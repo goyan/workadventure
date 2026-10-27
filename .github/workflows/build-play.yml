@@ -64,5 +64,5 @@ jobs:
           labels: |
             org.opencontainers.image.source=https://github.com/goyan/workadventure
             org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/goyan/workadventure-play:buildcache
+          cache-to: type=registry,ref=ghcr.io/goyan/workadventure-play:buildcache,mode=max
