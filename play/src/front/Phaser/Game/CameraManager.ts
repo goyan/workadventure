@@ -126,7 +126,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
                 );
             } else {
                 // We set the bounds back after a call to start following the player
-                this.camera.setBounds(0, 0, this.mapSize.width, this.mapSize.height);
+                this.setCameraBounds();
             }
         });
 
@@ -452,7 +452,22 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     private initCamera() {
         this.camera = this.scene.cameras.main;
-        this.camera.setBounds(0, 0, this.mapSize.width, this.mapSize.height);
+        this.setCameraBounds();
+    }
+
+    /**
+     * The camera bounds are deliberately larger than the map (same margin as in the map editor).
+     * With bounds fitted to the map, Phaser clamps the camera as soon as the view is larger than the map
+     * (zoom out) or when the avatar is close to an edge: the view then sticks to the map origin (0,0)
+     * instead of staying centered on the avatar. With a margin, the avatar is always centered, at any zoom level.
+     */
+    private setCameraBounds(): void {
+        this.camera.setBounds(
+            -this.mapSize.width,
+            -this.mapSize.height,
+            this.mapSize.width * 3,
+            this.mapSize.height * 3,
+        );
     }
 
     private onFollowUpdate = () => {
