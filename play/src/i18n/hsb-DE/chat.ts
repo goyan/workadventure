@@ -40,6 +40,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "Waše přeprošenje bu wot {name} přijate",
         defaultResponderName: "Wužiwar",
         limitReached: "Sće přewjele přeprošenjow pósłali. Prošu spytajće pozdźišo hišće raz.",
+        teleport: "Teleportować",
+        walk: "Tam hić",
     },
     imagePreview: {
         close: "Začinić",

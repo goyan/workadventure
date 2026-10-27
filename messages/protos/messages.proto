@@ -1169,6 +1169,8 @@ message UserMovedMessage {
 
 message MoveToPositionMessage{
   PositionMessage position = 1;
+  /** Jump straight to the position instead of walking there. */
+  optional bool teleport = 2;
 }
 
 message LocatePositionMessage{
@@ -1378,6 +1380,7 @@ message AskPositionMessage{
   enum AskType {
     MOVE = 0;
     LOCATE = 1;
+    TELEPORT = 2;
   }
   AskType askType = 3;
   optional int32 userId = 4;

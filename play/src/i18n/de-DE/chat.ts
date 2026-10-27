@@ -40,6 +40,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "Ihre Einladung wurde von {name} angenommen",
         defaultResponderName: "Der Benutzer",
         limitReached: "Sie haben zu viele Meeting-Einladungen gesendet. Bitte versuchen Sie es später erneut.",
+        teleport: "Teleportieren",
+        walk: "Hinlaufen",
     },
     imagePreview: {
         close: "Schließen",

@@ -40,6 +40,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "Waša pśepšosēnje jo wót {name} pśijate",
         defaultResponderName: "Wužywaŕ",
         limitReached: "Sćo pósłali pśewjele pśepšosowanjow. Pšosym wopytajśo pózdźej hyšći raz.",
+        teleport: "Teleportěrowaś",
+        walk: "Tam hyś",
     },
     imagePreview: {
         close: "Zacyniś",

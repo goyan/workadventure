@@ -37,6 +37,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "您的邀请已被 {name} 接受",
         defaultResponderName: "该用户",
         limitReached: "您发送的会议邀请过多，请稍后再试。",
+        teleport: "传送过去",
+        walk: "步行前往",
     },
     imagePreview: {
         close: "关闭",

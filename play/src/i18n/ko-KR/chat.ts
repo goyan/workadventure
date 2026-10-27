@@ -39,6 +39,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "{name}님이 초대를 수락했습니다",
         defaultResponderName: "해당 사용자",
         limitReached: "회의 초대를 너무 많이 보냈습니다. 나중에 다시 시도해 주세요.",
+        teleport: "순간이동",
+        walk: "걸어서 가기",
     },
     imagePreview: {
         close: "닫기",

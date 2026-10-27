@@ -39,6 +39,8 @@ const chat: DeepPartial<Translation["chat"]> = {
         invitationAccepted: "La teva invitació ha estat acceptada per {name}",
         defaultResponderName: "L'usuari",
         limitReached: "Has enviat massa invitacions a reunions. Si us plau, torna-ho a provar més tard.",
+        teleport: "Teletransporta'm",
+        walk: "Anar-hi caminant",
     },
     imagePreview: {
         close: "Tancar",

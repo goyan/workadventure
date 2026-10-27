@@ -8,13 +8,16 @@
 
     let request = $derived($meetingInvitationRequestStore);
 
-    function onAccept() {
-        gameManager.getCurrentGameScene().inviteManager?.handleAccept({
-            senderUserUuid: request?.senderUserUuid ?? "",
-            senderPlayUri: request?.senderPlayUri ?? "",
-            senderName: request?.senderName ?? "",
-            senderUserId: request?.senderUserId ?? 0,
-        });
+    function onAccept(teleport: boolean) {
+        gameManager.getCurrentGameScene().inviteManager?.handleAccept(
+            {
+                senderUserUuid: request?.senderUserUuid ?? "",
+                senderPlayUri: request?.senderPlayUri ?? "",
+                senderName: request?.senderName ?? "",
+                senderUserId: request?.senderUserId ?? 0,
+            },
+            teleport,
+        );
         meetingInvitationRequestStore.set(null);
     }
 
@@ -59,9 +62,19 @@
             variant="light"
             appearance="ghost"
             class="text-nowrap my-2 mx-1 min-w-0 !border !border-solid !border-transparent hover:!bg-white/30"
-            onclick={onAccept}
+            onclick={() => onAccept(true)}
+            data-testid="meeting-invitation-teleport"
         >
-            {$LL.chat.accept()}
+            {$LL.chat.meetingInvitation.teleport()}
+        </Button>
+        <Button
+            variant="light"
+            appearance="ghost"
+            class="text-nowrap my-2 mx-1 min-w-0 !border !border-solid !border-transparent hover:!bg-white/30"
+            onclick={() => onAccept(false)}
+            data-testid="meeting-invitation-walk"
+        >
+            {$LL.chat.meetingInvitation.walk()}
         </Button>
         <Button
             variant="light"

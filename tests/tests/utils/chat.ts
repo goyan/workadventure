@@ -98,7 +98,7 @@ class Chat {
 
     async UL_acceptInvitation(page: Page) {
         await expect(page.getByTestId("meeting-invitation-popup")).toBeVisible({ timeout: 15_000 });
-        await page.getByRole("button", { name: "Accept" }).first().click();
+        await page.getByTestId("meeting-invitation-walk").click();
     }
 
     async UL_declineInvitation(page: Page) {

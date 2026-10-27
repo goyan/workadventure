@@ -725,15 +725,23 @@ export class RoomConnection implements RoomConnection {
                     break;
                 }
                 case "moveToPositionMessage": {
-                    if (message.moveToPositionMessage && message.moveToPositionMessage.position) {
-                        gameManager
-                            .getCurrentGameScene()
-                            .moveTo(message.moveToPositionMessage.position, false, WOKA_SPEED * 2.5)
-                            .catch((error) => {
+                    // Subscribers (the InviteManager) may open locks at the destination before we go there
+                    this._moveToPositionMessageStream.next(message.moveToPositionMessage);
+                    const position = message.moveToPositionMessage.position;
+                    if (position) {
+                        const scene = gameManager.getCurrentGameScene();
+                        // Teleporting skips the colliders: walk instead when an area at the destination blocks us
+                        if (
+                            message.moveToPositionMessage.teleport &&
+                            !scene.getGameMapFrontWrapper().areasManager?.isPositionBlocked(position)
+                        ) {
+                            scene.CurrentPlayer.teleportTo(position.x, position.y);
+                        } else {
+                            scene.moveTo(position, false, WOKA_SPEED * 2.5).catch((error) => {
                                 console.warn(error);
                             });
+                        }
                     }
-                    this._moveToPositionMessageStream.next(message.moveToPositionMessage);
                     break;
                 }
                 case "locatePositionMessage": {

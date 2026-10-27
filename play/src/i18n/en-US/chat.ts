@@ -38,6 +38,8 @@ const chat: BaseTranslation = {
         invitationAccepted: "Your invitation was accepted by {name}",
         defaultResponderName: "The user",
         limitReached: "You have sent too many meeting invitations. Please try again later.",
+        teleport: "Teleport me",
+        walk: "Walk there",
     },
     imagePreview: {
         close: "Close",
