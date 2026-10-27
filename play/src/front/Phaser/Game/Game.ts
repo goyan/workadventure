@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { SKIP_RENDER_OPTIMIZATIONS } from "../../Enum/EnvironmentVariable";
 import { ResizableScene } from "../Login/ResizableScene";
+import { preventBrowserPageZoom } from "../../Utils/PreventBrowserPageZoom";
 
 const Events = Phaser.Core.Events;
 
@@ -17,6 +18,8 @@ export class Game extends Phaser.Game {
 
     constructor(GameConfig: Phaser.Types.Core.GameConfig) {
         super(GameConfig);
+
+        preventBrowserPageZoom();
 
         this.scale.on(Phaser.Scale.Events.RESIZE, () => {
             for (const scene of this.scene.getScenes(true)) {
