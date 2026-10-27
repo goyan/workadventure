@@ -19,9 +19,27 @@ import { followRoleStore, followStateStore, followUsersStore } from "../../Store
 import { localUserStore } from "../../Connection/LocalUserStore";
 import type { Shortcut } from "./UserInputManager";
 
+// Below this distance (in screen pixels), a press followed by a move is still a click, not a drag.
+const DRAG_THRESHOLD_PIXELS = 6;
+
+/**
+ * A trackpad two-finger scroll is told apart from a notched mouse wheel: a notched wheel (Windows/Linux) reports
+ * multiples of 120 on the legacy wheelDeltaY and never scrolls horizontally, a trackpad reports continuous values.
+ * Pinch gestures and Ctrl+wheel (ctrlKey) are zoom gestures and are never treated as a scroll.
+ */
+function isTrackpadScroll(event: WheelEvent): boolean {
+    if (event.ctrlKey || event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) {
+        return false;
+    }
+    const wheelDeltaY = (event as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY;
+    return event.deltaX !== 0 || (wheelDeltaY !== undefined && wheelDeltaY % 120 !== 0);
+}
+
 export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private gameScene: GameScene;
     private controlKeyisPressed: boolean = false;
+    private dragStart?: { x: number; y: number };
+    private isDragPanning = false;
     public shortcuts: Shortcut[] = [];
 
     constructor(gameScene: GameScene) {
@@ -104,10 +122,28 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         deltaY: number,
         deltaZ: number,
     ): void {
+        const event = pointer.event;
+        if (event instanceof WheelEvent && isTrackpadScroll(event) && this.canPan()) {
+            // Two-finger scroll on a trackpad moves the view. Pinch and Ctrl+wheel (ctrlKey) and notched
+            // mouse wheels still zoom.
+            this.gameScene.getCameraManager().panBy(deltaX, deltaY);
+            return;
+        }
         this.gameScene.handleMouseWheel(deltaY);
     }
 
+    private canPan(): boolean {
+        return !get(mapEditorModeStore) && this.gameScene.getCameraManager().canPan();
+    }
+
     public handlePointerUpEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        this.dragStart = undefined;
+        if (this.isDragPanning) {
+            // The end of a drag must neither move the avatar nor activate what is under the cursor.
+            this.isDragPanning = false;
+            return;
+        }
+
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
             for (const object of gameObjects) {
                 if (isActivatable(object)) {
@@ -153,9 +189,34 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             });
     }
 
-    public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {}
+    public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        // Touch screens already use the finger for the joystick. Dragging starts on an empty spot of the map only.
+        if (pointer.wasTouch || !pointer.leftButtonDown() || gameObjects.length > 0 || !this.canPan()) {
+            return;
+        }
+        this.dragStart = { x: pointer.x, y: pointer.y };
+        this.isDragPanning = false;
+    }
 
-    public handlePointerMoveEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {}
+    public handlePointerMoveEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
+        if (!this.dragStart) {
+            return;
+        }
+        if (!pointer.leftButtonDown()) {
+            this.dragStart = undefined;
+            this.isDragPanning = false;
+            return;
+        }
+        if (!this.isDragPanning) {
+            if (Math.hypot(pointer.x - this.dragStart.x, pointer.y - this.dragStart.y) < DRAG_THRESHOLD_PIXELS) {
+                return;
+            }
+            this.isDragPanning = true;
+        }
+        this.gameScene
+            .getCameraManager()
+            .panBy(pointer.prevPosition.x - pointer.x, pointer.prevPosition.y - pointer.y);
+    }
 
     private handleKeyF() {
         const state = get(followStateStore);

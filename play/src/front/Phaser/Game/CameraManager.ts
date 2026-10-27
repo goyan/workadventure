@@ -73,6 +73,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     private continuousButtonZoomFactorPerSecond: number | undefined;
 
     private playerToFollow?: Player | RemotePlayer;
+    private panning = false;
     private zoomLocked: boolean;
 
     private readonly EDITOR_MODE_SCROLL_SPEED: number = 5;
@@ -301,6 +302,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     }
 
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
+        this.stopPanning();
         this.playerToFollow = player;
 
         this.animateToFocus(player, duration, () => {});
@@ -815,6 +817,64 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         if (this.cameraAnimation?.type === "speed") {
             this.cameraAnimation.onInterrupt();
         }
+    }
+
+    /**
+     * Free panning (mouse drag, trackpad two-finger scroll) is not available when the camera is locked
+     * on a focus target or when the zoom is locked.
+     */
+    public canPan(): boolean {
+        return !this.zoomLocked && !this.waScaleManager.getFocusTarget();
+    }
+
+    /**
+     * Moves the view by a distance expressed in screen pixels. The camera is detached from the avatar
+     * until the avatar moves again.
+     */
+    public panBy(screenDx: number, screenDy: number): void {
+        if (!this.canPan()) {
+            return;
+        }
+        if (!this.panning) {
+            this.startPanning();
+        }
+        const screenPixelsPerWorldPixel = this.scene.scale.zoom * this.camera.zoom;
+        this.scrollCamera(screenDx / screenPixelsPerWorldPixel, screenDy / screenPixelsPerWorldPixel);
+    }
+
+    private startPanning(): void {
+        this.cameraAnimation?.onInterrupt();
+        this.panning = true;
+        // Same starting point as animateToFocus(): the current center of the view, so that nothing jumps.
+        this.explorerFocusOn = {
+            x: this.camera.scrollX + this.camera.width / 2 + this.camera.followOffset.x,
+            y: this.camera.scrollY + this.camera.height / 2 + this.camera.followOffset.y,
+        };
+        this.camera.startFollow(
+            this.explorerFocusOn,
+            true,
+            1,
+            1,
+            this.camera.followOffset.x,
+            this.camera.followOffset.y,
+        );
+        // As soon as the avatar moves, the camera comes back to it.
+        this.playerToFollow?.once(hasMovedEventName, this.onPanningAvatarMoved);
+    }
+
+    private readonly onPanningAvatarMoved = (): void => {
+        if (!this.panning || !this.playerToFollow) {
+            return;
+        }
+        this.startFollowPlayer(this.playerToFollow, 300);
+    };
+
+    private stopPanning(): void {
+        if (!this.panning) {
+            return;
+        }
+        this.panning = false;
+        this.playerToFollow?.off(hasMovedEventName, this.onPanningAvatarMoved);
     }
 
     scrollCamera(x: number, y: number): void {
