@@ -5,6 +5,8 @@ interface Size {
 
 // Granularity of the default zoom level (see getOptimalZoomLevel).
 const OPTIMAL_ZOOM_STEP = 0.25;
+// The default view is wider than what the screen could show at the "ideal" zoom (Gather-like framing, smaller avatars).
+const DEFAULT_ZOOM_OUT_FACTOR = 0.5;
 
 export class HdpiManager {
     private _zoomModifier = 1;
@@ -105,7 +107,7 @@ export class HdpiManager {
         const result = Math.sqrt(realPixelNumber / this.minRecommendedGamePixelsNumber);
         // The default zoom used to be rounded down to an integer (1.5 only between 1.5 and 2). On a 1080p screen, 2.59 became 2,
         // which frames the map much wider than needed. Quarter steps keep the framing close to what the screen can show.
-        return Math.max(1, Math.floor(result / OPTIMAL_ZOOM_STEP) * OPTIMAL_ZOOM_STEP);
+        return Math.max(1, Math.floor((result * DEFAULT_ZOOM_OUT_FACTOR) / OPTIMAL_ZOOM_STEP) * OPTIMAL_ZOOM_STEP);
     }
 
     public get zoomModifier(): number {
