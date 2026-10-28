@@ -4,6 +4,11 @@ Ce dépôt est un fork de [workadventure/workadventure](https://github.com/worka
 qui alimente notre WorkAdventure interne. Seul le service **`play`** (front + pusher) est notre image ; le reste est officiel.
 Les conventions de code de WorkAdventure sont dans `AGENTS.md` / `play/AGENTS.md`.
 
+Le développement du front se fait dans ce fork. Les cartes, bundles et configurations
+de déploiement sont dans le dépôt privé
+[workadventure-selfhost](https://github.com/goyan/workadventure-selfhost) : son accès
+est également nécessaire pour travailler sur ces éléments.
+
 ## Le circuit
 
 ```
@@ -79,6 +84,22 @@ Utiliser une image dont la largeur et la hauteur sont des puissances de deux (pa
 pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doivent utiliser
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
+
+### Déplacement au double-clic
+
+Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse
+de course habituelle (celle de Maj), via le pathfinding existant. Les murs et collisions
+sont pris en compte, les diagonales ne coupent pas les coins des obstacles. Si la case
+visée est bloquée, le moteur essaie les cases voisines accessibles.
+Un double-clic au-delà des limites de la carte, sur le décor extérieur, est ignoré.
+Une touche de déplacement reprend le contrôle de l'avatar. Un clic simple garde
+l'activation des objets, le glisser garde le pan de caméra et le clic droit garde
+son déplacement habituel. Le double-clic ne lance pas de déplacement dans l'éditeur
+ou quand les contrôles / le déplacement au clic sont désactivés.
+
+Pour valider en beta : double-cliquer de l'autre côté d'un mur, puis dans le jardin ;
+vérifier le contournement et la course, reprendre la main avec une flèche, puis tester
+un clic simple sur un objet et un glisser de caméra.
 
 ### Valider la notification en beta
 

@@ -17,6 +17,7 @@ import { isPopupJustClosed } from "../Game/Say/SayManager";
 import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import type { Shortcut } from "./UserInputManager";
 
 // Below this distance (in screen pixels), a press followed by a move is still a click, not a drag.
@@ -161,7 +162,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
         }
 
-        if ((!pointer.wasTouch && pointer.leftButtonReleased()) || pointer.getDuration() > 250) {
+        // Phaser keeps the native mouseup event, including the browser's double-click count.
+        const isDoubleClick =
+            !pointer.wasTouch &&
+            pointer.leftButtonReleased() &&
+            pointer.event instanceof MouseEvent &&
+            pointer.event.detail === 2;
+
+        if ((!pointer.wasTouch && pointer.leftButtonReleased() && !isDoubleClick) || pointer.getDuration() > 250) {
+            return;
+        }
+
+        if (isDoubleClick && (!this.gameScene.userInputManager.isControlsEnabled || get(mapEditorModeStore))) {
             return;
         }
 
@@ -184,6 +196,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         const camera = this.gameScene.getCameraManager().getCamera();
         const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
+        if (
+            isDoubleClick &&
+            (worldPoint.x < 0 ||
+                worldPoint.y < 0 ||
+                worldPoint.x >= this.gameScene.Map.widthInPixels ||
+                worldPoint.y >= this.gameScene.Map.heightInPixels)
+        ) {
+            return;
+        }
         this.gameScene
             .moveTo(
                 {
@@ -191,6 +212,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     y: worldPoint.y,
                 },
                 true,
+                isDoubleClick ? WOKA_SPEED * 2.5 : undefined,
             )
             .catch((reason) => {
                 console.warn(reason);
