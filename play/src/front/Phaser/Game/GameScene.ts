@@ -4380,7 +4380,7 @@ ${escapedMessage}
         });
     }
 
-    handleMouseWheel(deltaY: number) {
+    handleMouseWheel(deltaY: number, rateMultiplier = 1) {
         // Calculate the velocity of the zoom
         //const velocity = deltaY / 30;
 
@@ -4389,7 +4389,7 @@ ${escapedMessage}
 
         // Explanation of the formula: to Zoom x 2, we need a delta of 200
         // Question: Why 200 ? For mac usage, it's too slow
-        let zoomFactor = Math.exp(((-deltaY * Math.log(2)) / 100) * MOUSE_WHEEL_ZOOM_RATE);
+        let zoomFactor = Math.exp(((-deltaY * Math.log(2)) / 100) * MOUSE_WHEEL_ZOOM_RATE * rateMultiplier);
 
         // Sometimes, deltaY can be really high (this happens when the browser is lagging for 1 second or so)
         // Let's clamp the value to avoid zooming too much
