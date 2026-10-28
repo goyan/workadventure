@@ -213,9 +213,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             this.isDragPanning = true;
         }
-        this.gameScene
-            .getCameraManager()
-            .panBy(pointer.prevPosition.x - pointer.x, pointer.prevPosition.y - pointer.y);
+        this.gameScene.getCameraManager().panBy(pointer.prevPosition.x - pointer.x, pointer.prevPosition.y - pointer.y);
     }
 
     private handleKeyF() {
