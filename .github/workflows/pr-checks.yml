@@ -8,8 +8,6 @@ name: pr-checks
 on:
   pull_request:
     branches: [infogene]
-  push:
-    branches: [ci-test]   # TEMPORAIRE : pour valider ce workflow avant de le fusionner
 
 concurrency:
   group: pr-checks-${{ github.ref }}
