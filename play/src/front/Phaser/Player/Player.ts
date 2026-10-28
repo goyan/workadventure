@@ -128,6 +128,13 @@ export class Player extends Character {
             x = x + 1;
         }
 
+        // Normalize so that diagonal movement is not faster (length sqrt(2)) than straight movement
+        const length = Math.hypot(x, y);
+        if (length > 1) {
+            x = x / length;
+            y = y / length;
+        }
+
         // Compute movement deltas
         const followMode = get(followStateStore) !== "off";
         const speed = this.deduceSpeed(activeEvents.get(UserInputEvent.SpeedUp), followMode);
