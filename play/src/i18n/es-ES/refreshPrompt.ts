@@ -3,6 +3,8 @@ import type { Translation } from "../i18n-types";
 
 const refreshPrompt: DeepPartial<Translation["refreshPrompt"]> = {
     refresh: "Actualizar",
+    newVersion: "Hay una nueva versión disponible. Actualiza la página.",
+    later: "Más tarde",
 };
 
 export default refreshPrompt;

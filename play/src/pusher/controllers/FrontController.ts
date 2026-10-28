@@ -1,4 +1,5 @@
 import fs from "fs";
+import { createHash } from "crypto";
 import type { Request, Response, Application } from "express";
 import Mustache from "mustache";
 import { uuid } from "stanza/Utils";
@@ -24,6 +25,7 @@ const debug = Debug("pusher:requests");
 
 export class FrontController extends BaseHttpController {
     private indexFile: string;
+    private readonly buildVersion: string;
     private redirectToAdminFile: string;
     private script: Promise<string> | undefined;
 
@@ -53,6 +55,12 @@ export class FrontController extends BaseHttpController {
         }
 
         this.indexFile = fs.readFileSync(indexPath, "utf8");
+        // Vite's asset hashes make this identify the deployed frontend, including frontend-only patches.
+        this.buildVersion = createHash("sha256").update(this.indexFile).digest("hex");
+        this.indexFile = this.indexFile.replace(
+            "</head>",
+            `<meta name="wa-build-version" content="${this.buildVersion}" /></head>`,
+        );
         this.redirectToAdminFile = fs.readFileSync(redirectToAdminPath, "utf8");
 
         // Pre-parse the index file for speed (and validation)
@@ -87,6 +95,10 @@ export class FrontController extends BaseHttpController {
     }
 
     front(): void {
+        this.app.get("/build-version", (_req: Request, res: Response) => {
+            res.set("Cache-Control", "no-store").json({ version: this.buildVersion });
+        });
+
         this.app.get("/_/{*splat}", (req: Request, res: Response) => {
             debug(`FrontController => [${req.method}] ${req.originalUrl} — IP: ${req.ip} — Time: ${Date.now()}`);
             /**

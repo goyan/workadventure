@@ -28,6 +28,7 @@
     import GameOverlay from "./GameOverlay.svelte";
     import CoWebsitesContainer from "./EmbedScreens/CoWebsitesContainer.svelte";
     import BrowserNotSupported from "./BrowserNotSupported/BrowserNotSupported.svelte";
+    import BuildUpdateNotification from "./BuildUpdateNotification.svelte";
 
     let WebGLRenderer = Phaser.Renderer.WebGL.WebGLRenderer;
     let game: Game | undefined = $state();
@@ -254,6 +255,7 @@
 {#if browserNotSupported}
     <BrowserNotSupported />
 {:else}
+    <BuildUpdateNotification />
     <div
         class="h-dvh w-dvw flex landscape:flex-row portrait:flex-col-reverse"
         id="main-container"
