@@ -1,0 +1,80 @@
+# Vérifications d'une pull request vers `infogene` (partie `play`, la seule que nous modifions).
+# Reprend les étapes de l'ancien « Continuous Integration Play » d'upstream : types, svelte-check, lint, formatage, tests.
+#
+# SÉCURITÉ : repo public. Déclencheur `pull_request` uniquement (jamais `pull_request_target`) : le jeton est en lecture
+# seule et aucun secret n'est exposé aux PR venant de forks. Actions épinglées par SHA.
+name: pr-checks
+
+on:
+  pull_request:
+    branches: [infogene]
+  push:
+    branches: [ci-test]   # TEMPORAIRE : pour valider ce workflow avant de le fusionner
+
+concurrency:
+  group: pr-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    name: Contrôles play
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          version: "3.x"
+
+      - name: Dépendances
+        run: npm ci --workspace=workadventure-play
+
+      - name: Dépendances des messages protobuf
+        run: npm ci
+        working-directory: messages
+
+      - name: Génération des messages protobuf
+        run: npm run ts-proto
+        working-directory: messages
+
+      - name: Fichiers i18n
+        run: npm run typesafe-i18n
+        working-directory: play
+
+      - name: Complétude des traductions
+        run: npm run i18n:check
+        working-directory: play
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: play
+
+      - name: Svelte check
+        run: npm run svelte-check
+        working-directory: play
+
+      - name: Lint
+        run: npm run lint
+        working-directory: play
+
+      - name: Formatage
+        run: npm run pretty-check
+        working-directory: play
+
+      - name: Tests unitaires
+        run: npm test
+        working-directory: play
