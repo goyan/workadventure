@@ -19,7 +19,8 @@ export class Game extends Phaser.Game {
     constructor(GameConfig: Phaser.Types.Core.GameConfig) {
         super(GameConfig);
 
-        preventBrowserPageZoom();
+        const removePageZoomGuard = preventBrowserPageZoom();
+        this.events.once(Phaser.Core.Events.DESTROY, removePageZoomGuard);
 
         this.scale.on(Phaser.Scale.Events.RESIZE, () => {
             for (const scene of this.scene.getScenes(true)) {
