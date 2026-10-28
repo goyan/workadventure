@@ -6,7 +6,7 @@ interface Size {
 // Granularity of the default zoom level (see getOptimalZoomLevel).
 const OPTIMAL_ZOOM_STEP = 0.25;
 // The default view is wider than what the screen could show at the "ideal" zoom (Gather-like framing, smaller avatars).
-const DEFAULT_ZOOM_OUT_FACTOR = 0.5;
+const DEFAULT_ZOOM_OUT_FACTOR = 0.75;
 
 export class HdpiManager {
     private _zoomModifier = 1;

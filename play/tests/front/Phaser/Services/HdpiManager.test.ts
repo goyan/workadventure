@@ -15,18 +15,18 @@ describe("Test HdpiManager", () => {
     it("should match multiple just above.", () => {
         const hdpiManager = new HdpiManager(640 * 480, 64 * 64);
 
-        // The default view is twice as wide as the "ideal" zoom (factor 0.5), by steps of 0.25, never below 1.
+        // The default view is wider than the "ideal" zoom (factor 0.75), by steps of 0.25, never below 1.
         let result = hdpiManager.getOptimalGameSize({ width: 960, height: 600 });
         expect(result.game.width).toEqual(960);
         expect(result.game.height).toEqual(600);
 
-        result = hdpiManager.getOptimalGameSize({ width: 640 * 4 + 50, height: 480 * 4 + 50 });
-        expect(result.game.width).toEqual(Math.ceil((640 * 4 + 50) / 2));
-        expect(result.game.height).toEqual((480 * 4 + 50) / 2);
+        result = hdpiManager.getOptimalGameSize({ width: 640 * 2 + 50, height: 480 * 2 + 50 });
+        expect(result.game.width).toEqual(Math.ceil((640 * 2 + 50) / 1.5));
+        expect(result.game.height).toEqual(Math.ceil((480 * 2 + 50) / 1.5));
 
-        result = hdpiManager.getOptimalGameSize({ width: 640 * 6 + 50, height: 480 * 6 + 50 });
-        expect(result.game.width).toEqual(Math.ceil((640 * 6 + 50) / 3));
-        expect(result.game.height).toEqual(Math.ceil((480 * 6 + 50) / 3));
+        result = hdpiManager.getOptimalGameSize({ width: 640 * 4 + 50, height: 480 * 4 + 50 });
+        expect(result.game.width).toEqual(Math.ceil((640 * 4 + 50) / 3));
+        expect(result.game.height).toEqual(Math.ceil((480 * 4 + 50) / 3));
         expect(result.real.width).toEqual(result.game.width * 3);
         expect(result.real.height).toEqual(result.game.height * 3);
     });
@@ -53,18 +53,17 @@ describe("Test HdpiManager", () => {
         expect(result.game.width).toBeLessThanOrEqual(screen.width * 1.1);
         expect(result.game.height).toBeGreaterThanOrEqual(screen.height);
         expect(result.game.height).toBeLessThanOrEqual(screen.height * 1.1);
-        // 1280x768 gives an optimal zoom of 1: the zoom modifier is clamped so that the canvas is not zoomed out further.
-        expect(hdpiManager.zoomModifier).toEqual(1);
+        // 1280x768 gives an optimal zoom of 1.25: the zoom modifier is clamped so that the canvas is not zoomed out further.
+        expect(hdpiManager.zoomModifier).toEqual(1 / 1.25);
     });
 
     it("should compute the default zoom by steps of 0.25.", () => {
         const hdpiManager = new HdpiManager(640 * 480, 64 * 64);
 
-        expect(hdpiManager.getOptimalZoomLevel(1366 * 768)).toEqual(1);
-        expect(hdpiManager.getOptimalZoomLevel(1920 * 1080)).toEqual(1.25);
-        expect(hdpiManager.getOptimalZoomLevel(2560 * 1440)).toEqual(1.5);
-        expect(hdpiManager.getOptimalZoomLevel(3840 * 2160)).toEqual(2.5);
-        expect(hdpiManager.getOptimalZoomLevel(640 * 4 * 480 * 4)).toEqual(2);
+        expect(hdpiManager.getOptimalZoomLevel(1366 * 768)).toEqual(1.25);
+        expect(hdpiManager.getOptimalZoomLevel(1920 * 1080)).toEqual(1.75);
+        expect(hdpiManager.getOptimalZoomLevel(2560 * 1440)).toEqual(2.5);
+        expect(hdpiManager.getOptimalZoomLevel(640 * 4 * 480 * 4)).toEqual(3);
         // Never below 1.
         expect(hdpiManager.getOptimalZoomLevel(640 * 480)).toEqual(1);
     });
