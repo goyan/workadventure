@@ -71,6 +71,13 @@ Le bandeau reprend `ToastContainer` et propose « Rafraîchir » ou « Plus tard
 « Plus tard » masque la notification pour cette session. Les pages déjà ouvertes avant l'installation de ce
 patch doivent être rafraîchies une première fois pour pouvoir recevoir les prochaines notifications.
 Les nouveaux messages sont traduits ; le haut et le bas sorabe utilisent provisoirement l'anglais.
+Décor extérieur (`Phaser/Game/GameScene.ts`) : la propriété Tiled facultative `exteriorTexture`
+(type fichier, chemin relatif au TMJ) active une texture répétée derrière la carte. Son origine,
+son échelle et son déplacement suivent les tiles de la carte ; elle couvre les bornes étendues
+de la caméra. Les limites physiques de la carte restent celles du TMJ.
+Utiliser une image dont la largeur et la hauteur sont des puissances de deux (par exemple 128 × 128)
+pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doivent utiliser
+cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
 
 ### Valider la notification en beta

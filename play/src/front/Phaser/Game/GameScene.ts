@@ -348,6 +348,7 @@ export class GameScene extends DirtyScene {
     private popUpElements: Map<number, DOMElement> = new Map<number, Phaser.GameObjects.DOMElement>();
     private remotePlayersSpatialIndex = new SpatialMap<number, RemotePlayer>(CONVERSATION_BUBBLE_SPATIAL_GRID_SIZE);
     private originalMapUrl: string | undefined;
+    private exteriorTextureKey: string | undefined;
     private pinchManager: PinchManager | undefined;
     private outlineManager!: OutlineManager;
     private mapTransitioning = false; //used to prevent transitions happening at the same time.
@@ -709,6 +710,21 @@ export class GameScene extends DirtyScene {
 
         //permit to set bound collision
         this.physics.world.setBounds(0, 0, this.Map.widthInPixels, this.Map.heightInPixels);
+
+        if (this.exteriorTextureKey !== undefined) {
+            // Match the camera's extended bounds and anchor the repeating ground at the map origin.
+            this.add
+                .tileSprite(
+                    -this.Map.widthInPixels,
+                    -this.Map.heightInPixels,
+                    this.Map.widthInPixels * 3,
+                    this.Map.heightInPixels * 3,
+                    this.exteriorTextureKey,
+                )
+                .setOrigin(0)
+                .setDepth(-3)
+                .setTilePosition(-this.Map.widthInPixels, -this.Map.heightInPixels);
+        }
 
         this.usernameDomLayer = new UsernameDomLayer(this);
 
@@ -1822,6 +1838,13 @@ export class GameScene extends DirtyScene {
         // The map file can be modified by the scripting API and we don't want to tamper the Phaser cache (in case we come back on the map after visiting other maps)
         // So we are doing a deep copy
         this.mapFile = structuredClone(data);
+
+        const exteriorTexture = PropertyUtils.findStringProperty("exteriorTexture", this.mapFile.properties);
+        this.exteriorTextureKey =
+            exteriorTexture === undefined ? undefined : new URL(exteriorTexture, this.mapUrlFile).toString();
+        if (this.exteriorTextureKey !== undefined) {
+            this.load.image(this.exteriorTextureKey, this.exteriorTextureKey);
+        }
 
         // Safe parse can take up to 600ms on a 17MB map.
         // TODO: move safeParse to a "map" page and display details of what is going wrong there.
