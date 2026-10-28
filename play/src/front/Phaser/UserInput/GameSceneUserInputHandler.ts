@@ -22,6 +22,13 @@ import type { Shortcut } from "./UserInputManager";
 // Below this distance (in screen pixels), a press followed by a move is still a click, not a drag.
 const DRAG_THRESHOLD_PIXELS = 6;
 
+// A notched mouse wheel reports a deltaY of about 100 per notch, a trackpad pinch (a wheel event with ctrlKey) reports a
+// burst of tiny deltas. The zoom formula is tuned for the wheel, so a pinch needs a gain to feel as fast as a few notches.
+// 6 is close to the pinch gain used by d3-zoom and most map/design tools.
+const PINCH_ZOOM_RATE_MULTIPLIER = 6;
+// Under this |deltaY|, a ctrlKey wheel event is a pinch. A Ctrl+notched-wheel keeps the normal rate.
+const PINCH_MAX_DELTA_Y = 50;
+
 /**
  * A trackpad two-finger scroll is told apart from a notched mouse wheel: a notched wheel (Windows/Linux) reports
  * multiples of 120 on the legacy wheelDeltaY and never scrolls horizontally, a trackpad reports continuous values.
@@ -129,7 +136,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             this.gameScene.getCameraManager().panBy(deltaX, deltaY);
             return;
         }
-        this.gameScene.handleMouseWheel(deltaY);
+        const isPinch = event instanceof WheelEvent && event.ctrlKey && Math.abs(deltaY) < PINCH_MAX_DELTA_Y;
+        this.gameScene.handleMouseWheel(deltaY, isPinch ? PINCH_ZOOM_RATE_MULTIPLIER : 1);
     }
 
     private canPan(): boolean {
