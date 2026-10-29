@@ -162,6 +162,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             exitMap: "Mappa di Uscita",
             exitMapStartAreaName: "Nome area di partenza",
             defaultStartArea: "Area di partenza predefinita",
+            createMapLabel: "Create a new map",
+            createMapPlaceholder: "Name of the new map",
+            createMapButton: "Create the map",
+            createMapErrorLimit: "Creation limit reached, try again later",
+            createMapErrorGeneric: "The map could not be created",
             actionButtonLabel: "Vai all'uscita",
         },
         youtube: {

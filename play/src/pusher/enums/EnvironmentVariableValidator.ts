@@ -402,6 +402,44 @@ export const EnvironmentVariables = z.object({
         .describe(
             'If set to true, all users can edit the map. If set to false, only the users in MAP_EDITOR_ALLOWED_USERS or users with the "admin" or "editor" tag can edit the map. Note: this setting is ignored if an Admin API is configured.',
         ),
+    // Map creation from the map editor (disabled until the template and a map-storage write credential are set)
+    MAP_CREATION_TEMPLATE: z
+        .string()
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe(
+            "Folder of map-storage copied to create a new map from the map editor (for instance: blank-grass). The feature is disabled when unset.",
+        ),
+    MAP_CREATION_TAG: z
+        .string()
+        .optional()
+        .transform((val) => (val === undefined || val === "" ? "admin" : val))
+        .describe(
+            'Tag a user must have to create maps from the map editor. Defaults to "admin". "*" lets every user who can edit the map create maps (development only).',
+        ),
+    MAP_CREATION_MAX_TOTAL: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 20))
+        .describe("Maximum number of maps created from the map editor, all users together. Defaults to 20"),
+    MAP_CREATION_MAX_PER_USER_PER_HOUR: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 5))
+        .describe("Maximum number of maps one user can create per hour. Defaults to 5"),
+    MAP_STORAGE_WRITE_BEARER_TOKEN: z
+        .string()
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe(
+            "Bearer token used by the pusher to write in map-storage (map creation). Preferred over the Basic credentials",
+        ),
+    MAP_STORAGE_WRITE_USER: z
+        .string()
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe("Basic user used by the pusher to write in map-storage when no bearer token is set"),
+    MAP_STORAGE_WRITE_PASSWORD: z
+        .string()
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe("Basic password used by the pusher to write in map-storage when no bearer token is set"),
     WOKA_SPEED: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 9))
         .describe("Avatar (WOKA) movement speed. Defaults to 9"),
