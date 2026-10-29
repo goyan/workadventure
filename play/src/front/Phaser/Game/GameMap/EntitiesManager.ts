@@ -143,6 +143,7 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid, withGridUpdate);
         }
+        this.gameMapFrontWrapper.addEntityCollisionRectangles(entity);
 
         this.entities.set(entityId, entity);
 
@@ -180,6 +181,7 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid);
         }
+        this.gameMapFrontWrapper.removeEntityCollisionRectangles(id);
         entity.destroy();
         this.scene.markDirty();
 

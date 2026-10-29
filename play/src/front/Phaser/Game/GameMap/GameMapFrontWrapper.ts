@@ -27,6 +27,7 @@ import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
+import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
 import { TiledTileCollisions } from "./TiledTileCollisions";
 import TilemapLayer = Phaser.Tilemaps.TilemapLayer;
 
@@ -100,6 +101,7 @@ export class GameMapFrontWrapper {
      */
     private areasCollisionLayer: Phaser.Tilemaps.TilemapLayer;
     private readonly tiledTileCollisions: TiledTileCollisions | undefined;
+    private readonly entityCollisionRectangles: EntityCollisionRectangles;
 
     private collisionGridDirty = true;
     private areasCollisionLayerDirty = true;
@@ -153,6 +155,8 @@ export class GameMapFrontWrapper {
         if (this.gameMap.getTiledObjectProperty(this.gameMap.getMap(), "partialTileCollisions") === true) {
             this.tiledTileCollisions = new TiledTileCollisions(scene);
         }
+
+        this.entityCollisionRectangles = new EntityCollisionRectangles(scene);
 
         this.existingTileIndex = terrains.length > 0 ? terrains[0].firstgid : -1;
 
@@ -1685,14 +1689,27 @@ export class GameMapFrontWrapper {
 
     public setTileCollisionPlayer(player: Player): void {
         this.tiledTileCollisions?.setPlayer(player);
+        this.entityCollisionRectangles.setPlayer(player);
     }
 
     public isTileCollisionPathClear(player: Player, path: { x: number; y: number }[]): boolean {
-        return this.tiledTileCollisions?.isPathClear(player, path) ?? true;
+        return (
+            (this.tiledTileCollisions?.isPathClear(player, path) ?? true) &&
+            this.entityCollisionRectangles.isPathClear(player, path)
+        );
+    }
+
+    public addEntityCollisionRectangles(entity: Entity): void {
+        this.entityCollisionRectangles.add(entity);
+    }
+
+    public removeEntityCollisionRectangles(entityId: string): void {
+        this.entityCollisionRectangles.remove(entityId);
     }
 
     public close(): void {
         this.tiledTileCollisions?.destroy();
+        this.entityCollisionRectangles.destroy();
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }

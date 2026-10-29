@@ -101,6 +101,23 @@ Pour valider en beta : double-cliquer de l'autre côté d'un mur, puis dans le j
 vérifier le contournement et la course, reprendre la main avec une flèche, puis tester
 un clic simple sur un objet et un glisser de caméra.
 
+### Rectangles de collision des entités
+
+Un prefab de catalogue peut déclarer `collisionRectangles` : des rectangles en pixels, relatifs au coin
+haut-gauche de l'entité (`{x, y, width, height}`). Ils bloquent l'avatar en plus (ou à la place) de la grille
+`collisionGrid` de 32 px, et suivent l'entité quand l'éditeur la déplace, la copie ou la supprime. Cela permet
+des murs et des portes éditables dans le jeu avec des collisions fines, par exemple un mur de 6 px ou une bande
+de 3 px au pied d'une façade. Mettre `collisionGrid: [[0]]` pour garder l'aimantation à la grille de l'éditeur.
+Le catalogue est lu par le front seul (`EntitiesCollectionsManager`) : les images officielles de `back` et
+`map-storage` n'ont pas à changer. L'import d'image de l'éditeur (« Ajouter votre image ») ne porte pas ces
+rectangles ; ils se déclarent dans le JSON du catalogue statique. Ne pas les écrire à la main dans le catalogue des
+entités personnalisées : `map-storage` l'ouvre et le réécrit avec son schéma, qui supprime le champ.
+Une liste de rectangles invalide est ignorée (l'entité reste, sans collision fine) sans faire rejeter le catalogue.
+Le pathfinding du double-clic en tient compte en **refusant** le trajet qui les traverse, sans contournement (la grille
+de navigation voit la case libre quand `collisionGrid` vaut `[[0]]`). Ajouter un mur annule un trajet en cours du joueur
+local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
+Phaser sans navigateur) : comportement validé en jeu uniquement.
+
 ### Valider la notification en beta
 
 Ouvrir une session après le déploiement du patch, puis garder l'onglet ouvert pendant le déploiement beta suivant.

@@ -273,6 +273,17 @@ export const EntityDataProperties = z.array(EntityDataProperty);
 
 export const CollisionGrid = z.array(z.array(z.number()));
 
+/**
+ * Solid rectangle in pixels, relative to the top-left corner of an entity. Opt-in alternative to the
+ * 32px `collisionGrid` for thin walls; it only affects the player movement, not the editor placement grid.
+ */
+export const CollisionRectangle = z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number().positive(),
+    height: z.number().positive(),
+});
+
 export const EntityRawPrefab = z.object({
     id: z.string(),
     name: z.string(),
@@ -281,6 +292,9 @@ export const EntityRawPrefab = z.object({
     direction: z.enum(["Left", "Up", "Down", "Right"]),
     color: z.string(),
     collisionGrid: CollisionGrid.optional(),
+    // Fail open: an invalid rectangle list is ignored instead of rejecting the whole catalog file,
+    // which would make every placed entity of the catalog lose its prefab.
+    collisionRectangles: z.array(CollisionRectangle).optional().catch(undefined),
     depthOffset: z.number().optional(),
 });
 
@@ -434,6 +448,7 @@ export type EntityCollection = z.infer<typeof EntityCollection>;
 export type EntityCollectionRaw = z.infer<typeof EntityCollectionRaw>;
 export type CollectionUrl = z.infer<typeof CollectionUrl>;
 export type CollisionGrid = z.infer<typeof CollisionGrid>;
+export type CollisionRectangle = z.infer<typeof CollisionRectangle>;
 export type EntityData = z.infer<typeof EntityData>;
 export type EntityDimensions = z.infer<typeof EntityDimensions>;
 export type EntityCoordinates = z.infer<typeof EntityCoordinates>;
