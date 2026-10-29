@@ -7,17 +7,15 @@ import {
     MapCreationService,
     readMapCreationConfig,
     roomPathFromUrl,
-    slugifyMapName,
 } from "../../src/pusher/services/MapCreationService";
 import type { MapCreationConfig } from "../../src/pusher/services/MapCreationService";
 
 const config: MapCreationConfig = {
-    template: "blank-grass",
     creatorTag: "admin",
-    maxTotal: 3,
     maxPerUserPerHour: 2,
+    adminApiUrl: "http://admin-api:8080",
+    authorization: "secret-token",
     mapStorageUrl: "http://map-storage:3000",
-    authorization: "Bearer secret-token",
 };
 
 function mapsResponse(paths: string[], status = 200) {
@@ -27,43 +25,27 @@ function mapsResponse(paths: string[], status = 200) {
     };
 }
 
-function createService(
-    options: { existing?: string[]; copyStatuses?: number[]; now?: () => number; suffixes?: string[] } = {},
-) {
-    const copyStatuses = [...(options.copyStatuses ?? [])];
-    const suffixes = [...(options.suffixes ?? ["a1b2c3", "d4e5f6", "0a0b0c"])];
-    const http = {
-        get: vi.fn().mockResolvedValue(mapsResponse(options.existing ?? [])),
-        post: vi.fn().mockImplementation(() => Promise.resolve({ status: copyStatuses.shift() ?? 201 })),
+/** Answer of POST /api/room/create, as documented in the Admin API README of the selfhost. */
+function created(folder: string) {
+    return {
+        status: 201,
+        data: {
+            folder,
+            roomUrl: `/~/${folder}/office.wam`,
+            wamUrl: `https://wa-beta.goyan.fr/map-storage/${folder}/office.wam`,
+        },
     };
-    const service = new MapCreationService(
-        config,
-        http as unknown as AxiosInstance,
-        options.now ?? (() => 1_000_000),
-        () => suffixes.shift() ?? "ffffff",
-    );
-    return { service, http };
 }
 
-describe("slugifyMapName", () => {
-    it("should keep only lowercase ASCII letters and single dashes when the name has accents and spaces", () => {
-        expect(slugifyMapName("Salle de réunion n°2 !")).toBe("salle-de-reunion-n-2");
-    });
-
-    it("should never contain a path separator when the name tries a path traversal", () => {
-        expect(slugifyMapName("../../goyan/office")).toBe("goyan-office");
-    });
-
-    it("should fall back to a default when nothing usable remains", () => {
-        expect(slugifyMapName("???")).toBe("bureau");
-    });
-
-    it("should not end with a dash when the truncation cuts inside a separator", () => {
-        const slug = slugifyMapName(`${"a".repeat(29)} b`);
-        expect(slug.length).toBeLessThanOrEqual(30);
-        expect(slug.endsWith("-")).toBe(false);
-    });
-});
+function createService(options: { existing?: string[]; responses?: unknown[]; now?: () => number } = {}) {
+    const responses = [...(options.responses ?? [])];
+    const http = {
+        get: vi.fn().mockResolvedValue(mapsResponse(options.existing ?? [])),
+        post: vi.fn().mockImplementation(() => Promise.resolve(responses.shift() ?? created("carte-salle-a1b2c3"))),
+    };
+    const service = new MapCreationService(config, http as unknown as AxiosInstance, options.now ?? (() => 1_000_000));
+    return { service, http };
+}
 
 describe("roomPathFromUrl", () => {
     const front = "https://wa-beta.goyan.fr";
@@ -124,82 +106,103 @@ describe("canCreateMap", () => {
 
 describe("readMapCreationConfig", () => {
     const environment = {
-        template: "blank-grass",
         creatorTag: "admin",
-        maxTotal: 20,
         maxPerUserPerHour: 5,
+        adminApiUrl: "http://admin-api:8080/",
+        adminApiToken: "t",
         mapStorageUrl: "http://map-storage:3000/",
         production: false,
-        bearerToken: undefined,
-        user: undefined,
-        password: undefined,
     };
 
-    it("should disable the feature when no write credential is set", () => {
-        expect(readMapCreationConfig(environment)).toBeUndefined();
+    it("should use the Admin API token and strip the trailing slashes", () => {
+        expect(readMapCreationConfig(environment)).toEqual({
+            creatorTag: "admin",
+            maxPerUserPerHour: 5,
+            adminApiUrl: "http://admin-api:8080",
+            authorization: "t",
+            mapStorageUrl: "http://map-storage:3000",
+        });
     });
 
-    it("should disable the feature when the template is missing", () => {
-        expect(readMapCreationConfig({ ...environment, template: undefined, bearerToken: "t" })).toBeUndefined();
+    it("should disable the feature when the Admin API is not configured", () => {
+        expect(readMapCreationConfig({ ...environment, adminApiUrl: undefined })).toBeUndefined();
+        expect(readMapCreationConfig({ ...environment, adminApiToken: undefined })).toBeUndefined();
     });
 
-    it("should prefer the bearer token over the Basic credentials and strip the trailing slash", () => {
-        const result = readMapCreationConfig({ ...environment, bearerToken: "t", user: "u", password: "p" });
-        expect(result?.authorization).toBe("Bearer t");
-        expect(result?.mapStorageUrl).toBe("http://map-storage:3000");
+    it("should disable the feature when map-storage cannot be listed", () => {
+        expect(readMapCreationConfig({ ...environment, mapStorageUrl: undefined })).toBeUndefined();
     });
 
-    it("should build a Basic header when only the user and the password are set", () => {
-        const result = readMapCreationConfig({ ...environment, user: "u", password: "p" });
-        expect(result?.authorization).toBe(`Basic ${Buffer.from("u:p").toString("base64")}`);
-    });
-
-    it("should disable the feature when only the user is set", () => {
-        expect(readMapCreationConfig({ ...environment, user: "u" })).toBeUndefined();
+    it("should disable the feature when the development wildcard tag is used in production", () => {
+        expect(readMapCreationConfig({ ...environment, creatorTag: "*", production: true })).toBeUndefined();
+        expect(readMapCreationConfig({ ...environment, creatorTag: "*" })).toBeDefined();
+        expect(readMapCreationConfig({ ...environment, production: true })).toBeDefined();
     });
 });
 
 describe("MapCreationService.createMap", () => {
-    it("should copy the configured template into a prefixed folder when the name is valid", async () => {
-        const { service, http } = createService();
-        const result = await service.createMap("user-1", "Zone Bureau Nord");
+    it("should ask the Admin API for a map with the trimmed name and the user, and return its room", async () => {
+        const { service, http } = createService({ responses: [created("carte-zone-bureau-nord-a1b2c3")] });
+        const result = await service.createMap("user-1", "  Zone Bureau Nord ");
         expect(result).toEqual({
             folder: "carte-zone-bureau-nord-a1b2c3",
             roomUrl: "/~/carte-zone-bureau-nord-a1b2c3/office.wam",
         });
         expect(http.post).toHaveBeenCalledWith(
-            "http://map-storage:3000/copy",
-            { source: "blank-grass", destination: "carte-zone-bureau-nord-a1b2c3" },
-            expect.objectContaining({ headers: { Authorization: "Bearer secret-token" } }),
+            "http://admin-api:8080/api/room/create",
+            { name: "Zone Bureau Nord", userIdentifier: "user-1" },
+            expect.objectContaining({ headers: { Authorization: "secret-token" } }),
         );
+        expect(http.get).not.toHaveBeenCalled();
     });
 
-    it("should reject an empty or too long name without calling map-storage", async () => {
+    it("should reject an empty or too long name without calling the Admin API", async () => {
         const { service, http } = createService();
         await expect(service.createMap("user-1", "   ")).rejects.toMatchObject({ code: "invalid-name" });
         await expect(service.createMap("user-1", "x".repeat(61))).rejects.toMatchObject({ code: "invalid-name" });
-        expect(http.get).not.toHaveBeenCalled();
         expect(http.post).not.toHaveBeenCalled();
     });
 
-    it("should refuse when the maximum number of created maps is reached, counting only prefixed folders", async () => {
-        const { service, http } = createService({
-            existing: [
-                "carte-a-111111/office.wam",
-                "carte-b-222222/office.wam",
-                "carte-c-333333/office.wam",
-                "goyan/office.wam",
+    it("should translate each refusal of the Admin API", async () => {
+        const { service } = createService({
+            responses: [
+                { status: 400, data: { error: "INVALID_NAME" } },
+                { status: 403, data: { error: "NOT_ADMIN" } },
+                { status: 409, data: { error: "MAP_LIMIT_REACHED", max: 30 } },
+                { status: 503, data: { error: "MAP_CREATION_DISABLED" } },
+                { status: 503, data: { error: "MAP_STORAGE_UNAVAILABLE" } },
+                { status: 401, data: "" },
             ],
         });
-        await expect(service.createMap("user-1", "Quatre")).rejects.toMatchObject({ code: "quota-total" });
-        expect(http.post).not.toHaveBeenCalled();
+        // One user per call: the hourly limit of a user must not hide the answer of the Admin API.
+        const codes = await Promise.all(
+            [0, 1, 2, 3, 4, 5].map((i) =>
+                service.createMap(`user-${i}`, "Salle").catch((e: unknown) => (e as MapCreationError).code),
+            ),
+        );
+        expect(codes).toEqual([
+            "invalid-name",
+            "forbidden",
+            "quota-total",
+            "storage-failure",
+            "storage-failure",
+            "storage-failure",
+        ]);
     });
 
-    it("should not count the maps that were not created from the editor", async () => {
+    it("should refuse a room that is not a created map, so an exit never points elsewhere", async () => {
         const { service } = createService({
-            existing: ["goyan/office.wam", "goyan-wall-prefabs/office.wam", "autre/office.wam", "x/office.wam"],
+            responses: [
+                { status: 201, data: { folder: "goyan", roomUrl: "/~/goyan/office.wam" } },
+                { status: 201, data: { folder: "carte-a-111111", roomUrl: "https://evil.example/~/x.wam" } },
+                { status: 201, data: { folder: "carte-../goyan", roomUrl: "/~/carte-../goyan/office.wam" } },
+                { status: 201, data: "not json" },
+            ],
         });
-        await expect(service.createMap("user-1", "Premier")).resolves.toMatchObject({ folder: "carte-premier-a1b2c3" });
+        const results = await Promise.allSettled([0, 1, 2, 3].map((i) => service.createMap(`user-${i}`, "Salle")));
+        for (const result of results) {
+            expect(result).toMatchObject({ status: "rejected", reason: { code: "storage-failure" } });
+        }
     });
 
     it("should limit the creations of one user per hour, and let a new hour start fresh", async () => {
@@ -213,62 +216,12 @@ describe("MapCreationService.createMap", () => {
         await expect(service.createMap("user-1", "Trois")).resolves.toBeDefined();
     });
 
-    it("should try another suffix when the folder already exists", async () => {
-        const { service, http } = createService({ copyStatuses: [409, 201] });
-        const result = await service.createMap("user-1", "Salle");
-        expect(result.folder).toBe("carte-salle-d4e5f6");
-        expect(http.post).toHaveBeenCalledTimes(2);
-    });
-
-    it("should give up after three collisions", async () => {
-        const { service, http } = createService({ copyStatuses: [409, 409, 409] });
-        await expect(service.createMap("user-1", "Salle")).rejects.toBeInstanceOf(MapCreationError);
-        expect(http.post).toHaveBeenCalledTimes(3);
-    });
-
-    it("should report a storage failure without leaking the response when map-storage refuses the copy", async () => {
-        const { service } = createService({ copyStatuses: [401] });
-        const error = await service.createMap("user-1", "Salle").catch((e: unknown) => e);
-        expect(error).toMatchObject({ code: "storage-failure" });
-        expect((error as Error).message).not.toContain("secret-token");
-    });
-
-    it("should report a storage failure when the list of maps cannot be read", async () => {
-        const { service, http } = createService();
-        http.get.mockResolvedValue({ status: 500, data: "boom" });
-        await expect(service.createMap("user-1", "Salle")).rejects.toMatchObject({ code: "storage-failure" });
-        expect(http.post).not.toHaveBeenCalled();
-    });
-
     it("should not count a failed creation against the user hourly limit", async () => {
-        const { service } = createService({ copyStatuses: [500, 500, 201, 201] });
+        const { service } = createService({ responses: [{ status: 503 }, { status: 409 }] });
         await expect(service.createMap("user-1", "Un")).rejects.toMatchObject({ code: "storage-failure" });
-        await expect(service.createMap("user-1", "Deux")).rejects.toMatchObject({ code: "storage-failure" });
+        await expect(service.createMap("user-1", "Deux")).rejects.toMatchObject({ code: "quota-total" });
         await expect(service.createMap("user-1", "Trois")).resolves.toBeDefined();
         await expect(service.createMap("user-1", "Quatre")).resolves.toBeDefined();
-    });
-});
-
-describe("readMapCreationConfig in production", () => {
-    const environment = {
-        template: "blank-grass",
-        creatorTag: "admin",
-        maxTotal: 20,
-        maxPerUserPerHour: 5,
-        mapStorageUrl: "http://map-storage:3000",
-        production: true,
-        bearerToken: "t",
-        user: undefined,
-        password: undefined,
-    };
-
-    it("should disable the feature when the development wildcard tag is used in production", () => {
-        expect(readMapCreationConfig({ ...environment, creatorTag: "*" })).toBeUndefined();
-        expect(readMapCreationConfig({ ...environment, creatorTag: "*", production: false })).toBeDefined();
-    });
-
-    it("should keep the feature enabled in production with a real tag", () => {
-        expect(readMapCreationConfig(environment)).toBeDefined();
     });
 });
 
@@ -335,19 +288,8 @@ describe("MapCreationService limits under concurrency", () => {
         expect(http.post).toHaveBeenCalledTimes(2);
     });
 
-    it("should let only one of two parallel creations pass when the total limit leaves room for one", async () => {
-        const { service } = createService({ existing: ["carte-a-111111/office.wam", "carte-b-222222/office.wam"] });
-        const results = await Promise.allSettled([
-            service.createMap("user-1", "Un"),
-            service.createMap("user-2", "Deux"),
-        ]);
-        expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-        const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
-        expect(rejected[0].reason).toMatchObject({ code: "quota-total" });
-    });
-
     it("should free the reserved slot when the creation fails, so the user can try again", async () => {
-        const { service } = createService({ copyStatuses: [500, 201] });
+        const { service } = createService({ responses: [{ status: 500 }] });
         await expect(service.createMap("user-1", "Un")).rejects.toMatchObject({ code: "storage-failure" });
         await expect(service.createMap("user-1", "Deux")).resolves.toBeDefined();
         await expect(service.createMap("user-1", "Trois")).resolves.toBeDefined();
@@ -358,7 +300,7 @@ describe("MapCreationService network failures", () => {
     const networkError = Object.assign(new Error("connect ECONNREFUSED 10.0.0.5:3000"), {
         isAxiosError: true,
         code: "ECONNREFUSED",
-        config: { headers: { Authorization: "Bearer secret-token" } },
+        config: { headers: { Authorization: "secret-token" } },
     });
 
     function everything(error: unknown): string {
@@ -369,7 +311,7 @@ describe("MapCreationService network failures", () => {
         return parts.join(" ");
     }
 
-    it("should turn a refused connection on the copy into a storage failure without the credential", async () => {
+    it("should turn a refused connection to the Admin API into a storage failure without the token", async () => {
         const { service, http } = createService();
         http.post.mockRejectedValue(networkError);
         const error = await service.createMap("user-1", "Salle").catch((e: unknown) => e);
@@ -378,7 +320,7 @@ describe("MapCreationService network failures", () => {
         expect(everything(error)).not.toContain("secret-token");
     });
 
-    it("should turn a failure to list the maps into a storage failure without the credential", async () => {
+    it("should turn a failure to list the maps into a storage failure without the token", async () => {
         const { service, http } = createService();
         http.get.mockRejectedValue(networkError);
         const error = await service.roomExists("goyan/office.wam").catch((e: unknown) => e);

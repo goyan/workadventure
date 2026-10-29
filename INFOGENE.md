@@ -121,33 +121,34 @@ Phaser sans navigateur) : comportement validé en jeu uniquement.
 ### Création de carte depuis l'éditeur
 
 Dans l'éditeur, la propriété de zone « Quitter la carte » (`exit`) propose un bloc **« Créer une nouvelle carte »** : nom, bouton, et la sortie pointe
-aussitôt sur la carte créée. Le pusher (image `play`) copie un **dossier modèle** de `map-storage` (`POST /copy`) ; ni `back` ni `map-storage` ne changent.
-Endpoint : `GET /map-creation?roomUrl=…` (le bouton n'apparaît que si `allowed`) et `POST /map-creation` ; les deux exigent le jeton de l'utilisateur
+aussitôt sur la carte créée. Le pusher (image `play`) **demande la carte à l'Admin API** (`POST /api/room/create`, jeton `ADMIN_API_TOKEN` habituel), qui copie un
+dossier modèle de `map-storage` ; ni `back` ni `map-storage` ne changent. Le pusher n'a **aucun identifiant d'écriture** de `map-storage` : le compte Basic reste dans
+l'Admin API, jamais exposée sur Internet (contrat dans `admin-api/README.md` du repo selfhost).
+Endpoint du pusher : `GET /map-creation?roomUrl=…` (le bouton n'apparaît que si `allowed`) et `POST /map-creation` ; les deux exigent le jeton de l'utilisateur
 (`authenticated`) et **recalculent le droit côté serveur** par l'Admin API : l'utilisateur doit pouvoir éditer la salle ET porter le tag `MAP_CREATION_TAG`.
 L'URL de salle envoyée par le navigateur sert de contexte à ce calcul : elle doit avoir l'origine de `PUSHER_URL` (absolue partout, contrairement à `FRONT_URL`
 qui vaut `/` en beta), être de la forme `/~/<chemin>.wam` et exister dans `map-storage` ; elle est reconstruite à partir de son chemin avant l'appel.
 
-Désactivée tant que ces variables du pusher ne sont pas toutes posées : `MAP_CREATION_TEMPLATE` (dossier modèle, jamais fourni par le navigateur),
-`INTERNAL_MAP_STORAGE_URL`, et un identifiant d'écriture (`MAP_STORAGE_WRITE_BEARER_TOKEN`, ou `MAP_STORAGE_WRITE_USER` + `MAP_STORAGE_WRITE_PASSWORD`).
-Réglages : `MAP_CREATION_TAG` (défaut `admin`, `*` = tout éditeur, développement seulement), `MAP_CREATION_MAX_TOTAL` (20), `MAP_CREATION_MAX_PER_USER_PER_HOUR` (5).
+Active dès que `ADMIN_API_URL`, `ADMIN_API_TOKEN` et `INTERNAL_MAP_STORAGE_URL` (lecture de `GET /maps`) sont posées ; aucune variable propre à ajouter.
+Côté Admin API : `MAP_CREATION_TEMPLATE` (modèle, vide = désactivée → 503), `MAP_CREATION_MAX` (30). Réglages du pusher : `MAP_CREATION_TAG` (défaut `admin`,
+`*` = tout éditeur, développement seulement), `MAP_CREATION_MAX_PER_USER_PER_HOUR` (5).
 
-- Le dossier créé s'appelle `carte-<nom simplifié>-<suffixe aléatoire>` (lettres minuscules, chiffres et tirets : le nom n'est jamais un chemin). Collision (409) :
-  nouvelle tentative, 3 au plus. Le plafond total compte les dossiers préfixés `carte-` dans `GET /maps`.
-- L'identifiant d'écriture de `map-storage` donne l'écriture sur **toutes** les cartes (`map-storage` n'a pas de droits fins) : il ne doit jamais sortir de l'environnement
-  du pusher, et le code de l'endpoint est la seule barrière. **Préférer le couple Basic** (`MAP_STORAGE_WRITE_USER` / `_PASSWORD`) au jeton Bearer : la stratégie Bearer de
-  `map-storage` écrit le jeton en clair dans ses journaux à chaque requête (`Authentication.ts`), pas la stratégie Basic.
-- Les erreurs réseau vers `map-storage` sont remplacées par une erreur assainie avant de sortir du service (une erreur Axios brute porte l'en-tête `Authorization`) ; rien de brut n'est journalisé.
+- L'Admin API revérifie le tag `admin` dans sa base, réduit le nom à `carte-<nom simplifié>-<suffixe aléatoire>`, applique le plafond total (dossiers `carte-*` dans
+  `map-storage`) et ne crée qu'une carte à la fois. Le pusher vérifie seulement la longueur du nom (1 à 60) ; un nom sans lettre ni chiffre (`???`) est refusé (400).
+- Réponses traduites par le pusher : 201 → `{ folder, roomUrl }`, 400 → 400, 403 → 403, 409 (plafond) → 429, autre (503, 401…) → 502. La réponse 201 n'est acceptée que
+  pour un dossier `carte-…` et `roomUrl = /~/<dossier>/office.wam` : une sortie ne peut pas pointer ailleurs.
+- Les erreurs réseau vers l'Admin API et `map-storage` sont remplacées par une erreur assainie avant de sortir du service (une erreur Axios brute porte l'en-tête
+  `Authorization`, donc `ADMIN_API_TOKEN`) ; rien de brut n'est journalisé.
 - Sémantique du droit : les tags viennent de l'Admin API pour la salle d'origine citée (salle existante du monde), pas pour la carte à créer. Le seul garde est donc le tag
-  `MAP_CREATION_TAG` (l'Admin API de la selfhost renvoie `canEdit: true` à tous). `*` est refusé quand `NODE_ENV=production` (la fonction se désactive).
-- Limites : réservées avant le premier `await` (des requêtes parallèles ne les contournent pas), mais **en mémoire** : remises à zéro au redémarrage du pusher et non partagées entre
-  instances (acceptable en beta mono-instance). Les interrogations du droit sont aussi limitées (30 par minute et par utilisateur), le droit est demandé avant de lister les cartes.
-- La liste déroulante des sorties vient de `/api/room/sameWorld` de l'Admin API ; sans cette route, une carte créée n'apparaît que le temps de la session.
+  (l'Admin API de la selfhost renvoie `canEdit: true` à tous, et tous les comptes portent `admin`). `*` est refusé quand `NODE_ENV=production` (la fonction se désactive).
+- Limites du pusher **en mémoire** (par utilisateur et par heure, interrogations 30 par minute) : remises à zéro au redémarrage et non partagées entre instances
+  (acceptable en beta mono-instance). Le plafond total, lui, est persistant (compté dans `map-storage` par l'Admin API).
+- La liste déroulante des sorties vient de `/api/room/sameWorld` de l'Admin API ; les dossiers `carte-test-*` (essais) en sont exclus.
 - Un seul monde : le plafond et le préfixe `carte-` sont globaux. À scoper par monde si un second monde est ajouté.
-- Le nom saisi n'est pas écrit dans le WAM (aucune retouche après la copie : un échec laisserait une carte à moitié créée). Le nom du modèle s'affiche donc dans les listes.
+- Le nom saisi n'est pas écrit dans le WAM (aucune retouche après la copie). Le nom du modèle s'affiche donc dans les listes.
 - Les textes sont traduits en français ; les autres langues utilisent provisoirement l'anglais.
-- Vérifié en local (dev) avant les corrections de revue : droit refusé sans le tag (403, aucune carte créée), 401 sans jeton, 400 pour un nom vide, tentative `../../goyan` ramenée à un dossier sûr,
-  limite par heure (429), carte créée jouable. Depuis : 44 tests unitaires (concurrence, panne réseau sans fuite du jeton, décision d'autorisation). **Non vérifié** : le bloc dans l'interface
-  de l'éditeur (cliqué à la main), l'endpoint après les corrections de revue (non rejoué de bout en bout), la beta.
+- Vérifié : route de l'Admin API de bout en bout en beta (401, 400, 403, 201, WAM servi) ; tests unitaires du pusher (Admin API simulée). **Non vérifié** : le bloc dans
+  l'interface de l'éditeur (cliqué à la main), l'appel réel pusher → Admin API, la beta avec ce code.
 
 ### Valider la notification en beta
 
