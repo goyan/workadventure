@@ -184,3 +184,10 @@ par rapport à `floorLayer` est conservé.
 Sans la nouvelle propriété, les cartes gardent leurs collisions actuelles. Ce prototype
 reste local, sans push ni déploiement. La recette dans le jeu WorkAdventure reste à faire
 sur une salle séparée, avant toute modification de la carte beta habituelle.
+
+## Bibliothèques d'objets communes
+
+Le champ `entityCollectionsUrls` de la réponse `/api/map` de l'Admin API s'ajoute aux collections d'objets du WAM
+(`GameScene.loadEntityCollections`, `mergeEntityCollectionUrls`). Les collections du WAM passent en premier ; aucun doublon
+d'URL ni d'identifiant d'objet n'est conservé (le WAM prime). Sans Admin API (ou sans ce champ) l'effet est nul. Un objet
+posé depuis une bibliothèque commune dépend de cette liste : si elle change, l'objet n'est plus résolu.

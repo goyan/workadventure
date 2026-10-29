@@ -229,6 +229,7 @@ import { IframeEventDispatcher } from "./IframeEventDispatcher";
 import { PlayerVariablesManager } from "./PlayerVariablesManager";
 import { SayManager } from "./Say/SayManager";
 import { EntitiesCollectionsManager } from "./MapEditor/EntitiesCollectionsManager";
+import { mergeEntityCollectionUrls } from "./MapEditor/EntityCollectionUrls";
 import { DEPTH_BUBBLE_CHAT_SPRITE, DEPTH_DEBUG_SERVER_VIEWPORT } from "./DepthIndexes";
 import { ScriptingEventsManager } from "./ScriptingEventsManager";
 import { FollowManager } from "./FollowManager";
@@ -1807,12 +1808,14 @@ export class GameScene extends DirtyScene {
 
     private loadEntityCollections() {
         const customEntityCollectionUrl = this.getCustomEntityCollectionUrl();
-        const collectionDescriptors: { url: string; type: EntityPrefabType }[] = this.wamFile.entityCollections.map(
-            (collectionUrl) => ({
-                url: collectionUrl.url,
-                type: "Default",
-            }),
+        const collectionUrls = mergeEntityCollectionUrls(
+            this.wamFile.entityCollections.map((collection) => collection.url),
+            this._room.entityCollectionsUrls,
         );
+        const collectionDescriptors: { url: string; type: EntityPrefabType }[] = collectionUrls.map((url) => ({
+            url,
+            type: "Default",
+        }));
         collectionDescriptors.push({ url: customEntityCollectionUrl, type: "Custom" });
 
         this.entitiesCollectionsManager.loadCollections(collectionDescriptors);
