@@ -3,13 +3,10 @@ import type { Request, Response } from "express";
 import Debug from "debug";
 import * as Sentry from "@sentry/node";
 import {
+    ADMIN_API_TOKEN,
+    ADMIN_API_URL,
     MAP_CREATION_MAX_PER_USER_PER_HOUR,
-    MAP_CREATION_MAX_TOTAL,
     MAP_CREATION_TAG,
-    MAP_CREATION_TEMPLATE,
-    MAP_STORAGE_WRITE_BEARER_TOKEN,
-    MAP_STORAGE_WRITE_PASSWORD,
-    MAP_STORAGE_WRITE_USER,
     INTERNAL_MAP_STORAGE_URL,
     PUSHER_URL,
 } from "../enums/EnvironmentVariable";
@@ -23,10 +20,19 @@ import {
     MapCreationService,
     readMapCreationConfig,
 } from "../services/MapCreationService";
+import type { MapCreationErrorCode } from "../services/MapCreationService";
 import { validatePostQuery, validateQuery } from "../services/QueryValidator";
 import { BaseHttpController } from "./BaseHttpController";
 
 const debug = Debug("pusher:requests");
+
+const HTTP_STATUS_BY_ERROR: Record<MapCreationErrorCode, number> = {
+    "invalid-name": 400,
+    forbidden: 403,
+    "rate-limit": 429,
+    "quota-total": 429,
+    "storage-failure": 502,
+};
 
 export class MapCreationController extends BaseHttpController {
     private readonly service: MapCreationService | undefined;
@@ -35,15 +41,12 @@ export class MapCreationController extends BaseHttpController {
     constructor(app: ConstructorParameters<typeof BaseHttpController>[0]) {
         super(app);
         const config = readMapCreationConfig({
-            template: MAP_CREATION_TEMPLATE,
             creatorTag: MAP_CREATION_TAG,
-            maxTotal: MAP_CREATION_MAX_TOTAL,
             maxPerUserPerHour: MAP_CREATION_MAX_PER_USER_PER_HOUR,
+            adminApiUrl: ADMIN_API_URL,
+            adminApiToken: ADMIN_API_TOKEN,
             mapStorageUrl: INTERNAL_MAP_STORAGE_URL,
             production: process.env.NODE_ENV === "production",
-            bearerToken: MAP_STORAGE_WRITE_BEARER_TOKEN,
-            user: MAP_STORAGE_WRITE_USER,
-            password: MAP_STORAGE_WRITE_PASSWORD,
         });
         this.service = config ? new MapCreationService(config) : undefined;
         this.creatorTag = config?.creatorTag ?? MAP_CREATION_TAG;
@@ -86,12 +89,11 @@ export class MapCreationController extends BaseHttpController {
             } catch (e) {
                 if (e instanceof MapCreationError) {
                     if (e.code === "storage-failure") {
-                        // The error was sanitized by the service: no request configuration, so no credential.
+                        // The error was sanitized by the service: no request configuration, so no token.
                         console.error("Map creation failed:", e.message);
                         Sentry.captureException(e);
                     }
-                    const status = e.code === "invalid-name" ? 400 : e.code === "storage-failure" ? 502 : 429;
-                    res.status(status).json({ error: e.code });
+                    res.status(HTTP_STATUS_BY_ERROR[e.code]).json({ error: e.code });
                     return;
                 }
                 // Never log the raw error: a network library error can carry the request configuration.

@@ -1,18 +1,14 @@
-import { randomBytes } from "node:crypto";
 import type { AxiosInstance } from "axios";
 import axios from "axios";
+import { z } from "zod";
 import { MapsCacheFileFormat } from "@workadventure/map-editor";
 
-/** Every map created from the map editor lives in a folder starting with this prefix: it is how they are counted. */
-const CREATED_MAP_FOLDER_PREFIX = "carte-";
 const MAX_NAME_LENGTH = 60;
-const MAX_SLUG_LENGTH = 30;
-const MAX_COPY_ATTEMPTS = 3;
 const ONE_HOUR_IN_MS = 60 * 60 * 1000;
 const ONE_MINUTE_IN_MS = 60 * 1000;
 const MAX_QUERIES_PER_MINUTE = 30;
 
-type MapCreationErrorCode = "invalid-name" | "rate-limit" | "quota-total" | "storage-failure";
+export type MapCreationErrorCode = "invalid-name" | "forbidden" | "rate-limit" | "quota-total" | "storage-failure";
 
 export class MapCreationError extends Error {
     constructor(
@@ -26,58 +22,50 @@ export class MapCreationError extends Error {
 }
 
 export interface MapCreationConfig {
-    /** Folder of map-storage copied for every new map. Never comes from a client. */
-    template: string;
     /** Tag required to create a map, or "*" for every user who can edit the map (development only). */
     creatorTag: string;
-    maxTotal: number;
     maxPerUserPerHour: number;
-    /** Internal URL of map-storage, without the public path prefix. */
-    mapStorageUrl: string;
-    /** Value of the Authorization header sent to map-storage. */
+    /** Admin API that copies the template: it alone holds the map-storage write credential. */
+    adminApiUrl: string;
+    /** Value of the Authorization header sent to the Admin API (ADMIN_API_TOKEN). */
     authorization: string;
+    /** Internal URL of map-storage, without the public path prefix. Read only: lists the existing rooms. */
+    mapStorageUrl: string;
 }
 
 interface MapCreationEnvironment {
-    template: string | undefined;
     creatorTag: string;
-    maxTotal: number;
     maxPerUserPerHour: number;
+    adminApiUrl: string | undefined;
+    adminApiToken: string | undefined;
     mapStorageUrl: string | undefined;
     /** True when the pusher runs in production: the "*" wildcard tag is then refused. */
     production: boolean;
-    bearerToken: string | undefined;
-    user: string | undefined;
-    password: string | undefined;
 }
 
+/** Folder and room returned by the Admin API: only a "carte-" folder, so an exit can never point elsewhere. */
+const CreatedMap = z
+    .object({ folder: z.string().regex(/^carte-[a-z0-9]+(?:-[a-z0-9]+)*$/), roomUrl: z.string() })
+    .refine((created) => created.roomUrl === `/~/${created.folder}/office.wam`);
+
 /**
- * Undefined means the feature is disabled: it needs a template, an internal map-storage URL and a write credential.
- * A bearer token wins over the Basic credentials.
+ * Undefined means the feature is disabled: it needs the Admin API (which creates the map) and the internal URL of
+ * map-storage (which lists the rooms). The pusher holds no map-storage write credential.
  */
 export function readMapCreationConfig(env: MapCreationEnvironment): MapCreationConfig | undefined {
-    if (!env.template || !env.mapStorageUrl) {
+    if (!env.adminApiUrl || !env.adminApiToken || !env.mapStorageUrl) {
         return undefined;
     }
     // "*" lets every editor create maps: a development convenience that must never reach production by mistake.
     if (env.creatorTag === "*" && env.production) {
         return undefined;
     }
-    let authorization: string;
-    if (env.bearerToken) {
-        authorization = `Bearer ${env.bearerToken}`;
-    } else if (env.user && env.password) {
-        authorization = `Basic ${Buffer.from(`${env.user}:${env.password}`).toString("base64")}`;
-    } else {
-        return undefined;
-    }
     return {
-        template: env.template,
         creatorTag: env.creatorTag,
-        maxTotal: env.maxTotal,
         maxPerUserPerHour: env.maxPerUserPerHour,
+        adminApiUrl: env.adminApiUrl.replace(/\/+$/, ""),
+        authorization: env.adminApiToken,
         mapStorageUrl: env.mapStorageUrl.replace(/\/+$/, ""),
-        authorization,
     };
 }
 
@@ -132,30 +120,14 @@ export async function isCreationAllowed(
     return dependencies.roomExists(roomPath);
 }
 
-/** Lowercase ASCII letters, digits and single dashes only: the name is never used as a path. */
-export function slugifyMapName(name: string): string {
-    const slug = name
-        .normalize("NFD")
-        .replace(/[̀-ͯ]/g, "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, MAX_SLUG_LENGTH)
-        .replace(/-+$/g, "");
-    return slug === "" ? "bureau" : slug;
-}
-
 export class MapCreationService {
     private readonly recentCreations = new Map<string, number[]>();
     private readonly recentQueries = new Map<string, number[]>();
-    /** Creations started and not finished: counted against the total limit before map-storage lists them. */
-    private creationsInFlight = 0;
 
     constructor(
         private readonly config: MapCreationConfig,
         private readonly http: AxiosInstance = axios,
         private readonly now: () => number = Date.now,
-        private readonly randomSuffix: () => string = () => randomBytes(3).toString("hex"),
     ) {}
 
     /** Limits how often one user can ask for the right (every query reaches the Admin API and map-storage). */
@@ -168,8 +140,9 @@ export class MapCreationService {
     }
 
     /**
-     * Creates a folder copied from the template and returns the room URL to use in an exit.
-     * Both limits are reserved BEFORE the first await, so parallel requests cannot all pass the same check.
+     * Asks the Admin API to copy its template into a new folder and returns the room URL to use in an exit.
+     * The Admin API checks the tag again, simplifies the name, applies the total limit and creates one map at a time.
+     * The hourly slot is reserved BEFORE the first await, so parallel requests cannot all pass the same check.
      */
     public async createMap(userIdentifier: string, rawName: string): Promise<{ folder: string; roomUrl: string }> {
         const name = rawName.trim();
@@ -177,48 +150,51 @@ export class MapCreationService {
             throw new MapCreationError("invalid-name", `The name must have 1 to ${MAX_NAME_LENGTH} characters`);
         }
         const reservedAt = this.reserveUserSlot(userIdentifier);
-        const othersInFlight = this.creationsInFlight;
-        this.creationsInFlight++;
         let succeeded = false;
         try {
-            if ((await this.countCreatedMaps()) + othersInFlight >= this.config.maxTotal) {
-                throw new MapCreationError("quota-total", "The maximum number of created maps is reached");
-            }
-            const created = await this.copyTemplate(slugifyMapName(name), MAX_COPY_ATTEMPTS);
+            const created = await this.requestCreation(userIdentifier, name);
             succeeded = true;
             return created;
         } finally {
-            this.creationsInFlight--;
             if (!succeeded) {
                 this.releaseUserSlot(userIdentifier, reservedAt);
             }
         }
     }
 
-    /** Copies the template into a new folder; on a name collision (409) tries again with another suffix. */
-    private async copyTemplate(slug: string, attemptsLeft: number): Promise<{ folder: string; roomUrl: string }> {
-        if (attemptsLeft === 0) {
-            throw new MapCreationError("storage-failure", "No free folder name found");
-        }
-        const folder = `${CREATED_MAP_FOLDER_PREFIX}${slug}-${this.randomSuffix()}`;
-        const response = await this.callMapStorage(() =>
+    private async requestCreation(userIdentifier: string, name: string): Promise<{ folder: string; roomUrl: string }> {
+        const response = await this.callRemote("Admin API", () =>
             this.http.post(
-                `${this.config.mapStorageUrl}/copy`,
-                { source: this.config.template, destination: folder },
+                `${this.config.adminApiUrl}/api/room/create`,
+                { name, userIdentifier },
                 {
                     headers: { Authorization: this.config.authorization },
-                    timeout: 15_000,
+                    // The Admin API lists the maps (10 s) then copies the template (60 s).
+                    timeout: 75_000,
                     validateStatus: () => true,
                 },
             ),
         );
-        if (response.status === 201) {
-            return { folder, roomUrl: `/~/${folder}/office.wam` };
+        switch (response.status) {
+            case 201: {
+                const created = CreatedMap.safeParse(response.data);
+                if (!created.success) {
+                    throw new MapCreationError("storage-failure", "The Admin API returned an unexpected map");
+                }
+                return { folder: created.data.folder, roomUrl: created.data.roomUrl };
+            }
+            case 400:
+                throw new MapCreationError("invalid-name", "The Admin API refused the name");
+            case 403:
+                throw new MapCreationError("forbidden", "The Admin API refused the creation right");
+            case 409:
+                throw new MapCreationError("quota-total", "The maximum number of created maps is reached");
+            default:
+                throw new MapCreationError(
+                    "storage-failure",
+                    `The Admin API refused the creation (HTTP ${response.status})`,
+                );
         }
-        if (response.status !== 409) {
-            throw new MapCreationError("storage-failure", `map-storage refused the copy (HTTP ${response.status})`);
-        }
-        return this.copyTemplate(slug, attemptsLeft - 1);
     }
 
     /** True when the room is a map served by map-storage: the authorization context cannot be an arbitrary URL. */
@@ -226,12 +202,8 @@ export class MapCreationService {
         return (await this.listMapPaths()).includes(roomPath);
     }
 
-    private async countCreatedMaps(): Promise<number> {
-        return (await this.listMapPaths()).filter((path) => path.startsWith(CREATED_MAP_FOLDER_PREFIX)).length;
-    }
-
     private async listMapPaths(): Promise<string[]> {
-        const response = await this.callMapStorage(() =>
+        const response = await this.callRemote("map-storage", () =>
             this.http.get(`${this.config.mapStorageUrl}/maps`, { timeout: 15_000, validateStatus: () => true }),
         );
         const parsed = MapsCacheFileFormat.safeParse(response.data);
@@ -243,14 +215,14 @@ export class MapCreationService {
 
     /**
      * Network failures (refused connection, timeout, DNS) reject with an Axios error that carries the request
-     * configuration, so the write credential: it is replaced by a sanitized error and never reaches a log or Sentry.
+     * configuration, so the Admin API token: it is replaced by a sanitized error and never reaches a log or Sentry.
      */
-    private async callMapStorage<T>(call: () => Promise<T>): Promise<T> {
+    private async callRemote<T>(service: string, call: () => Promise<T>): Promise<T> {
         try {
             return await call();
         } catch (e) {
             const reason = axios.isAxiosError(e) ? (e.code ?? "network error") : "unexpected error";
-            throw new MapCreationError("storage-failure", "map-storage unreachable", { cause: new Error(reason) });
+            throw new MapCreationError("storage-failure", `${service} unreachable`, { cause: new Error(reason) });
         }
     }
 
