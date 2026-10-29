@@ -124,6 +124,14 @@ sont vérifiés contre les rectangles et la taille de l'avatar ; un trajet risqu
 traverser un mur est refusé. Un changement de mur par script arrête le trajet en cours.
 Les calques cachés de collision des meubles gardent leur comportement.
 
+La propriété numérique facultative `tileLayerDepth` sur un calque de tuiles définit sa
+profondeur d'affichage en pixels du monde. Pour une façade horizontale de 32 px, séparer
+chaque rangée en un calque et régler sa profondeur sur le pied du mur : `(rangée + 1) * 32`.
+L'avatar est ainsi masqué derrière la façade et visible devant. La collision reste
+indépendante du dessin et peut occuper uniquement les derniers pixels de la tuile.
+Sans cette propriété, ou avec une valeur non numérique/non finie, l'ordre existant
+par rapport à `floorLayer` est conservé.
+
 Sans la nouvelle propriété, les cartes gardent leurs collisions actuelles. Ce prototype
 reste local, sans push ni déploiement. La recette dans le jeu WorkAdventure reste à faire
 sur une salle séparée, avant toute modification de la carte beta habituelle.

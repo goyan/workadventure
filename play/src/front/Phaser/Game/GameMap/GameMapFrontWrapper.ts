@@ -168,9 +168,15 @@ export class GameMapFrontWrapper {
                     (layer.y || 0) * 32,
                 );
                 if (phaserLayer) {
+                    // Row layers can sort a wall facade by its foot, alongside characters and entities.
+                    const tileLayerDepth = this.gameMap.getTiledObjectProperty(layer, "tileLayerDepth");
                     this.phaserLayers.push(
                         phaserLayer
-                            .setDepth(depth)
+                            .setDepth(
+                                typeof tileLayerDepth === "number" && Number.isFinite(tileLayerDepth)
+                                    ? tileLayerDepth
+                                    : depth,
+                            )
                             .setScrollFactor(layer.parallaxx ?? 1, layer.parallaxy ?? 1)
                             .setAlpha(layer.opacity)
                             .setVisible(layer.visible)
