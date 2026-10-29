@@ -10,6 +10,7 @@ import { derived, writable } from "svelte/store";
 import { entitiesFileMigration } from "@workadventure/map-editor/src/Migrations/EntitiesFileMigration";
 import { asError } from "catch-unknown";
 import { EntityVariant } from "./Entities/EntityVariant";
+import { takeUnseenEntities } from "./EntityCollectionUrls";
 
 export class EntitiesCollectionsManager {
     private entitiesPrefabsMapPromise!: Promise<Map<string, EntityPrefab>>;
@@ -81,9 +82,11 @@ export class EntitiesCollectionsManager {
                         }
                     }
 
+                    // The first collection declaring an id wins (WAM collections are loaded first)
+                    const seenIds = new Set<string>();
                     for (const { collection, url } of entityCollections) {
                         const tagSet = new Set<string>();
-                        collection.collection.forEach((entity: EntityPrefab) => {
+                        takeUnseenEntities(collection.collection, seenIds).forEach((entity: EntityPrefab) => {
                             this.currentCollection.collection.push({
                                 name: entity.name,
                                 id: entity.id,
