@@ -94,6 +94,7 @@ export class EntitiesCollectionsManager {
                                 direction: entity.direction,
                                 color: entity.color,
                                 collisionGrid: entity.collisionGrid,
+                                collisionRectangles: entity.collisionRectangles,
                                 type: entity.type,
                             });
                             entity.tags.forEach((tag: string) => tagSet.add(tag));
