@@ -155,6 +155,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             exitMap: "退出地圖",
             exitMapStartAreaName: "起始區域名稱",
             defaultStartArea: "預設起始區域",
+            createMapLabel: "Create a new map",
+            createMapPlaceholder: "Name of the new map",
+            createMapButton: "Create the map",
+            createMapErrorLimit: "Creation limit reached, try again later",
+            createMapErrorGeneric: "The map could not be created",
             actionButtonLabel: "前往出口",
         },
         youtube: {

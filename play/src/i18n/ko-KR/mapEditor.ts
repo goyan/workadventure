@@ -159,6 +159,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             exitMap: "다른 지도 열기",
             exitMapStartAreaName: "도착 지도에서의 시작 영역 이름",
             defaultStartArea: "기본 시작 영역",
+            createMapLabel: "Create a new map",
+            createMapPlaceholder: "Name of the new map",
+            createMapButton: "Create the map",
+            createMapErrorLimit: "Creation limit reached, try again later",
+            createMapErrorGeneric: "The map could not be created",
             actionButtonLabel: "출구로 이동",
         },
         youtube: {

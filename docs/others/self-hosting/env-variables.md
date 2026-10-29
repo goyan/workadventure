@@ -102,6 +102,13 @@ Environment variables for the Play service (frontend and pusher).
 | `ENABLE_MAP_EDITOR` | No | Enable the built-in map editor. Defaults to false |
 | `MAP_EDITOR_ALLOWED_USERS` | No | Comma-separated list of user IDs allowed to edit maps |
 | `MAP_EDITOR_ALLOW_ALL_USERS` | No | If set to true, all users can edit the map. If set to false, only the users in MAP_EDITOR_ALLOWED_USERS or users with the "admin" or "editor" tag can edit the map. Note: this setting is ignored if an Admin API is configured. |
+| `MAP_CREATION_TEMPLATE` | No | Folder of map-storage copied to create a new map from the map editor (for instance: blank-grass). The feature is disabled when unset. |
+| `MAP_CREATION_TAG` | No | Tag a user must have to create maps from the map editor. Defaults to "admin". "*" lets every user who can edit the map create maps (development only). |
+| `MAP_CREATION_MAX_TOTAL` | No | Maximum number of maps created from the map editor, all users together. Defaults to 20 |
+| `MAP_CREATION_MAX_PER_USER_PER_HOUR` | No | Maximum number of maps one user can create per hour. Defaults to 5 |
+| `MAP_STORAGE_WRITE_BEARER_TOKEN` | No | Bearer token used by the pusher to write in map-storage (map creation). Preferred over the Basic credentials |
+| `MAP_STORAGE_WRITE_USER` | No | Basic user used by the pusher to write in map-storage when no bearer token is set |
+| `MAP_STORAGE_WRITE_PASSWORD` | No | Basic password used by the pusher to write in map-storage when no bearer token is set |
 | `WOKA_SPEED` | No | Avatar (WOKA) movement speed. Defaults to 9 |
 | `FEATURE_FLAG_BROADCAST_AREAS` | No | Enable broadcast areas feature. Defaults to false |
 | `KLAXOON_ENABLED` | No | Enable Klaxoon embedded application integration. Defaults to false |

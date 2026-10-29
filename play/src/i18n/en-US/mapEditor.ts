@@ -156,6 +156,11 @@ const mapEditor: BaseTranslation = {
             exitMap: "Exit map",
             exitMapStartAreaName: "Start area name",
             defaultStartArea: "Default start area",
+            createMapLabel: "Create a new map",
+            createMapPlaceholder: "Name of the new map",
+            createMapButton: "Create the map",
+            createMapErrorLimit: "Creation limit reached, try again later",
+            createMapErrorGeneric: "The map could not be created",
             actionButtonLabel: "Go to exit",
         },
         youtube: {

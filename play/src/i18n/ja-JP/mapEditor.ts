@@ -161,6 +161,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             exitMap: "出口マップ",
             exitMapStartAreaName: "入口エリア名",
             defaultStartArea: "デフォルトの入口エリア",
+            createMapLabel: "Create a new map",
+            createMapPlaceholder: "Name of the new map",
+            createMapButton: "Create the map",
+            createMapErrorLimit: "Creation limit reached, try again later",
+            createMapErrorGeneric: "The map could not be created",
             actionButtonLabel: "出口へ移動",
         },
         youtube: {
