@@ -24,8 +24,10 @@ import type { Entity } from "../../ECS/Entity";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import type { ITiledPlace } from "../GameMapPropertiesListener";
 import type { GameScene } from "../GameScene";
+import type { Player } from "../../Player/Player";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
+import { TiledTileCollisions } from "./TiledTileCollisions";
 import TilemapLayer = Phaser.Tilemaps.TilemapLayer;
 
 export type DynamicArea = {
@@ -97,6 +99,7 @@ export class GameMapFrontWrapper {
      * A layer containing collide tiles mapping the collision zones of restricted areas put with the map editor
      */
     private areasCollisionLayer: Phaser.Tilemaps.TilemapLayer;
+    private readonly tiledTileCollisions: TiledTileCollisions | undefined;
 
     private collisionGridDirty = true;
     private areasCollisionLayerDirty = true;
@@ -147,6 +150,9 @@ export class GameMapFrontWrapper {
         this.scene = scene;
         this.gameMap = gameMap;
         this.phaserMap = phaserMap;
+        if (this.gameMap.getTiledObjectProperty(this.gameMap.getMap(), "partialTileCollisions") === true) {
+            this.tiledTileCollisions = new TiledTileCollisions(scene);
+        }
 
         this.existingTileIndex = terrains.length > 0 ? terrains[0].firstgid : -1;
 
@@ -359,7 +365,7 @@ export class GameMapFrontWrapper {
         const phaserLayer = this.findPhaserLayer(layerName);
         if (phaserLayer != undefined) {
             phaserLayer.setVisible(visible);
-            phaserLayer.setCollisionByProperty({ collides: true }, visible);
+            this.configureTileCollisions(phaserLayer, visible);
             this.invalidateCollisionGrid();
         } else {
             const phaserLayers = this.findPhaserLayers(layerName + "/");
@@ -373,7 +379,7 @@ export class GameMapFrontWrapper {
             }
             for (let i = 0; i < phaserLayers.length; i++) {
                 phaserLayers[i].setVisible(visible);
-                phaserLayers[i].setCollisionByProperty({ collides: true }, visible);
+                this.configureTileCollisions(phaserLayers[i], visible);
             }
             this.invalidateCollisionGrid();
         }
@@ -793,6 +799,7 @@ export class GameMapFrontWrapper {
                     }
                 }
             }
+            this.tiledTileCollisions?.updateLayer(phaserLayer);
             this.invalidateCollisionGrid({ modifiedLayer: phaserLayer });
         } else {
             console.error("The layer '" + layer + "' does not exist (or is not a tilelaye).");
@@ -1661,7 +1668,25 @@ export class GameMapFrontWrapper {
         return this.getTiledObjectProperty(obj, GameMapProperties.START_LAYER) == true;
     }
 
-    public close() {
+    public configureTileCollisions(layer: TilemapLayer, collide = true): void {
+        const syntheticLayer = layer === this.entitiesCollisionLayer || layer === this.areasCollisionLayer;
+        layer.setCollisionByProperty(
+            { collides: true },
+            this.tiledTileCollisions && !syntheticLayer ? layer.visible && collide : collide,
+        );
+        this.tiledTileCollisions?.updateLayer(layer);
+    }
+
+    public setTileCollisionPlayer(player: Player): void {
+        this.tiledTileCollisions?.setPlayer(player);
+    }
+
+    public isTileCollisionPathClear(player: Player, path: { x: number; y: number }[]): boolean {
+        return this.tiledTileCollisions?.isPathClear(player, path) ?? true;
+    }
+
+    public close(): void {
+        this.tiledTileCollisions?.destroy();
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }

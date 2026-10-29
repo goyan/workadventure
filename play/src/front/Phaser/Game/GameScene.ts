@@ -3888,6 +3888,9 @@ ${escapedMessage}
             tryFindingNearestAvailable,
         );
         if (path.length === 0) throw new Error("No path found");
+        if (!this.gameMapFrontWrapper.isTileCollisionPathClear(this.CurrentPlayer, path)) {
+            throw new Error("No path found around partial tile collisions");
+        }
         return this.CurrentPlayer.setPathToFollow(path, speed ?? this.CurrentPlayer.walkingSpeed);
     }
 
@@ -3993,6 +3996,7 @@ ${escapedMessage}
     }
 
     private createCollisionWithPlayer() {
+        this.gameMapFrontWrapper.setTileCollisionPlayer(this.CurrentPlayer);
         //add collision layer
         for (const phaserLayer of this.gameMapFrontWrapper.phaserLayers) {
             // Area blocking is handled by Area game objects/colliders.
@@ -4017,7 +4021,7 @@ ${escapedMessage}
                         | Phaser.Types.Physics.Arcade.GameObjectWithBody,
                 ) => {},
             );
-            phaserLayer.setCollisionByProperty({ collides: true });
+            this.gameMapFrontWrapper.configureTileCollisions(phaserLayer);
             if (DEBUG_MODE) {
                 //debug code to see the collision hitbox of the object in the top layer
                 phaserLayer.renderDebug(this.add.graphics(), {

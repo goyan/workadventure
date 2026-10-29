@@ -107,3 +107,23 @@ Ouvrir une session après le déploiement du patch, puis garder l'onglet ouvert 
 Le bandeau doit apparaître sans interrompre le jeu ; « Plus tard » le masque et « Rafraîchir » recharge la page.
 Un onglet resté en arrière-plan doit détecter la mise à jour à son retour. Une panne réseau ou une réponse
 invalide de `/build-version` ne doit pas annoncer de nouvelle version.
+
+### Collisions partielles Tiled — prototype local
+
+La branche `feat/tiled-partial-collisions` ajoute un support facultatif des rectangles
+du Collision Editor de Tiled. Activer la propriété booléenne `partialTileCollisions=true`
+sur la carte et conserver `collides=true` sur chaque tuile concernée. Les rectangles
+doivent rester dans leur case ; les polygones, ellipses et rectangles tournés conservent
+la collision pleine existante. Les flips et quarts de tour des tuiles sont pris en compte.
+Utiliser des calques non redimensionnés, sans parallaxe.
+
+Le clavier utilise les rectangles précis. Le double-clic et l'éditeur conservent la
+grille 32 × 32 : une case portant un mur reste entièrement bloquée pour calculer un
+trajet. Les portes doivent donc laisser des cases libres. Le départ et la fin du trajet
+sont vérifiés contre les rectangles et la taille de l'avatar ; un trajet risquant de
+traverser un mur est refusé. Un changement de mur par script arrête le trajet en cours.
+Les calques cachés de collision des meubles gardent leur comportement.
+
+Sans la nouvelle propriété, les cartes gardent leurs collisions actuelles. Ce prototype
+reste local, sans push ni déploiement. La recette dans le jeu WorkAdventure reste à faire
+sur une salle séparée, avant toute modification de la carte beta habituelle.
