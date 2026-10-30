@@ -31,7 +31,7 @@ export const MapPatternPayload = z.object({
 export type MapPatternPayload = z.infer<typeof MapPatternPayload>;
 export type MapPatternItem = MapPatternPayload["items"][number];
 
-/** What the Admin API returns for a pattern, without its payload. */
+/** What the Admin API returns for a pattern, without its payload. It never reaches the browser: see the "ForClient" shapes. */
 export const MapPatternSummary = z.object({
     id: z.string(),
     name: z.string(),
@@ -46,3 +46,18 @@ export const MapPatternList = z.object({ patterns: z.array(MapPatternSummary) })
 
 export const MapPatternDetail = MapPatternSummary.extend({ payload: MapPatternPayload });
 export type MapPatternDetail = z.infer<typeof MapPatternDetail>;
+
+/**
+ * What the pusher sends to the browser: the author is replaced by the right to delete, computed on the server
+ * (the author or an administrator), so the browser never learns who created a pattern.
+ */
+export const MapPatternSummaryForClient = MapPatternSummary.omit({ createdBy: true }).extend({
+    canDelete: z.boolean(),
+});
+export type MapPatternSummaryForClient = z.infer<typeof MapPatternSummaryForClient>;
+
+export const MapPatternListForClient = z.object({ patterns: z.array(MapPatternSummaryForClient) });
+export type MapPatternListForClient = z.infer<typeof MapPatternListForClient>;
+
+export const MapPatternDetailForClient = MapPatternSummaryForClient.extend({ payload: MapPatternPayload });
+export type MapPatternDetailForClient = z.infer<typeof MapPatternDetailForClient>;

@@ -15,7 +15,7 @@ const summary = {
     name: "Salle",
     entityCount: 1,
     areaCount: 0,
-    createdBy: "user-1",
+    canDelete: true,
     createdAt: "2026-10-30T10:00:00.000Z",
 };
 const payload: MapPatternPayload = {

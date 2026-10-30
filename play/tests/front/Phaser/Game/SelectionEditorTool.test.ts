@@ -27,7 +27,7 @@ import {
     MapPatternApiError,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapPatternApi";
 import { mapEditorPatternStore } from "../../../../src/front/Stores/MapEditorPatternStore";
-import type { MapPatternDetail } from "../../../../src/common/MapPattern";
+import type { MapPatternDetailForClient } from "../../../../src/common/MapPattern";
 
 const patternRoomUrl = "https://wa-beta.goyan.fr/~/goyan/office.wam";
 
@@ -708,11 +708,11 @@ describe("SelectionEditorTool", () => {
             name: "Salle",
             entityCount: 2,
             areaCount: 0,
-            createdBy: "user-1",
+            canDelete: true,
             createdAt: "2026-10-30T10:00:00.000Z",
         };
 
-        function patternDetail(items: MapPatternDetail["payload"]["items"]): MapPatternDetail {
+        function patternDetail(items: MapPatternDetailForClient["payload"]["items"]): MapPatternDetailForClient {
             return { ...patternSummary, payload: { version: 1, bounds: { width: 96, height: 64 }, items } };
         }
 

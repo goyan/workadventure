@@ -57,6 +57,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             "Éléments ignorés : {count} (objet indisponible sur cette carte, ou droit de modifier les zones manquant).",
         patternsUnavailable: "Les motifs sont indisponibles pour le moment. Réessayez plus tard.",
         patternsForbidden: "Vous n’avez pas le droit de gérer les motifs sur cette carte.",
+        patternsDeleteForbidden: "Seul l’auteur du motif ou un administrateur peut le supprimer.",
         patternsQuota: "Le nombre maximal de motifs est atteint. Supprimez-en un d’abord.",
         patternsInvalid: "Ce motif ne peut pas être enregistré. Vérifiez son nom et sa taille.",
         patternsNotFound: "Ce motif n’existe plus.",

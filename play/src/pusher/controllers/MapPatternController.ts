@@ -12,12 +12,13 @@ import {
     MapPatternService,
     readMapPatternConfig,
 } from "../services/MapPatternService";
-import type { MapPatternErrorCode } from "../services/MapPatternService";
+import type { MapPatternErrorCode, PatternRight } from "../services/MapPatternService";
 import { validatePostQuery, validateQuery } from "../services/QueryValidator";
 import { BaseHttpController } from "./BaseHttpController";
 
 const HTTP_STATUS_BY_ERROR: Record<MapPatternErrorCode, number> = {
     invalid: 400,
+    forbidden: 403,
     "not-found": 404,
     quota: 409,
     "rate-limit": 429,
@@ -46,8 +47,8 @@ export class MapPatternController extends BaseHttpController {
             if (query === undefined) {
                 return;
             }
-            await this.handle(req, res, query.roomUrl, async (service) => {
-                res.json(await service.list());
+            await this.handle(req, res, query.roomUrl, async (service, userIdentifier, right) => {
+                res.json(await service.list(userIdentifier, right.isAdmin));
             });
         });
 
@@ -56,8 +57,8 @@ export class MapPatternController extends BaseHttpController {
             if (query === undefined) {
                 return;
             }
-            await this.handle(req, res, query.roomUrl, async (service) => {
-                res.json(await service.get(this.readPatternId(req)));
+            await this.handle(req, res, query.roomUrl, async (service, userIdentifier, right) => {
+                res.json(await service.get(this.readPatternId(req), userIdentifier, right.isAdmin));
             });
         });
 
@@ -70,9 +71,9 @@ export class MapPatternController extends BaseHttpController {
             if (body === undefined) {
                 return;
             }
-            await this.handle(req, res, body.roomUrl, async (service, userIdentifier) => {
+            await this.handle(req, res, body.roomUrl, async (service, userIdentifier, right) => {
                 // The author is the authenticated user: a userIdentifier sent by the browser is never read.
-                res.status(201).json(await service.create(userIdentifier, body.name, body.payload));
+                res.status(201).json(await service.create(userIdentifier, body.name, body.payload, right.isAdmin));
             });
         });
 
@@ -81,8 +82,8 @@ export class MapPatternController extends BaseHttpController {
             if (query === undefined) {
                 return;
             }
-            await this.handle(req, res, query.roomUrl, async (service) => {
-                await service.delete(this.readPatternId(req));
+            await this.handle(req, res, query.roomUrl, async (service, userIdentifier, right) => {
+                await service.delete(this.readPatternId(req), userIdentifier, right.isAdmin);
                 res.status(204).send();
             });
         });
@@ -102,7 +103,7 @@ export class MapPatternController extends BaseHttpController {
         req: Request,
         res: ResponseWithUserIdentifier,
         roomUrl: string,
-        action: (service: MapPatternService, userIdentifier: string) => Promise<void>,
+        action: (service: MapPatternService, userIdentifier: string, right: PatternRight) => Promise<void>,
     ): Promise<void> {
         const userIdentifier = res.userIdentifier;
         if (!userIdentifier) {
@@ -114,11 +115,12 @@ export class MapPatternController extends BaseHttpController {
         }
         try {
             this.service.assertQueryWithinRate(userIdentifier);
-            if (!(await this.isAllowed(req, userIdentifier, roomUrl))) {
+            const right = await this.fetchRight(req, userIdentifier, roomUrl);
+            if (right === undefined) {
                 res.status(403).json({ error: "forbidden" });
                 return;
             }
-            await action(this.service, userIdentifier);
+            await action(this.service, userIdentifier, right);
         } catch (e) {
             if (e instanceof MapPatternError) {
                 if (e.code === "unavailable") {
@@ -135,7 +137,7 @@ export class MapPatternController extends BaseHttpController {
         }
     }
 
-    private async isAllowed(req: Request, userIdentifier: string, roomUrl: string): Promise<boolean> {
+    private async fetchRight(req: Request, userIdentifier: string, roomUrl: string): Promise<PatternRight | undefined> {
         try {
             const jwtData = await jwtTokenManager.verifyJWTToken(req.header("authorization") ?? "");
             return await canManagePatterns(roomUrl, PUSHER_URL, {
@@ -150,12 +152,14 @@ export class MapPatternController extends BaseHttpController {
                         req.header("accept-language"),
                         jwtData.tags,
                     );
-                    return member.status === "error" ? undefined : { canEdit: member.canEdit ?? false };
+                    return member.status === "error"
+                        ? undefined
+                        : { canEdit: member.canEdit ?? false, tags: member.tags };
                 },
             });
         } catch (e) {
             console.error("Cannot check the map pattern right:", e instanceof Error ? e.message : "unknown error");
-            return false;
+            return undefined;
         }
     }
 }
