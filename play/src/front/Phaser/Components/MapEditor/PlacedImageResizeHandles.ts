@@ -66,7 +66,7 @@ export class PlacedImageResizeHandles {
                 },
             );
             square.on(Phaser.Input.Events.DRAG_START, (pointer: Phaser.Input.Pointer) => {
-                if (!pointer.leftButtonDown() || this.busy() || !this.entity.canEdit) return;
+                if (this.drag || !pointer.leftButtonDown() || this.busy() || !this.entity.canEdit) return;
                 this.bounds = this.getEntityBounds();
                 this.drag = {
                     corner,
