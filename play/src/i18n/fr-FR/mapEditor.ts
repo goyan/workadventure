@@ -15,6 +15,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurer le salon",
         trashEditor: "Corbeille",
         exploreTheRoom: "Explorer le salon",
+        selectionEditor: "Outil de sélection",
         closeMapEditor: "Fermer l'éditeur de carte",
         mapManagerActivated: "Gestionnaire de carte activé",
         mapExplorerActivated: "Survol de la carte",
@@ -24,6 +25,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         trashEditorActivated: "Corbeille activée",
         configureMyRoomActivated: "Configuration de la salle activée",
     },
+    selection: {
+        title: "Sélection et édition en masse",
+        drawingInstruction: "Tracez un rectangle sur la carte pour sélectionner des objets et des zones.",
+        objectCount: "Objets : {count}",
+        areaCount: "Zones : {count}",
+        copy: "Copier",
+        paste: "Coller",
+        move: "Déplacer",
+        delete: "Supprimer",
+        fill: "Remplir",
+        tileToFillWith: "Tuile à poser",
+        placeInstruction: "Cliquez sur la carte pour placer le groupe. Appuyez sur Échap pour annuler.",
+        cancel: "Annuler",
+        blocked:
+            "Cette action est impossible. Vérifiez la zone sélectionnée, les limites de la carte et vos droits d’édition.",
+        failed: "La sélection n’a pas pu être modifiée. Réessayez.",
+    },
+
     properties: {
         silent: {
             label: "Silent",

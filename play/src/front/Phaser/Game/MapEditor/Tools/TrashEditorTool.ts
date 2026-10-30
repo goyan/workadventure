@@ -10,6 +10,7 @@ import { SizeAlteringSquare } from "../../../Components/MapEditor/SizeAlteringSq
 import { Entity } from "../../../ECS/Entity";
 import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
+import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 import type { AreaEditorTool } from "./AreaEditorTool";
 
@@ -256,7 +257,7 @@ export class TrashEditorTool extends EntityRelatedEditorTool {
             pointer.button !== 0 ||
             !pointer.leftButtonDown() ||
             (pointer.downElement !== this.scene.game.canvas && pointer.event.target !== this.scene.game.canvas) ||
-            !this.isPointerInsideCanvas(pointer)
+            !isPointerInsideCanvas(this.scene, pointer)
         ) {
             return;
         }
@@ -273,7 +274,7 @@ export class TrashEditorTool extends EntityRelatedEditorTool {
         if (!this.active || !stroke || stroke.pointerId !== pointer.id) {
             return;
         }
-        if (!pointer.leftButtonDown() || !this.isPointerInsideCanvas(pointer)) {
+        if (!pointer.leftButtonDown() || !isPointerInsideCanvas(this.scene, pointer)) {
             this.stopTrashStroke();
             return;
         }

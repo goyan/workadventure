@@ -15,6 +15,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurar minha sala",
         trashEditor: "Lixeira",
         exploreTheRoom: "Explorar a sala",
+        selectionEditor: "Selection tool",
         closeMapEditor: "Fechar editor de mapa",
         mapManagerActivated: "Gerenciador de mapa ativado",
         mapExplorerActivated: "Visão geral do mapa",
@@ -24,6 +25,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         trashEditorActivated: "Editor de lixeira ativado",
         configureMyRoomActivated: "Configurar minha sala ativado",
     },
+    selection: {
+        title: "Select and edit in bulk",
+        drawingInstruction: "Drag on the map to select objects and areas.",
+        objectCount: "Objects: {count}",
+        areaCount: "Areas: {count}",
+        copy: "Copy",
+        paste: "Paste",
+        move: "Move",
+        delete: "Delete",
+        fill: "Fill",
+        tileToFillWith: "Tile to fill with",
+        placeInstruction: "Click on the map to place the group. Press Escape to cancel.",
+        cancel: "Cancel",
+        blocked:
+            "This action cannot be completed. Check the selected area, map boundaries, and your editing permissions.",
+        failed: "The selection could not be updated. Please try again.",
+    },
+
     properties: {
         silent: {
             label: "Silencioso",

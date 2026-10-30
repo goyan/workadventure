@@ -15,6 +15,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "تكوين غرفتي", // Mein Zimmer konfigurieren
         trashEditor: "سلة المهملات", // Papierkorb
         exploreTheRoom: "استكشاف الغرفة", // Raum erkunden
+        selectionEditor: "Selection tool",
         closeMapEditor: "إغلاق محرر الخريطة", // Karteneditor schließen
         mapManagerActivated: "تم تفعيل مدير الخريطة", // Kartenmanager aktiviert
         mapExplorerActivated: "تم تفعيل مستكشف الخريطة", // Kartenübersicht
@@ -24,6 +25,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         trashEditorActivated: "تم تفعيل سلة المهملات", // Papierkorb aktiviert
         configureMyRoomActivated: "تم تفعيل تكوين غرفتي", // Mein Zimmer konfigurieren aktiviert
     },
+    selection: {
+        title: "Select and edit in bulk",
+        drawingInstruction: "Drag on the map to select objects and areas.",
+        objectCount: "Objects: {count}",
+        areaCount: "Areas: {count}",
+        copy: "Copy",
+        paste: "Paste",
+        move: "Move",
+        delete: "Delete",
+        fill: "Fill",
+        tileToFillWith: "Tile to fill with",
+        placeInstruction: "Click on the map to place the group. Press Escape to cancel.",
+        cancel: "Cancel",
+        blocked:
+            "This action cannot be completed. Check the selected area, map boundaries, and your editing permissions.",
+        failed: "The selection could not be updated. Please try again.",
+    },
+
     properties: {
         silent: {
             label: "صامت",

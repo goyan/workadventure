@@ -85,6 +85,26 @@ pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doiv
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
 
+### Sélection et édition en masse
+
+L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.
+Les objets qui croisent ce rectangle sont sélectionnés, y compris les sols, murs, meubles,
+objets personnalisés et exemplaires superposés ; les zones sont incluses pour les éditeurs
+ayant le droit global. Le rectangle et les contours restent visibles après le tracé.
+
+Le panneau propose Copier, Coller, Déplacer, Supprimer et Remplir. Copier conserve un instantané
+dans le presse-papiers interne à la salle. Coller et Déplacer affichent un aperçu :
+un clic confirme la destination, Échap l'annule. Les éléments gardent leurs positions relatives.
+Remplir répète la tuile choisie dans la palette dans le rectangle sans déborder ni recréer
+une instance identique au même emplacement. Les actions indisponibles sont désactivées.
+
+Chaque opération utilise les commandes natives par élément et forme une seule entrée locale
+d'annulation/rétablissement. Les droits et limites sont contrôlés avant l'action groupée.
+Les superpositions sont autorisées, comme la pose native avec Maj ; la destination reste
+soumise aux droits, limites et contrôles des joueurs. Le protocole réseau conserve les commandes
+individuelles : une concurrence entre éditeurs peut entraîner une réconciliation du groupe.
+Les calques TMJ statiques restent hors sélection ; le rectangle ne crée pas de zone métier.
+
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse
