@@ -60,6 +60,7 @@ function canResizeImage(
     entity: Entity,
     size: EntityDimensions,
     collisionGrid: number[][] | undefined,
+    position: { x: number; y: number } = entity,
 ): boolean {
     const wrapper = scene.getGameMapFrontWrapper();
     if (
@@ -67,12 +68,12 @@ function canResizeImage(
         !scene
             .getEntityPermissions()
             .canEdit(
-                { x: Math.ceil(entity.x + size.width / 2), y: Math.ceil(entity.y + size.height / 2) },
+                { x: Math.ceil(position.x + size.width / 2), y: Math.ceil(position.y + size.height / 2) },
                 size.width,
                 size.height,
                 !collisionGrid,
             ) ||
-        wrapper.isOutOfMapBounds(entity.x, entity.y, size.width, size.height)
+        wrapper.isOutOfMapBounds(position.x, position.y, size.width, size.height)
     ) {
         return false;
     }
@@ -83,8 +84,11 @@ function canResizeImage(
             row.every(
                 (value, x) =>
                     value !== 1 ||
-                    previousGrid?.[y]?.[x] === 1 ||
-                    wrapper.isSpaceAvailable(entity.x + x * tile.width, entity.y + y * tile.height),
+                    previousGrid?.[
+                        Math.floor((position.y + y * tile.height) / tile.height) - Math.floor(entity.y / tile.height)
+                    ]?.[Math.floor((position.x + x * tile.width) / tile.width) - Math.floor(entity.x / tile.width)] ===
+                        1 ||
+                    wrapper.isSpaceAvailable(position.x + x * tile.width, position.y + y * tile.height),
             ),
         ) ?? true
     );
@@ -99,6 +103,7 @@ export async function resizePlacedImage(
     entity: Entity,
     size: EntityDimensions,
     signal: AbortSignal,
+    position?: { x: number; y: number },
 ): Promise<void> {
     signal.throwIfAborted();
     const prefab = entity.getPrefab();
@@ -113,11 +118,18 @@ export async function resizePlacedImage(
     ) {
         throw new PlacedImageResizeError("Cannot resize this image");
     }
-    if (entity.width === size.width && entity.height === size.height) return;
+    if (
+        entity.width === size.width &&
+        entity.height === size.height &&
+        (!position || (position.x === entity.x && position.y === entity.y))
+    )
+        return;
+    const originalPosition = { x: entity.x, y: entity.y };
     const source = { width: entity.width, height: entity.height };
     if (source.width <= 0 || source.height <= 0) throw new PlacedImageResizeError("Image is not loaded");
     const collisionGrid = resizeImageCollisionGrid(prefab.collisionGrid, source, size);
-    if (!canResizeImage(scene, entity, size, collisionGrid)) throw new PlacedImageResizeError("Image cannot fit here");
+    if (!canResizeImage(scene, entity, size, collisionGrid, position))
+        throw new PlacedImageResizeError("Image cannot fit here");
 
     const response = await fetch(prefab.imagePath, { signal });
     if (!response.ok) throw new Error("Could not load image");
@@ -180,7 +192,11 @@ export async function resizePlacedImage(
     await manager.executeCommands(() => {
         signal.throwIfAborted();
         const current = entities.getEntities().get(entity.entityId);
-        if (current !== entity || !canResizeImage(scene, current, size, collisionGrid)) {
+        if (
+            current !== entity ||
+            (position && (current.x !== originalPosition.x || current.y !== originalPosition.y)) ||
+            !canResizeImage(scene, current, size, collisionGrid, position)
+        ) {
             throw new PlacedImageResizeError("Image changed during resize");
         }
         const data = structuredClone(current.getEntityData());
@@ -189,7 +205,7 @@ export async function resizePlacedImage(
             new CreateEntityFrontCommand(
                 wamFile,
                 entity.entityId,
-                { ...data, prefabRef: { collectionName: resizedPrefab.collectionName, id } },
+                { ...data, ...position, prefabRef: { collectionName: resizedPrefab.collectionName, id } },
                 undefined,
                 entities,
                 size,

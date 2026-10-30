@@ -1,9 +1,10 @@
 <script lang="ts">
-    import { onDestroy } from "svelte";
+    import { onDestroy, onMount } from "svelte";
     import * as Sentry from "@sentry/svelte";
     import LL from "../../../../i18n/i18n-svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
+    import { PlacedImageResizeHandles } from "../../../Phaser/Components/MapEditor/PlacedImageResizeHandles";
     import {
         isPlacedImageSizeValid,
         MAX_PLACED_IMAGE_DIMENSION,
@@ -32,12 +33,12 @@
         if (keepProportions && Number.isFinite(height)) width = Math.max(1, Math.round(height * ratio));
     }
 
-    function applySize(): void {
+    function applySize(position?: { x: number; y: number }): void {
         if (!valid || busy) return;
         busy = true;
         error = false;
         const scene = gameManager.getCurrentGameScene();
-        resizePlacedImage(scene, entity, { width, height }, controller.signal)
+        resizePlacedImage(scene, entity, { width, height }, controller.signal, position)
             .then(() => {
                 if (controller.signal.aborted) return;
                 const current = scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().get(entity.entityId);
@@ -56,6 +57,25 @@
                 if (!controller.signal.aborted) busy = false;
             });
     }
+
+    onMount(() => {
+        const handles = new PlacedImageResizeHandles(
+            gameManager.getCurrentGameScene(),
+            entity,
+            () => keepProportions,
+            () => busy,
+            (size) => {
+                width = size.width;
+                height = size.height;
+            },
+            (bounds) => {
+                width = bounds.width;
+                height = bounds.height;
+                applySize({ x: bounds.x, y: bounds.y });
+            },
+        );
+        return () => handles.destroy();
+    });
 
     onDestroy(() => controller.abort());
 </script>
@@ -95,7 +115,7 @@
         class="btn btn-secondary w-full"
         data-testid="resize-placed-image"
         disabled={!valid || busy || (width === entity.width && height === entity.height)}
-        onclick={applySize}
+        onclick={() => applySize()}
     >
         {busy ? $LL.mapEditor.entityEditor.resize.saving() : $LL.mapEditor.entityEditor.resize.apply()}
     </button>
