@@ -52,9 +52,8 @@
             return;
         }
         try {
-            await selectionTool.saveSelectionAsPattern(name);
-            // Keep the field open on failure so the name is not lost: the error is shown below the form.
-            if (!$mapEditorPatternStore.error && !$mapEditorSelectionStore.error) {
+            // Closed as soon as the pattern exists, even if the list refresh fails: a second click would duplicate it.
+            if (await selectionTool.saveSelectionAsPattern(name)) {
                 stopNamingPattern();
             }
         } catch (error: unknown) {
