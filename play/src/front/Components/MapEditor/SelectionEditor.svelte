@@ -13,7 +13,9 @@
     import EntityEditorPicker from "./EntityEditor/EntityEditorPicker.svelte";
     import { IconCheck, IconTrash, IconX } from "@wa-icons";
 
-    const selectionTool = gameManager.getCurrentGameScene().getMapEditorModeManager().getSelectionEditorTool();
+    const mapEditorModeManager = gameManager.getCurrentGameScene().getMapEditorModeManager();
+    if (!mapEditorModeManager) throw new Error("The map editor is not available");
+    const selectionTool = mapEditorModeManager.getSelectionEditorTool();
 
     let hasEntitySelection = $derived($mapEditorSelectionStore.entityCount > 0);
     let hasSelection = $derived($mapEditorSelectionStore.entityCount + $mapEditorSelectionStore.areaCount > 0);

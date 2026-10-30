@@ -3,6 +3,7 @@
     import { LL } from "../../../../i18n/i18n-svelte";
     import Input from "../../Input/Input.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
+    import Button from "../../UI/Button.svelte";
     import RangeSlider from "../../Input/RangeSlider.svelte";
     import Select from "../../Input/Select.svelte";
     import InputCheckbox from "../../Input/InputCheckbox.svelte";
@@ -34,6 +35,9 @@
         onclose,
     }: Props = $props();
     let optionAdvancedActivated = $state(false);
+
+    // Same default as the one applied when opening the Jitsi cowebsite (see GameMapPropertiesListener).
+    property.width ??= 50;
 
     function onTriggerValueChange() {
         triggerOnActionChoosen = property.trigger === ON_ACTION_TRIGGER_BUTTON;
@@ -172,13 +176,13 @@
                         />
                     {/if}
 
-                    <button
-                        class="btn bg-transparent rounded-md hover:!bg-white/10 transition-all border !border-white py-2"
+                    <Button
+                        class="jitsi-more-options-btn bg-transparent rounded-md hover:!bg-white/10 transition-all border !border-white py-2"
                         onclick={OpenPopup}
-                        data-testid="livekitRoomMoreOptionsButton"
+                        dataTestId="livekitRoomMoreOptionsButton"
                     >
                         {$LL.mapEditor.properties.jitsiRoomProperty.moreOptionsLabel()}
-                    </button>
+                    </Button>
 
                     <!-- <JitsiRoomConfigEditor
                         bind:isOpen={jitsiConfigModalOpened}
@@ -193,13 +197,14 @@
     {/snippet}
 </PropertyEditorBase>
 
-<style lang="scss">
-    button {
+<style>
+    /* Global so it reaches the <button> rendered by <Button> (scoped CSS would not). */
+    :global(.jitsi-more-options-btn) {
         flex: 1 1 0px;
         border: 1px solid grey;
         margin-bottom: 0.5em;
     }
-    button:hover {
+    :global(.jitsi-more-options-btn):hover {
         background-color: rgb(77 75 103);
     }
     .value-switch {

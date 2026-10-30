@@ -5,10 +5,11 @@
     import { MAX_USERNAME_LENGTH } from "../../Enum/EnvironmentVariable";
     import logoImg from "../images/logo.svg";
     import poweredByWorkAdventureImg from "../images/Powered_By_WorkAdventure_Big.png";
-    import bgMap from "../images/map-exemple.png";
+    import bgMap from "../images/map-exemple.webp";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { LL, locale } from "../../../i18n/i18n-svelte";
     import { NameNotValidError, NameTooLongError } from "../../Exception/NameError";
+    import Button from "../UI/Button.svelte";
 
     interface Props {
         game: Game;
@@ -95,12 +96,14 @@
     /* eslint-disable svelte/no-at-html-tags */
 </script>
 
-<section class="self-center absolute z-30 top-0 text-center w-full block">
+<section class="self-center absolute z-30 top-0 text-center w-full">
     <img
         draggable="false"
         src={logo}
         alt="logo"
-        class="main-logo mt-8 {gameManager.currentStartedRoom.loginSceneLogo ? 'max-h-[200px] object-cover' : ''}"
+        class="main-logo inline mt-8 {gameManager.currentStartedRoom.loginSceneLogo
+            ? 'max-h-[200px] object-cover'
+            : ''}"
         style="width: 333px;"
     />
 </section>
@@ -144,12 +147,15 @@
             class="action flex h-fit justify-center m-0"
             class:opacity-50={(name.trim() === "" && startValidating) || errorName !== ""}
         >
-            <button
+            <Button
                 type="submit"
                 disabled={(name.trim() === "" && startValidating) || errorName !== ""}
-                class="mt-4 w-52 md:w-96 bold text-center block btn btn-secondary btn-lg loginSceneFormSubmit"
-                >{$LL.login.continue()}</button
+                variant="secondary"
+                size="lg"
+                class="mt-4 w-52 md:w-96 bold text-center block loginSceneFormSubmit"
             >
+                {$LL.login.continue()}
+            </Button>
         </section>
         {#if legalString}
             <section class="terms-and-conditions h-fit text-center w-full">

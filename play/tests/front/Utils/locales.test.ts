@@ -4,6 +4,71 @@ describe("Locale Detection", () => {
     beforeEach(() => {
         vi.resetModules();
         vi.clearAllMocks();
+        vi.doMock("typesafe-i18n/detectors", () => ({
+            detectLocale: vi.fn((fallback, _locales, detector) => {
+                const detected = detector();
+                return detected.length > 0 ? detected[0] : fallback;
+            }),
+            initLocalStorageDetector: vi.fn(),
+            navigatorDetector: vi.fn(),
+        }));
+        vi.doMock("../../../src/i18n/i18n-util", () => ({
+            baseLocale: "en-US",
+            isLocale: (locale: string) =>
+                [
+                    "ar-SA",
+                    "ca-ES",
+                    "de-DE",
+                    "dsb-DE",
+                    "en-US",
+                    "es-ES",
+                    "fr-FR",
+                    "hsb-DE",
+                    "it-IT",
+                    "ja-JP",
+                    "nl-NL",
+                    "pt-BR",
+                    "th-TH",
+                    "vi-VN",
+                    "zh-CN",
+                ].includes(locale),
+            locales: [
+                "ar-SA",
+                "ca-ES",
+                "de-DE",
+                "dsb-DE",
+                "en-US",
+                "es-ES",
+                "fr-FR",
+                "hsb-DE",
+                "it-IT",
+                "ja-JP",
+                "nl-NL",
+                "pt-BR",
+                "th-TH",
+                "vi-VN",
+                "zh-CN",
+            ],
+            loadedLocales: {},
+            loadedFormatters: {},
+        }));
+        vi.doMock("../../../src/i18n/i18n-util.async", () => ({
+            loadLocaleAsync: vi.fn().mockResolvedValue(undefined),
+        }));
+        vi.doMock("../../../src/i18n/i18n-svelte", () => ({
+            setLocale: vi.fn(),
+        }));
+        vi.doMock("../../../src/front/Enum/EnvironmentVariable", () => ({
+            FALLBACK_LOCALE: "en-US",
+            MAX_USERNAME_LENGTH: 20,
+        }));
+        vi.doMock("../../../src/front/Connection/LocalUserStore", () => ({
+            languageKey: "language",
+            localUserStore: {
+                getLanguage: vi.fn(() => undefined),
+                setLanguage: vi.fn(),
+            },
+        }));
     });
 
     // Mock localStorage
@@ -52,6 +117,7 @@ describe("Locale Detection", () => {
                         "ja-JP",
                         "nl-NL",
                         "pt-BR",
+                        "vi-VN",
                         "zh-CN",
                         "zh-TW",
                     ].includes(locale),
@@ -68,6 +134,7 @@ describe("Locale Detection", () => {
                     "ja-JP",
                     "nl-NL",
                     "pt-BR",
+                    "vi-VN",
                     "zh-CN",
                     "zh-TW",
                 ],
@@ -102,6 +169,7 @@ describe("Locale Detection", () => {
                 "ja-JP",
                 "nl-NL",
                 "pt-BR",
+                "vi-VN",
                 "zh-CN",
                 "zh-TW",
             ];
@@ -151,6 +219,7 @@ describe("Locale Detection", () => {
                 "ja-JP",
                 "nl-NL",
                 "pt-BR",
+                "vi-VN",
                 "zh-CN",
                 "zh-TW",
             ];
@@ -200,6 +269,7 @@ describe("Locale Detection", () => {
                 "ja-JP",
                 "nl-NL",
                 "pt-BR",
+                "vi-VN",
                 "zh-CN",
                 "zh-TW",
             ];
@@ -267,6 +337,7 @@ describe("Locale Detection", () => {
                         "ja-JP",
                         "nl-NL",
                         "pt-BR",
+                        "vi-VN",
                         "zh-CN",
                         "zh-TW",
                     ].includes(locale),
@@ -283,6 +354,7 @@ describe("Locale Detection", () => {
                     "ja-JP",
                     "nl-NL",
                     "pt-BR",
+                    "vi-VN",
                     "zh-CN",
                     "zh-TW",
                 ],
@@ -339,6 +411,29 @@ describe("Locale Detection", () => {
             const [, , detectorFunction] = (detectLocale as any).mock.calls[0];
             const result = detectorFunction();
             expect(result).toEqual(["fr-FR"]);
+        });
+
+        it('should detect Thai when browser sends generic "th"', async () => {
+            Object.defineProperty(window, "navigator", {
+                value: {
+                    language: "th",
+                    languages: ["th"],
+                },
+                configurable: true,
+            });
+
+            localStorageMock.getItem.mockReturnValue(null);
+
+            // Re-import with fresh mocks
+            const { localeDetector } = await import("../../../src/front/Utils/locales");
+            const { detectLocale } = await import("typesafe-i18n/detectors");
+
+            await localeDetector();
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const [, , detectorFunction] = (detectLocale as any).mock.calls[0];
+            const result = detectorFunction();
+            expect(result).toEqual(["th-TH"]);
         });
 
         it("should prefer exact matches over generic mappings", async () => {

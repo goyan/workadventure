@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type {
     AreaChangeCallback,
     AreaData,
@@ -19,7 +20,10 @@ import type {
 import type { Observable } from "rxjs";
 import { Subject } from "rxjs";
 import { Deferred } from "@workadventure/shared-utils";
+import { get } from "svelte/store";
 import { PathTileType } from "../../../Utils/PathfindingManager";
+import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
+import { extensionModuleStore } from "../../../Stores/GameSceneStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import type { ITiledPlace } from "../GameMapPropertiesListener";
@@ -29,7 +33,20 @@ import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
 import { TiledTileCollisions } from "./TiledTileCollisions";
+import { getTileLayerStats, isWorthRenderingOnGpu } from "./TilemapGpuLayerEligibility";
+
 import TilemapLayer = Phaser.Tilemaps.TilemapLayer;
+import TilemapGPULayer = Phaser.Tilemaps.TilemapGPULayer;
+import Tilemap = Phaser.Tilemaps.Tilemap;
+import Tileset = Phaser.Tilemaps.Tileset;
+import WebGLRenderer = Phaser.Renderer.WebGL.WebGLRenderer;
+
+type RenderableTilemapLayer = TilemapLayer | TilemapGPULayer;
+type TileAnimationData = {
+    animation?: Array<{ duration?: number }>;
+};
+
+const TILE_ANIMATION_REFRESH_FALLBACK_MS = 100;
 
 export type DynamicArea = {
     name: string;
@@ -84,8 +101,8 @@ export class GameMapFrontWrapper {
      */
     private entitiesManager: EntitiesManager;
 
-    public readonly phaserMap: Phaser.Tilemaps.Tilemap;
-    public readonly phaserLayers: TilemapLayer[] = [];
+    public readonly phaserMap: Tilemap;
+    public readonly phaserLayers: RenderableTilemapLayer[] = [];
     /**
      * Areas that we can do CRUD operations on via scripting API
      */
@@ -95,11 +112,11 @@ export class GameMapFrontWrapper {
     /**
      * A layer containing collide tiles mapping the collision zones of entities put with the map editor
      */
-    private entitiesCollisionLayer: Phaser.Tilemaps.TilemapLayer;
+    private entitiesCollisionLayer: TilemapLayer;
     /**
      * A layer containing collide tiles mapping the collision zones of restricted areas put with the map editor
      */
-    private areasCollisionLayer: Phaser.Tilemaps.TilemapLayer;
+    private areasCollisionLayer: TilemapLayer;
     private readonly tiledTileCollisions: TiledTileCollisions | undefined;
     private readonly entityCollisionRectangles: EntityCollisionRectangles;
 
@@ -143,12 +160,7 @@ export class GameMapFrontWrapper {
 
     public readonly initializedPromise = new Deferred<void>();
 
-    constructor(
-        scene: GameScene,
-        gameMap: GameMap,
-        phaserMap: Phaser.Tilemaps.Tilemap,
-        terrains: Array<Phaser.Tilemaps.Tileset>,
-    ) {
+    constructor(scene: GameScene, gameMap: GameMap, phaserMap: Tilemap, terrains: Array<Tileset>) {
         this.scene = scene;
         this.gameMap = gameMap;
         this.phaserMap = phaserMap;
@@ -165,12 +177,7 @@ export class GameMapFrontWrapper {
         let depth = -2;
         for (const layer of this.gameMap.flatLayers) {
             if (layer.type === "tilelayer") {
-                const phaserLayer = phaserMap.createLayer(
-                    layer.name,
-                    terrains,
-                    (layer.x || 0) * 32,
-                    (layer.y || 0) * 32,
-                );
+                const phaserLayer = this.createRenderableLayer(layer, terrains);
                 if (phaserLayer) {
                     // Row layers can sort a wall facade by its foot, alongside characters and entities.
                     const tileLayerDepth = this.gameMap.getTiledObjectProperty(layer, "tileLayerDepth");
@@ -183,8 +190,7 @@ export class GameMapFrontWrapper {
                             )
                             .setScrollFactor(layer.parallaxx ?? 1, layer.parallaxy ?? 1)
                             .setAlpha(layer.opacity)
-                            .setVisible(layer.visible)
-                            .setSize(layer.width, layer.height),
+                            .setVisible(layer.visible),
                     );
                 }
             }
@@ -243,6 +249,103 @@ export class GameMapFrontWrapper {
         this.areasCollisionLayer.setDepth(-2).setCollisionByProperty({ collides: true }).setVisible(false);
 
         this.phaserLayers.push(this.areasCollisionLayer);
+    }
+
+    private createRenderableLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): RenderableTilemapLayer | null {
+        const gpuTileset = this.getGpuTilesetForLayer(layer, terrains);
+
+        return this.phaserMap.createLayer(
+            layer.name,
+            gpuTileset ?? terrains,
+            (layer.x || 0) * 32,
+            (layer.y || 0) * 32,
+            gpuTileset !== undefined,
+        );
+    }
+
+    private getGpuTilesetForLayer(layer: ITiledMapTileLayer, terrains: Array<Tileset>): Tileset | undefined {
+        if (
+            terrains.length === 0 ||
+            !(this.scene.game.renderer instanceof WebGLRenderer) ||
+            this.getMap().orientation !== "orthogonal"
+        ) {
+            return undefined;
+        }
+
+        const layerStats = getTileLayerStats(layer.data);
+        if (!layerStats || !isWorthRenderingOnGpu(layerStats)) {
+            return undefined;
+        }
+
+        let layerTileset: Tileset | undefined;
+        for (const tileIndex of layerStats.tileIndices) {
+            const tileset = terrains.find((terrain) => terrain.containsTileIndex(tileIndex));
+            if (!tileset) {
+                return undefined;
+            }
+            if (tileset.tileWidth !== this.phaserMap.tileWidth || tileset.tileHeight !== this.phaserMap.tileHeight) {
+                return undefined;
+            }
+            if (layerTileset && layerTileset !== tileset) {
+                return undefined;
+            }
+            layerTileset = tileset;
+        }
+
+        return layerTileset;
+    }
+
+    public getTileAnimationRefreshDelay(): number | undefined {
+        let refreshDelay: number | undefined;
+        for (const phaserLayer of this.phaserLayers) {
+            for (const tileset of this.getTilesetsForLayer(phaserLayer)) {
+                const tilesetDelay = this.getTilesetAnimationRefreshDelay(tileset);
+                if (tilesetDelay === undefined) {
+                    continue;
+                }
+                refreshDelay = refreshDelay === undefined ? tilesetDelay : Math.min(refreshDelay, tilesetDelay);
+            }
+        }
+
+        return refreshDelay;
+    }
+
+    public setTileAnimationsPaused(paused: boolean): void {
+        for (const phaserLayer of this.phaserLayers) {
+            phaserLayer.setTimerPaused(paused);
+        }
+    }
+
+    private getTilesetsForLayer(layer: RenderableTilemapLayer): Tileset[] {
+        return this.isGpuTilemapLayer(layer) ? [layer.tileset] : layer.tileset;
+    }
+
+    private getTilesetAnimationRefreshDelay(tileset: Tileset): number | undefined {
+        const tileData = tileset.tileData as Record<string, TileAnimationData | undefined>;
+        let refreshDelay: number | undefined;
+
+        for (const tileDatum of Object.values(tileData)) {
+            if (!tileDatum?.animation) {
+                continue;
+            }
+            const animationDelay =
+                tileDatum.animation.reduce<number | undefined>((minimumDelay, frame) => {
+                    if (!frame.duration || frame.duration <= 0) {
+                        return minimumDelay;
+                    }
+                    return minimumDelay === undefined ? frame.duration : Math.min(minimumDelay, frame.duration);
+                }, undefined) ?? TILE_ANIMATION_REFRESH_FALLBACK_MS;
+            const clampedAnimationDelay = Math.max(16, animationDelay);
+
+            refreshDelay =
+                refreshDelay === undefined ? clampedAnimationDelay : Math.min(refreshDelay, clampedAnimationDelay);
+        }
+
+        return refreshDelay;
+    }
+
+    private isGpuTilemapLayer(layer: RenderableTilemapLayer): layer is TilemapGPULayer {
+        return "generateLayerDataTexture" in layer;
     }
 
     public initialize(): Promise<void> {
@@ -469,7 +572,7 @@ export class GameMapFrontWrapper {
     private invalidateCollisionGrid({
         areasLayerDirty = false,
         modifiedLayer,
-    }: { areasLayerDirty?: boolean; modifiedLayer?: TilemapLayer } = {}): void {
+    }: { areasLayerDirty?: boolean; modifiedLayer?: RenderableTilemapLayer } = {}): void {
         if (areasLayerDirty) {
             this.areasCollisionLayerDirty = true;
         }
@@ -558,7 +661,7 @@ export class GameMapFrontWrapper {
     }
 
     /**
-     * Marks walkable tiles under meeting (Jitsi/Livekit) and personal desk areas with higher pathfinding cost.
+     * Marks walkable tiles under meeting and personal desk areas with higher pathfinding cost.
      * Meeting overlaps take precedence over personal desk on the same tile.
      */
     private applyPathfindingAreaWeights(grid: number[][], mapWidth: number, mapHeight: number): void {
@@ -572,10 +675,9 @@ export class GameMapFrontWrapper {
 
         const personalAreas: AreaData[] = [];
         const meetingAreas: AreaData[] = [];
+        const areaMapEditors = getAreaMapEditors(get(extensionModuleStore));
         for (const area of gameMapAreas.getAreas().values()) {
-            const hasMeeting = area.properties.some(
-                (p) => p.type === "jitsiRoomProperty" || p.type === "livekitRoomProperty",
-            );
+            const hasMeeting = hasMeetingProperty(area.properties, areaMapEditors);
             const hasPersonalDesk = area.properties.some((p) => p.type === "personalAreaPropertyData");
             if (hasPersonalDesk) {
                 personalAreas.push(area);
@@ -774,16 +876,19 @@ export class GameMapFrontWrapper {
         return this.gameMap.findObject(objectName, objectClass);
     }
 
-    public findPhaserLayer(layerName: string): TilemapLayer | undefined {
+    public findPhaserLayer(layerName: string): RenderableTilemapLayer | undefined {
         return this.phaserLayers.find((layer) => layer.layer.name === layerName);
     }
 
-    public findPhaserLayers(groupName: string): TilemapLayer[] {
+    public findPhaserLayers(groupName: string): RenderableTilemapLayer[] {
         return this.phaserLayers.filter((l) => l.layer.name.includes(groupName));
     }
 
-    public addTerrain(terrain: Phaser.Tilemaps.Tileset): void {
+    public addTerrain(terrain: Tileset): void {
         for (const phaserLayer of this.phaserLayers) {
+            if (this.isGpuTilemapLayer(phaserLayer)) {
+                continue;
+            }
             phaserLayer.tileset.push(terrain);
         }
     }
@@ -799,6 +904,12 @@ export class GameMapFrontWrapper {
                     console.error("The tile '" + tile + "' that you want to place doesn't exist.");
                     return;
                 }
+                if (this.isGpuTilemapLayer(phaserLayer) && !phaserLayer.tileset.containsTileIndex(tileIndex)) {
+                    console.warn(
+                        `Cannot place tile ${tileIndex} on GPU tile layer "${layer}" because it belongs to another tileset.`,
+                    );
+                    return;
+                }
                 this.gameMap.putTileInFlatLayer(tileIndex, x, y, layer);
                 const phaserTile = phaserLayer.putTileAt(tileIndex, x, y);
                 if (phaserTile !== null) {
@@ -810,6 +921,9 @@ export class GameMapFrontWrapper {
                 }
             }
             this.tiledTileCollisions?.updateLayer(phaserLayer);
+            if (this.isGpuTilemapLayer(phaserLayer)) {
+                phaserLayer.generateLayerDataTexture();
+            }
             this.invalidateCollisionGrid({ modifiedLayer: phaserLayer });
         } else {
             console.error("The layer '" + layer + "' does not exist (or is not a tilelaye).");
@@ -1408,7 +1522,7 @@ export class GameMapFrontWrapper {
         }
     }
 
-    private getLayerCollisionGrid(layer: TilemapLayer): (1 | 2 | 3 | 0)[][] {
+    private getLayerCollisionGrid(layer: RenderableTilemapLayer): (1 | 2 | 3 | 0)[][] {
         let isExitLayer = false;
         const isStartLayer = layer.layer.name === "start";
         for (const property of layer.layer.properties as { [key: string]: string | number | boolean }[]) {
@@ -1667,7 +1781,8 @@ export class GameMapFrontWrapper {
                 }
             }
         }
-        return names;
+        // A "start" layer and a "start" area, or two start areas with the same name, would list the name twice.
+        return [...new Set(names)];
     }
 
     public isStartObject(obj: ITiledMapLayer | ITiledMapObject): boolean {
@@ -1678,7 +1793,7 @@ export class GameMapFrontWrapper {
         return this.getTiledObjectProperty(obj, GameMapProperties.START_LAYER) == true;
     }
 
-    public configureTileCollisions(layer: TilemapLayer, collide = true): void {
+    public configureTileCollisions(layer: RenderableTilemapLayer, collide = true): void {
         const syntheticLayer = layer === this.entitiesCollisionLayer || layer === this.areasCollisionLayer;
         layer.setCollisionByProperty(
             { collides: true },

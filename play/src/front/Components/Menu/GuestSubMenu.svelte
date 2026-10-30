@@ -13,6 +13,7 @@
     } from "../../Stores/InvitePreferencesStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import Select from "../Input/Select.svelte";
+    import Button from "../UI/Button.svelte";
     import { IconCheck, IconShare } from "@wa-icons";
 
     const TIMEOUT_COPY_LINK_BUTTON = 5000;
@@ -70,7 +71,7 @@
 
     function copyLink() {
         // Analytics Client
-        analyticsClient.inviteCopyLink();
+        analyticsClient.trackAdminEvent("invite.sent", { inviteType: "copy_link" });
 
         const input: HTMLInputElement = document.getElementById("input-share-link") as HTMLInputElement;
         input.focus();
@@ -90,8 +91,10 @@
         const input = document.getElementById("input-share-link");
         if (input) {
             const value = getLink();
-            // Analytics Client
-            analyticsClient.inviteCopyLinkWalk(value);
+            // Report the option, not the link it produces: the event records whether
+            // walk-to-me is on. The link carries the entry point and, when the option
+            // is on, the player's coordinates — none of which this event is about.
+            analyticsClient.trackAdminEvent("invite.walk_link_option_changed", { value: walkAutomatically });
 
             (input as HTMLInputElement).value = value;
         }
@@ -101,7 +104,7 @@
 
     async function shareLink() {
         // Analytics Client
-        analyticsClient.inviteCopyLink();
+        analyticsClient.trackAdminEvent("invite.sent", { inviteType: "copy_link" });
 
         const shareData = { url: getLink() };
 
@@ -139,12 +142,14 @@
                 <div class="pb-4 text-lg font-semibold">
                     {$LL.menu.invite.description()}
                 </div>
-                <button type="button" class="btn btn-secondary w-full" onclick={shareLink}>
-                    <IconShare font-size="20" stroke="1.5" class="me-2" />
+                <Button variant="secondary" class="w-full" onclick={shareLink}>
+                    {#snippet icon()}
+                        <IconShare font-size="20" stroke="1.5" />
+                    {/snippet}
                     <span class="text-lg font-bold">
                         {$LL.menu.invite.share()}
                     </span>
-                </button>
+                </Button>
             </div>
         {/if}
         <div class="share-url w-full block mobile:hidden">
@@ -156,22 +161,23 @@
                     class="grow h-12 text-sm border-white bg-contrast rounded-md border border-solid border-white/20"
                     value={location.toString()}
                 />
-                <button
-                    type="button"
-                    class="flex items-center btn btn-sm absolute right-2 transition-all text-center justify-center {linkCopied
-                        ? 'btn-success'
-                        : 'btn-secondary'}"
+                <Button
+                    variant={linkCopied ? "success" : "secondary"}
+                    size="sm"
+                    class="flex items-center absolute right-2 transition-all text-center"
                     onclick={() => {
                         changeCopyLinkButtonStatus();
                         copyLink();
                     }}
                 >
-                    <span class="flex items-center justify-center {linkCopied ? '' : 'hidden'}">
-                        <IconCheck class="text-white" />
-                    </span>
+                    {#snippet icon()}
+                        <span class="flex items-center justify-center {linkCopied ? '' : 'hidden'}">
+                            <IconCheck class="text-white" />
+                        </span>
+                    {/snippet}
                     <div hidden={!linkCopied}>{$LL.menu.invite.copied()}</div>
                     <div hidden={linkCopied}>{$LL.menu.invite.copy()}</div>
-                </button>
+                </Button>
             </div>
         </div>
     </div>

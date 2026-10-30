@@ -2,6 +2,8 @@ import * as Sentry from "@sentry/node";
 import type { FilterType, UpdateSpaceUserMessage, SetPlayerDetailsMessage } from "@workadventure/messages";
 import { SpaceUser, AvailabilityStatus } from "@workadventure/messages";
 import Debug from "debug";
+import type { SpaceState } from "@workadventure/shared-utils";
+import { emptySpaceState } from "@workadventure/shared-utils";
 import type { PusherWebSocket } from "../services/PusherWebSocket";
 import type { BackSpaceConnection } from "./Websocket/SocketData";
 import type { EventProcessor } from "./EventProcessor";
@@ -21,6 +23,19 @@ export type SpaceUserExtended = {
 
 export type PartialSpaceUser = Partial<Omit<SpaceUser, "spaceUserId">> & Pick<SpaceUser, "spaceUserId">;
 const debug = Debug("space");
+
+/**
+ * The only fields a client may change about itself in a space. Every other field (tags, uuid, name...) is set by
+ * the server and is used for permission checks, so a client must never be able to overwrite it.
+ */
+const CLIENT_UPDATABLE_SPACE_USER_FIELDS: ReadonlySet<string> = new Set<keyof SpaceUser>([
+    "microphoneState",
+    "cameraState",
+    "screenSharingState",
+    "megaphoneState",
+    "attendeesState",
+    "cpuLimited",
+]);
 
 /**
  * The Space class from the Pusher acts as a proxy and a cache for the users available in the space.
@@ -69,6 +84,9 @@ export class Space implements SpaceForSpaceConnectionInterface {
     public readonly users: Map<string, SpaceUserExtended>;
 
     public readonly metadata: Map<string, unknown>;
+
+    // Copy of the back's SpaceState, kept up to date by applying its patches, so a user joining gets it whole.
+    public state: SpaceState = emptySpaceState();
 
     // The list of users connected to THIS pusher specifically.
     // Note: Space._localConnectedUser, Space._localConnectedUserWithSpaceUser and SocketData.spaces must be in sync.
@@ -136,6 +154,16 @@ export class Space implements SpaceForSpaceConnectionInterface {
 
         // Wait for the list of users to have been received from the back and then send all the users to the front
         await this.dispatcher.notifyMeInit(watcher);
+
+        // That wait is a full round trip to the back for the first watcher of a space. The user may have left
+        // or stopped watching in the meantime; both paths already told the back to drop them and both clear
+        // _localWatchers. Forwarding now would put them back in the back's "users to notify" list, where they
+        // would stay until this pusher disconnects.
+        if (!this._localWatchers.has(spaceUser.spaceUserId)) {
+            debug(`${this.name} : filter dropped before init completed for ${watcher.getUserData().userId}`);
+            return;
+        }
+
         this.forwarder.addUserToNotify(spaceUser);
     }
 
@@ -336,39 +364,35 @@ export class Space implements SpaceForSpaceConnectionInterface {
             return null;
         }
 
-        // Use the spaceUserId from the message to find the correct user
-        // This is important when the same userUuid has multiple connections (e.g., multiple tabs)
-        const messageSpaceUserId = updateSpaceUserMessage.user.spaceUserId;
-        const spaceUser = Array.from(this._localConnectedUserWithSpaceUser.values()).find(
-            (user) => user.spaceUserId === messageSpaceUserId,
-        );
+        // The sending socket is the only identity the pusher can trust. The spaceUserId carried by the message
+        // comes from the front and can be stale, and a lookup by uuid could pick another tab of the same user.
+        const spaceUser = this._localConnectedUserWithSpaceUser.get(client);
         if (!spaceUser) {
-            // Fallback to userUuid for backward compatibility
-            const userUuid = client.getUserData().userUuid;
-            const spaceUserByUuid = Array.from(this._localConnectedUserWithSpaceUser.values()).find(
-                (user) => user.uuid === userUuid,
-            );
-            if (!spaceUserByUuid) {
-                throw new Error(`spaceUser not found by spaceUserId ${messageSpaceUserId} or userUuid ${userUuid}`);
-            }
+            throw new Error(`spaceUser not found for socket ${client.getUserData().spaceUserId} in space ${this.name}`);
+        }
+
+        const messageSpaceUserId = updateSpaceUserMessage.user.spaceUserId;
+        if (messageSpaceUserId !== spaceUser.spaceUserId) {
             console.warn(
-                `[Space.applyFromUpdateSpaceUserMessage] User found by userUuid fallback, not by spaceUserId. ` +
-                    `messageSpaceUserId: ${messageSpaceUserId}, foundSpaceUserId: ${spaceUserByUuid.spaceUserId}`,
+                `[Space.extractUpdatedFieldsFromUpdateSpaceUserMessage] Message spaceUserId ${messageSpaceUserId} does not match the socket's ${spaceUser.spaceUserId}. Applying the update to the socket's user.`,
             );
         }
 
-        const targetUser =
-            spaceUser ??
-            Array.from(this._localConnectedUserWithSpaceUser.values()).find(
-                (user) => user.uuid === client.getUserData().userUuid,
-            );
-        if (!targetUser) {
-            throw new Error(`spaceUser not found for message spaceUserId ${messageSpaceUserId}`);
+        const changedFields = updateSpaceUserMessage.updateMask.filter((field) =>
+            CLIENT_UPDATABLE_SPACE_USER_FIELDS.has(field),
+        );
+        if (changedFields.length !== updateSpaceUserMessage.updateMask.length) {
+            const message = `[Space.extractUpdatedFieldsFromUpdateSpaceUserMessage] User ${spaceUser.spaceUserId} tried to update read-only fields in space ${this.name}: ${updateSpaceUserMessage.updateMask.join(", ")}`;
+            console.warn(message);
+            Sentry.captureException(new Error(message));
+        }
+        if (changedFields.length === 0) {
+            return null;
         }
 
         return {
-            changedFields: updateSpaceUserMessage.updateMask,
-            partialSpaceUser: updateSpaceUserMessage.user,
+            changedFields,
+            partialSpaceUser: { ...updateSpaceUserMessage.user, spaceUserId: spaceUser.spaceUserId },
         };
     }
 

@@ -9,6 +9,7 @@
     } from "../../Connection/ChatConnection";
     import type { WorkAdventureComponent } from "../../../../types/component";
     import LL, { locale } from "../../../../i18n/i18n-svelte";
+    import AvatarBox from "../../../Components/UI/Avatar.svelte";
     import Avatar from "../Avatar.svelte";
 
     import { resolveChatUserColor } from "../../Connection/Matrix/services/WaMatrixProfileService";
@@ -23,6 +24,7 @@
     import MessageFile from "./Message/MessageFile.svelte";
     import MessageAudioFile from "./Message/MessageAudioFile.svelte";
     import MessageVideoFile from "./Message/MessageVideoFile.svelte";
+    import MessageAttachmentRecipients from "./Message/MessageAttachmentRecipients.svelte";
     import MessageEdition from "./MessageEdition.svelte";
     import MessageReactions from "./MessageReactions.svelte";
     import MessageIncoming from "./Message/MessageIncoming.svelte";
@@ -39,7 +41,6 @@
         membersForMessageAvatars?: Readable<readonly ChatRoomMember[]>;
         /** Root message reply preview; hide inside an open thread timeline (main room only). */
         showThreadSummary?: boolean;
-        updateMessageBody?: (event: { id: string }) => void;
     }
 
     let {
@@ -48,7 +49,6 @@
         showHeader = true,
         membersForMessageAvatars = undefined,
         showThreadSummary = true,
-        updateMessageBody = () => {},
     }: Props = $props();
 
     let messageRef: HTMLDivElement | undefined = $state();
@@ -66,12 +66,6 @@
         isModified,
         reactions,
     } = $derived(message);
-
-    const handleUpdateMessageBody = () => {
-        updateMessageBody({
-            id: message.id,
-        });
-    };
 
     let messageFromSystem = $derived(type === "incoming" || type === "outcoming");
 
@@ -151,17 +145,25 @@
             : 'justify-start pl-3'}"
     >
         {#if (!isMyMessage || isQuotedMessage) && sender !== undefined && replyDepth === 0 && showHeader}
-            <div class="avatar overflow-hidden mt-4 shrink-0">
+            <AvatarBox class="overflow-hidden mt-4 shrink-0">
                 <Avatar
                     compact
                     pictureStore={messageAvatarPictureStore}
                     fallbackName={sender?.username}
                     color={messageSenderAvatarColor}
                 />
-            </div>
+            </AvatarBox>
         {/if}
 
-        <div class="flex flex-col justify-end max-w-full {replyDepth === 0 && !showHeader ? 'ml-12' : ''}">
+        <!-- Without a header, the avatar is left out: keep its column so the bubble lines up with the one above.
+             Our own messages never show an avatar, so they have no column to keep. -->
+        <div
+            class="flex flex-col justify-end max-w-full {replyDepth === 0 &&
+            !showHeader &&
+            (!isMyMessage || isQuotedMessage)
+                ? 'ml-12'
+                : ''}"
+        >
             {#if replyDepth <= 0 && showHeader}
                 <div
                     class="w-full h-fit text-xs px-2 flex justify-between items-end gap-2 overflow-x-hidden"
@@ -213,7 +215,10 @@
                     {/if}
 
                     {@const MessageComponent = messageType[type]}
-                    <MessageComponent updateMessageBody={handleUpdateMessageBody} {content} />
+                    <MessageComponent {content} {message} />
+                    {#if message.attachment?.delivery}
+                        <MessageAttachmentRecipients recipients={message.attachment.delivery} />
+                    {/if}
 
                     {#if $reactionsWithUsers.length > 0}
                         <MessageReactions

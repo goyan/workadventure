@@ -7,6 +7,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         deletePrompt: "此地圖已被刪除",
         deletePromptSubtitle: "你已與此房間中斷連線。",
         deletePromptDetails: "重新整理不會復原此地圖，因為它已經不存在了。",
+        editionFailed: "您的變更無法儲存，已被復原。",
     },
     sideBar: {
         areaEditor: "區域編輯器工具",
@@ -114,7 +115,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 cancel: "取消",
                 validate: "驗證",
             },
-            disabled: "此房間的 Jitsi 整合已停用 ❌",
             actionButtonLabel: "開始 Jitsi 會議",
         },
         playAudio: {
@@ -123,9 +123,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             volumeLabel: "音量",
             audioLinkLabel: "音訊連結",
             audioLinkPlaceholder: "https://xxx.yyy/smthing.mp3",
+            sourceUpload: "上傳檔案",
+            sourceUrl: "使用 URL",
             defaultButtonLabel: "播放音樂",
             error: "無法載入聲音",
             actionButtonLabel: "播放音樂",
+            playForAllUsersLabel: "為地圖上所有使用者播放",
+            audibleRadiusLabel: "可聽半徑（像素）",
+            audibleRadiusPlaceholder: "留空則處處可聽",
         },
         openWebsite: {
             label: "開啟連結",
@@ -160,14 +165,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "講台（舞台）上的使用者可以向相符的「觀眾」區域中的所有與會者講話。",
             nameLabel: "名稱",
             namePlaceholder: "主舞台",
-            disabled: "此房間的講台已停用 ❌",
             actionButtonLabel: "加入講台",
         },
         listenerMegaphone: {
             label: "觀眾",
             description: "觀眾區域的使用者可以聽到所連結講台上的演講者。",
             nameLabel: "講台名稱",
-            disabled: "此房間的觀眾已停用 ❌",
             namePlaceholder: "我的演講者區域",
             waitingMediaLinkLabel: "直播開始前顯示的媒體",
             waitingMediaLinkPlaceholder: "https://www....",
@@ -346,6 +349,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 startWithAudioMuted: "以麥克風靜音開始",
                 startWithVideoMuted: "以視訊關閉開始",
                 disableChat: "停用聊天",
+                raiseHandEnabled: "允許舉手",
                 livekitRoomAdminTag: "會議室的版主標籤",
                 cancel: "取消",
                 validate: "驗證",
@@ -367,6 +371,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         advancedOptions: "進階選項",
         chatEnabled: "關聯專用聊天頻道",
         allowTalking: "允許交談和形成氣泡",
+        raiseHandEnabled: "允許舉手",
         noProperties: "未定義屬性",
     },
     areaEditor: {
@@ -504,7 +509,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 audienceVideoFeedbackActivated: "禮堂模式",
                 audienceVideoFeedbackActivatedDisabled: "禮堂模式",
                 audienceVideoFeedbackActivatedHelper:
-                    "禮堂模式已啟用：接收房間／世界中所有使用者（已啟用攝影機和麥克風）的攝影機和麥克風串流。但參與者將無法看到其他參與者。預設停用。",
+                    "禮堂模式已啟用：接收房間／世界中所有使用者（已啟用攝影機）的攝影機串流，不含聲音。但參與者將無法看到其他參與者。預設停用。",
                 error: {
                     title: "請輸入標題",
                     save: {

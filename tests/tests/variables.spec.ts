@@ -14,7 +14,7 @@ import { getBackDump, getPusherDump, getPusherRooms } from "./utils/debug";
 import { assertLogMessage, startRecordLogs } from "./utils/log";
 import { maps_domain, maps_test_url, play_url, publicTestMapUrl } from "./utils/urls";
 import { getPage } from "./utils/auth";
-import { isMobile } from "./utils/isMobile";
+import { isMobileViewport } from "./utils/isMobile";
 import { evaluateScript } from "./utils/scripting";
 
 async function setVariable(page: Page, value: string) {
@@ -24,9 +24,11 @@ async function setVariable(page: Page, value: string) {
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
             await WA.onInit();
+            // Await the write: "WA.state.textField = value" returns before the front has even received it, and
+            // the test often navigates away right after, which silently drops the variable.
             // eslint-disable-next-line @typescript-eslint/ban-ts-comment
             // @ts-ignore
-            WA.state.textField = value;
+            await WA.state.saveVariable("textField", value);
         },
         value,
     );
@@ -47,8 +49,8 @@ async function expectVariableToBe(page: Page, value: string) {
 test.setTimeout(360000);
 
 test.describe("Variables @nomobile", () => {
-    test.beforeEach(async ({ page }) => {
-        test.skip(isMobile(page), "Skip on mobile devices");
+    test.beforeEach(async ({ viewport }) => {
+        test.skip(isMobileViewport(viewport), "Skip on mobile devices");
     });
 
     // WARNING: Since this test restarts Traefik and other components, it might fail when run against the vite dev server.

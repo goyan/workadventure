@@ -12,6 +12,8 @@ export type LocalCameraPeerDisplayOptions = {
     isInActiveConversation: boolean;
     isListener: boolean;
     listenerSharingCamera: boolean;
+    // A listener who was given the floor streams like a speaker, so they see their own camera.
+    isSpeaker: boolean;
     availabilityStatus: AvailabilityStatus;
 };
 
@@ -25,6 +27,7 @@ export function shouldDisplayLocalCameraPeer({
     isInActiveConversation,
     isListener,
     listenerSharingCamera,
+    isSpeaker,
     availabilityStatus,
 }: LocalCameraPeerDisplayOptions): boolean {
     if (!hasCameraDevice || isCameraEnergySaving || isSilent) {
@@ -36,13 +39,14 @@ export function shouldDisplayLocalCameraPeer({
         availabilityStatus === AvailabilityStatus.SILENT ||
         availabilityStatus === AvailabilityStatus.DO_NOT_DISTURB ||
         availabilityStatus === AvailabilityStatus.BACK_IN_A_MOMENT ||
+        availabilityStatus === AvailabilityStatus.SOUND_BLOCKED ||
         availabilityStatus === AvailabilityStatus.BUSY;
 
     if (isUnavailableStatus) {
         return false;
     }
 
-    if (isListener && !listenerSharingCamera) {
+    if (isListener && !listenerSharingCamera && !isSpeaker) {
         return false;
     }
 

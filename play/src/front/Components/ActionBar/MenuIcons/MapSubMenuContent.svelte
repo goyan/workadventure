@@ -52,13 +52,13 @@
     function toggleMapEditorMode() {
         //if (isMobile) return;
         if ($mapEditorModeStore && !$mapExplorationModeStore) {
-            analyticsClient.toggleMapEditor(false);
+            analyticsClient.trackAdminEvent("map_editor.closed");
             mapEditorModeStore.switchMode(false);
-            gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(undefined);
+            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(undefined);
         } else {
-            analyticsClient.toggleMapEditor(true);
+            analyticsClient.trackAdminEvent("map_editor.opened");
             mapEditorModeStore.switchMode(true);
-            gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(EditorToolName.EntityEditor);
+            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.EntityEditor);
         }
         isTodoListVisibleStore.set(false);
         isCalendarVisibleStore.set(false);
@@ -67,14 +67,14 @@
 
     function toggleMapExplorerMode() {
         if ($mapExplorationModeStore) {
-            gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(undefined);
+            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(undefined);
             mapEditorModeStore.switchMode(false);
         } else {
             mapEditorModeStore.switchMode(true);
-            gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(EditorToolName.ExploreTheRoom);
+            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.ExploreTheRoom);
         }
 
-        analyticsClient.clickTopOpenMapExplorer();
+        analyticsClient.trackAdminEvent("map_explorer.top_button_clicked");
         isTodoListVisibleStore.set(false);
         isCalendarVisibleStore.set(false);
         closeMapMenu();
@@ -114,7 +114,7 @@
             await mapEditorModeManager.unclaimPersonalArea($personalAreaDataStore);
 
             // Send analytics event
-            analyticsClient.unclaimPersonalDesk();
+            analyticsClient.trackAdminEvent("personal_desk.unclaimed");
 
             // Close the menu
             openedMenuStore.close("profileMenu");

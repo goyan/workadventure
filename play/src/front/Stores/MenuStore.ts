@@ -441,7 +441,7 @@ function createOpenedMenuStore() {
             } else {
                 set(menu);
                 activeSecondaryZoneActionBarStore.set(undefined);
-                analyticsClient.openProfileMenu();
+                analyticsClient.trackAdminEvent("profile.opened", { source: "profile_button" });
             }
         },
     };

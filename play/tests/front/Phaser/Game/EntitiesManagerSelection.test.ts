@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { EntityPrefab, WAMEntityData } from "@workadventure/map-editor";
 import { mock } from "vitest-mock-extended";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

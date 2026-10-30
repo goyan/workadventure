@@ -1,13 +1,17 @@
 import type { Writable } from "svelte/store";
-import { get, writable } from "svelte/store";
+import { writable } from "svelte/store";
 import { Subject } from "rxjs";
 import { localUserStore } from "../Connection/LocalUserStore";
+import { resolveSoundUrl } from "../Utils/UrlPlaceholderResolver";
 import { videoStreamElementsStore } from "./PeerStore";
 import { activeSecondaryZoneActionBarStore } from "./MenuStore";
 
 export interface AudioManagerVolume {
     muted: boolean;
+    /** Set by the user. */
     volume: number;
+    /** Set by the sound being played (its own volume, faded with the distance), multiplied by the user's. */
+    soundVolume: number;
     decreaseWhileTalking: boolean;
     volumeReduced: boolean;
     loop: boolean;
@@ -20,7 +24,8 @@ function createAudioManagerVolumeStore() {
     const { subscribe, update } = writable<AudioManagerVolume>({
         muted: false,
         volume: 1,
-        decreaseWhileTalking: true,
+        soundVolume: 1,
+        decreaseWhileTalking: localUserStore.getDecreaseAudioPlayerVolumeWhileTalking(),
         volumeReduced: false,
         loop: false,
         talking: false,
@@ -39,6 +44,12 @@ function createAudioManagerVolumeStore() {
         setVolume: (newVolume: number): void => {
             update((audioPlayerVolume: AudioManagerVolume) => {
                 audioPlayerVolume.volume = newVolume;
+                return audioPlayerVolume;
+            });
+        },
+        setSoundVolume: (newSoundVolume: number): void => {
+            update((audioPlayerVolume: AudioManagerVolume) => {
+                audioPlayerVolume.soundVolume = newSoundVolume;
                 return audioPlayerVolume;
             });
         },
@@ -91,15 +102,9 @@ function createAudioManagerFileStore() {
         subscribe,
         playAudio: (url: string | number | boolean, mapUrl: string, volume: number | undefined, loop = false): void => {
             update((file: string) => {
-                const audioPath = String(url);
+                file = resolveSoundUrl(String(url), mapUrl);
 
-                file = new URL(audioPath, mapUrl).toString();
-
-                audioManagerVolumeStore.setVolume(
-                    volume
-                        ? Math.min(volume, get(audioManagerVolumeStore).volume)
-                        : get(audioManagerVolumeStore).volume,
-                );
+                audioManagerVolumeStore.setSoundVolume(volume ?? 1);
                 audioManagerVolumeStore.setLoop(loop);
                 audioManagerVolumeStore.setMuted(false);
                 audioManagerVolumeStore.stopSound(false);

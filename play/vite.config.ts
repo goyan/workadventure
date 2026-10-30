@@ -1,13 +1,45 @@
 import path from "path";
 import { fileURLToPath } from "url";
-import fs from "fs";
+import type { Plugin } from "vite";
 import { defineConfig, loadEnv } from "vite";
 import { svelte, vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { noiseSuppressionAudioWorkletVitePlugin } from "@workadventure/noise-suppression/vite";
+import tailwindcss from "@tailwindcss/vite";
 import Icons from "unplugin-icons/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { apiVersionHash } from "../libs/messages/src/JsonMessages/ApiVersion";
+
+// Matrix is only for logged-in users (GameManager loads it with import()): keep the SDK out of the chunks every
+// visitor downloads. A single value import of it anywhere on the startup path would silently bring it all back.
+const matrixStaysLazy: Plugin = {
+    name: "workadventure-matrix-stays-lazy",
+    apply: "build",
+    generateBundle(_options, bundle) {
+        const visited = new Set<string>();
+        const visit = (fileName: string) => {
+            const chunk = bundle[fileName];
+            if (visited.has(fileName) || chunk?.type !== "chunk") {
+                return;
+            }
+            visited.add(fileName);
+            // EventType (lib/@types/event.js, with its NamespacedValue import) is tiny and allowed.
+            const leak = chunk.moduleIds.find((id) =>
+                /\/matrix-js-sdk\/lib\/(?!@types\/|NamespacedValue\.js)/.test(id),
+            );
+            if (leak) {
+                this.error(`${leak} is in the startup chunk ${fileName}: load Matrix code with import().`);
+            }
+            chunk.imports.forEach(visit);
+        };
+        for (const chunk of Object.values(bundle)) {
+            if (chunk.type === "chunk" && chunk.isEntry) {
+                visit(chunk.fileName);
+            }
+        }
+    },
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -15,12 +47,22 @@ export default defineConfig(({ mode }) => {
     // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
     const env = loadEnv(mode, process.cwd(), "");
     const config = {
+        // Relative base: every URL Vite emits resolves against the file that references it, so the build can be
+        // served from any origin (the pusher itself, or an assets domain set at runtime with ASSETS_URL).
+        base: "./",
         server: {
             host: "0.0.0.0",
             port: 8080,
-            hmr: {
+            // When the page loads its modules from another origin (ASSETS_URL), asset URLs must be absolute.
+            origin: env.ASSETS_URL || undefined,
+            ws: {
                 // workaround for development in docker
                 clientPort: 80,
+                // The dev module graph is served same-origin under the play host (see the
+                // `play-vite` Traefik router in docker-compose.yaml), so pin the HMR websocket to
+                // the Vite host explicitly. Otherwise the client opens the HMR socket against the
+                // play host, which routes to the pusher instead of Vite and HMR fails to connect.
+                host: "front.workadventure.localhost",
             },
             watch: {
                 ignored: ["./src/pusher"],
@@ -32,7 +74,6 @@ export default defineConfig(({ mode }) => {
             rollupOptions: {
                 input: {
                     main: path.resolve(process.cwd(), "index.html"),
-                    pipLayoutTest: path.resolve(process.cwd(), "pip-layout-test.html"),
                 },
                 // external: ["@mediapipe/tasks-vision"],
                 //plugins: [inject({ Buffer: ["buffer/", "Buffer"] })],
@@ -40,7 +81,15 @@ export default defineConfig(({ mode }) => {
             assetsInclude: ["**/*.tflite", "**/*.wasm"],
         },
         plugins: [
-            mediapipe_workaround(),
+            {
+                // The pusher only uses an index.html built for the same protocol as its own (see FrontAssets.ts).
+                name: "workadventure-api-version",
+                transformIndexHtml: () => [
+                    { tag: "meta", attrs: { name: "wa-api-version", content: apiVersionHash }, injectTo: "head" },
+                ],
+            },
+            matrixStaysLazy,
+            tailwindcss(),
             noiseSuppressionAudioWorkletVitePlugin(),
             nodePolyfills({
                 include: ["events", "buffer"],
@@ -69,8 +118,9 @@ export default defineConfig(({ mode }) => {
             tsconfigPaths(),
         ],
         resolve: {
+            // Without this, vitest resolves Svelte to its server build and mount() is unavailable.
+            conditions: mode === "test" ? ["browser"] : undefined,
             alias: {
-                phaser: fileURLToPath(new URL("./node_modules/phaser/dist/phaser.esm.js", import.meta.url)),
                 events: "events",
                 "@wa-icons": fileURLToPath(new URL("./src/front/Components/Icons.ts", import.meta.url)),
                 "@wa-modals": fileURLToPath(new URL("./src/front/Components/Modal/modalManager.ts", import.meta.url)),
@@ -87,8 +137,7 @@ export default defineConfig(({ mode }) => {
             },
         },
         optimizeDeps: {
-            include: ["olm"],
-            exclude: ["svelte-modals", "@mediapipe/selfie_segmentation"],
+            exclude: ["svelte-modals"],
             esbuildOptions: {
                 define: {
                     global: "globalThis",
@@ -126,21 +175,3 @@ export default defineConfig(({ mode }) => {
     }
     return config;
 });
-
-// use to fix the module export issue with mediapipe ==> https://github.com/tensorflow/tfjs/issues/7165
-// TODO: remove this when we migrate to mediapipe/tasks-vision
-function mediapipe_workaround() {
-    return {
-        name: "mediapipe_workaround",
-        load(id: string) {
-            const filePath = id.split("?")[0];
-            if (path.basename(filePath) === "selfie_segmentation.js" && fs.existsSync(filePath)) {
-                let code = fs.readFileSync(filePath, "utf-8");
-                code += "\nexport const SelfieSegmentation = globalThis.SelfieSegmentation;\n";
-                return { code };
-            } else {
-                return null;
-            }
-        },
-    };
-}

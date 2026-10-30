@@ -154,6 +154,7 @@ export async function resizePlacedImage(
     const entities = scene.getGameMapFrontWrapper().getEntitiesManager();
     const collections = scene.getEntitiesCollectionsManager();
     const manager = scene.getMapEditorModeManager();
+    if (!manager) throw new Error("The map editor is not available");
     const upload = new UploadEntityFrontCommand(
         {
             id,

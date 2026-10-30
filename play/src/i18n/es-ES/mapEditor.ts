@@ -7,6 +7,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         deletePrompt: "Este mapa ha sido eliminado",
         deletePromptSubtitle: "Te has desconectado de esta sala.",
         deletePromptDetails: "Actualizar no restaurará este mapa porque ya no existe.",
+        editionFailed: "No se ha podido guardar tu cambio y se ha deshecho.",
     },
     sideBar: {
         areaEditor: "Herramienta de edición de zonas",
@@ -114,7 +115,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 cancel: "Cancelar",
                 validate: "Validar",
             },
-            disabled: "La integración Jitsi está desactivada en esta sala ❌",
             actionButtonLabel: "Iniciar reunión Jitsi",
         },
         playAudio: {
@@ -123,9 +123,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             volumeLabel: "Volumen",
             audioLinkLabel: "Enlace de audio",
             audioLinkPlaceholder: "https://xxx.yyy/smthing.mp3",
+            sourceUpload: "Subir un archivo",
+            sourceUrl: "Usar una URL",
             defaultButtonLabel: "Reproducir música",
             error: "No se pudo cargar el sonido",
             actionButtonLabel: "Reproducir música",
+            playForAllUsersLabel: "Reproducir para todos los usuarios del mapa",
+            audibleRadiusLabel: "Radio audible (en píxeles)",
+            audibleRadiusPlaceholder: "Audible en todas partes si está vacío",
         },
         openWebsite: {
             label: "Abrir enlace",
@@ -161,14 +166,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 'Los usuarios en el podio (escenario) pueden hablar a todos los asistentes en la zona "Audiencia" correspondiente.',
             nameLabel: "Nombre",
             namePlaceholder: "EscenarioPrincipal",
-            disabled: "El podio está desactivado en esta sala ❌",
             actionButtonLabel: "Unirse al podio",
         },
         listenerMegaphone: {
             label: "Audiencia",
             description: "Los usuarios en la zona de audiencia pueden escuchar al orador en el podio vinculado.",
             nameLabel: "Nombre del podio",
-            disabled: "La audiencia está desactivada en esta sala ❌",
             namePlaceholder: "MiZonaDeOrador",
             waitingMediaLinkLabel: "Medio a mostrar antes del inicio del directo",
             waitingMediaLinkPlaceholder: "https://www....",
@@ -353,6 +356,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 startWithAudioMuted: "Iniciar con el micrófono silenciado",
                 startWithVideoMuted: "Iniciar con el vídeo cerrado",
                 disableChat: "Desactivar el chat",
+                raiseHandEnabled: "Permitir levantar la mano",
                 livekitRoomAdminTag: "Etiqueta de moderador de la sala de reuniones",
                 cancel: "Cancelar",
                 validate: "Validar",
@@ -362,6 +366,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         advancedOptions: "Opciones avanzadas",
         chatEnabled: "Asociar un canal de chat dedicado",
         allowTalking: "Permitir hablar y formar burbujas",
+        raiseHandEnabled: "Permitir levantar la mano",
         maxUsersInAreaPropertyData: {
             label: "Número máximo de usuarios",
             description: "Establecer el número máximo de usuarios en la zona.",
@@ -515,7 +520,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 audienceVideoFeedbackActivated: "Modo auditorio",
                 audienceVideoFeedbackActivatedDisabled: "Modo auditorio",
                 audienceVideoFeedbackActivatedHelper:
-                    "Modo auditorio activado: recibe el flujo de cámara y micrófono de todos los usuarios (con cámara y micrófono activados) en la sala o el mundo. Pero el asistente no podrá ver a los demás asistentes. Desactivado por defecto.",
+                    "Modo auditorio activado: recibe el flujo de cámara de todos los usuarios (con cámara activada) en la sala o el mundo, sin su audio. Pero el asistente no podrá ver a los demás asistentes. Desactivado por defecto.",
                 error: {
                     title: "Introduzca un título",
                     save: {

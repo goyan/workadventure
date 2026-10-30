@@ -20,8 +20,10 @@
     import { myCameraStore, myMicrophoneStore } from "../../Stores/MyMediaStore";
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
+    import { playSpeakerTestSound } from "../../WebRtc/AudioOutputManager";
 
-    import bgMap from "../images/map-exemple.png";
+    import bgMap from "../images/map-exemple.webp";
+    import Button from "../UI/Button.svelte";
     import HorizontalSoundMeterWidget from "./HorizontalSoundMeterWidget.svelte";
     import SelectMicrophone from "./SelectMicrophone.svelte";
     import SelectCamera from "./SelectCamera.svelte";
@@ -36,11 +38,11 @@
 
     let enableCameraScene = $derived(game.scene.getScene(EnableCameraSceneName) as EnableCameraScene);
     const bgColor = gameManager.currentStartedRoom.backgroundColor ?? "#1B2A41";
+    const sceneBg = gameManager.currentStartedRoom.backgroundSceneImage ?? bgMap;
     let legals = gameManager.currentStartedRoom?.legals ?? {};
 
     let selectedCamera: string | undefined = $state(undefined);
     let selectedMicrophone: string | undefined = $state(undefined);
-    const sound = new Audio("/resources/objects/webrtc-in.mp3");
 
     let legalStrings: string[] = [];
     if (legals?.termsOfUseUrl) {
@@ -83,8 +85,12 @@
     }
 
     function submit() {
-        selectCamera(selectedCamera);
-        selectMicrophone(selectedMicrophone);
+        // Picking a device or "Disable" is applied at click time (see handleSelect*). Re-applying the displayed
+        // selection here would turn off a device whose track is not delivered yet, and pin the browser's default device
+        // as the preferred one. A saved preferred device is what marks this page as done (see GameManager): "" means
+        // no preference, follow the system default.
+        localUserStore.setPreferredVideoInputDevice(localUserStore.getPreferredVideoInputDevice() ?? "");
+        localUserStore.setPreferredAudioInputDevice(localUserStore.getPreferredAudioInputDevice() ?? "");
         enableCameraScene.login();
     }
 
@@ -140,7 +146,6 @@
         requestedMicrophoneState.enableMicrophone();
 
         batchGetUserMediaStore.commitChanges();
-        sound.load();
     });
 
     function handleSelectCamera(deviceId: string | undefined) {
@@ -185,7 +190,7 @@
     }
 
     function playSoundClick() {
-        sound.play().catch((e) => console.error(e));
+        playSpeakerTestSound().catch((e) => console.error(e));
     }
     /* eslint-disable svelte/no-at-html-tags */
 </script>
@@ -199,7 +204,7 @@
 >
     <section class="flex min-h-dvh">
         <div
-            class="text-white justify-center items-center overflow-hidden w-[100vw] container flex flex-col min-h-dvh pb-36 pt-8 lg:pt-0 relative"
+            class="text-white justify-center items-center overflow-hidden w-[100vw] container flex flex-col min-h-dvh pb-42 md:pb-36 pt-8 lg:pt-0 relative"
         >
             <section class="mb-4 text-center">
                 <h2 class="h4">{$LL.camera.enable.title()}</h2>
@@ -209,7 +214,7 @@
             </section>
 
             <div
-                class="flex md:flex-wrap flex-col lg:space-x-4 w-full items-center justify-center lg:flex-row lg:items-stretch lg:px-4 lg:pb-4"
+                class="flex md:flex-wrap flex-col gap-4 w-full items-center justify-center lg:flex-row lg:items-stretch lg:px-4 lg:pb-4"
             >
                 <!-- MICROPHONE -->
 
@@ -257,7 +262,7 @@
                                 <div
                                     class="webrtcsetup flex items-center justify-center w-full aspect-video rounded-lg overflow-hidden bg-contrast"
                                 >
-                                    CAM PB <!-- TODO HUGO : catch pb with cam -->
+                                    {$LL.camera.my.loading()}
                                 </div>
                             {/if}
                         </span>
@@ -280,16 +285,13 @@
                 <section
                     class="container m-auto p-4 flex flex-col-reverse md:flex-row items-center justify-center space-y-2 md:space-y-0 md:space-x-4"
                 >
-                    <button
-                        type="submit"
-                        class="btn btn-light btn-lg btn-ghost w-full md:w-1/2
-              
-                     hidden">{$LL.actionbar.cancel()}</button
-                    >
+                    <Button type="submit" variant="light" appearance="ghost" size="lg" class="w-full md:w-1/2 hidden">
+                        {$LL.actionbar.cancel()}
+                    </Button>
                     <!-- TODO ACTION -->
-                    <button type="submit" class="btn btn-secondary btn-lg w-full md:w-1/2 block"
-                        >{$LL.menu.settings.save()}</button
-                    >
+                    <Button type="submit" variant="secondary" size="lg" class="w-full md:w-1/2 block">
+                        {$LL.menu.settings.save()}
+                    </Button>
                 </section>
                 {#if legalString}
                     <section class="terms-and-conditions h-fit z-40 text-center w-full">
@@ -305,10 +307,10 @@
         </div>
     </section>
 </form>
-<div class="absolute start-0 top-0 w-dvw h-dvh bg-cover z-10" style="background-image: url('{bgMap}');"></div>
-<div class="absolute start-0 top-0 w-dvw h-dvh bg-contrast/80 z-20" style="background-color: '{bgColor}';"></div>
+<div class="fixed start-0 top-0 w-dvw h-dvh bg-cover z-10" style="background-image: url('{sceneBg}');"></div>
+<div class="fixed start-0 top-0 w-dvw h-dvh bg-contrast/80 z-20" style="background-color: '{bgColor}';"></div>
 
-<style lang="scss">
+<style>
     .enableCameraScene {
         h2 {
             margin: 1px;

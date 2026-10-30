@@ -1,7 +1,6 @@
 import type { Readable, Unsubscriber, Writable } from "svelte/store";
 import { derived, get, readable, readonly, writable } from "svelte/store";
 import type {
-    EmittedEvents,
     ICreateRoomOpts,
     ICreateRoomStateEvent,
     IPushRule,
@@ -9,14 +8,16 @@ import type {
     MatrixClient,
     MatrixEvent,
     Room,
+    SyncStateData,
     User,
     Visibility,
 } from "matrix-js-sdk";
 import {
     ClientEvent,
-    CryptoEvent,
+    ConnectionError,
     EventTimeline,
     EventType,
+    HttpApiEvent,
     MatrixError,
     PendingEventOrdering,
     PushRuleActionName,
@@ -31,9 +32,11 @@ import { MapStore } from "@workadventure/store-utils";
 import { KnownMembership } from "matrix-js-sdk/lib/@types/membership";
 import { defaultWoka } from "@workadventure/shared-utils";
 import { slugify } from "@workadventure/shared-utils/src/Jitsi/slugify";
+import { shortHash } from "@workadventure/shared-utils/src/String/shortHash";
+
 import { AvailabilityStatus } from "@workadventure/messages";
 import type { VerificationRequest } from "matrix-js-sdk/lib/crypto-api";
-import { canAcceptVerificationRequest } from "matrix-js-sdk/lib/crypto-api";
+import { canAcceptVerificationRequest, CryptoEvent } from "matrix-js-sdk/lib/crypto-api";
 import { asError } from "catch-unknown";
 
 import Debug from "debug";
@@ -48,8 +51,9 @@ import type {
     MatrixPeerProfileDiagnostics,
     MatrixUserSettingsDiagnostics,
 } from "../ChatConnection";
-import { selectedRoomStore } from "../../Stores/SelectRoomStore";
+import { retargetSelectedRoomIfReplaced, selectedRoomStore } from "../../Stores/SelectRoomStore";
 import { chatNotificationStore } from "../../../Stores/ProximityNotificationStore";
+import { loginTokenErrorStore } from "../../../Stores/ChatStore";
 import { currentPlayerWokaStore } from "../../../Stores/CurrentPlayerWokaStore";
 import LL from "../../../../i18n/i18n-svelte";
 import type { RequestedStatus } from "../../../Rules/StatusRules/statusRules";
@@ -61,6 +65,7 @@ import { matrixSecurity as defaultMatrixSecurity } from "./MatrixSecurity";
 import { MatrixRoomFolder } from "./MatrixRoomFolder";
 import { hasValidViaEntries } from "./MatrixSpaceRelations";
 import { chatUserFactory, mapMatrixPresenceToAvailabilityStatus } from "./MatrixChatUser";
+import { clearMatrixStores } from "./MatrixStoreCleanup";
 import {
     pushLocalWokaAndNameToMatrixProfile,
     syncWokaAvatarToMatrixProfileOnWokaChange,
@@ -88,17 +93,21 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     private handleMyMembership: (room: Room, membership: string, prevMembership: string | undefined) => void;
     private handleRoomStateEvent: (event: MatrixEvent) => void;
     private handleName: (room: Room) => void;
+    private handleSync: (state: SyncState, prevState: SyncState | null, res?: SyncStateData) => void;
     private handleAccountDataEvent: (event: MatrixEvent) => void;
     private handleUserPresence: (event: MatrixEvent | undefined, user: User) => void;
     private handleVerificationRequestReceived: (request: VerificationRequest) => void;
+    private handleSessionLoggedOut: (error: MatrixError) => void;
     private directRoomsUnreadAggregateUnsubscriber: Unsubscriber | undefined;
     private statusUnsubscriber: Unsubscriber | undefined;
     private wokaAvatarMatrixSyncUnsubscriber: Unsubscriber | undefined;
     private displayNameMatrixSyncUnsubscriber: (() => void) | undefined;
     private displayNameMatrixSyncDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     private isClientReady = false;
-    private usersStatus: MapStore<string, AvailabilityStatus>;
-    private userIdsNeedingPresenceUpdate = new Set();
+    private isSessionLoggedOut = false;
+    // Per-user availability store, shared with the rendered ChatUser and kept live by
+    // onUserPresenceEvent. Persistent across directRoomsUsers recomputes so the UI subscription survives.
+    private readonly userAvailabilityStores = new Map<string, Writable<AvailabilityStatus>>();
     private readonly roomPlacementRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly roomPlacementRetryGenerations = new Map<string, number>();
     private readonly parentRoomIdsByRoomId = new Map<string, Set<string>>();
@@ -133,6 +142,10 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     isGuest: Writable<boolean> = writable(false);
     hasUnreadMessages: Readable<boolean>;
     roomCreationInProgress: Writable<boolean> = writable(false);
+    private pendingDirectRoomCreation = new Map<
+        string,
+        Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined>
+    >();
     roomFolders: MapStore<MatrixRoomFolder["id"], MatrixRoomFolder> = new MapStore<
         MatrixRoomFolder["id"],
         MatrixRoomFolder
@@ -154,6 +167,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             | AvailabilityStatus.SPEAKER
             | AvailabilityStatus.LIVEKIT
             | AvailabilityStatus.LISTENER
+            | AvailabilityStatus.SOUND_BLOCKED
             | RequestedStatus
         >,
         private matrixSecurity: MatrixSecurity = defaultMatrixSecurity,
@@ -180,8 +194,11 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                         if (member.id !== myUserID) {
                             const user = this.client?.getUser(member.id);
                             if (user) {
-                                acc.push(chatUserFactory(user, client));
-                                this.userIdsNeedingPresenceUpdate.add(user.userId);
+                                const availabilityStatus = this.getOrCreateUserAvailabilityStore(
+                                    user.userId,
+                                    user.presence,
+                                );
+                                acc.push(chatUserFactory(user, client, { availabilityStatus }));
                             }
                         }
                     });
@@ -227,7 +244,6 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             },
         );
 
-        this.usersStatus = new MapStore<string, AvailabilityStatus>();
         this.isEncryptionRequiredAndNotSet = this.matrixSecurity.isEncryptionRequiredAndNotSet;
 
         this.shouldRetrySendingEvents = derived(
@@ -262,9 +278,11 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         this.handleMyMembership = this.onRoomEventMembership.bind(this);
         this.handleRoomStateEvent = this.onRoomStateEvent.bind(this);
         this.handleName = this.onRoomNameEvent.bind(this);
+        this.handleSync = this.onSyncStateChange.bind(this);
         this.handleAccountDataEvent = this.onAccountDataEvent.bind(this);
         this.handleUserPresence = this.onUserPresenceEvent.bind(this);
         this.handleVerificationRequestReceived = this.onVerificationRequestReceived.bind(this);
+        this.handleSessionLoggedOut = this.onSessionLoggedOut.bind(this);
 
         this.statusUnsubscriber = this.statusStore.subscribe((status: AvailabilityStatus) => {
             this.setPresence(status);
@@ -469,6 +487,12 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         this.client.getVisibleRooms().forEach((room) => this.updateRawUnreadRoom(room));
     }
 
+    private getDirectRoomIdsFor(userID: string): Set<string> {
+        const directRoomsPerUsers = this.client?.getAccountData(EventType.Direct)?.getContent() ?? {};
+        const roomIds: unknown = directRoomsPerUsers[userID];
+        return new Set(Array.isArray(roomIds) ? (roomIds as string[]) : []);
+    }
+
     private getDirectRoomIds(): Set<string> {
         const directRoomsPerUsers = this.client?.getAccountData(EventType.Direct)?.getContent() ?? {};
         return new Set(Object.values(directRoomsPerUsers).flat() as string[]);
@@ -562,11 +586,17 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                 });
             }
             this.rebuildSpaceHierarchy();
-            await this.syncMatrixGlobalProfileFromLocalWokaAndName(false);
+            // Best effort, like the later syncs below: a failed avatar upload (or crypto.subtle, which hashes the
+            // Woka, missing on a non-secure origin) is already logged and reported, and must not take the whole
+            // chat down with it. Whether the Woka is there yet when the init gets here is only a matter of timing.
+            await this.syncMatrixGlobalProfileFromLocalWokaAndName(false).catch(() => undefined);
             this.attachWokaAvatarMatrixSync();
             this.attachDisplayNameMatrixSync();
         } catch (error) {
-            this.connectionStatus.set("OFFLINE");
+            // "OFFLINE" is what a deliberate stop looks like, and the chat panel renders nothing at all for
+            // it: a failed init would leave the user staring at an empty panel with no hint that anything
+            // went wrong. "ON_ERROR" at least shows the connection error banner.
+            this.connectionStatus.set("ON_ERROR");
             console.error(error);
             Sentry.captureException(error);
         }
@@ -709,6 +739,16 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         });
     }
 
+    /**
+     * Returns a unique room alias local part (no domain) for public rooms/folders.
+     * Ensures multiple rooms with the same name get distinct aliases.
+     */
+    private uniqueRoomAliasName(baseName: string): string {
+        const slug = slugify(baseName) || "room";
+        const hash = shortHash(crypto.randomUUID());
+        return `${slug}-${hash}`;
+    }
+
     private setPresence(status: AvailabilityStatus): void {
         let matrixStatus: SetPresence;
         if (status === AvailabilityStatus.ONLINE) {
@@ -722,43 +762,64 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         });
     }
 
+    private getOrCreateUserAvailabilityStore(
+        userId: string,
+        presence: string | undefined,
+    ): Writable<AvailabilityStatus> {
+        let store = this.userAvailabilityStores.get(userId);
+        if (!store) {
+            store = writable(mapMatrixPresenceToAvailabilityStatus(presence));
+            this.userAvailabilityStores.set(userId, store);
+        }
+        return store;
+    }
+
     private onUserPresenceEvent(event: MatrixEvent | undefined, user: User): void {
-        const userStatus = get(this.usersStatus).get(user.userId);
-        const newStatus = mapMatrixPresenceToAvailabilityStatus(user.presence);
-        if (userStatus && newStatus !== userStatus && this.userIdsNeedingPresenceUpdate.has(user.userId)) {
-            get(this.usersStatus).set(user.userId, newStatus);
+        // Push the new presence into the shared store so the rendered DM peer's availabilityStatus updates
+        // live. (The previous implementation wrote to a map that was never seeded, so it never ran.)
+        const store = this.userAvailabilityStores.get(user.userId);
+        if (store) {
+            store.set(mapMatrixPresenceToAvailabilityStatus(user.presence));
+        }
+    }
+
+    private onSyncStateChange(state: SyncState, prevState: SyncState | null, res?: SyncStateData): void {
+        if (!this.client) return;
+        switch (state) {
+            case SyncState.Prepared:
+                this.connectionStatus.set("ONLINE");
+                this.isClientReady = true;
+                break;
+            case SyncState.Error:
+                this.connectionStatus.set("ON_ERROR");
+                if (res?.error) {
+                    console.error("Matrix sync error (previous state: ", prevState, "): ", res?.error);
+                    // A ConnectionError means the homeserver could not be reached (network down, laptop waking up...).
+                    // The SDK keeps polling /versions every few seconds and resumes the sync once it answers.
+                    if (!(res.error instanceof ConnectionError)) {
+                        Sentry.captureException(res.error);
+                    }
+                }
+                break;
+            case SyncState.Reconnecting:
+                this.connectionStatus.set("CONNECTING");
+                break;
+            case SyncState.Stopped:
+                this.connectionStatus.set("OFFLINE");
+                break;
+            // Catchup follows a connectivity error while the client catches up before returning to Syncing.
+            case SyncState.Catchup:
+            case SyncState.Syncing:
+                if (get(this.connectionStatus) !== "ONLINE" && this.isClientReady) {
+                    this.connectionStatus.set("ONLINE");
+                }
+                break;
         }
     }
 
     async startMatrixClient() {
         if (!this.client) return;
-        this.client.on(ClientEvent.Sync, (state, prevState, res) => {
-            if (!this.client) return;
-            switch (state) {
-                case SyncState.Prepared:
-                    this.connectionStatus.set("ONLINE");
-                    this.isClientReady = true;
-                    break;
-                case SyncState.Error:
-                    this.connectionStatus.set("ON_ERROR");
-                    if (res?.error) {
-                        console.error("Matrix sync error (previous state: ", prevState, "): ", res?.error);
-                        Sentry.captureException(res?.error);
-                    }
-                    break;
-                case SyncState.Reconnecting:
-                    this.connectionStatus.set("CONNECTING");
-                    break;
-                case SyncState.Stopped:
-                    this.connectionStatus.set("OFFLINE");
-                    break;
-                case SyncState.Syncing:
-                    if (get(this.connectionStatus) !== "ONLINE" && this.isClientReady) {
-                        this.connectionStatus.set("ONLINE");
-                    }
-                    break;
-            }
-        });
+        this.client.on(ClientEvent.Sync, this.handleSync);
 
         this.client.on(ClientEvent.Room, this.handleRoom);
         this.client.on(ClientEvent.DeleteRoom, this.handleDeleteRoom);
@@ -768,19 +829,36 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         this.client.on(ClientEvent.AccountData, this.handleAccountDataEvent);
         this.client.on(UserEvent.Presence, this.handleUserPresence);
         this.client.on(CryptoEvent.VerificationRequestReceived, this.handleVerificationRequestReceived);
-        await this.client.store.startup();
+        this.client.on(HttpApiEvent.SessionLoggedOut, this.handleSessionLoggedOut);
 
+        // Crypto first, and only then the sync store. Every sign-in mints a new device id while the rust
+        // crypto store keeps the previous one, so `initRustCrypto()` regularly fails with "the account in
+        // the store doesn't match the account in the constructor" and has to clear the stores before
+        // retrying. Clearing them closes and deletes the sync store's database - and `IndexedDBStore.startup()`
+        // returns early once it has run, so it never reconnects. Starting the store first therefore left it
+        // dead for the rest of the session: every command failed with "the database connection is closing",
+        // the SDK degraded to an in-memory store, and nothing was persisted - so the next page load had no
+        // sync token and paid for a full initial sync all over again.
         try {
             await this.client.initRustCrypto();
-        } catch {
-            await this.client.clearStores();
+        } catch (error) {
+            console.error("Unable to initialize the Matrix crypto. Clearing the stores before retrying.", error);
+            await clearMatrixStores(this.client);
             await this.client.initRustCrypto();
         }
+
+        await this.client.store.startup();
 
         await this.client.startClient({
             threadSupport: true,
             //Detached to prevent using listener on localIdReplaced for each event
             pendingEventOrdering: PendingEventOrdering.Detached,
+            // Without this, the initial sync carries the complete member list of every joined room. A world
+            // creates one Matrix room per area, so a long-standing member of a busy world ends up with a
+            // response the homeserver needs minutes to build - past the 80s the SDK is willing to wait
+            // (BUFFER_PERIOD_MS in matrix-js-sdk's sync.ts), after which it aborts and starts over, forever.
+            // The full member list is now fetched per room, when something actually needs to display it.
+            lazyLoadMembers: true,
         });
 
         try {
@@ -788,6 +866,23 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         } catch (error) {
             console.error("Failed to wait initial sync:", error);
         }
+    }
+
+    /**
+     * The homeserver rejected our access token with M_UNKNOWN_TOKEN and matrix-js-sdk could not refresh it.
+     *
+     * Nothing in this session can recover from that - the sync loop will keep failing - and the dead
+     * credentials would be replayed on every later page load, so drop them: the next login then starts from
+     * a clean store. The UI switches to the "reconnect" prompt, whose button goes through the OpenID flow,
+     * the only place a fresh Matrix login token is minted.
+     */
+    private onSessionLoggedOut(error: MatrixError): void {
+        this.isSessionLoggedOut = true;
+        console.error("The Matrix session is no longer valid: ", error);
+        Sentry.captureException(error);
+        localUserStore.clearMatrixSession();
+        this.connectionStatus.set("ON_ERROR");
+        loginTokenErrorStore.set(true);
     }
 
     private onVerificationRequestReceived(request: VerificationRequest) {
@@ -847,6 +942,9 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             const checkSync = () => {
                 if (this.client?.isInitialSyncComplete()) {
                     resolve();
+                } else if (this.isSessionLoggedOut) {
+                    // A dead session never syncs: don't keep the chat (and its button) waiting for the timeout.
+                    reject(new Error("Failed to wait initial sync : the Matrix session is no longer valid"));
                 } else {
                     if (Date.now() - startTime >= timeout) {
                         reject(new Error(`Failed to wait initial sync : timeout ${timeout} ms`));
@@ -1068,8 +1166,11 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         }
         if (event.getType() === "m.push_rules") {
             const content = event.getContent();
+            // `global` and its rule-kind arrays (override, room, …) are all optional in a PushRuleSet;
+            // a partial m.push_rules update can omit `override`, so never assume it exists.
+            const overrideRules: IPushRule[] = content?.global?.override ?? [];
 
-            content.global.override.forEach((rule: IPushRule) => {
+            overrideRules.forEach((rule: IPushRule) => {
                 const room = this.roomList.get(rule.rule_id);
                 if (!room) return;
                 if (rule.actions.includes(PushRuleActionName.DontNotify)) {
@@ -1079,7 +1180,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
 
             Array.from(this.roomList.values())
                 .filter((room) => {
-                    return !content.global.override.some(
+                    return !overrideRules.some(
                         (rule: IPushRule) =>
                             rule.rule_id === room.id && rule.actions.includes(PushRuleActionName.DontNotify),
                     );
@@ -1280,7 +1381,9 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             roomFolder.init();
         } else {
             if (!parentFolder.roomList.has(roomId)) {
-                parentFolder.roomList.set(roomId, new MatrixChatRoom(room));
+                const newRoom = new MatrixChatRoom(room);
+                parentFolder.roomList.set(roomId, newRoom);
+                this.retargetSelectedRoomIfReplaced(newRoom);
             }
         }
 
@@ -1299,7 +1402,9 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             return;
         }
         if (!this.roomList.has(roomId)) {
-            this.roomList.set(roomId, new MatrixChatRoom(room));
+            const newRoom = new MatrixChatRoom(room);
+            this.roomList.set(roomId, newRoom);
+            this.retargetSelectedRoomIfReplaced(newRoom);
         }
     }
 
@@ -1458,10 +1563,12 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     private createAndAddNewRootRoom(room: Room): MatrixChatRoom {
         const newRoom = new MatrixChatRoom(room);
         this.roomList.set(newRoom.id, newRoom);
-        if (get(selectedRoomStore)?.id === newRoom.id) {
-            selectedRoomStore.set(newRoom);
-        }
+        this.retargetSelectedRoomIfReplaced(newRoom);
         return newRoom;
+    }
+
+    private retargetSelectedRoomIfReplaced(newRoom: MatrixChatRoom): void {
+        retargetSelectedRoomIfReplaced(newRoom);
     }
     private onClientEventDeleteRoom(roomId: string) {
         this.untrackRawUnreadRoom(roomId);
@@ -1657,9 +1764,8 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     }
     private handleMatrixError(error: unknown): Error {
         if (error instanceof MatrixError) {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            //@ts-ignore
-            return new Error(error.data.error, { cause: error });
+            // MatrixError.data is IErrorJson with an optional `error` string in 41.8.0, so no cast is needed.
+            return new Error(error.data.error ?? error.message, { cause: error });
         }
         return asError(error);
     }
@@ -1669,10 +1775,13 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
             throw new Error("Room name is undefined");
         }
 
+        // When MSC4362 (encrypted state events) is supported: for rooms created with state encryption
+        // enabled, omit `name` here and call client.setRoomName(room_id, name) after creation so the
+        // client can send the name as an encrypted state event. Currently we send the name in createRoom.
         return {
             name: roomName.trim(),
             visibility: roomOptions.visibility as Visibility | undefined,
-            room_alias_name: slugify(roomName),
+            ...(roomOptions.visibility === "public" && { room_alias_name: this.uniqueRoomAliasName(roomName) }),
             invite:
                 roomOptions.invite
                     ?.map((invitation) => invitation.value)
@@ -1680,10 +1789,9 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
                 [],
             is_direct: roomOptions.is_direct,
             initial_state: this.computeInitialState(roomOptions),
-            power_level_content_override: {
-                // @ts-ignore TODO: fix type
-                suggested: roomOptions.suggested ?? false,
-            },
+            // No power_level_content_override: `suggested` is not an m.room.power_levels field (hence the
+            // suppressed type error). The real "suggested" flag is set on the m.space.child event in
+            // addRoomToSpace, so this only stored a junk key in the room power levels.
         };
     }
 
@@ -1696,7 +1804,7 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         return {
             name: roomName.trim(),
             visibility: (roomOptions.visibility === "public" ? "public" : "private") as Visibility | undefined,
-            room_alias_name: slugify(roomName),
+            ...(roomOptions.visibility === "public" && { room_alias_name: this.uniqueRoomAliasName(roomName) }),
             invite:
                 roomOptions.invite
                     ?.map((invitation) => invitation.value)
@@ -1755,11 +1863,26 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
     }
 
     async createDirectRoom(userToInvite: string): Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined> {
+        // Deduplicate concurrent calls (e.g. a double click on the "send message" button):
+        // both callers must resolve to the same room instead of racing two createRoom requests.
+        const pendingCreation = this.pendingDirectRoomCreation.get(userToInvite);
+        if (pendingCreation) return pendingCreation;
+
+        const creation = this.doCreateDirectRoom(userToInvite).finally(() => {
+            this.pendingDirectRoomCreation.delete(userToInvite);
+        });
+        this.pendingDirectRoomCreation.set(userToInvite, creation);
+        return creation;
+    }
+
+    private async doCreateDirectRoom(
+        userToInvite: string,
+    ): Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined> {
         if (!this.client) {
             return Promise.reject(new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG));
         }
 
-        const existingDirectRoom = this.getDirectRoomFor(userToInvite);
+        const existingDirectRoom = await this.getDirectRoomFor(userToInvite);
 
         if (existingDirectRoom) return existingDirectRoom;
 
@@ -1796,20 +1919,43 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         }
     }
 
-    getDirectRoomFor(userID: string): (ChatRoom & ChatRoomMembershipManagement) | undefined {
-        const directRooms = Array.from(this.roomList.values())
-            .filter((room) => {
-                const memberIDs = get(room.members)
-                    .filter((member) => member.id && ["join", "invite"].includes(get(member.membership)))
-                    .map((member) => member.id);
-                return (
-                    get(room.type) === "direct" &&
-                    memberIDs.some((memberId) => memberId === userID && memberIDs.length === 2)
-                );
-            })
-            .map((room) => room);
-        if (directRooms.length > 0) return directRooms[0];
-        return undefined;
+    async getDirectRoomFor(userID: string): Promise<(ChatRoom & ChatRoomMembershipManagement) | undefined> {
+        if (!this.client) return undefined;
+
+        const isActiveMembership = (membership: string | undefined) =>
+            membership === KnownMembership.Join || membership === KnownMembership.Invite;
+
+        // Look the DM up in the SDK client, not in roomList: roomList is filled asynchronously
+        // (one room per animation frame) and rooms transiently leave it during placement
+        // reconciliation, so it can miss a DM the client already knows about — every miss here
+        // forks a duplicate room. Same heuristic as Element's findDMForUser: a DM is a room of
+        // exactly two active people containing those two people.
+        const candidateRooms = this.client.getRooms().filter((room) => {
+            if (room.isSpaceRoom() || !isActiveMembership(room.getMyMembership())) return false;
+            // Counts come from the room summary, not from `getMembers().length`: under lazy loading the
+            // latter only holds the member events that happen to be loaded (the heroes and the recent
+            // senders), so a crowded room whose two loaded members are the two of us would be picked as
+            // our DM. Same reasoning as MatrixChatRoom.getMatrixRoomType.
+            if (room.getJoinedMemberCount() + room.getInvitedMemberCount() !== 2) return false;
+            return isActiveMembership(room.getMember(userID)?.membership);
+        });
+
+        // A room flagged as a DM with that user wins over a room that merely ended up with two people:
+        // a group chat everybody else left still counts two active members but is not our DM.
+        const directRoomIds = this.getDirectRoomIdsFor(userID);
+        const flaggedRooms = candidateRooms.filter((room) => directRoomIds.has(room.roomId));
+        const suitableRooms = flaggedRooms.length > 0 ? flaggedRooms : candidateRooms;
+
+        // Duplicate DMs already exist for some users: pick the most recently active one
+        // (the sidebar sort criterion) instead of an arbitrary insertion order.
+        const bestRoom = suitableRooms.sort(
+            (roomA, roomB) => roomB.getLastActiveTimestamp() - roomA.getLastActiveTimestamp(),
+        )[0];
+        if (!bestRoom) return undefined;
+
+        const existingWrapper = await this.findRoomOrFolder(bestRoom.roomId);
+        if (existingWrapper instanceof MatrixChatRoom) return existingWrapper;
+        return this.createAndAddNewRootRoom(bestRoom);
     }
 
     async searchChatUsers(searchText: string, limit = 20) {
@@ -1882,17 +2028,18 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
 
             this.client
                 .joinRoom(roomId)
-                .then(async (_) => {
-                    //Wait Sync Event before use/update roomList otherwise room not exist in the client
-                    await this.waitForNextSync();
+                .then(async (joinedRoom) => {
+                    // client.joinRoom() resolves with the joined Room, already registered in the
+                    // client store, so we can use it directly. We previously blocked on the next
+                    // sync event here, but with newer matrix-js-sdk sync timing that event can be a
+                    // full long-poll cycle away, delaying (or, when getRoom() was still empty,
+                    // failing) the room opening. Read it back from the store and fall back to the
+                    // room returned by joinRoom.
+                    const roomAfterSync = this.client?.getRoom(roomId) ?? joinedRoom;
 
                     if (!this.client) {
                         rej(new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG));
                         return;
-                    }
-                    const roomAfterSync = this.client.getRoom(roomId);
-                    if (!roomAfterSync) {
-                        return Promise.reject(new Error("Room not present after synchronization"));
                     }
                     const dmInviterId = roomAfterSync.getDMInviter();
                     if (dmInviterId) {
@@ -1950,15 +2097,30 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         if (!this.client) {
             throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
         }
-        const directMap: Record<string, string[]> = this.client.getAccountData("m.direct")?.getContent() || {};
-        directMap[userId] = [...(directMap[userId] || []), roomId];
-        await this.client.setAccountData("m.direct", directMap);
+        const directMap: Record<string, string[]> = this.client.getAccountData(EventType.Direct)?.getContent() || {};
+        const roomsForUser = directMap[userId] ?? [];
+        if (roomsForUser.includes(roomId)) return;
+        directMap[userId] = [...roomsForUser, roomId];
+        await this.client.setAccountData(EventType.Direct, directMap);
     }
 
     async isUserExist(address: string): Promise<boolean> {
-        const user = await this.searchChatUsers(address, 1);
-        if (!user) return false;
-        return user && user.some((user) => user.id === address);
+        if (!this.client) {
+            throw new Error(CLIENT_NOT_INITIALIZED_ERROR_MSG);
+        }
+        // The user directory cannot answer this: it only lists users we already share a room with (or who
+        // are in a public room), it is indexed asynchronously, and it matches on words, so searching for a
+        // full "@someone:my.server" happily returns anybody else on the same server. The profile endpoint
+        // answers about that exact user: 404 means there is no such user.
+        try {
+            await this.client.getProfileInfo(address);
+            return true;
+        } catch (error) {
+            if (error instanceof MatrixError && error.httpStatus === 404) {
+                return false;
+            }
+            throw error;
+        }
     }
 
     getRoomByID(roomId: string): ChatRoom {
@@ -2013,16 +2175,20 @@ export class MatrixChatConnection implements ChatConnectionInterface, MatrixChat
         this.parentRoomIdsByRoomId.clear();
         this.childRoomIdsBySpaceId.clear();
         this.folderShellsByRoomId.clear();
+        this.userAvailabilityStores.clear();
         this.roomList.forEach((room) => {
             this.roomList.delete(room.id);
         });
+        this.client?.off(ClientEvent.Sync, this.handleSync);
         this.client?.off(ClientEvent.Room, this.handleRoom);
         this.client?.off(ClientEvent.DeleteRoom, this.handleDeleteRoom);
         this.client?.off(RoomEvent.MyMembership, this.handleMyMembership);
-        this.client?.off("RoomState.events" as EmittedEvents, this.handleRoomStateEvent);
+        this.client?.off(RoomStateEvent.Events, this.handleRoomStateEvent);
         this.client?.off(RoomEvent.Name, this.handleName);
+        this.client?.off(ClientEvent.AccountData, this.handleAccountDataEvent);
         this.client?.off(UserEvent.Presence, this.handleUserPresence);
         this.client?.off(CryptoEvent.VerificationRequestReceived, this.handleVerificationRequestReceived);
+        this.client?.off(HttpApiEvent.SessionLoggedOut, this.handleSessionLoggedOut);
         if (this.directRoomsUnreadAggregateUnsubscriber) {
             this.directRoomsUnreadAggregateUnsubscriber();
             this.directRoomsUnreadAggregateUnsubscriber = undefined;

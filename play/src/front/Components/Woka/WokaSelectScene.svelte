@@ -4,11 +4,14 @@
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
+    import Button from "../UI/Button.svelte";
     import WokaPreview from "./WokaPreview.svelte";
     import type { WokaCollection, WokaData, WokaTexture } from "./WokaTypes";
     import { getItemsPerRow } from "./ItemsPerRow";
     import WokaImage from "./WokaImage.svelte";
     import { IconShuffle } from "@wa-icons";
+
+    /* eslint-disable svelte/require-each-key */
 
     interface Props {
         customize: () => void;
@@ -228,13 +231,18 @@
                         />
 
                         <div class="mt-4 space-y-2">
-                            <button
-                                class="btn btn-sm btn-light btn-border w-full px-4 py-2 bg-white/10 text-white rounded hover:bg-white/10 flex flex-row items-center justify-center gap-2"
+                            <Button
+                                size="sm"
+                                variant="light"
+                                appearance="border"
+                                class="w-full px-4 py-2 text-white rounded hover:bg-white/10 flex flex-row items-center gap-2"
                                 onclick={randomizeOutfit}
                             >
-                                <IconShuffle font-size="20" class="text-white" />
+                                {#snippet icon()}
+                                    <IconShuffle font-size="20" class="text-white" />
+                                {/snippet}
                                 <span>{$LL.woka.selectWoka.randomize()}</span>
-                            </button>
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -245,7 +253,7 @@
                         <div
                             class="flex-none lg:flex-1 flex flex-col items-start gap-0 min-h-0 min-w-0 max-h-full overflow-y-scroll overflow-x-auto scroll-mask py-[20px]"
                         >
-                            {#each wokaData?.["woka"]?.collections || [] as collection, collectionIndex (collection.name)}
+                            {#each wokaData?.["woka"]?.collections || [] as collection, collectionIndex}
                                 <p class="text-sm text-gray-500 mb-1 mt-4 p-0">{collection.name}</p>
                                 <div
                                     id="woka-line-{collectionIndex}"

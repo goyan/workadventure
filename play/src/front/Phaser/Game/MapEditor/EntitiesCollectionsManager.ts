@@ -99,6 +99,7 @@ export class EntitiesCollectionsManager {
                                 collisionGrid: entity.collisionGrid,
                                 collisionRectangles: entity.collisionRectangles,
                                 type: entity.type,
+                                ownerId: entity.ownerId,
                             });
                             entity.tags.forEach((tag: string) => tagSet.add(tag));
                         });

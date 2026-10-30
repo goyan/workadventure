@@ -1,4 +1,6 @@
+import * as Phaser from "phaser";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+import { cameraDetachedStore } from "../../Stores/CameraStore";
 import { Easing } from "../../types";
 import { HtmlUtils } from "../../WebRtc/HtmlUtils";
 import type { Box } from "../../WebRtc/LayoutManager";
@@ -17,7 +19,19 @@ import {
     getSmoothButtonZoomModifier,
 } from "./CameraZoomUtils";
 import type { GameScene } from "./GameScene";
+
 import Clamp = Phaser.Math.Clamp;
+import EventEmitter = Phaser.Events.EventEmitter;
+import Camera = Phaser.Cameras.Scene2D.Camera;
+import Tween = Phaser.Tweens.Tween;
+
+/** While walking, the avatar and its path stay at least this far (in map pixels, two tiles) from the edge of the view. */
+const WALK_FRAMING_MARGIN = 64;
+/** The view blends into the walk framing (and back to the avatar) in this long (ms), plus 1 ms per screen pixel it
+ * travels, up to WALK_BLEND_MAX_MS. */
+const WALK_BLEND_MIN_MS = 500;
+const WALK_BLEND_MS_PER_SCREEN_PIXEL = 1;
+const WALK_BLEND_MAX_MS = 1500;
 
 export enum CameraManagerEvent {
     CameraUpdate = "CameraUpdate",
@@ -46,8 +60,25 @@ type SpeedCameraAnimation = {
 
 type CameraAnimation = FocusCameraAnimation | SpeedCameraAnimation;
 
+type CursorZoomAnchor = {
+    screenX: number;
+    screenY: number;
+    world: { x: number; y: number };
+};
+
 type ZoomAnimation = {
     onInterrupt: () => void;
+};
+
+/** A blend of the view from `from` to a target, over `duration` ms. */
+type ViewBlend = { from: { x: number; y: number; zoom: number }; elapsed: number; duration: number };
+
+type WalkFraming = ViewBlend & {
+    id: number;
+    startZoom: number;
+    destination: { x: number; y: number };
+    // The walk is over: the view blends back to the avatar at the starting zoom.
+    ending: boolean;
 };
 
 /**
@@ -57,8 +88,8 @@ type ZoomAnimation = {
  * The CameraManager handles the transitions / animations between the different camera modes.
  * It also handles the smooth zoom in and out of the camera.
  */
-export class CameraManager extends Phaser.Events.EventEmitter {
-    private camera: Phaser.Cameras.Scene2D.Camera;
+export class CameraManager extends EventEmitter {
+    private camera: Camera;
     private waScaleManager: WaScaleManager;
 
     private cameraAnimation: CameraAnimation | undefined;
@@ -73,22 +104,31 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     private continuousButtonZoomFactorPerSecond: number | undefined;
 
     private playerToFollow?: Player | RemotePlayer;
-    private panning = false;
-    // While the map editor is open the camera is detached from the avatar and never snaps back to it.
-    private editorFreeCamera = false;
     private zoomLocked: boolean;
+    private manuallyDetached = false;
+    private cursorZoomAnchor: CursorZoomAnchor | undefined;
 
-    private readonly EDITOR_MODE_SCROLL_SPEED: number = 5;
+    /** Key scrolling in the map editor, in world units per ms at zoom modifier 1 (same on-screen speed at any zoom). */
+    private readonly KEY_SCROLL_SPEED = 0.6;
+    private mapEditorOpen = false;
+    private zoomBeforeMapEditor: number | undefined;
+    // The camera bounds last set in game mode (see updateGameBounds).
+    private gameBounds: { x: number; y: number; width: number; height: number } | undefined;
 
     private readonly unsubscribeMapEditorModeStore: () => void;
 
     private _resistanceEndZoomLevel = 0.3;
 
-    // The point of the scene the explorer mode is focusing on.
+    // The free point the view follows when it does not follow a player: after a drag, or in the map editor.
     private explorerFocusOn: { x: number; y: number } = { x: 0, y: 0 };
+    // What the camera follows, or is gliding towards (a player, a focus zone...). Undefined while the view is free.
+    private followTarget: { x: number; y: number } | undefined;
+    // The tap-walk the view frames (see startWalkFraming): the zoom it started from, and the blend into the framing.
+    private walkFraming: WalkFraming | undefined;
+    private walkFramingCount = 0;
 
     // The tween for the camera offset
-    private cameraOffsetCurrentTween?: Phaser.Tweens.Tween;
+    private cameraOffsetCurrentTween?: Tween;
 
     // The box we should center the camera on (expressed in screen pixels, not game pixels).
     private cameraOffsetBox: Box | undefined;
@@ -118,28 +158,28 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
         // Subscribe to map editor mode store to change camera bounds when the map editor is opened or closed
         this.unsubscribeMapEditorModeStore = mapEditorModeStore.subscribe((isOpened) => {
-            // Define new bounds for camera if the map editor is opened
+            const changed = isOpened !== this.mapEditorOpen;
+            this.mapEditorOpen = isOpened;
             if (isOpened) {
-                //this.camera.setBounds(0, 0, this.mapSize.width * 2, this.mapSize.height);
+                // The editor lets the view go past the map edges.
                 this.camera.setBounds(
                     -this.mapSize.width,
                     -this.mapSize.height,
                     this.mapSize.width * 3,
                     this.mapSize.height * 3,
                 );
-                this.enterEditorFreeCamera();
             } else {
-                this.leaveEditorFreeCamera();
-                // We set the bounds back after a call to start following the player
-                this.setCameraBounds();
+                this.gameBounds = undefined;
+                this.updateGameBounds();
+            }
+            if (changed) {
+                if (isOpened) this.enterMapEditor();
+                else this.leaveMapEditor();
             }
         });
+        this.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.updateGameBounds);
 
-        // Set zoom out to the maximum possible value
-        this.waScaleManager.maxZoomOut = this.waScaleManager.getTargetZoomModifierFor(
-            this.mapSize.width,
-            this.mapSize.height,
-        );
+        this.waScaleManager.mapSize = this.mapSize;
 
         this.scene.game.events.on(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
     }
@@ -148,11 +188,46 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.doUpdateCameraOffset(true);
     };
 
+    /**
+     * In game mode the view stays on the map. On an axis where the map is smaller than the view, the map is centred
+     * in the area the follow offset leaves visible: the bounds grow to the view's size around that centre, where
+     * Phaser's clamping would otherwise pin the map to the top-left corner.
+     */
+    private readonly updateGameBounds = (): void => {
+        if (this.mapEditorOpen) return;
+        const { displayWidth, displayHeight, followOffset } = this.camera;
+        const { width: mapWidth, height: mapHeight } = this.mapSize;
+        const bounds = {
+            x: displayWidth > mapWidth ? mapWidth / 2 - followOffset.x - displayWidth / 2 : 0,
+            y: displayHeight > mapHeight ? mapHeight / 2 - followOffset.y - displayHeight / 2 : 0,
+            width: Math.max(mapWidth, displayWidth),
+            height: Math.max(mapHeight, displayHeight),
+        };
+        const last = this.gameBounds;
+        if (
+            last &&
+            last.x === bounds.x &&
+            last.y === bounds.y &&
+            last.width === bounds.width &&
+            last.height === bounds.height
+        ) {
+            return;
+        }
+        this.gameBounds = bounds;
+        this.camera.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+        this.scene.markDirty();
+    };
+
     public destroy(): void {
+        this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.updateWalkFraming);
+        this.setManuallyDetached(false);
+        this.cameraAnimation?.onInterrupt();
+        this.cameraAnimation = undefined;
         this.cancelOffsetTween();
         this.zoomAnimation?.onInterrupt();
         this.zoomAnimation = undefined;
         this.scene.game.events.off(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
+        this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.updateGameBounds);
 
         this.scene.game.events.off(WaScaleManagerEvent.RefreshFocusOnTarget);
         this.camera.off("followupdate", this.onFollowUpdate);
@@ -161,7 +236,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         super.destroy();
     }
 
-    public getCamera(): Phaser.Cameras.Scene2D.Camera {
+    public getCamera(): Camera {
         return this.camera;
     }
 
@@ -170,6 +245,15 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         duration: number,
         callback?: () => void,
     ): void {
+        this.stopWalkFraming();
+        // The focus tween moves explorerFocusOn itself: let a running cursor zoom finish around the centre instead.
+        this.cursorZoomAnchor = undefined;
+        this.followTarget = target;
+        const wasManuallyDetached = this.manuallyDetached;
+        this.setManuallyDetached(false);
+        if (wasManuallyDetached) {
+            this.doUpdateCameraOffset(true);
+        }
         this.cameraAnimation?.onInterrupt();
 
         if (duration === 0) {
@@ -199,7 +283,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
             to: 1,
             duration,
             ease: Easing.SineEaseOut,
-            onUpdate: (tween: Phaser.Tweens.Tween) => {
+            onUpdate: (tween: Tween) => {
                 const progress = tween.getValue() ?? 0;
                 const shiftX = (target.x - origin.x) * progress;
                 const shiftY = (target.y - origin.y) * progress;
@@ -230,7 +314,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
      * @param duration Time for the transition im MS. If set to 0, transition will occur immediately
      */
     public setPosition(setTo: WaScaleManagerFocusTarget, duration = 1000): void {
-        this.waScaleManager.saveZoom();
+        this.waScaleManager.saveZoom(this.walkFraming?.startZoom);
         this.camera.stopFollow();
 
         const currentZoomModifier = this.waScaleManager.zoomModifier;
@@ -250,7 +334,8 @@ export class CameraManager extends Phaser.Events.EventEmitter {
      * Set camera to focus mode. As long as the camera is in the Focus mode, its view cannot be changed.
      */
     public enterFocusMode(focusOn: WaScaleManagerFocusTarget, margin = 0, duration = 1000): void {
-        this.waScaleManager.saveZoom();
+        // During a tap-walk, leaving the zone goes back to the zoom from before the walk.
+        this.waScaleManager.saveZoom(this.walkFraming?.startZoom);
         this.waScaleManager.setFocusTarget(focusOn);
 
         this.zoomLocked = false;
@@ -274,39 +359,42 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.restoreZoom(duration);
     }
 
-    public move(moveEvents: ActiveEventList): void {
-        let sendViewportUpdate = false;
-        if (moveEvents.get(UserInputEvent.MoveUp)) {
-            this.explorerFocusOn.y -= this.EDITOR_MODE_SCROLL_SPEED;
-            this.explorerFocusOn.y = Clamp(this.explorerFocusOn.y, 0, this.mapSize.height);
-            this.scene.markDirty();
-            sendViewportUpdate = true;
-        } else if (moveEvents.get(UserInputEvent.MoveDown)) {
-            this.explorerFocusOn.y += this.EDITOR_MODE_SCROLL_SPEED;
-            this.explorerFocusOn.y = Clamp(this.explorerFocusOn.y, 0, this.mapSize.height);
-            this.scene.markDirty();
-            sendViewportUpdate = true;
-        }
+    /** Scrolls the free view with the move keys, as the map editor does. `delta` is the frame time in ms. */
+    public move(moveEvents: ActiveEventList, delta: number): void {
+        const x = Number(moveEvents.get(UserInputEvent.MoveRight)) - Number(moveEvents.get(UserInputEvent.MoveLeft));
+        const y = Number(moveEvents.get(UserInputEvent.MoveDown)) - Number(moveEvents.get(UserInputEvent.MoveUp));
+        if (x === 0 && y === 0) return;
+        const step = (this.KEY_SCROLL_SPEED * delta) / this.waScaleManager.zoomModifier;
+        this.scrollCamera(x * step, y * step);
+    }
 
-        if (moveEvents.get(UserInputEvent.MoveLeft)) {
-            this.explorerFocusOn.x -= this.EDITOR_MODE_SCROLL_SPEED;
-            this.explorerFocusOn.x = Clamp(this.explorerFocusOn.x, 0, this.mapSize.width);
-            this.scene.markDirty();
-            sendViewportUpdate = true;
-        } else if (moveEvents.get(UserInputEvent.MoveRight)) {
-            this.explorerFocusOn.x += this.EDITOR_MODE_SCROLL_SPEED;
-            this.explorerFocusOn.x = Clamp(this.explorerFocusOn.x, 0, this.mapSize.width);
-            this.scene.markDirty();
-            sendViewportUpdate = true;
-        }
+    /** In the map editor the view is free: the move keys scroll it and the wheel zooms on the cursor. */
+    private enterMapEditor(): void {
+        this.stopWalkFraming();
+        this.zoomBeforeMapEditor = this.waScaleManager.zoomModifier;
+        // Unless the user dragged the view away, start where a following camera would be: on its target, with its
+        // offset. A small map holds the game-mode view away from the avatar, and a camera reopened while gliding back
+        // to the avatar (just after closing the editor) would otherwise stop halfway.
+        const target = this.manuallyDetached ? undefined : this.followTarget;
+        const offset = { x: this.camera.followOffset.x, y: this.camera.followOffset.y };
+        this.setExplorationMode();
+        if (!target) return;
+        this.explorerFocusOn.x = target.x;
+        this.explorerFocusOn.y = target.y;
+        this.camera.setFollowOffset(offset.x, offset.y);
+    }
 
-        if (sendViewportUpdate) {
-            this.scene.sendViewportToServer();
-        }
+    private leaveMapEditor(): void {
+        // Zoomed out past the resistance level (to see the whole map, say): go back to the zoom from before.
+        const targetZoom =
+            this.waScaleManager.zoomModifier < this.resistanceEndZoomLevel
+                ? Math.max(this.zoomBeforeMapEditor ?? 0, this.resistanceEndZoomLevel)
+                : undefined;
+        this.startFollowPlayer(this.scene.CurrentPlayer, 1000);
+        if (targetZoom) this.zoomByFactor(targetZoom / this.waScaleManager.zoomModifier, 1000);
     }
 
     public startFollowPlayer(player: Player | RemotePlayer, duration = 0): void {
-        this.stopPanning();
         this.playerToFollow = player;
 
         this.animateToFocus(player, duration, () => {});
@@ -385,6 +473,10 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     public doUpdateCameraOffset(instant = false): void {
         const targetFollowOffset = this.updateTargetFollowOffset();
 
+        if (this.manuallyDetached) {
+            return;
+        }
+
         if (instant) {
             if (!this.cameraOffsetCurrentTween) {
                 this.camera.setFollowOffset(targetFollowOffset.x, targetFollowOffset.y);
@@ -458,22 +550,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     private initCamera() {
         this.camera = this.scene.cameras.main;
-        this.setCameraBounds();
-    }
-
-    /**
-     * The camera bounds are deliberately larger than the map (same margin as in the map editor).
-     * With bounds fitted to the map, Phaser clamps the camera as soon as the view is larger than the map
-     * (zoom out) or when the avatar is close to an edge: the view then sticks to the map origin (0,0)
-     * instead of staying centered on the avatar. With a margin, the avatar is always centered, at any zoom level.
-     */
-    private setCameraBounds(): void {
-        this.camera.setBounds(
-            -this.mapSize.width,
-            -this.mapSize.height,
-            this.mapSize.width * 3,
-            this.mapSize.height * 3,
-        );
+        this.camera.setBounds(0, 0, this.mapSize.width, this.mapSize.height);
     }
 
     private onFollowUpdate = () => {
@@ -514,10 +591,11 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     // Create function to define the camera on exploration mode. The camera can be moved anywhere on the map. The camera is not locked on the player. The camera can be zoomed in and out. The camera can be moved with the mouse. The camera can be moved with the keyboard. The camera can be moved with the touchpad.
     public setExplorationMode(): void {
-        // The free editor camera is already detached from the avatar: re-targeting it would make the view jump.
-        if (this.editorFreeCamera) {
-            return;
-        }
+        this.followTarget = undefined;
+        this.setManuallyDetached(false);
+        this.cameraAnimation?.onInterrupt();
+        this.cameraAnimation = undefined;
+        this.cancelOffsetTween();
         this.camera.setFollowOffset(0, 0);
 
         // this.camera.setBounds(
@@ -535,6 +613,176 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.camera.startFollow(this.explorerFocusOn, true);
     }
 
+    /**
+     * While the avatar walks where the user tapped or right-clicked, frames the avatar and the rest of its path: the
+     * view centres between them and zooms out just enough to show both, never closer than the zoom the walk started
+     * from. The view blends into that framing, then tracks it, so it closes in on the avatar as it arrives. Returns
+     * the walk's id for endWalkFraming(). When a script or a focus zone holds the camera, it only brings the view
+     * back to the avatar, and returns undefined.
+     */
+    public startWalkFraming(destination: { x: number; y: number }): number | undefined {
+        if (this.isZoomLocked() || this.waScaleManager.getFocusTarget()) {
+            this.resumePlayerFollow();
+            return undefined;
+        }
+        if (!this.walkFraming) {
+            // Take the camera over from the avatar or a dragged view, without moving it.
+            this.zoomAnimation?.onInterrupt();
+            this.cameraAnimation?.onInterrupt();
+            this.cameraAnimation = undefined;
+            this.followTarget = undefined;
+            if (this.manuallyDetached) {
+                this.setManuallyDetached(false);
+                this.doUpdateCameraOffset(true);
+            }
+            const { followOffset } = this.camera;
+            this.explorerFocusOn = {
+                x: this.camera.scrollX + this.camera.width / 2 + followOffset.x,
+                y: this.camera.scrollY + this.camera.height / 2 + followOffset.y,
+            };
+            this.camera.startFollow(this.explorerFocusOn, true, 1, 1, followOffset.x, followOffset.y);
+            this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.updateWalkFraming);
+        }
+        // A tap during a walk keeps the zoom the first walk started from, so repeated taps don't ratchet it out.
+        const startZoom = this.walkFraming?.startZoom ?? this.waScaleManager.zoomModifier;
+        this.walkFraming = {
+            id: ++this.walkFramingCount,
+            startZoom,
+            destination,
+            ending: false,
+            ...this.blendFromView(),
+        };
+        return this.walkFraming.id;
+    }
+
+    /** The walk ended (arrived, cancelled or stuck): blend back to the avatar, unless a later walk took over. */
+    public endWalkFraming(id: number | undefined): void {
+        if (id === undefined || this.walkFraming?.id !== id) return;
+        Object.assign(this.walkFraming, { ending: true, ...this.blendFromView() });
+    }
+
+    /** A script, a focus zone or the map editor takes over the camera: leave the view and the zoom where they are. */
+    private stopWalkFraming(): void {
+        if (!this.walkFraming) return;
+        this.walkFraming = undefined;
+        this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.updateWalkFraming);
+        this.waScaleManager.setZoomModifier(this.waScaleManager.zoomModifier, this.camera, false);
+    }
+
+    /** Starts a new blend from the current view; its duration is set on the first frame, once the target is known. */
+    private blendFromView(): ViewBlend {
+        const from = { x: this.explorerFocusOn.x, y: this.explorerFocusOn.y, zoom: this.waScaleManager.zoomModifier };
+        return { from, elapsed: 0, duration: 0 };
+    }
+
+    /** Where the view should be for the walk: centred on the avatar and the rest of its path, all of it in view. */
+    private frameWalk(framing: WalkFraming): { x: number; y: number; zoom: number } {
+        const player = this.scene.CurrentPlayer;
+        const ahead = player.getPathAhead();
+        // Until the path is computed (it's async), frame the spot the user pointed at.
+        const points = framing.ending ? [] : ahead.length > 0 ? ahead : [framing.destination];
+        let [minX, maxX, minY, maxY] = [player.x, player.x, player.y, player.y];
+        for (const point of points) {
+            minX = Math.min(minX, point.x);
+            maxX = Math.max(maxX, point.x);
+            minY = Math.min(minY, point.y);
+            maxY = Math.max(maxY, point.y);
+        }
+        const visible = this.visibleHalfSize();
+        const zoom = this.waScaleManager.zoomModifier;
+        const fit = Math.min(
+            visible.width / ((maxX - minX) / 2 + WALK_FRAMING_MARGIN),
+            visible.height / ((maxY - minY) / 2 + WALK_FRAMING_MARGIN),
+        );
+        // WaScaleManager stops the zoom-out once the whole map is visible.
+        return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, zoom: Math.min(zoom * fit, framing.startZoom) };
+    }
+
+    private readonly updateWalkFraming = (_time: number, delta: number): void => {
+        const framing = this.walkFraming;
+        if (!framing) return;
+        const target = this.frameWalk(framing);
+        const { from } = framing;
+        if (framing.elapsed === 0) {
+            const travel = Math.hypot(target.x - from.x, target.y - from.y) * this.scene.scale.zoom * this.camera.zoom;
+            framing.duration = Math.min(WALK_BLEND_MIN_MS + travel * WALK_BLEND_MS_PER_SCREEN_PIXEL, WALK_BLEND_MAX_MS);
+        }
+        framing.elapsed += delta;
+        const blend = Phaser.Math.Easing.Sine.InOut(Math.min(framing.elapsed / framing.duration, 1));
+        // The position and the zoom move on the same blend, so neither runs ahead of the other. The zoom blends in
+        // ratios, so zooming out and back in feel alike.
+        this.explorerFocusOn.x = from.x + (target.x - from.x) * blend;
+        this.explorerFocusOn.y = from.y + (target.y - from.y) * blend;
+        const zoom = from.zoom * Math.pow(target.zoom / from.zoom, blend);
+        this.scene.markDirty();
+        if (framing.ending && blend === 1) {
+            // Back on the avatar at the starting zoom: follow it again, and leave the camera-zoom mode used while
+            // walking (see WaScaleManager.applyNewSize).
+            this.walkFraming = undefined;
+            this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.updateWalkFraming);
+            this.waScaleManager.setZoomModifier(framing.startZoom, this.camera, false);
+            this.startFollowPlayer(this.scene.CurrentPlayer);
+        } else if (Math.abs(zoom - this.waScaleManager.zoomModifier) > 0.0001) {
+            // Camera zoom while walking, without resizing the canvas every frame.
+            this.waScaleManager.setZoomModifier(zoom, this.camera, true);
+            this.emit(CameraManagerEvent.CameraUpdate, this.getCameraUpdateEventData());
+        }
+    };
+
+    /** Half the size of the area not covered by panels, where the avatar is centred, in map pixels. */
+    private visibleHalfSize(): { width: number; height: number } {
+        const box = this.cameraOffsetBox;
+        if (!box) return { width: this.camera.displayWidth / 2, height: this.camera.displayHeight / 2 };
+        const mapPixelsPerScreenPixel = 1 / this.scene.scale.zoom / this.camera.zoom;
+        return {
+            width: ((box.xEnd - box.xStart) / 2) * mapPixelsPerScreenPixel,
+            height: ((box.yEnd - box.yStart) / 2) * mapPixelsPerScreenPixel,
+        };
+    }
+
+    /**
+     * Make the view follow the free point the user drags and zooms. In game mode this detaches the view from the
+     * avatar but keeps avatar controls. In the map editor the view is always free, so it never counts as detached.
+     */
+    public startManualPan(): void {
+        this.stopWalkFraming();
+        if (this.cursorZoomAnchor) this.zoomAnimation?.onInterrupt();
+        // Apply pans made since the last frame (a pinch pans then zooms in one go) before taking the visible centre.
+        this.camera.preRender();
+        this.setExplorationMode();
+        if (!this.mapEditorOpen) this.setManuallyDetached(true);
+    }
+
+    /** The view follows the free point rather than the avatar: after a drag, or in the map editor. */
+    private isFreeCamera(): boolean {
+        return this.manuallyDetached || this.mapEditorOpen;
+    }
+
+    public panBy(screenX: number, screenY: number): void {
+        this.scrollCamera(screenX / this.camera.zoom, screenY / this.camera.zoom);
+    }
+
+    /** Keep the view gliding after a drag, converting screen velocity to world units at the current zoom. */
+    public releaseManualPan(velocity: { x: number; y: number }): void {
+        if (!this.isFreeCamera() || !Number.isFinite(velocity.x) || !Number.isFinite(velocity.y)) return;
+        this.setSpeed({ x: (-velocity.x * 10) / this.camera.zoom, y: (-velocity.y * 10) / this.camera.zoom });
+    }
+
+    public stopManualPanInertia(): void {
+        if (this.isFreeCamera()) this.stopSpeed();
+    }
+
+    public resumePlayerFollow(): void {
+        if (this.manuallyDetached) {
+            this.startFollowPlayer(this.scene.CurrentPlayer, 500);
+        }
+    }
+
+    private setManuallyDetached(detached: boolean): void {
+        this.manuallyDetached = detached;
+        cameraDetachedStore.set(detached);
+    }
+
     public setFollowMode(): void {
         this.scene.reposition();
     }
@@ -544,7 +792,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.cameraOffsetCurrentTween = undefined;
     }
 
-    private stopTween(tween: Phaser.Tweens.Tween | undefined): void {
+    private stopTween(tween: Tween | undefined): void {
         if (!tween) {
             return;
         }
@@ -554,7 +802,17 @@ export class CameraManager extends Phaser.Events.EventEmitter {
     }
 
     public centerCameraOn(position: { x: number; y: number }, zoom?: number): void {
-        this.animateToFocus(position, 1000);
+        // End on the free point (now at `position`), not on `position` itself, so keys, drags and zoom still move the view.
+        this.animateToFocus(position, 1000, () => {
+            this.camera.startFollow(
+                this.explorerFocusOn,
+                true,
+                1,
+                1,
+                this.camera.followOffset.x,
+                this.camera.followOffset.y,
+            );
+        });
         if (zoom) {
             this.animateToZoomLevel(zoom, 1000);
         }
@@ -567,6 +825,32 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.animateToZoomLevel(this.waScaleManager.zoomModifier * zoomFactor, duration, callback);
     }
 
+    public zoomByFactorAtPointer(zoomFactor: number, duration: number, pointer: { x: number; y: number }): void {
+        // Zooming during a tap-walk frees the view where it is, as a drag does.
+        if (this.walkFraming) this.startManualPan();
+        // While following the avatar, the wheel zooms on it. Cursor zoom needs a free view (a drag, or the editor).
+        if (!this.isFreeCamera()) {
+            this.zoomByFactor(zoomFactor, duration);
+            return;
+        }
+        const limitReached =
+            zoomFactor > 1 ? this.waScaleManager.isMaximumZoomInReached : this.waScaleManager.isMaximumZoomOutReached;
+        if (this.isZoomLocked() || limitReached) return;
+        // Normalized coordinates survive WaScaleManager switching between canvas and camera zoom.
+        const screenX = (pointer.x - this.camera.x) / this.camera.width;
+        const screenY = (pointer.y - this.camera.y) / this.camera.height;
+        this.zoomAnimation?.onInterrupt();
+        this.startManualPan();
+        this.camera.preRender();
+        const world = this.camera.getWorldPoint(
+            this.camera.x + screenX * this.camera.width,
+            this.camera.y + screenY * this.camera.height,
+        );
+        const anchor = { screenX, screenY, world };
+        this.cursorZoomAnchor = anchor;
+        this.animateToZoomLevel(this.waScaleManager.zoomModifier * zoomFactor, duration, undefined, anchor);
+    }
+
     /**
      * Applies one Explorer menu click step.
      * If another click arrives while the previous step is still animating, the target is moved again
@@ -576,6 +860,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         if (this.isZoomLocked()) {
             return;
         }
+        if (this.walkFraming) this.startManualPan();
 
         this.smoothButtonZoomTargetModifier = getRetargetedButtonZoomModifier(
             this.waScaleManager.zoomModifier,
@@ -599,6 +884,7 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         if (this.isZoomLocked()) {
             return;
         }
+        if (this.walkFraming) this.startManualPan();
 
         this.smoothButtonZoomTargetModifier = undefined;
         this.smoothButtonZoomStartModifier = undefined;
@@ -625,8 +911,26 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         this.stopButtonZoomAnimation();
     }
 
-    private animateToZoomLevel(targetZoomModifier: number, duration: number, callback?: () => void): void {
+    private animateToZoomLevel(
+        targetZoomModifier: number,
+        duration: number,
+        callback?: () => void,
+        anchor?: CursorZoomAnchor,
+    ): void {
+        this.stopWalkFraming();
         this.zoomAnimation?.onInterrupt();
+        const applyZoom = (value: number, animating: boolean): void => {
+            this.waScaleManager.setZoomModifier(value, this.camera, animating);
+            if (anchor && this.cursorZoomAnchor === anchor && this.isFreeCamera()) {
+                this.camera.preRender();
+                const point = this.camera.getWorldPoint(
+                    this.camera.x + anchor.screenX * this.camera.width,
+                    this.camera.y + anchor.screenY * this.camera.height,
+                );
+                this.scrollCamera(anchor.world.x - point.x, anchor.world.y - point.y);
+                this.camera.preRender();
+            }
+        };
         const startZoomModifier = this.waScaleManager.zoomModifier;
         const startDate = Date.now();
 
@@ -637,16 +941,17 @@ export class CameraManager extends Phaser.Events.EventEmitter {
             to: targetZoomModifier,
             duration,
             ease: easeAlgo,
-            onUpdate: (tween: Phaser.Tweens.Tween) => {
+            onUpdate: (tween: Tween) => {
                 const value = tween.getValue();
                 if (value === null) {
                     return;
                 }
-                this.waScaleManager.setZoomModifier(value, this.camera, true);
+                applyZoom(value, true);
                 this.emit(CameraManagerEvent.CameraUpdate, this.getCameraUpdateEventData());
             },
             onComplete: () => {
-                this.waScaleManager.setZoomModifier(targetZoomModifier, this.camera, false);
+                applyZoom(targetZoomModifier, false);
+                if (this.cursorZoomAnchor === anchor) this.cursorZoomAnchor = undefined;
                 callback?.();
             },
             onStop: () => {
@@ -670,17 +975,20 @@ export class CameraManager extends Phaser.Events.EventEmitter {
                 } else {
                     value = targetZoomModifier;
                 }
-                this.waScaleManager.setZoomModifier(value, this.camera, true);
+                applyZoom(value, true);
                 this.emit(CameraManagerEvent.CameraUpdate, this.getCameraUpdateEventData());
             },
         });
 
-        this.zoomAnimation = {
+        const animation: ZoomAnimation = {
             onInterrupt: () => {
                 zoomTween.stop();
                 zoomTween.destroy();
+                if (this.zoomAnimation === animation) this.zoomAnimation = undefined;
+                if (this.cursorZoomAnchor === anchor) this.cursorZoomAnchor = undefined;
             },
         };
+        this.zoomAnimation = animation;
     }
 
     private startButtonZoomAnimation(): void {
@@ -825,100 +1133,6 @@ export class CameraManager extends Phaser.Events.EventEmitter {
         if (this.cameraAnimation?.type === "speed") {
             this.cameraAnimation.onInterrupt();
         }
-    }
-
-    /**
-     * Free panning (mouse drag, trackpad two-finger scroll) is not available when the camera is locked
-     * on a focus target or when the zoom is locked.
-     */
-    public canPan(): boolean {
-        // The map explorer sets a focus target to zoom around the view center, which does not forbid panning.
-        return !this.zoomLocked && (this.editorFreeCamera || !this.waScaleManager.getFocusTarget());
-    }
-
-    /**
-     * Scrolls the map by a distance expressed in game pixels while the map editor is open (keyboard scroll).
-     */
-    public scrollEditorCamera(x: number, y: number): void {
-        if (!this.editorFreeCamera) {
-            return;
-        }
-        // Another feature may have made the camera follow the avatar again since the editor was opened.
-        if (!this.panning) {
-            this.startPanning();
-        }
-        this.scrollCamera(x, y);
-    }
-
-    private enterEditorFreeCamera(): void {
-        this.editorFreeCamera = true;
-        if (!this.panning) {
-            this.startPanning();
-        }
-    }
-
-    private leaveEditorFreeCamera(): void {
-        if (!this.editorFreeCamera) {
-            return;
-        }
-        this.editorFreeCamera = false;
-        const player = this.playerToFollow ?? this.scene.CurrentPlayer;
-        if (player) {
-            this.startFollowPlayer(player, 300);
-        }
-    }
-
-    /**
-     * Moves the view by a distance expressed in screen pixels. The camera is detached from the avatar
-     * until the avatar moves again.
-     */
-    public panBy(screenDx: number, screenDy: number): void {
-        if (!this.canPan()) {
-            return;
-        }
-        if (!this.panning) {
-            this.startPanning();
-        }
-        const screenPixelsPerWorldPixel = this.scene.scale.zoom * this.camera.zoom;
-        this.scrollCamera(screenDx / screenPixelsPerWorldPixel, screenDy / screenPixelsPerWorldPixel);
-    }
-
-    private startPanning(): void {
-        this.cameraAnimation?.onInterrupt();
-        this.panning = true;
-        // Same starting point as animateToFocus(): the current center of the view, so that nothing jumps.
-        this.explorerFocusOn = {
-            x: this.camera.scrollX + this.camera.width / 2 + this.camera.followOffset.x,
-            y: this.camera.scrollY + this.camera.height / 2 + this.camera.followOffset.y,
-        };
-        this.camera.startFollow(
-            this.explorerFocusOn,
-            true,
-            1,
-            1,
-            this.camera.followOffset.x,
-            this.camera.followOffset.y,
-        );
-        // As soon as the avatar moves, the camera comes back to it (not while editing the map).
-        if (this.editorFreeCamera) {
-            return;
-        }
-        this.playerToFollow?.once(hasMovedEventName, this.onPanningAvatarMoved);
-    }
-
-    private readonly onPanningAvatarMoved = (): void => {
-        if (!this.panning || !this.playerToFollow || this.editorFreeCamera) {
-            return;
-        }
-        this.startFollowPlayer(this.playerToFollow, 300);
-    };
-
-    private stopPanning(): void {
-        if (!this.panning) {
-            return;
-        }
-        this.panning = false;
-        this.playerToFollow?.off(hasMovedEventName, this.onPanningAvatarMoved);
     }
 
     scrollCamera(x: number, y: number): void {

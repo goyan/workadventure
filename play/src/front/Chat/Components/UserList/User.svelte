@@ -1,11 +1,11 @@
 <script lang="ts">
-    import { AskPositionMessage_AskType, AvailabilityStatus } from "@workadventure/messages";
+    import { AskPositionMessage_AskType } from "@workadventure/messages";
     import * as Sentry from "@sentry/svelte";
     import highlightWords from "highlight-words";
     import { defaultColor } from "@workadventure/shared-utils";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { availabilityStatusStore } from "../../../Stores/MediaStore";
-    import { getColorHexOfStatus } from "../../../Utils/AvailabilityStatus";
+    import { getColorHexOfStatus, getStatusLabel } from "../../../Utils/AvailabilityStatus";
     import type { ChatUser } from "../../Connection/ChatConnection";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { chatSearchBarValue } from "../../Stores/ChatStore";
@@ -24,8 +24,6 @@
     }
 
     let { user, isMatrixChatEnabled = true }: Props = $props();
-
-    let showRoomCreationInProgress = false;
 
     let { chatId, availabilityStatus, username = "", color, isAdmin, pictureStore } = $derived(user);
 
@@ -55,40 +53,14 @@
         }),
     );
 
-    const roomCreationInProgress = gameManager.chatConnection.roomCreationInProgress;
-
-    function getNameOfAvailabilityStatus(status: AvailabilityStatus) {
-        switch (status) {
-            case AvailabilityStatus.ONLINE:
-                return $LL.chat.status.online();
-            case AvailabilityStatus.AWAY:
-                return $LL.chat.status.away();
-            case AvailabilityStatus.BUSY:
-                return $LL.chat.status.busy();
-            case AvailabilityStatus.DO_NOT_DISTURB:
-                return $LL.chat.status.do_not_disturb();
-            case AvailabilityStatus.BACK_IN_A_MOMENT:
-                return $LL.chat.status.back_in_a_moment();
-            case AvailabilityStatus.JITSI:
-            case AvailabilityStatus.BBB:
-            case AvailabilityStatus.LIVEKIT:
-                return $LL.chat.status.meeting();
-            case AvailabilityStatus.SPEAKER:
-                return $LL.chat.status.megaphone();
-            case AvailabilityStatus.SILENT:
-            default:
-                return $LL.chat.status.unavailable();
-        }
-    }
-
     let loadingDirectRoomAccess = false;
 
     function openWokaMenu() {
-        if (user.uuid == undefined) return;
-        // Track the open woka menu action
-        analyticsClient.openWokaMenu();
-
         const currentScene = gameManager.getCurrentGameScene();
+        // The back only locates users of our own map: for anyone else, a LOCATE would get no answer.
+        if (user.uuid == undefined || user.playUri !== currentScene.roomUrl) return;
+        // Track the open woka menu action
+        analyticsClient.trackAdminEvent("user.woka_menu.opened");
 
         const remotePlayerData = currentScene.getRemotePlayersRepository().getPlayerByUuid(user.uuid);
         if (remotePlayerData != undefined) {
@@ -116,7 +88,7 @@
         <div
             class="wa-chat-item {isAdmin
                 ? 'admin'
-                : 'user'} group/chatItem relative mb-[1px] text-md flex gap-2 flex-row items-center hover:bg-white transition-all hover:bg-opacity-10 hover:rounded hover:!cursor-pointer px-2 py-2 cursor-pointer"
+                : 'user'} group/chatItem relative mb-[1px] text-md flex gap-2 flex-row items-center transition-all hover:bg-white/10 hover:rounded hover:!cursor-pointer px-2 py-2 cursor-pointer"
         >
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -173,7 +145,7 @@
                                 class="rounded-full me-1 h-1.5 w-1.5"
                                 style="background:{getColorHexOfStatus($userStatus)}"
                             ></div>
-                            {getNameOfAvailabilityStatus($userStatus)}
+                            {getStatusLabel($userStatus)}
                         </div>
                     {:else}
                         {$LL.chat.userList.disconnected()}
@@ -186,7 +158,7 @@
                         <UserActionButton {user} />
                     {/if}
                 </div>
-                {#if !isMe && !showRoomCreationInProgress && isMatrixChatEnabled}
+                {#if !isMe && isMatrixChatEnabled}
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div
                         class="relative"
@@ -213,7 +185,7 @@
                                         },
                                     });
                                 });
-                                analyticsClient.sendMessageFromUserList();
+                                analyticsClient.trackAdminEvent("chat.message_from_user_list_clicked");
                             }}
                         >
                             <IconSend font-size="16" />
@@ -232,16 +204,12 @@
                             </div>
                         {/if}
                     </div>
-                {:else if $roomCreationInProgress && showRoomCreationInProgress}
-                    <div class="min-h-[30px] text-md flex gap-2 justify-center flex-row items-center p-1">
-                        <IconLoader class="animate-spin" />
-                    </div>
                 {/if}
             </div>
         </div>
     </div>
 
-    <style lang="scss">
+    <style>
         .status {
             background-color: var(--color);
         }

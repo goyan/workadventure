@@ -1,7 +1,8 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
     import { analyticsClient } from "../../Administration/AnalyticsClient";
-    import { mapEditorModeStore, mapExplorationModeStore } from "../../Stores/MapEditorStore";
+    import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+    import { cameraDetachedStore } from "../../Stores/CameraStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { BUTTON_ZOOM_FACTOR_PER_SECOND, BUTTON_ZOOM_STEP_FACTOR } from "../../Phaser/Game/CameraZoomUtils";
@@ -61,9 +62,9 @@
             direction === "in" ? BUTTON_ZOOM_FACTOR_PER_SECOND : 1 / BUTTON_ZOOM_FACTOR_PER_SECOND;
 
         if (direction === "in") {
-            analyticsClient.clickToZoomIn();
+            analyticsClient.trackAdminEvent("map_explorer.zoom_in_clicked");
         } else {
-            analyticsClient.clickToZoomOut();
+            analyticsClient.trackAdminEvent("map_explorer.zoom_out_clicked");
         }
 
         cameraManager?.smoothZoomByFactor(zoomFactor);
@@ -94,17 +95,19 @@
     }
 
     function openMapExplorer() {
-        analyticsClient.clickTopOpenMapExplorer();
+        analyticsClient.trackAdminEvent("map_explorer.top_button_clicked");
 
         mapEditorModeStore.switchMode(true);
-        gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(EditorToolName.ExploreTheRoom);
+        gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.ExploreTheRoom);
     }
 
     function centerToUser() {
-        analyticsClient.clickCenterToUser();
+        analyticsClient.trackAdminEvent("map_explorer.center_to_user_clicked");
 
-        mapEditorModeStore.switchMode(false);
-        gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(EditorToolName.CloseMapEditor);
+        const scene = gameManager.getCurrentGameScene();
+        // In the map editor, bring the view back to the avatar and stay in the editor.
+        if ($mapEditorModeStore) scene.getCameraManager().centerCameraOn(scene.CurrentPlayer);
+        else getCameraManager()?.resumePlayerFollow();
     }
 
     onDestroy(() => {
@@ -154,7 +157,7 @@
                 </div>
             </div>
         </div>
-        {#if $mapExplorationModeStore === false}
+        {#if !$mapEditorModeStore && !$cameraDetachedStore}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
@@ -169,9 +172,10 @@
                 </div>
             </div>
         {:else}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div
+            <button
+                type="button"
+                aria-label={$LL.mapEditor.explorer.showMyLocation()}
+                data-testid="center-camera-on-player"
                 class="group flex justify-center items-center p-1 rounded hover:bg-white/30 cursor-pointer"
                 onclick={centerToUser}
             >
@@ -181,7 +185,7 @@
                 >
                     {$LL.mapEditor.explorer.showMyLocation()}
                 </div>
-            </div>
+            </button>
         {/if}
     </div>
 </div>

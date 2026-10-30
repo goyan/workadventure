@@ -20,7 +20,9 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import LL from "../../../../i18n/i18n-svelte";
 import { gameManager } from "../GameManager";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
-import { EditorCameraKeys, isTextEditingTarget } from "./EditorCameraKeys";
+import { analyticsClient } from "../../../Administration/AnalyticsClient";
+import { warningMessageStore } from "../../../Stores/ErrorStore";
+import { isTextEditingTarget } from "./isTextEditingTarget";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { FloorEditorTool } from "./Tools/FloorEditorTool";
@@ -105,8 +107,6 @@ export class MapEditorModeManager {
 
     private mapEditorModeUnsubscriber: Unsubscriber | undefined;
 
-    private readonly cameraKeys: EditorCameraKeys;
-
     private readonly selectionEditorTool: SelectionEditorTool;
 
     private isReverting: Promise<void> = Promise.resolve();
@@ -119,7 +119,6 @@ export class MapEditorModeManager {
         private _personalAreaDataStore = personalAreaDataStore,
     ) {
         this.scene = scene;
-        this.cameraKeys = new EditorCameraKeys(scene);
 
         this.localCommandsHistory = [];
         this.pendingCommands = [];
@@ -138,7 +137,7 @@ export class MapEditorModeManager {
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
             [EditorToolName.TrashEditor]: new TrashEditorTool(this, areaEditorTool),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
-            [EditorToolName.ExploreTheRoom]: new ExplorerTool(this, this.scene),
+            [EditorToolName.ExploreTheRoom]: new ExplorerTool(this.scene),
             [EditorToolName.CloseMapEditor]: new CloseTool(),
         };
         this.activeTool = undefined;
@@ -151,7 +150,6 @@ export class MapEditorModeManager {
     }
 
     public update(time: number, dt: number): void {
-        this.cameraKeys.update();
         this.currentlyActiveTool?.update(time, dt);
     }
 
@@ -492,10 +490,6 @@ export class MapEditorModeManager {
             tool.destroy();
         }
         this.unsubscribeFromStores();
-        if (this.active) {
-            this.cameraKeys.stop();
-            this.scene.userInputManager.restoreControls("mapEditor");
-        }
     }
 
     public handleKeyDownEvent(event: KeyboardEvent): boolean {
@@ -601,12 +595,20 @@ export class MapEditorModeManager {
 
     private async handleIncomingCommandMessage(editMapCommandMessage: EditMapCommandMessage): Promise<void> {
         if (editMapCommandMessage.editMapMessage?.message?.$case === "errorCommandMessage") {
-            logger("ErrorCommandMessage received", editMapCommandMessage.editMapMessage?.message.errorCommandMessage);
+            const reason = editMapCommandMessage.editMapMessage.message.errorCommandMessage.reason;
+            logger("ErrorCommandMessage received", reason);
+            // The only place a map editor edit is known to have failed. The commands themselves send
+            // fire-and-forget, so this is where the failure analytics belongs.
+            analyticsClient.trackAdminEvent("map_editor.save.failed", { reason });
             const hasPendingCommand = this.pendingCommands.some(
                 (command) => command.commandId === editMapCommandMessage.id,
             );
             if (hasPendingCommand) {
+                // The server refused the command, so the optimistic local state is now wrong. Nothing is
+                // reported to Sentry: map-storage already logged the cause, and a refusal is also the expected
+                // answer to a command the user was not allowed to run.
                 await this.revertPendingCommands();
+                warningMessageStore.addWarningMessage(get(LL).mapEditor.map.editionFailed());
             }
             return;
         }
@@ -712,6 +714,16 @@ export class MapEditorModeManager {
         mapEditorSelectedToolStore.set(tool);
     }
 
+    public returnToLastMode(): boolean {
+        if (!this.active) {
+            return false;
+        }
+
+        // The whole map editor has a free view: stop following the remote player, stay where the view is.
+        this.scene.getCameraManager().setExplorationMode();
+        return true;
+    }
+
     private emitMapEditorUpdate(command: FrontCommandInterface, delay = 0): void {
         const func = () => {
             if (this.scene.connection === undefined) {
@@ -744,13 +756,7 @@ export class MapEditorModeManager {
         this.mapEditorModeUnsubscriber = mapEditorModeStore.subscribe((active) => {
             const wasActive = this.active;
             this.active = active;
-            // The avatar stays still while the map editor is open: the keys scroll the map instead.
-            if (active && !wasActive) {
-                this.scene.userInputManager.disableControls("mapEditor");
-                this.cameraKeys.start();
-            } else if (!active && wasActive) {
-                this.cameraKeys.stop();
-                this.scene.userInputManager.restoreControls("mapEditor");
+            if (!active && wasActive) {
                 mapEditorSnapEnabledStore.set(true);
             }
             if (!this.active) {

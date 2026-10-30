@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { EntityPrefab, WamFile } from "@workadventure/map-editor";
 import type { GameMap, WAMEntityData } from "@workadventure/map-editor";
 import { asError } from "catch-unknown";

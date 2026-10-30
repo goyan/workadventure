@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
@@ -64,10 +65,16 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         vi.mocked(isActivatable).mockReturnValue(false);
         camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
         cameraManager.getCamera.mockReturnValue(camera);
-        cameraManager.canPan.mockReturnValue(true);
+        cameraManager.isZoomLocked.mockReturnValue(false);
         scene = mock<GameScene>({
             userInputManager: mock<UserInputManager>({ isControlsEnabled: true, isRightClickEnabled: true }),
         });
+        Object.defineProperty(scene, "game", {
+            configurable: true,
+            value: { canvas: document.createElement("canvas") },
+        });
+        Object.defineProperty(scene, "events", { configurable: true, value: new Phaser.Events.EventEmitter() });
+        Object.defineProperty(scene, "input", { configurable: true, value: {} });
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
@@ -186,18 +193,6 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, undefined]]);
     });
 
-    it("pans the camera without running when a drag ends with a double-click count", () => {
-        const drag = pointer();
-        handler.handlePointerDownEvent(drag, []);
-        drag.x += 20;
-        drag.prevPosition.set(120, 160);
-        handler.handlePointerMoveEvent(drag, []);
-        handler.handlePointerUpEvent(drag, []);
-
-        expect(cameraManager.panBy.mock.calls).toEqual([[-20, 0]]);
-        expect(scene.moveTo.mock.calls).toEqual([]);
-    });
-
     it("activates an interactive object without starting navigation", () => {
         const object = mock<Phaser.GameObjects.GameObject>();
         vi.mocked(isActivatable).mockReturnValue(true);
@@ -248,6 +243,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         it("pans with a two-finger trackpad scroll outside the map editor", () => {
             handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
 
+            expect(cameraManager.startManualPan.mock.calls).toHaveLength(1);
             expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
         });
 
@@ -256,25 +252,6 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
 
             expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
-        });
-
-        it("starts dragging with the left button outside the map editor", () => {
-            const drag = pointer();
-            handler.handlePointerDownEvent(drag, []);
-            drag.x += 20;
-            handler.handlePointerMoveEvent(drag, []);
-
-            expect(cameraManager.panBy.mock.calls).toEqual([[-20, 0]]);
-        });
-
-        it("leaves the left button drag to the tools while editing the map", () => {
-            mapEditorModeStore.set(true);
-            const drag = pointer();
-            handler.handlePointerDownEvent(drag, []);
-            drag.x += 20;
-            handler.handlePointerMoveEvent(drag, []);
-
-            expect(cameraManager.panBy.mock.calls).toEqual([]);
         });
     });
 });

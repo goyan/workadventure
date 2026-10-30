@@ -1,6 +1,5 @@
 <script lang="ts">
-    import { onDestroy, onMount } from "svelte";
-    import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
+    import { onDestroy } from "svelte";
     import { showModalGlobalComminucationVisibilityStore } from "../../Stores/ModalStore";
     import { requestedScreenSharingState } from "../../Stores/ScreenSharingStore";
     import {
@@ -34,38 +33,23 @@
     import ButtonClose from "../Input/ButtonClose.svelte";
     import Select from "../Input/Select.svelte";
     import InputCheckbox from "../Input/InputCheckbox.svelte";
+    import Button from "../UI/Button.svelte";
     import { IconAlertTriangle, IconInfoCircle, IconMessageShare, IconMusicShare, IconSpeakerPhone } from "@wa-icons";
-
-    let mainModal: HTMLDivElement;
 
     let inputSendTextActive = $state(false);
     let uploadAudioActive = $state(false);
     let broadcastToWorld = $state(false);
+    let sending = $state(false);
     let handleSendText: TextGlobalMessageHandle | undefined = $state();
     let handleSendAudio: AudioGlobalMessageHandle | undefined = $state();
-    let videoElement: HTMLVideoElement | undefined = $state();
     let stream: MediaStream | undefined = $state();
-    let aspectRatio = $state(1);
-
-    let isMobile = $state(isMediaBreakpointUp("md"));
-    const resizeObserver = new ResizeObserver(() => {
-        isMobile = isMediaBreakpointUp("md");
-    });
 
     const unsubscribeLocalStreamStore = localStreamStore.subscribe((value) => {
         if (value.type === "success") {
             stream = value.stream;
-            // TODO: remove this hack
-            setTimeout(() => {
-                aspectRatio = videoElement != undefined ? videoElement.videoWidth / videoElement.videoHeight : 1;
-            }, 100);
         } else {
             stream = undefined;
         }
-    });
-
-    onMount(() => {
-        resizeObserver.observe(mainModal);
     });
 
     onDestroy(() => {
@@ -89,21 +73,21 @@
         displayedMegaphoneScreenStore.set(true);
         inputSendTextActive = false;
         uploadAudioActive = false;
-        analyticsClient.openMegaphone();
+        analyticsClient.trackAdminEvent("megaphone.opened");
     }
 
     function activateInputText() {
         displayedMegaphoneScreenStore.set(false);
         inputSendTextActive = true;
         uploadAudioActive = false;
-        analyticsClient.openGlobalMessage();
+        analyticsClient.trackAdminEvent("global_message.opened", { source: "action_bar" });
     }
 
     function activateUploadAudio() {
         displayedMegaphoneScreenStore.set(false);
         inputSendTextActive = false;
         uploadAudioActive = true;
-        analyticsClient.openGlobalAudio();
+        analyticsClient.trackAdminEvent("global_audio.opened");
     }
 
     function back() {
@@ -112,14 +96,22 @@
         uploadAudioActive = false;
     }
 
-    function send(): void {
+    async function send(): Promise<void> {
         if (inputSendTextActive) {
-            analyticsClient.sendGlocalTextMessage();
+            analyticsClient.trackAdminEvent("global_message.text_sent");
             handleSendText?.sendTextMessage(broadcastToWorld);
         }
         if (uploadAudioActive) {
-            analyticsClient.sendGlobalSoundMessage();
-            handleSendAudio?.sendAudioMessage(broadcastToWorld);
+            analyticsClient.trackAdminEvent("global_message.sound_sent");
+            sending = true;
+            try {
+                // On failure, stay open: the error is shown under the upload area.
+                if (!(await handleSendAudio?.sendAudioMessage(broadcastToWorld))) {
+                    return;
+                }
+            } finally {
+                sending = false;
+            }
         }
         close();
     }
@@ -193,7 +185,6 @@
 
 <div
     class="absolute z-[308] rounded-xxl w-full h-full top-0 left-0 right-0 bottom-0 flex items-center justify-center overflow-hidden"
-    bind:this={mainModal}
 >
     <div
         class="h-full md:h-auto md:top-auto md:left-auto md:right-auto md:bottom-auto bg-contrast/80 backdrop-blur rounded-md max-h-screen overflow-y-auto w-full lg:w-11/12"
@@ -254,13 +245,16 @@
                             {$LL.megaphone.modal.liveMessage.title()}
                         </h4>
 
-                        <button
-                            class="btn-lg btn btn-light btn-border mt-2 mb-4"
+                        <Button
+                            variant="light"
+                            appearance="border"
+                            size="lg"
+                            class="mt-2 mb-4"
                             onclick={activateLiveMessage}
                             disabled={!$megaphoneCanBeUsedStore}
                         >
                             {$LL.megaphone.modal.liveMessage.button()}
-                        </button>
+                        </Button>
 
                         {#if !$megaphoneCanBeUsedStore}
                             <p class="help-text !text-danger-800">
@@ -297,13 +291,16 @@
                             {$LL.megaphone.modal.textMessage.title()}
                         </h4>
 
-                        <button
-                            class="btn-lg btn btn-light btn-border mb-4"
+                        <Button
+                            variant="light"
+                            appearance="border"
+                            size="lg"
+                            class="mb-4"
                             onclick={activateInputText}
                             disabled={!$userIsAdminStore}
                         >
                             {$LL.megaphone.modal.textMessage.button()}
-                        </button>
+                        </Button>
 
                         {#if !$userIsAdminStore}
                             <p class="help-text !text-danger-800">
@@ -340,13 +337,16 @@
                             {$LL.megaphone.modal.audioMessage.title()}
                         </h4>
 
-                        <button
-                            class="btn-lg btn btn-light btn-border mb-4"
+                        <Button
+                            variant="light"
+                            appearance="border"
+                            size="lg"
+                            class="mb-4"
                             onclick={activateUploadAudio}
                             disabled={!$userIsAdminStore}
                         >
                             {$LL.megaphone.modal.audioMessage.button()}
-                        </button>
+                        </Button>
 
                         {#if !$userIsAdminStore}
                             <p class="help-text !text-danger-800">
@@ -402,15 +402,16 @@
                     </div>
                     <div class="flex justify-center">
                         <section class="centered-column">
-                            <button
-                                class="btn btn-light"
+                            <Button
+                                variant="light"
+                                disabled={sending}
                                 onclick={(event) => {
                                     event.preventDefault();
-                                    send();
+                                    send().catch((e) => console.error(e));
                                 }}
                             >
                                 {$LL.menu.globalMessage.send()}
-                            </button>
+                            </Button>
                         </section>
                     </div>
                 </div>
@@ -427,9 +428,8 @@
                     <div class="flex flex-col md:flex-row justify-center">
                         <div class="flex flex-col mr-5">
                             <video
-                                bind:this={videoElement}
                                 class="h-full w-full md:object-cover rounded"
-                                class:object-contain={stream && (isMobile || aspectRatio < 1)}
+                                class:object-contain={stream}
                                 class:max-h-[230px]={stream}
                                 style="-webkit-transform: scaleX(-1);transform: scaleX(-1);"
                                 use:srcObject={stream}
@@ -516,8 +516,8 @@
                     </div>
                     <div class="flex flew-row justify-center">
                         {#if !$requestedMegaphoneStore}
-                            <button
-                                class="btn light text-black bg-white mt-4 rounded-md"
+                            <Button
+                                class="font-light [&_.btn-label]:text-black bg-white mt-4 rounded-md disabled:bg-[#4a5568] disabled:cursor-not-allowed"
                                 onclick={startLive}
                                 disabled={!$requestedCameraState && !$requestedMicrophoneState}
                             >
@@ -525,11 +525,11 @@
                                     <Tooltip text={$LL.warning.megaphoneNeeds()} />
                                 {/if}
                                 {$LL.megaphone.modal.liveMessage.startMegaphone()}
-                            </button>
+                            </Button>
                         {:else}
-                            <button class="btn btn-danger" onclick={stopLive}>
+                            <Button variant="danger" onclick={stopLive}>
                                 {$LL.megaphone.modal.liveMessage.stopMegaphone()}
-                            </button>
+                            </Button>
                         {/if}
                     </div>
                 </div>
@@ -538,16 +538,11 @@
     </div>
 </div>
 
-<style lang="scss">
+<style>
     video {
         transition: all 0.2s ease-in-out;
         &:hover {
             scale: 1.1;
         }
-    }
-
-    button.light[disabled] {
-        background-color: #4a5568;
-        cursor: not-allowed;
     }
 </style>

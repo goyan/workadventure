@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { publicTestMapUrl } from "./utils/urls";
+import Menu from "./utils/menu";
 
 declare global {
     interface Window {
@@ -8,10 +9,41 @@ declare global {
         __disconnectSpeaker: (deviceId: string) => void;
         __lastRequestedAudioDeviceId: () => string | undefined;
         __lastRequestedVideoDeviceId: () => string | undefined;
+        __releaseGetUserMedia: () => void;
     }
 }
 
 test.describe("Media devices @nomobile @nowebkit", () => {
+    test("saving the camera page before the devices load keeps the camera and the microphone on", async ({
+        browser,
+    }) => {
+        const context = await browser.newContext();
+        // getUserMedia answers only when the test says so, like a browser waiting on its permission prompt
+        await context.addInitScript(() => {
+            const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+            const released = new Promise<void>((resolve) => {
+                window.__releaseGetUserMedia = resolve;
+            });
+            navigator.mediaDevices.getUserMedia = async (constraints?: MediaStreamConstraints) => {
+                await released;
+                return getUserMedia(constraints);
+            };
+        });
+        const page = await context.newPage();
+
+        await loginWithMockedMediaDevices(page, publicTestMapUrl("tests/E2E/empty.json", "camera-page-early-save"));
+        await page.evaluate(() => window.__releaseGetUserMedia());
+
+        await Menu.expectMicrophoneOn(page);
+        await Menu.expectCameraOn(page);
+
+        // Saving marked the camera page as done: it is not shown again
+        await page.reload();
+        await waitForMapAfterOnboarding(page);
+
+        await context.close();
+    });
+
     test("should fallback from the last microphone until no microphone remains", async ({ browser, browserName }) => {
         test.skip(browserName === "webkit", "WebKit has issues with camera/microphone");
         test.skip(
@@ -318,37 +350,36 @@ async function createContextWithMockedMediaDevices(
 async function loginWithMockedMediaDevices(page: Page, url: string): Promise<void> {
     await page.goto(url);
 
-    const firstVisibleStep = await Promise.race([
-        page
-            .getByTestId("loginSceneNameInput")
-            .waitFor({ state: "visible" })
-            .then(() => "login" as const),
-        page
-            .locator("button.selectCharacterSceneFormSubmit")
-            .waitFor({ state: "visible" })
-            .then(() => "character" as const),
-        page
-            .locator("h2", { hasText: "Turn on your camera and microphone" })
-            .waitFor({ state: "visible" })
-            .then(() => "media" as const),
-        page
-            .getByTestId("microphone-button")
-            .waitFor({ state: "visible" })
-            .then(() => "map" as const),
-    ]);
+    const loginName = page.getByTestId("loginSceneNameInput");
+    const selectCharacter = page.locator("button.selectCharacterSceneFormSubmit");
+    const mediaStep = page.locator("h2", { hasText: "Turn on your camera and microphone" });
+    const microphone = page.getByTestId("microphone-button");
+
+    // Single wait, then read which step we landed on. A Promise.race would leave the losing
+    // waitFor() calls polling for their full timeout, and those extra in-flight operations
+    // deadlock any registered locator handler (see `dismissPwaInstallScreenIfShown`).
+    await loginName.or(selectCharacter).or(mediaStep).or(microphone).first().waitFor({ state: "visible" });
+
+    const firstVisibleStep = (await loginName.isVisible())
+        ? "login"
+        : (await selectCharacter.isVisible())
+          ? "character"
+          : (await mediaStep.isVisible())
+            ? "media"
+            : "map";
 
     if (firstVisibleStep === "login") {
-        await page.getByTestId("loginSceneNameInput").fill("Alice");
-        await page.getByTestId("loginSceneNameInput").press("Enter");
+        await loginName.fill("Alice");
+        await loginName.press("Enter");
     }
 
     if (firstVisibleStep === "login" || firstVisibleStep === "character") {
-        await expect(page.locator("button.selectCharacterSceneFormSubmit")).toBeVisible();
-        await page.locator("button.selectCharacterSceneFormSubmit").click();
+        await expect(selectCharacter).toBeVisible();
+        await selectCharacter.click();
     }
 
     if (firstVisibleStep !== "map") {
-        await expect(page.locator("h2", { hasText: "Turn on your camera and microphone" })).toBeVisible();
+        await expect(mediaStep).toBeVisible();
         await page.getByText("Save").click();
     }
 
@@ -370,24 +401,20 @@ async function openMediaSettings(page: Page): Promise<void> {
 }
 
 async function waitForMapAfterOnboarding(page: Page): Promise<void> {
-    for (let i = 0; i < 3; i++) {
-        const nextVisibleStep = await Promise.race([
-            page
-                .getByTestId("microphone-button")
-                .waitFor({ state: "visible", timeout: 30_000 })
-                .then(() => "map" as const),
-            page
-                .getByTestId("onboarding-button-welcome-skip")
-                .waitFor({ state: "visible", timeout: 30_000 })
-                .then(() => "onboarding" as const),
-        ]);
+    const microphone = page.getByTestId("microphone-button");
+    const skipOnboarding = page.getByTestId("onboarding-button-welcome-skip");
 
-        if (nextVisibleStep === "map") {
+    for (let i = 0; i < 3; i++) {
+        // Single wait rather than a Promise.race: a leaked loser polling for 30s here would race
+        // the `onboarding-button-welcome-skip` locator handler registered in utils/auth.ts.
+        await microphone.or(skipOnboarding).first().waitFor({ state: "visible", timeout: 30_000 });
+
+        if (await microphone.isVisible()) {
             return;
         }
 
-        await page.getByTestId("onboarding-button-welcome-skip").click();
+        await skipOnboarding.click();
     }
 
-    await expect(page.getByTestId("microphone-button")).toBeVisible({ timeout: 30_000 });
+    await expect(microphone).toBeVisible({ timeout: 30_000 });
 }

@@ -6,7 +6,6 @@
         AreaDataPropertiesKeys,
         AreaDataProperty,
         OpenWebsitePropertyData,
-        PlayAudioPropertyData,
     } from "@workadventure/map-editor";
     import { PersonalAreaAccessClaimMode, SpeakerMegaphonePropertyData } from "@workadventure/map-editor";
     import type { KlaxoonEvent } from "@workadventure/shared-utils";
@@ -15,7 +14,7 @@
     import { v4 as uuid } from "uuid";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { mapEditorSelectedAreaPreviewStore } from "../../../Stores/MapEditorStore";
-    import { FEATURE_FLAG_BROADCAST_AREAS, MATRIX_PUBLIC_URI, PUSHER_URL } from "../../../Enum/EnvironmentVariable";
+    import { MATRIX_PUBLIC_URI, PUSHER_URL } from "../../../Enum/EnvironmentVariable";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import JitsiRoomPropertyEditor from "../PropertyEditor/JitsiRoomPropertyEditor.svelte";
     import PlayAudioPropertyEditor from "../PropertyEditor/PlayAudioPropertyEditor.svelte";
@@ -32,7 +31,6 @@
     import RightsPropertyEditor from "../PropertyEditor/RightsPropertyEditor.svelte";
     import { IconChevronDown, IconChevronRight, IconInfoCircle } from "../../Icons";
     import { extensionModuleStore } from "../../../Stores/GameSceneStore";
-    import type { ExtensionModule, ExtensionModuleAreaProperty } from "../../../ExternalModule/ExtensionModule";
     import MatrixRoomPropertyEditor from "../PropertyEditor/MatrixRoomPropertyEditor.svelte";
     import TooltipPropertyButton from "../PropertyEditor/TooltipPropertyButton.svelte";
     import LivekitRoomPropertyEditor from "../PropertyEditor/LivekitRoomPropertyEditor.svelte";
@@ -44,6 +42,7 @@
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import MaxUsersInAreaPropertyEditor from "../PropertyEditor/MaxUsersInAreaPropertyEditor.svelte";
     import LockableAreaPropertyEditor from "../PropertyEditor/LockableAreaPropertyEditor.svelte";
+    import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 
     let properties: AreaDataProperties = $state([]);
     let areaName = $state("");
@@ -182,6 +181,7 @@
                     jitsiRoomConfig: {},
                     hideButtonLabel: true,
                     roomName: $LL.mapEditor.properties.jitsiRoomProperty.label(),
+                    width: 50,
                     trigger: ON_ACTION_TRIGGER_ENTER,
                 };
             }
@@ -209,6 +209,7 @@
                         startWithAudioMuted: false,
                         startWithVideoMuted: false,
                         disableChat: false,
+                        raiseHandEnabled: true,
                     },
                     livekitRoomAdminTag: "",
                 };
@@ -320,6 +321,7 @@
                     speakerZoneName: areasName.size == 1 ? [...areasName.keys()][0] : "",
                     chatEnabled: false,
                     allowTalking: false,
+                    raiseHandEnabled: true,
                 };
             }
             case "exit":
@@ -410,7 +412,7 @@
 
     function onAddProperty(type: AreaDataPropertiesKeys, subtype?: string) {
         if ($mapEditorSelectedAreaPreviewStore) {
-            analyticsClient.addMapEditorProperty("area", type || "unknown");
+            analyticsClient.trackAdminEvent("map_editor.property.added", { name: type || "unknown", type: "area" });
             const property = getPropertyFromType(type, subtype);
             $mapEditorSelectedAreaPreviewStore.addProperty(property);
 
@@ -427,7 +429,7 @@
 
     function onAddSpecificProperty(app: ApplicationDefinitionInterface) {
         if (!$mapEditorSelectedAreaPreviewStore) return;
-        analyticsClient.addMapEditorProperty("entity", app.name);
+        analyticsClient.trackAdminEvent("map_editor.property.added", { name: app.name, type: "area" });
         const property: OpenWebsitePropertyData = {
             id: uuid(),
             type: "openWebsite",
@@ -455,10 +457,10 @@
 
     function onDeleteProperty(id: string, removeAreaEntities?: boolean) {
         if ($mapEditorSelectedAreaPreviewStore) {
-            analyticsClient.removeMapEditorProperty(
-                "area",
-                properties.find((property) => property.id === id)?.type || "unknown",
-            );
+            analyticsClient.trackAdminEvent("map_editor.property.removed", {
+                name: properties.find((property) => property.id === id)?.type || "unknown",
+                type: "area",
+            });
             $mapEditorSelectedAreaPreviewStore.deleteProperty(id, removeAreaEntities);
             // refresh properties
             properties = $mapEditorSelectedAreaPreviewStore.getProperties();
@@ -540,25 +542,13 @@
         });
     }
 
-    // Fixme: this is a hack to force the map editor to update the property
-    function onUpdateAudioProperty(property: PlayAudioPropertyData) {
-        onUpdateProperty(property);
-    }
-
     function toggleDescriptionField() {
         showDescriptionField = !showDescriptionField;
     }
 
-    let extensionModulesAreaMapEditor = $extensionModuleStore.reduce(
-        (acc: { [key: string]: ExtensionModuleAreaProperty }[], module: ExtensionModule) => {
-            const areaProperty = module.areaMapEditor?.();
-            if (areaProperty != undefined) {
-                acc.push(areaProperty);
-            }
-            return acc;
-        },
-        [],
-    );
+    let extensionModulesAreaMapEditor = getAreaMapEditors($extensionModuleStore);
+
+    let hasMeeting = $derived(hasMeetingProperty(properties, extensionModulesAreaMapEditor));
 </script>
 
 {#if $mapEditorSelectedAreaPreviewStore === undefined}
@@ -594,28 +584,26 @@
                     onclick={() => {
                         onAddProperty("livekitRoomProperty");
                     }}
-                    disabled={hasSpeakerMegaphoneProperty || hasListenerMegaphoneProperty}
+                    disabled={hasMeeting}
                 />
             {/if}
-            {#if FEATURE_FLAG_BROADCAST_AREAS}
-                {#if !hasSpeakerMegaphoneProperty}
-                    <AddPropertyButtonWrapper
-                        property="speakerMegaphone"
-                        onclick={() => {
-                            onAddProperty("speakerMegaphone");
-                        }}
-                        disabled={hasListenerMegaphoneProperty || hasLivekitRoomProperty}
-                    />
-                {/if}
-                {#if !hasListenerMegaphoneProperty}
-                    <AddPropertyButtonWrapper
-                        property="listenerMegaphone"
-                        onclick={() => {
-                            onAddProperty("listenerMegaphone");
-                        }}
-                        disabled={hasSpeakerMegaphoneProperty || hasLivekitRoomProperty}
-                    />
-                {/if}
+            {#if !hasSpeakerMegaphoneProperty}
+                <AddPropertyButtonWrapper
+                    property="speakerMegaphone"
+                    onclick={() => {
+                        onAddProperty("speakerMegaphone");
+                    }}
+                    disabled={hasMeeting}
+                />
+            {/if}
+            {#if !hasListenerMegaphoneProperty}
+                <AddPropertyButtonWrapper
+                    property="listenerMegaphone"
+                    onclick={() => {
+                        onAddProperty("listenerMegaphone");
+                    }}
+                    disabled={hasMeeting}
+                />
             {/if}
             {#if !hasStartProperty}
                 <AddPropertyButtonWrapper
@@ -656,6 +644,7 @@
                                     startWithAudioMuted: false,
                                     startWithVideoMuted: false,
                                     disableChat: false,
+                                    raiseHandEnabled: true,
                                 };
 
                                 config.disableChat = true;
@@ -712,7 +701,7 @@
             <div class="properties-buttons flex flex-row flex-wrap mt-2">
                 {#each extensionModulesAreaMapEditor as extensionModuleAreaMapEditor, index (`extensionModulesAreaMapEditor-${index}`)}
                     {#each Object.entries(extensionModuleAreaMapEditor) as [subtype, areaProperty] (`extensionModuleAreaMapEditor-${subtype}`)}
-                        {#if areaProperty.shouldDisplayButton(properties)}
+                        {#if areaProperty.shouldDisplayButton(properties) && !(areaProperty.isMeeting && hasMeeting)}
                             <AddPropertyButtonWrapper
                                 property="extensionModule"
                                 subProperty={subtype}
@@ -729,7 +718,7 @@
                         onclick={() => {
                             onAddProperty("jitsiRoomProperty");
                         }}
-                        disabled={hasLivekitRoomProperty || hasSpeakerMegaphoneProperty || hasListenerMegaphoneProperty}
+                        disabled={hasMeeting}
                     />
                 {/if}
             </div>
@@ -873,10 +862,10 @@
             onchange={onUpdateAreaSearchable}
         />
 
-        <div class="properties-container p-1">
+        <div class="properties-container flex flex-col gap-8 p-1">
             {#each properties as property, i (property.id)}
                 {#if property.type !== "areaDescriptionProperties"}
-                    <div class="property-box border border-solid border-white/20 bg-white/5 rounded p-2 my-8">
+                    <div class="property-box border border-solid border-white/20 bg-white/5 rounded p-2">
                         {#if properties[i].type === "focusable"}
                             <FocusablePropertyEditor
                                 bind:property={properties[i]}
@@ -908,14 +897,14 @@
                                 }}
                                 onchange={() => onUpdateProperty(property)}
                             />
-                        {:else if property.type === "playAudio"}
+                        {:else if properties[i].type === "playAudio"}
                             <PlayAudioPropertyEditor
-                                property={{ ...property, hideButtonLabel: true }}
+                                bind:property={properties[i]}
                                 isArea={true}
                                 onclose={() => {
                                     onDeleteProperty(property.id);
                                 }}
-                                onaudiolink={onUpdateAudioProperty}
+                                onchange={() => onUpdateProperty(property)}
                             />
                         {:else if properties[i].type === "openWebsite"}
                             <OpenWebsitePropertyEditor
@@ -1058,7 +1047,7 @@
     </div>
 {/if}
 
-<style lang="scss">
+<style>
     .properties-container {
         overflow-y: auto;
         overflow-x: hidden;
@@ -1079,69 +1068,4 @@
             margin-bottom: 0;
         }
     }
-
-    //     .input-switch {
-    //         position: relative;
-    //         top: 0px;
-    //         right: 0px;
-    //         bottom: 0px;
-    //         left: 0px;
-    //         display: inline-block;
-    //         height: 1rem;
-    //         width: 2rem;
-    //         -webkit-appearance: none;
-    //         -moz-appearance: none;
-    //         appearance: none;
-    //         border-radius: 9999px;
-    //         border-width: 1px;
-    //         border-style: solid;
-    //         --border-opacity: 1;
-    //         border-color: rgb(77 75 103 / var(--border-opacity));
-    //         --bg-opacity: 1;
-    //         background-color: rgb(15 31 45 / var(--bg-opacity));
-    //         background-image: none;
-    //         padding: 0px;
-    //         --text-opacity: 1;
-    //         color: rgb(242 253 255 / var(--text-opacity));
-    //         outline: 2px solid transparent;
-    //         outline-offset: 2px;
-    //         cursor: url(../../../../../public/static/images/cursor_pointer.png), pointer;
-    //     }
-
-    //     .input-switch::before {
-    //         position: absolute;
-    //         left: -3px;
-    //         top: -3px;
-    //         height: 1.25rem;
-    //         width: 1.25rem;
-    //         border-radius: 9999px;
-    //         --bg-opacity: 1;
-    //         background-color: rgb(146 142 187 / var(--bg-opacity));
-    //         transition-property: all;
-    //         transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    //         transition-duration: 150ms;
-    //         --content: "";
-    //         content: var(--content);
-    //     }
-
-    //     .input-switch:checked {
-    //         --border-opacity: 1;
-    //         border-color: rgb(146 142 187 / var(--border-opacity));
-    //     }
-
-    //     .input-switch:checked::before {
-    //         left: 13px;
-    //         top: -3px;
-    //         --bg-opacity: 1;
-    //         background-color: rgb(65 86 246 / var(--bg-opacity));
-    //         content: var(--content);
-    //         /*--shadow: 0 0 7px 0 rgba(4, 255, 210, 1);
-    // --shadow-colored: 0 0 7px 0 var(--shadow-color);
-    // box-shadow: var(--ring-offset-shadow, 0 0 #0000), var(--ring-shadow, 0 0 #0000), var(--shadow);*/
-    //     }
-
-    //     .input-switch:disabled {
-    //         cursor: not-allowed;
-    //         opacity: 0.4;
-    //     }
 </style>

@@ -55,7 +55,7 @@
 
     function onAddProperty(type: EntityDataPropertiesKeys, subtype?: string) {
         if ($mapEditorSelectedEntityStore) {
-            analyticsClient.addMapEditorProperty("entity", type || "unknown");
+            analyticsClient.trackAdminEvent("map_editor.property.added", { name: type || "unknown", type: "entity" });
             const property = getPropertyFromType(type, subtype);
             $mapEditorSelectedEntityStore.addProperty(property);
 
@@ -66,7 +66,7 @@
 
     function onAddSpecificProperty(app: ApplicationDefinitionInterface) {
         if (!$mapEditorSelectedEntityStore) return;
-        analyticsClient.addMapEditorProperty("entity", app.name);
+        analyticsClient.trackAdminEvent("map_editor.property.added", { name: app.name, type: "entity" });
         const property: EntityDataProperty = {
             id: uuid(),
             type: "openWebsite",
@@ -154,6 +154,7 @@
                         startWithAudioMuted: false,
                         startWithVideoMuted: false,
                         disableChat: false,
+                        raiseHandEnabled: true,
                     },
                     livekitRoomAdminTag: "",
                 };
@@ -240,6 +241,7 @@
                     buttonLabel: $LL.mapEditor.properties.playAudio.label(),
                     audioLink: "",
                     volume: 1,
+                    playForAllUsers: true,
                 };
             default:
                 throw new Error(`Unknown property type ${type}`);
@@ -248,7 +250,10 @@
 
     function onDeleteProperty(id: string) {
         if ($mapEditorSelectedEntityStore) {
-            analyticsClient.removeMapEditorProperty("entity", properties.find((p) => p.id === id)?.type || "unknown");
+            analyticsClient.trackAdminEvent("map_editor.property.removed", {
+                name: properties.find((p) => p.id === id)?.type || "unknown",
+                type: "entity",
+            });
             $mapEditorSelectedEntityStore.deleteProperty(id);
             // refresh properties
             properties = $mapEditorSelectedEntityStore?.getProperties();
@@ -438,10 +443,10 @@
             onchange={onUpdateSearchable}
         />
 
-        <div class="properties-container p-1">
+        <div class="properties-container flex flex-col gap-8 p-1">
             {#each properties as property, i (property.id)}
                 {#if property.type !== "entityDescriptionProperties"}
-                    <div class="property-box border border-solid border-white/20 bg-white/5 rounded p-2 my-8">
+                    <div class="property-box border border-solid border-white/20 bg-white/5 rounded p-2">
                         {#if properties[i].type === "playAudio"}
                             <PlayAudioPropertyEditor
                                 bind:property={properties[i]}
@@ -475,7 +480,7 @@
     </div>
 {/if}
 
-<style lang="scss">
+<style>
     .properties-container {
         overflow-y: auto;
         overflow-x: hidden;
@@ -491,81 +496,9 @@
         margin-bottom: 0.5em;
         margin-top: 0.5em;
         flex-direction: column;
-        label {
-            min-width: fit-content;
-            margin-right: 0.5em;
-        }
-        input {
-            flex-grow: 1;
-            min-width: 0;
-        }
+
         * {
             margin-bottom: 0;
         }
     }
-
-    // .input-switch {
-    //     position: relative;
-    //     top: 0px;
-    //     right: 0px;
-    //     bottom: 0px;
-    //     left: 0px;
-    //     display: inline-block;
-    //     height: 1rem;
-    //     width: 2rem;
-    //     -webkit-appearance: none;
-    //     -moz-appearance: none;
-    //     appearance: none;
-    //     border-radius: 9999px;
-    //     border-width: 1px;
-    //     border-style: solid;
-    //     --border-opacity: 1;
-    //     border-color: rgb(77 75 103 / var(--border-opacity));
-    //     --bg-opacity: 1;
-    //     background-color: rgb(15 31 45 / var(--bg-opacity));
-    //     background-image: none;
-    //     padding: 0px;
-    //     --text-opacity: 1;
-    //     color: rgb(242 253 255 / var(--text-opacity));
-    //     outline: 2px solid transparent;
-    //     outline-offset: 2px;
-    //     cursor: url(../../../../../public/static/images/cursor_pointer.png), pointer;
-    // }
-
-    // .input-switch::before {
-    //     position: absolute;
-    //     left: -3px;
-    //     top: -3px;
-    //     height: 1.25rem;
-    //     width: 1.25rem;
-    //     border-radius: 9999px;
-    //     --bg-opacity: 1;
-    //     background-color: rgb(146 142 187 / var(--bg-opacity));
-    //     transition-property: all;
-    //     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-    //     transition-duration: 150ms;
-    //     --content: "";
-    //     content: var(--content);
-    // }
-
-    // .input-switch:checked {
-    //     --border-opacity: 1;
-    //     border-color: rgb(146 142 187 / var(--border-opacity));
-    // }
-
-    // .input-switch:checked::before {
-    //     left: 13px;
-    //     top: -3px;
-    //     --bg-opacity: 1;
-    //     background-color: rgb(65 86 246 / var(--bg-opacity));
-    //     content: var(--content);
-    //     /*--shadow: 0 0 7px 0 rgba(4, 255, 210, 1);
-    //     --shadow-colored: 0 0 7px 0 var(--shadow-color);
-    //     box-shadow: var(--ring-offset-shadow, 0 0 #0000), var(--ring-shadow, 0 0 #0000), var(--shadow);*/
-    // }
-
-    // .input-switch:disabled {
-    //     cursor: not-allowed;
-    //     opacity: 0.4;
-    // }
 </style>
