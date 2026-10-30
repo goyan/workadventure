@@ -262,6 +262,12 @@ export const EnvironmentVariables = z.object({
     ENABLE_CHAT_ONLINE_LIST: BoolAsString.optional()
         .transform((val) => toBool(val, true))
         .describe("Enable/disable online users list in chat. Defaults to true"),
+    MAP_LAYER_CATALOG_URLS: z
+        .string()
+        .optional()
+        .describe(
+            "Comma-separated URLs of the floor and wall catalogs of the map tool. They are added to the entity collections of every room, so the tool works on old maps too.",
+        ),
     ENABLE_TILE_SNAP: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe(

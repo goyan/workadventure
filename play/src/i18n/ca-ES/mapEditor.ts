@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurar la meva sala",
         trashEditor: "Paperera",
         exploreTheRoom: "Explorar la sala",
+        mapLayerEditor: "Eina de mapa (terres i parets)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Tancar l'editor de mapes",
         mapManagerActivated: "Gestor de mapes activat",
@@ -404,6 +405,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Com funciona?",
         description: "Dibuixeu una zona al mapa per crear-ne una de nova.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Dibuixa a mà alçada",
+            area: "Dibuixa una zona",
+        },
+        title: "Mapa",
+        modes: {
+            wall: "Paret",
+            room: "Sala",
+            floorBrush: "Pinzell de terra",
+            floorRectangle: "Rectangle de terra",
+            floorFill: "Omple el terra",
+            erase: "Goma",
+        },
+        hints: {
+            wall: "Arrossega per traçar una paret recta.",
+            room: "Arrossega un rectangle: parets i terra d'un sol cop.",
+            floorBrush: "Mantén el botó i pinta rajoles de terra.",
+            floorRectangle: "Arrossega un rectangle per omplir-lo de terra.",
+            floorFill: "Fes clic en una sala tancada per omplir-la.",
+            erase: "Mantén el botó per esborrar parets i terres. Els objectes es conserven.",
+        },
+        floors: "Terra",
+        walls: "Estil de paret",
+        catalogLoading: "S'estan comprovant els catàlegs de terres i parets...",
+        catalogMissing: "Els catàlegs de terres i parets no estan disponibles en aquesta sala.",
+        status: {
+            tooLarge: "Aquest canvi és massa gran. Dibuixa una zona més petita.",
+            fillTooLarge: "La zona no està tancada o és massa gran per omplir-la. Tanca-la primer amb parets.",
+            failed: "No s'ha pogut aplicar el canvi.",
+        },
+        families: {
+            "carrelage-gris": "Rajoles grises",
+            "parquet-clair": "Parquet clar",
+            "moquette-grise": "Moqueta grisa",
+            "moquette-olive": "Moqueta oliva",
+            "pierre-grise": "Pedra grisa",
+            "pierre-olive": "Pedra oliva",
+            "moquette-mauve": "Moqueta malva",
+            "pierre-mauve": "Pedra malva",
+        },
+        tints: {
+            blanc: "Blanc",
+            lavande: "Lavanda",
+            gris: "Gris",
+            brique: "Maó",
+        },
     },
     entityEditor: {
         resize: {

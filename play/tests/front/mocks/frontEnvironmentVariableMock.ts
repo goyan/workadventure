@@ -60,6 +60,7 @@ export const ENABLE_CHAT = true;
 export const ENABLE_CHAT_ONLINE_LIST = true;
 export const ENABLE_CHAT_DISCONNECTED_LIST = true;
 export const ENABLE_TILE_SNAP = false;
+export const MAP_LAYER_CATALOG_URLS: string[] = [];
 export const ENABLE_SAY = true;
 export const ENABLE_ISSUE_REPORT = true;
 export const STUN_SERVER = "stun:test.com:19302";

@@ -25,7 +25,7 @@ import { warningMessageStore } from "../../../Stores/ErrorStore";
 import { isTextEditingTarget } from "./isTextEditingTarget";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
-import { FloorEditorTool } from "./Tools/FloorEditorTool";
+import { MapLayerEditorTool } from "./Tools/MapLayerEditorTool";
 import { EntityEditorTool } from "./Tools/EntityEditorTool";
 import { WAMSettingsEditorTool } from "./Tools/WAMSettingsEditorTool";
 import type { FrontCommandInterface } from "./Commands/FrontCommandInterface";
@@ -39,7 +39,7 @@ import { SelectionEditorTool } from "./Tools/SelectionEditorTool";
 
 export enum EditorToolName {
     AreaEditor = "AreaEditor",
-    FloorEditor = "FloorEditor",
+    MapLayerEditor = "MapLayerEditor",
     EntityEditor = "EntityEditor",
     WAMSettingsEditor = "WAMSettingsEditor",
     TrashEditor = "TrashEditor",
@@ -133,7 +133,7 @@ export class MapEditorModeManager {
         this.editorTools = {
             [EditorToolName.AreaEditor]: areaEditorTool,
             [EditorToolName.EntityEditor]: new EntityEditorTool(this),
-            [EditorToolName.FloorEditor]: new FloorEditorTool(this),
+            [EditorToolName.MapLayerEditor]: new MapLayerEditorTool(this),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
             [EditorToolName.TrashEditor]: new TrashEditorTool(this, areaEditorTool),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
@@ -551,6 +551,11 @@ export class MapEditorModeManager {
             case "7": {
                 if (!mapEditorModeActivated) break;
                 this.equipTool(EditorToolName.SelectionEditor);
+                break;
+            }
+            case "8": {
+                if (!mapEditorModeActivated) break;
+                this.equipTool(EditorToolName.MapLayerEditor);
                 break;
             }
             case "z": {

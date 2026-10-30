@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configureer mijn kamer",
         trashEditor: "Prullenbak",
         exploreTheRoom: "Verken de kamer",
+        mapLayerEditor: "Kaartgereedschap (vloeren en muren)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Sluit kaart editor",
         mapManagerActivated: "Kaartbeheerder geactiveerd",
@@ -406,6 +407,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Hoe werkt het?",
         description: "Teken een zone op de kaart om een nieuwe te maken.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Vrij tekenen",
+            area: "Een gebied tekenen",
+        },
+        title: "Kaart",
+        modes: {
+            wall: "Muur",
+            room: "Ruimte",
+            floorBrush: "Vloerpenseel",
+            floorRectangle: "Vloerrechthoek",
+            floorFill: "Vloer vullen",
+            erase: "Gum",
+        },
+        hints: {
+            wall: "Sleep om een rechte muur te tekenen.",
+            room: "Sleep een rechthoek: muren en vloer in één keer.",
+            floorBrush: "Houd de knop ingedrukt en schilder vloertegels.",
+            floorRectangle: "Sleep een rechthoek om die met vloer te vullen.",
+            floorFill: "Klik in een gesloten ruimte om die te vullen.",
+            erase: "Houd de knop ingedrukt om muren en vloeren te wissen. Objecten blijven staan.",
+        },
+        floors: "Vloer",
+        walls: "Muurstijl",
+        catalogLoading: "De vloer- en muurcatalogi worden gecontroleerd...",
+        catalogMissing: "De vloer- en muurcatalogi zijn niet beschikbaar in deze ruimte.",
+        status: {
+            tooLarge: "Deze wijziging is te groot. Teken een kleiner gebied.",
+            fillTooLarge: "Het gebied is niet gesloten of te groot om te vullen. Sluit het eerst met muren.",
+            failed: "De wijziging kon niet worden toegepast.",
+        },
+        families: {
+            "carrelage-gris": "Grijze tegels",
+            "parquet-clair": "Licht parket",
+            "moquette-grise": "Grijs tapijt",
+            "moquette-olive": "Olijftapijt",
+            "pierre-grise": "Grijze steen",
+            "pierre-olive": "Olijfsteen",
+            "moquette-mauve": "Mauve tapijt",
+            "pierre-mauve": "Mauve steen",
+        },
+        tints: {
+            blanc: "Wit",
+            lavande: "Lavendel",
+            gris: "Grijs",
+            brique: "Baksteen",
+        },
     },
     entityEditor: {
         resize: {

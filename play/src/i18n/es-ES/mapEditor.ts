@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurar mi sala",
         trashEditor: "Papelera",
         exploreTheRoom: "Explorar la sala",
+        mapLayerEditor: "Herramienta de mapa (suelos y paredes)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Cerrar editor de mapa",
         mapManagerActivated: "Gestor de mapa activado",
@@ -405,6 +406,55 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "¿Cómo funciona?",
         description: "Dibuje una zona en el mapa para crear una nueva.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Dibujar a mano alzada",
+            area: "Dibujar una zona",
+        },
+        title: "Mapa",
+        modes: {
+            wall: "Pared",
+            room: "Sala",
+            floorBrush: "Pincel de suelo",
+            floorRectangle: "Rectángulo de suelo",
+            floorFill: "Rellenar suelo",
+            erase: "Borrador",
+        },
+        hints: {
+            wall: "Arrastra para trazar una pared recta.",
+            room: "Arrastra un rectángulo: paredes y suelo de una vez.",
+            floorBrush: "Mantén el botón y pinta baldosas de suelo.",
+            floorRectangle: "Arrastra un rectángulo para rellenarlo de suelo.",
+            floorFill: "Haz clic en una sala cerrada para rellenarla.",
+            erase: "Mantén el botón para borrar paredes y suelos. Los objetos se conservan.",
+        },
+        floors: "Suelo",
+        walls: "Estilo de pared",
+        catalogLoading: "Comprobando los catálogos de suelos y paredes...",
+        catalogMissing: "Los catálogos de suelos y paredes no están disponibles en esta sala.",
+        status: {
+            tooLarge: "Este cambio es demasiado grande. Dibuja una zona más pequeña.",
+            fillTooLarge:
+                "La zona no está cerrada o es demasiado grande para rellenarla. Ciérrala primero con paredes.",
+            failed: "No se pudo aplicar el cambio.",
+        },
+        families: {
+            "carrelage-gris": "Baldosas grises",
+            "parquet-clair": "Parqué claro",
+            "moquette-grise": "Moqueta gris",
+            "moquette-olive": "Moqueta oliva",
+            "pierre-grise": "Piedra gris",
+            "pierre-olive": "Piedra oliva",
+            "moquette-mauve": "Moqueta malva",
+            "pierre-mauve": "Piedra malva",
+        },
+        tints: {
+            blanc: "Blanco",
+            lavande: "Lavanda",
+            gris: "Gris",
+            brique: "Ladrillo",
+        },
     },
     entityEditor: {
         resize: {

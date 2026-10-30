@@ -22,6 +22,7 @@ import { coWebsites } from "../../Stores/CoWebsiteStore";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
+import { isMapLayerPrefab } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -290,6 +291,25 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
 
     public getPrefab(): EntityPrefab {
         return this.prefab;
+    }
+
+    /**
+     * Floors and walls of the map layer belong to the Map tool: no editor tool or player may click, select or drag them.
+     * `prefab` is not set yet when Phaser builds the object, hence the optional access.
+     */
+    public override setInteractive(
+        hitArea?: Phaser.Types.Input.InputConfiguration | unknown,
+        callback?: Phaser.Types.Input.HitAreaCallback,
+        dropZone?: boolean,
+    ): this {
+        if (this.prefab && isMapLayerPrefab(this.prefab.collectionName, this.prefab.id)) {
+            // Callers also make the object draggable, which needs an input object: give it one that nothing can hit.
+            return super.setInteractive({
+                hitArea: new Phaser.Geom.Rectangle(0, 0, 0, 0),
+                hitAreaCallback: () => false,
+            });
+        }
+        return super.setInteractive(hitArea, callback, dropZone);
     }
 
     public getProperties(): EntityDataProperties {

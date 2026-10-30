@@ -1,11 +1,12 @@
 <script lang="ts">
     import type { EntityPrefab } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
-    import { get } from "svelte/store";
+    import { derived, get } from "svelte/store";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
+    import { MAP_LAYER_COLLECTIONS } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import { mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
@@ -30,7 +31,10 @@
     import { IconChevronLeft, IconPencil } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
-    const entitiesPrefabsVariants = entitiesCollectionsManager.getEntitiesPrefabsVariantStore();
+    // Floors and walls of the map layer have their own tool: they are not offered as objects.
+    const entitiesPrefabsVariants = derived(entitiesCollectionsManager.getEntitiesPrefabsVariantStore(), (variants) =>
+        variants.filter((variant) => !MAP_LAYER_COLLECTIONS.includes(variant.defaultPrefab.collectionName)),
+    );
     const MOST_USED_CATEGORY_LIMIT = 12;
 
     // Users who only got the map editor through a zone tag or a personal area may upload their own

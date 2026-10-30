@@ -11,7 +11,16 @@
     import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
     import ArrowBarRight from "../Icons/ArrowBarRight.svelte";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import { IconDeselect, IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconTrash } from "@wa-icons";
+    import {
+        IconDeselect,
+        IconX,
+        IconTexture,
+        IconLamp,
+        IconMapSearch,
+        IconSettings,
+        IconTrash,
+        IconWall,
+    } from "@wa-icons";
 
     type SideBarTool = {
         toolName: EditorToolName;
@@ -37,6 +46,11 @@
         iconComponent: IconTrash,
         tooltiptext: $LL.mapEditor.sideBar.trashEditor(),
     };
+    const mapLayerEditorTool = {
+        toolName: EditorToolName.MapLayerEditor,
+        iconComponent: IconWall,
+        tooltiptext: $LL.mapEditor.sideBar.mapLayerEditor(),
+    };
     const selectionEditorTool = {
         toolName: EditorToolName.SelectionEditor,
         iconComponent: IconDeselect,
@@ -56,6 +70,7 @@
                 iconComponent: IconTexture,
                 tooltiptext: $LL.mapEditor.sideBar.areaEditor(),
             });
+            tools.push(mapLayerEditorTool);
             tools.push(entityEditorTool);
             tools.push(selectionEditorTool);
             tools.push({

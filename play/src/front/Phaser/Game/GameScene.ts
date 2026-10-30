@@ -53,6 +53,7 @@ import {
     ENABLE_CHAT_DISCONNECTED_LIST,
     ENABLE_MAP_EDITOR,
     ENABLE_OPENID,
+    MAP_LAYER_CATALOG_URLS,
     MAX_PER_GROUP,
     POSITION_DELAY,
     PUBLIC_MAP_STORAGE_PREFIX,
@@ -1894,9 +1895,10 @@ export class GameScene extends DirtyScene {
 
     private loadEntityCollections() {
         const customEntityCollectionUrl = this.getCustomEntityCollectionUrl();
+        // The floor and wall catalogs of the map tool are offered in every room, old maps included.
         const collectionUrls = mergeEntityCollectionUrls(
             this.wamFile.entityCollections.map((collection) => collection.url),
-            this._room.entityCollectionsUrls,
+            [...(this._room.entityCollectionsUrls ?? []), ...MAP_LAYER_CATALOG_URLS],
         );
         const collectionDescriptors: { url: string; type: EntityPrefabType }[] = collectionUrls.map((url) => ({
             url,
@@ -3984,7 +3986,7 @@ ${escapedMessage}
                     }
                     case "floor": {
                         mapEditorModeStore.switchMode(true);
-                        mapEditorSelectedToolStore.set(EditorToolName.FloorEditor);
+                        mapEditorSelectedToolStore.set(EditorToolName.MapLayerEditor);
                         break;
                     }
                     case "entity": {

@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurer le salon",
         trashEditor: "Corbeille",
         exploreTheRoom: "Explorer le salon",
+        mapLayerEditor: "Outil carte (sols et murs)",
         selectionEditor: "Outil de sélection",
         closeMapEditor: "Fermer l'éditeur de carte",
         mapManagerActivated: "Gestionnaire de carte activé",
@@ -407,6 +408,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Comment ça marche ?",
         description: "Dessinez une zone sur la carte afin d'en créer une nouvelle.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Tracer à la volée",
+            area: "Tracer une zone",
+        },
+        title: "Carte",
+        modes: {
+            wall: "Mur",
+            room: "Pièce",
+            floorBrush: "Pinceau de sol",
+            floorRectangle: "Rectangle de sol",
+            floorFill: "Remplir un sol",
+            erase: "Gomme",
+        },
+        hints: {
+            wall: "Glissez pour tracer un mur droit.",
+            room: "Glissez un rectangle : murs et sol en une fois.",
+            floorBrush: "Maintenez le bouton et peignez les dalles de sol.",
+            floorRectangle: "Glissez un rectangle pour le remplir de sol.",
+            floorFill: "Cliquez dans une pièce fermée pour la remplir.",
+            erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
+        },
+        floors: "Sol",
+        walls: "Style de mur",
+        catalogLoading: "Vérification des catalogues de sols et de murs...",
+        catalogMissing: "Les catalogues de sols et de murs ne sont pas disponibles dans cette salle.",
+        status: {
+            tooLarge: "Cette modification est trop grande. Dessinez une zone plus petite.",
+            fillTooLarge: "La zone n'est pas fermée ou trop grande pour être remplie. Fermez-la d'abord avec des murs.",
+            failed: "La modification n'a pas pu être appliquée.",
+        },
+        families: {
+            "carrelage-gris": "Carrelage gris",
+            "parquet-clair": "Parquet clair",
+            "moquette-grise": "Moquette grise",
+            "moquette-olive": "Moquette olive",
+            "pierre-grise": "Pierre grise",
+            "pierre-olive": "Pierre olive",
+            "moquette-mauve": "Moquette mauve",
+            "pierre-mauve": "Pierre mauve",
+        },
+        tints: {
+            blanc: "Blanc",
+            lavande: "Lavande",
+            gris: "Gris",
+            brique: "Brique",
+        },
     },
     entityEditor: {
         resize: {

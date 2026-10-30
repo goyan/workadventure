@@ -89,6 +89,7 @@ if (typeof window !== "undefined" && window.env === undefined) {
         ENABLE_CHAT_ONLINE_LIST: undefined,
         ENABLE_CHAT_DISCONNECTED_LIST: undefined,
         ENABLE_TILE_SNAP: undefined,
+        MAP_LAYER_CATALOG_URLS: undefined,
         ENABLE_SAY: undefined,
         ENABLE_ISSUE_REPORT: undefined,
         GRPC_MAX_MESSAGE_SIZE: 4194304,

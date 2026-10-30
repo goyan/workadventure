@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "設定我的房間",
         trashEditor: "垃圾桶",
         exploreTheRoom: "探索房間",
+        mapLayerEditor: "地圖工具（地板與牆壁）",
         selectionEditor: "Selection tool",
         closeMapEditor: "關閉地圖編輯器",
         mapManagerActivated: "地圖管理器已啟用",
@@ -397,6 +398,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "如何使用？",
         description: "在地圖上繪製一個區域以建立新區域。",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "自由繪製",
+            area: "繪製區域",
+        },
+        title: "地圖",
+        modes: {
+            wall: "牆壁",
+            room: "房間",
+            floorBrush: "地板畫筆",
+            floorRectangle: "地板矩形",
+            floorFill: "填滿地板",
+            erase: "橡皮擦",
+        },
+        hints: {
+            wall: "拖曳以繪製直牆。",
+            room: "拖曳矩形：一次產生牆壁與地板。",
+            floorBrush: "按住按鈕並繪製地板磚。",
+            floorRectangle: "拖曳矩形以填入地板。",
+            floorFill: "點擊封閉的房間以填滿。",
+            erase: "按住按鈕擦除牆壁與地板。物件會保留。",
+        },
+        floors: "地板",
+        walls: "牆壁樣式",
+        catalogLoading: "正在檢查地板與牆壁目錄...",
+        catalogMissing: "此房間無法使用地板與牆壁目錄。",
+        status: {
+            tooLarge: "此變更過大。請繪製較小的區域。",
+            fillTooLarge: "該區域未封閉或過大，無法填滿。請先以牆壁封閉。",
+            failed: "無法套用此變更。",
+        },
+        families: {
+            "carrelage-gris": "灰色地磚",
+            "parquet-clair": "淺色木地板",
+            "moquette-grise": "灰色地毯",
+            "moquette-olive": "橄欖色地毯",
+            "pierre-grise": "灰色石材",
+            "pierre-olive": "橄欖色石材",
+            "moquette-mauve": "淡紫色地毯",
+            "pierre-mauve": "淡紫色石材",
+        },
+        tints: {
+            blanc: "白色",
+            lavande: "薰衣草色",
+            gris: "灰色",
+            brique: "磚紅色",
+        },
     },
     entityEditor: {
         resize: {

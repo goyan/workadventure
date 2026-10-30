@@ -54,6 +54,7 @@ Environment variables for the Play service (frontend and pusher).
 | `ENABLE_CHAT` | No | Enable/disable the chat feature. Defaults to true |
 | `ENABLE_CHAT_UPLOAD` | No | Enable/disable file upload in chat. Defaults to true |
 | `ENABLE_CHAT_ONLINE_LIST` | No | Enable/disable online users list in chat. Defaults to true |
+| `MAP_LAYER_CATALOG_URLS` | No | Comma-separated URLs of the floor and wall catalogs of the map tool. They are added to the entity collections of every room, so the tool works on old maps too. |
 | `ENABLE_TILE_SNAP` | No | Slide the local avatar to the center of its tile when it stops, and aim double-click moves at tile centers. Defaults to false. |
 | `ENABLE_CHAT_DISCONNECTED_LIST` | No | Enable/disable offline users list in chat. Defaults to true |
 | `DEFAULT_WOKA_NAME` | No | Default name to use for users when they join the room. |
