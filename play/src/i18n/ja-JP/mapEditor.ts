@@ -400,6 +400,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "マップ上にゾーンを描き、新しいゾーンを作成します。",
     },
     entityEditor: {
+        resize: {
+            title: "画像サイズ",
+            width: "幅 (px)",
+            height: "高さ (px)",
+            keepProportions: "縦横比を維持",
+            apply: "サイズを適用",
+            saving: "保存中…",
+            invalidSize: "1〜4096ピクセルの整数を入力してください。",
+            error: "サイズを変更できません。空きスペースと編集権限を確認して、再試行してください。",
+        },
         header: {
             title: "マップにオブジェクトを追加",
             description: "検索、アップロード、または既存のオブジェクトを選択し、マップに追加します。",

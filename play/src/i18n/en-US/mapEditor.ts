@@ -397,6 +397,16 @@ const mapEditor: BaseTranslation = {
         description: "Draw a zone on the map to create a new one.",
     },
     entityEditor: {
+        resize: {
+            title: "Image size",
+            width: "Width (px)",
+            height: "Height (px)",
+            keepProportions: "Keep proportions",
+            apply: "Apply size",
+            saving: "Saving…",
+            invalidSize: "Use whole numbers from 1 to 4096 pixels.",
+            error: "Could not resize the image. Check available space and your editing rights, then try again.",
+        },
         header: {
             title: "Add object to your map",
             description: "Search, upload or select existing object and add it in the map.",

@@ -403,6 +403,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Teken een zone op de kaart om een nieuwe te maken.",
     },
     entityEditor: {
+        resize: {
+            title: "Afbeeldingsgrootte",
+            width: "Breedte (px)",
+            height: "Hoogte (px)",
+            keepProportions: "Verhoudingen behouden",
+            apply: "Grootte toepassen",
+            saving: "Opslaan…",
+            invalidSize: "Gebruik gehele getallen van 1 tot 4096 pixels.",
+            error: "Kan de afbeelding niet vergroten of verkleinen. Controleer de beschikbare ruimte en je bewerkingsrechten.",
+        },
         header: {
             title: "Voeg object toe aan je kaart",
             description: "Zoek, upload of selecteer een bestaand object en voeg het toe aan de kaart.",

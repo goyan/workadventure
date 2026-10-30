@@ -394,6 +394,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "在地圖上繪製一個區域以建立新區域。",
     },
     entityEditor: {
+        resize: {
+            title: "圖片尺寸",
+            width: "寬度 (px)",
+            height: "高度 (px)",
+            keepProportions: "保持比例",
+            apply: "套用尺寸",
+            saving: "儲存中…",
+            invalidSize: "請輸入 1 到 4096 像素的整數。",
+            error: "無法調整尺寸。請檢查可用空間和編輯權限，然後重試。",
+        },
         header: {
             title: "向地圖新增物件",
             description: "搜尋、上傳或選擇現有物件並將其加入地圖中。",

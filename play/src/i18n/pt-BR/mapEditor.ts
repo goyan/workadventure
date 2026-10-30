@@ -403,6 +403,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Desenhe uma zona no mapa para criar uma nova.",
     },
     entityEditor: {
+        resize: {
+            title: "Tamanho da imagem",
+            width: "Largura (px)",
+            height: "Altura (px)",
+            keepProportions: "Manter proporções",
+            apply: "Aplicar tamanho",
+            saving: "Salvando…",
+            invalidSize: "Use números inteiros de 1 a 4096 pixels.",
+            error: "Não foi possível redimensionar. Verifique o espaço disponível e suas permissões de edição.",
+        },
         header: {
             title: "Adicionar objeto ao seu mapa",
             description: "Pesquise, faça upload ou selecione objeto existente e adicione-o no mapa.",

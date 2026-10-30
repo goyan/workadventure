@@ -403,6 +403,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Zeichnen Sie ein Gebiet auf der Karte, um ein neues zu erstellen.",
     },
     entityEditor: {
+        resize: {
+            title: "Bildgröße",
+            width: "Breite (px)",
+            height: "Höhe (px)",
+            keepProportions: "Proportionen beibehalten",
+            apply: "Größe anwenden",
+            saving: "Speichern…",
+            invalidSize: "Verwenden Sie ganze Zahlen von 1 bis 4096 Pixeln.",
+            error: "Das Bild konnte nicht skaliert werden. Prüfen Sie den verfügbaren Platz und Ihre Bearbeitungsrechte.",
+        },
         header: {
             title: "Objekt zu Ihrer Karte hinzufügen",
             description: "Suchen, hochladen oder vorhandenes Objekt auswählen und zur Karte hinzufügen.",

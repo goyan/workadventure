@@ -400,6 +400,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Če želite ustvariti novo območje, ga narišite na zemljevidu.",
     },
     entityEditor: {
+        resize: {
+            title: "Wulkosć wobraza",
+            width: "Šěrokosć (px)",
+            height: "Wysokosć (px)",
+            keepProportions: "Proporcije zachować",
+            apply: "Wulkosć nałožić",
+            saving: "Składowanje…",
+            invalidSize: "Wužiwaj cyłe ličby wot 1 do 4096 pikselow.",
+            error: "Wulkosć njeda so změnić. Přepruwuj swobodny rum a swoje prawa za wobdźěłanje.",
+        },
         header: {
             title: "Objekt k swojej karće přidać",
             description: "Pytajće, nahrajće abo wubjerće eksistowacy objekt a přidajće jón k karće.",

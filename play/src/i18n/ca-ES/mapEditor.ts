@@ -401,6 +401,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Dibuixeu una zona al mapa per crear-ne una de nova.",
     },
     entityEditor: {
+        resize: {
+            title: "Mida de la imatge",
+            width: "Amplada (px)",
+            height: "Alçada (px)",
+            keepProportions: "Mantén les proporcions",
+            apply: "Aplica la mida",
+            saving: "Desant…",
+            invalidSize: "Utilitza nombres enters d’1 a 4096 píxels.",
+            error: "No s’ha pogut canviar la mida. Comprova l’espai disponible i els permisos d’edició.",
+        },
         header: {
             title: "Afegir objecte al vostre mapa",
             description: "Cercar, pujar o seleccionar un objecte existent i afegir-lo al mapa.",

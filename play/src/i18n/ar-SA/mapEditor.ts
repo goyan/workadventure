@@ -396,6 +396,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "ارسم منطقة على الخريطة لإنشاء منطقة جديدة.", // Draw an area on the map to create a new one.
     },
     entityEditor: {
+        resize: {
+            title: "حجم الصورة",
+            width: "العرض (بكسل)",
+            height: "الارتفاع (بكسل)",
+            keepProportions: "الحفاظ على النسب",
+            apply: "تطبيق الحجم",
+            saving: "جارٍ الحفظ…",
+            invalidSize: "استخدم أعدادًا صحيحة من 1 إلى 4096 بكسل.",
+            error: "تعذر تغيير الحجم. تحقق من المساحة المتاحة وصلاحيات التحرير ثم حاول مجددًا.",
+        },
         header: {
             title: "أضف كائن إلى خريطتك", // Add an object to your map
             description: "ابحث، حمِّل أو اختر كائنًا موجودًا وأضفه إلى الخريطة.", // Search, upload, or select an existing object and add it to the map.

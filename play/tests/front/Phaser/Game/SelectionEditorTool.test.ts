@@ -378,7 +378,7 @@ describe("SelectionEditorTool", () => {
         mapEditorModeManager.getScene.mockReturnValue(scene);
         commandGroups = [];
         mapEditorModeManager.executeCommands.mockImplementation(async (commands) => {
-            const group = [...commands];
+            const group = [...(typeof commands === "function" ? commands() : commands)];
             commandGroups.push(group);
             await group.reduce(
                 (previous, command) => previous.then(() => command.execute()).then(() => undefined),
@@ -894,11 +894,12 @@ describe("SelectionEditorTool", () => {
             armClipboard();
             let release: (() => void) | undefined;
             mapEditorModeManager.executeCommands.mockImplementation(async (commands) => {
-                commandGroups.push([...commands]);
+                const batch = typeof commands === "function" ? commands() : commands;
+                commandGroups.push([...batch]);
                 await new Promise<void>((resolve) => {
                     release = resolve;
                 });
-                await Promise.all(commands.map((command) => command.execute()));
+                await Promise.all(batch.map((command) => command.execute()));
             });
 
             clickAt(200, 200);

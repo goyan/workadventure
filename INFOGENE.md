@@ -318,3 +318,22 @@ L'état (`mapEditorSnapEnabledStore`) ne dure que la session d'édition et revie
 La décision est dans `Phaser/Game/MapEditor/EntityPlacementSnapping.ts`. Le pinceau de sols (clic droit maintenu) reste
 toujours calé (index de case) ; seul Maj y ignore les collisions. `SelectionEditorTool` déplace déjà ses sélections par
 cases entières : il n'est pas concerné.
+
+## Redimensionner une image posée
+
+Dans l'éditeur d'objets, cliquer sur une image importée déjà posée, puis régler « Taille de l'image » :
+largeur et hauteur en pixels, proportions conservées par défaut, bouton « Appliquer la taille ».
+Les dimensions acceptées sont des entiers de 1 à 4096 pixels. Le coin supérieur gauche reste en place ;
+l'image doit rester dans la carte et respecter les droits d'édition et les nouvelles collisions.
+
+Le moteur officiel ne sauvegarde pas une échelle par instance. Le front importe donc une nouvelle version PNG
+de l'image, avec sa grille de collision et sa profondeur adaptées, puis remplace cet exemplaire par les commandes
+natives. Sa position, son identifiant, son nom et ses propriétés sont conservés ; les autres exemplaires restent
+à leur taille précédente. La version redimensionnée est aussi disponible dans le catalogue des images importées.
+Ctrl/Cmd+Z annule le remplacement en une étape ; le rétablissement le réapplique. L'image importée reste dans
+le catalogue pour que le rétablissement et les copies restent possibles.
+
+La sauvegarde de l'image est confirmée par le serveur avant le remplacement. Une erreur ou la fermeture du panneau
+pendant la préparation laisse l'exemplaire d'origine en place. Le poids maximal des messages du serveur reste applicable.
+Un agrandissement ne peut pas recréer les détails absents de l'image ; redimensionner plusieurs fois la même version
+peut réduire sa qualité.

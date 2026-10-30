@@ -373,18 +373,25 @@ export class MapEditorModeManager {
     /**
      * Executes related commands as one undoable history entry while keeping each command as an
      * individual message on the native map editor protocol.
+     * Preparatory assets may skip history while still tracking server acceptance/rejection.
+     * A factory reads current map state inside the queue, immediately before execution.
      */
-    public async executeCommands(commands: readonly FrontCommand[]): Promise<void> {
-        if (commands.length === 0) return;
+    public async executeCommands(
+        commands: readonly FrontCommand[] | (() => readonly FrontCommand[]),
+        recordHistory = true,
+    ): Promise<void> {
+        if (typeof commands !== "function" && commands.length === 0) return;
 
         await this.isReverting;
         return this.enqueueCommand(async () => {
-            const group = this.createHistoryGroup(commands);
+            const batch = typeof commands === "function" ? commands() : commands;
+            if (batch.length === 0) return;
+            const group = recordHistory ? this.createHistoryGroup(batch) : undefined;
             try {
-                await this.applyCommands(commands, true, true, group);
-                this.recordHistoryGroup(group);
+                await this.applyCommands(batch, true, true, group);
+                if (group) this.recordHistoryGroup(group);
             } catch (error) {
-                this.discardPendingHistoryGroup(group);
+                if (group) this.discardPendingHistoryGroup(group);
                 throw error;
             }
         });
