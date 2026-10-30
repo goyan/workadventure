@@ -4,6 +4,10 @@ const refreshPrompt: BaseTranslation = {
     refresh: "Atualizar",
     newVersion: "Uma nova versão está disponível. Atualize a página.",
     later: "Mais tarde",
+    whatsNew: "Novidades",
+    feature: "Funcionalidade",
+    fix: "Correção",
+    noChanges: "Nenhum detalhe da atualização disponível.",
 };
 
 export default refreshPrompt;

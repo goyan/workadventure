@@ -25,7 +25,6 @@ import { chatVisibilityStore, isMatrixChatEnabledStore } from "./ChatStore";
 import { gameSceneStore } from "./GameSceneStore";
 import { modalIframeStore, modalVisibilityStore, showModalGlobalComminucationVisibilityStore } from "./ModalStore";
 import { getAdditionalMenuItemStore } from "./AdditionalItemsMenuStore";
-import { personalAreaDataStore } from "./PersonalDeskStore";
 
 export const menuIconVisiblilityStore = writable(false);
 export const menuVisiblilityStore = writable(false);
@@ -413,22 +412,8 @@ export const globalMessageVisibleStore = derived(
         return $megaphoneCanBeUsedStore || $userIsAdminStore;
     },
 );
-export const mapMenuVisibleStore = derived(
-    [
-        mapEditorMenuVisibleStore,
-        globalMessageVisibleStore,
-        getAdditionalMenuItemStore("buildMenu"),
-        personalAreaDataStore,
-    ],
-    ([$mapEditorMenuVisibleStore, $globalMessageVisibleStore, $additionalBuildMenuItems, $personalAreaDataStore]) => {
-        return (
-            $mapEditorMenuVisibleStore ||
-            $globalMessageVisibleStore ||
-            $additionalBuildMenuItems.size > 0 ||
-            $personalAreaDataStore !== null
-        );
-    },
-);
+// Every user can open the release history from Tools, including users without editing rights.
+export const mapMenuVisibleStore: Readable<boolean> = alwaysVisible;
 
 type Menus = "appMenu" | "profileMenu" | "mapMenu" | "participantMenu";
 

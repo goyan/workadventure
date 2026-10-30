@@ -3,16 +3,21 @@ import { z } from "zod";
 import { asError } from "catch-unknown";
 import { abortAny } from "@workadventure/shared-utils/src/Abort/AbortAny";
 import { abortTimeout } from "@workadventure/shared-utils/src/Abort/AbortTimeout";
+import { ReleaseNotes } from "../../common/ReleaseNotes";
+import type { ReleaseNote } from "../../common/ReleaseNotes";
 import { PUSHER_URL } from "../Enum/EnvironmentVariable";
 
 const debug = Debug("front:build-update");
-const buildVersionResponse = z.object({ version: z.string().regex(/^[a-f0-9]{64}$/) });
+const buildVersionResponse = z.object({
+    version: z.string().regex(/^[a-f0-9]{64}$/),
+    releaseNotes: z.unknown().optional(),
+});
 
 /**
  * Compare against the version of the loaded page, never a fresh baseline from the server.
  * The caller decides when to reload; detecting an update must not interrupt a conversation.
  */
-export function watchForBuildUpdate(currentVersion: string, onUpdate: () => void): () => void {
+export function watchForBuildUpdate(currentVersion: string, onUpdate: (notes: ReleaseNote[]) => void): () => void {
     const controller = new AbortController();
     let pendingCheck: Promise<void> | undefined;
 
@@ -29,7 +34,8 @@ export function watchForBuildUpdate(currentVersion: string, onUpdate: () => void
             const parsed = buildVersionResponse.safeParse(body);
             if (!controller.signal.aborted && parsed.success && parsed.data.version !== currentVersion) {
                 stop();
-                onUpdate();
+                const notes = ReleaseNotes.safeParse(parsed.data.releaseNotes);
+                onUpdate(notes.success ? notes.data : []);
             }
         } catch (error) {
             // Deployment downtime and offline clients should simply retry on the next check.

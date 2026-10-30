@@ -5,6 +5,7 @@ import { showReportScreenStore, userReportEmpty } from "./ShowReportScreenStore"
 import { emoteMenuStore } from "./EmoteStore";
 import { refreshPromptStore } from "./RefreshPromptStore";
 import { mapDeletedPromptStore } from "./MapDeletedPromptStore";
+import { releaseNotesVisibleStore } from "./ReleaseNotesStore";
 
 export const inputFormFocusStore = writable(false);
 
@@ -21,6 +22,7 @@ export const enableUserInputsStore = derived(
         emoteMenuStore,
         refreshPromptStore,
         mapDeletedPromptStore,
+        releaseNotesVisibleStore,
     ],
     ([
         $menuInputFocusStore,
@@ -31,6 +33,7 @@ export const enableUserInputsStore = derived(
         $emoteMenuStore,
         $refreshPromptStore,
         $mapDeletedPromptStore,
+        $releaseNotesVisibleStore,
     ]) => {
         return (
             !$menuInputFocusStore &&
@@ -40,7 +43,8 @@ export const enableUserInputsStore = derived(
             !$mapExplorerSearchinputFocusStore &&
             !$emoteMenuStore &&
             !$refreshPromptStore &&
-            !$mapDeletedPromptStore
+            !$mapDeletedPromptStore &&
+            !$releaseNotesVisibleStore
         );
     },
 );
