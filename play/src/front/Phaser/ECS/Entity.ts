@@ -22,7 +22,11 @@ import { coWebsites } from "../../Stores/CoWebsiteStore";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
-import { isMapLayerPrefab } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
+import {
+    MAP_LAYER_FLOOR_DEPTH,
+    isMapLayerPrefab,
+    parseMapLayerPrefab,
+} from "../Game/MapEditor/MapLayer/MapLayerCatalog";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -91,7 +95,7 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
             })
             .catch((error) => console.error(error));
 
-        this.setDepth(this.y + this.displayHeight + (this.prefab.depthOffset ?? 0));
+        this.updateDepth();
 
         this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe(() => {
             this.updateOutline();
@@ -310,6 +314,18 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
             });
         }
         return super.setInteractive(hitArea, callback, dropZone);
+    }
+
+    /**
+     * Objects are sorted by the y of their foot, like the characters. The floors of the map layer are the lowest
+     * level above the ground tiles: nothing, neither a character nor a companion walking over a tile row, may go under.
+     */
+    public updateDepth(depthOffset: number = this.prefab.depthOffset ?? 0): void {
+        if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
+            this.setDepth(MAP_LAYER_FLOOR_DEPTH);
+            return;
+        }
+        this.setDepth(this.y + this.displayHeight + depthOffset);
     }
 
     public getProperties(): EntityDataProperties {

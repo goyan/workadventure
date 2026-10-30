@@ -8,6 +8,12 @@
 
 export const MAP_LAYER_TILE_SIZE = 32;
 
+/**
+ * Depth of the floors: just above the ground tiles of the map (depth 0), under everything that is sorted by its y
+ * (objects, walls, characters, companions), whatever the row they stand on.
+ */
+export const MAP_LAYER_FLOOR_DEPTH = 0.5;
+
 export const MAP_LAYER_FLOOR_COLLECTION = "Carte Sols";
 export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, MAP_LAYER_WALL_COLLECTION];

@@ -138,10 +138,8 @@ export class EntitiesManager extends EventEmitter {
             .then(() => {
                 const entity = this.entities.get(entityId);
                 if (entity) {
-                    entity
-                        .setTexture(prefab.imagePath)
-                        .setDepth(entity.y + entity.displayHeight + (entity.getPrefab().depthOffset ?? 0))
-                        .setVisible(true);
+                    entity.setTexture(prefab.imagePath).setVisible(true);
+                    entity.updateDepth();
                     if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
                         mapEditorSelectedEntityStore.set(entity);
                     }
@@ -221,7 +219,7 @@ export class EntitiesManager extends EventEmitter {
             const entityPrefab = entity.getPrefab();
             if (entityPrefab.id === modifiedEntityPrefabId) {
                 if (entityPrefab.depthOffset !== depthOffset) {
-                    entity.setDepth(entity.y + entity.displayHeight + depthOffset);
+                    entity.updateDepth(depthOffset);
                 }
             }
         }
@@ -339,7 +337,7 @@ export class EntitiesManager extends EventEmitter {
                 const snapToGrid = this.isSnappingToGrid();
                 entity.x = snapToGrid ? Math.floor(dragX / tileDim.width) * tileDim.width : Math.floor(dragX);
                 entity.y = snapToGrid ? Math.floor(dragY / tileDim.height) * tileDim.height : Math.floor(dragY);
-                entity.setDepth(entity.y + entity.displayHeight + depthOffset);
+                entity.updateDepth(depthOffset);
 
                 this.changeEntityTint(entity);
             }
