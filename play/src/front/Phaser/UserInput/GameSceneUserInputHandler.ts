@@ -1,5 +1,6 @@
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
+import { getTileCenter } from "../Player/TileSnap";
 import { Player } from "../Player/Player";
 import { RemotePlayer } from "../Entity/RemotePlayer";
 import type { UserInputHandlerInterface } from "../../Interfaces/UserInputHandlerInterface";
@@ -206,11 +207,13 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
+        // A double-click ends at the center of the targeted tile, like the avatar does when it stops.
+        const target = isDoubleClick ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint;
         this.gameScene
             .moveTo(
                 {
-                    x: worldPoint.x,
-                    y: worldPoint.y,
+                    x: target.x,
+                    y: target.y,
                 },
                 true,
                 isDoubleClick ? WOKA_SPEED * 2.5 : undefined,
@@ -218,6 +221,11 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             .catch((reason) => {
                 console.warn(reason);
             });
+    }
+
+    private getTileCenterOf(x: number, y: number): { x: number; y: number } {
+        const { width, height } = this.gameScene.getGameMapFrontWrapper().getTileDimensions();
+        return getTileCenter(x, y, width, height);
     }
 
     public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
