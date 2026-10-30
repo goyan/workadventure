@@ -11,7 +11,7 @@
     import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
     import ArrowBarRight from "../Icons/ArrowBarRight.svelte";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import { IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconTrash } from "@wa-icons";
+    import { IconDeselect, IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconTrash } from "@wa-icons";
 
     type SideBarTool = {
         toolName: EditorToolName;
@@ -37,6 +37,11 @@
         iconComponent: IconTrash,
         tooltiptext: $LL.mapEditor.sideBar.trashEditor(),
     };
+    const selectionEditorTool = {
+        toolName: EditorToolName.SelectionEditor,
+        iconComponent: IconDeselect,
+        tooltiptext: $LL.mapEditor.sideBar.selectionEditor(),
+    };
 
     let availableTools = $derived.by<SideBarTool[]>(() => {
         const tools: SideBarTool[] = [exploreTheRoomTool];
@@ -52,6 +57,7 @@
                 tooltiptext: $LL.mapEditor.sideBar.areaEditor(),
             });
             tools.push(entityEditorTool);
+            tools.push(selectionEditorTool);
             tools.push({
                 toolName: EditorToolName.WAMSettingsEditor,
                 iconComponent: IconSettings,

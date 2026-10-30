@@ -356,6 +356,10 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
                 return;
             }
 
+            if (get(mapEditorSelectedToolStore) === EditorToolName.SelectionEditor) {
+                return;
+            }
+
             if (!entity.canEdit) {
                 return;
             }

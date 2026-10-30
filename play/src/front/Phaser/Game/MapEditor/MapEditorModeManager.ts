@@ -19,7 +19,7 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import LL from "../../../../i18n/i18n-svelte";
 import { gameManager } from "../GameManager";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
-import { EditorCameraKeys } from "./EditorCameraKeys";
+import { EditorCameraKeys, isTextEditingTarget } from "./EditorCameraKeys";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { FloorEditorTool } from "./Tools/FloorEditorTool";
@@ -30,7 +30,9 @@ import type { FrontCommand } from "./Commands/FrontCommand";
 import { TrashEditorTool } from "./Tools/TrashEditorTool";
 import { ExplorerTool } from "./Tools/ExplorerTool";
 import { CloseTool } from "./Tools/CloseTool";
+import { CreateEntityFrontCommand } from "./Commands/Entity/CreateEntityFrontCommand";
 import { UpdateAreaFrontCommand } from "./Commands/Area/UpdateAreaFrontCommand";
+import { SelectionEditorTool } from "./Tools/SelectionEditorTool";
 
 export enum EditorToolName {
     AreaEditor = "AreaEditor",
@@ -38,11 +40,30 @@ export enum EditorToolName {
     EntityEditor = "EntityEditor",
     WAMSettingsEditor = "WAMSettingsEditor",
     TrashEditor = "TrashEditor",
+    SelectionEditor = "SelectionEditor",
     ExploreTheRoom = "ExploreTheRoom",
     CloseMapEditor = "CloseMapEditor",
 }
 
 const logger = debug("map-editor");
+
+interface CommandHistoryGroup {
+    commands: FrontCommand[];
+    acknowledgedCommandIndexes: Set<number>;
+    everAcknowledgedCommandIndexes: Set<number>;
+}
+
+interface PendingCommandHistoryGroup {
+    group: CommandHistoryGroup;
+    commandIndex: number;
+    direction: "apply" | "undo";
+}
+
+interface ExecutedCommand {
+    command: FrontCommand;
+    emitted: boolean;
+    history: PendingCommandHistoryGroup | undefined;
+}
 
 export class MapEditorModeManager {
     private scene: GameScene;
@@ -69,12 +90,13 @@ export class MapEditorModeManager {
     /**
      * We are making use of CommandPattern to implement an Undo-Redo mechanism
      */
-    private localCommandsHistory: FrontCommand[];
+    private localCommandsHistory: CommandHistoryGroup[];
 
     /**
      * Commands sent by us that are still to be acknowledged by the server
      */
     private pendingCommands: FrontCommand[];
+    private pendingCommandHistoryGroups: Array<PendingCommandHistoryGroup | undefined>;
     /**
      * Which command was called most recently
      */
@@ -84,7 +106,11 @@ export class MapEditorModeManager {
 
     private readonly cameraKeys: EditorCameraKeys;
 
+    private readonly selectionEditorTool: SelectionEditorTool;
+
     private isReverting: Promise<void> = Promise.resolve();
+
+    private isHandlingIncomingCommand = false;
 
     constructor(
         scene: GameScene,
@@ -96,11 +122,13 @@ export class MapEditorModeManager {
 
         this.localCommandsHistory = [];
         this.pendingCommands = [];
+        this.pendingCommandHistoryGroups = [];
         this.currentCommandIndex = -1;
 
         this.active = false;
 
         const areaEditorTool = new AreaEditorTool(this);
+        this.selectionEditorTool = new SelectionEditorTool(this, areaEditorTool);
 
         this.editorTools = {
             [EditorToolName.AreaEditor]: areaEditorTool,
@@ -108,6 +136,7 @@ export class MapEditorModeManager {
             [EditorToolName.FloorEditor]: new FloorEditorTool(this),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
             [EditorToolName.TrashEditor]: new TrashEditorTool(this, areaEditorTool),
+            [EditorToolName.SelectionEditor]: this.selectionEditorTool,
             [EditorToolName.ExploreTheRoom]: new ExplorerTool(this, this.scene),
             [EditorToolName.CloseMapEditor]: new CloseTool(),
         };
@@ -127,6 +156,193 @@ export class MapEditorModeManager {
 
     private currentRunningCommand: Promise<void>;
 
+    private enqueueCommand<T>(operation: () => Promise<T>): Promise<T> {
+        const queuedOperation = this.currentRunningCommand
+            .then(operation)
+            .finally(() => this.selectionEditorTool.refreshSelection());
+        this.currentRunningCommand = queuedOperation.then(
+            () => undefined,
+            () => undefined,
+        );
+        return queuedOperation;
+    }
+
+    private async applyCommands(
+        commands: readonly FrontCommand[],
+        trackPending: boolean,
+        updateLastCommandId = true,
+        historyGroup?: CommandHistoryGroup,
+        historyDirection: PendingCommandHistoryGroup["direction"] = "apply",
+        historyCommandIndexes: readonly number[] = commands.map((_command, index) => index),
+    ): Promise<void> {
+        const executedCommands: ExecutedCommand[] = [];
+        try {
+            await commands.reduce(async (previousCommand, command, index) => {
+                await previousCommand;
+                try {
+                    await command.execute();
+                } catch (error) {
+                    if (command instanceof CreateEntityFrontCommand) {
+                        try {
+                            await command.getUndoCommand().execute();
+                        } catch (compensationError) {
+                            throw new AggregateError(
+                                [error, compensationError],
+                                "Create entity failed and its partial WAM change could not be reverted",
+                                { cause: compensationError },
+                            );
+                        }
+                    }
+                    throw error;
+                }
+                const commandIndex = historyCommandIndexes[index];
+                const history =
+                    historyGroup !== undefined && commandIndex !== undefined
+                        ? { group: historyGroup, commandIndex, direction: historyDirection }
+                        : undefined;
+                const executedCommand: ExecutedCommand = { command, emitted: false, history };
+                executedCommands.push(executedCommand);
+                this.emitMapEditorUpdate(command);
+                executedCommand.emitted = true;
+                if (trackPending) {
+                    this.pendingCommands.push(command);
+                    this.pendingCommandHistoryGroups.push(history);
+                    logger("adding command to pendingList : ", command);
+                }
+                if (updateLastCommandId) {
+                    this.scene.getGameMap().getWamFile()?.updateLastCommandIdProperty(command.commandId);
+                }
+            }, Promise.resolve());
+        } catch (error) {
+            const compensationErrors: unknown[] = [];
+            await executedCommands
+                .slice()
+                .reverse()
+                .reduce(async (previousCommand, executedCommand) => {
+                    await previousCommand;
+                    try {
+                        const undoCommand = executedCommand.command.getUndoCommand();
+                        await undoCommand.execute();
+                        if (executedCommand.emitted) {
+                            this.emitMapEditorUpdate(undoCommand);
+                            if (trackPending) {
+                                this.pendingCommands.push(undoCommand);
+                                this.pendingCommandHistoryGroups.push(
+                                    executedCommand.history
+                                        ? {
+                                              ...executedCommand.history,
+                                              direction:
+                                                  executedCommand.history.direction === "apply" ? "undo" : "apply",
+                                          }
+                                        : undefined,
+                                );
+                                logger("adding compensation command to pendingList : ", undoCommand);
+                            }
+                            if (updateLastCommandId) {
+                                this.scene
+                                    .getGameMap()
+                                    .getWamFile()
+                                    ?.updateLastCommandIdProperty(undoCommand.commandId);
+                            }
+                        }
+                    } catch (compensationError) {
+                        compensationErrors.push(compensationError);
+                    }
+                }, Promise.resolve());
+            if (compensationErrors.length > 0) {
+                throw new AggregateError(
+                    [error, ...compensationErrors],
+                    "Command execution failed and one or more compensating commands also failed",
+                    { cause: error },
+                );
+            }
+            throw error;
+        }
+    }
+
+    private recordHistoryGroup(group: CommandHistoryGroup): void {
+        // A new edit after undo discards the redo branch.
+        if (this.currentCommandIndex !== this.localCommandsHistory.length - 1) {
+            this.localCommandsHistory.splice(this.currentCommandIndex + 1);
+        }
+        this.localCommandsHistory.push(group);
+        this.currentCommandIndex += 1;
+    }
+
+    private removeHistoryGroup(group: CommandHistoryGroup): void {
+        const index = this.localCommandsHistory.indexOf(group);
+        if (index !== -1) {
+            this.localCommandsHistory.splice(index, 1);
+            if (index <= this.currentCommandIndex) {
+                this.currentCommandIndex -= 1;
+            }
+            if (this.currentCommandIndex >= this.localCommandsHistory.length) {
+                this.currentCommandIndex = this.localCommandsHistory.length - 1;
+            }
+        }
+        this.pendingCommandHistoryGroups = this.pendingCommandHistoryGroups.map((pendingGroup) =>
+            pendingGroup?.group === group ? undefined : pendingGroup,
+        );
+    }
+
+    private createHistoryGroup(commands: readonly FrontCommand[]): CommandHistoryGroup {
+        return {
+            commands: [...commands],
+            acknowledgedCommandIndexes: new Set(),
+            everAcknowledgedCommandIndexes: new Set(),
+        };
+    }
+
+    private discardPendingHistoryGroup(group: CommandHistoryGroup): void {
+        this.pendingCommandHistoryGroups = this.pendingCommandHistoryGroups.map((pendingGroup) =>
+            pendingGroup?.group === group ? undefined : pendingGroup,
+        );
+    }
+
+    private reconcileHistoryGroup(group: CommandHistoryGroup): void {
+        const groupIndex = this.localCommandsHistory.indexOf(group);
+        if (groupIndex === -1) return;
+
+        const replacementGroups: CommandHistoryGroup[] = [];
+        let segmentStart = 0;
+        let segmentState: "applied" | "undone" | undefined;
+        const appendSegment = (end: number): void => {
+            if (segmentState === undefined) return;
+            const commands = group.commands.slice(segmentStart, end);
+            if (commands.length === 0) return;
+            const replacement = this.createHistoryGroup(commands);
+            commands.forEach((_command, index) => {
+                replacement.everAcknowledgedCommandIndexes.add(index);
+                if (segmentState === "applied") {
+                    replacement.acknowledgedCommandIndexes.add(index);
+                }
+            });
+            replacementGroups.push(replacement);
+        };
+
+        group.commands.forEach((_command, index) => {
+            const wasAcknowledged = group.everAcknowledgedCommandIndexes.has(index);
+            const isApplied = group.acknowledgedCommandIndexes.has(index);
+            const state = !wasAcknowledged ? undefined : isApplied ? "applied" : "undone";
+            if (state !== segmentState) {
+                appendSegment(index);
+                segmentStart = index;
+                segmentState = state;
+            }
+        });
+        appendSegment(group.commands.length);
+
+        this.localCommandsHistory.splice(groupIndex, 1, ...replacementGroups);
+        this.currentCommandIndex = -1;
+        for (const [index, candidate] of this.localCommandsHistory.entries()) {
+            const isApplied = candidate.commands.every((_command, commandIndex) =>
+                candidate.acknowledgedCommandIndexes.has(commandIndex),
+            );
+            if (!isApplied) break;
+            this.currentCommandIndex = index;
+        }
+    }
+
     /**
      * Creates new Command object from given command config and executes it
      * @param command what to execute
@@ -136,100 +352,111 @@ export class MapEditorModeManager {
         command: (Command & FrontCommandInterface) | (Command & FrontCommandInterface & UpdateWAMSettingCommand),
     ): Promise<void> {
         await this.isReverting;
-        // Commands are throttled. Only one at a time.
-        return (this.currentRunningCommand = this.currentRunningCommand.then(async () => {
-            const delay = 0;
+        return this.enqueueCommand(async () => {
+            const shouldRecord = !(command instanceof UpdateWAMSettingCommand);
+            const group = shouldRecord ? this.createHistoryGroup([command]) : undefined;
             try {
-                await command.execute();
-                this.emitMapEditorUpdate(command, delay);
+                await this.applyCommands([command], shouldRecord, true, group);
 
-                if (!(command instanceof UpdateWAMSettingCommand)) {
-                    // if we are not at the end of commands history and perform an action, get rid of commands later in history than our current point in time
-                    if (this.currentCommandIndex !== this.localCommandsHistory.length - 1) {
-                        this.localCommandsHistory.splice(this.currentCommandIndex + 1);
-                    }
-                    this.pendingCommands.push(command);
-                    logger("adding command to pendingList : ", command);
-                    this.localCommandsHistory.push(command);
-                    this.currentCommandIndex += 1;
+                if (group) {
+                    this.recordHistoryGroup(group);
                 }
-
-                this.scene.getGameMap().getWamFile()?.updateLastCommandIdProperty(command.commandId);
-                return;
             } catch (error) {
-                console.error(error);
+                if (group) this.discardPendingHistoryGroup(group);
+                logger("Map editor command failed", { error });
                 Sentry.captureException(error);
-                return;
             }
-        }));
+        });
+    }
+
+    /**
+     * Executes related commands as one undoable history entry while keeping each command as an
+     * individual message on the native map editor protocol.
+     */
+    public async executeCommands(commands: readonly FrontCommand[]): Promise<void> {
+        if (commands.length === 0) return;
+
+        await this.isReverting;
+        return this.enqueueCommand(async () => {
+            const group = this.createHistoryGroup(commands);
+            try {
+                await this.applyCommands(commands, true, true, group);
+                this.recordHistoryGroup(group);
+            } catch (error) {
+                this.discardPendingHistoryGroup(group);
+                throw error;
+            }
+        });
     }
 
     public async executeLocalCommand(command: Command & FrontCommandInterface): Promise<void> {
+        if (this.isHandlingIncomingCommand) {
+            try {
+                await command.execute();
+                this.scene.getGameMap().getWamFile()?.updateLastCommandIdProperty(command.commandId);
+            } catch (error) {
+                logger("Map editor command failed", { error });
+                Sentry.captureException(error);
+            }
+            return;
+        }
         await this.isReverting;
-        // Commands are throttled. Only one at a time.
-        return (this.currentRunningCommand = this.currentRunningCommand.then(async () => {
+        return this.enqueueCommand(async () => {
             try {
                 await command.execute();
                 this.scene.getGameMap().getWamFile()?.updateLastCommandIdProperty(command.commandId);
                 return;
             } catch (error) {
-                console.error(error);
+                logger("Map editor command failed", { error });
                 Sentry.captureException(error);
                 return;
             }
-        }));
+        });
     }
 
     // A simple queue to be sure we run only one undo or redo at once.
     private runningUndoRedoCommand: Promise<void> = Promise.resolve();
 
     public async undoCommand(): Promise<void> {
-        if (this.localCommandsHistory.length === 0 || this.currentCommandIndex === -1) {
-            return;
-        }
-        try {
-            const command = this.localCommandsHistory[this.currentCommandIndex];
-            const undoCommand = command.getUndoCommand();
-            await undoCommand.execute();
-            this.pendingCommands.push(undoCommand);
-            logger("adding command to pendingList : ", undoCommand);
-
-            // this should not be called with every change. Use some sort of debounce
-            this.emitMapEditorUpdate(undoCommand);
-            this.currentCommandIndex -= 1;
-        } catch (e) {
-            this.localCommandsHistory.splice(this.currentCommandIndex, 1);
-            this.currentCommandIndex -= 1;
-            console.error(e);
-            Sentry.captureException(e);
-        }
+        await this.isReverting;
+        return this.enqueueCommand(async () => {
+            if (this.localCommandsHistory.length === 0 || this.currentCommandIndex === -1) return;
+            const group = this.localCommandsHistory[this.currentCommandIndex];
+            try {
+                const undoCommands = group.commands
+                    .slice()
+                    .reverse()
+                    .map((command) => command.getUndoCommand());
+                const commandIndexes = group.commands.map((_command, index) => index).reverse();
+                await this.applyCommands(undoCommands, true, false, group, "undo", commandIndexes);
+                this.currentCommandIndex -= 1;
+            } catch (error) {
+                if (error instanceof AggregateError) this.removeHistoryGroup(group);
+                logger("Map editor command failed", { error });
+                Sentry.captureException(error);
+            }
+        });
     }
 
     public async redoCommand(): Promise<void> {
-        if (
-            this.localCommandsHistory.length === 0 ||
-            this.currentCommandIndex === this.localCommandsHistory.length - 1
-        ) {
-            return;
-        }
-        try {
-            const command = this.localCommandsHistory[this.currentCommandIndex + 1];
-            await command.execute();
-            this.pendingCommands.push(command);
-            logger("adding command to pendingList : ", command);
-
-            // do any necessary changes for active tool interface
-            //this.handleCommandExecutionByTools(commandConfig, true);
-
-            // this should not be called with every change. Use some sort of debounce
-            this.emitMapEditorUpdate(command);
-            this.currentCommandIndex += 1;
-        } catch (e) {
-            this.localCommandsHistory.splice(this.currentCommandIndex, 1);
-            this.currentCommandIndex -= 1;
-            console.error(e);
-            Sentry.captureException(e);
-        }
+        await this.isReverting;
+        return this.enqueueCommand(async () => {
+            if (
+                this.localCommandsHistory.length === 0 ||
+                this.currentCommandIndex === this.localCommandsHistory.length - 1
+            ) {
+                return;
+            }
+            const group = this.localCommandsHistory[this.currentCommandIndex + 1];
+            try {
+                await this.applyCommands(group.commands, true, false, group);
+                this.currentCommandIndex += 1;
+            } catch (error) {
+                if (error instanceof AggregateError) this.removeHistoryGroup(group);
+                logger("Map editor command failed", { error });
+                Sentry.captureException(error);
+            }
+        });
     }
 
     /**
@@ -264,12 +491,24 @@ export class MapEditorModeManager {
     }
 
     public handleKeyDownEvent(event: KeyboardEvent): boolean {
-        this.currentlyActiveTool?.handleKeyDownEvent(event);
+        if (isTextEditingTarget(event.target)) return false;
         const mapEditorModeStoreValue = get(mapEditorModeStore);
         if (!mapEditorModeStoreValue) return false;
 
+        this.currentlyActiveTool?.handleKeyDownEvent(event);
         const mapEditorModeActivated = get(mapEditorActivated);
-        switch (event.key.toLowerCase()) {
+        const key = event.key.toLowerCase();
+        const selectionToolHandledKey =
+            (this.activeTool === EditorToolName.SelectionEditor &&
+                (event.ctrlKey || event.metaKey) &&
+                (key === "c" || key === "v")) ||
+            (this.activeTool === EditorToolName.SelectionEditor &&
+                (key === "escape" || key === "delete" || key === "backspace"));
+        if (selectionToolHandledKey) {
+            event.preventDefault();
+            return true;
+        }
+        switch (key) {
             case "dead":
             case "`": {
                 this.equipTool(EditorToolName.CloseMapEditor);
@@ -307,22 +546,28 @@ export class MapEditorModeManager {
                 this.equipTool(EditorToolName.CloseMapEditor);
                 break;
             }
+            case "7": {
+                if (!mapEditorModeActivated) break;
+                this.equipTool(EditorToolName.SelectionEditor);
+                break;
+            }
             case "z": {
                 if (!mapEditorModeActivated) break;
                 // Todo replace with key combo https://photonstorm.github.io/phaser3-docs/Phaser.Input.Keyboard.KeyCombo.html
                 if (event.ctrlKey || event.metaKey) {
+                    event.preventDefault();
                     if (event.shiftKey) {
                         this.runningUndoRedoCommand = this.runningUndoRedoCommand
                             .then(() => {
                                 return this.redoCommand();
                             })
-                            .catch((e) => console.error(e));
+                            .catch((error: unknown) => logger("Map editor history operation failed", { error }));
                     } else {
                         this.runningUndoRedoCommand = this.runningUndoRedoCommand
                             .then(() => {
                                 return this.undoCommand();
                             })
-                            .catch((e) => console.error(e));
+                            .catch((error: unknown) => logger("Map editor history operation failed", { error }));
                     }
                 }
                 break;
@@ -340,77 +585,110 @@ export class MapEditorModeManager {
         // The editMapCommandMessageStream stream is completed in the RoomConnection. No need to unsubscribe.
         //eslint-disable-next-line rxjs/no-ignored-subscription, svelte/no-ignored-unsubscribe
         connection.editMapCommandMessageStream.subscribe((editMapCommandMessage) => {
-            limit(async () => {
-                if (editMapCommandMessage.editMapMessage?.message?.$case === "errorCommandMessage") {
-                    logger(
-                        "ErrorCommandMessage received",
-                        editMapCommandMessage.editMapMessage?.message.errorCommandMessage,
-                    );
-                    const command = this.pendingCommands.find(
-                        (command) => command.commandId === editMapCommandMessage.id,
-                    );
-                    if (command) {
-                        logger("removing command of pendingList : ", editMapCommandMessage.id);
-                        this.pendingCommands.splice(this.pendingCommands.indexOf(command), 1);
-                    }
-                    return;
-                }
-
-                logger("Received command from server", editMapCommandMessage.id);
-
-                // Local command execution (undo/redo)
-                if (this.pendingCommands.length > 0) {
-                    if (this.pendingCommands[0].commandId === editMapCommandMessage.id) {
-                        logger("removing command of pendingList : ", editMapCommandMessage.id);
-                        const command = this.pendingCommands.shift();
-
-                        const message = editMapCommandMessage.editMapMessage?.message;
-
-                        if (
-                            command instanceof UpdateAreaFrontCommand &&
-                            message &&
-                            message.$case === "modifyAreaMessage" &&
-                            message.modifyAreaMessage.modifyServerData === true
-                        ) {
-                            command.setNewConfig(message.modifyAreaMessage);
-                            await command.execute();
-                        }
-
-                        return;
-                    }
-                    await this.revertPendingCommands();
-                }
-
-                // Remote command execution
-                for (const tool of Object.values(this.editorTools)) {
-                    //eslint-disable-next-line no-await-in-loop
-                    await tool.handleIncomingCommandMessage(editMapCommandMessage);
-                }
-            }).catch((e) => console.error(e));
+            limit(() => this.enqueueCommand(() => this.handleIncomingCommandMessage(editMapCommandMessage))).catch(
+                (error: unknown) => logger("Incoming map editor command failed", { error }),
+            );
         });
+    }
+
+    private async handleIncomingCommandMessage(editMapCommandMessage: EditMapCommandMessage): Promise<void> {
+        if (editMapCommandMessage.editMapMessage?.message?.$case === "errorCommandMessage") {
+            logger("ErrorCommandMessage received", editMapCommandMessage.editMapMessage?.message.errorCommandMessage);
+            const hasPendingCommand = this.pendingCommands.some(
+                (command) => command.commandId === editMapCommandMessage.id,
+            );
+            if (hasPendingCommand) {
+                await this.revertPendingCommands();
+            }
+            return;
+        }
+
+        logger("Received command from server", editMapCommandMessage.id);
+
+        // Local command execution (undo/redo)
+        if (this.pendingCommands.length > 0) {
+            if (this.pendingCommands[0].commandId === editMapCommandMessage.id) {
+                logger("removing command of pendingList : ", editMapCommandMessage.id);
+                const command = this.pendingCommands.shift();
+                const historyGroup = this.pendingCommandHistoryGroups.shift();
+                if (historyGroup) {
+                    historyGroup.group.everAcknowledgedCommandIndexes.add(historyGroup.commandIndex);
+                    if (historyGroup.direction === "apply") {
+                        historyGroup.group.acknowledgedCommandIndexes.add(historyGroup.commandIndex);
+                    } else {
+                        historyGroup.group.acknowledgedCommandIndexes.delete(historyGroup.commandIndex);
+                    }
+                }
+
+                const message = editMapCommandMessage.editMapMessage?.message;
+
+                if (
+                    command instanceof UpdateAreaFrontCommand &&
+                    message &&
+                    message.$case === "modifyAreaMessage" &&
+                    message.modifyAreaMessage.modifyServerData === true
+                ) {
+                    command.setNewConfig(message.modifyAreaMessage);
+                    await command.execute();
+                }
+
+                return;
+            }
+            await this.revertPendingCommands();
+        }
+
+        // Remote command execution
+        this.isHandlingIncomingCommand = true;
+        try {
+            await Object.values(this.editorTools).reduce(async (previousTool, tool) => {
+                await previousTool;
+                await tool.handleIncomingCommandMessage(editMapCommandMessage);
+            }, Promise.resolve());
+        } finally {
+            this.isHandlingIncomingCommand = false;
+        }
     }
 
     private async revertPendingCommands(): Promise<void> {
         logger("Reverting pending commands");
-        // We are blocking the normal execution of commands until we revert all pending commands
-        this.isReverting = (async () => {
-            while (this.pendingCommands.length > 0) {
-                const command = this.pendingCommands.pop();
-                if (command) {
-                    //eslint-disable-next-line no-await-in-loop
-                    await command.getUndoCommand().execute();
-                    // also remove from local history of commands as this is invalid
-                    const index = this.localCommandsHistory.findIndex(
-                        (localCommand) => localCommand.commandId === command.commandId,
-                    );
-                    if (index !== -1) {
-                        this.localCommandsHistory.splice(index, 1);
-                        this.currentCommandIndex -= 1;
-                    }
-                }
+        const pendingSnapshot = [...this.pendingCommands];
+        const pendingHistorySnapshot = [...this.pendingCommandHistoryGroups];
+        const affectedGroups = new Set(
+            pendingHistorySnapshot.flatMap((pendingGroup) => (pendingGroup ? [pendingGroup.group] : [])),
+        );
+
+        const reverting = (async () => {
+            let revertedCount = 0;
+            try {
+                await pendingSnapshot
+                    .map((command, index) => ({ command, index }))
+                    .reverse()
+                    .reduce(async (previousCommand, { command }) => {
+                        await previousCommand;
+                        await command.getUndoCommand().execute();
+                        revertedCount += 1;
+                    }, Promise.resolve());
+            } catch (error) {
+                this.pendingCommands = pendingSnapshot.slice(0, pendingSnapshot.length - revertedCount);
+                this.pendingCommandHistoryGroups = pendingHistorySnapshot.slice(
+                    0,
+                    pendingHistorySnapshot.length - revertedCount,
+                );
+                for (const group of affectedGroups) this.removeHistoryGroup(group);
+                throw error;
             }
+            this.pendingCommands = [];
+            this.pendingCommandHistoryGroups = [];
+            for (const group of affectedGroups) this.reconcileHistoryGroup(group);
         })();
-        return this.isReverting;
+        this.isReverting = reverting;
+        try {
+            await reverting;
+        } finally {
+            if (this.isReverting === reverting) {
+                this.isReverting = Promise.resolve();
+            }
+        }
     }
 
     public equipTool(tool?: EditorToolName): void {
@@ -493,6 +771,10 @@ export class MapEditorModeManager {
 
     public get currentlyActiveTool(): MapEditorTool | undefined {
         return this.activeTool ? this.editorTools[this.activeTool] : undefined;
+    }
+
+    public getSelectionEditorTool(): SelectionEditorTool {
+        return this.selectionEditorTool;
     }
 
     public getScene(): GameScene {

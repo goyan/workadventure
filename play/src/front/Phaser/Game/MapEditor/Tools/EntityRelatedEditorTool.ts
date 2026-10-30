@@ -194,25 +194,6 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         this.scene.markDirty();
     }
 
-    protected isPointerInsideCanvas(pointer: Phaser.Input.Pointer): boolean {
-        if (pointer.event instanceof MouseEvent) {
-            const bounds = this.scene.game.canvas.getBoundingClientRect();
-            return (
-                pointer.event.clientX >= bounds.left &&
-                pointer.event.clientX < bounds.right &&
-                pointer.event.clientY >= bounds.top &&
-                pointer.event.clientY < bounds.bottom
-            );
-        }
-
-        return (
-            pointer.x >= 0 &&
-            pointer.y >= 0 &&
-            pointer.x < this.scene.scale.width &&
-            pointer.y < this.scene.scale.height
-        );
-    }
-
     protected getEntityPrefabAlignWithGridOffset(): { x: number; y: number } {
         if (!this.entityPrefab || !this.entityPrefabPreview) {
             return { x: 0, y: 0 };

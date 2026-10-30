@@ -25,6 +25,7 @@ import { ModifyCustomEntityFrontCommand } from "../Commands/Entity/ModifyCustomE
 import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCommand";
 import { UploadEntityFrontCommand } from "../Commands/Entity/UploadEntityFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
+import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { EditorToolName } from "../MapEditorModeManager";
 import { AreaPreview } from "../../../Components/MapEditor/AreaPreview";
 import { mapEditorActivated } from "../../../../Stores/MenuStore";
@@ -437,7 +438,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         if (this.isFloorPrefab(this.entityPrefab)) {
             if (
                 (pointer.downElement !== this.scene.game.canvas && pointer.event.target !== this.scene.game.canvas) ||
-                !this.isPointerInsideCanvas(pointer)
+                !isPointerInsideCanvas(this.scene, pointer)
             ) {
                 return;
             }
@@ -633,7 +634,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         }
         if (
             !pointer.leftButtonDown() ||
-            !this.isPointerInsideCanvas(pointer) ||
+            !isPointerInsideCanvas(this.scene, pointer) ||
             this.entityPrefab !== stroke.prefab ||
             !this.isFloorPrefab(stroke.prefab)
         ) {

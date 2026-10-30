@@ -15,6 +15,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "내 방 설정",
         trashEditor: "휴지통",
         exploreTheRoom: "방 탐색",
+        selectionEditor: "Selection tool",
         closeMapEditor: "지도 편집기 닫기",
         mapManagerActivated: "지도 편집 모드로 전환되었습니다",
         mapExplorerActivated: "지도 개요 보기",
@@ -24,6 +25,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         trashEditorActivated: "휴지통 편집 모드로 전환되었습니다",
         configureMyRoomActivated: "내 방 설정 모드로 전환되었습니다",
     },
+    selection: {
+        title: "Select and edit in bulk",
+        drawingInstruction: "Drag on the map to select objects and areas.",
+        objectCount: "Objects: {count}",
+        areaCount: "Areas: {count}",
+        copy: "Copy",
+        paste: "Paste",
+        move: "Move",
+        delete: "Delete",
+        fill: "Fill",
+        tileToFillWith: "Tile to fill with",
+        placeInstruction: "Click on the map to place the group. Press Escape to cancel.",
+        cancel: "Cancel",
+        blocked:
+            "This action cannot be completed. Check the selected area, map boundaries, and your editing permissions.",
+        failed: "The selection could not be updated. Please try again.",
+    },
+
     properties: {
         silent: {
             label: "조용한 영역",

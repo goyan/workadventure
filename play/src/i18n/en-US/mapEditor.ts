@@ -14,6 +14,7 @@ const mapEditor: BaseTranslation = {
         configureMyRoom: "Configure my room",
         trashEditor: "Trash",
         exploreTheRoom: "Explore the room",
+        selectionEditor: "Selection tool",
         closeMapEditor: "Close map editor",
         mapManagerActivated: "Map manager activated",
         mapExplorerActivated: "Map overview",
@@ -23,6 +24,24 @@ const mapEditor: BaseTranslation = {
         trashEditorActivated: "Trash editor activated",
         configureMyRoomActivated: "Configure my room activated",
     },
+    selection: {
+        title: "Select and edit in bulk",
+        drawingInstruction: "Drag on the map to select objects and areas.",
+        objectCount: "Objects: {count}",
+        areaCount: "Areas: {count}",
+        copy: "Copy",
+        paste: "Paste",
+        move: "Move",
+        delete: "Delete",
+        fill: "Fill",
+        tileToFillWith: "Tile to fill with",
+        placeInstruction: "Click on the map to place the group. Press Escape to cancel.",
+        cancel: "Cancel",
+        blocked:
+            "This action cannot be completed. Check the selected area, map boundaries, and your editing permissions.",
+        failed: "The selection could not be updated. Please try again.",
+    },
+
     properties: {
         silent: {
             label: "Silent",
