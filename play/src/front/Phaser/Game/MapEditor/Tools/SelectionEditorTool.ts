@@ -17,6 +17,7 @@ import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { EntitiesManager } from "../../GameMap/EntitiesManager";
 import type { GameScene } from "../../GameScene";
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
+import { gameManager } from "../../GameManager";
 import { isTextEditingTarget } from "../EditorCameraKeys";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { CreateAreaFrontCommand } from "../Commands/Area/CreateAreaFrontCommand";
@@ -27,6 +28,14 @@ import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCo
 import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCommand";
 import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
+import { createMapPattern, getMapPattern, MapPatternApiError } from "../MapPatternApi";
+import {
+    patternErrorCodeOf,
+    refreshMapPatterns,
+    setMapPatternError,
+    setPatternIgnoredCount,
+} from "../MapPatternActions";
+import { patternPayloadToPlacement, selectionToPatternPayload } from "../SelectionPattern";
 import { MapEditorTool } from "./MapEditorTool";
 import type { AreaEditorTool } from "./AreaEditorTool";
 
@@ -215,6 +224,77 @@ export class SelectionEditorTool extends MapEditorTool {
         this.cancelIncompleteGesture();
         this.publishState({ mode: "paste" });
         this.drawVisuals();
+    }
+
+    /** Saves the current selection as a pattern shared with the other editors of the world (Admin API). */
+    public async saveSelectionAsPattern(name: string): Promise<void> {
+        if (!this.beginOperation()) {
+            return;
+        }
+        try {
+            setMapPatternError(undefined);
+            const items = this.readSelectedItems();
+            if (!items || items.length === 0) {
+                this.setError("blocked");
+                return;
+            }
+            const roomUrl = this.getRoomUrl();
+            await createMapPattern(roomUrl, name, selectionToPatternPayload(items));
+            await refreshMapPatterns(roomUrl);
+        } catch (error: unknown) {
+            this.reportPatternFailure("save pattern", error);
+        } finally {
+            this.endOperation();
+        }
+    }
+
+    /**
+     * Loads a shared pattern into the internal clipboard (replacing its content) and enters the Paste mode,
+     * like pasteSelection. Items whose prefab is not loaded in the map are ignored and counted.
+     */
+    public async pasteFromPattern(id: string): Promise<void> {
+        if (!this.beginOperation()) {
+            return;
+        }
+        const lifecycleVersion = this.lifecycleVersion;
+        try {
+            setMapPatternError(undefined);
+            setPatternIgnoredCount(0);
+            const pattern = await getMapPattern(this.getRoomUrl(), id);
+            const collectionsManager = this.scene.getEntitiesCollectionsManager();
+            const prefabRefs = pattern.payload.items.flatMap((item) =>
+                item.kind === "entity" ? [item.data.prefabRef] : [],
+            );
+            const knownPrefabs = new Set<string>();
+            await Promise.all(
+                prefabRefs.map(async ({ collectionName, id: prefabId }) => {
+                    if (await collectionsManager.getEntityPrefab(collectionName, prefabId)) {
+                        knownPrefabs.add(this.getPrefabKey(collectionName, prefabId));
+                    }
+                }),
+            );
+            if (!this.active || lifecycleVersion !== this.lifecycleVersion) {
+                return;
+            }
+            const placement = patternPayloadToPlacement(pattern.payload, {
+                isPrefabKnown: (collectionName, prefabId) =>
+                    knownPrefabs.has(this.getPrefabKey(collectionName, prefabId)),
+                canEditAreas: this.canEditAreas(),
+            });
+            setPatternIgnoredCount(placement.ignoredCount);
+            if (placement.items.length === 0) {
+                this.setError("blocked");
+                return;
+            }
+            this.clipboard = { items: placement.items, bounds: placement.bounds };
+            this.cancelIncompleteGesture();
+            this.publishState({ hasClipboard: true, mode: "paste" });
+            this.drawVisuals();
+        } catch (error: unknown) {
+            this.reportPatternFailure("paste pattern", error);
+        } finally {
+            this.endOperation();
+        }
     }
 
     public moveSelection(): void {
@@ -906,6 +986,14 @@ export class SelectionEditorTool extends MapEditorTool {
         return get(userIsAdminStore) || get(userIsEditorStore);
     }
 
+    private getRoomUrl(): string {
+        return gameManager.currentStartedRoom.href;
+    }
+
+    private getPrefabKey(collectionName: string, id: string): string {
+        return JSON.stringify([collectionName, id]);
+    }
+
     private getPrefabPositionKey(collectionName: string, id: string, x: number, y: number): string {
         return JSON.stringify([collectionName, id, x, y]);
     }
@@ -966,6 +1054,15 @@ export class SelectionEditorTool extends MapEditorTool {
 
     private setError(error: NonNullable<MapEditorSelectionState["error"]>): void {
         this.publishState({ error });
+    }
+
+    /** An API refusal is shown by the pattern panel; anything else is an unexpected failure. */
+    private reportPatternFailure(operation: string, error: unknown): void {
+        if (error instanceof MapPatternApiError) {
+            setMapPatternError(patternErrorCodeOf(error));
+            return;
+        }
+        this.reportFailure(operation, error);
     }
 
     private reportFailure(operation: string, error: unknown): void {

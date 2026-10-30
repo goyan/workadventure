@@ -32,6 +32,7 @@ import { CompanionService } from "./services/CompanionService";
 import { WokaService } from "./services/WokaService";
 import { UserController } from "./controllers/UserController";
 import { MapCreationController } from "./controllers/MapCreationController";
+import { MapPatternController } from "./controllers/MapPatternController";
 import { MatrixRoomAreaController } from "./controllers/MatrixRoomAreaController";
 import { LocalScriptController } from "./controllers/LocalScriptController";
 import { LivekitWebhookController } from "./controllers/LivekitWebhookController";
@@ -118,6 +119,7 @@ class App {
         }
         new UserController(this.app);
         new MapCreationController(this.app);
+        new MapPatternController(this.app);
         new MatrixRoomAreaController(this.app);
 
         const staticOptions = {
