@@ -321,14 +321,17 @@ cases entières : il n'est pas concerné.
 
 ## Redimensionner une image posée
 
-Dans l'éditeur d'objets, cliquer sur une image importée déjà posée, puis régler « Taille de l'image » :
-largeur et hauteur en pixels, proportions conservées par défaut, bouton « Appliquer la taille ».
-Les dimensions acceptées sont des entiers de 1 à 4096 pixels. Le coin supérieur gauche reste en place ;
-l'image doit rester dans la carte et respecter les droits d'édition et les nouvelles collisions.
+Dans l'éditeur d'objets, cliquer sur une image importée déjà posée : quatre poignées blanches apparaissent
+aux coins. Glisser une poignée montre un aperçu, puis relâcher enregistre la taille ; le coin opposé reste fixe.
+Les proportions sont conservées par défaut ; décocher « Conserver les proportions » dans le panneau pour
+étirer librement. Échap, perte de focus ou relâchement hors du canvas annulent le geste.
+Le panneau « Taille de l'image » conserve aussi largeur et hauteur en pixels et le bouton « Appliquer la taille »
+(coin supérieur gauche fixe). Les dimensions acceptées sont des entiers de 1 à 4096 pixels.
+L'image doit rester dans la carte et respecter les droits d'édition et les nouvelles collisions.
 
 Le moteur officiel ne sauvegarde pas une échelle par instance. Le front importe donc une nouvelle version PNG
 de l'image, avec sa grille de collision et sa profondeur adaptées, puis remplace cet exemplaire par les commandes
-natives. Sa position, son identifiant, son nom et ses propriétés sont conservés ; les autres exemplaires restent
+natives. Son identifiant, son nom et ses propriétés sont conservés ; les autres exemplaires restent
 à leur taille précédente. La version redimensionnée est aussi disponible dans le catalogue des images importées.
 Ctrl/Cmd+Z annule le remplacement en une étape ; le rétablissement le réapplique. L'image importée reste dans
 le catalogue pour que le rétablissement et les copies restent possibles.

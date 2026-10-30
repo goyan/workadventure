@@ -249,4 +249,46 @@ describe("Persisted placed image resize", () => {
         await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
         expect(f.connection.emitMapEditorCreateEntity.mock.calls[0][2].name).toBe("Updated entrance");
     });
+
+    it("persists a corner resize with its opposite corner fixed", async () => {
+        const f = fixture();
+        f.prefab.collisionGrid = undefined;
+        f.entity.getCollisionGrid.mockReturnValue(undefined);
+        await resizePlacedImage(f.scene, f.entity, { width: 96, height: 48 }, new AbortController().signal, {
+            x: 0,
+            y: 48,
+        });
+        expect(f.connection.emitMapEditorCreateEntity.mock.calls[0][2]).toMatchObject({ x: 0, y: 48 });
+        expect(f.permissions.canEdit.mock.calls[0]).toEqual([{ x: 48, y: 72 }, 96, 48, true]);
+    });
+
+    it("checks obstacles in world cells when the top-left corner changes", async () => {
+        const f = fixture();
+        f.wrapper.isSpaceAvailable.mockReturnValue(false);
+        await expect(
+            resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal, {
+                x: 0,
+                y: 32,
+            }),
+        ).rejects.toThrow("Image cannot fit here");
+        expect(f.connection.emitMapEditorUploadEntity.mock.calls).toHaveLength(0);
+    });
+
+    it("does not overwrite a collaborator's move during an anchored resize", async () => {
+        const f = fixture();
+        f.connection.emitMapEditorUploadEntity.mockImplementation((id, upload) => {
+            f.entity.x = 96;
+            f.commands.next({
+                id,
+                editMapMessage: { message: { $case: "uploadEntityMessage", uploadEntityMessage: upload } },
+            });
+        });
+        await expect(
+            resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal, {
+                x: 0,
+                y: 32,
+            }),
+        ).rejects.toThrow("Image changed during resize");
+        expect(f.connection.emitMapEditorDeleteEntity.mock.calls).toHaveLength(0);
+    });
 });
