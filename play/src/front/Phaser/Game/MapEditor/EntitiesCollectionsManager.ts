@@ -203,7 +203,9 @@ export class EntitiesCollectionsManager {
     }
 
     private async fetchRawCollection(url: string): Promise<EntityCollectionRaw> {
-        const response = await fetch(url);
+        // Catalogs change when images are uploaded. Revalidate even after a page reload,
+        // otherwise a cached catalog can hide entities referencing a new prefab.
+        const response = await fetch(url, { cache: "no-cache" });
         if (!response.ok) {
             throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
         }
