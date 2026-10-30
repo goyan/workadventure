@@ -221,3 +221,12 @@ Les commandes WAM natives assurent la sauvegarde, la diffusion et l'annulation p
 L'annulation d'une suppression conserve désormais les dimensions avant de détruire l'instance,
 ce qui permet de restaurer son identifiant, sa position et ses propriétés. Les calques de fond TMJ
 restent gérés dans Tiled.
+
+## Caméra en mode éditeur
+
+À l'ouverture de l'éditeur, quel que soit l'outil, la caméra se détache de l'avatar sans saut et les contrôles de
+l'avatar sont désactivés (raison `mapEditor`). Les flèches et ZQSD / WASD font défiler la carte (même vitesse que
+l'Explorateur, `EditorCameraKeys.ts`) ; elles sont ignorées dans un champ de saisie et avec Ctrl / Cmd / Alt (pour
+garder Ctrl+Z). Le trackpad à deux doigts déplace aussi la vue ; le glisser clic gauche reste réservé aux outils.
+Changer d'outil ne recentre pas la vue. À la fermeture, les contrôles sont rétablis et la caméra revient sur l'avatar
+(~300 ms), le zoom de l'Explorateur étant restauré comme avant.
