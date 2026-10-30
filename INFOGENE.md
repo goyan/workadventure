@@ -248,6 +248,9 @@ restent gérés dans Tiled.
 l'avatar sont désactivés (raison `mapEditor`). Les flèches et ZQSD / WASD font défiler la carte (même vitesse que
 l'Explorateur, `EditorCameraKeys.ts`) ; elles sont ignorées dans un champ de saisie et avec Ctrl / Cmd / Alt (pour
 garder Ctrl+Z). Le trackpad à deux doigts déplace aussi la vue ; le glisser clic gauche reste réservé aux outils.
+Le verrou `mapEditor` de l'avatar ne bloque pas les événements de scroll ou de pincement : ils atteignent le
+gestionnaire de caméra natif. Les autres raisons de blocage (champ, fenêtre, script, écran d'erreur) restent
+respectées ; l'Explorateur conserve son gestionnaire de molette pour éviter un double zoom.
 Changer d'outil ne recentre pas la vue. À la fermeture, les contrôles sont rétablis et la caméra revient sur l'avatar
 (~300 ms), le zoom de l'Explorateur étant restauré comme avant.
 
