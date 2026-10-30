@@ -190,6 +190,41 @@ describe("MapPatternService", () => {
         expect(http.post).not.toHaveBeenCalled();
     });
 
+    it("should refuse a pattern that contains an area, before calling the Admin API", async () => {
+        const { service, http } = createService({ post: { status: 201, data: summary } });
+        const withArea = {
+            ...payload,
+            items: [
+                ...payload.items,
+                {
+                    kind: "area",
+                    data: { id: "", x: 0, y: 0, width: 32, height: 32, visible: true, name: "Zone", properties: [] },
+                },
+            ],
+        };
+
+        expect(await errorCodeOf(service.create("user-1", "Salle", withArea, false))).toBe("invalid");
+        expect(http.post).not.toHaveBeenCalled();
+    });
+
+    it("should still read a stored pattern that contains an area", async () => {
+        const legacy = {
+            ...payload,
+            items: [
+                ...payload.items,
+                {
+                    kind: "area",
+                    data: { id: "", x: 0, y: 0, width: 32, height: 32, visible: true, name: "Zone", properties: [] },
+                },
+            ],
+        };
+        const { service } = createService({ get: { status: 200, data: { ...summary, payload: legacy } } });
+
+        const detail = await service.get(patternId, "user-1", false);
+
+        expect(detail.payload.items.map((item) => item.kind)).toEqual(["entity", "area"]);
+    });
+
     it("should relay 400 as invalid and 409 as quota", async () => {
         expect(
             await errorCodeOf(

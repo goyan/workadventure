@@ -145,7 +145,8 @@ export class MapPatternService {
     ): Promise<MapPatternSummaryForClient> {
         const name = PatternName.safeParse(rawName);
         const payload = MapPatternPayload.safeParse(rawPayload);
-        if (!name.success || !payload.success) {
+        // Patterns only carry objects: the browser never sends areas, and the server refuses them too.
+        if (!name.success || !payload.success || payload.data.items.some((item) => item.kind === "area")) {
             throw new MapPatternError("invalid", "The pattern name or payload is invalid");
         }
         const response = await this.callAdminApi(() =>

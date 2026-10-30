@@ -24,26 +24,31 @@ const meetingArea: PatternSourceItem = {
     data: { id: "area-1", x: 288, y: 192, width: 160, height: 128, name: "Meeting", visible: true, properties: [] },
 };
 
-const allKnown = { isPrefabKnown: () => true, canEditAreas: true };
+const allKnown = { isPrefabKnown: () => true };
 
 describe("selectionToPatternPayload", () => {
-    it("should store positions relative to the top-left corner of the selection", () => {
-        const payload = selectionToPatternPayload([chair, desk, meetingArea]);
+    it("should store positions relative to the top-left corner of the selected objects", () => {
+        const payload = selectionToPatternPayload([chair, desk]);
 
-        // union: x 288 -> 448, y 192 -> 320
-        expect(payload.bounds).toEqual({ width: 160, height: 128 });
+        // union: x 320 -> 448, y 224 -> 288
+        expect(payload.bounds).toEqual({ width: 128, height: 64 });
         expect(payload.items.map((item) => [item.kind, item.data.x, item.data.y])).toEqual([
+            ["entity", 0, 0],
             ["entity", 32, 32],
-            ["entity", 64, 64],
-            ["area", 0, 0],
         ]);
     });
 
-    it("should not store the original ids", () => {
-        const payload = selectionToPatternPayload([meetingArea]);
+    it("should drop the areas of the selection, and ignore them to compute the bounds", () => {
+        const payload = selectionToPatternPayload([chair, desk, meetingArea]);
 
-        const area = payload.items[0];
-        expect(area.kind === "area" && area.data.id).toBe("");
+        expect(payload.items.every((item) => item.kind === "entity")).toBe(true);
+        expect(payload.items).toHaveLength(2);
+        expect(payload.bounds).toEqual({ width: 128, height: 64 });
+    });
+
+    it("should refuse a selection without any object", () => {
+        expect(() => selectionToPatternPayload([meetingArea])).toThrow();
+        expect(() => selectionToPatternPayload([])).toThrow();
     });
 
     it("should keep dimensions and collision grid of entities", () => {
@@ -54,29 +59,29 @@ describe("selectionToPatternPayload", () => {
 
     it("should produce a payload accepted by the common schema, and not mutate the selection", () => {
         const before = structuredClone(chair);
-        const payload = selectionToPatternPayload([chair, desk, meetingArea]);
+        const payload = selectionToPatternPayload([chair, desk]);
 
         expect(MapPatternPayload.safeParse(payload).success).toBe(true);
         expect(chair).toEqual(before);
     });
-
-    it("should refuse an empty selection", () => {
-        expect(() => selectionToPatternPayload([])).toThrow();
-    });
 });
 
 describe("patternPayloadToPlacement", () => {
-    const payload = selectionToPatternPayload([chair, desk, meetingArea]);
+    const payload = selectionToPatternPayload([chair, desk]);
+    // A pattern stored before areas were dropped: the schema still reads it.
+    const legacyPayload: MapPatternPayload = {
+        ...payload,
+        items: [...payload.items, { kind: "area", data: { ...meetingArea.data, id: "", x: 0, y: 0 } }],
+    };
 
     it("should rebuild items at the origin with their relative bounds", () => {
         const placement = patternPayloadToPlacement(payload, allKnown);
 
         expect(placement.ignoredCount).toBe(0);
-        expect(placement.bounds).toEqual({ x: 0, y: 0, width: 160, height: 128 });
+        expect(placement.bounds).toEqual({ x: 0, y: 0, width: 128, height: 64 });
         expect(placement.items.map((item) => item.bounds)).toEqual([
-            { x: 32, y: 32, width: 32, height: 64 },
-            { x: 64, y: 64, width: 96, height: 32 },
-            { x: 0, y: 0, width: 160, height: 128 },
+            { x: 0, y: 0, width: 32, height: 64 },
+            { x: 32, y: 32, width: 96, height: 32 },
         ]);
         expect(placement.items.every((item) => item.id === "")).toBe(true);
     });
@@ -84,24 +89,24 @@ describe("patternPayloadToPlacement", () => {
     it("should ignore, and count, entities whose prefab is not loaded in the map", () => {
         const placement = patternPayloadToPlacement(payload, {
             isPrefabKnown: (collectionName, prefabId) => !(collectionName === "Furniture" && prefabId === "desk"),
-            canEditAreas: true,
         });
 
         expect(placement.ignoredCount).toBe(1);
-        expect(placement.items.map((item) => item.kind)).toEqual(["entity", "area"]);
+        expect(placement.items.map((item) => item.kind)).toEqual(["entity"]);
     });
 
-    it("should ignore, and count, areas when the user cannot edit areas", () => {
-        const placement = patternPayloadToPlacement(payload, { isPrefabKnown: () => true, canEditAreas: false });
+    it("should skip the areas of an old pattern without counting them as ignored", () => {
+        const placement = patternPayloadToPlacement(legacyPayload, allKnown);
 
-        expect(placement.ignoredCount).toBe(1);
         expect(placement.items.map((item) => item.kind)).toEqual(["entity", "entity"]);
+        expect(placement.ignoredCount).toBe(0);
+        expect(placement.bounds).toEqual({ x: 0, y: 0, width: 128, height: 64 });
     });
 
-    it("should return nothing to paste when every item is ignored", () => {
-        const placement = patternPayloadToPlacement(payload, { isPrefabKnown: () => false, canEditAreas: false });
+    it("should return nothing to paste when every object is ignored", () => {
+        const placement = patternPayloadToPlacement(legacyPayload, { isPrefabKnown: () => false });
 
         expect(placement.items).toEqual([]);
-        expect(placement.ignoredCount).toBe(3);
+        expect(placement.ignoredCount).toBe(2);
     });
 });

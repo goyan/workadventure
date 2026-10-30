@@ -103,7 +103,9 @@ objets personnalisés et exemplaires superposés ; les zones sont incluses pour 
 ayant le droit global. Le rectangle et les contours restent visibles après le tracé.
 
 Le panneau propose Copier, Coller, Déplacer, Supprimer et Remplir. Copier conserve un instantané
-dans le presse-papiers interne à la salle. Coller et Déplacer affichent un aperçu :
+dans le presse-papiers interne à la salle ; **il ne contient que des objets** : les zones sélectionnées ne sont pas copiées
+(une sélection de zones seules se comporte comme une sélection vide pour Copier), alors que Déplacer et Supprimer agissent
+toujours sur les zones sélectionnées. Coller et Déplacer affichent un aperçu :
 un clic confirme la destination, Échap l'annule. Déplacer se termine après un clic ; Coller est un **tampon** : le mode reste armé
 avec le même contenu après chaque pose (une nouvelle copie, de nouveaux identifiants et une entrée d'annulation par clic)
 et ne se termine que par Échap, le bouton Annuler, un changement d'outil ou la fermeture de l'éditeur. Une pose refusée garde le mode
@@ -121,16 +123,18 @@ Les calques TMJ statiques restent hors sélection ; le rectangle ne crée pas de
 
 #### Motifs partagés
 
-« Enregistrer comme motif » (actif si la sélection n'est pas vide) demande un nom (1 à 60 caractères) dans un
+« Enregistrer comme motif » (actif si la sélection contient au moins un objet) demande un nom (1 à 60 caractères) dans un
 champ du panneau, puis enregistre la sélection côté Admin API. Le bloc « Motifs », sous « Tuile à poser »,
-liste les motifs de tous les éditeurs du monde (nom, nombre d'objets et de zones) : **un clic sur un motif le
+liste les motifs de tous les éditeurs du monde (nom, nombre d'objets) : **un clic sur un motif le
 colle** (même mode Coller que le bouton, il remplace le contenu du presse-papiers interne) ; la poubelle à droite
 d'un motif le supprime. Le motif est partagé entre toutes les salles : il ne dépend pas de la carte d'origine.
 
 Le motif contient des positions relatives au coin haut-gauche de la sélection, sans les identifiants d'origine
 (de nouveaux sont créés au collage). Un objet dont le prefab n'est chargé dans aucune collection de la carte
-courante est ignoré, et un message indique combien d'éléments l'ont été ; de même pour les zones si
-l'utilisateur n'a pas le droit de modifier les zones.
+courante est ignoré, et un message indique combien d'objets l'ont été.
+**Les motifs ne contiennent que des objets** : le front n'envoie jamais de zone et le pusher refuse (400 `invalid`) un
+motif qui en contient. Le schéma commun continue de lire des éléments `area` : les anciens motifs enregistrés avec des
+zones se collent sans elles, et ces zones ignorées ne sont pas comptées comme des éléments ignorés (choix, pas erreur).
 
 Chemin d'appel : panneau `SelectionEditor.svelte` → `SelectionEditorTool` (`saveSelectionAsPattern`,
 `pasteFromPattern`) et store `MapEditorPatternStore` → pusher `/map-patterns` (`MapPatternController`,

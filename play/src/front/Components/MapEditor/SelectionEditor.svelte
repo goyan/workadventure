@@ -15,11 +15,14 @@
 
     const selectionTool = gameManager.getCurrentGameScene().getMapEditorModeManager().getSelectionEditorTool();
 
+    let hasEntitySelection = $derived($mapEditorSelectionStore.entityCount > 0);
     let hasSelection = $derived($mapEditorSelectionStore.entityCount + $mapEditorSelectionStore.areaCount > 0);
 
     let isNamingPattern = $state(false);
     let patternName = $state("");
-    let canSavePattern = $derived(patternName.trim().length > 0 && hasSelection && !$mapEditorSelectionStore.busy);
+    let canSavePattern = $derived(
+        patternName.trim().length > 0 && hasEntitySelection && !$mapEditorSelectionStore.busy,
+    );
 
     const patternErrorMessages = $derived({
         unavailable: $LL.mapEditor.selection.patternsUnavailable(),
@@ -169,7 +172,7 @@
             class="rounded bg-secondary px-3 py-2 text-white hover:bg-secondary-600 disabled:opacity-50"
             data-testid="mapEditorSelectionCopy"
             aria-label={$LL.mapEditor.selection.copy()}
-            disabled={!hasSelection || $mapEditorSelectionStore.busy}
+            disabled={!hasEntitySelection || $mapEditorSelectionStore.busy}
             onclick={copySelection}
             type="button"
         >
@@ -222,7 +225,7 @@
                 class="col-span-2 rounded bg-secondary px-3 py-2 text-white hover:bg-secondary-600 disabled:opacity-50"
                 data-testid="mapEditorSelectionSavePattern"
                 aria-label={$LL.mapEditor.selection.saveAsPattern()}
-                disabled={!hasSelection || $mapEditorSelectionStore.busy}
+                disabled={!hasEntitySelection || $mapEditorSelectionStore.busy}
                 onclick={startNamingPattern}
                 type="button"
             >
