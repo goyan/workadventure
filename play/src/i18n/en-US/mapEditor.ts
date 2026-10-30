@@ -414,6 +414,7 @@ const mapEditor: BaseTranslation = {
         },
         images: "Image{{s}}",
         noImage: "No image",
+        snapToGrid: "Snap to grid",
         specialTags: {
             customLabel: "Custom",
             mostUsedLabel: "Most used",

@@ -411,6 +411,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "圖像{{s}}",
         noImage: "無圖像",
+        snapToGrid: "對齊格線",
         specialTags: {
             customLabel: "自訂",
             mostUsedLabel: "最常用",

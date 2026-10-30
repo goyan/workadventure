@@ -15,6 +15,7 @@ import {
     mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
+    mapEditorSnapEnabledStore,
 } from "../../../../Stores/MapEditorStore";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import { CopyEntityEventData, EntitiesManagerEvent } from "../../GameMap/EntitiesManager";
@@ -28,6 +29,7 @@ import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { EditorToolName } from "../MapEditorModeManager";
 import { AreaPreview } from "../../../Components/MapEditor/AreaPreview";
+import { isPlacementFree, shouldSnapToGrid } from "../EntityPlacementSnapping";
 import { mapEditorActivated } from "../../../../Stores/MenuStore";
 import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 
@@ -368,7 +370,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             return;
         }
 
-        if (this.entityPrefab.collisionGrid || this.shiftKey?.isDown) {
+        if (this.isSnappingToGrid()) {
             const offset = this.getEntityPrefabAlignWithGridOffset();
             this.entityPrefabPreview.setPosition(
                 Math.floor(pointer.worldX / 32) * 32 + offset.x,
@@ -392,7 +394,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         if (!this.canEntityBePlaced()) {
             this.entityPrefabPreview.setTint(0xff0000);
         } else {
-            if (this.shiftKey?.isDown) {
+            if (this.isFreePlacement()) {
                 this.entityPrefabPreview.setTint(0xffa500);
             } else {
                 this.entityPrefabPreview.clearTint();
@@ -453,7 +455,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         let x = Math.floor(pointer.worldX);
         let y = Math.floor(pointer.worldY);
 
-        if (this.entityPrefab.collisionGrid || this.shiftKey?.isDown) {
+        if (this.isSnappingToGrid()) {
             const offsets = this.getEntityPrefabAlignWithGridOffset();
             x = Math.floor(pointer.worldX / 32) * 32 + offsets.x;
             y = Math.floor(pointer.worldY / 32) * 32 + offsets.y;
@@ -593,10 +595,19 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         width: number,
         height: number,
         prefab: EntityPrefab,
+        ignoreCollisionGrid: boolean = this.isFreePlacement(),
     ): boolean {
         return this.scene
             .getGameMapFrontWrapper()
-            .canEntityBePlacedOnMap(topLeftPos, width, height, prefab.collisionGrid, undefined, this.shiftKey?.isDown);
+            .canEntityBePlacedOnMap(topLeftPos, width, height, prefab.collisionGrid, undefined, ignoreCollisionGrid);
+    }
+
+    private isSnappingToGrid(): boolean {
+        return shouldSnapToGrid(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
+    }
+
+    private isFreePlacement(): boolean {
+        return isPlacementFree(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
     }
 
     private isFloorPrefab(prefab: EntityPrefab): boolean {
@@ -678,7 +689,8 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
 
         const width = this.entityPrefabPreview.displayWidth;
         const height = this.entityPrefabPreview.displayHeight;
-        if (!this.canEntityBePlacedAt(topLeftPos, width, height, prefab)) {
+        // The floor brush always works on tile indexes: only Shift ignores collisions, the snapping switch does not apply.
+        if (!this.canEntityBePlacedAt(topLeftPos, width, height, prefab, this.shiftKey?.isDown ?? false)) {
             return;
         }
 

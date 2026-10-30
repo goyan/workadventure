@@ -60,6 +60,9 @@ export const mapEditorSelectedEntityPrefabStore = writable<EntityPrefab | undefi
 
 export const mapEditorCopiedEntityDataPropertiesStore = writable<EntityDataProperties | undefined>(undefined);
 
+// Session-only: reset to enabled when the map editor closes.
+export const mapEditorSnapEnabledStore = writable<boolean>(true);
+
 export const mapEditorEntityModeStore = writable<MapEditorEntityToolMode>("ADD");
 
 export const mapEditorEntityUploadEventStore = writable<UploadEntityMessage | undefined>(undefined);

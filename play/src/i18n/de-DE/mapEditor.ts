@@ -420,6 +420,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Bild{{s}}",
         noImage: "Kein Bild",
+        snapToGrid: "Am Raster ausrichten",
         specialTags: {
             customLabel: "Benutzerdefiniert",
             mostUsedLabel: "Meistverwendet",

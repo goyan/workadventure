@@ -18,6 +18,7 @@ import {
     mapEditorModeStore,
     mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
+    mapEditorSnapEnabledStore,
 } from "../../../../src/front/Stores/MapEditorStore";
 
 const floorPrefab = EntityPrefab.parse({
@@ -169,7 +170,7 @@ describe("EntityEditorTool floor painting", () => {
         });
         input.emit.mockImplementation((event, ...args) => inputEvents.emit(event, ...args));
         Object.defineProperty(input, "activePointer", { value: pointerAt(canvas, 16, 16) });
-        const keyboard = { addKey: vi.fn(() => mock<Phaser.Input.Keyboard.Key>()) };
+        const keyboard = { addKey: vi.fn(() => mock<Phaser.Input.Keyboard.Key>({ isDown: false })) };
         Object.defineProperty(input, "keyboard", { value: keyboard });
         scene.input = input;
         scene.getGameMapFrontWrapper.mockReturnValue(gameMapFrontWrapper);
@@ -202,6 +203,7 @@ describe("EntityEditorTool floor painting", () => {
             await command.execute();
         });
 
+        mapEditorSnapEnabledStore.set(true);
         mapEditorModeStore.set(true);
         mapEditorEntityModeStore.set("ADD");
         mapEditorSelectedEntityPrefabStore.set(undefined);
@@ -236,6 +238,36 @@ describe("EntityEditorTool floor painting", () => {
 
         expect(entityPositions(wamFile)).toEqual([[64, 96]]);
         expect(entities.size).toBe(1);
+    });
+
+    it("snaps an object without collision to the tile grid by default", async () => {
+        await selectPrefab(furniturePrefab);
+
+        input.emit(Phaser.Input.Events.POINTER_DOWN, pointerAt(canvas, 100, 70), []);
+        await settleCommands();
+
+        expect(entityPositions(wamFile)).toEqual([[96, 64]]);
+    });
+
+    it("places an object without collision at the pixel when snapping is disabled", async () => {
+        mapEditorSnapEnabledStore.set(false);
+        await selectPrefab(furniturePrefab);
+
+        input.emit(Phaser.Input.Events.POINTER_DOWN, pointerAt(canvas, 100, 70), []);
+        await settleCommands();
+
+        expect(entityPositions(wamFile)).toEqual([[84, 54]]);
+    });
+
+    it("keeps the floor brush on the tile grid even when snapping is disabled", async () => {
+        mapEditorSnapEnabledStore.set(false);
+        await selectPrefab(floorPrefab);
+        const position = tileCenter(2, 3);
+
+        input.emit(Phaser.Input.Events.POINTER_DOWN, pointerAt(canvas, position.x, position.y), []);
+        await settleCommands();
+
+        expect(entityPositions(wamFile)).toEqual([[64, 96]]);
     });
 
     it("fills every intermediate cell on a fast horizontal stroke", async () => {

@@ -12,6 +12,7 @@ import type { GameScene } from "../GameScene";
 import {
     mapEditorAskToClaimPersonalAreaStore,
     mapEditorModeStore,
+    mapEditorSnapEnabledStore,
     mapEditorSelectedToolStore,
 } from "../../../Stores/MapEditorStore";
 import { mapEditorActivated, mapEditorActivatedForThematics } from "../../../Stores/MenuStore";
@@ -743,6 +744,7 @@ export class MapEditorModeManager {
             } else if (!active && wasActive) {
                 this.cameraKeys.stop();
                 this.scene.userInputManager.restoreControls("mapEditor");
+                mapEditorSnapEnabledStore.set(true);
             }
             if (!this.active) {
                 this.lastlyUsedTool = get(mapEditorSelectedToolStore);

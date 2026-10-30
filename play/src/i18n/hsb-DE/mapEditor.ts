@@ -417,6 +417,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Wobraz{{s}}",
         noImage: "Žadyn wobraz",
+        snapToGrid: "Na rastr wusměrić",
         specialTags: {
             customLabel: "Swójski",
             mostUsedLabel: "Najhusćišo wužiwane",

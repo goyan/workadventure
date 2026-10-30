@@ -418,6 +418,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Imatge{{s}}",
         noImage: "Sense imatge",
+        snapToGrid: "Imant a la graella",
         specialTags: {
             customLabel: "Personalitzat",
             mostUsedLabel: "Més utilitzats",
