@@ -55,6 +55,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         patternIgnored: "Ignored items: {count} (object not available on this map, or no right to edit areas).",
         patternsUnavailable: "Patterns are unavailable right now. Please try again later.",
         patternsForbidden: "You do not have the right to manage patterns on this map.",
+        patternsDeleteForbidden: "Only the author of the pattern or an administrator can delete it.",
         patternsQuota: "The maximum number of patterns is reached. Delete one first.",
         patternsInvalid: "This pattern cannot be saved. Check its name and its size.",
         patternsNotFound: "This pattern no longer exists.",

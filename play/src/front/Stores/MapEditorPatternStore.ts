@@ -1,11 +1,14 @@
 import { writable } from "svelte/store";
-import type { MapPatternSummary } from "../../common/MapPattern";
+import type { MapPatternSummaryForClient } from "../../common/MapPattern";
 import type { MapPatternApiErrorCode } from "../Phaser/Game/MapEditor/MapPatternApi";
 
+/** API errors, plus the refusal of a deletion by someone who is neither the author nor an administrator. */
+export type MapPatternStoreError = MapPatternApiErrorCode | "delete-forbidden";
+
 export type MapEditorPatternState = {
-    patterns: MapPatternSummary[];
+    patterns: MapPatternSummaryForClient[];
     loading: boolean;
-    error: MapPatternApiErrorCode | undefined;
+    error: MapPatternStoreError | undefined;
     /** Items left out by the last paste (prefab not loaded in the map, area without the right to edit areas). */
     ignoredCount: number;
 };

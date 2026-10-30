@@ -1,3 +1,4 @@
+import type { MapPatternStoreError } from "../../../Stores/MapEditorPatternStore";
 import { mapEditorPatternStore } from "../../../Stores/MapEditorPatternStore";
 import type { MapPatternApiErrorCode } from "./MapPatternApi";
 import { deleteMapPattern, listMapPatterns, MapPatternApiError } from "./MapPatternApi";
@@ -29,13 +30,17 @@ export async function removeMapPattern(roomUrl: string, id: string): Promise<voi
     try {
         await deleteMapPattern(roomUrl, id);
     } catch (error: unknown) {
-        mapEditorPatternStore.update((state) => ({ ...state, error: patternErrorCodeOf(error) }));
+        const code = patternErrorCodeOf(error);
+        mapEditorPatternStore.update((state) => ({
+            ...state,
+            error: code === "forbidden" ? "delete-forbidden" : code,
+        }));
         return;
     }
     await refreshMapPatterns(roomUrl);
 }
 
-export function setMapPatternError(error: MapPatternApiErrorCode | undefined): void {
+export function setMapPatternError(error: MapPatternStoreError | undefined): void {
     mapEditorPatternStore.update((state) => ({ ...state, error }));
 }
 

@@ -8,7 +8,7 @@
     import { mapEditorPatternStore } from "../../Stores/MapEditorPatternStore";
     import { refreshMapPatterns, removeMapPattern } from "../../Phaser/Game/MapEditor/MapPatternActions";
     import { MAP_PATTERN_MAX_NAME_LENGTH } from "../../../common/MapPattern";
-    import type { MapPatternSummary } from "../../../common/MapPattern";
+    import type { MapPatternSummaryForClient } from "../../../common/MapPattern";
     import { mapEditorSelectedEntityPrefabStore } from "../../Stores/MapEditorStore";
     import EntityEditorPicker from "./EntityEditor/EntityEditorPicker.svelte";
     import { IconCheck, IconTrash, IconX } from "@wa-icons";
@@ -24,6 +24,7 @@
     const patternErrorMessages = $derived({
         unavailable: $LL.mapEditor.selection.patternsUnavailable(),
         forbidden: $LL.mapEditor.selection.patternsForbidden(),
+        "delete-forbidden": $LL.mapEditor.selection.patternsDeleteForbidden(),
         quota: $LL.mapEditor.selection.patternsQuota(),
         invalid: $LL.mapEditor.selection.patternsInvalid(),
         "not-found": $LL.mapEditor.selection.patternsNotFound(),
@@ -70,7 +71,7 @@
         }
     }
 
-    async function pastePattern(pattern: MapPatternSummary): Promise<void> {
+    async function pastePattern(pattern: MapPatternSummaryForClient): Promise<void> {
         try {
             await selectionTool.pasteFromPattern(pattern.id);
         } catch (error: unknown) {
@@ -78,7 +79,7 @@
         }
     }
 
-    async function deletePattern(pattern: MapPatternSummary): Promise<void> {
+    async function deletePattern(pattern: MapPatternSummaryForClient): Promise<void> {
         try {
             await removeMapPattern(gameManager.currentStartedRoom.href, pattern.id);
         } catch (error: unknown) {
@@ -317,16 +318,18 @@
                                 })}
                             </span>
                         </button>
-                        <button
-                            class="shrink-0 rounded p-1 hover:bg-white/10 disabled:opacity-50"
-                            data-testid="mapEditorSelectionPatternDelete"
-                            aria-label={$LL.mapEditor.selection.deletePattern({ name: pattern.name })}
-                            disabled={$mapEditorSelectionStore.busy}
-                            onclick={() => deletePattern(pattern)}
-                            type="button"
-                        >
-                            <IconTrash />
-                        </button>
+                        {#if pattern.canDelete}
+                            <button
+                                class="shrink-0 rounded p-1 hover:bg-white/10 disabled:opacity-50"
+                                data-testid="mapEditorSelectionPatternDelete"
+                                aria-label={$LL.mapEditor.selection.deletePattern({ name: pattern.name })}
+                                disabled={$mapEditorSelectionStore.busy}
+                                onclick={() => deletePattern(pattern)}
+                                type="button"
+                            >
+                                <IconTrash />
+                            </button>
+                        {/if}
                     </li>
                 {/each}
             </ul>

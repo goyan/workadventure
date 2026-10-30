@@ -1,9 +1,13 @@
 import { z } from "zod";
-import type { MapPatternDetail, MapPatternPayload, MapPatternSummary } from "../../../../common/MapPattern";
+import type {
+    MapPatternDetailForClient,
+    MapPatternPayload,
+    MapPatternSummaryForClient,
+} from "../../../../common/MapPattern";
 import {
-    MapPatternDetail as MapPatternDetailSchema,
-    MapPatternList,
-    MapPatternSummary as MapPatternSummarySchema,
+    MapPatternDetailForClient as MapPatternDetailSchema,
+    MapPatternListForClient,
+    MapPatternSummaryForClient as MapPatternSummarySchema,
 } from "../../../../common/MapPattern";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { ABSOLUTE_PUSHER_URL } from "../../../Enum/ComputedConst";
@@ -74,12 +78,12 @@ async function parseBody<T extends z.ZodTypeAny>(response: Response, schema: T):
     return parsed.data;
 }
 
-export async function listMapPatterns(roomUrl: string): Promise<MapPatternSummary[]> {
+export async function listMapPatterns(roomUrl: string): Promise<MapPatternSummaryForClient[]> {
     const response = await request("map-patterns", roomUrl, { method: "GET" });
-    return (await parseBody(response, MapPatternList)).patterns;
+    return (await parseBody(response, MapPatternListForClient)).patterns;
 }
 
-export async function getMapPattern(roomUrl: string, id: string): Promise<MapPatternDetail> {
+export async function getMapPattern(roomUrl: string, id: string): Promise<MapPatternDetailForClient> {
     const response = await request(`map-patterns/${encodeURIComponent(id)}`, roomUrl, { method: "GET" });
     return parseBody(response, MapPatternDetailSchema);
 }
@@ -88,7 +92,7 @@ export async function createMapPattern(
     roomUrl: string,
     name: string,
     payload: MapPatternPayload,
-): Promise<MapPatternSummary> {
+): Promise<MapPatternSummaryForClient> {
     const response = await request("map-patterns", roomUrl, { method: "POST", body: { name, payload } });
     return parseBody(response, MapPatternSummarySchema);
 }

@@ -8,12 +8,17 @@ import {
     MapPatternPayload,
     MapPatternSummary,
 } from "../../common/MapPattern";
+import type {
+    MapPatternDetailForClient,
+    MapPatternListForClient,
+    MapPatternSummaryForClient,
+} from "../../common/MapPattern";
 import { roomPathFromUrl } from "./MapCreationService";
 
 const ONE_MINUTE_IN_MS = 60 * 1000;
 const MAX_QUERIES_PER_MINUTE = 60;
 
-export type MapPatternErrorCode = "invalid" | "not-found" | "quota" | "rate-limit" | "unavailable";
+export type MapPatternErrorCode = "invalid" | "forbidden" | "not-found" | "quota" | "rate-limit" | "unavailable";
 
 export class MapPatternError extends Error {
     constructor(
@@ -45,24 +50,39 @@ export function readMapPatternConfig(env: {
 
 export interface PatternRightDependencies {
     /** Right of the authenticated user, computed by the Admin API for this room. Undefined when it cannot be known. */
-    fetchMember(trustedRoomUrl: string): Promise<{ canEdit: boolean } | undefined>;
+    fetchMember(trustedRoomUrl: string): Promise<{ canEdit: boolean; tags: string[] } | undefined>;
+}
+
+/** Tag of the Admin API that marks an administrator (same tag as the global messages of the pusher). */
+export const ADMIN_TAG = "admin";
+
+/** The author or an administrator. Computed on the server: the browser only receives the result. */
+export function canDeletePattern(createdBy: string, userIdentifier: string, isAdmin: boolean): boolean {
+    return isAdmin || createdBy === userIdentifier;
+}
+
+export interface PatternRight {
+    isAdmin: boolean;
 }
 
 /**
  * The browser designates the room used as authorization context: it must be a room of this world, and the Admin API
- * must say that the user can edit it. Nothing sent by the browser is trusted as a right.
+ * must say that the user can edit it. Undefined means no right. Nothing sent by the browser is trusted as a right.
  */
 export async function canManagePatterns(
     roomUrl: string,
     pusherUrl: string,
     dependencies: PatternRightDependencies,
-): Promise<boolean> {
+): Promise<PatternRight | undefined> {
     const roomPath = roomPathFromUrl(roomUrl, pusherUrl);
     if (roomPath === undefined) {
-        return false;
+        return undefined;
     }
     const member = await dependencies.fetchMember(new URL(`/~/${roomPath}`, pusherUrl).toString());
-    return member?.canEdit === true;
+    if (member?.canEdit !== true) {
+        return undefined;
+    }
+    return { isAdmin: member.tags.includes(ADMIN_TAG) };
 }
 
 const PatternId = z.string().uuid();
@@ -89,17 +109,18 @@ export class MapPatternService {
         this.recentQueries.set(userIdentifier, recent);
     }
 
-    public async list(): Promise<z.infer<typeof MapPatternList>> {
+    public async list(userIdentifier: string, isAdmin: boolean): Promise<MapPatternListForClient> {
         const response = await this.callAdminApi(() =>
             this.http.get(`${this.config.adminApiUrl}/api/map-patterns`, this.requestOptions()),
         );
         if (response.status !== 200) {
             throw this.unexpectedStatus(response.status);
         }
-        return this.parseResponse(MapPatternList, response.data);
+        const list = this.parseResponse(MapPatternList, response.data);
+        return { patterns: list.patterns.map((pattern) => this.toClient(pattern, userIdentifier, isAdmin)) };
     }
 
-    public async get(id: string): Promise<MapPatternDetail> {
+    public async get(id: string, userIdentifier: string, isAdmin: boolean): Promise<MapPatternDetailForClient> {
         const patternId = this.parseId(id);
         const response = await this.callAdminApi(() =>
             this.http.get(`${this.config.adminApiUrl}/api/map-patterns/${patternId}`, this.requestOptions()),
@@ -111,11 +132,17 @@ export class MapPatternService {
             throw this.unexpectedStatus(response.status);
         }
         // The stored payload is validated again: it is sent to every editor, whatever wrote it.
-        return this.parseResponse(MapPatternDetail, response.data);
+        const detail = this.parseResponse(MapPatternDetail, response.data);
+        return { ...this.toClient(detail, userIdentifier, isAdmin), payload: detail.payload };
     }
 
     /** The payload is validated BEFORE the call, and the author comes from the server, never from the browser. */
-    public async create(userIdentifier: string, rawName: string, rawPayload: unknown): Promise<MapPatternSummary> {
+    public async create(
+        userIdentifier: string,
+        rawName: string,
+        rawPayload: unknown,
+        isAdmin: boolean,
+    ): Promise<MapPatternSummaryForClient> {
         const name = PatternName.safeParse(rawName);
         const payload = MapPatternPayload.safeParse(rawPayload);
         if (!name.success || !payload.success) {
@@ -130,7 +157,7 @@ export class MapPatternService {
         );
         switch (response.status) {
             case 201:
-                return this.parseResponse(MapPatternSummary, response.data);
+                return this.toClient(this.parseResponse(MapPatternSummary, response.data), userIdentifier, isAdmin);
             case 400:
                 throw new MapPatternError("invalid", "The Admin API refused the pattern");
             case 409:
@@ -140,17 +167,32 @@ export class MapPatternService {
         }
     }
 
-    public async delete(id: string): Promise<void> {
+    /** `requestedBy` and `admin` come from the server: the Admin API refuses (403) anyone but the author or an admin. */
+    public async delete(id: string, userIdentifier: string, isAdmin: boolean): Promise<void> {
         const patternId = this.parseId(id);
         const response = await this.callAdminApi(() =>
-            this.http.delete(`${this.config.adminApiUrl}/api/map-patterns/${patternId}`, this.requestOptions()),
+            this.http.delete(`${this.config.adminApiUrl}/api/map-patterns/${patternId}`, {
+                ...this.requestOptions(),
+                params: { requestedBy: userIdentifier, admin: isAdmin },
+            }),
         );
-        if (response.status === 404) {
-            throw new MapPatternError("not-found", "The pattern does not exist");
+        switch (response.status) {
+            case 204:
+                return;
+            case 400:
+                throw new MapPatternError("invalid", "The Admin API refused the deletion request");
+            case 403:
+                throw new MapPatternError("forbidden", "Only the author or an administrator can delete a pattern");
+            case 404:
+                throw new MapPatternError("not-found", "The pattern does not exist");
+            default:
+                throw this.unexpectedStatus(response.status);
         }
-        if (response.status !== 204) {
-            throw this.unexpectedStatus(response.status);
-        }
+    }
+
+    private toClient(pattern: MapPatternSummary, userIdentifier: string, isAdmin: boolean): MapPatternSummaryForClient {
+        const { createdBy, ...visible } = pattern;
+        return { ...visible, canDelete: canDeletePattern(createdBy, userIdentifier, isAdmin) };
     }
 
     /** Only a UUID can reach the Admin API URL: anything else cannot designate a pattern. */
