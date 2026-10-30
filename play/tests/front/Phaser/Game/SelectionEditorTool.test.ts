@@ -514,20 +514,10 @@ describe("SelectionEditorTool", () => {
             prefabRef: { collectionName: "Objects", id: "chair" },
             properties: [descriptionProperty],
         });
-        const pastedArea = Array.from(wamFile.getGameMapAreas().getAreas()?.values() ?? []).find(
-            (value) => value.id !== "zone-original",
-        );
-        expect(pastedArea).toMatchObject({
-            x: 192,
-            y: 192,
-            width: 32,
-            height: 32,
-            name: "Area zone-original",
-            visible: true,
-        });
-        expect(pastedArea?.id).not.toBe("zone-original");
+        // Areas are not copied: only the zone that was already on the map exists.
+        expect(Array.from(wamFile.getGameMapAreas().getAreas()?.keys() ?? [])).toEqual(["zone-original"]);
         // Paste is a stamp: the mode stays armed after the placement.
-        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 1, mode: "paste" });
+        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 0, mode: "paste" });
     });
 
     it("moves a group by one snapped delta and leaves relative offsets intact", async () => {
@@ -963,6 +953,99 @@ describe("SelectionEditorTool", () => {
             // The classic Paste button reuses the clipboard: no pattern is armed any more.
             tool.pasteSelection();
             expect(get(mapEditorPatternStore).armedPatternId).toBeUndefined();
+        });
+    });
+    describe("copies without areas", () => {
+        it("treats a selection that only contains areas as empty for Copy", () => {
+            wamFile.getGameMapAreas().addArea(area("zone-only", 32, 32, 32, 32), true);
+            userIsEditorStore.set(true);
+            select(0, 0, 64, 64);
+
+            tool.copySelection();
+
+            expect(get(mapEditorSelectionStore)).toMatchObject({ areaCount: 1, hasClipboard: false, error: "blocked" });
+        });
+
+        it("keeps Move and Delete acting on the selected areas", async () => {
+            wamFile.getGameMapAreas().addArea(area("zone-only", 32, 32, 32, 32), true);
+            userIsEditorStore.set(true);
+            select(0, 0, 64, 64);
+
+            tool.moveSelection();
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            emitPointerUp(pointerAt(canvas, 200, 200, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+            expect(commandGroups).toHaveLength(1);
+            expect(commandGroups[0]).toHaveLength(1);
+
+            await tool.deleteSelection();
+            expect(commandGroups).toHaveLength(2);
+        });
+
+        it("saves a pattern without the selected areas and refuses an areas-only selection", async () => {
+            addEntity("floor-1", 32, 32, floorPrefab);
+            wamFile.getGameMapAreas().addArea(area("zone-1", 32, 32, 32, 32), true);
+            userIsEditorStore.set(true);
+            vi.mocked(createMapPattern).mockResolvedValue({
+                id: "7d0f6c4e-1b0a-4d4e-9d0e-0c9f2f1a3b11",
+                name: "Salle",
+                entityCount: 1,
+                areaCount: 0,
+                canDelete: true,
+                createdAt: "2026-10-30T10:00:00.000Z",
+            });
+            select(0, 0, 64, 64);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 1 });
+
+            await tool.saveSelectionAsPattern("Salle");
+
+            const payload = vi.mocked(createMapPattern).mock.calls[0][2];
+            expect(payload.items.map((item) => item.kind)).toEqual(["entity"]);
+
+            entities.clear();
+            tool.clear();
+            tool.activate();
+            vi.mocked(createMapPattern).mockClear();
+            select(0, 0, 64, 64);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 0, areaCount: 1 });
+
+            await expect(tool.saveSelectionAsPattern("Zone")).resolves.toBe(false);
+            expect(createMapPattern).not.toHaveBeenCalled();
+            expect(get(mapEditorSelectionStore).error).toBe("blocked");
+        });
+
+        it("pastes an old pattern without its areas and without counting them as ignored", async () => {
+            vi.mocked(getMapPattern).mockResolvedValue({
+                id: "7d0f6c4e-1b0a-4d4e-9d0e-0c9f2f1a3b11",
+                name: "Ancien",
+                entityCount: 1,
+                areaCount: 1,
+                canDelete: true,
+                createdAt: "2026-10-30T10:00:00.000Z",
+                payload: {
+                    version: 1,
+                    bounds: { width: 64, height: 32 },
+                    items: [
+                        {
+                            kind: "entity",
+                            data: { x: 0, y: 0, prefabRef: { collectionName: "Tiles", id: "tile" }, properties: [] },
+                            dimensions: { width: 32, height: 32 },
+                        },
+                        { kind: "area", data: { ...area("", 32, 0, 32, 32) } },
+                    ],
+                },
+            });
+            userIsEditorStore.set(true);
+
+            await tool.pasteFromPattern("7d0f6c4e-1b0a-4d4e-9d0e-0c9f2f1a3b11");
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            emitPointerUp(pointerAt(canvas, 200, 200, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+
+            expect(get(mapEditorPatternStore).ignoredCount).toBe(0);
+            expect(get(mapEditorSelectionStore).error).toBeUndefined();
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toHaveLength(1);
+            expect(wamFile.getGameMapAreas().getAreas()?.size ?? 0).toBe(0);
         });
     });
 });

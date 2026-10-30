@@ -48,14 +48,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         savePatternConfirm: "Enregistrer",
         patternsTitle: "Motifs",
         patternsDescription:
-            "Cliquez sur un motif pour le coller. Les motifs sont partagés entre tous les éditeurs de ce monde.",
+            "Cliquez sur un motif pour le coller. Les motifs ne contiennent que des objets et sont partagés entre tous les éditeurs de ce monde.",
         patternsLoading: "Chargement des motifs…",
         patternsEmpty: "Aucun motif pour l’instant. Sélectionnez des objets et enregistrez-les comme motif.",
         patternContent: "Objets : {entityCount} · Zones : {areaCount}",
         pastePattern: "Coller le motif {name}",
         deletePattern: "Supprimer le motif {name}",
-        patternIgnored:
-            "Éléments ignorés : {count} (objet indisponible sur cette carte, ou droit de modifier les zones manquant).",
+        patternIgnored: "Objets ignorés : {count} (objet indisponible sur cette carte).",
         patternsUnavailable: "Les motifs sont indisponibles pour le moment. Réessayez plus tard.",
         patternsForbidden: "Vous n’avez pas le droit de gérer les motifs sur cette carte.",
         patternsDeleteForbidden: "Seul l’auteur du motif ou un administrateur peut le supprimer.",

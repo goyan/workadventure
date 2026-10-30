@@ -28,7 +28,7 @@ export type PatternPlacedItem =
 export interface PatternPlacement {
     items: PatternPlacedItem[];
     bounds: Bounds;
-    /** Items left out: unknown prefab or an area the user cannot edit. */
+    /** Entities left out because their prefab is not loaded in the map. Areas of old patterns are not counted. */
     ignoredCount: number;
 }
 
@@ -46,37 +46,33 @@ function unionOf(boundsList: Bounds[]): Bounds {
     return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-/** Converts the selection to a payload v1: positions relative to the union top-left corner, no original id. */
-export function selectionToPatternPayload(items: PatternSourceItem[]): MapPatternPayload {
+/**
+ * Converts the selection to a payload v1: positions relative to the union top-left corner, no original id.
+ * Only entities are stored: areas of the selection are dropped (the schema still reads `area` items of old patterns).
+ */
+export function selectionToPatternPayload(selection: PatternSourceItem[]): MapPatternPayload {
+    const items = selection.filter((item) => item.kind === "entity");
     if (items.length === 0) {
-        throw new Error("A pattern needs at least one item");
+        throw new Error("A pattern needs at least one entity");
     }
     const union = unionOf(items.map(boundsOf));
-    const patternItems: MapPatternItem[] = items.map((item) => {
-        if (item.kind === "entity") {
-            return {
-                kind: "entity",
-                data: { ...structuredClone(item.data), x: item.data.x - union.x, y: item.data.y - union.y },
-                dimensions: { ...item.dimensions },
-                ...(item.collisionGrid ? { collisionGrid: structuredClone(item.collisionGrid) } : {}),
-            };
-        }
-        return {
-            kind: "area",
-            // The schema asks for an id, but a new one is created when the pattern is pasted.
-            data: { ...structuredClone(item.data), id: "", x: item.data.x - union.x, y: item.data.y - union.y },
-        };
-    });
+    const patternItems: MapPatternItem[] = items.map((item) => ({
+        kind: "entity",
+        data: { ...structuredClone(item.data), x: item.data.x - union.x, y: item.data.y - union.y },
+        dimensions: { ...item.dimensions },
+        ...(item.collisionGrid ? { collisionGrid: structuredClone(item.collisionGrid) } : {}),
+    }));
     return { version: 1, bounds: { width: union.width, height: union.height }, items: patternItems };
 }
 
 /**
  * Rebuilds the items of a pattern at the origin (0, 0), ready to be pasted by the usual Paste mode.
- * An entity is kept only when its prefab is loaded in a collection of the map; an area only when the user can edit areas.
+ * An entity is kept only when its prefab is loaded in a collection of the map. Areas of patterns stored before areas
+ * were dropped are skipped silently: it is a choice, not an error, so they are not counted as ignored.
  */
 export function patternPayloadToPlacement(
     payload: MapPatternPayload,
-    options: { isPrefabKnown: (collectionName: string, prefabId: string) => boolean; canEditAreas: boolean },
+    options: { isPrefabKnown: (collectionName: string, prefabId: string) => boolean },
 ): PatternPlacement {
     const items: PatternPlacedItem[] = [];
     let ignoredCount = 0;
@@ -94,12 +90,6 @@ export function patternPayloadToPlacement(
                 collisionGrid: item.collisionGrid ? structuredClone(item.collisionGrid) : undefined,
                 bounds: boundsOf(item),
             });
-        } else {
-            if (!options.canEditAreas) {
-                ignoredCount += 1;
-                continue;
-            }
-            items.push({ kind: "area", id: "", data: structuredClone(item.data), bounds: boundsOf(item) });
         }
     }
     return {

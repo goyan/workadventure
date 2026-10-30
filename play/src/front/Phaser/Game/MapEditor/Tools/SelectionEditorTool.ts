@@ -203,7 +203,8 @@ export class SelectionEditorTool extends MapEditorTool {
             return;
         }
         this.clearError();
-        const items = this.readSelectedItems();
+        // Areas are never copied: a copy only carries objects. Move and Delete still act on selected areas.
+        const items = this.readSelectedItems()?.filter((item) => item.kind === "entity");
         const bounds = items && this.getUnionBounds(items);
         if (!items || items.length === 0 || !bounds) {
             this.setError("blocked");
@@ -238,7 +239,7 @@ export class SelectionEditorTool extends MapEditorTool {
         let created = false;
         try {
             setMapPatternError(undefined);
-            const items = this.readSelectedItems();
+            const items = this.readSelectedItems()?.filter((item) => item.kind === "entity");
             if (!items || items.length === 0) {
                 this.setError("blocked");
                 return false;
@@ -286,7 +287,6 @@ export class SelectionEditorTool extends MapEditorTool {
             const placement = patternPayloadToPlacement(pattern.payload, {
                 isPrefabKnown: (collectionName, prefabId) =>
                     knownPrefabs.has(this.getPrefabKey(collectionName, prefabId)),
-                canEditAreas: this.canEditAreas(),
             });
             setPatternIgnoredCount(placement.ignoredCount);
             if (placement.items.length === 0) {
