@@ -44,6 +44,7 @@ const recording: DeepPartial<Translation["recording"]> = {
             advert: "所有参与者将收到您正在开始录制的通知。",
             yourRecordInProgress: "录制正在进行中，点击停止。",
             inProgress: "录制正在进行中",
+            notEnabled: "此世界已禁用录制。",
         },
         spacePicker: {
             megaphone: "录制扩音器",

@@ -25,6 +25,11 @@
     const recording = gameManager.currentStartedRoom.recording;
     let closeFloatingUi: (() => void) | undefined = undefined;
     let triggerElement: HTMLElement | undefined = $state(undefined);
+    let pendingRecordingLabel = $derived(
+        $recordingMenuState.currentRows.some((row) => row.status === "stopping")
+            ? `${$LL.recording.actionbar.title.stop()}...`
+            : `${$LL.recording.actionbar.title.start()}...`,
+    );
 
     function closeSpacePicker(): void {
         closeFloatingUi?.();
@@ -118,10 +123,10 @@
         });
     }}
     classList="group/btn-recording"
-    tooltipTitle={$recordingMenuState.hasOwnRecording
-        ? $LL.recording.actionbar.title.stop()
-        : $recordingMenuState.hasPendingRequest
-          ? $LL.recording.actionbar.title.inProgress()
+    tooltipTitle={$recordingMenuState.hasPendingRequest
+        ? pendingRecordingLabel
+        : $recordingMenuState.hasOwnRecording
+          ? $LL.recording.actionbar.title.stop()
           : $recordingMenuState.hasActionableStart
             ? $LL.recording.actionbar.title.start()
             : $recordingMenuState.hasOtherRecording
@@ -148,15 +153,11 @@
                     <div class="text-xs italic opacity-80">
                         {$LL.recording.actionbar.desc.needLogin()}
                     </div>
-                {:else if !$recordingMenuState.hasOwnRecording && recording?.buttonState === "disabled" && recording?.disabledReason}
-                    <div class="text-xs italic opacity-80">
-                        {recording.disabledReason}
-                    </div>
                 {:else if $recordingMenuState.hasPendingRequest}
                     <div class="text-sm text-white px-2 py-1 flex flex-row gap-2 items-center">
                         <div class="bg-red-500 rounded-full w-4 h-4 max-w-4 max-h-4 animate-pulse"></div>
                         <div class="text-xs italic opacity-80">
-                            {$LL.recording.actionbar.desc.inProgress()}
+                            {pendingRecordingLabel}
                         </div>
                     </div>
                 {:else if $recordingMenuState.actionableRows.some((row) => row.action === "start")}
@@ -175,12 +176,18 @@
                             {$LL.recording.actionbar.desc.yourRecordInProgress()}
                         </div>
                     </div>
-                {:else}
+                {:else if $recordingMenuState.hasOtherRecording}
                     <div class="text-sm text-white px-2 py-1 flex flex-row gap-2 items-center">
                         <div class="bg-red-500 rounded-full w-4 h-4 max-w-4 max-h-4 animate-pulse"></div>
                         <div class="text-xs italic opacity-80">
                             {$LL.recording.actionbar.desc.inProgress()}
                         </div>
+                    </div>
+                {:else}
+                    <div class="text-xs italic opacity-80">
+                        {recording?.buttonState === "disabled" && recording.disabledReason
+                            ? recording.disabledReason
+                            : $LL.recording.actionbar.desc.notEnabled()}
                     </div>
                 {/if}
             </div>

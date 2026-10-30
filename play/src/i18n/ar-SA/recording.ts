@@ -44,6 +44,7 @@ const recording: DeepPartial<Translation["recording"]> = {
             advert: "سيتم إشعار جميع المشاركين بأنك تبدأ تسجيلاً.",
             yourRecordInProgress: "التسجيل قيد التقدم، انقر لإيقافه.",
             inProgress: "التسجيل قيد التقدم",
+            notEnabled: "التسجيلات معطلة لهذا العالم.",
         },
         spacePicker: {
             megaphone: "تسجيل مكبر الصوت",
