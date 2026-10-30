@@ -25,10 +25,6 @@ import type { MapEditorTool } from "./MapEditorTool";
 const logger = debug("explorer-tool");
 
 export class ExplorerTool implements MapEditorTool {
-    private downIsPressed = false;
-    private upIsPressed = false;
-    private leftIsPressed = false;
-    private rightIsPressed = false;
     private explorationMouseIsActive = false;
     private entitiesManager: EntitiesManager;
     private lastCameraCenterXToZoom = 0;
@@ -37,36 +33,8 @@ export class ExplorerTool implements MapEditorTool {
     private enableUserInputsStoreSubscribe: Unsubscriber | undefined;
     private zoomLevelBeforeExplorerMode: number | undefined;
 
-    private keyDownHandler = (event: KeyboardEvent) => {
-        if (!get(enableUserInputsStore)) return;
-        if (event.key === "ArrowDown" || event.key === "s") {
-            this.downIsPressed = true;
-        }
-        if (event.key === "ArrowUp" || event.key === "w" || event.key === "z") {
-            this.upIsPressed = true;
-        }
-        if (event.key === "ArrowLeft" || event.key === "q" || event.key === "a") {
-            this.leftIsPressed = true;
-        }
-        if (event.key === "ArrowRight" || event.key === "d") {
-            this.rightIsPressed = true;
-        }
-    };
     private keyUpHandler = (event: KeyboardEvent) => {
         if (!get(enableUserInputsStore)) return;
-        // Define new zone to zoom
-        if (event.key === "ArrowDown" || event.key === "s") {
-            this.downIsPressed = false;
-        }
-        if (event.key === "ArrowUp" || event.key === "w" || event.key === "z") {
-            this.upIsPressed = false;
-        }
-        if (event.key === "ArrowLeft" || event.key === "q" || event.key === "a") {
-            this.leftIsPressed = false;
-        }
-        if (event.key === "ArrowRight" || event.key === "d") {
-            this.rightIsPressed = false;
-        }
         this.mapEditorModeManager.handleKeyDownEvent(event);
     };
     private wheelHandler = (
@@ -135,19 +103,6 @@ export class ExplorerTool implements MapEditorTool {
 
     public update(time: number, dt: number): void {
         if (!get(enableUserInputsStore)) return;
-        const factorToMove = 10 * (1 / waScaleManager.zoomModifier);
-        if (this.downIsPressed) {
-            this.scene.getCameraManager().scrollCamera(0, factorToMove);
-        }
-        if (this.upIsPressed) {
-            this.scene.getCameraManager().scrollCamera(0, -factorToMove);
-        }
-        if (this.leftIsPressed) {
-            this.scene.getCameraManager().scrollCamera(-factorToMove, 0);
-        }
-        if (this.rightIsPressed) {
-            this.scene.getCameraManager().scrollCamera(factorToMove, 0);
-        }
 
         get(mapExplorationAreasStore)?.forEach((preview) => preview.update(time, dt));
     }
@@ -161,7 +116,6 @@ export class ExplorerTool implements MapEditorTool {
         this.scene.userInputManager.restoreRightClick();
 
         // Remove all controls for the exploration mode
-        this.scene.input.keyboard?.off("keydown", this.keyDownHandler);
         this.scene.input.keyboard?.off("keyup", this.keyUpHandler);
         this.scene.input.off("wheel", this.wheelHandler);
         this.scene.input.off("pointerdown", this.pointerDownHandler);
@@ -187,8 +141,7 @@ export class ExplorerTool implements MapEditorTool {
             }
         }
 
-        // Restore camera mode
-        cameraManager.startFollowPlayer(this.scene.CurrentPlayer, 1000);
+        // The camera stays detached from the avatar: the map editor recenters it when it closes.
         if (targetZoom) {
             const targetZoomFactor = targetZoom / waScaleManager.zoomModifier;
             cameraManager.zoomByFactor(targetZoomFactor, 1000);
@@ -249,7 +202,6 @@ export class ExplorerTool implements MapEditorTool {
         this.scene.userInputManager.disableRightClick();
         // Implement all controls for the exploration mode
         this.scene.input.setTopOnly(false);
-        this.scene.input.keyboard?.on("keydown", this.keyDownHandler);
         this.scene.input.keyboard?.on("keyup", this.keyUpHandler);
         this.scene.input.on("wheel", this.wheelHandler);
         this.scene.input.on("pointerdown", this.pointerDownHandler);

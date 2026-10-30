@@ -131,7 +131,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         deltaZ: number,
     ): void {
         const event = pointer.event;
-        if (event instanceof WheelEvent && isTrackpadScroll(event) && this.canPan()) {
+        if (event instanceof WheelEvent && isTrackpadScroll(event) && this.canPan(true)) {
             // Two-finger scroll on a trackpad moves the view. Pinch and Ctrl+wheel (ctrlKey) and notched
             // mouse wheels still zoom.
             this.gameScene.getCameraManager().panBy(deltaX, deltaY);
@@ -141,8 +141,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         this.gameScene.handleMouseWheel(deltaY, isPinch ? PINCH_ZOOM_RATE_MULTIPLIER : 1);
     }
 
-    private canPan(): boolean {
-        return !get(mapEditorModeStore) && this.gameScene.getCameraManager().canPan();
+    // The trackpad moves the view in the map editor too; dragging with the left button stays reserved to the tools.
+    private canPan(allowInMapEditor = false): boolean {
+        return (allowInMapEditor || !get(mapEditorModeStore)) && this.gameScene.getCameraManager().canPan();
     }
 
     public handlePointerUpEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {

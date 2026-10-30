@@ -170,4 +170,44 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         expect(warning).toHaveBeenCalledWith(error);
     });
+
+    describe("camera panning", () => {
+        function trackpadScroll(): ReturnType<typeof mock<Phaser.Input.Pointer>> {
+            const wheel = pointer();
+            wheel.event = new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL });
+            return wheel;
+        }
+
+        it("pans with a two-finger trackpad scroll outside the map editor", () => {
+            handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
+
+            expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
+        });
+
+        it("pans with a two-finger trackpad scroll while editing the map", () => {
+            mapEditorModeStore.set(true);
+            handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
+
+            expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
+        });
+
+        it("starts dragging with the left button outside the map editor", () => {
+            const drag = pointer();
+            handler.handlePointerDownEvent(drag, []);
+            drag.x += 20;
+            handler.handlePointerMoveEvent(drag, []);
+
+            expect(cameraManager.panBy.mock.calls).toEqual([[-20, 0]]);
+        });
+
+        it("leaves the left button drag to the tools while editing the map", () => {
+            mapEditorModeStore.set(true);
+            const drag = pointer();
+            handler.handlePointerDownEvent(drag, []);
+            drag.x += 20;
+            handler.handlePointerMoveEvent(drag, []);
+
+            expect(cameraManager.panBy.mock.calls).toEqual([]);
+        });
+    });
 });

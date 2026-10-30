@@ -74,6 +74,8 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     private playerToFollow?: Player | RemotePlayer;
     private panning = false;
+    // While the map editor is open the camera is detached from the avatar and never snaps back to it.
+    private editorFreeCamera = false;
     private zoomLocked: boolean;
 
     private readonly EDITOR_MODE_SCROLL_SPEED: number = 5;
@@ -125,7 +127,9 @@ export class CameraManager extends Phaser.Events.EventEmitter {
                     this.mapSize.width * 3,
                     this.mapSize.height * 3,
                 );
+                this.enterEditorFreeCamera();
             } else {
+                this.leaveEditorFreeCamera();
                 // We set the bounds back after a call to start following the player
                 this.setCameraBounds();
             }
@@ -510,6 +514,10 @@ export class CameraManager extends Phaser.Events.EventEmitter {
 
     // Create function to define the camera on exploration mode. The camera can be moved anywhere on the map. The camera is not locked on the player. The camera can be zoomed in and out. The camera can be moved with the mouse. The camera can be moved with the keyboard. The camera can be moved with the touchpad.
     public setExplorationMode(): void {
+        // The free editor camera is already detached from the avatar: re-targeting it would make the view jump.
+        if (this.editorFreeCamera) {
+            return;
+        }
         this.camera.setFollowOffset(0, 0);
 
         // this.camera.setBounds(
@@ -824,7 +832,40 @@ export class CameraManager extends Phaser.Events.EventEmitter {
      * on a focus target or when the zoom is locked.
      */
     public canPan(): boolean {
-        return !this.zoomLocked && !this.waScaleManager.getFocusTarget();
+        // The map explorer sets a focus target to zoom around the view center, which does not forbid panning.
+        return !this.zoomLocked && (this.editorFreeCamera || !this.waScaleManager.getFocusTarget());
+    }
+
+    /**
+     * Scrolls the map by a distance expressed in game pixels while the map editor is open (keyboard scroll).
+     */
+    public scrollEditorCamera(x: number, y: number): void {
+        if (!this.editorFreeCamera) {
+            return;
+        }
+        // Another feature may have made the camera follow the avatar again since the editor was opened.
+        if (!this.panning) {
+            this.startPanning();
+        }
+        this.scrollCamera(x, y);
+    }
+
+    private enterEditorFreeCamera(): void {
+        this.editorFreeCamera = true;
+        if (!this.panning) {
+            this.startPanning();
+        }
+    }
+
+    private leaveEditorFreeCamera(): void {
+        if (!this.editorFreeCamera) {
+            return;
+        }
+        this.editorFreeCamera = false;
+        const player = this.playerToFollow ?? this.scene.CurrentPlayer;
+        if (player) {
+            this.startFollowPlayer(player, 300);
+        }
     }
 
     /**
@@ -858,12 +899,15 @@ export class CameraManager extends Phaser.Events.EventEmitter {
             this.camera.followOffset.x,
             this.camera.followOffset.y,
         );
-        // As soon as the avatar moves, the camera comes back to it.
+        // As soon as the avatar moves, the camera comes back to it (not while editing the map).
+        if (this.editorFreeCamera) {
+            return;
+        }
         this.playerToFollow?.once(hasMovedEventName, this.onPanningAvatarMoved);
     }
 
     private readonly onPanningAvatarMoved = (): void => {
-        if (!this.panning || !this.playerToFollow) {
+        if (!this.panning || !this.playerToFollow || this.editorFreeCamera) {
             return;
         }
         this.startFollowPlayer(this.playerToFollow, 300);
