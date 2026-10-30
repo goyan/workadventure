@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Mój rum konfigurěrowaś",
         trashEditor: "Zbórk",
         exploreTheRoom: "Wobłuk wužiwaś",
+        mapLayerEditor: "Map tool (floors and walls)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Mapu zacyniś",
         mapManagerActivated: "Mapowy manager je aktiwěrowany",
@@ -404,6 +405,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Kak to funkcioněrujo?",
         description: "Cyrkajśo wobcerk na kórśe, aby nowy napórał.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Draw freehand",
+            area: "Draw an area",
+        },
+        title: "Map",
+        modes: {
+            wall: "Wall",
+            room: "Room",
+            floorBrush: "Floor brush",
+            floorRectangle: "Floor rectangle",
+            floorFill: "Floor fill",
+            erase: "Eraser",
+        },
+        hints: {
+            wall: "Drag to draw a straight wall.",
+            room: "Drag a rectangle: walls and floor in one go.",
+            floorBrush: "Hold the button and paint floor tiles.",
+            floorRectangle: "Drag a rectangle to fill it with the floor.",
+            floorFill: "Click inside a closed room to fill it.",
+            erase: "Hold the button to erase walls and floors. Objects are kept.",
+        },
+        floors: "Floor",
+        walls: "Wall style",
+        catalogLoading: "Checking the floor and wall catalogs...",
+        catalogMissing: "The floor and wall catalogs are not available in this room.",
+        status: {
+            tooLarge: "This change is too large. Draw a smaller area.",
+            fillTooLarge: "The area is not closed or too large to fill. Close it with walls first.",
+            failed: "The change could not be applied.",
+        },
+        families: {
+            "carrelage-gris": "Grey tiles",
+            "parquet-clair": "Light parquet",
+            "moquette-grise": "Grey carpet",
+            "moquette-olive": "Olive carpet",
+            "pierre-grise": "Grey stone",
+            "pierre-olive": "Olive stone",
+            "moquette-mauve": "Mauve carpet",
+            "pierre-mauve": "Mauve stone",
+        },
+        tints: {
+            blanc: "White",
+            lavande: "Lavender",
+            gris: "Grey",
+            brique: "Brick",
+        },
     },
     entityEditor: {
         resize: {

@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Cấu hình phòng của tôi",
         trashEditor: "Thùng rác",
         exploreTheRoom: "Khám phá phòng",
+        mapLayerEditor: "Công cụ bản đồ (sàn và tường)",
         selectionEditor: "Công cụ chọn",
         closeMapEditor: "Đóng trình chỉnh sửa bản đồ",
         mapManagerActivated: "Đã bật trình quản lý bản đồ",
@@ -402,6 +403,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Cách hoạt động?",
         description: "Vẽ một vùng trên bản đồ để tạo vùng mới.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Vẽ tự do",
+            area: "Vẽ một vùng",
+        },
+        title: "Bản đồ",
+        modes: {
+            wall: "Tường",
+            room: "Phòng",
+            floorBrush: "Cọ sàn",
+            floorRectangle: "Hình chữ nhật sàn",
+            floorFill: "Lấp đầy sàn",
+            erase: "Cục tẩy",
+        },
+        hints: {
+            wall: "Kéo để vẽ một bức tường thẳng.",
+            room: "Kéo một hình chữ nhật: tường và sàn cùng lúc.",
+            floorBrush: "Giữ nút và vẽ gạch sàn.",
+            floorRectangle: "Kéo một hình chữ nhật để lấp đầy bằng sàn.",
+            floorFill: "Nhấp vào phòng kín để lấp đầy.",
+            erase: "Giữ nút để xóa tường và sàn. Các vật thể được giữ lại.",
+        },
+        floors: "Sàn",
+        walls: "Kiểu tường",
+        catalogLoading: "Đang kiểm tra danh mục sàn và tường...",
+        catalogMissing: "Danh mục sàn và tường không có trong phòng này.",
+        status: {
+            tooLarge: "Thay đổi này quá lớn. Hãy vẽ vùng nhỏ hơn.",
+            fillTooLarge: "Vùng chưa kín hoặc quá lớn để lấp đầy. Hãy khép kín bằng tường trước.",
+            failed: "Không thể áp dụng thay đổi.",
+        },
+        families: {
+            "carrelage-gris": "Gạch xám",
+            "parquet-clair": "Sàn gỗ sáng",
+            "moquette-grise": "Thảm xám",
+            "moquette-olive": "Thảm ô liu",
+            "pierre-grise": "Đá xám",
+            "pierre-olive": "Đá ô liu",
+            "moquette-mauve": "Thảm tím nhạt",
+            "pierre-mauve": "Đá tím nhạt",
+        },
+        tints: {
+            blanc: "Trắng",
+            lavande: "Oải hương",
+            gris: "Xám",
+            brique: "Gạch đỏ",
+        },
     },
     entityEditor: {
         resize: {

@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "マイルームの設定",
         trashEditor: "ごみ箱エディター",
         exploreTheRoom: "ルームの探索",
+        mapLayerEditor: "マップツール（床と壁）",
         selectionEditor: "Selection tool",
         closeMapEditor: "マップエディターの終了",
         mapManagerActivated: "マップマネージャーの起動",
@@ -403,6 +404,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "どのように機能しますか？",
         description: "マップ上にゾーンを描き、新しいゾーンを作成します。",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "フリーハンドで描く",
+            area: "範囲を描く",
+        },
+        title: "マップ",
+        modes: {
+            wall: "壁",
+            room: "部屋",
+            floorBrush: "床ブラシ",
+            floorRectangle: "床の矩形",
+            floorFill: "床を塗りつぶす",
+            erase: "消しゴム",
+        },
+        hints: {
+            wall: "ドラッグしてまっすぐな壁を描きます。",
+            room: "矩形をドラッグすると壁と床を一度に作れます。",
+            floorBrush: "ボタンを押したまま床タイルを塗ります。",
+            floorRectangle: "矩形をドラッグして床で埋めます。",
+            floorFill: "閉じた部屋をクリックして塗りつぶします。",
+            erase: "ボタンを押したまま壁と床を消します。オブジェクトは残ります。",
+        },
+        floors: "床",
+        walls: "壁のスタイル",
+        catalogLoading: "床と壁のカタログを確認しています...",
+        catalogMissing: "この部屋では床と壁のカタログを利用できません。",
+        status: {
+            tooLarge: "この変更は大きすぎます。もっと小さな範囲を描いてください。",
+            fillTooLarge: "範囲が閉じていないか、大きすぎて塗りつぶせません。先に壁で囲んでください。",
+            failed: "変更を適用できませんでした。",
+        },
+        families: {
+            "carrelage-gris": "グレーのタイル",
+            "parquet-clair": "明るいパーケット",
+            "moquette-grise": "グレーのカーペット",
+            "moquette-olive": "オリーブのカーペット",
+            "pierre-grise": "グレーの石",
+            "pierre-olive": "オリーブの石",
+            "moquette-mauve": "モーブのカーペット",
+            "pierre-mauve": "モーブの石",
+        },
+        tints: {
+            blanc: "白",
+            lavande: "ラベンダー",
+            gris: "グレー",
+            brique: "レンガ",
+        },
     },
     entityEditor: {
         resize: {

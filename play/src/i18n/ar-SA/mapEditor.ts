@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "تكوين غرفتي", // Mein Zimmer konfigurieren
         trashEditor: "سلة المهملات", // Papierkorb
         exploreTheRoom: "استكشاف الغرفة", // Raum erkunden
+        mapLayerEditor: "أداة الخريطة (الأرضيات والجدران)",
         selectionEditor: "Selection tool",
         closeMapEditor: "إغلاق محرر الخريطة", // Karteneditor schließen
         mapManagerActivated: "تم تفعيل مدير الخريطة", // Kartenmanager aktiviert
@@ -399,6 +400,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "كيف يعمل؟", // How does it work?
         description: "ارسم منطقة على الخريطة لإنشاء منطقة جديدة.", // Draw an area on the map to create a new one.
+    },
+    mapLayer: {
+        groups: {
+            freehand: "الرسم الحر",
+            area: "رسم منطقة",
+        },
+        title: "الخريطة",
+        modes: {
+            wall: "جدار",
+            room: "غرفة",
+            floorBrush: "فرشاة الأرضية",
+            floorRectangle: "مستطيل أرضية",
+            floorFill: "ملء الأرضية",
+            erase: "ممحاة",
+        },
+        hints: {
+            wall: "اسحب لرسم جدار مستقيم.",
+            room: "اسحب مستطيلاً: جدران وأرضية دفعة واحدة.",
+            floorBrush: "اضغط مع الاستمرار وارسم بلاط الأرضية.",
+            floorRectangle: "اسحب مستطيلاً لملئه بالأرضية.",
+            floorFill: "انقر داخل غرفة مغلقة لملئها.",
+            erase: "اضغط مع الاستمرار لمسح الجدران والأرضيات. تبقى الأغراض.",
+        },
+        floors: "الأرضية",
+        walls: "نمط الجدار",
+        catalogLoading: "جارٍ التحقق من كتالوجات الأرضيات والجدران...",
+        catalogMissing: "كتالوجات الأرضيات والجدران غير متاحة في هذه الغرفة.",
+        status: {
+            tooLarge: "هذا التغيير كبير جداً. ارسم منطقة أصغر.",
+            fillTooLarge: "المنطقة غير مغلقة أو كبيرة جداً للملء. أغلقها بالجدران أولاً.",
+            failed: "تعذّر تطبيق التغيير.",
+        },
+        families: {
+            "carrelage-gris": "بلاط رمادي",
+            "parquet-clair": "باركيه فاتح",
+            "moquette-grise": "سجاد رمادي",
+            "moquette-olive": "سجاد زيتوني",
+            "pierre-grise": "حجر رمادي",
+            "pierre-olive": "حجر زيتوني",
+            "moquette-mauve": "سجاد أرجواني فاتح",
+            "pierre-mauve": "حجر أرجواني فاتح",
+        },
+        tints: {
+            blanc: "أبيض",
+            lavande: "لافندر",
+            gris: "رمادي",
+            brique: "طوب",
+        },
     },
     entityEditor: {
         resize: {

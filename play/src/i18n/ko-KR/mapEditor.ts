@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "내 방 설정",
         trashEditor: "휴지통",
         exploreTheRoom: "방 탐색",
+        mapLayerEditor: "지도 도구(바닥 및 벽)",
         selectionEditor: "Selection tool",
         closeMapEditor: "지도 편집기 닫기",
         mapManagerActivated: "지도 편집 모드로 전환되었습니다",
@@ -402,6 +403,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "사용 방법",
         description: "지도에서 영역을 그려 새로운 영역을 만드세요.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "자유롭게 그리기",
+            area: "영역 그리기",
+        },
+        title: "지도",
+        modes: {
+            wall: "벽",
+            room: "방",
+            floorBrush: "바닥 브러시",
+            floorRectangle: "바닥 사각형",
+            floorFill: "바닥 채우기",
+            erase: "지우개",
+        },
+        hints: {
+            wall: "드래그하여 직선 벽을 그립니다.",
+            room: "사각형을 드래그하면 벽과 바닥이 한 번에 만들어집니다.",
+            floorBrush: "버튼을 누른 채 바닥 타일을 칠합니다.",
+            floorRectangle: "사각형을 드래그하여 바닥으로 채웁니다.",
+            floorFill: "닫힌 방을 클릭하여 채웁니다.",
+            erase: "버튼을 누른 채 벽과 바닥을 지웁니다. 오브젝트는 유지됩니다.",
+        },
+        floors: "바닥",
+        walls: "벽 스타일",
+        catalogLoading: "바닥 및 벽 카탈로그를 확인하는 중...",
+        catalogMissing: "이 방에서는 바닥 및 벽 카탈로그를 사용할 수 없습니다.",
+        status: {
+            tooLarge: "변경 사항이 너무 큽니다. 더 작은 영역을 그리세요.",
+            fillTooLarge: "영역이 닫혀 있지 않거나 너무 커서 채울 수 없습니다. 먼저 벽으로 닫으세요.",
+            failed: "변경 사항을 적용할 수 없습니다.",
+        },
+        families: {
+            "carrelage-gris": "회색 타일",
+            "parquet-clair": "밝은 마루",
+            "moquette-grise": "회색 카펫",
+            "moquette-olive": "올리브 카펫",
+            "pierre-grise": "회색 돌",
+            "pierre-olive": "올리브 돌",
+            "moquette-mauve": "연보라 카펫",
+            "pierre-mauve": "연보라 돌",
+        },
+        tints: {
+            blanc: "흰색",
+            lavande: "라벤더",
+            gris: "회색",
+            brique: "벽돌",
+        },
     },
     entityEditor: {
         resize: {

@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Mein Zimmer konfigurieren",
         trashEditor: "Papierkorb",
         exploreTheRoom: "Raum erkunden",
+        mapLayerEditor: "Kartenwerkzeug (Böden und Wände)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Karteneditor schließen",
         mapManagerActivated: "Kartenmanager aktiviert",
@@ -406,6 +407,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Wie funktioniert das?",
         description: "Zeichnen Sie ein Gebiet auf der Karte, um ein neues zu erstellen.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Freihand zeichnen",
+            area: "Bereich zeichnen",
+        },
+        title: "Karte",
+        modes: {
+            wall: "Wand",
+            room: "Raum",
+            floorBrush: "Bodenpinsel",
+            floorRectangle: "Bodenrechteck",
+            floorFill: "Boden füllen",
+            erase: "Radierer",
+        },
+        hints: {
+            wall: "Ziehen, um eine gerade Wand zu zeichnen.",
+            room: "Rechteck ziehen: Wände und Boden in einem Zug.",
+            floorBrush: "Taste gedrückt halten und Bodenfliesen malen.",
+            floorRectangle: "Rechteck ziehen, um es mit Boden zu füllen.",
+            floorFill: "In einen geschlossenen Raum klicken, um ihn zu füllen.",
+            erase: "Taste gedrückt halten, um Wände und Böden zu löschen. Objekte bleiben erhalten.",
+        },
+        floors: "Boden",
+        walls: "Wandstil",
+        catalogLoading: "Boden- und Wandkataloge werden geprüft...",
+        catalogMissing: "Die Boden- und Wandkataloge sind in diesem Raum nicht verfügbar.",
+        status: {
+            tooLarge: "Diese Änderung ist zu groß. Zeichne einen kleineren Bereich.",
+            fillTooLarge: "Der Bereich ist nicht geschlossen oder zu groß zum Füllen. Schließe ihn zuerst mit Wänden.",
+            failed: "Die Änderung konnte nicht angewendet werden.",
+        },
+        families: {
+            "carrelage-gris": "Graue Fliesen",
+            "parquet-clair": "Helles Parkett",
+            "moquette-grise": "Grauer Teppich",
+            "moquette-olive": "Olivgrüner Teppich",
+            "pierre-grise": "Grauer Stein",
+            "pierre-olive": "Olivgrüner Stein",
+            "moquette-mauve": "Malvenfarbener Teppich",
+            "pierre-mauve": "Malvenfarbener Stein",
+        },
+        tints: {
+            blanc: "Weiß",
+            lavande: "Lavendel",
+            gris: "Grau",
+            brique: "Backstein",
+        },
     },
     entityEditor: {
         resize: {

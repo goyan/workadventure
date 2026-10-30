@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configurar minha sala",
         trashEditor: "Lixeira",
         exploreTheRoom: "Explorar a sala",
+        mapLayerEditor: "Ferramenta de mapa (pisos e paredes)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Fechar editor de mapa",
         mapManagerActivated: "Gerenciador de mapa ativado",
@@ -406,6 +407,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Como funciona?",
         description: "Desenhe uma zona no mapa para criar uma nova.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Desenhar à mão livre",
+            area: "Desenhar uma área",
+        },
+        title: "Mapa",
+        modes: {
+            wall: "Parede",
+            room: "Sala",
+            floorBrush: "Pincel de piso",
+            floorRectangle: "Retângulo de piso",
+            floorFill: "Preencher piso",
+            erase: "Borracha",
+        },
+        hints: {
+            wall: "Arraste para traçar uma parede reta.",
+            room: "Arraste um retângulo: paredes e piso de uma vez.",
+            floorBrush: "Segure o botão e pinte ladrilhos de piso.",
+            floorRectangle: "Arraste um retângulo para preenchê-lo com piso.",
+            floorFill: "Clique em uma sala fechada para preenchê-la.",
+            erase: "Segure o botão para apagar paredes e pisos. Os objetos são mantidos.",
+        },
+        floors: "Piso",
+        walls: "Estilo da parede",
+        catalogLoading: "Verificando os catálogos de pisos e paredes...",
+        catalogMissing: "Os catálogos de pisos e paredes não estão disponíveis nesta sala.",
+        status: {
+            tooLarge: "Esta alteração é grande demais. Desenhe uma área menor.",
+            fillTooLarge: "A área não está fechada ou é grande demais para ser preenchida. Feche-a antes com paredes.",
+            failed: "Não foi possível aplicar a alteração.",
+        },
+        families: {
+            "carrelage-gris": "Ladrilho cinza",
+            "parquet-clair": "Parquet claro",
+            "moquette-grise": "Carpete cinza",
+            "moquette-olive": "Carpete oliva",
+            "pierre-grise": "Pedra cinza",
+            "pierre-olive": "Pedra oliva",
+            "moquette-mauve": "Carpete lilás",
+            "pierre-mauve": "Pedra lilás",
+        },
+        tints: {
+            blanc: "Branco",
+            lavande: "Lavanda",
+            gris: "Cinza",
+            brique: "Tijolo",
+        },
     },
     entityEditor: {
         resize: {

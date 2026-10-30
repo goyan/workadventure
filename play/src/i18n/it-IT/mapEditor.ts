@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "Configura la mia stanza",
         trashEditor: "Cestino",
         exploreTheRoom: "Esplora la stanza",
+        mapLayerEditor: "Strumento mappa (pavimenti e pareti)",
         selectionEditor: "Selection tool",
         closeMapEditor: "Chiudi l'editor della mappa",
         mapManagerActivated: "Gestore della mappa attivato",
@@ -404,6 +405,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Come funziona?",
         description: "Disegna una zona sulla mappa per crearne una nuova.",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "Disegna a mano libera",
+            area: "Disegna un'area",
+        },
+        title: "Mappa",
+        modes: {
+            wall: "Parete",
+            room: "Stanza",
+            floorBrush: "Pennello pavimento",
+            floorRectangle: "Rettangolo pavimento",
+            floorFill: "Riempi pavimento",
+            erase: "Gomma",
+        },
+        hints: {
+            wall: "Trascina per tracciare una parete dritta.",
+            room: "Trascina un rettangolo: pareti e pavimento in un colpo solo.",
+            floorBrush: "Tieni premuto il pulsante e dipingi le piastrelle.",
+            floorRectangle: "Trascina un rettangolo per riempirlo di pavimento.",
+            floorFill: "Clicca in una stanza chiusa per riempirla.",
+            erase: "Tieni premuto il pulsante per cancellare pareti e pavimenti. Gli oggetti restano.",
+        },
+        floors: "Pavimento",
+        walls: "Stile della parete",
+        catalogLoading: "Verifica dei cataloghi di pavimenti e pareti...",
+        catalogMissing: "I cataloghi di pavimenti e pareti non sono disponibili in questa stanza.",
+        status: {
+            tooLarge: "Questa modifica è troppo grande. Disegna un'area più piccola.",
+            fillTooLarge: "L'area non è chiusa o è troppo grande per essere riempita. Chiudila prima con delle pareti.",
+            failed: "Impossibile applicare la modifica.",
+        },
+        families: {
+            "carrelage-gris": "Piastrelle grigie",
+            "parquet-clair": "Parquet chiaro",
+            "moquette-grise": "Moquette grigia",
+            "moquette-olive": "Moquette oliva",
+            "pierre-grise": "Pietra grigia",
+            "pierre-olive": "Pietra oliva",
+            "moquette-mauve": "Moquette malva",
+            "pierre-mauve": "Pietra malva",
+        },
+        tints: {
+            blanc: "Bianco",
+            lavande: "Lavanda",
+            gris: "Grigio",
+            brique: "Mattone",
+        },
     },
     entityEditor: {
         resize: {

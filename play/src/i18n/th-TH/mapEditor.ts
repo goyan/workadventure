@@ -16,6 +16,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoom: "ตั้งค่าห้องของฉัน",
         trashEditor: "ถังขยะ",
         exploreTheRoom: "สำรวจห้อง",
+        mapLayerEditor: "เครื่องมือแผนที่ (พื้นและผนัง)",
         selectionEditor: "เครื่องมือเลือก",
         closeMapEditor: "ปิดตัวแก้ไขแผนที่",
         mapManagerActivated: "เปิดใช้ตัวจัดการแผนที่แล้ว",
@@ -399,6 +400,54 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "ใช้งานอย่างไร?",
         description: "วาดพื้นที่บนแผนที่เพื่อสร้างพื้นที่ใหม่",
+    },
+    mapLayer: {
+        groups: {
+            freehand: "วาดอิสระ",
+            area: "วาดเป็นพื้นที่",
+        },
+        title: "แผนที่",
+        modes: {
+            wall: "ผนัง",
+            room: "ห้อง",
+            floorBrush: "แปรงพื้น",
+            floorRectangle: "สี่เหลี่ยมพื้น",
+            floorFill: "เติมพื้น",
+            erase: "ยางลบ",
+        },
+        hints: {
+            wall: "ลากเพื่อวาดผนังตรง",
+            room: "ลากสี่เหลี่ยม: สร้างผนังและพื้นพร้อมกัน",
+            floorBrush: "กดปุ่มค้างแล้วระบายกระเบื้องพื้น",
+            floorRectangle: "ลากสี่เหลี่ยมเพื่อเติมด้วยพื้น",
+            floorFill: "คลิกในห้องที่ปิดเพื่อเติม",
+            erase: "กดปุ่มค้างเพื่อลบผนังและพื้น วัตถุจะยังอยู่",
+        },
+        floors: "พื้น",
+        walls: "สไตล์ผนัง",
+        catalogLoading: "กำลังตรวจสอบแคตตาล็อกพื้นและผนัง...",
+        catalogMissing: "แคตตาล็อกพื้นและผนังไม่พร้อมใช้งานในห้องนี้",
+        status: {
+            tooLarge: "การเปลี่ยนแปลงนี้ใหญ่เกินไป โปรดวาดพื้นที่ที่เล็กลง",
+            fillTooLarge: "พื้นที่ไม่ปิดหรือใหญ่เกินกว่าจะเติมได้ โปรดปิดด้วยผนังก่อน",
+            failed: "ไม่สามารถใช้การเปลี่ยนแปลงได้",
+        },
+        families: {
+            "carrelage-gris": "กระเบื้องสีเทา",
+            "parquet-clair": "ปาร์เกต์สีอ่อน",
+            "moquette-grise": "พรมสีเทา",
+            "moquette-olive": "พรมสีมะกอก",
+            "pierre-grise": "หินสีเทา",
+            "pierre-olive": "หินสีมะกอก",
+            "moquette-mauve": "พรมสีม่วงอ่อน",
+            "pierre-mauve": "หินสีม่วงอ่อน",
+        },
+        tints: {
+            blanc: "ขาว",
+            lavande: "ลาเวนเดอร์",
+            gris: "เทา",
+            brique: "อิฐ",
+        },
     },
     entityEditor: {
         resize: {

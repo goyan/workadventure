@@ -74,6 +74,10 @@ export const ENABLE_CHAT_ONLINE_LIST = env.ENABLE_CHAT_ONLINE_LIST;
 
 export const ENABLE_CHAT_DISCONNECTED_LIST = env.ENABLE_CHAT_DISCONNECTED_LIST;
 export const ENABLE_TILE_SNAP = env.ENABLE_TILE_SNAP ?? false;
+export const MAP_LAYER_CATALOG_URLS = (env.MAP_LAYER_CATALOG_URLS ?? "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0);
 export const ENABLE_SAY = env.ENABLE_SAY;
 export const ENABLE_ISSUE_REPORT = env.ENABLE_ISSUE_REPORT;
 
