@@ -723,7 +723,7 @@ describe("SelectionEditorTool", () => {
             vi.mocked(listMapPatterns).mockResolvedValue([patternSummary]);
             select(0, 0, 200, 200);
 
-            await tool.saveSelectionAsPattern("Salle");
+            await expect(tool.saveSelectionAsPattern("Salle")).resolves.toBe(true);
 
             expect(createMapPattern).toHaveBeenCalledTimes(1);
             const [roomUrl, name, payload] = vi.mocked(createMapPattern).mock.calls[0];
@@ -739,8 +739,20 @@ describe("SelectionEditorTool", () => {
             expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: undefined });
         });
 
+        it("reports the pattern as created even when the list refresh fails afterwards", async () => {
+            addEntity("floor-1", 32, 32, floorPrefab);
+            vi.mocked(createMapPattern).mockResolvedValue(patternSummary);
+            vi.mocked(listMapPatterns).mockRejectedValue(new MapPatternApiError("unavailable"));
+            select(0, 0, 200, 200);
+
+            await expect(tool.saveSelectionAsPattern("Salle")).resolves.toBe(true);
+
+            expect(get(mapEditorPatternStore).error).toBe("unavailable");
+            expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: undefined });
+        });
+
         it("does not call the API when nothing is selected", async () => {
-            await tool.saveSelectionAsPattern("Salle");
+            await expect(tool.saveSelectionAsPattern("Salle")).resolves.toBe(false);
 
             expect(createMapPattern).not.toHaveBeenCalled();
             expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: "blocked" });
@@ -751,7 +763,7 @@ describe("SelectionEditorTool", () => {
             vi.mocked(createMapPattern).mockRejectedValue(new MapPatternApiError("quota"));
             select(0, 0, 200, 200);
 
-            await tool.saveSelectionAsPattern("Salle");
+            await expect(tool.saveSelectionAsPattern("Salle")).resolves.toBe(false);
 
             expect(get(mapEditorPatternStore).error).toBe("quota");
             expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: undefined });

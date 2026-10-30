@@ -226,26 +226,32 @@ export class SelectionEditorTool extends MapEditorTool {
         this.drawVisuals();
     }
 
-    /** Saves the current selection as a pattern shared with the other editors of the world (Admin API). */
-    public async saveSelectionAsPattern(name: string): Promise<void> {
+    /**
+     * Saves the current selection as a pattern shared with the other editors of the world (Admin API).
+     * Resolves to true once the pattern is created, even if the list refresh that follows fails (the store shows it).
+     */
+    public async saveSelectionAsPattern(name: string): Promise<boolean> {
         if (!this.beginOperation()) {
-            return;
+            return false;
         }
+        let created = false;
         try {
             setMapPatternError(undefined);
             const items = this.readSelectedItems();
             if (!items || items.length === 0) {
                 this.setError("blocked");
-                return;
+                return false;
             }
             const roomUrl = this.getRoomUrl();
             await createMapPattern(roomUrl, name, selectionToPatternPayload(items));
+            created = true;
             await refreshMapPatterns(roomUrl);
         } catch (error: unknown) {
             this.reportPatternFailure("save pattern", error);
         } finally {
             this.endOperation();
         }
+        return created;
     }
 
     /**
