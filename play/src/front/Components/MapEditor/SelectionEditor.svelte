@@ -19,7 +19,7 @@
 
     let isNamingPattern = $state(false);
     let patternName = $state("");
-    let canSavePattern = $derived(patternName.trim().length > 0 && !$mapEditorSelectionStore.busy);
+    let canSavePattern = $derived(patternName.trim().length > 0 && hasSelection && !$mapEditorSelectionStore.busy);
 
     const patternErrorMessages = $derived({
         unavailable: $LL.mapEditor.selection.patternsUnavailable(),
@@ -49,7 +49,8 @@
 
     async function savePattern(): Promise<void> {
         const name = patternName.trim();
-        if (name.length === 0) {
+        // Enter in the field bypasses the disabled button: the selection may have been emptied while typing.
+        if (name.length === 0 || !canSavePattern) {
             return;
         }
         try {
