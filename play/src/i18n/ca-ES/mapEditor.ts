@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Eina d'edició d'entitats",
         tileEditor: "Eina d'edició de rajoles",
         configureMyRoom: "Configurar la meva sala",
-        trashEditor: "Paperera",
         exploreTheRoom: "Explorar la sala",
         mapLayerEditor: "Eina de mapa (terres i parets)",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Exploració de la sala activada",
         areaEditorActivated: "Editor d'àrees activat",
         entityEditorActivated: "Editor d'entitats activat",
-        trashEditorActivated: "Paperera activada",
         configureMyRoomActivated: "Configuració de la sala activada",
     },
     selection: {
@@ -383,6 +381,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "No s'han definit propietats",
     },
     areaEditor: {
+        eraser: "Goma",
+        eraserHint: "Feu clic en una zona per eliminar-la.",
+        deleteButton: "Elimina la zona",
         editInstructions: "Feu clic en una àrea per modificar les seves propietats.",
         nameLabel: "Nom",
         nameLabelPlaceholder: "LaMevaÀrea",
@@ -455,6 +456,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "Goma",
+        eraserHint: "Feu clic o arrossegueu sobre els objectes per eliminar-los.",
         resize: {
             title: "Mida de la imatge",
             width: "Amplada (px)",
@@ -476,9 +479,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "Cercar",
             backToSelectObject: "Tornar a seleccionar objecte",
-        },
-        trashTool: {
-            delete: "Feu clic a l'objecte per eliminar-lo!",
         },
         deleteButton: "Eliminar",
         testInteractionButton: "Provar interacció",

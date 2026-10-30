@@ -65,6 +65,12 @@ export const mapEditorSnapEnabledStore = writable<boolean>(true);
 
 export const mapEditorEntityModeStore = writable<MapEditorEntityToolMode>("ADD");
 
+/** Eraser of the entity tool: a click on an object, or a drag over objects, deletes them. */
+export const mapEditorEntityEraserStore = writable<boolean>(false);
+
+/** Eraser of the area tool: a click on an area deletes it. */
+export const mapEditorAreaEraserStore = writable<boolean>(false);
+
 export const mapEditorEntityUploadEventStore = writable<UploadEntityMessage | undefined>(undefined);
 export const mapEditorModifyCustomEntityEventStore = writable<ModifyCustomEntityMessage | undefined>(undefined);
 export const mapEditorDeleteCustomEntityEventStore = writable<DeleteCustomEntityMessage | undefined>(undefined);

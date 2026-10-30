@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "오브젝트 편집 도구",
         tileEditor: "타일 편집 도구",
         configureMyRoom: "내 방 설정",
-        trashEditor: "휴지통",
         exploreTheRoom: "방 탐색",
         mapLayerEditor: "지도 도구(바닥 및 벽)",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "방 탐색 모드로 전환되었습니다",
         areaEditorActivated: "영역 편집 모드로 전환되었습니다",
         entityEditorActivated: "오브젝트 편집 모드로 전환되었습니다",
-        trashEditorActivated: "휴지통 편집 모드로 전환되었습니다",
         configureMyRoomActivated: "내 방 설정 모드로 전환되었습니다",
     },
     selection: {
@@ -380,6 +378,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "이 엔티티에는 설정된 속성이 없습니다",
     },
     areaEditor: {
+        eraser: "지우개",
+        eraserHint: "영역을 클릭하여 삭제합니다.",
+        deleteButton: "영역 삭제",
         editInstructions: "영역을 클릭해 속성을 수정하세요.",
         nameLabel: "이름",
         nameLabelPlaceholder: "MyArea",
@@ -453,6 +454,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "지우개",
+        eraserHint: "오브젝트를 클릭하거나 드래그하여 삭제합니다.",
         resize: {
             title: "이미지 크기",
             width: "너비 (px)",
@@ -474,9 +477,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "검색",
             backToSelectObject: "오브젝트 선택 화면으로 돌아가기",
-        },
-        trashTool: {
-            delete: "삭제하려는 오브젝트를 클릭하세요!",
         },
         deleteButton: "삭제",
         testInteractionButton: "상호작용 테스트",

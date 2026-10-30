@@ -143,6 +143,7 @@ function createManagerFixture(): {
     const initializedPromise = new Deferred<void>();
     initializedPromise.resolve();
     Object.defineProperty(gameMapFrontWrapper, "initializedPromise", { value: initializedPromise });
+    gameMapFrontWrapper.getEntitiesManager.mockReturnValue(mock<EntitiesManager>());
     scene.getGameMapFrontWrapper.mockReturnValue(gameMapFrontWrapper);
     const wamFile = new WamFile({ version: "1", mapUrl: "test.tmj", areas: [], entities: {}, entityCollections: [] });
     const gameMap = mock<ReturnType<GameScene["getGameMap"]>>();

@@ -13,7 +13,6 @@
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
     import MapLayerEditor from "./MapLayerEditor.svelte";
     import SelectionEditor from "./SelectionEditor.svelte";
-    import TrashEditor from "./TrashEditor.svelte";
     import ConfigureMyRoom from "./WAMSettingsEditor.svelte";
     import MapEditorResizeHandle from "./MapEditorResizeHandle.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditorSideBarWidthStore";
@@ -75,9 +74,6 @@
                 in:fly={{ x: 100, duration: 200, delay: 200 }}
                 out:fly={{ x: 100, duration: 200 }}
             >
-                {#if $mapEditorSelectedToolStore === EditorToolName.TrashEditor}
-                    <TrashEditor />
-                {/if}
                 {#if $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
                     <EntityEditor />
                 {/if}

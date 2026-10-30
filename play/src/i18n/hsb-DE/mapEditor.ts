@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Entita wobdźěłać",
         tileEditor: "Kachlu wobdźěłać",
         configureMyRoom: "Mój rum konfigurować",
-        trashEditor: "papjernik",
         exploreTheRoom: "Wobłuk wužiwać",
         mapLayerEditor: "Map tool (floors and walls)",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Wobłuk wužiwać",
         areaEditorActivated: "Płoninu wobdźěłać",
         entityEditorActivated: "Entita wobdźěłać",
-        trashEditorActivated: "Papjernik wužiwać",
         configureMyRoomActivated: "Mój rum wobdźěłać",
     },
     selection: {
@@ -382,6 +380,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "Žane kajkosće njejsu definowane",
     },
     areaEditor: {
+        eraser: "Gumij",
+        eraserHint: "Klikń na wobłuk, zo by jón wotstronił.",
+        deleteButton: "Wobłuk wotstronić",
         editInstructions: "Klikńće na płoninu, zo byšće jeje kajkosće změnili.",
         nameLabel: "mjeno",
         nameLabelPlaceholder: "MójWobłuk",
@@ -454,6 +455,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "Gumij",
+        eraserHint: "Klikń abo ćehń přez objekty, zo by je wotstronił.",
         resize: {
             title: "Wulkosć wobraza",
             width: "Šěrokosć (px)",
@@ -475,9 +478,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "slědźić",
             backToSelectObject: "Wróćo k wubrance",
-        },
-        trashTool: {
-            delete: "Klikńće na objekt, zo byšće jón wotstronił!",
         },
         deleteButton: "wotstronić",
         testInteractionButton: "Interakciju testować",

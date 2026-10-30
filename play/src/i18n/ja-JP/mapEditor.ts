@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "エンティティエディターツール",
         tileEditor: "タイルエディターツール",
         configureMyRoom: "マイルームの設定",
-        trashEditor: "ごみ箱エディター",
         exploreTheRoom: "ルームの探索",
         mapLayerEditor: "マップツール（床と壁）",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "ルームの探索",
         areaEditorActivated: "エリアエディターの起動",
         entityEditorActivated: "エンティティエディターの起動",
-        trashEditorActivated: "ごみ箱エディターの起動",
         configureMyRoomActivated: "マイルームの設定",
     },
     selection: {
@@ -382,6 +380,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "プロパティが定義されていません",
     },
     areaEditor: {
+        eraser: "消しゴム",
+        eraserHint: "エリアをクリックして削除します。",
+        deleteButton: "エリアを削除",
         editInstructions: "エリアをクリックしてプロパティを変更します。",
         nameLabel: "エリア名",
         nameLabelPlaceholder: "マイエリア",
@@ -454,6 +455,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "消しゴム",
+        eraserHint: "オブジェクトをクリックまたはドラッグして削除します。",
         resize: {
             title: "画像サイズ",
             width: "幅 (px)",
@@ -475,9 +478,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "検索",
             backToSelectObject: "オブジェクトの選択に戻る",
-        },
-        trashTool: {
-            delete: "オブジェクトをクリックして削除します。",
         },
         deleteButton: "削除",
         testInteractionButton: "相互作用のテスト",

@@ -7,7 +7,7 @@
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
     import { MAP_LAYER_COLLECTIONS } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
-    import { mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
+    import { mapEditorEntityEraserStore, mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
         mapEditorDeleteCustomEntityEventStore,
@@ -28,7 +28,7 @@
     import EntityVariantPositionPicker from "./EntityItem/EntityVariantPositionPicker.svelte";
     import EntityUpload from "./EntityUpload/EntityUpload.svelte";
     import TagListItem from "./TagListItem.svelte";
-    import { IconChevronLeft, IconPencil } from "@wa-icons";
+    import { IconChevronLeft, IconEraser, IconPencil } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
     // Floors and walls of the map layer have their own tool: they are not offered as objects.
@@ -297,6 +297,21 @@
                 alignLabel="center"
             />
         </div>
+        <button
+            type="button"
+            class="flex flex-row items-center gap-2 p-2 rounded text-sm {$mapEditorEntityEraserStore
+                ? 'bg-danger'
+                : 'bg-white/10 hover:bg-white/20'}"
+            data-testid="entityEraserButton"
+            aria-pressed={$mapEditorEntityEraserStore}
+            onclick={() => mapEditorEntityEraserStore.update((active) => !active)}
+        >
+            <IconEraser font-size="18" />
+            <span>{$LL.mapEditor.entityEditor.eraser()}</span>
+        </button>
+        {#if $mapEditorEntityEraserStore}
+            <p class="m-0 text-sm opacity-80">{$LL.mapEditor.entityEditor.eraserHint()}</p>
+        {/if}
         <div class="flex *:w-full">
             <Input
                 rounded

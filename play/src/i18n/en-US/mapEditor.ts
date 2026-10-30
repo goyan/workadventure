@@ -13,7 +13,6 @@ const mapEditor: BaseTranslation = {
         entityEditor: "Entity editor tool",
         tileEditor: "Tile editor tool",
         configureMyRoom: "Configure my room",
-        trashEditor: "Trash",
         exploreTheRoom: "Explore the room",
         mapLayerEditor: "Map tool (floors and walls)",
         selectionEditor: "Selection tool",
@@ -23,7 +22,6 @@ const mapEditor: BaseTranslation = {
         exploreTheRoomActivated: "Explore the room activated",
         areaEditorActivated: "Area editor activated",
         entityEditorActivated: "Entity editor activated",
-        trashEditorActivated: "Trash editor activated",
         configureMyRoomActivated: "Configure my room activated",
     },
     selection: {
@@ -379,6 +377,9 @@ const mapEditor: BaseTranslation = {
         noProperties: "No properties defined",
     },
     areaEditor: {
+        eraser: "Eraser",
+        eraserHint: "Click an area to delete it.",
+        deleteButton: "Delete area",
         editInstructions: "Click an area to modify its properties.",
         nameLabel: "Name",
         nameLabelPlaceholder: "MyArea",
@@ -473,10 +474,9 @@ const mapEditor: BaseTranslation = {
             searchPlaceholder: "Search",
             backToSelectObject: "Back to select object",
         },
-        trashTool: {
-            delete: "Click on the object to delete it!",
-        },
         deleteButton: "Delete",
+        eraser: "Eraser",
+        eraserHint: "Click or drag over objects to delete them.",
         testInteractionButton: "Test Interaction",
         buttonLabel: "Button Label",
         editInstructions: "Click an entity to modify its properties.",

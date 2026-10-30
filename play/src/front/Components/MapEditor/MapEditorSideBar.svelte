@@ -11,16 +11,7 @@
     import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
     import ArrowBarRight from "../Icons/ArrowBarRight.svelte";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import {
-        IconDeselect,
-        IconX,
-        IconTexture,
-        IconLamp,
-        IconMapSearch,
-        IconSettings,
-        IconTrash,
-        IconWall,
-    } from "@wa-icons";
+    import { IconDeselect, IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconWall } from "@wa-icons";
 
     type SideBarTool = {
         toolName: EditorToolName;
@@ -41,11 +32,6 @@
         iconComponent: IconLamp,
         tooltiptext: $LL.mapEditor.sideBar.entityEditor(),
     };
-    const trashEditorTool = {
-        toolName: EditorToolName.TrashEditor,
-        iconComponent: IconTrash,
-        tooltiptext: $LL.mapEditor.sideBar.trashEditor(),
-    };
     const mapLayerEditorTool = {
         toolName: EditorToolName.MapLayerEditor,
         iconComponent: IconWall,
@@ -61,7 +47,7 @@
         const tools: SideBarTool[] = [exploreTheRoomTool];
 
         if ($mapEditorActivatedForThematics && !$mapEditorActivated) {
-            tools.push(entityEditorTool, trashEditorTool);
+            tools.push(entityEditorTool);
         }
 
         if ($mapEditorActivated && !isMobile) {
@@ -78,7 +64,6 @@
                 iconComponent: IconSettings,
                 tooltiptext: $LL.mapEditor.sideBar.configureMyRoom(),
             });
-            tools.push(trashEditorTool);
         }
 
         return tools;

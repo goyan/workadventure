@@ -9,6 +9,7 @@ import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
+    mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
     mapEditorModeStore,
     mapEditorSelectedEntityDraggedStore,
@@ -17,6 +18,7 @@ import {
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
 } from "../../../Stores/MapEditorStore";
+import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
@@ -60,6 +62,7 @@ export enum EntitiesManagerEvent {
 }
 
 export class EntitiesManager extends EventEmitter {
+    private readonly erasingEntityIds = new Set<string>();
     private scene: GameScene;
     private gameMapFrontWrapper: GameMapFrontWrapper;
 
@@ -177,6 +180,7 @@ export class EntitiesManager extends EventEmitter {
     }
 
     public deleteEntity(id: string): boolean {
+        this.erasingEntityIds.delete(id);
         const entity = this.entities.get(id);
         if (!entity) {
             console.warn(`Entity ${id} already deleted`);
@@ -386,7 +390,9 @@ export class EntitiesManager extends EventEmitter {
                     document.activeElement.blur();
                 }
 
-                if (this.isTrashEditorToolActive()) {
+                if (get(mapEditorEntityEraserStore)) {
+                    // The eraser of the entity tool deletes the object instead of selecting it.
+                    this.eraseEntity(entity);
                     return;
                 }
 
@@ -402,8 +408,13 @@ export class EntitiesManager extends EventEmitter {
                     return;
                 }
                 if (this.isEntityEditorToolActive()) {
-                    entity.setPointedToEditColor(this.isTrashEditorToolActive() ? 0xff0000 : 0x00ff00);
+                    const eraser = get(mapEditorEntityEraserStore);
+                    entity.setPointedToEditColor(eraser ? 0xff0000 : 0x00ff00);
                     this.scene.markDirty();
+                    // Dragging over objects with the button down erases them.
+                    if (eraser && pointer.leftButtonDown()) {
+                        this.eraseEntity(entity);
+                    }
                 }
                 if (this.isExplorerToolActive()) {
                     entity.setPointedToEditColor(0xf9e82d);
@@ -471,15 +482,18 @@ export class EntitiesManager extends EventEmitter {
         this.scene.markDirty();
     }
 
-    private isEntityEditorToolActive(): boolean {
-        return (
-            get(mapEditorSelectedToolStore) === EditorToolName.EntityEditor ||
-            get(mapEditorSelectedToolStore) === EditorToolName.TrashEditor
-        );
+    private eraseEntity(entity: Entity): void {
+        const prefab = entity.getPrefab();
+        // Floors and walls of the map layer are erased with the Map tool, which keeps their joints consistent.
+        if (isMapLayerPrefab(prefab.collectionName, prefab.id) || this.erasingEntityIds.has(entity.entityId)) {
+            return;
+        }
+        this.erasingEntityIds.add(entity.entityId);
+        entity.delete();
     }
 
-    private isTrashEditorToolActive(): boolean {
-        return get(mapEditorSelectedToolStore) === EditorToolName.TrashEditor;
+    private isEntityEditorToolActive(): boolean {
+        return get(mapEditorSelectedToolStore) === EditorToolName.EntityEditor;
     }
 
     private isExplorerToolActive(): boolean {

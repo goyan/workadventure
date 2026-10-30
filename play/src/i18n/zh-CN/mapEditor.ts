@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "实体编辑器工具",
         tileEditor: "瓦片编辑器工具",
         configureMyRoom: "配置我的房间",
-        trashEditor: "垃圾桶",
         exploreTheRoom: "探索房间",
         mapLayerEditor: "地图工具（地板和墙壁）",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "探索房间已激活",
         areaEditorActivated: "区域编辑器已激活",
         entityEditorActivated: "实体编辑器已激活",
-        trashEditorActivated: "垃圾桶编辑器已激活",
         configureMyRoomActivated: "配置我的房间已激活",
     },
     selection: {
@@ -376,6 +374,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "未定义属性",
     },
     areaEditor: {
+        eraser: "橡皮擦",
+        eraserHint: "点击区域即可将其删除。",
+        deleteButton: "删除区域",
         editInstructions: "点击区域以修改其属性。",
         nameLabel: "名称",
         nameLabelPlaceholder: "MyArea",
@@ -448,6 +449,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "橡皮擦",
+        eraserHint: "点击或拖动经过对象即可将其删除。",
         resize: {
             title: "图片尺寸",
             width: "宽度 (px)",
@@ -469,9 +472,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "搜索",
             backToSelectObject: "返回选择对象",
-        },
-        trashTool: {
-            delete: "点击对象以删除它！",
         },
         deleteButton: "删除",
         testInteractionButton: "测试交互",

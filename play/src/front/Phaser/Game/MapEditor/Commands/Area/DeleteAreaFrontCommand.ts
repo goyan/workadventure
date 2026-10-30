@@ -3,7 +3,6 @@ import { DeleteAreaCommand } from "@workadventure/map-editor";
 import type { AreaEditorTool } from "../../Tools/AreaEditorTool";
 import type { FrontCommandInterface } from "../FrontCommandInterface";
 import type { RoomConnection } from "../../../../../Connection/RoomConnection";
-import type { TrashEditorTool } from "../../Tools/TrashEditorTool";
 import { VoidFrontCommand } from "../VoidFrontCommand";
 import type { GameMapFrontWrapper } from "../../../GameMap/GameMapFrontWrapper";
 import { analyticsClient } from "../../../../../Administration/AnalyticsClient";
@@ -14,7 +13,7 @@ export class DeleteAreaFrontCommand extends DeleteAreaCommand implements FrontCo
         wamFile: WamFile,
         areaId: string,
         commandId: string | undefined,
-        private editorTool: AreaEditorTool | TrashEditorTool,
+        private editorTool: AreaEditorTool,
         private gameMapFrontWrapper: GameMapFrontWrapper,
     ) {
         super(wamFile, areaId, commandId);

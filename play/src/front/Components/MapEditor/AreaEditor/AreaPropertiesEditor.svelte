@@ -13,7 +13,7 @@
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
     import { LL } from "../../../../i18n/i18n-svelte";
-    import { mapEditorSelectedAreaPreviewStore } from "../../../Stores/MapEditorStore";
+    import { mapEditorAreaModeStore, mapEditorSelectedAreaPreviewStore } from "../../../Stores/MapEditorStore";
     import { MATRIX_PUBLIC_URI, PUSHER_URL } from "../../../Enum/EnvironmentVariable";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import JitsiRoomPropertyEditor from "../PropertyEditor/JitsiRoomPropertyEditor.svelte";
@@ -29,7 +29,7 @@
     import AddPropertyButtonWrapper from "../PropertyEditor/AddPropertyButtonWrapper.svelte";
     import PersonalAreaPropertyEditor from "../PropertyEditor/PersonalAreaPropertyEditor.svelte";
     import RightsPropertyEditor from "../PropertyEditor/RightsPropertyEditor.svelte";
-    import { IconChevronDown, IconChevronRight, IconInfoCircle } from "../../Icons";
+    import { IconChevronDown, IconChevronRight, IconInfoCircle, IconTrash } from "../../Icons";
     import { extensionModuleStore } from "../../../Stores/GameSceneStore";
     import MatrixRoomPropertyEditor from "../PropertyEditor/MatrixRoomPropertyEditor.svelte";
     import TooltipPropertyButton from "../PropertyEditor/TooltipPropertyButton.svelte";
@@ -549,12 +549,27 @@
     let extensionModulesAreaMapEditor = getAreaMapEditors($extensionModuleStore);
 
     let hasMeeting = $derived(hasMeetingProperty(properties, extensionModulesAreaMapEditor));
+
+    function deleteSelectedArea() {
+        // Same as the Delete key: the area tool removes the area through a command.
+        $mapEditorSelectedAreaPreviewStore?.delete();
+        mapEditorAreaModeStore.set("ADD");
+    }
 </script>
 
 {#if $mapEditorSelectedAreaPreviewStore === undefined}
     {$LL.mapEditor.areaEditor.editInstructions()}
 {:else}
     <div class="overflow-x-hidden space-y-3">
+        <button
+            type="button"
+            class="flex flex-row items-center gap-2 p-2 rounded text-sm bg-danger"
+            data-testid="deleteAreaButton"
+            onclick={deleteSelectedArea}
+        >
+            <IconTrash font-size="18" />
+            <span>{$LL.mapEditor.areaEditor.deleteButton()}</span>
+        </button>
         <div class="properties-buttons flex flex-row flex-wrap">
             {#if !hasPersonalAreaProperty && !hasRightsProperty}
                 <AddPropertyButtonWrapper

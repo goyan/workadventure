@@ -9,6 +9,7 @@ import { EntitiesManagerEvent } from "../../GameMap/EntitiesManager";
 import {
     mapEditorCopiedEntityDataPropertiesStore,
     mapEditorEntityFileDroppedStore,
+    mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
     mapEditorModeStore,
     mapEditorSelectedEntityDraggedStore,
@@ -39,6 +40,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     protected mapEntityEditorModeStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorSelectedEntityStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorSelectedEntityDraggedStoreUnsubscriber: Unsubscriber | undefined;
+    protected mapEditorEntityEraserStoreUnsubscriber: Unsubscriber | undefined;
 
     protected constructor(mapEditorModeManager: MapEditorModeManager) {
         super();
@@ -59,6 +61,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     public clear(): void {
         this.scene.input.topOnly = false;
         mapEditorEntityModeStore.set("ADD");
+        mapEditorEntityEraserStore.set(false);
         mapEditorSelectedEntityStore.set(undefined);
         this.entitiesManager.clearAllEntitiesTint();
         this.entitiesManager.clearAllEntitiesEditOutlines();
@@ -118,12 +121,17 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         this.mapEntityEditorModeStoreUnsubscriber?.();
         this.mapEditorSelectedEntityStoreUnsubscriber?.();
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber?.();
+        this.mapEditorEntityEraserStoreUnsubscriber?.();
     }
 
     protected subscribeToStores(): void {
         this.mapEditorSelectedEntityPrefabStoreUnsubscriber = mapEditorSelectedEntityPrefabStore.subscribe(
             (entityPrefab: EntityPrefab | undefined): void => {
                 this.entityPrefab = entityPrefab;
+                if (entityPrefab) {
+                    // Picking an object to place leaves the eraser.
+                    mapEditorEntityEraserStore.set(false);
+                }
                 if (!entityPrefab) {
                     this.entityPrefabPreview?.destroy();
                     this.entityPrefabPreview = undefined;
@@ -149,6 +157,16 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
                 this.scene.markDirty();
             },
         );
+
+        this.mapEditorEntityEraserStoreUnsubscriber = mapEditorEntityEraserStore.subscribe((eraser) => {
+            if (!eraser) {
+                return;
+            }
+            // The eraser works on the objects of the map: nothing is being placed or edited meanwhile.
+            this.cleanPreview();
+            mapEditorSelectedEntityStore.set(undefined);
+            mapEditorEntityModeStore.set("ADD");
+        });
 
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber = mapEditorSelectedEntityDraggedStore.subscribe(
             (dragged) => {

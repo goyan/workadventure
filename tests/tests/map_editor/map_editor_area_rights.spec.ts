@@ -288,7 +288,7 @@ test.describe("Map editor area with rights @oidc @nomobile @nowebkit", () => {
         // check if removed or not
         // Expected to be removed
         await Menu.openMapEditor(page2);
-        await MapEditor.openTrashEditor(page2);
+        await MapEditor.openEntityEraser(page2);
         await EntityEditor.moveAndClick(
             page2,
             AreaAccessRights.entityPositionInArea.x,

@@ -30,7 +30,6 @@ import { EntityEditorTool } from "./Tools/EntityEditorTool";
 import { WAMSettingsEditorTool } from "./Tools/WAMSettingsEditorTool";
 import type { FrontCommandInterface } from "./Commands/FrontCommandInterface";
 import type { FrontCommand } from "./Commands/FrontCommand";
-import { TrashEditorTool } from "./Tools/TrashEditorTool";
 import { ExplorerTool } from "./Tools/ExplorerTool";
 import { CloseTool } from "./Tools/CloseTool";
 import { CreateEntityFrontCommand } from "./Commands/Entity/CreateEntityFrontCommand";
@@ -42,7 +41,6 @@ export enum EditorToolName {
     MapLayerEditor = "MapLayerEditor",
     EntityEditor = "EntityEditor",
     WAMSettingsEditor = "WAMSettingsEditor",
-    TrashEditor = "TrashEditor",
     SelectionEditor = "SelectionEditor",
     ExploreTheRoom = "ExploreTheRoom",
     CloseMapEditor = "CloseMapEditor",
@@ -135,7 +133,6 @@ export class MapEditorModeManager {
             [EditorToolName.EntityEditor]: new EntityEditorTool(this),
             [EditorToolName.MapLayerEditor]: new MapLayerEditorTool(this),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
-            [EditorToolName.TrashEditor]: new TrashEditorTool(this, areaEditorTool),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
             [EditorToolName.ExploreTheRoom]: new ExplorerTool(this.scene),
             [EditorToolName.CloseMapEditor]: new CloseTool(),
@@ -536,11 +533,6 @@ export class MapEditorModeManager {
             case "4": {
                 if (!mapEditorModeActivated) break;
                 this.equipTool(EditorToolName.WAMSettingsEditor);
-                break;
-            }
-            case "5": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.TrashEditor);
                 break;
             }
             case "6": {

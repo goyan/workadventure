@@ -13,8 +13,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         areaEditor: "تحرير المنطقة", // Fläche bearbeiten
         entityEditor: "تحرير الكيان", // Entität bearbeiten
         tileEditor: "تحرير البلاطة", // Kachel bearbeiten
-        configureMyRoom: "تكوين غرفتي", // Mein Zimmer konfigurieren
-        trashEditor: "سلة المهملات", // Papierkorb
+        configureMyRoom: "تكوين غرفتي", // Mein Zimmer konfigurieren // Papierkorb
         exploreTheRoom: "استكشاف الغرفة", // Raum erkunden
         mapLayerEditor: "أداة الخريطة (الأرضيات والجدران)",
         selectionEditor: "Selection tool",
@@ -23,8 +22,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         mapExplorerActivated: "تم تفعيل مستكشف الخريطة", // Kartenübersicht
         exploreTheRoomActivated: "تم تفعيل استكشاف الغرفة", // Raum erkunden aktiviert
         areaEditorActivated: "تم تفعيل تحرير المنطقة", // Fläche bearbeiten aktiviert
-        entityEditorActivated: "تم تفعيل تحرير الكيان", // Entität bearbeiten aktiviert
-        trashEditorActivated: "تم تفعيل سلة المهملات", // Papierkorb aktiviert
+        entityEditorActivated: "تم تفعيل تحرير الكيان", // Entität bearbeiten aktiviert // Papierkorb aktiviert
         configureMyRoomActivated: "تم تفعيل تكوين غرفتي", // Mein Zimmer konfigurieren aktiviert
     },
     selection: {
@@ -378,6 +376,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "لا توجد خصائص محددة",
     },
     areaEditor: {
+        eraser: "ممحاة",
+        eraserHint: "انقر على منطقة لحذفها.",
+        deleteButton: "حذف المنطقة",
         editInstructions: "انقر على منطقة لتعديل خصائصها", // Click on an area to edit its properties
         nameLabel: "الاسم", // Name
         nameLabelPlaceholder: "منطقتي", // MyArea
@@ -450,6 +451,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "ممحاة",
+        eraserHint: "انقر أو اسحب فوق الكائنات لحذفها.",
         resize: {
             title: "حجم الصورة",
             width: "العرض (بكسل)",
@@ -471,9 +474,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "بحث", // Search
             backToSelectObject: "العودة لاختيار الكائن", // Back to select object
-        },
-        trashTool: {
-            delete: "انقر على الكائن لحذفه!", // Click on the object to delete it!
         },
         deleteButton: "حذف", // Delete
         testInteractionButton: "اختبار التفاعل", // Test interaction

@@ -5,7 +5,11 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuid } from "uuid";
 import type { MapEditorAreaToolMode } from "../../../../Stores/MapEditorStore";
-import { mapEditorAreaModeStore, mapEditorSelectedAreaPreviewStore } from "../../../../Stores/MapEditorStore";
+import {
+    mapEditorAreaEraserStore,
+    mapEditorAreaModeStore,
+    mapEditorSelectedAreaPreviewStore,
+} from "../../../../Stores/MapEditorStore";
 import { AreaPreview, AreaPreviewEvent } from "../../../Components/MapEditor/AreaPreview";
 import { SizeAlteringSquare } from "../../../Components/MapEditor/SizeAlteringSquare";
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
@@ -22,7 +26,6 @@ import ActionPopupOnPersonalAreaWithEntities from "../../../../Components/MapEdi
 import { SpeechDomElement } from "../../../Entity/SpeechDomElement";
 import { LL } from "../../../../../i18n/i18n-svelte";
 import { MapEditorTool } from "./MapEditorTool";
-import type { TrashEditorTool } from "./TrashEditorTool";
 import { modals } from "@wa-modals";
 
 import Graphics = Phaser.GameObjects.Graphics;
@@ -96,6 +99,7 @@ export class AreaEditorTool extends MapEditorTool {
         this.wasAreaMoved = false;
         this.drawinNewAreaStartPos = undefined;
         mapEditorSelectedAreaPreviewStore.set(undefined);
+        mapEditorAreaEraserStore.set(false);
         this.setAreaPreviewsVisibility(false);
         this.scene.input.setDefaultCursor("auto");
         this.unbindEventHandlers();
@@ -178,7 +182,7 @@ export class AreaEditorTool extends MapEditorTool {
         }
     }
 
-    public handleDeleteAreaFrontCommandExecution(areaId: string, editorTool?: AreaEditorTool | TrashEditorTool): void {
+    public handleDeleteAreaFrontCommandExecution(areaId: string, editorTool?: AreaEditorTool): void {
         const isPersonalArea = this.getIsPersonalArea(areaId);
         const deleteAreaCommand = new DeleteAreaFrontCommand(
             this.scene.getGameMap().getWamFile()!,
@@ -319,6 +323,18 @@ export class AreaEditorTool extends MapEditorTool {
         }
         const mode = get(mapEditorAreaModeStore);
 
+        if (get(mapEditorAreaEraserStore)) {
+            // The eraser deletes the smallest area under the pointer and never draws or moves anything.
+            const smallestArea = gameObjects
+                .filter((obj) => this.isAreaPreview(obj))
+                .sort((a1, a2) => a1.getSize() - a2.getSize())[0];
+            if (smallestArea) {
+                this.handleDeleteAreaFrontCommandExecution(smallestArea.getId());
+                this.changeAreaMode("ADD");
+            }
+            return;
+        }
+
         if (areaEditorToolObjects.length === 0) {
             this.draggingdArea = false;
             this.wasAreaMoved = false;
@@ -356,6 +372,10 @@ export class AreaEditorTool extends MapEditorTool {
                     pointer.worldY,
                 );
             else this.destroyTooltip();
+        }
+
+        if (get(mapEditorAreaEraserStore)) {
+            return;
         }
 
         const mode = get(mapEditorAreaModeStore);
