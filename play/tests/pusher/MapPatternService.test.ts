@@ -182,6 +182,21 @@ describe("MapPatternService", () => {
         );
     });
 
+    it("should send DELETE and GET with the Authorization header only: no body, no Content-Type", async () => {
+        const { service, http } = createService({
+            get: { status: 200, data: { patterns: [] } },
+            delete: { status: 204 },
+        });
+        await service.delete(patternId);
+        await service.list();
+
+        for (const call of [http.delete.mock.calls[0], http.get.mock.calls[0]]) {
+            expect(call).toHaveLength(2);
+            expect(call[1].headers).toEqual({ Authorization: "secret-token" });
+            expect(call[1]).not.toHaveProperty("data");
+        }
+    });
+
     it("should answer unavailable on a 5xx of the Admin API", async () => {
         expect(await errorCodeOf(createService({ get: { status: 500, data: {} } }).service.list())).toBe("unavailable");
     });
