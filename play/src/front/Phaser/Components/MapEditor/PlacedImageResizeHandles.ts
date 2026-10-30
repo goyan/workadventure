@@ -18,6 +18,7 @@ export class PlacedImageResizeHandles {
         | undefined;
     private bounds: Phaser.Geom.Rectangle;
     private previousVisualSignature = "";
+    private destroyed = false;
 
     constructor(
         private readonly scene: GameScene,
@@ -85,21 +86,30 @@ export class PlacedImageResizeHandles {
         scene.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.refresh);
         scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.cancel);
         scene.input.keyboard?.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, this.keyDown);
+        entity.on(Phaser.GameObjects.Events.DESTROY, this.entityDestroyed);
         window.addEventListener("blur", this.cancel);
         this.refresh();
     }
 
     public destroy(): void {
+        if (this.destroyed) return;
+        this.destroyed = true;
         this.cancel();
         this.scene.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.refresh);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.cancel);
         this.scene.input.keyboard?.off(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, this.keyDown);
         if (this.scene.input.topOnly) this.scene.input.setTopOnly(this.previousTopOnly);
         window.removeEventListener("blur", this.cancel);
+        this.entity.off(Phaser.GameObjects.Events.DESTROY, this.entityDestroyed);
         this.handles.forEach(({ square }) => square.destroy());
         this.preview.destroy();
         this.outline.destroy();
+        this.scene.markDirty();
     }
+
+    private readonly entityDestroyed = (): void => {
+        this.destroy();
+    };
 
     private getEntityBounds(): Phaser.Geom.Rectangle {
         return new Phaser.Geom.Rectangle(this.entity.x, this.entity.y, this.entity.width, this.entity.height);
@@ -166,6 +176,7 @@ export class PlacedImageResizeHandles {
     };
 
     private readonly refresh = (): void => {
+        if (this.destroyed) return;
         if (
             this.drag &&
             (!this.entity.canEdit || this.entity.x !== this.drag.original.x || this.entity.y !== this.drag.original.y)
