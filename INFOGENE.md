@@ -105,6 +105,31 @@ soumise aux droits, limites et contrôles des joueurs. Le protocole réseau cons
 individuelles : une concurrence entre éditeurs peut entraîner une réconciliation du groupe.
 Les calques TMJ statiques restent hors sélection ; le rectangle ne crée pas de zone métier.
 
+#### Motifs partagés
+
+« Enregistrer comme motif » (actif si la sélection n'est pas vide) demande un nom (1 à 60 caractères) dans un
+champ du panneau, puis enregistre la sélection côté Admin API. Le bloc « Motifs », sous « Tuile à poser »,
+liste les motifs de tous les éditeurs du monde (nom, nombre d'objets et de zones) : **un clic sur un motif le
+colle** (même mode Coller que le bouton, il remplace le contenu du presse-papiers interne) ; la poubelle à droite
+d'un motif le supprime. Le motif est partagé entre toutes les salles : il ne dépend pas de la carte d'origine.
+
+Le motif contient des positions relatives au coin haut-gauche de la sélection, sans les identifiants d'origine
+(de nouveaux sont créés au collage). Un objet dont le prefab n'est chargé dans aucune collection de la carte
+courante est ignoré, et un message indique combien d'éléments l'ont été ; de même pour les zones si
+l'utilisateur n'a pas le droit de modifier les zones.
+
+Chemin d'appel : panneau `SelectionEditor.svelte` → `SelectionEditorTool` (`saveSelectionAsPattern`,
+`pasteFromPattern`) et store `MapEditorPatternStore` → pusher `/map-patterns` (`MapPatternController`,
+`MapPatternService`) → Admin API `/api/map-patterns`. Le navigateur n'a jamais le jeton de l'Admin API. Le
+pusher recalcule le droit à chaque appel (`fetchMemberDataByUuid` pour la salle courante, `canEdit` requis,
+sinon 403), valide le motif avec le schéma commun `play/src/common/MapPattern.ts` avant l'envoi et prend l'auteur
+dans le jeton authentifié. Limites : 2000 éléments et 256 Kio par motif, 200 motifs au total (409 « quota »),
+60 requêtes par minute et par utilisateur (429). Sans `ADMIN_API_URL`/`ADMIN_API_TOKEN` la fonction est
+désactivée (« indisponible » dans le panneau). Toute modification des droits ou de la suppression est à
+discuter : n'importe quel éditeur peut supprimer le motif d'un autre.
+
+À valider en beta (visuel) : enregistrer, voir le motif dans la liste d'une autre salle, le coller, le supprimer.
+
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse

@@ -41,6 +41,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         blocked:
             "Cette action est impossible. Vérifiez la zone sélectionnée, les limites de la carte et vos droits d’édition.",
         failed: "La sélection n’a pas pu être modifiée. Réessayez.",
+        saveAsPattern: "Enregistrer comme motif",
+        patternNameLabel: "Nom du motif",
+        patternNamePlaceholder: "Nom du motif",
+        savePatternConfirm: "Enregistrer",
+        patternsTitle: "Motifs",
+        patternsDescription:
+            "Cliquez sur un motif pour le coller. Les motifs sont partagés entre tous les éditeurs de ce monde.",
+        patternsLoading: "Chargement des motifs…",
+        patternsEmpty: "Aucun motif pour l’instant. Sélectionnez des objets et enregistrez-les comme motif.",
+        patternContent: "Objets : {entityCount} · Zones : {areaCount}",
+        pastePattern: "Coller le motif {name}",
+        deletePattern: "Supprimer le motif {name}",
+        patternIgnored:
+            "Éléments ignorés : {count} (objet indisponible sur cette carte, ou droit de modifier les zones manquant).",
+        patternsUnavailable: "Les motifs sont indisponibles pour le moment. Réessayez plus tard.",
+        patternsForbidden: "Vous n’avez pas le droit de gérer les motifs sur cette carte.",
+        patternsQuota: "Le nombre maximal de motifs est atteint. Supprimez-en un d’abord.",
+        patternsInvalid: "Ce motif ne peut pas être enregistré. Vérifiez son nom et sa taille.",
+        patternsNotFound: "Ce motif n’existe plus.",
+        patternsRateLimit: "Trop de requêtes. Patientez un instant.",
     },
 
     properties: {

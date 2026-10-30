@@ -19,6 +19,28 @@ import {
 import { mapEditorSelectionStore } from "../../../../src/front/Stores/MapEditorSelectionStore";
 import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import type { FrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/FrontCommand";
+import type { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/MapEditor/EntitiesCollectionsManager";
+import {
+    createMapPattern,
+    getMapPattern,
+    listMapPatterns,
+    MapPatternApiError,
+} from "../../../../src/front/Phaser/Game/MapEditor/MapPatternApi";
+import { mapEditorPatternStore } from "../../../../src/front/Stores/MapEditorPatternStore";
+import type { MapPatternDetail } from "../../../../src/common/MapPattern";
+
+const patternRoomUrl = "https://wa-beta.goyan.fr/~/goyan/office.wam";
+
+vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
+    gameManager: { currentStartedRoom: { href: "https://wa-beta.goyan.fr/~/goyan/office.wam" } },
+}));
+
+vi.mock("../../../../src/front/Phaser/Game/MapEditor/MapPatternApi", async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    createMapPattern: vi.fn(),
+    getMapPattern: vi.fn(),
+    listMapPatterns: vi.fn(),
+}));
 
 const floorPrefab = EntityPrefab.parse({
     id: "tile",
@@ -329,6 +351,21 @@ describe("SelectionEditorTool", () => {
         texture.getSourceImage.mockReturnValue(sourceImage);
         textureManager.get.mockReturnValue(texture);
         vi.spyOn(TexturesHelper, "loadEntityImage").mockResolvedValue();
+
+        const collectionsManager = mock<EntitiesCollectionsManager>();
+        collectionsManager.getEntityPrefab.mockImplementation((collectionName, prefabId) =>
+            Promise.resolve(
+                [floorPrefab, wallPrefab, furniturePrefab, pilePrefab].find(
+                    (candidate) => candidate.collectionName === collectionName && candidate.id === prefabId,
+                ),
+            ),
+        );
+        scene.getEntitiesCollectionsManager.mockReturnValue(collectionsManager);
+        vi.mocked(createMapPattern).mockReset();
+        vi.mocked(getMapPattern).mockReset();
+        vi.mocked(listMapPatterns).mockReset();
+        vi.mocked(listMapPatterns).mockResolvedValue([]);
+        mapEditorPatternStore.set({ patterns: [], loading: false, error: undefined, ignoredCount: 0 });
 
         areaEditorTool = mock<AreaEditorTool>();
         mapEditorModeManager = mock<MapEditorModeManager>();
@@ -664,5 +701,118 @@ describe("SelectionEditorTool", () => {
         expect(wamFile.getGameMapEntities().getEntities()).toEqual({});
         expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, entityCount: 0, hasRectangle: false });
         expect(commandGroups).toHaveLength(0);
+    });
+    describe("shared patterns", () => {
+        const patternSummary = {
+            id: "7d0f6c4e-1b0a-4d4e-9d0e-0c9f2f1a3b11",
+            name: "Salle",
+            entityCount: 2,
+            areaCount: 0,
+            createdBy: "user-1",
+            createdAt: "2026-10-30T10:00:00.000Z",
+        };
+
+        function patternDetail(items: MapPatternDetail["payload"]["items"]): MapPatternDetail {
+            return { ...patternSummary, payload: { version: 1, bounds: { width: 96, height: 64 }, items } };
+        }
+
+        it("saves the selection as a pattern with relative positions and no id, then refreshes the list", async () => {
+            addEntity("floor-1", 32, 32, floorPrefab);
+            addEntity("wall-1", 96, 64, wallPrefab);
+            vi.mocked(createMapPattern).mockResolvedValue(patternSummary);
+            vi.mocked(listMapPatterns).mockResolvedValue([patternSummary]);
+            select(0, 0, 200, 200);
+
+            await tool.saveSelectionAsPattern("Salle");
+
+            expect(createMapPattern).toHaveBeenCalledTimes(1);
+            const [roomUrl, name, payload] = vi.mocked(createMapPattern).mock.calls[0];
+            expect(roomUrl).toBe(patternRoomUrl);
+            expect(name).toBe("Salle");
+            expect(payload.bounds).toEqual({ width: 96, height: 64 });
+            expect(payload.items.map((item) => [item.data.x, item.data.y])).toEqual([
+                [0, 0],
+                [64, 32],
+            ]);
+            expect(JSON.stringify(payload)).not.toContain("floor-1");
+            expect(get(mapEditorPatternStore).patterns).toEqual([patternSummary]);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: undefined });
+        });
+
+        it("does not call the API when nothing is selected", async () => {
+            await tool.saveSelectionAsPattern("Salle");
+
+            expect(createMapPattern).not.toHaveBeenCalled();
+            expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: "blocked" });
+        });
+
+        it("publishes the API refusal in the pattern store and leaves the selection state clean", async () => {
+            addEntity("floor-1", 32, 32, floorPrefab);
+            vi.mocked(createMapPattern).mockRejectedValue(new MapPatternApiError("quota"));
+            select(0, 0, 200, 200);
+
+            await tool.saveSelectionAsPattern("Salle");
+
+            expect(get(mapEditorPatternStore).error).toBe("quota");
+            expect(get(mapEditorSelectionStore)).toMatchObject({ busy: false, error: undefined });
+        });
+
+        it("enters the Paste mode from a pattern, ignores unknown prefabs and pastes at the clicked place", async () => {
+            vi.mocked(getMapPattern).mockResolvedValue(
+                patternDetail([
+                    {
+                        kind: "entity",
+                        data: { x: 0, y: 0, prefabRef: { collectionName: "Tiles", id: "tile" }, properties: [] },
+                        dimensions: { width: 32, height: 32 },
+                    },
+                    {
+                        kind: "entity",
+                        data: { x: 64, y: 0, prefabRef: { collectionName: "Missing", id: "ghost" }, properties: [] },
+                        dimensions: { width: 32, height: 32 },
+                    },
+                ]),
+            );
+
+            await tool.pasteFromPattern(patternSummary.id);
+
+            expect(getMapPattern).toHaveBeenCalledWith(patternRoomUrl, patternSummary.id);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ mode: "paste", hasClipboard: true, busy: false });
+            expect(get(mapEditorPatternStore).ignoredCount).toBe(1);
+
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            emitPointerUp(pointerAt(canvas, 200, 200, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+
+            const placed = Object.entries(wamFile.getGameMapEntities().getEntities());
+            expect(placed).toHaveLength(1);
+            expect(placed[0][1]).toMatchObject({ x: 192, y: 192, prefabRef: { collectionName: "Tiles", id: "tile" } });
+            expect(placed[0][0]).not.toBe("");
+        });
+
+        it("does not enter the Paste mode when every item is ignored", async () => {
+            vi.mocked(getMapPattern).mockResolvedValue(
+                patternDetail([
+                    {
+                        kind: "entity",
+                        data: { x: 0, y: 0, prefabRef: { collectionName: "Missing", id: "ghost" }, properties: [] },
+                        dimensions: { width: 32, height: 32 },
+                    },
+                ]),
+            );
+
+            await tool.pasteFromPattern(patternSummary.id);
+
+            expect(get(mapEditorSelectionStore)).toMatchObject({ mode: "select", hasClipboard: false, busy: false });
+            expect(get(mapEditorPatternStore).ignoredCount).toBe(1);
+        });
+
+        it("publishes a failing download in the pattern store", async () => {
+            vi.mocked(getMapPattern).mockRejectedValue(new MapPatternApiError("unavailable"));
+
+            await tool.pasteFromPattern(patternSummary.id);
+
+            expect(get(mapEditorPatternStore).error).toBe("unavailable");
+            expect(get(mapEditorSelectionStore)).toMatchObject({ mode: "select", busy: false });
+        });
     });
 });
