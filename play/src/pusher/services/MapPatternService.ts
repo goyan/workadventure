@@ -93,7 +93,9 @@ export class MapPatternService {
 
     constructor(
         private readonly config: MapPatternConfig,
-        private readonly http: AxiosInstance = axios,
+        // Own instance: the Room API installs a 5 minute GET cache on the default axios instance (AdminAuthenticator),
+        // which would hide a pattern created in the meantime.
+        private readonly http: AxiosInstance = axios.create(),
         private readonly now: () => number = Date.now,
     ) {}
 
