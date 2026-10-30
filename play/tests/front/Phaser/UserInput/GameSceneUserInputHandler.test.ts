@@ -147,6 +147,45 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         expect(scene.moveTo.mock.calls).toEqual([]);
     });
 
+    it.each([true, false])(
+        "does not navigate on a right-click while editing the map with controls enabled: %s",
+        (isControlsEnabled) => {
+            mapEditorModeStore.set(true);
+            scene.userInputManager = mock<UserInputManager>({ isControlsEnabled, isRightClickEnabled: true });
+
+            handler.handlePointerUpEvent(pointer(2, 1), []);
+
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        },
+    );
+
+    it.each([true, false])(
+        "does not navigate on a touch while editing the map with controls enabled: %s",
+        (isControlsEnabled) => {
+            mapEditorModeStore.set(true);
+            scene.userInputManager = mock<UserInputManager>({ isControlsEnabled, isRightClickEnabled: true });
+            const touch = pointer();
+            touch.wasTouch = true;
+
+            handler.handlePointerUpEvent(touch, []);
+
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        },
+    );
+
+    it("restores right-click navigation after closing the map editor", () => {
+        mapEditorModeStore.set(true);
+        scene.userInputManager = mock<UserInputManager>({ isControlsEnabled: false, isRightClickEnabled: true });
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+        expect(scene.moveTo.mock.calls).toEqual([]);
+
+        mapEditorModeStore.set(false);
+        scene.userInputManager = mock<UserInputManager>({ isControlsEnabled: true, isRightClickEnabled: true });
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, undefined]]);
+    });
+
     it("pans the camera without running when a drag ends with a double-click count", () => {
         const drag = pointer();
         handler.handlePointerDownEvent(drag, []);

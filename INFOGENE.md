@@ -251,6 +251,8 @@ garder Ctrl+Z). Le trackpad à deux doigts déplace aussi la vue ; le glisser cl
 Le verrou `mapEditor` de l'avatar ne bloque pas les événements de scroll ou de pincement : ils atteignent le
 gestionnaire de caméra natif. Les autres raisons de blocage (champ, fenêtre, script, écran d'erreur) restent
 respectées ; l'Explorateur conserve son gestionnaire de molette pour éviter un double zoom.
+Pendant l'édition, aucun clic droit, double-clic gauche ou toucher ne lance de déplacement vers le pointeur.
+Les déplacements par clic reprennent leur comportement habituel après fermeture de l'éditeur.
 Changer d'outil ne recentre pas la vue. À la fermeture, les contrôles sont rétablis et la caméra revient sur l'avatar
 (~300 ms), le zoom de l'Explorateur étant restauré comme avant.
 

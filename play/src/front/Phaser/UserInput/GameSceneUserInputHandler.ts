@@ -175,7 +175,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             return;
         }
 
-        if (isDoubleClick && (!this.gameScene.userInputManager.isControlsEnabled || get(mapEditorModeStore))) {
+        // Editor gestures must never start avatar navigation, including right-clicks and touch releases.
+        if (get(mapEditorModeStore) || (isDoubleClick && !this.gameScene.userInputManager.isControlsEnabled)) {
             return;
         }
 
