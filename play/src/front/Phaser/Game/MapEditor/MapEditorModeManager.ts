@@ -19,6 +19,7 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import LL from "../../../../i18n/i18n-svelte";
 import { gameManager } from "../GameManager";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
+import { EditorCameraKeys } from "./EditorCameraKeys";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { FloorEditorTool } from "./Tools/FloorEditorTool";
@@ -81,6 +82,8 @@ export class MapEditorModeManager {
 
     private mapEditorModeUnsubscriber: Unsubscriber | undefined;
 
+    private readonly cameraKeys: EditorCameraKeys;
+
     private isReverting: Promise<void> = Promise.resolve();
 
     constructor(
@@ -89,6 +92,7 @@ export class MapEditorModeManager {
         private _personalAreaDataStore = personalAreaDataStore,
     ) {
         this.scene = scene;
+        this.cameraKeys = new EditorCameraKeys(scene);
 
         this.localCommandsHistory = [];
         this.pendingCommands = [];
@@ -117,6 +121,7 @@ export class MapEditorModeManager {
     }
 
     public update(time: number, dt: number): void {
+        this.cameraKeys.update();
         this.currentlyActiveTool?.update(time, dt);
     }
 
@@ -252,6 +257,10 @@ export class MapEditorModeManager {
             tool.destroy();
         }
         this.unsubscribeFromStores();
+        if (this.active) {
+            this.cameraKeys.stop();
+            this.scene.userInputManager.restoreControls("mapEditor");
+        }
     }
 
     public handleKeyDownEvent(event: KeyboardEvent): boolean {
@@ -447,7 +456,16 @@ export class MapEditorModeManager {
 
     private subscribeToStores(): void {
         this.mapEditorModeUnsubscriber = mapEditorModeStore.subscribe((active) => {
+            const wasActive = this.active;
             this.active = active;
+            // The avatar stays still while the map editor is open: the keys scroll the map instead.
+            if (active && !wasActive) {
+                this.scene.userInputManager.disableControls("mapEditor");
+                this.cameraKeys.start();
+            } else if (!active && wasActive) {
+                this.cameraKeys.stop();
+                this.scene.userInputManager.restoreControls("mapEditor");
+            }
             if (!this.active) {
                 this.lastlyUsedTool = get(mapEditorSelectedToolStore);
                 this.equipTool(undefined);

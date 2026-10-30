@@ -204,3 +204,12 @@ Les dalles restent des entités WAM : les commandes natives assurent leur sauveg
 joueurs et l'annulation, une dalle à la fois. Les meubles et murs gardent leur placement au clic.
 Deux éditeurs qui peignent simultanément la même case peuvent encore créer un doublon avant de recevoir les
 commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
+
+## Caméra en mode éditeur
+
+À l'ouverture de l'éditeur, quel que soit l'outil, la caméra se détache de l'avatar sans saut et les contrôles de
+l'avatar sont désactivés (raison `mapEditor`). Les flèches et ZQSD / WASD font défiler la carte (même vitesse que
+l'Explorateur, `EditorCameraKeys.ts`) ; elles sont ignorées dans un champ de saisie et avec Ctrl / Cmd / Alt (pour
+garder Ctrl+Z). Le trackpad à deux doigts déplace aussi la vue ; le glisser clic gauche reste réservé aux outils.
+Changer d'outil ne recentre pas la vue. À la fermeture, les contrôles sont rétablis et la caméra revient sur l'avatar
+(~300 ms), le zoom de l'Explorateur étant restauré comme avant.
