@@ -11,6 +11,8 @@ export type MapEditorPatternState = {
     error: MapPatternStoreError | undefined;
     /** Items left out by the last paste (prefab not loaded in the map, area without the right to edit areas). */
     ignoredCount: number;
+    /** Pattern currently armed in the Paste mode (stamp), highlighted in the list. */
+    armedPatternId: string | undefined;
 };
 
 export const mapEditorPatternStore = writable<MapEditorPatternState>({
@@ -18,4 +20,5 @@ export const mapEditorPatternStore = writable<MapEditorPatternState>({
     loading: false,
     error: undefined,
     ignoredCount: 0,
+    armedPatternId: undefined,
 });

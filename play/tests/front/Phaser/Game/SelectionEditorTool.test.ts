@@ -365,7 +365,13 @@ describe("SelectionEditorTool", () => {
         vi.mocked(getMapPattern).mockReset();
         vi.mocked(listMapPatterns).mockReset();
         vi.mocked(listMapPatterns).mockResolvedValue([]);
-        mapEditorPatternStore.set({ patterns: [], loading: false, error: undefined, ignoredCount: 0 });
+        mapEditorPatternStore.set({
+            patterns: [],
+            loading: false,
+            error: undefined,
+            ignoredCount: 0,
+            armedPatternId: undefined,
+        });
 
         areaEditorTool = mock<AreaEditorTool>();
         mapEditorModeManager = mock<MapEditorModeManager>();
@@ -520,7 +526,8 @@ describe("SelectionEditorTool", () => {
             visible: true,
         });
         expect(pastedArea?.id).not.toBe("zone-original");
-        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 1, mode: "select" });
+        // Paste is a stamp: the mode stays armed after the placement.
+        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 1, mode: "paste" });
     });
 
     it("moves a group by one snapped delta and leaves relative offsets intact", async () => {
@@ -825,6 +832,137 @@ describe("SelectionEditorTool", () => {
 
             expect(get(mapEditorPatternStore).error).toBe("unavailable");
             expect(get(mapEditorSelectionStore)).toMatchObject({ mode: "select", busy: false });
+        });
+    });
+    describe("paste stamp", () => {
+        function clickAt(x: number, y: number): void {
+            emitPointerDown(pointerAt(canvas, x, y));
+            emitPointerUp(pointerAt(canvas, x, y, { pressed: false }));
+        }
+
+        async function placed(): Promise<void> {
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+        }
+
+        function pressEscape(): void {
+            tool.handleKeyDownEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        }
+
+        function armClipboard(): void {
+            addEntity("source", 32, 32, floorPrefab);
+            select(0, 0, 64, 64);
+            tool.copySelection();
+            tool.pasteSelection();
+        }
+
+        it("places a new copy at every click and stays in the Paste mode until Escape", async () => {
+            armClipboard();
+
+            clickAt(200, 200);
+            await placed();
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+            clickAt(328, 200);
+            await placed();
+
+            const entitiesOnMap = Object.entries(wamFile.getGameMapEntities().getEntities());
+            const copies = entitiesOnMap.filter(([id]) => id !== "source");
+            expect(copies.map(([, data]) => [data.x, data.y]).sort((a, b) => a[0] - b[0])).toEqual([
+                [192, 192],
+                [320, 192],
+            ]);
+            expect(new Set(entitiesOnMap.map(([id]) => id)).size).toBe(3);
+            expect(commandGroups).toHaveLength(2);
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+
+            pressEscape();
+            expect(get(mapEditorSelectionStore).mode).toBe("select");
+        });
+
+        it("stays in the Paste mode with the error when a placement is blocked", async () => {
+            armClipboard();
+
+            clickAt(495, 495);
+            await placed();
+
+            expect(get(mapEditorSelectionStore)).toMatchObject({ mode: "paste", error: "blocked" });
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toEqual(["source"]);
+        });
+
+        it("keeps Move as a single click placement", async () => {
+            addEntity("source", 32, 32, floorPrefab);
+            select(0, 0, 64, 64);
+            tool.moveSelection();
+
+            clickAt(200, 200);
+            await placed();
+
+            expect(get(mapEditorSelectionStore).mode).toBe("select");
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toEqual(["source"]);
+        });
+
+        it("ignores a click while a placement is still running", async () => {
+            armClipboard();
+            let release: (() => void) | undefined;
+            mapEditorModeManager.executeCommands.mockImplementation(async (commands) => {
+                commandGroups.push([...commands]);
+                await new Promise<void>((resolve) => {
+                    release = resolve;
+                });
+                await Promise.all(commands.map((command) => command.execute()));
+            });
+
+            clickAt(200, 200);
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(true));
+            clickAt(328, 200);
+            release?.();
+            await placed();
+
+            expect(commandGroups).toHaveLength(1);
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toHaveLength(2);
+        });
+
+        it("highlights the armed pattern and clears it when the mode ends or the clipboard is pasted", async () => {
+            const detail = {
+                id: "7d0f6c4e-1b0a-4d4e-9d0e-0c9f2f1a3b11",
+                name: "Salle",
+                entityCount: 1,
+                areaCount: 0,
+                canDelete: true,
+                createdAt: "2026-10-30T10:00:00.000Z",
+                payload: {
+                    version: 1 as const,
+                    bounds: { width: 32, height: 32 },
+                    items: [
+                        {
+                            kind: "entity" as const,
+                            data: { x: 0, y: 0, prefabRef: { collectionName: "Tiles", id: "tile" }, properties: [] },
+                            dimensions: { width: 32, height: 32 },
+                        },
+                    ],
+                },
+            };
+            vi.mocked(getMapPattern).mockResolvedValue(detail);
+
+            await tool.pasteFromPattern(detail.id);
+            expect(get(mapEditorPatternStore).armedPatternId).toBe(detail.id);
+
+            clickAt(200, 200);
+            await placed();
+            expect(get(mapEditorPatternStore).armedPatternId).toBe(detail.id);
+
+            vi.mocked(getMapPattern).mockResolvedValue({ ...detail, id: "other-pattern" });
+            await tool.pasteFromPattern("other-pattern");
+            expect(get(mapEditorPatternStore).armedPatternId).toBe("other-pattern");
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+
+            pressEscape();
+            expect(get(mapEditorPatternStore).armedPatternId).toBeUndefined();
+
+            await tool.pasteFromPattern(detail.id);
+            expect(get(mapEditorPatternStore).armedPatternId).toBe(detail.id);
+            // The classic Paste button reuses the clipboard: no pattern is armed any more.
+            tool.pasteSelection();
+            expect(get(mapEditorPatternStore).armedPatternId).toBeUndefined();
         });
     });
 });

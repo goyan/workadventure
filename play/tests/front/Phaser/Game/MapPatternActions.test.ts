@@ -21,7 +21,13 @@ describe("removeMapPattern", () => {
     beforeEach(() => {
         vi.mocked(deleteMapPattern).mockReset();
         vi.mocked(listMapPatterns).mockReset().mockResolvedValue([]);
-        mapEditorPatternStore.set({ patterns: [], loading: false, error: undefined, ignoredCount: 0 });
+        mapEditorPatternStore.set({
+            patterns: [],
+            loading: false,
+            error: undefined,
+            ignoredCount: 0,
+            armedPatternId: undefined,
+        });
     });
 
     it("should explain that only the author or an administrator can delete when the API answers 403", async () => {

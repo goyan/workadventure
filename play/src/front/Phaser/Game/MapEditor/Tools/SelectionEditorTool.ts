@@ -32,6 +32,7 @@ import { createMapPattern, getMapPattern, MapPatternApiError } from "../MapPatte
 import {
     patternErrorCodeOf,
     refreshMapPatterns,
+    setArmedPattern,
     setMapPatternError,
     setPatternIgnoredCount,
 } from "../MapPatternActions";
@@ -295,6 +296,7 @@ export class SelectionEditorTool extends MapEditorTool {
             this.clipboard = { items: placement.items, bounds: placement.bounds };
             this.cancelIncompleteGesture();
             this.publishState({ hasClipboard: true, mode: "paste" });
+            setArmedPattern(id);
             this.drawVisuals();
         } catch (error: unknown) {
             this.reportPatternFailure("paste pattern", error);
@@ -314,6 +316,7 @@ export class SelectionEditorTool extends MapEditorTool {
             return;
         }
         this.cancelIncompleteGesture();
+        setArmedPattern(undefined);
         this.publishState({ mode: "move" });
         this.drawVisuals();
     }
@@ -707,7 +710,10 @@ export class SelectionEditorTool extends MapEditorTool {
                         ? this.translateBounds(selectedRectangle, delta)
                         : this.translateBounds(bounds, delta);
             }
-            this.cancelPlacement();
+            // Paste is a stamp: the mode stays armed with the same content until Escape, Cancel or a tool change.
+            if (mode !== "paste") {
+                this.cancelPlacement();
+            }
             if (this.active) {
                 this.publishSelectionCounts();
                 this.publishState({ hasRectangle: true });
@@ -715,7 +721,9 @@ export class SelectionEditorTool extends MapEditorTool {
             this.drawVisuals();
         } catch (error: unknown) {
             this.reportFailure("place selection", error);
-            this.cancelPlacement();
+            if (get(mapEditorSelectionStore).mode !== "paste") {
+                this.cancelPlacement();
+            }
         } finally {
             this.endOperation();
         }
@@ -1022,6 +1030,7 @@ export class SelectionEditorTool extends MapEditorTool {
     private cancelPlacement(): void {
         this.placementPointerId = undefined;
         this.placementPointerPosition = undefined;
+        setArmedPattern(undefined);
         this.publishState({ mode: "select" });
         this.drawVisuals();
     }
