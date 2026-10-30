@@ -347,7 +347,11 @@ export class UserInputManager {
                 deltaY: number,
                 deltaZ: number,
             ) => {
-                if (this.isInputDisabled) {
+                // The editor locks avatar controls, but its camera still accepts scroll and pinch gestures.
+                if (
+                    this.isInputDisabled &&
+                    !(this.disableControlsReasons.size === 1 && this.disableControlsReasons.has("mapEditor"))
+                ) {
                     return;
                 }
                 this.userInputHandler.handleMouseWheelEvent(pointer, gameObjects, deltaX, deltaY, deltaZ);
