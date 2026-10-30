@@ -3,8 +3,6 @@ import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Sentry from "@sentry/svelte";
 import { asError } from "catch-unknown";
 import { get } from "svelte/store";
-import { v4 as uuidv4 } from "uuid";
-import type { WAMEntityData } from "@workadventure/map-editor";
 import type { FloorFamily, WallTint } from "../MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
@@ -18,8 +16,6 @@ import {
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
-import { CreateEntityFrontCommand } from "../Commands/Entity/CreateEntityFrontCommand";
-import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
 import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
@@ -36,6 +32,7 @@ import {
     parseMapLayerPrefab,
 } from "../MapLayer/MapLayerCatalog";
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
+import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import {
@@ -56,8 +53,6 @@ import { MapEditorTool } from "./MapEditorTool";
 
 /** Above every entity, below nothing: the preview must stay readable over furniture. */
 const PREVIEW_DEPTH = 100_000;
-/** Safety net: one gesture never creates or deletes more entities than this. */
-const MAX_ENTITIES_PER_OPERATION = 4000;
 
 /**
  * An edit of the map layer, applied to the model. The same function drives the preview (on a copy of the model
@@ -442,30 +437,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 mapLayerStatusStore.set("tooLarge");
                 return [];
             }
-            const commands: FrontCommand[] = diff.toDelete.map(
-                (entityId) => new DeleteEntityFrontCommand(wamFile, entityId, undefined, entitiesManager),
-            );
-            for (const item of diff.toCreate) {
-                const piece = parseMapLayerPrefab(item.collectionName, item.prefabId);
-                if (!piece) continue;
-                const entityData: WAMEntityData = {
-                    x: item.x,
-                    y: item.y,
-                    prefabRef: { collectionName: item.collectionName, id: item.prefabId },
-                    properties: [],
-                };
-                commands.push(
-                    new CreateEntityFrontCommand(
-                        wamFile,
-                        uuidv4(),
-                        entityData,
-                        undefined,
-                        entitiesManager,
-                        mapLayerPieceSize(piece),
-                    ),
-                );
-            }
-            return commands;
+            return buildMapLayerCommands(wamFile, entitiesManager, diff);
         };
 
         this.mapEditorModeManager.executeCommands(factory).catch((error: unknown) => {

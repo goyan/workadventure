@@ -25,6 +25,9 @@ import { CreateAreaFrontCommand } from "../Commands/Area/CreateAreaFrontCommand"
 import { DeleteAreaFrontCommand } from "../Commands/Area/DeleteAreaFrontCommand";
 import { UpdateAreaFrontCommand } from "../Commands/Area/UpdateAreaFrontCommand";
 import { CreateEntityFrontCommand } from "../Commands/Entity/CreateEntityFrontCommand";
+import { isMapLayerPrefab } from "../MapLayer/MapLayerCatalog";
+import { buildMapLayerSyncCommands, readMapLayerEntityStates } from "../MapLayer/MapLayerSync";
+import type { MapLayerEntityState } from "../MapLayer/MapLayerSync";
 import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
 import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCommand";
 import type { FrontCommand } from "../Commands/FrontCommand";
@@ -345,6 +348,10 @@ export class SelectionEditorTool extends MapEditorTool {
                           context.gameMapFrontWrapper,
                       ),
             );
+            const deletedIds = new Set(items.map((item) => item.id));
+            this.appendMapLayerSync(context, commands, items, (states) =>
+                states.filter((state) => !deletedIds.has(state.entityId)),
+            );
             await this.mapEditorModeManager.executeCommands(commands);
             this.selectedEntityIds = [];
             this.selectedAreaIds = [];
@@ -445,8 +452,10 @@ export class SelectionEditorTool extends MapEditorTool {
                 return;
             }
 
-            const commands = candidateItems.map((item) => {
+            const createdStates: MapLayerEntityState[] = [];
+            const commands: FrontCommand[] = candidateItems.map((item) => {
                 const id = uuid();
+                createdStates.push(this.toMapLayerEntityState(id, item.data));
                 return new CreateEntityFrontCommand(
                     context.wamFile,
                     id,
@@ -456,6 +465,7 @@ export class SelectionEditorTool extends MapEditorTool {
                     item.dimensions,
                 );
             });
+            this.appendMapLayerSync(context, commands, candidateItems, (states) => [...states, ...createdStates]);
             await this.mapEditorModeManager.executeCommands(commands);
             if (this.active && lifecycleVersion === this.lifecycleVersion) {
                 this.selectRectangle(rectangle);
@@ -634,6 +644,9 @@ export class SelectionEditorTool extends MapEditorTool {
             const commands: FrontCommand[] = [];
             const nextEntityIds: string[] = [];
             const nextAreaIds: string[] = [];
+            // Entities of the map as they will be once the commands have run.
+            const movedPositions = new Map<string, { x: number; y: number }>();
+            const createdStates: MapLayerEntityState[] = [];
             for (const item of items) {
                 if (mode === "move") {
                     if (item.kind === "entity") {
@@ -649,6 +662,7 @@ export class SelectionEditorTool extends MapEditorTool {
                             ),
                         );
                         nextEntityIds.push(item.id);
+                        movedPositions.set(item.id, { x: item.data.x + delta.x, y: item.data.y + delta.y });
                     } else {
                         commands.push(
                             new UpdateAreaFrontCommand(
@@ -680,6 +694,7 @@ export class SelectionEditorTool extends MapEditorTool {
                         ),
                     );
                     nextEntityIds.push(id);
+                    createdStates.push(this.toMapLayerEntityState(id, data));
                 } else {
                     const id = uuid();
                     const data: AreaData = {
@@ -702,6 +717,10 @@ export class SelectionEditorTool extends MapEditorTool {
                 }
             }
 
+            this.appendMapLayerSync(context, commands, items, (states) => [
+                ...states.map((state) => ({ ...state, ...movedPositions.get(state.entityId) })),
+                ...createdStates,
+            ]);
             await this.mapEditorModeManager.executeCommands(commands);
             if (this.active) {
                 this.selectedEntityIds = nextEntityIds;
@@ -729,6 +748,45 @@ export class SelectionEditorTool extends MapEditorTool {
         } finally {
             this.endOperation();
         }
+    }
+
+    private toMapLayerEntityState(entityId: string, data: WAMEntityData): MapLayerEntityState {
+        return {
+            entityId,
+            x: data.x,
+            y: data.y,
+            collectionName: data.prefabRef.collectionName,
+            prefabId: data.prefabRef.id,
+        };
+    }
+
+    /**
+     * Floors and walls choose their sprites from their neighbours (joints, corners, ends). When an operation touches
+     * some of them, appends the commands that re-create the right sprites around the result, so that the whole is one
+     * undo step. `apply` turns the entities of the map into what they will be once `commands` have run.
+     */
+    private appendMapLayerSync(
+        context: { wamFile: WamFile; entitiesManager: EntitiesManager },
+        commands: FrontCommand[],
+        involved: readonly (SelectionItem | EntitySelectionItem)[],
+        apply: (states: MapLayerEntityState[]) => MapLayerEntityState[],
+    ): void {
+        const touchesMapLayer = involved.some(
+            (item) =>
+                item.kind === "entity" && isMapLayerPrefab(item.data.prefabRef.collectionName, item.data.prefabRef.id),
+        );
+        if (!touchesMapLayer) {
+            return;
+        }
+        const sync = buildMapLayerSyncCommands(
+            context.wamFile,
+            context.entitiesManager,
+            apply(readMapLayerEntityStates(context.entitiesManager)),
+        );
+        if (sync === undefined) {
+            throw new Error("The floors and walls change is too large");
+        }
+        commands.push(...sync);
     }
 
     private areItemsValidAtDestination(
