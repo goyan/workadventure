@@ -47,18 +47,28 @@ function unionOf(boundsList: Bounds[]): Bounds {
 }
 
 /**
- * Converts the selection to a payload v1: positions relative to the union top-left corner, no original id.
+ * Converts the selection to a payload v1: no original id, positions relative to the tile corner that contains the
+ * top-left of the selection. Pasting moves a pattern by whole tiles, so the offset of that corner inside its tile
+ * must survive: thin walls are centered on a grid line, and a pattern anchored on its leftmost wall would otherwise
+ * land 6 px away from the grid of its source. Patterns saved before this rule are anchored on the union corner itself.
  * Only entities are stored: areas of the selection are dropped (the schema still reads `area` items of old patterns).
  */
-export function selectionToPatternPayload(selection: PatternSourceItem[]): MapPatternPayload {
+export function selectionToPatternPayload(
+    selection: PatternSourceItem[],
+    tileDimensions: { width: number; height: number },
+): MapPatternPayload {
     const items = selection.filter((item) => item.kind === "entity");
     if (items.length === 0) {
         throw new Error("A pattern needs at least one entity");
     }
     const union = unionOf(items.map(boundsOf));
+    const origin = {
+        x: Math.floor(union.x / tileDimensions.width) * tileDimensions.width,
+        y: Math.floor(union.y / tileDimensions.height) * tileDimensions.height,
+    };
     const patternItems: MapPatternItem[] = items.map((item) => ({
         kind: "entity",
-        data: { ...structuredClone(item.data), x: item.data.x - union.x, y: item.data.y - union.y },
+        data: { ...structuredClone(item.data), x: item.data.x - origin.x, y: item.data.y - origin.y },
         dimensions: { ...item.dimensions },
         ...(item.collisionGrid ? { collisionGrid: structuredClone(item.collisionGrid) } : {}),
     }));
