@@ -1,5 +1,6 @@
 import {
     WALL_HALF,
+    WALL_THICKNESS,
     facadePrefabName,
     floorPrefabName,
     jointPrefabName,
@@ -50,8 +51,10 @@ function jointArmsAt(model: MapLayerModel, x: number, y: number): JointArm[] {
 
 /**
  * Chooses the sprites of a model.
- * - A floor cell uses the plain tile of its family, or the shaded one when a horizontal wall stands on it (its foot casts a shadow).
- * - A horizontal wall is a facade (cap and south face) in one piece per grid column. Its face is seamless with the
+ * - A floor cell uses the plain tile of its family, or the shaded one when a horizontal wall stands on the tile row
+ *   right before it (the wall casts its shadow on the top of the tile, fading downwards).
+ * - A horizontal wall stands entirely on the tile row of its grid line: cap on the top 12 px, face on the 20 px below.
+ *   It is a facade (cap and south face) in one piece per grid column. Its face is seamless with the
  *   next facade and closes with an end when the wall stops on a vertex.
  * - A vertical wall is a strip, one piece per grid row.
  * - The caps meet on each vertex: a joint piece draws the corner, the T or the cross, or closes the end of a wall.
@@ -62,7 +65,7 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
     const vertices = new Map<string, { x: number; y: number }>();
 
     for (const floor of model.getFloors()) {
-        const name = floorPrefabName(floor.family, model.hasWall("h", floor.x, floor.y) ? "ombre" : "uni");
+        const name = floorPrefabName(floor.family, model.hasWall("h", floor.x, floor.y - 1) ? "ombre" : "uni");
         placements.push(placement(MAP_LAYER_FLOOR_COLLECTION, name, floor.x * size, floor.y * size));
     }
 
@@ -74,7 +77,7 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                     MAP_LAYER_WALL_COLLECTION,
                     facadePrefabName(wall.tint, ends),
                     wall.x * size - facadeLeftExtension(ends),
-                    wall.y * size - WALL_HALF,
+                    wall.y * size,
                 ),
             );
             vertices.set(`${wall.x},${wall.y}`, { x: wall.x, y: wall.y });
@@ -85,7 +88,7 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                     MAP_LAYER_WALL_COLLECTION,
                     verticalWallPrefabName(wall.tint),
                     wall.x * size - WALL_HALF,
-                    wall.y * size + WALL_HALF,
+                    wall.y * size + WALL_THICKNESS,
                 ),
             );
             vertices.set(`${wall.x},${wall.y}`, { x: wall.x, y: wall.y });
@@ -103,17 +106,12 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                     MAP_LAYER_WALL_COLLECTION,
                     wallEndPrefabName(lastWall.tint),
                     vertex.x * size - WALL_HALF,
-                    vertex.y * size + WALL_HALF,
+                    vertex.y * size + WALL_THICKNESS,
                 ),
             );
         }
         placements.push(
-            placement(
-                MAP_LAYER_WALL_COLLECTION,
-                jointPrefabName(arms),
-                vertex.x * size - WALL_HALF,
-                vertex.y * size - WALL_HALF,
-            ),
+            placement(MAP_LAYER_WALL_COLLECTION, jointPrefabName(arms), vertex.x * size - WALL_HALF, vertex.y * size),
         );
     }
 

@@ -373,7 +373,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 const mode = get(mapLayerModeStore);
                 if (mode === "wall" || mode === "room") {
                     const vertex = vertexAt(this.hover.x, this.hover.y);
-                    graphics.fillStyle(0xffffff, 0.8).fillCircle(vertex.x * size, vertex.y * size, 4);
+                    graphics.fillStyle(0xffffff, 0.8).fillCircle(vertex.x * size, (vertex.y + 1) * size, 4);
                 } else {
                     const cell = cellAt(this.hover.x, this.hover.y);
                     graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(cell.x * size, cell.y * size, size, size);

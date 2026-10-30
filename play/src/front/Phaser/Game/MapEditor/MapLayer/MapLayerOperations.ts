@@ -1,5 +1,11 @@
 import type { FloorFamily, WallTint } from "./MapLayerCatalog";
-import { MAP_LAYER_TILE_SIZE, WALL_HALF, facadeLeftExtension, parseMapLayerPrefab } from "./MapLayerCatalog";
+import {
+    MAP_LAYER_TILE_SIZE,
+    WALL_HALF,
+    WALL_THICKNESS,
+    facadeLeftExtension,
+    parseMapLayerPrefab,
+} from "./MapLayerCatalog";
 import type { WallOrientation } from "./MapLayerModel";
 import { MapLayerModel, cellKey } from "./MapLayerModel";
 
@@ -49,20 +55,28 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                 }
                 break;
             case "facade": {
-                // The sprite starts above the grid line (the cap is centered on it) and may start left of the column.
+                // The sprite fills the tile row of its line and may start left of the column. Walls drawn when the cap
+                // was centered on the line (half a wall higher) are still read, and redrawn in place on the next edit.
                 const x = (item.x + facadeLeftExtension(piece.ends)) / size;
-                const y = (item.y + WALL_HALF) / size;
+                const y = item.y / size;
+                const legacyY = (item.y + WALL_HALF) / size;
                 if (Number.isInteger(x) && Number.isInteger(y)) {
                     model.setWall("h", x, y, piece.tint);
+                } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
+                    model.setWall("h", x, legacyY, piece.tint);
                 }
                 break;
             }
             case "vertical": {
-                // The strip is centered on its grid line and starts under the joint of its first vertex.
+                // The strip is centered on its grid line and starts under the joint of its first vertex (same legacy
+                // reading as the facades, with the strip half a wall higher).
                 const x = (item.x + WALL_HALF) / size;
-                const y = (item.y - WALL_HALF) / size;
+                const y = (item.y - WALL_THICKNESS) / size;
+                const legacyY = (item.y - WALL_HALF) / size;
                 if (Number.isInteger(x) && Number.isInteger(y)) {
                     model.setWall("v", x, y, piece.tint);
+                } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
+                    model.setWall("v", x, legacyY, piece.tint);
                 }
                 break;
             }
@@ -112,9 +126,15 @@ export function rectangleCells(a: Point, b: Point): Point[] {
     return cells;
 }
 
-/** Nearest grid vertex to a world position. */
+/**
+ * Vertex whose wall has its base nearest to a world position: a wall stands on the tile row of its line, so its
+ * base is one tile under the line.
+ */
 export function vertexAt(worldX: number, worldY: number): Point {
-    return { x: Math.round(worldX / MAP_LAYER_TILE_SIZE), y: Math.round(worldY / MAP_LAYER_TILE_SIZE) };
+    return {
+        x: Math.round(worldX / MAP_LAYER_TILE_SIZE),
+        y: Math.round((worldY - MAP_LAYER_TILE_SIZE) / MAP_LAYER_TILE_SIZE),
+    };
 }
 
 /** Tile index under a world position. */
@@ -214,13 +234,14 @@ const VERTICAL_WALL_HIT_WIDTH = 8;
  */
 export function wallAtPoint(model: MapLayerModel, worldX: number, worldY: number): WallEdgeRef | undefined {
     const size = MAP_LAYER_TILE_SIZE;
-    const row = Math.floor(worldY / size);
+    // The strip of the row y spans from the joint of its first vertex to the joint of the next one.
+    const row = Math.floor((worldY - WALL_THICKNESS) / size);
     const nearestLine = Math.round(worldX / size);
     if (Math.abs(worldX - nearestLine * size) <= VERTICAL_WALL_HIT_WIDTH && model.hasWall("v", nearestLine, row)) {
         return { orientation: "v", x: nearestLine, y: row };
     }
-    // The facade of the line y covers from half a wall above the line to the end of its face.
-    const line = Math.floor((worldY + WALL_HALF) / size);
+    // The facade of the line y fills the tile row y.
+    const line = Math.floor(worldY / size);
     const column = Math.floor(worldX / size);
     if (model.hasWall("h", column, line)) {
         return { orientation: "h", x: column, y: line };

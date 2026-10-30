@@ -93,14 +93,14 @@ describe("autotile", () => {
         ]);
     });
 
-    it("shades the floor under the foot of a horizontal wall, and only there", () => {
+    it("shades the floor tile right after a horizontal wall, and only there", () => {
         const model = new MapLayerModel();
         applyFloor(model, rectangleCells({ x: 2, y: 2 }, { x: 3, y: 3 }), "moquette-grise", bounds);
         model.setWall("h", 2, 2, "blanc");
         const floors = names(model).filter((item) => item.startsWith("sol-"));
-        expect(floors).toContain("sol-moquette-grise-ombre@64,64");
-        expect(floors).toContain("sol-moquette-grise-uni@96,64");
-        expect(floors).toContain("sol-moquette-grise-uni@64,96");
+        expect(floors).toContain("sol-moquette-grise-ombre@64,96");
+        expect(floors).toContain("sol-moquette-grise-uni@96,96");
+        expect(floors).toContain("sol-moquette-grise-uni@64,64");
         model.removeWall("h", 2, 2);
         expect(names(model).filter((item) => item.includes("ombre"))).toEqual([]);
     });
@@ -110,14 +110,14 @@ describe("autotile", () => {
         applyWalls(model, lineWallEdges({ x: 2, y: 3 }, { x: 5, y: 3 }), "gris", bounds);
         expect(names(model)).toEqual(
             [
-                // facades start half a wall above the line; the ends reach 6 px beyond the end vertices
-                "facade-gris-left@58,90",
-                "facade-gris-mid@96,90",
-                "facade-gris-right@128,90",
-                "raccord-E@58,90",
-                "raccord-EW@90,90",
-                "raccord-EW@122,90",
-                "raccord-W@154,90",
+                // facades fill the tile row of their line; the ends reach 6 px beyond the end vertices
+                "facade-gris-left@58,96",
+                "facade-gris-mid@96,96",
+                "facade-gris-right@128,96",
+                "raccord-E@58,96",
+                "raccord-EW@90,96",
+                "raccord-EW@122,96",
+                "raccord-W@154,96",
             ].sort(),
         );
     });
@@ -125,7 +125,7 @@ describe("autotile", () => {
     it("draws a lone facade closed on both sides", () => {
         const model = new MapLayerModel();
         model.setWall("h", 4, 2, "blanc");
-        expect(names(model)).toEqual(["facade-blanc-single@122,58", "raccord-E@122,58", "raccord-W@154,58"].sort());
+        expect(names(model)).toEqual(["facade-blanc-single@122,64", "raccord-E@122,64", "raccord-W@154,64"].sort());
     });
 
     it("draws a vertical wall as strips centered on their line, with its ends closed", () => {
@@ -133,12 +133,12 @@ describe("autotile", () => {
         applyWalls(model, lineWallEdges({ x: 4, y: 1 }, { x: 4, y: 3 }), "blanc", bounds);
         expect(names(model)).toEqual(
             [
-                "mur-vertical-blanc@122,38",
-                "mur-vertical-blanc@122,70",
-                "raccord-S@122,26",
-                "raccord-NS@122,58",
-                "raccord-N@122,90",
-                "bout-blanc@122,102",
+                "mur-vertical-blanc@122,44",
+                "mur-vertical-blanc@122,76",
+                "raccord-S@122,32",
+                "raccord-NS@122,64",
+                "raccord-N@122,96",
+                "bout-blanc@122,108",
             ].sort(),
         );
     });
@@ -147,10 +147,10 @@ describe("autotile", () => {
         const model = new MapLayerModel();
         model.setWall("v", 5, 2, "brique");
         const alone = names(model);
-        expect(alone).toContain("bout-brique@154,102");
+        expect(alone).toContain("bout-brique@154,108");
         // a wall that goes on, or a horizontal wall at the end, already has a face
         model.setWall("v", 5, 3, "brique");
-        expect(names(model).filter((item) => item.startsWith("bout-"))).toEqual(["bout-brique@154,134"]);
+        expect(names(model).filter((item) => item.startsWith("bout-"))).toEqual(["bout-brique@154,140"]);
         model.setWall("h", 5, 4, "brique");
         expect(names(model).filter((item) => item.startsWith("bout-"))).toEqual([]);
     });
@@ -174,16 +174,16 @@ describe("autotile", () => {
         model.setWall("v", 8, 4, "blanc");
         model.setWall("v", 8, 5, "blanc");
         const joints = names(model).filter((item) => item.startsWith("raccord"));
-        expect(joints).toContain("raccord-NESW@154,154");
-        expect(joints).toContain("raccord-NES@250,154");
+        expect(joints).toContain("raccord-NESW@154,160");
+        expect(joints).toContain("raccord-NES@250,160");
     });
 
     it("re-chooses the ends and joints when a wall is removed", () => {
         const model = new MapLayerModel();
         applyWalls(model, lineWallEdges({ x: 2, y: 3 }, { x: 4, y: 3 }), "blanc", bounds);
-        expect(names(model)).toContain("facade-blanc-left@58,90");
+        expect(names(model)).toContain("facade-blanc-left@58,96");
         model.removeWall("h", 3, 3);
-        expect(names(model)).toEqual(["facade-blanc-single@58,90", "raccord-E@58,90", "raccord-W@90,90"].sort());
+        expect(names(model)).toEqual(["facade-blanc-single@58,96", "raccord-E@58,96", "raccord-W@90,96"].sort());
     });
 });
 
@@ -222,6 +222,21 @@ describe("modelFromPlacedPrefabs", () => {
         expect(new Set(computePlacements(rebuilt).map((item) => item.key))).toEqual(
             new Set(placements.map((item) => item.key)),
         );
+    });
+
+    it("still reads the walls drawn when their cap was centered on the grid line", () => {
+        const wall = (prefab: string, x: number, y: number) => ({
+            x,
+            y,
+            collectionName: MAP_LAYER_WALL_COLLECTION,
+            prefabId: mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, prefab),
+        });
+        const rebuilt = modelFromPlacedPrefabs([
+            wall("facade-blanc-single", 58, 90),
+            wall("mur-vertical-lavande", 122, 38),
+        ]);
+        expect(rebuilt.getWall("h", 2, 3)?.tint).toBe("blanc");
+        expect(rebuilt.getWall("v", 4, 1)?.tint).toBe("lavande");
     });
 
     it("ignores other entities and misaligned positions", () => {
@@ -270,7 +285,7 @@ describe("operations", () => {
         applyWalls(model, lineWallEdges({ x: -2, y: 0 }, { x: 1, y: 0 }), "blanc", bounds);
         // one floor in the map, one wall left once the segments outside are dropped (a facade and its two joints)
         expect(names(model).filter((item) => item.startsWith("sol-"))).toHaveLength(1);
-        expect(names(model).filter((item) => item.startsWith("facade-"))).toEqual(["facade-blanc-single@-6,-6"]);
+        expect(names(model).filter((item) => item.startsWith("facade-"))).toEqual(["facade-blanc-single@-6,0"]);
     });
 
     it("fills a closed room and stops at its walls", () => {
@@ -307,10 +322,10 @@ describe("operations", () => {
         model.setWall("v", 2, 1, "blanc");
         model.setWall("h", 4, 1, "blanc");
         model.setFloor(6, 6, "pierre-grise");
-        expect(wallAtPoint(model, 66, 40)).toEqual({ orientation: "v", x: 2, y: 1 });
-        expect(wallAtPoint(model, 80, 40)).toBeUndefined();
+        expect(wallAtPoint(model, 66, 50)).toEqual({ orientation: "v", x: 2, y: 1 });
+        expect(wallAtPoint(model, 80, 50)).toBeUndefined();
         expect(wallAtPoint(model, 140, 50)).toEqual({ orientation: "h", x: 4, y: 1 });
-        eraseAt(model, 66, 40);
+        eraseAt(model, 66, 50);
         eraseAt(model, 140, 50);
         eraseAt(model, 200, 200);
         expect(computePlacements(model)).toEqual([]);
