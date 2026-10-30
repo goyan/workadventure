@@ -411,6 +411,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "图像{{s}}",
         noImage: "无图像",
+        snapToGrid: "吸附到网格",
         specialTags: {
             customLabel: "自定义",
             mostUsedLabel: "最常用",

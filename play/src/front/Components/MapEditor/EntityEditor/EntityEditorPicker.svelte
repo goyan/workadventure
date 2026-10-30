@@ -5,6 +5,7 @@
     import { LL } from "../../../../i18n/i18n-svelte";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
+    import { mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
         mapEditorDeleteCustomEntityEventStore,
@@ -15,6 +16,7 @@
         selectCategoryStore,
     } from "../../../Stores/MapEditorStore";
     import Input from "../../Input/Input.svelte";
+    import InputSwitch from "../../Input/InputSwitch.svelte";
     import ButtonClose from "../../Input/ButtonClose.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import EntitiesGrid from "./EntitiesGrid.svelte";
@@ -248,21 +250,30 @@
 
 <div class="flex flex-col flex-1 overflow-auto gap-2">
     <div class="flex flex-col gap-2">
-        <div>
-            {#if $selectCategoryStore === undefined}
-                <p class="text-[22px] m-0">{$LL.mapEditor.entityEditor.header.title()}</p>
-                <p class="m-0 opacity-50">{$LL.mapEditor.entityEditor.header.description()}</p>
-            {:else}
-                <div class="flex flex-row items-center gap-4">
-                    <button
-                        class="p-2 rounded-full flex flex-row items-center hover:bg-white/10"
-                        data-testid="clearCurrentSelection"
-                        onclick={displayTagListAndClearCurrentSelection}
-                    >
-                        <IconChevronLeft />{$LL.mapEditor.entityEditor.buttons.back()}
-                    </button>
-                </div>
-            {/if}
+        <div class="flex flex-row items-start justify-between gap-2">
+            <div>
+                {#if $selectCategoryStore === undefined}
+                    <p class="text-[22px] m-0">{$LL.mapEditor.entityEditor.header.title()}</p>
+                    <p class="m-0 opacity-50">{$LL.mapEditor.entityEditor.header.description()}</p>
+                {:else}
+                    <div class="flex flex-row items-center gap-4">
+                        <button
+                            class="p-2 rounded-full flex flex-row items-center hover:bg-white/10"
+                            data-testid="clearCurrentSelection"
+                            onclick={displayTagListAndClearCurrentSelection}
+                        >
+                            <IconChevronLeft />{$LL.mapEditor.entityEditor.buttons.back()}
+                        </button>
+                    </div>
+                {/if}
+            </div>
+            <InputSwitch
+                label={$LL.mapEditor.entityEditor.snapToGrid()}
+                bind:value={$mapEditorSnapEnabledStore}
+                margin="mt-1"
+                spacing="ml-2"
+                alignLabel="center"
+            />
         </div>
         <div class="flex *:w-full">
             <Input

@@ -413,6 +413,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "صورة{{s}}", // Image{{s}}
         noImage: "لا توجد صورة", // No image
+        snapToGrid: "المحاذاة إلى الشبكة",
         specialTags: {
             customLabel: "مخصص",
             mostUsedLabel: "الأكثر استخدامًا",

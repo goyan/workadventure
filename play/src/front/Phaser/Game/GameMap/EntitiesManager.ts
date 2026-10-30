@@ -14,7 +14,9 @@ import {
     mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
+    mapEditorSnapEnabledStore,
 } from "../../../Stores/MapEditorStore";
+import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
 import type { GameScene } from "../GameScene";
@@ -298,17 +300,11 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
                 this.isEntityEditorToolActive() &&
                 get(mapEditorEntityModeStore) === "EDIT"
             ) {
-                const collisitonGrid = entity.getPrefab().collisionGrid;
                 const depthOffset = entity.getPrefab().depthOffset ?? 0;
                 const tileDim = this.scene.getGameMapFrontWrapper().getTileDimensions();
-                entity.x =
-                    collisitonGrid || this.shiftKey?.isDown
-                        ? Math.floor(dragX / tileDim.width) * tileDim.width
-                        : Math.floor(dragX);
-                entity.y =
-                    collisitonGrid || this.shiftKey?.isDown
-                        ? Math.floor(dragY / tileDim.height) * tileDim.height
-                        : Math.floor(dragY);
+                const snapToGrid = this.isSnappingToGrid();
+                entity.x = snapToGrid ? Math.floor(dragX / tileDim.width) * tileDim.width : Math.floor(dragX);
+                entity.y = snapToGrid ? Math.floor(dragY / tileDim.height) * tileDim.height : Math.floor(dragY);
                 entity.setDepth(entity.y + entity.displayHeight + depthOffset);
 
                 this.changeEntityTint(entity);
@@ -330,7 +326,7 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
                             entity.displayHeight,
                             entity.getCollisionGrid(),
                             entity.getOldPosition(),
-                            this.shiftKey?.isDown,
+                            this.isFreePlacement(),
                         )
                 ) {
                     const oldPos = entity.getOldPosition();
@@ -432,6 +428,14 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
         this.emit(EntitiesManagerEvent.CopyEntity, eventData);
     }
 
+    private isSnappingToGrid(): boolean {
+        return shouldSnapToGrid(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
+    }
+
+    private isFreePlacement(): boolean {
+        return isPlacementFree(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
+    }
+
     private changeEntityTint(entity: Entity): void {
         if (
             !this.scene
@@ -442,12 +446,12 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
                     entity.displayHeight,
                     entity.getCollisionGrid(),
                     entity.getOldPosition(),
-                    this.shiftKey?.isDown,
+                    this.isFreePlacement(),
                 )
         ) {
             entity.setTint(0xff0000);
         } else {
-            if (this.shiftKey?.isDown) {
+            if (this.isFreePlacement()) {
                 entity.setTint(0xffa500);
             } else {
                 entity.clearTint();

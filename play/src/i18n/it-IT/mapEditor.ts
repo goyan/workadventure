@@ -418,6 +418,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Immagine{{s}}",
         noImage: "Nessuna immagine",
+        snapToGrid: "Aggancia alla griglia",
         specialTags: {
             customLabel: "Personalizzato",
             mostUsedLabel: "Più usati",

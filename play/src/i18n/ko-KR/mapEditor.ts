@@ -416,6 +416,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "이미지{{s}}",
         noImage: "이미지가 없습니다",
+        snapToGrid: "격자에 맞추기",
         specialTags: {
             customLabel: "사용자 정의",
             mostUsedLabel: "자주 사용됨",

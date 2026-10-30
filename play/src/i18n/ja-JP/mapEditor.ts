@@ -417,6 +417,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "画像",
         noImage: "画像なし",
+        snapToGrid: "グリッドにスナップ",
         specialTags: {
             customLabel: "カスタム",
             mostUsedLabel: "よく使うもの",

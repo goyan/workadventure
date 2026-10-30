@@ -419,6 +419,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Imagen{{s}}",
         noImage: "Sin imagen",
+        snapToGrid: "Ajustar a la cuadrícula",
         specialTags: {
             customLabel: "Personalizado",
             mostUsedLabel: "Más usados",
