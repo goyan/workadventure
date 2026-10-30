@@ -21,6 +21,7 @@
     import OpenFilePropertyEditor from "../PropertyEditor/OpenFilePropertyEditor.svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
+    import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -398,6 +399,11 @@
                 onchange={onUpdateName}
             />
         </div>
+        {#if $mapEditorSelectedEntityStore.getPrefab().type === "Custom" && $mapEditorSelectedEntityStore.visible}
+            {#key `${$mapEditorSelectedEntityStore.entityId}:${$mapEditorSelectedEntityStore.getPrefab().id}`}
+                <PlacedImageSizeEditor entity={$mapEditorSelectedEntityStore} />
+            {/key}
+        {/if}
         <div class="entity-name-container">
             {#if !showDescriptionField}
                 <a

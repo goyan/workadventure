@@ -15,6 +15,8 @@ import { EditorToolName, MapEditorModeManager } from "../../../../src/front/Phas
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
 import { mapEditorActivated } from "../../../../src/front/Stores/MenuStore";
 import { CreateEntityFrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/Entity/CreateEntityFrontCommand";
+import { DeleteEntityFrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/Entity/DeleteEntityFrontCommand";
+import type { Entity } from "../../../../src/front/Phaser/ECS/Entity";
 import type * as AreaEditorToolModule from "../../../../src/front/Phaser/Game/MapEditor/Tools/AreaEditorTool";
 import type { AreaEditorTool } from "../../../../src/front/Phaser/Game/MapEditor/Tools/AreaEditorTool";
 
@@ -168,6 +170,78 @@ describe("MapEditorModeManager command groups", () => {
         editorToolMocks.incomingMessages.length = 0;
         editorToolMocks.keyDownEvents.length = 0;
         vi.clearAllMocks();
+    });
+
+    it("tracks a preparatory upload without adding it to the resize undo history", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+        await manager.executeCommand(new StateCommand(state, 1, "before"));
+        await manager.executeCommands([new StateCommand(state, 2, "upload")], false);
+        await manager.executeCommands([new StateCommand(state, 3, "resize")]);
+        await manager.undoCommand();
+        expect(state.value).toBe(3);
+        await manager.undoCommand();
+        expect(state.value).toBe(2);
+        await manager.redoCommand();
+        await manager.redoCommand();
+        expect(state.value).toBe(6);
+    });
+
+    it("reads the latest state in a command factory after earlier queued operations finish", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+        const ready = new Deferred<void>();
+        const before = manager.executeCommand(new StateCommand(state, 1, "before", () => ready.promise));
+        const next = manager.executeCommands(() => [new StateCommand(state, state.value, "latest")]);
+        ready.resolve();
+        await Promise.all([before, next]);
+        expect(state.value).toBe(2);
+        await manager.undoCommand();
+        expect(state.value).toBe(1);
+    });
+
+    it("preserves the instance data and other copies when resizing, undoing and redoing", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const data: WAMEntityData = {
+            x: 32,
+            y: 64,
+            prefabRef: { collectionName: "custom entities", id: "original-image" },
+            name: "Entrance",
+            properties: [
+                { id: "description", type: "entityDescriptionProperties", description: "Logo", searchable: true },
+            ],
+        };
+        fixture.wamFile.getGameMapEntities().addEntity("image", structuredClone(data));
+        fixture.wamFile.getGameMapEntities().addEntity("other-copy", structuredClone(data));
+        const entities = mock<EntitiesManager>();
+        const rendered = new Map<string, Entity>([["image", mock<Entity>({ width: 64, height: 32 })]]);
+        entities.getEntities.mockReturnValue(rendered);
+        entities.addEntity.mockImplementation((id, entityData) => {
+            const entity = mock<Entity>({
+                width: entityData.prefabRef.id === "resized-image" ? 128 : 64,
+                height: entityData.prefabRef.id === "resized-image" ? 64 : 32,
+            });
+            rendered.set(id, entity);
+            return Promise.resolve(entity);
+        });
+        entities.deleteEntity.mockImplementation((id) => rendered.delete(id));
+        const resized = { ...data, prefabRef: { collectionName: "custom entities", id: "resized-image" } };
+        await manager.executeCommands([
+            new DeleteEntityFrontCommand(fixture.wamFile, "image", undefined, entities),
+            new CreateEntityFrontCommand(fixture.wamFile, "image", resized, undefined, entities, {
+                width: 128,
+                height: 64,
+            }),
+        ]);
+        expect(fixture.wamFile.getGameMapEntities().getEntity("image")).toEqual(resized);
+        await manager.undoCommand();
+        expect(fixture.wamFile.getGameMapEntities().getEntity("image")).toEqual(data);
+        await manager.redoCommand();
+        expect(fixture.wamFile.getGameMapEntities().getEntity("image")).toEqual(resized);
+        expect(fixture.wamFile.getGameMapEntities().getEntity("other-copy")).toEqual(data);
     });
 
     it("undoes and redoes a multi-command group as one step between individual commands", async () => {

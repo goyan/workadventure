@@ -399,6 +399,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "지도에서 영역을 그려 새로운 영역을 만드세요.",
     },
     entityEditor: {
+        resize: {
+            title: "이미지 크기",
+            width: "너비 (px)",
+            height: "높이 (px)",
+            keepProportions: "비율 유지",
+            apply: "크기 적용",
+            saving: "저장 중…",
+            invalidSize: "1~4096픽셀의 정수를 입력하세요.",
+            error: "크기를 변경할 수 없습니다. 여유 공간과 편집 권한을 확인하고 다시 시도하세요.",
+        },
         header: {
             title: "지도에 오브젝트 추가",
             description: "오브젝트를 검색하거나 업로드 또는 선택해서 지도에 배치하세요.",

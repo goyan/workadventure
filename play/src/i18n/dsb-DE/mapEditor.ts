@@ -401,6 +401,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         description: "Cyrkajśo wobcerk na kórśe, aby nowy napórał.",
     },
     entityEditor: {
+        resize: {
+            title: "Wjelikosć wobraza",
+            width: "Šyrokosć (px)",
+            height: "Wusokosć (px)",
+            keepProportions: "Proporcije wobchowaś",
+            apply: "Wjelikosć nałožyś",
+            saving: "Składowanje…",
+            invalidSize: "Wužywaj cełe licby wót 1 do 4096 pikselow.",
+            error: "Wjelikosć njedajo se změniś. Pśekontrolěruj lichy rum a swóje pšawa za wobźěłowanje.",
+        },
         header: {
             title: "Objekt k swójomu kórśeju pśidaś",
             description: "Pytajśo, nagrajśo abo wubjeŕśo eksistěrujucy objekt a pśidajśo jen k kórśeju.",

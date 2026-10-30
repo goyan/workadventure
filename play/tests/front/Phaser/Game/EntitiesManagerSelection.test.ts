@@ -122,4 +122,15 @@ describe("Native entity clicks while selecting a group", () => {
         expect(manager.equipTool.mock.calls).toHaveLength(0);
         expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
     });
+
+    it("refreshes the selected instance when resize undo/redo recreates it with the same id", async () => {
+        mapEditorSelectedEntityStore.set(mock<Entity>({ entityId: "chair-instance" }));
+        await entitiesManager.addEntity("chair-instance", {
+            x: 32,
+            y: 32,
+            prefabRef: { id: "chair", collectionName: "Furniture" },
+            properties: [],
+        });
+        expect(get(mapEditorSelectedEntityStore)).toBe(entity);
+    });
 });

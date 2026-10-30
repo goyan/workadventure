@@ -130,6 +130,9 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
                         .setTexture(prefab.imagePath)
                         .setDepth(entity.y + entity.displayHeight + (entity.getPrefab().depthOffset ?? 0))
                         .setVisible(true);
+                    if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
+                        mapEditorSelectedEntityStore.set(entity);
+                    }
                 }
             })
             .catch((e) => console.error(e));
@@ -162,6 +165,9 @@ export class EntitiesManager extends Phaser.Events.EventEmitter {
             });
 
         this.scene.markDirty();
+        if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
+            mapEditorSelectedEntityStore.set(entity);
+        }
         return entity;
     }
 
