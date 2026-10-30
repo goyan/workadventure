@@ -44,6 +44,7 @@ const recording: DeepPartial<Translation["recording"]> = {
             advert: "Wšitcy wobdźělnicy dostanu powěsć, zo započinajaće nagraće.",
             yourRecordInProgress: "Nagraće běži, klikńće, zo by jo zastajił.",
             inProgress: "Nagraće běži",
+            notEnabled: "Nagraća su za tutón swět znjemóžnjene.",
         },
         spacePicker: {
             megaphone: "Megafon nagrać",

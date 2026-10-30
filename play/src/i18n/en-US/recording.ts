@@ -43,6 +43,7 @@ const recording: BaseTranslation = {
             advert: "All participants will be notified that you are starting a recording.",
             yourRecordInProgress: "Recording in progress, click to stop it.",
             inProgress: "A recording is in progress",
+            notEnabled: " Recordings are disabled for this world.",
         },
         spacePicker: {
             megaphone: "Record megaphone",

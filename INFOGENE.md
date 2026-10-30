@@ -342,3 +342,13 @@ La sauvegarde de l'image est confirmée par le serveur avant le remplacement. Un
 pendant la préparation laisse l'exemplaire d'origine en place. Le poids maximal des messages du serveur reste applicable.
 Un agrandissement ne peut pas recréer les détails absents de l'image ; redimensionner plusieurs fois la même version
 peut réduire sa qualité.
+
+## Disponibilité de l'enregistrement
+
+Le bouton d'enregistrement indique « Les enregistrements sont désactivés pour ce monde »
+si la salle ne permet pas de démarrer un enregistrement et qu'aucun enregistrement n'est actif.
+Une raison fournie par l'Admin API reste affichée. Le message « Un enregistrement est en cours »
+est réservé à un enregistrement confirmé ; les demandes en attente affichent
+« Démarrer l'enregistrement… » ou « Arrêter l'enregistrement… ».
+L'enregistrement natif nécessite LiveKit Egress et un stockage S3 ; le correctif de l'infobulle
+n'active pas ces services.

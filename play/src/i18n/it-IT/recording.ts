@@ -44,6 +44,7 @@ const recording: DeepPartial<Translation["recording"]> = {
             advert: "Tutti i partecipanti saranno notificati che stai avviando una registrazione.",
             yourRecordInProgress: "Registrazione in corso, clicca per fermarla.",
             inProgress: "Una registrazione è in corso",
+            notEnabled: "Le registrazioni sono disabilitate per questo mondo.",
         },
         spacePicker: {
             megaphone: "Registra megafono",
