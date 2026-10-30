@@ -191,3 +191,16 @@ Le champ `entityCollectionsUrls` de la réponse `/api/map` de l'Admin API s'ajou
 (`GameScene.loadEntityCollections`, `mergeEntityCollectionUrls`). Les collections du WAM passent en premier ; aucun doublon
 d'URL ni d'identifiant d'objet n'est conservé (le WAM prime). Sans Admin API (ou sans ce champ) l'effet est nul. Un objet
 posé depuis une bibliothèque commune dépend de cette liste : si elle change, l'objet n'est plus résolu.
+
+## Peindre les sols dans l'éditeur
+
+Les dalles de la collection `Infogène Sols` (tag `Sols`, grille `[[0]]`, profondeur `-32`, une case de carte)
+se posent au clic gauche maintenu : le mouvement remplit les cases intermédiaires sur la grille.
+Le pinceau ignore les exemplaires du même prefab déjà présents à la même position et les créations encore
+en attente. Relâcher le bouton, sortir du canvas, perdre le focus, changer d'objet ou d'outil, ou appuyer sur
+Échap termine le tracé. Un clic droit abandonne l'aperçu.
+
+Les dalles restent des entités WAM : les commandes natives assurent leur sauvegarde, leur diffusion aux autres
+joueurs et l'annulation, une dalle à la fois. Les meubles et murs gardent leur placement au clic.
+Deux éditeurs qui peignent simultanément la même case peuvent encore créer un doublon avant de recevoir les
+commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
