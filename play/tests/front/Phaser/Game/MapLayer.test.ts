@@ -10,6 +10,7 @@ import {
     verticalWallPrefabName,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
+import { wallBarriers } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerBarriers";
 import {
     computePlacements,
     diffPlacements,
@@ -329,5 +330,57 @@ describe("operations", () => {
         eraseAt(model, 140, 50);
         eraseAt(model, 200, 200);
         expect(computePlacements(model)).toEqual([]);
+    });
+});
+
+describe("wallBarriers", () => {
+    it("makes a horizontal wall a barrier south of its tile", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 4, 2, "blanc");
+        const barriers = wallBarriers(computePlacements(model));
+
+        expect(barriers.blocksMove({ x: 4, y: 2 }, { x: 4, y: 3 })).toBe(true);
+        expect(barriers.blocksMove({ x: 4, y: 1 }, { x: 4, y: 2 })).toBe(false);
+        expect(barriers.blocksMove({ x: 5, y: 2 }, { x: 5, y: 3 })).toBe(false);
+    });
+
+    it("stops the feet on the row under a vertical wall, which is where its collision is", () => {
+        const model = new MapLayerModel();
+        model.setWall("v", 6, 1, "blanc");
+        const barriers = wallBarriers(computePlacements(model));
+
+        expect(barriers.blocksMove({ x: 5, y: 2 }, { x: 6, y: 2 })).toBe(true);
+        expect(barriers.blocksMove({ x: 5, y: 1 }, { x: 6, y: 1 })).toBe(false);
+        expect(barriers.blocksMove({ x: 5, y: 3 }, { x: 6, y: 3 })).toBe(false);
+    });
+
+    it("closes the way under the end of a vertical wall that meets a horizontal one", () => {
+        // A vertical wall of 2 strips ends on a horizontal wall that stands on the row 3.
+        const model = new MapLayerModel();
+        model.setWall("v", 6, 1, "blanc");
+        model.setWall("v", 6, 2, "blanc");
+        model.setWall("h", 5, 3, "blanc");
+        model.setWall("h", 6, 3, "blanc");
+        const barriers = wallBarriers(computePlacements(model));
+
+        // On the row of the horizontal wall, the avatar cannot go round the end of the vertical wall.
+        expect(barriers.blocksMove({ x: 5, y: 3 }, { x: 6, y: 3 })).toBe(true);
+        expect(barriers.blocksMove({ x: 5, y: 2 }, { x: 6, y: 2 })).toBe(true);
+    });
+
+    it("ignores the floors and the objects that are not walls", () => {
+        const model = new MapLayerModel();
+        model.setFloor(3, 3, "pierre-grise");
+        const barriers = wallBarriers([
+            ...computePlacements(model),
+            {
+                x: 96,
+                y: 96,
+                collectionName: "Infogène Modern Office",
+                prefabId: "Infogène Modern Office:desk:Default:Down",
+            },
+        ]);
+
+        expect(barriers.touchesTile(3, 3)).toBe(false);
     });
 });

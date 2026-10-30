@@ -1256,7 +1256,6 @@ export class GameScene extends DirtyScene {
         this.cameraManager?.destroy();
         this.mapEditorModeManager?.destroy();
         this.gameMapPropertiesListener?.destroy();
-        this.pathfindingManager?.cleanup();
 
         // A broadcast does not follow the user into the next room, but nothing said
         // so: the action bar kept offering to stop it, and its analytics interval —
@@ -4101,6 +4100,7 @@ ${escapedMessage}
             pathfindingManager.setCollisionGrid(
                 this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
             );
+            pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
             // Each attempt must fully complete (walk, then maybe reroute) before the next one starts.
             // eslint-disable-next-line no-await-in-loop
             const path = await pathfindingManager.findPathFromGameCoordinates(

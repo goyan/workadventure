@@ -22,6 +22,8 @@ import { Subject } from "rxjs";
 import { Deferred } from "@workadventure/shared-utils";
 import { get } from "svelte/store";
 import { PathTileType } from "../../../Utils/PathfindingManager";
+import type { TileBarriers } from "../../../Utils/TileBarriers";
+import { wallBarriers } from "../MapEditor/MapLayer/MapLayerBarriers";
 import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 import { extensionModuleStore } from "../../../Stores/GameSceneStore";
 import type { Entity } from "../../ECS/Entity";
@@ -1811,6 +1813,19 @@ export class GameMapFrontWrapper {
         return (
             (this.tiledTileCollisions?.isPathClear(player, path) ?? true) &&
             this.entityCollisionRectangles.isPathClear(player, path)
+        );
+    }
+
+    /**
+     * The walls of the map layer as thin barriers between tiles, for the pathfinder: they block no tile of the
+     * collision grid, they only separate two tiles.
+     */
+    public getWallBarriers(): TileBarriers {
+        return wallBarriers(
+            Array.from(this.entitiesManager.getEntities().values(), (entity) => {
+                const prefab = entity.getPrefab();
+                return { x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id };
+            }),
         );
     }
 

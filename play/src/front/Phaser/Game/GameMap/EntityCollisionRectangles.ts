@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import type { Entity } from "../../ECS/Entity";
+import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Player } from "../../Player/Player";
 import { isPathClearOfStaticGroups } from "./StaticGroupsPath";
 
@@ -28,7 +29,7 @@ export class EntityCollisionRectangles {
         this.player = player;
         for (const state of this.states.values()) {
             state.collider?.destroy();
-            state.collider = this.scene.physics.add.collider(player, state.group);
+            state.collider = this.createCollider(player, state);
         }
     }
 
@@ -52,15 +53,32 @@ export class EntityCollisionRectangles {
                 .setVisible(false);
             group.add(object);
         }
-        this.states.set(entity.entityId, {
+        const state: EntityCollisionState = {
             entity,
             group,
-            collider: this.player ? this.scene.physics.add.collider(this.player, group) : undefined,
+            collider: undefined,
             left: topLeft.x,
             top: topLeft.y,
-        });
+        };
+        if (this.player) {
+            state.collider = this.createCollider(this.player, state);
+        }
+        this.states.set(entity.entityId, state);
         // A new wall may invalidate a path already being followed; removing one never does.
         this.player?.finishFollowingPath(true);
+    }
+
+    private createCollider(player: Player, state: EntityCollisionState): Phaser.Physics.Arcade.Collider {
+        const prefab = state.entity.getPrefab();
+        // The walls of the map layer are barriers for the pathfinder: a path never goes through them. While the avatar
+        // walks one, the collision would only push it out of the wall it runs along, in jerks.
+        const isWall = isMapLayerPrefab(prefab.collectionName, prefab.id);
+        return this.scene.physics.add.collider(
+            player,
+            state.group,
+            undefined,
+            () => !(isWall && player.isWalkingPath()),
+        );
     }
 
     public remove(entityId: string): void {
@@ -78,7 +96,13 @@ export class EntityCollisionRectangles {
         return isPathClearOfStaticGroups(
             player,
             path,
-            Array.from(this.states.values(), (state) => state.group),
+            // The walls of the map layer are barriers for the pathfinder: no path goes through them, and one that runs
+            // along a wall, at the distance of a tile center, is not blocked by the thickness of its collision.
+            Array.from(this.states.values())
+                .filter(
+                    (state) => !isMapLayerPrefab(state.entity.getPrefab().collectionName, state.entity.getPrefab().id),
+                )
+                .map((state) => state.group),
         );
     }
 

@@ -49,6 +49,11 @@ export type FloorVariant = "uni" | "ombre";
  */
 export const WALL_THICKNESS = 12;
 export const WALL_HALF = WALL_THICKNESS / 2;
+/**
+ * How far the collision of a wall reaches on each side of its line, as the catalogs declare it (18 px for a vertical
+ * wall, a bit more than its 12 px to keep the head of the avatar clear of it).
+ */
+export const WALL_COLLISION_HALF = 9;
 export const FACADE_FACE_HEIGHT = 20;
 export const FACADE_HEIGHT = WALL_THICKNESS + FACADE_FACE_HEIGHT;
 /** A vertical wall piece spans the grid row between the joints drawn on its two vertices. */
