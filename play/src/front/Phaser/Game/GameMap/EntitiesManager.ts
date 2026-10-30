@@ -61,8 +61,12 @@ export enum EntitiesManagerEvent {
     CopyEntity = "EntitiesManagerEvent:CopyEntity",
 }
 
+/** Opacity of the entities that are not the subject of the map editor tool in use. */
+const DIMMED_ENTITY_ALPHA = 0.4;
+
 export class EntitiesManager extends EventEmitter {
     private readonly erasingEntityIds = new Set<string>();
+    private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
     private gameMapFrontWrapper: GameMapFrontWrapper;
 
@@ -159,6 +163,7 @@ export class EntitiesManager extends EventEmitter {
         this.gameMapFrontWrapper.addEntityCollisionRectangles(entity);
 
         this.entities.set(entityId, entity);
+        this.applyEntityDimming(entity);
 
         // We use the promise to be sure that the entity is fully loaded before we check if it is activatable and push it to the activatableEntities array
         this.scene
@@ -224,6 +229,20 @@ export class EntitiesManager extends EventEmitter {
 
     public getProperties(): Map<string, string | boolean | number> {
         return this.properties;
+    }
+
+    /**
+     * Fades the entities matching the predicate (undefined: none), so that the tool in use stands out.
+     * Entities added later, e.g. by another editor, follow the same rule.
+     */
+    public setEntitiesDimming(shouldDim: ((entity: Entity) => boolean) | undefined): void {
+        this.shouldDimEntity = shouldDim;
+        this.entities.forEach((entity) => this.applyEntityDimming(entity));
+        this.scene.markDirty();
+    }
+
+    private applyEntityDimming(entity: Entity): void {
+        entity.setAlpha(this.shouldDimEntity?.(entity) ? DIMMED_ENTITY_ALPHA : 1);
     }
 
     public clearAllEntitiesTint(): void {

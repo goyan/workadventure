@@ -34,6 +34,7 @@ import { ExplorerTool } from "./Tools/ExplorerTool";
 import { CloseTool } from "./Tools/CloseTool";
 import { CreateEntityFrontCommand } from "./Commands/Entity/CreateEntityFrontCommand";
 import { UpdateAreaFrontCommand } from "./Commands/Area/UpdateAreaFrontCommand";
+import { isMapLayerPrefab } from "./MapLayer/MapLayerCatalog";
 import { SelectionEditorTool } from "./Tools/SelectionEditorTool";
 
 export enum EditorToolName {
@@ -740,13 +741,39 @@ export class MapEditorModeManager {
      */
     private clearToNeutralState(): void {
         this.currentlyActiveTool?.clear();
+        this.applyEntitiesDimming(undefined);
     }
 
     /**
      * Show things necessary for tool's usage
      */
     private activateTool(): void {
+        this.applyEntitiesDimming(this.activeTool);
         this.currentlyActiveTool?.activate();
+    }
+
+    /**
+     * Each tool works on its own kind of content: the others are faded (objects, floors and walls) or hidden (areas,
+     * handled by the area tool itself).
+     * - Areas: everything else is faded, the areas are shown.
+     * - Map (floors and walls): objects are faded, areas are hidden.
+     * - Objects: floors and walls stay fully visible, areas are hidden.
+     */
+    private applyEntitiesDimming(tool: EditorToolName | undefined): void {
+        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
+        switch (tool) {
+            case EditorToolName.AreaEditor:
+                entitiesManager.setEntitiesDimming(() => true);
+                break;
+            case EditorToolName.MapLayerEditor:
+                entitiesManager.setEntitiesDimming((entity) => {
+                    const prefab = entity.getPrefab();
+                    return !isMapLayerPrefab(prefab.collectionName, prefab.id);
+                });
+                break;
+            default:
+                entitiesManager.setEntitiesDimming(undefined);
+        }
     }
 
     private subscribeToStores(): void {
