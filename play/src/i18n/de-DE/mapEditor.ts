@@ -7,6 +7,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         deletePrompt: "Diese Karte wurde gelöscht",
         deletePromptSubtitle: "Du wurdest von diesem Raum getrennt.",
         deletePromptDetails: "Ein Neuladen stellt diese Karte nicht wieder her, da sie nicht mehr existiert.",
+        editionFailed: "Deine Änderung konnte nicht gespeichert werden und wurde rückgängig gemacht.",
     },
     sideBar: {
         areaEditor: "Fläche bearbeiten",
@@ -88,7 +89,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             durationLabel: "Übergangsdauer (ms)",
         },
         jitsiRoomProperty: {
-            disabled: "Jitsi integration is disabled for this room ❌",
             label: "Jitsi-Raum",
             description: "Starten Sie ein Jitsi-Meeting beim Betreten.",
             roomNameLabel: "Raumname",
@@ -123,9 +123,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             volumeLabel: "Lautstärke",
             audioLinkLabel: "Audiolink",
             audioLinkPlaceholder: "https://xxx.yyy/smthing.mp3",
+            sourceUpload: "Datei hochladen",
+            sourceUrl: "URL verwenden",
             defaultButtonLabel: "Musik abspielen",
             error: "Sound konnte nicht geladen werden",
             actionButtonLabel: "Musik abspielen",
+            playForAllUsersLabel: "Für alle Benutzer der Karte abspielen",
+            audibleRadiusLabel: "Hörradius (in Pixeln)",
+            audibleRadiusPlaceholder: "Überall hörbar, wenn leer",
         },
         openWebsite: {
             label: "Link öffnen",
@@ -162,7 +167,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 'Benutzer auf dem Podium (Bühne) können zu allen Teilnehmern im zugehörigen "Publikum"-Bereich sprechen.',
             nameLabel: "Name",
             namePlaceholder: "Hauptbühne",
-            disabled: "Podium ist für diesen Raum deaktiviert ❌",
             actionButtonLabel: "Podium beitreten",
         },
         listenerMegaphone: {
@@ -170,7 +174,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Benutzer im Publikumsbereich können den Sprecher auf dem verknüpften Podium hören.",
             nameLabel: "Podiumsname",
             namePlaceholder: "MySpeakerZone",
-            disabled: "Publikum ist für diesen Raum deaktiviert ❌",
             waitingMediaLinkLabel: "Medien, die vor Beginn des Livestreams angezeigt werden",
             waitingMediaLinkPlaceholder: "https://www… (Medien-URL eingeben)",
             waitingMedialLinkError:
@@ -182,6 +185,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
 
         chatEnabled: "Chat aktiviert",
         allowTalking: "Sprechen und Blasenbildung erlauben",
+        raiseHandEnabled: "Handheben erlauben",
         seeAttendees: "Teilnehmer anzeigen",
         start: {
             label: "Startbereich",
@@ -350,6 +354,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 startWithAudioMuted: "Mit deaktiviertem Mikrofon starten",
                 startWithVideoMuted: "Mit deaktivierter Kamera starten",
                 disableChat: "Chat deaktivieren",
+                raiseHandEnabled: "Handheben erlauben",
                 livekitRoomAdminTag: "Moderator-Tag für den Besprechungsraum",
                 cancel: "Abbrechen",
                 validate: "Validieren",
@@ -517,7 +522,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 audienceVideoFeedbackActivated: "Auditorium-Modus aktiviert",
                 audienceVideoFeedbackActivatedDisabled: "Auditorium-Modus deaktiviert",
                 audienceVideoFeedbackActivatedHelper:
-                    "Auditorium-Modus aktiviert: Empfangen Sie den Kamera- und Mikrofonstream aller Benutzer (mit aktivierter Kamera und Mikrofon) im Raum/der Welt. Der Teilnehmer kann jedoch die anderen Teilnehmer nicht sehen. Standardmäßig deaktiviert.",
+                    "Auditorium-Modus aktiviert: Empfangen Sie den Kamerastream aller Benutzer (mit aktivierter Kamera) im Raum/der Welt, ohne deren Ton. Der Teilnehmer kann jedoch die anderen Teilnehmer nicht sehen. Standardmäßig deaktiviert.",
                 error: {
                     title: "Fehler",
                     save: {

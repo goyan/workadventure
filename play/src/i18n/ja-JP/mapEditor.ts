@@ -7,6 +7,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         deletePrompt: "このマップは削除されました",
         deletePromptSubtitle: "このルームから切断されました。",
         deletePromptDetails: "このマップはもう存在しないため、再読み込みしても復元されません。",
+        editionFailed: "変更を保存できなかったため、元に戻されました。",
     },
     sideBar: {
         areaEditor: "エリアエディターツール",
@@ -88,7 +89,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             durationLabel: "トランジション時間（ミリ秒）",
         },
         jitsiRoomProperty: {
-            disabled: "Jitsi integration is disabled for this room ❌",
             label: "Jitsi ルーム",
             description: "入室時に Jitsi ミーティングを開始します。",
             roomNameLabel: "ルーム名",
@@ -123,9 +123,14 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             volumeLabel: "音量",
             audioLinkLabel: "オーディオリンク",
             audioLinkPlaceholder: "https://xxx.yyy/smthing.mp3",
+            sourceUpload: "ファイルをアップロード",
+            sourceUrl: "URLを使用",
             defaultButtonLabel: "ミュージックの再生",
             error: "サウンドを読み込めませんでした",
             actionButtonLabel: "ミュージックを再生",
+            playForAllUsersLabel: "マップ上のすべてのユーザーに再生",
+            audibleRadiusLabel: "可聴半径（ピクセル）",
+            audibleRadiusPlaceholder: "空欄の場合はどこでも聞こえます",
         },
         openWebsite: {
             hideUrlLabel: "Hide URL",
@@ -162,14 +167,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "ポディウム（ステージ）上のユーザーは、対応する「オーディエンス」エリアのすべての参加者に話すことができます。",
             nameLabel: "名前",
             namePlaceholder: "メインステージ",
-            disabled: "この部屋ではポディウムが無効になっています ❌",
             actionButtonLabel: "ポディウムに参加",
         },
         listenerMegaphone: {
             label: "オーディエンス",
             description: "オーディエンスエリアのユーザーは、リンクされたポディウムのスピーカーを聞くことができます。",
             nameLabel: "ポディウム名",
-            disabled: "この部屋ではオーディエンスが無効になっています ❌",
             namePlaceholder: "私のスピーカーゾーン",
             waitingMediaLinkLabel: "配信開始前に表示するメディア",
             waitingMediaLinkPlaceholder: "https://www…（メディアのURLを入力）",
@@ -181,6 +184,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
 
         chatEnabled: "専用チャットチャンネルを開設",
         allowTalking: "会話とバブルの形成を許可する",
+        raiseHandEnabled: "挙手を許可する",
         seeAttendees: "参加者を表示",
         start: {
             label: "入口エリア",
@@ -354,6 +358,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 startWithAudioMuted: "マイクをミュートした状態で開始",
                 startWithVideoMuted: "ビデオを閉じた状態で開始",
                 disableChat: "チャットを無効化",
+                raiseHandEnabled: "挙手を許可する",
                 livekitRoomAdminTag: "ミーティングルームのモデレータータグ",
                 cancel: "キャンセル",
                 validate: "有効",
@@ -513,7 +518,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 audienceVideoFeedbackActivated: "オーディトリアムモード",
                 audienceVideoFeedbackActivatedDisabled: "オーディトリアムモード",
                 audienceVideoFeedbackActivatedHelper:
-                    "オーディトリアムモードが有効化されました：ルーム/ワールド内のすべてのユーザー（カメラとマイクが有効化されている）のカメラとマイクストリームを受信します。ただし、参加者は他の参加者を見ることができません。デフォルトでは無効です。",
+                    "オーディトリアムモードが有効化されました：ルーム/ワールド内のすべてのユーザー（カメラが有効化されている）のカメラストリームを、音声なしで受信します。ただし、参加者は他の参加者を見ることができません。デフォルトでは無効です。",
                 error: {
                     title: "タイトルを入力してください",
                     save: {

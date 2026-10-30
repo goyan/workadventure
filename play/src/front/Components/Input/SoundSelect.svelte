@@ -1,5 +1,7 @@
 <script lang="ts">
     import * as Sentry from "@sentry/svelte";
+    import { playOnSelectedOutput } from "../../WebRtc/AudioOutputManager";
+    import Button from "../UI/Button.svelte";
     import Select from "./Select.svelte";
 
     interface Props {
@@ -37,7 +39,7 @@
         }
         sound.src = url;
         sound.volume = volume;
-        sound.play().catch((e) => {
+        playOnSelectedOutput(sound).catch((e) => {
             console.error(e);
             Sentry.captureException(e);
         });
@@ -57,7 +59,13 @@
 
 <div class={`flex items-end gap-2 ${outerClass}`.trim()}>
     <Select {id} bind:value {label} {options} onchange={handleChange} outerClass="flex-1" {disabled} />
-    <button class="btn btn-light btn-ghost mb-2" onclick={handlePlayClick} disabled={disabled || !getSoundUrl(value)}>
+    <Button
+        variant="light"
+        appearance="ghost"
+        class="mb-2"
+        onclick={handlePlayClick}
+        disabled={disabled || !getSoundUrl(value)}
+    >
         {playLabel}
-    </button>
+    </Button>
 </div>

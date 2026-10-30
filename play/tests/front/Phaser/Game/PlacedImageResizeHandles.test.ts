@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { Entity } from "../../../../src/front/Phaser/ECS/Entity";

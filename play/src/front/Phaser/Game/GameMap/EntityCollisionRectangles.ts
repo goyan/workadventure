@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import type { Entity } from "../../ECS/Entity";
 import type { Player } from "../../Player/Player";

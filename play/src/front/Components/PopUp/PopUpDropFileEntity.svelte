@@ -2,6 +2,7 @@
     import { v4 as uuidv4 } from "uuid";
     import { get } from "svelte/store";
     import type { EntityPrefab, OpenFilePropertyData } from "@workadventure/map-editor";
+    import { UploadedFileKind } from "@workadventure/messages";
     import Input from "../Input/Input.svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { UploadFileFrontCommand } from "../../Phaser/Game/MapEditor/Commands/File/UploadFileFrontCommand";
@@ -21,6 +22,7 @@
     import { isTodoListVisibleStore } from "../../Stores/TodoListStore";
     import { warningMessageStore } from "../../Stores/ErrorStore";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
+    import Button from "../UI/Button.svelte";
     import PopUpContainer from "./PopUpContainer.svelte";
     import DropFileEntityPicker from "./DropFileEntityPicker.svelte";
 
@@ -84,6 +86,7 @@
             file: fileAsUint8Array,
             name: file.name,
             propertyId,
+            kind: UploadedFileKind.Document,
         };
 
         const roomConnection = scene.connection;
@@ -110,9 +113,9 @@
 
         const mapEditorModeManager = scene.getMapEditorModeManager();
 
-        analyticsClient.dragDropFile();
+        analyticsClient.trackAdminEvent("file.drag_dropped");
         mapEditorModeStore.switchMode(true);
-        mapEditorModeManager.equipTool(EditorToolName.EntityEditor);
+        mapEditorModeManager?.equipTool(EditorToolName.EntityEditor);
         mapEditorEntityFileDroppedStore.set(true);
         mapEditorEntityModeStore.set("ADD");
         mapEditorSelectedEntityPrefabStore.set($state.snapshot(entityPrefab || defaultEntityPrefab));
@@ -148,15 +151,11 @@
     </div>
 
     {#snippet buttons()}
-        <button
-            class="btn btn-secondary btn-sm w-full max-w-96 justify-center"
-            onclick={onSave}
-            data-testid="dropFileSave"
-        >
+        <Button variant="secondary" size="sm" class="w-full max-w-96" onclick={onSave} dataTestId="dropFileSave">
             {$LL.mapEditor.entityEditor.buttons.save()}
-        </button>
-        <button class="btn bg-white/10 hover:bg-white/30 btn-sm w-full max-w-96 justify-center" onclick={removePopup}>
+        </Button>
+        <Button size="sm" class="bg-white/10 hover:bg-white/30 w-full max-w-96" onclick={removePopup}>
             {$LL.mapEditor.entityEditor.buttons.cancel()}
-        </button>
+        </Button>
     {/snippet}
 </PopUpContainer>

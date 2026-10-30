@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { get } from "svelte/store";
+    import { derived, get } from "svelte/store";
     import { requestVisitCardsStore, selectedChatIDRemotePlayerStore } from "../../Stores/GameStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
@@ -8,6 +8,7 @@
     import chat from "../images/chat.png";
 
     import ButtonClose from "../Input/ButtonClose.svelte";
+    import Button from "../UI/Button.svelte";
     import Spinner from "../Icons/Spinner.svelte";
     import { IconLoader } from "@wa-icons";
 
@@ -24,9 +25,20 @@
     let hidden = $state(true);
     let cvIframe: HTMLIFrameElement;
 
-    const chatConnection = gameManager.chatConnection;
     const selectPlayerChatID = get(selectedChatIDRemotePlayerStore);
-    const roomCreationInProgress = chatConnection.roomCreationInProgress;
+    // A Woka can be clicked as soon as the map shows, which does not wait for the chat connection: until it exists,
+    // the "send message" button stays a spinner.
+    const roomCreationInProgress = derived(
+        gameManager.chatConnectionStore,
+        (chatConnection, set) => {
+            if (!chatConnection) {
+                set(true);
+                return;
+            }
+            return chatConnection.roomCreationInProgress.subscribe(set);
+        },
+        true,
+    );
 
     function closeCard() {
         requestVisitCardsStore.set(null);
@@ -82,14 +94,17 @@
             <div class="buttonContainer p-2.5 flex flex-row justify-end gap-2 bg-contrast rounded-b-lg">
                 {#if selectPlayerChatID && showSendMessageButton}
                     {#if !$roomCreationInProgress}
-                        <button
-                            class="btn btn-secondary text-nowrap justify-center m-2 flex-1 min-w-0"
-                            data-testid="sendMessagefromVisitCardButton"
+                        <Button
+                            variant="secondary"
+                            class="text-nowrap m-2 flex-1 min-w-0"
+                            dataTestId="sendMessagefromVisitCardButton"
                             onclick={openChat}
                         >
-                            <img src={chat} alt="chat" class="w-6 h-6 mx-2" draggable="false" />
+                            {#snippet icon()}
+                                <img src={chat} alt="chat" class="w-6 h-6 mx-2" draggable="false" />
+                            {/snippet}
                             {$LL.menu.visitCard.sendMessage()}
-                        </button>
+                        </Button>
                     {:else}
                         <button
                             class="light cursor-pointer px-3 mb-2 mr-0"
@@ -106,7 +121,7 @@
 
 <svelte:window onmessage={handleIframeMessage} />
 
-<style lang="scss">
+<style>
     .visitCard {
         pointer-events: all;
         z-index: 750;
@@ -121,7 +136,8 @@
             }
         }
 
-        button {
+        /* Global so it reaches the <button> rendered by <Button> (scoped CSS would not). */
+        :global(button) {
             float: right;
         }
     }

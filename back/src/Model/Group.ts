@@ -141,11 +141,15 @@ export class Group implements Movable, CustomJsonReplacerInterface {
     }
 
     searchForNearbyUsers(): void {
-        if (!this.currentZone) return;
+        // A locked group lets nobody in, not even the users its members walk up to.
+        if (!this.currentZone || this.isLocked()) return;
 
         for (const user of this.positionNotifier.getAllUsersInSquareAroundZone(this.currentZone)) {
+            if (this.isFull()) return;
             //  Todo: Merge two groups with a leader
-            if (user.silent || user.group || this.isFull()) return; //we ignore users that are already in a group.
+            // We ignore users that are already in a group or silent, and users still walking: like in
+            // GameRoom.updateUserGroup, a user joins a group when they stop.
+            if (user.silent || user.group || user.getPosition().moving) continue;
             const distance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), this.getPosition());
             if (distance < this.groupRadius) {
                 this.join(user);
@@ -188,7 +192,10 @@ export class Group implements Movable, CustomJsonReplacerInterface {
 
         // Broadcast on the right event
         this.disconnectCallback(user, this);
-        this.positionNotifier.emitGroupUsersUpdatedEvent(this);
+        // No need to send a "user left group" ping since the group is already destroyed
+        if (!this.wasDestroyed) {
+            this.positionNotifier.emitGroupUsersUpdatedEvent(this);
+        }
     }
 
     lock(lock = true): void {
@@ -204,10 +211,11 @@ export class Group implements Movable, CustomJsonReplacerInterface {
             this.positionNotifier.leave(this);
         }
 
+        this.wasDestroyed = true;
+
         for (const user of this.users) {
             this.leave(user);
         }
-        this.wasDestroyed = true;
     }
 
     get getSize() {

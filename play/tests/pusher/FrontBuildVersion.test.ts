@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { Application, Request, Response } from "express";
 import { FrontController } from "../../src/pusher/controllers/FrontController";
+import type { FrontAssets } from "../../src/pusher/services/FrontAssets";
 import { releaseNotes } from "../../src/common/ReleaseNotes";
 
 const fixture = vi.hoisted(() => ({
@@ -39,6 +40,11 @@ vi.mock("../../src/pusher/services/MetaTagsBuilder", () => ({
     },
 }));
 
+const frontAssets: FrontAssets = {
+    getIndexTemplate: () => fixture.html,
+    registerStaticRoutes: () => undefined,
+};
+
 describe("frontend build identity", () => {
     beforeEach(() => {
         fixture.html = '<html><head><script src="/assets/front-a.js"></script></head><body></body></html>';
@@ -46,7 +52,7 @@ describe("frontend build identity", () => {
 
     it("serves the loaded page's build identity from the uncached version endpoint", async () => {
         const app = mock<Application>();
-        new FrontController(app);
+        new FrontController(app, frontAssets);
         const req = mock<Request>();
         req.header.mockReturnValue("https");
         req.get.mockReturnValue("play.example.org");
@@ -79,7 +85,7 @@ describe("frontend build identity", () => {
 
         function getVersion(): unknown {
             const app = mock<Application>();
-            new FrontController(app);
+            new FrontController(app, frontAssets);
             const res = mock<Response>();
             res.set.mockReturnValue(res);
             const handler = app.get.mock.calls.find(([path]) => path === "/build-version")?.[1];

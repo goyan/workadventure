@@ -7,6 +7,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         deletePrompt: "Cette carte a été supprimée",
         deletePromptSubtitle: "Vous avez été déconnecté de cette salle.",
         deletePromptDetails: "Actualiser ne restaurera pas cette carte, car elle n'existe plus.",
+        editionFailed: "Votre modification n'a pas pu être enregistrée et a été annulée.",
     },
     sideBar: {
         areaEditor: "Outil d'édition de zone",
@@ -66,7 +67,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
 
     properties: {
         silent: {
-            label: "Silent",
+            label: "Silencieux",
             description: "Ne permet pas les conversations à l'intérieur.",
             actionButtonLabel: "Ne pas déranger",
         },
@@ -93,8 +94,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Démarrer une réunion Jitsi à l'entrée.",
             jitsiUrl: "URL Jitsi",
             jitsiUrlPlaceholder: "meet.jit.si",
-            roomNameLabel: "Nom de Salle",
-            roomNamePlaceholder: "Nom de la Salle",
+            roomNameLabel: "Nom de la salle",
+            roomNamePlaceholder: "Nom de la salle",
             defaultButtonLabel: "Ouvrir la salle Jitsi",
             audioMutedLabel: "Désactivé par défaut",
             moreOptionsLabel: "Plus d'options",
@@ -115,7 +116,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 cancel: "Annuler",
                 validate: "Valider",
             },
-            disabled: "L'intégration Jitsi est désactivée sur ce salon ❌",
             actionButtonLabel: "Démarrer une réunion Jitsi",
         },
         playAudio: {
@@ -123,10 +123,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Jouer un audio avec un volume réglable.",
             audioLinkLabel: "Lien vers l'audio",
             audioLinkPlaceholder: "https://xxx.yyy/smthing.mp3",
+            sourceUpload: "Importer un fichier",
+            sourceUrl: "Utiliser une URL",
             defaultButtonLabel: "Jouer de la musique",
             volumeLabel: "Volume",
             error: "Impossible de charger le son",
             actionButtonLabel: "Jouer de la musique",
+            playForAllUsersLabel: "Jouer pour tous les utilisateurs de la carte",
+            audibleRadiusLabel: "Rayon d'audibilité (en pixels)",
+            audibleRadiusPlaceholder: "Audible partout si vide",
         },
         openWebsite: {
             label: "Ouvrir un lien",
@@ -164,14 +169,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 'Les utilisateurs sur le podium (scène) peuvent parler à tous les participants dans la zone "Audience" correspondante.',
             nameLabel: "Nom du podium",
             namePlaceholder: "MonPodium",
-            disabled: "Les podiums sont désactivés sur ce salon ❌",
             actionButtonLabel: "Rejoindre le podium",
         },
         listenerMegaphone: {
             label: "Audience",
             description: "Les utilisateurs dans la zone d'audience peuvent entendre l'orateur sur le podium lié.",
             nameLabel: "Nom du podium attaché",
-            disabled: 'Les zones "Audience" sont désactivées sur ce salon ❌',
             namePlaceholder: "MaZoneDeDiffusion",
             waitingMediaLinkLabel: "Média à afficher avant le début du live",
             waitingMediaLinkPlaceholder: "https://www… (entrez l’URL du média)",
@@ -183,6 +186,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         chatEnabled: "Chat activé",
         allowTalking: "Autoriser la parole et la formation de bulles",
+        raiseHandEnabled: "Autoriser la levée de main",
         seeAttendees: "Voir les participants",
         start: {
             label: "Zone de départ",
@@ -298,7 +302,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         excalidraw: {
             label: "Ouvrir Excalidraw",
             description:
-                "Un outil de dessin à la main virtuel (preque comme un tableau blanc). Collaboratif et chiffré de bout en bout.",
+                "Un outil de dessin à la main virtuel (presque comme un tableau blanc). Collaboratif et chiffré de bout en bout.",
             error: "Veuillez entrer une URL Excalidraw valide",
             disabled: "L'intégration Excalidraw est désactivée.",
             actionButtonLabel: "Ouvrir Excalidraw",
@@ -312,7 +316,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             actionButtonLabel: "Ouvrir Cards",
         },
         matrixRoomPropertyData: {
-            actionButtonLabel: "Start chatting",
+            actionButtonLabel: "Commencer à discuter",
             label: "Lier un salon Matrix",
             description: "Lier un salon Matrix",
             openAutomaticallyChatLabel: "Ouvrir le chat automatiquement",
@@ -321,9 +325,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             defaultChatRoomAreaName: "Salon de zone",
         },
         tooltipPropertyData: {
-            label: "Info Bulle",
-            description: "Afficher une info bulle lors de l'interaction avec l'objet ℹ️",
-            contentPlaceholder: "Contenu de l'info bulle 📝",
+            label: "Info-bulle",
+            description: "Afficher une info-bulle lors de l'interaction avec l'objet ℹ️",
+            contentPlaceholder: "Contenu de l'info-bulle 📝",
             duration: "Durée (en secondes) ⏱️",
             infinityDuration: "Infini ⏱️",
             actionButtonLabel: "Voir l'info bulle",
@@ -340,7 +344,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 dragDrop: "Glissez-déposer ou",
                 chooseFile: "Choisir ",
                 errorOnFileFormat: "Format du fichier non supporté",
-                errorOnFileNumber: "Dépot multiple de fichier non supporté",
+                errorOnFileNumber: "Dépôt multiple de fichiers non supporté",
                 errorOnFileSize: "Fichier trop volumineux : la taille maximale est de {size} MB",
             },
             hideUrlLabel: "Masquer l'URL",
@@ -358,6 +362,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 startWithAudioMuted: "Démarrer avec le microphone désactivé",
                 startWithVideoMuted: "Démarrer avec la vidéo désactivée",
                 disableChat: "Désactiver le chat",
+                raiseHandEnabled: "Autoriser la levée de main",
                 livekitRoomAdminTag: "Tag modérateur de la salle de réunion",
                 cancel: "Annuler",
                 validate: "Valider",
@@ -400,7 +405,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         nameHelpText: "Le nom de la zone sera affiché aux utilisateurs lorsqu'ils entreront dans la zone.",
     },
     areaEditorInstructions: {
-        title: "Comment ca marche ?",
+        title: "Comment ça marche ?",
         description: "Dessinez une zone sur la carte afin d'en créer une nouvelle.",
     },
     entityEditor: {
@@ -420,7 +425,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             choose: "Choisissez un objet",
         },
         title: "Outil d'édition d'entités",
-        editing: "Edition : {name}",
+        editing: "Édition : {name}",
         drop: "Déposez votre fichier n'importe où",
         itemPicker: {
             searchPlaceholder: "Rechercher",
@@ -433,7 +438,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         testInteractionButton: "Tester interaction",
         buttonLabel: "Texte du bouton",
         editInstructions: "Sélectionnez un objet pour modifier ses propriétés.",
-        selectObject: "Cliquer sur un objet pour le selectionner",
+        selectObject: "Cliquer sur un objet pour le sélectionner",
         objectName: "Nom de l'objet",
         objectNamePlaceholder: "MonObjet",
         objectDescription: "Description de l'objet",
@@ -446,7 +451,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             dragDrop: "Glissez-déposer ou",
             chooseFile: "Choisir ",
             errorOnFileFormat: "Format du fichier non supporté",
-            errorOnFileNumber: "Dépot multiple de fichier non supporté",
+            errorOnFileNumber: "Dépôt multiple de fichiers non supporté",
             errorOnFileSize: "Fichier trop volumineux : la taille maximale est de {size} MB",
         },
         images: "Image{{s}}",
@@ -459,7 +464,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         customEntityEditorForm: {
             imageName: "Nom de l'image",
             tags: "Tags",
-            writeTag: "Ecrire un tag...",
+            writeTag: "Écrire un tag...",
             objectType: "Type d'objet",
             floatingObject: "Objet flottant",
             floatingObjectDescription:
@@ -473,11 +478,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             wokaBelow: "Woka derrière",
         },
         buttons: {
-            editEntity: "Editer",
+            editEntity: "Éditer",
             back: "Retour",
             cancel: "Annuler",
             delete: "Supprimer",
-            save: "Enregister",
+            save: "Enregistrer",
             upload: "Charger",
         },
         errors: {
@@ -489,13 +494,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     settings: {
         loading: "Chargement en cours",
         megaphone: {
-            title: "Megaphone",
+            title: "Mégaphone",
             description:
-                "Le megaphone est un outil qui permet de diffuser un flux vidéo/audio à tous les joueurs dans la salle/monde.",
+                "Le mégaphone est un outil qui permet de diffuser un flux vidéo/audio à tous les joueurs dans la salle/monde.",
             inputs: {
                 spaceName: "Nom de l'espace",
                 spaceNameHelper:
-                    "Si vous souhaitez diffuser un flux à tous les utilisateurs qui se trouvent dans différentes salles mais dans le même monde, vous devez définir le même nom d'espace pour tous les paramètres du megaphone dans chaque salle et définir la portée sur 'Monde'.",
+                    "Si vous souhaitez diffuser un flux à tous les utilisateurs qui se trouvent dans différentes salles mais dans le même monde, vous devez définir le même nom d'espace pour tous les paramètres du mégaphone dans chaque salle et définir la portée sur 'Monde'.",
                 scope: "Portée",
                 world: "Monde",
                 room: "Salle",
@@ -505,24 +510,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 enableSoundNotifications: "Activer les notifications sonores",
                 rights: "Droits",
                 rightsHelper:
-                    "Les droits définissent qui peut utiliser le megaphone. Si vous le laissez vide, tout le monde peut l'utiliser. Si vous le définissez, seuls les utilisateurs qui ont au moins l'un de ces 'tags' peuvent l'utiliser.",
+                    "Les droits définissent qui peut utiliser le mégaphone. Si vous le laissez vide, tout le monde peut l'utiliser. Si vous le définissez, seuls les utilisateurs qui ont au moins l'un de ces 'tags' peuvent l'utiliser.",
                 recording: {
                     title: "Enregistrement",
-                    enable: "Activer l'enregistrement du megaphone",
+                    enable: "Activer l'enregistrement du mégaphone",
                     enableHelper:
-                        "Lorsqu'il est désactivé, les utilisateurs ne peuvent pas démarrer un enregistrement dans le megaphone. Les enregistrements en cours peuvent toujours être arrêtés.",
+                        "Lorsqu'il est désactivé, les utilisateurs ne peuvent pas démarrer un enregistrement dans le mégaphone. Les enregistrements en cours peuvent toujours être arrêtés.",
                     rights: "Droits d'enregistrement",
                     rightsHelper:
-                        "Toute personne ayant au moins l'un de ces tags peut enregistrer le megaphone, si elle peut déjà enregistrer et utiliser le megaphone. Laissez vide pour ne pas ajouter de restriction.",
+                        "Toute personne ayant au moins l'un de ces tags peut enregistrer le mégaphone, si elle peut déjà enregistrer et utiliser le mégaphone. Laissez vide pour ne pas ajouter de restriction.",
                 },
                 audienceVideoFeedbackActivated: "Mode auditorium activé",
                 audienceVideoFeedbackActivatedDisabled: "Mode auditorium désactivé",
                 audienceVideoFeedbackActivatedHelper:
-                    "Mode auditorium activé : Recevez le flux caméra et microphone de tous les utilisateurs (avec caméra et microphone activés) dans la salle/monde. Mais le participant ne pourra pas voir les autres participants. Désactivé par défaut.",
+                    "Mode auditorium activé : Recevez le flux caméra de tous les utilisateurs (avec caméra activée) dans la salle/monde, sans leur son. Mais le participant ne pourra pas voir les autres participants. Désactivé par défaut.",
                 error: {
                     title: "Veuillez entrer un nom",
                     save: {
-                        success: "Paramètres enregstrés avec succès",
+                        success: "Paramètres enregistrés avec succès",
                         fail: "Une erreur est survenue lors de l'enregistrement des paramètres",
                     },
                 },
@@ -583,7 +588,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entitiesFound: "Entités trouvées",
         noAreasFound: "Aucune zone trouvée dans la carte 🙅‍♀️",
         areasFound: "Zones trouvées",
-        noDescriptionFound: "No description found 🫥",
+        noDescriptionFound: "Aucune description trouvée 🫥",
         details: {
             close: "Fermer",
             moveToEntity: "Aller à l'entité {name}",

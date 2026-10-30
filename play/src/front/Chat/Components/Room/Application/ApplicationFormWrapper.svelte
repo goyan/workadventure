@@ -4,11 +4,11 @@
     import {
         ApplicationService,
         defaultNativeIntegrationAppName,
+        getEmbedLink,
         GoogleWorkSpaceService,
         KlaxoonService,
-        MediaLinkManager,
+        validateLinkForApplication,
     } from "@workadventure/shared-utils";
-    import CloseButton from "../../../../Components/MapEditor/PropertyEditor/CloseButton.svelte";
     import { GOOGLE_DRIVE_PICKER_APP_ID, GOOGLE_DRIVE_PICKER_CLIENT_ID } from "../../../../Enum/EnvironmentVariable";
     import LL from "../../../../../i18n/i18n-svelte";
     import type { ApplicationProperty } from "../MessageInputBar.svelte";
@@ -18,7 +18,6 @@
 
     interface Props {
         property: ApplicationProperty;
-        close?: () => void;
         update?: (property: ApplicationProperty) => void;
         processing?: () => void;
         processed?: () => void;
@@ -27,7 +26,6 @@
 
     let {
         property,
-        close = () => {},
         update = () => {},
         processing = () => {},
         processed = () => {},
@@ -103,12 +101,14 @@
         errorLink = undefined;
         let link = htmlElementInput.value.trim();
         try {
-            let mediaLink = new MediaLinkManager(htmlElementInput.value.trim());
-            mediaLink.linkMatchWithApplicationIdOrName(property.name);
-            link = await mediaLink.getEmbedLink({
+            const url = new URL(link);
+            validateLinkForApplication(url, property.name);
+            const embedLink = await getEmbedLink(url, {
                 klaxoonId: applicationManager.klaxoonToolClientId,
                 excalidrawDomains: applicationManager.excalidrawToolDomains,
             });
+            if (embedLink === undefined) throw new Error(`No embed link for ${url}`);
+            link = embedLink;
             if (property.regexUrl) {
                 link = ApplicationService.validateLink(
                     new URL(link),
@@ -183,15 +183,12 @@
 
 <div class="flex flex-col w-full justify-center items-center py-4 px-6 gap-2">
     <div class="flex flex-row w-full justify-between items-center gap-2">
-        <img draggable="false" class="w-8" src={property.img} alt={$LL.chat.a11y.applicationIcon()} />
-        <h2 class="text-sm p-0 m-0">{property.title}</h2>
-        <CloseButton
-            onclick={() => {
-                close();
-            }}
-        />
+        <img draggable="false" class="w-8 shrink-0" src={property.img} alt={$LL.chat.a11y.applicationIcon()} />
+        <h2 class="min-w-0 flex-1 text-center text-sm p-0 m-0 leading-tight whitespace-normal break-words">
+            {property.title}
+        </h2>
     </div>
-    <p class="text-xs text-center p-0 m-0 h-8 w-full whitespace-nowrap overflow-hidden overflow-ellipsis text-gray-400">
+    <p class="text-xs text-center p-0 m-0 min-h-8 w-full leading-tight whitespace-normal break-words text-gray-400">
         {property.description}
     </p>
 

@@ -8,7 +8,7 @@ import { isPathClearOfStaticGroups } from "./StaticGroupsPath";
  */
 export class TiledTileCollisions {
     private readonly layers = new Map<
-        Phaser.Tilemaps.TilemapLayer,
+        Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer,
         { group: Phaser.Physics.Arcade.StaticGroup; collider?: Phaser.Physics.Arcade.Collider }
     >();
     private player: Player | undefined;
@@ -23,7 +23,7 @@ export class TiledTileCollisions {
         }
     }
 
-    public updateLayer(layer: Phaser.Tilemaps.TilemapLayer): void {
+    public updateLayer(layer: Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer): void {
         const previous = this.layers.get(layer);
         previous?.collider?.destroy();
         previous?.group.clear(true, true);

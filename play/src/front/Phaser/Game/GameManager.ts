@@ -1,6 +1,7 @@
-import type { Unsubscriber } from "svelte/store";
-import { get } from "svelte/store";
+import type { Readable, Unsubscriber } from "svelte/store";
+import { get, readonly, writable } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
+import * as Phaser from "phaser";
 import { Deferred } from "@workadventure/shared-utils";
 import { TimeoutError } from "@workadventure/shared-utils/src/Abort/TimeoutError";
 import { connectionManager } from "../../Connection/ConnectionManager";
@@ -20,7 +21,8 @@ import { LoginSceneName } from "../Login/LoginScene";
 import { PwaInstallSceneName } from "../Login/PwaInstallScene";
 import { SelectCharacterSceneName } from "../Login/SelectCharacterScene";
 import { EmptySceneName } from "../Login/EmptyScene";
-import { gameSceneIsLoadedStore, waitForGameSceneStore } from "../../Stores/GameSceneStore";
+import { gameSceneIsLoadedStore, gameSceneStore } from "../../Stores/GameSceneStore";
+import { currentRoomStore } from "../../Stores/CurrentRoomStore";
 import { myCameraStore } from "../../Stores/MyMediaStore";
 import { SelectCompanionSceneName } from "../Login/SelectCompanionScene";
 import { errorScreenStore } from "../../Stores/ErrorScreenStore";
@@ -28,8 +30,6 @@ import { pwaInstallProfileMenuEligibleStore, pwaInstallSceneVisibleStore } from 
 import { hasCapability } from "../../Connection/Capabilities";
 import type { ChatConnectionInterface } from "../../Chat/Connection/ChatConnection";
 import { MATRIX_PUBLIC_URI } from "../../Enum/EnvironmentVariable";
-import { InvalidLoginTokenError, MatrixClientWrapper } from "../../Chat/Connection/Matrix/MatrixClientWrapper";
-import { MatrixChatConnection } from "../../Chat/Connection/Matrix/MatrixChatConnection";
 import { VoidChatConnection } from "../../Chat/Connection/VoidChatConnection";
 import { loginTokenErrorStore, isMatrixChatEnabledStore } from "../../Stores/ChatStore";
 import { initializeChatVisibilitySubscription } from "../../Chat/Stores/ChatStore";
@@ -39,6 +39,9 @@ import { generateRandomName } from "../../Utils/RandomNameGenerator";
 import { shouldShowPwaInstallSceneAsync } from "../../Utils/PwaInstallEligibility";
 import { raceTimeout } from "../../Utils/PromiseUtils";
 import { GameScene } from "./GameScene";
+
+import ScenePlugin = Phaser.Scenes.ScenePlugin;
+
 /**
  * This class should be responsible for any scene starting/stopping
  */
@@ -50,12 +53,20 @@ export class GameManager {
     private _startRoomPromise: Deferred<Room> = new Deferred();
     private currentGameSceneName: string | null = null;
     // Note: this scenePlugin is the scenePlugin of the EntryScene. We should always provide a key in methods called on this scenePlugin.
-    private scenePlugin!: Phaser.Scenes.ScenePlugin;
+    private scenePlugin!: ScenePlugin;
     private visitCardUrl: string | null = null;
     private matrixServerUrl: string | undefined = undefined;
     private chatConnectionPromise: Promise<ChatConnectionInterface> | undefined;
-    private matrixClientWrapper: MatrixClientWrapper | undefined;
-    private _chatConnection: ChatConnectionInterface | undefined;
+    private pendingChatConnectionPromise: Promise<ChatConnectionInterface> | undefined;
+    private matrixLoginTokenExchange: Promise<void> | undefined;
+    private readonly _chatConnectionStore = writable<ChatConnectionInterface | undefined>(undefined);
+    /**
+     * The chat connection, once there is one. The map does not wait for it, and for a logged-in user it only
+     * exists once the Matrix code is downloaded: any UI mounted with the map must go through this store.
+     */
+    public readonly chatConnectionStore: Readable<ChatConnectionInterface | undefined> = readonly(
+        this._chatConnectionStore,
+    );
     private chatVisibilitySubscription: Unsubscriber | undefined;
 
     constructor() {
@@ -65,7 +76,7 @@ export class GameManager {
         this.chatVisibilitySubscription = initializeChatVisibilitySubscription();
     }
 
-    public async init(scenePlugin: Phaser.Scenes.ScenePlugin): Promise<string> {
+    public async init(scenePlugin: ScenePlugin): Promise<string> {
         this.scenePlugin = scenePlugin;
         const result = await connectionManager.initGameConnexion();
         if (result instanceof URL) {
@@ -84,6 +95,7 @@ export class GameManager {
         }
         let nextScene = result.nextScene;
         this.startRoom = result.room;
+        currentRoomStore.set(result.room);
         this._startRoomPromise.resolve(result.room);
         this.loadMap(this.startRoom);
 
@@ -379,6 +391,11 @@ export class GameManager {
         return this.startRoom;
     }
 
+    /** Returns the current room, or undefined if no room has been started yet. */
+    public get currentStartedRoomOrNull(): Room | undefined {
+        return this.startRoom;
+    }
+
     public get currentStartedRoomPromise(): Promise<Room> {
         return this._startRoomPromise.promise;
     }
@@ -391,58 +408,139 @@ export class GameManager {
         return this.matrixServerUrl;
     }
 
-    public async getChatConnection(): Promise<ChatConnectionInterface> {
-        if (this.chatConnectionPromise) {
-            return this.chatConnectionPromise;
+    /**
+     * Whether the room the player is currently in allows the chat.
+     *
+     * `gameSceneStore` holds the running scene only once it finished loading. During the very first load the
+     * scene is still starting up - it is the one asking for the chat connection - so we fall back on the
+     * start room, which is precisely the room that scene is loading.
+     */
+    private async isChatEnabledOnCurrentRoom(): Promise<boolean> {
+        const room = get(gameSceneStore)?.room ?? (await this.currentStartedRoomPromise);
+        return room.isChatEnabled;
+    }
+
+    /**
+     * A Matrix session belongs to the user, not to the caller, so at most one may ever be opened: two
+     * clients in the same tab would fight over the same IndexedDB databases, which matrix-js-sdk warns
+     * leads to data corruption and decryption failures.
+     *
+     * Several callers ask for the connection while a scene starts up - the loading sequence and the world
+     * space join, at least - and deciding whether to open one has to await the room. The in-flight promise
+     * is therefore memoised synchronously: were the memoisation to happen only after that await, every
+     * caller arriving in the meantime would start a client of its own.
+     *
+     * A void connection is deliberately not memoised, so that a room where the chat is disabled does not
+     * settle the question for the rest of the session.
+     */
+    public getChatConnection(): Promise<ChatConnectionInterface> {
+        const alreadyRequested = this.chatConnectionPromise ?? this.pendingChatConnectionPromise;
+        if (alreadyRequested) {
+            return alreadyRequested;
         }
 
+        this.pendingChatConnectionPromise = this.openChatConnection().finally(() => {
+            this.pendingChatConnectionPromise = undefined;
+        });
+
+        return this.pendingChatConnectionPromise;
+    }
+
+    /**
+     * Spends the Matrix login token this page landed with, as soon as the homeserver is known (right after /me).
+     *
+     * The token lives two minutes, and the chat only opens once the game scene starts, after the Woka and camera
+     * screens - or never, on a room where the chat is disabled. openChatConnection() waits for this, so the two never
+     * race on a single-use token. Exchanging only creates a device: nothing here may ever call /logout.
+     */
+    public exchangeMatrixLoginToken(loginToken: string): void {
+        const matrixServerUrl = this.getMatrixServerUrl() ?? MATRIX_PUBLIC_URI;
+        if (!matrixServerUrl) {
+            return;
+        }
+        // A login token means a logged-in user, whose chat loads Matrix anyway: this only starts the download sooner.
+        this.matrixLoginTokenExchange = import("../../Chat/Connection/Matrix/MatrixClientWrapper")
+            .then(({ MatrixClientWrapper }) =>
+                new MatrixClientWrapper(matrixServerUrl, localUserStore).exchangeLoginToken(loginToken),
+            )
+            .catch((e: unknown) => {
+                // The token is gone either way. initMatrixClient() then uses the session this browser already
+                // holds, if this user opened it (exchangeLoginToken() drops another user's), or fails with
+                // MissingMatrixCredentialsError, which shows the "reconnect" prompt.
+                console.error("Unable to exchange the Matrix login token", e);
+                Sentry.captureException(e);
+            });
+    }
+
+    private async openChatConnection(): Promise<ChatConnectionInterface> {
         const matrixServerUrl = this.getMatrixServerUrl() ?? MATRIX_PUBLIC_URI;
 
-        if (matrixServerUrl && get(userIsConnected)) {
-            this.matrixClientWrapper = new MatrixClientWrapper(matrixServerUrl, localUserStore);
-
-            const matrixClientPromise = this.matrixClientWrapper.initMatrixClient();
-
-            matrixClientPromise.catch((e) => {
-                if (e instanceof InvalidLoginTokenError) {
-                    loginTokenErrorStore.set(true);
-                }
-            });
-
-            const matrixChatConnection = new MatrixChatConnection(matrixClientPromise, availabilityStatusStore);
-            this._chatConnection = matrixChatConnection;
-
-            this.chatConnectionPromise = matrixChatConnection.init().then(() => matrixChatConnection);
-            isMatrixChatEnabledStore.set(true);
-
-            try {
-                const gameScene = await waitForGameSceneStore();
-
-                if (gameScene.room.isChatEnabled) {
-                    return this.chatConnectionPromise;
-                }
-            } catch (e) {
-                console.error(e);
-                Sentry.captureException(e);
-            }
-
-            matrixChatConnection.destroy().catch((e) => {
-                console.error(e);
-                Sentry.captureException(e);
-            });
-            return new VoidChatConnection();
-        } else {
-            // No matrix connection? Let's fill the gap with a "void" object
-            this._chatConnection = new VoidChatConnection();
-            isMatrixChatEnabledStore.set(false);
-            return this._chatConnection;
+        // The chat setting is checked *before* the client is built, on purpose. Opening a Matrix session on a
+        // room where the chat is disabled used to mean a full connection and initial sync, immediately
+        // followed by destroy() - which is a real /logout. The homeserver then revoked the access token that
+        // is still stored locally, so every later room with the chat enabled restored that dead token and got
+        // nothing but M_UNKNOWN_TOKEN. Not opening the session at all leaves nothing to tear down.
+        if (!matrixServerUrl || !get(userIsConnected) || !(await this.isChatEnabledOnCurrentRoom())) {
+            return this.useVoidChatConnection();
         }
+
+        // matrix-js-sdk is a large chunk: only the users who actually get a Matrix chat download it. Anonymous
+        // users never do, so it stays out of the bundle everybody loads on startup.
+        let matrixModules;
+        try {
+            matrixModules = await Promise.all([
+                import("../../Chat/Connection/Matrix/MatrixClientWrapper"),
+                import("../../Chat/Connection/Matrix/MatrixChatConnection"),
+            ]);
+        } catch (e) {
+            // A network error, or a chunk removed by a newer deployment. The world works without the chat, and
+            // a void connection is not memoised, so the next call tries again.
+            console.error("Could not load the Matrix chat", e);
+            Sentry.captureException(e);
+            return this.useVoidChatConnection();
+        }
+        const [{ MatrixClientWrapper, MissingMatrixCredentialsError }, { MatrixChatConnection }] = matrixModules;
+
+        const matrixClientWrapper = new MatrixClientWrapper(matrixServerUrl, localUserStore);
+        const matrixClientPromise = Promise.resolve(this.matrixLoginTokenExchange).then(() =>
+            matrixClientWrapper.initMatrixClient(),
+        );
+
+        matrixClientPromise.catch((e) => {
+            // Only a new OpenID login can mint the Matrix login token this browser is missing, so show the
+            // "reconnect" prompt instead of a bare error banner.
+            if (e instanceof MissingMatrixCredentialsError) {
+                loginTokenErrorStore.set(true);
+            }
+        });
+
+        const matrixChatConnection = new MatrixChatConnection(matrixClientPromise, availabilityStatusStore);
+        this._chatConnectionStore.set(matrixChatConnection);
+
+        this.chatConnectionPromise = matrixChatConnection.init().then(() => matrixChatConnection);
+        isMatrixChatEnabledStore.set(true);
+
+        return this.chatConnectionPromise;
     }
+
+    private useVoidChatConnection(): ChatConnectionInterface {
+        // No matrix connection? Let's fill the gap with a "void" object
+        const voidChatConnection = new VoidChatConnection();
+        this._chatConnectionStore.set(voidChatConnection);
+        isMatrixChatEnabledStore.set(false);
+        return voidChatConnection;
+    }
+
+    /**
+     * Throws until the connection exists, which the map does not wait for: code that can run as soon as the map
+     * shows uses getChatConnection() or chatConnectionStore instead.
+     */
     get chatConnection(): ChatConnectionInterface {
-        if (!this._chatConnection) {
+        const chatConnection = get(this._chatConnectionStore);
+        if (!chatConnection) {
             throw new Error("_chatConnection not yet initialized");
         }
-        return this._chatConnection;
+        return chatConnection;
     }
 
     /**
@@ -450,28 +548,35 @@ export class GameManager {
      * Currently, this logs out from the Matrix client.
      */
     public async logout(): Promise<void> {
-        if (this._chatConnection) {
-            try {
-                this._chatConnection.clearListener();
-                await this._chatConnection.destroy();
-                if (this.chatVisibilitySubscription) {
-                    this.chatVisibilitySubscription();
-                }
-                this.clearChatDataFromLocalStorage();
-                this._chatConnection = undefined;
-                this.chatConnectionPromise = undefined;
-            } catch (e) {
-                console.error("Chat connection not closed properly : ", e);
-                Sentry.captureException(e);
+        const chatConnection = get(this._chatConnectionStore);
+        if (!chatConnection) {
+            return;
+        }
+
+        try {
+            chatConnection.clearListener();
+            await chatConnection.destroy();
+        } catch (e) {
+            // destroy() ends up calling POST /logout, which fails with a 401 when the Matrix session is
+            // already dead - exactly when the local cleanup below matters most. It must therefore run in
+            // every case: leaving the Matrix user id behind makes MatrixClientWrapper skip its
+            // clearStores() branch on the next login, restoring the broken session (stale sync token and
+            // crypto store) instead of starting over.
+            console.error("Chat connection not closed properly : ", e);
+            Sentry.captureException(e);
+        } finally {
+            if (this.chatVisibilitySubscription) {
+                this.chatVisibilitySubscription();
             }
+            this.clearChatDataFromLocalStorage();
+            this._chatConnectionStore.set(undefined);
+            this.chatConnectionPromise = undefined;
+            this.pendingChatConnectionPromise = undefined;
         }
     }
 
     private clearChatDataFromLocalStorage(): void {
-        localUserStore.setMatrixLoginToken(null);
-        localUserStore.setMatrixUserId(null);
-        localUserStore.setMatrixAccessToken(null);
-        localUserStore.setMatrixRefreshToken(null);
+        localUserStore.clearMatrixSession();
     }
 
     public async loadWokaData(): Promise<WokaData> {

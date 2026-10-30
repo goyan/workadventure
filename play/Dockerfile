@@ -1,3 +1,6 @@
+# The "front" image of the previous deployment. Its hashed assets are carried over (see the "front" stage).
+ARG PREVIOUS_FRONT_IMAGE=nginx:1.30-alpine3.24
+
 
 # protobuf build
 FROM --platform=$BUILDPLATFORM node:24-trixie-slim AS proto-builder
@@ -14,6 +17,10 @@ ARG NODE_OPTIONS="--max-old-space-size=16384"
 WORKDIR /usr/src
 RUN apt-get update && apt-get install -y git
 COPY package.json package-lock.json ./
+# The root postinstall runs patch-package during the npm ci below; it needs the
+# patch files present in the build context, otherwise the play build bundles an
+# unpatched phaser (patches/phaser+4.2.0.patch fixes TilemapGPULayer rendering).
+COPY patches ./patches
 COPY play/package.json play/package.json
 COPY play/packages/iframe-api-typings/package.json play/packages/iframe-api-typings/package.json
 COPY libs/messages/package.json libs/messages/package.json
@@ -46,7 +53,22 @@ RUN --mount=type=secret,id=SENTRY_RELEASE \
     npm run build-iframe-api && \
     SENTRY_RELEASE=$SENTRY_RELEASE SENTRY_URL=$SENTRY_URL SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN SENTRY_ORG=$SENTRY_ORG SENTRY_PROJECT=$SENTRY_PROJECT SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT npm run build
 
-# final production image
+# Previous front image: only its /usr/share/nginx/html/assets folder is used.
+FROM ${PREVIOUS_FRONT_IMAGE} AS previous-front
+RUN mkdir -p /usr/share/nginx/html/assets
+
+# "front" image: the static files, served by nginx (build with --target front).
+# It keeps the hashed files of the previous deployments for 60 days, so that pages rendered with an older
+# index.html (open tabs, a rollout in progress, a CDN miss) can still load their chunks.
+# nginx stable branch: the patch version follows upstream automatically.
+FROM nginx:1.30-alpine3.24 AS front
+COPY --from=previous-front /usr/share/nginx/html/assets /usr/share/nginx/html/assets
+COPY --from=builder /usr/src/play/dist/public /usr/share/nginx/html
+RUN find /usr/share/nginx/html/assets -type f -mtime +60 -delete
+COPY play/nginx-front.conf /etc/nginx/conf.d/default.conf
+HEALTHCHECK --interval=10s --timeout=5s --start-period=5s --retries=3 CMD wget -q -O /dev/null http://localhost/index.html || exit 1
+
+# final production image (the default target)
 FROM node:24-trixie-slim
 EXPOSE 3000
 WORKDIR /usr/src

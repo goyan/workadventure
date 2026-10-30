@@ -2,12 +2,10 @@ import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
 const video: DeepPartial<Translation["video"]> = {
-    connection_issue: "Problème de connexion!",
+    connection_issue: "Problème de connexion !",
     no_video_stream_received: "Absence de flux vidéo.",
     user_is_muted: "{name} est en sourdine.",
     reduce: "Réduire",
-    toggle_fullscreen: "Passer en plein écran",
-    exit_fullscreen: "Quitter le plein écran",
     connecting: "Connexion en cours...",
     reconnecting: "Reconnexion en cours...",
     persistent_connection_issue: "Reconnexion en cours... Connexion instable...",

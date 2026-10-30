@@ -1,5 +1,7 @@
 <script lang="ts">
     import { LL } from "../../../../i18n/i18n-svelte";
+    import { analyticsClient } from "../../../Administration/AnalyticsClient";
+    import Button from "../../UI/Button.svelte";
 
     interface Props {
         mode?: "settings" | "background";
@@ -15,30 +17,34 @@
 <div class="flex flex-row gap-2 px-1">
     <div class="flex-1 flex text-xxs uppercase text-white/50 pb-0.5 pt-1 relative bold">
         <div class="group flex items-center relative z-10 w-full">
-            <button
-                class="btn btn-sm btn-ghost btn-light justify-center w-full rounded text-nowrap {mode === 'settings'
-                    ? '!bg-white/10'
-                    : ''}"
+            <Button
+                variant="light"
+                appearance="ghost"
+                size="sm"
+                class="w-full rounded text-nowrap {mode === 'settings' ? '!bg-white/10' : ''}"
                 onclick={() => {
                     mode = "settings";
                 }}
             >
                 {$LL.actionbar.background.settings()}
-            </button>
+            </Button>
         </div>
     </div>
     <div class="flex-1 flex text-xxs uppercase text-white/50 pb-0.5 pt-1 relative bold">
         <div class="group flex items-center relative z-10 w-full">
-            <button
-                class="btn btn-sm btn-ghost btn-light justify-center w-full rounded text-nowrap {mode === 'background'
-                    ? '!bg-white/10'
-                    : ''}"
+            <Button
+                variant="light"
+                appearance="ghost"
+                size="sm"
+                class="w-full rounded text-nowrap {mode === 'background' ? '!bg-white/10' : ''}"
+                dataTestId="background-settings-tab"
                 onclick={() => {
                     mode = "background";
+                    analyticsClient.trackAdminEvent("settings.background.opened");
                 }}
             >
                 {$LL.actionbar.background.cameraBackground()}
-            </button>
+            </Button>
         </div>
     </div>
 </div>

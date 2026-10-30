@@ -43,7 +43,7 @@
   "dependencies": {
     "aws-sdk": "^2.1185.0",
     "axios": "^1.16.1",
-    "body-parser": "^2.2.2",
+    "body-parser": "^2.3.0",
     "catch-unknown": "^2.0.0",
     "cors": "^2.8.6",
     "debug": "^4.4.3",
@@ -53,14 +53,13 @@
     "morgan": "^1.10.1",
     "multer": "2.1.1",
     "prom-client": "^15.1.3",
-    "qs": "^6.15.2",
+    "qs": "^6.16.0",
     "redis": "^5.12.1",
     "tsx": "^4.22.3",
     "typescript": "^5.9.3",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@testcontainers/minio": "^12.0.1",
     "@types/body-parser": "^1.19.6",
     "@types/busboy": "^1.5.4",
     "@types/cors": "^2.8.19",

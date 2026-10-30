@@ -44,6 +44,7 @@
             case AvailabilityStatus.AWAY:
             case AvailabilityStatus.DO_NOT_DISTURB:
             case AvailabilityStatus.BACK_IN_A_MOMENT:
+            case AvailabilityStatus.SOUND_BLOCKED:
             case AvailabilityStatus.BUSY: {
                 type = "think";
                 break;
@@ -151,6 +152,7 @@
                     ? 'w-10'
                     : 'w-0'} p-0 aspect-square bg-secondary rounded flex items-center justify-center cursor-pointer transition-all"
                 onclick={sendMessageOrEscapeLine}
+                aria-label={$LL.say.button()}
             >
                 <IconSend />
             </button>

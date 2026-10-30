@@ -1,76 +1,56 @@
-import { beforeEach, describe, expect, it, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AvailabilityStatus } from "@workadventure/messages";
-import type { StatusRulesVerificationInterface, TimedRules } from "../statusRules";
-import { StatusRules } from "../statusRules";
+import type { TimedRules } from "../statusRules";
 import { BasicStatusStrategy } from "../StatusStrategy/BasicStatusStrategy";
-import { InvalidStatusTransitionError } from "../Errors/InvalidStatusTransitionError";
+import { BackInAMomentStatusStrategy } from "../StatusStrategy/BackInAMomentStatusStrategy";
+import { StatusStrategyFactory } from "../StatusFactory/StatusStrategyFactory";
 import type { StatusStrategyFactoryInterface } from "../StatusChanger";
 import { StatusChanger } from "../StatusChanger";
 import type { StatusStrategyInterface } from "../StatusStrategyInterface";
+import { BusyStatusStrategy } from "../StatusStrategy/BusyStatusStrategy";
+import { popupStore } from "../../../Stores/PopupStore";
+import { localUserStore } from "../../../Connection/LocalUserStore";
 
-describe("Verify Rules Transition", () => {
-    test.each([
-        { actualStatus: AvailabilityStatus.ONLINE, futureStatus: AvailabilityStatus.BUSY, result: true },
-        { actualStatus: AvailabilityStatus.ONLINE, futureStatus: AvailabilityStatus.DO_NOT_DISTURB, result: true },
-        { actualStatus: AvailabilityStatus.ONLINE, futureStatus: AvailabilityStatus.BACK_IN_A_MOMENT, result: true },
-        { actualStatus: AvailabilityStatus.ONLINE, futureStatus: AvailabilityStatus.ONLINE, result: true },
-        { actualStatus: AvailabilityStatus.BUSY, futureStatus: AvailabilityStatus.DO_NOT_DISTURB, result: true },
-        { actualStatus: AvailabilityStatus.BUSY, futureStatus: AvailabilityStatus.JITSI, result: true },
-        { actualStatus: AvailabilityStatus.JITSI, futureStatus: AvailabilityStatus.BUSY, result: true },
-    ])(
-        "change status $actualStatus to status $futureStatus to be $result  ",
-        ({
-            actualStatus,
-            futureStatus,
-            result,
-        }: {
-            actualStatus: AvailabilityStatus;
-            futureStatus: AvailabilityStatus;
-            result: boolean;
-        }) => {
-            //Arrange
-            //Act
-            const isValid: boolean = StatusRules.canChangeStatus(actualStatus).to(futureStatus);
-            //Assert
-            expect(isValid).toBe(result);
-        },
-    );
-});
+// The real strategies reach popups and MediaStore, whose module graph cycles back through
+// MediaManager -> ScreenSharingStore and dies on import. Stub the leaves so the factory
+// itself stays under test.
+vi.mock("../statusChangerFunctions", () => ({
+    askToChangeStatus: vi.fn(),
+    askIfUserWantToJoinBubbleOf: vi.fn(),
+    resetAllStatusStoreExcept: vi.fn(),
+    passStatusToOnline: vi.fn(),
+    closeChangeStatusConfirmationModal: vi.fn(),
+    closeBubbleConfirmationModal: vi.fn(),
+    hideBubbleConfirmationModal: vi.fn(),
+}));
+vi.mock("../../../Stores/PopupStore", () => ({
+    popupStore: { addPopup: vi.fn(), removePopup: vi.fn() },
+}));
+vi.mock("../../../Connection/LocalUserStore", () => ({
+    localUserStore: {
+        getLastNotificationPermissionRequest: vi.fn(),
+        setLastNotificationPermissionRequest: vi.fn(),
+    },
+}));
 
 describe("Status Rules", () => {
     describe("StatusChanger", () => {
         it("should create an instance of statusStrategy with online Status by default", () => {
             //Arrange
-            const mockRulesVerification: StatusRulesVerificationInterface = {
-                canChangeStatus: (actualStatus: AvailabilityStatus) => {
-                    return {
-                        to: vi.fn().mockReturnValueOnce(true),
-                    };
-                },
-            };
-
             const mockCreateStrategy = vi.fn().mockReturnValueOnce(new BasicStatusStrategy(AvailabilityStatus.BUSY));
 
             const mockStatusStrategyFactory: StatusStrategyFactoryInterface = {
                 createStrategy: mockCreateStrategy,
             };
 
-            const statusStrategy: StatusChanger = new StatusChanger(mockRulesVerification, mockStatusStrategyFactory);
+            const statusStrategy: StatusChanger = new StatusChanger(mockStatusStrategyFactory);
             //Act
             const actualStatus = statusStrategy.getActualStatus();
             //Assert
             expect(actualStatus).toBe(AvailabilityStatus.ONLINE);
         });
-        it("should set the status when statusVerification return true", () => {
+        it("should set the status", () => {
             //Arrange
-            const mockRulesVerification: StatusRulesVerificationInterface = {
-                canChangeStatus: (actualStatus: AvailabilityStatus) => {
-                    return {
-                        to: vi.fn().mockReturnValueOnce(true),
-                    };
-                },
-            };
-
             const actualStatus = AvailabilityStatus.ONLINE;
             const actualStrategy = new BasicStatusStrategy(actualStatus, [], []);
             const newStatus = AvailabilityStatus.BBB;
@@ -81,11 +61,7 @@ describe("Status Rules", () => {
                 createStrategy: mockCreateStrategy,
             };
 
-            const statusStrategy: StatusChanger = new StatusChanger(
-                mockRulesVerification,
-                mockStatusStrategyFactory,
-                actualStrategy,
-            );
+            const statusStrategy: StatusChanger = new StatusChanger(mockStatusStrategyFactory, actualStrategy);
             expect(statusStrategy.getActualStatus()).toBe(actualStatus);
 
             //Act
@@ -96,58 +72,35 @@ describe("Status Rules", () => {
             //Assert
             expect(result).toBe(newStatus);
         });
-        it("should return InvalidStatusTransitionError and leave the actual status when statusVerificator return false", () => {
-            //Arrange
-            const mockTo = vi.fn().mockReturnValueOnce(false);
-            const mockRulesVerificator: StatusRulesVerificationInterface = {
-                canChangeStatus: (actualStatus: AvailabilityStatus) => {
-                    return {
-                        to: mockTo,
-                    };
-                },
-            };
-
-            const actualStatus = AvailabilityStatus.ONLINE;
-            const actualStrategy = new BasicStatusStrategy(actualStatus, [], []);
-            const newStatus = AvailabilityStatus.BBB;
-
-            const mockCreateStrategy = vi.fn().mockReturnValueOnce(new BasicStatusStrategy(newStatus));
-
-            const mockStatusStrategyFactory: StatusStrategyFactoryInterface = {
-                createStrategy: mockCreateStrategy,
-            };
-
-            const statusStrategy: StatusChanger = new StatusChanger(
-                mockRulesVerificator,
-                mockStatusStrategyFactory,
-                actualStrategy,
+        // The derived availabilityStatusStore routinely preempts a requested status with an
+        // automatic one (BUSY -> SILENT on entering a silent zone, and back out again). Those
+        // used to throw. Nothing may reject a status here: the store has already emitted it.
+        it("should accept a transition between an automatic and a requested status", () => {
+            const statusStrategy = new StatusChanger(
+                StatusStrategyFactory,
+                new BasicStatusStrategy(AvailabilityStatus.BUSY),
             );
-            expect(statusStrategy.getActualStatus()).toBe(actualStatus);
+
+            statusStrategy.changeStatusTo(AvailabilityStatus.SILENT);
+            expect(statusStrategy.getActualStatus()).toBe(AvailabilityStatus.SILENT);
+
+            statusStrategy.changeStatusTo(AvailabilityStatus.BUSY);
+            expect(statusStrategy.getActualStatus()).toBe(AvailabilityStatus.BUSY);
+        });
+        it("should accept the status the browser imposes when sound is blocked while away", () => {
+            const statusStrategy = new StatusChanger(
+                StatusStrategyFactory,
+                new BasicStatusStrategy(AvailabilityStatus.AWAY),
+            );
 
             //Act
-            expect(() => {
-                statusStrategy.changeStatusTo(newStatus);
-            }).toThrow(InvalidStatusTransitionError);
-
-            const result = statusStrategy.getActualStatus();
+            statusStrategy.changeStatusTo(AvailabilityStatus.SOUND_BLOCKED);
 
             //Assert
-            expect(mockTo).toHaveBeenCalledOnce();
-
-            expect(result).toBe(actualStatus);
+            expect(statusStrategy.getActualStatus()).toBe(AvailabilityStatus.SOUND_BLOCKED);
         });
-        it("should apply rules of new status and delete rules of old status when you change status and statusVerificator return true", () => {
+        it("should apply rules of new status and delete rules of old status when you change status", () => {
             //Arrange
-
-            const mockTo = vi.fn().mockName("to").mockReturnValueOnce(true);
-            const mockRulesVerification: StatusRulesVerificationInterface = {
-                canChangeStatus: (actualStatus: AvailabilityStatus) => {
-                    return {
-                        to: mockTo,
-                    };
-                },
-            };
-
             const applyAllRulesOld = vi.fn();
             const cleanTimedRulesOld = vi.fn();
 
@@ -182,7 +135,6 @@ describe("Status Rules", () => {
             };
 
             const statusStrategy: StatusChanger = new StatusChanger(
-                mockRulesVerification,
                 mockStatusStrategyFactory,
                 mockOldBasicStatusStrategy,
             );
@@ -198,6 +150,72 @@ describe("Status Rules", () => {
             //Assert
             expect(result).toBe(newStatus);
             expect(applyAllRulesNew).toHaveBeenCalledOnce();
+        });
+    });
+    // SOUND_BLOCKED and BACK_IN_A_MOMENT both mean "cannot take part right now", but only
+    // BACK_IN_A_MOMENT is a deliberate choice. Handing the imposed one the requested one's
+    // strategy is what made a blocked <audio> element eventually prompt "still back in a
+    // moment?" at users who never asked for the status.
+    describe("SOUND_BLOCKED is not a requested BACK_IN_A_MOMENT", () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+
+        it("should not give it the BACK_IN_A_MOMENT strategy", () => {
+            const strategy = StatusStrategyFactory.createStrategy(AvailabilityStatus.SOUND_BLOCKED);
+
+            expect(strategy).not.toBeInstanceOf(BackInAMomentStatusStrategy);
+        });
+
+        it("should not arm the timed rule that asks the user to change status", () => {
+            const backInAMoment = StatusStrategyFactory.createStrategy(AvailabilityStatus.BACK_IN_A_MOMENT);
+            backInAMoment.applyAllRules();
+            expect(vi.getTimerCount()).toBe(1);
+
+            vi.clearAllTimers();
+
+            const soundBlocked = StatusStrategyFactory.createStrategy(AvailabilityStatus.SOUND_BLOCKED);
+            soundBlocked.applyAllRules();
+            expect(vi.getTimerCount()).toBe(0);
+        });
+
+        it("should still mute notification sounds, which could not play anyway", () => {
+            const strategy = StatusStrategyFactory.createStrategy(AvailabilityStatus.SOUND_BLOCKED);
+
+            expect(strategy.allowNotificationSound()).toBe(false);
+        });
+    });
+    // Busy asks to allow desktop notifications, to warn about who wants to talk. It used to ask
+    // whenever localStorage had no trace of a previous question, even with notifications granted.
+    describe("Busy asks to allow notifications", () => {
+        const asksForNotifications = (permission: NotificationPermission, lastRequest: string | null): boolean => {
+            vi.stubGlobal("Notification", { permission });
+            vi.spyOn(localUserStore, "getLastNotificationPermissionRequest").mockReturnValue(lastRequest);
+            vi.mocked(popupStore.addPopup).mockClear();
+
+            new BusyStatusStrategy().applyBasicRules();
+
+            return vi.mocked(popupStore.addPopup).mock.calls.length > 0;
+        };
+
+        afterEach(() => {
+            vi.unstubAllGlobals();
+        });
+
+        it("should not ask when notifications are already granted", () => {
+            expect(asksForNotifications("granted", null)).toBe(false);
+        });
+
+        it("should ask while the browser has not decided", () => {
+            expect(asksForNotifications("default", new Date().toString())).toBe(true);
+        });
+
+        it("should ask again only every two weeks once notifications are denied", () => {
+            const threeWeeksAgo = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toString();
+
+            expect(asksForNotifications("denied", null)).toBe(true);
+            expect(asksForNotifications("denied", new Date().toString())).toBe(false);
+            expect(asksForNotifications("denied", threeWeeksAgo)).toBe(true);
         });
     });
     describe("StatusStrategy", () => {

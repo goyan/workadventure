@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/svelte";
+import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import {
@@ -15,7 +16,7 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { LL } from "../../../i18n/i18n-svelte";
 import { blackListManager } from "../../WebRtc/BlackListManager";
-import { showReportScreenStore } from "../../Stores/ShowReportScreenStore";
+import { openModerationModal } from "../../Components/Moderation/openModerationModal";
 import { iframeListener } from "../../Api/IframeListener";
 import banIcon from "../../Components/images/ban-icon.svg";
 import { openDirectChatRoom } from "../../Chat/Utils";
@@ -25,10 +26,6 @@ import RequiresLoginForChatModal from "../../Chat/Components/RequiresLoginForCha
 import { analyticsClient } from "../../Administration/AnalyticsClient";
 import { IconCamera, IconUserPlus } from "@wa-icons";
 import { modals } from "@wa-modals";
-
-export enum RemotePlayerEvent {
-    Clicked = "Clicked",
-}
 
 /**
  * Class representing the sprite of a remote player (a player that plays on another computer)
@@ -70,7 +67,6 @@ export class RemotePlayer extends Character implements ActivatableInterface {
             this.say(sayMessage.message, sayMessage.type);
         }
 
-        this.bindEventHandlers();
         this.pathFollowingUpdateCallback = (_time: number, delta: number) => this.followPath(delta);
     }
 
@@ -123,8 +119,8 @@ export class RemotePlayer extends Character implements ActivatableInterface {
         }
     }
 
-    public finishFollowingPath(cancelled = false): void {
-        super.finishFollowingPath(cancelled);
+    public finishFollowingPath(cancelled = false, blocked = false): void {
+        super.finishFollowingPath(cancelled, blocked);
         this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.pathFollowingUpdateCallback);
         this.scene.markDirty();
     }
@@ -173,7 +169,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
 
     private toggleActionsMenu(): void {
         // Track the open woka menu action
-        analyticsClient.openWokaMenu();
+        analyticsClient.trackAdminEvent("user.woka_menu.opened");
 
         // Close the woka menu if it is already open by the same remote player
         const wokaMenuStoreValue = get(wokaMenuStore);
@@ -208,18 +204,16 @@ export class RemotePlayer extends Character implements ActivatableInterface {
     private getDefaultWokaMenuActions(): WokaMenuAction[] {
         const actions: WokaMenuAction[] = [];
         actions.push({
-            actionName: blackListManager.isBlackListed(this.userUuid)
-                ? get(LL).report.block.unblock()
-                : get(LL).report.block.block(),
+            actionName: get(LL).report.moderate.action(),
             protected: true,
             priority: -1,
             style: "is-error bg-white/10 hover:bg-white/30 text-red-500",
             testId: "wokamenu-block-user-button",
             callback: () => {
                 // Track the report user action
-                analyticsClient.reportUser();
+                analyticsClient.trackAdminEvent("user.report.clicked");
 
-                showReportScreenStore.set({ userUuid: this.userUuid, userName: this.playerName });
+                openModerationModal(this.userUuid, this.playerName);
             },
             actionIcon: banIcon,
         });
@@ -231,7 +225,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 style: "bg-white/10 hover:bg-white/30",
                 callback: () => {
                     // Track the talk to user action
-                    analyticsClient.goToUser();
+                    analyticsClient.trackAdminEvent("user.go_to_clicked");
 
                     if (this.scene.connection != undefined)
                         this.scene.connection.emitAskPosition(
@@ -252,7 +246,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 style: "bg-white/10 hover:bg-white/30",
                 callback: () => {
                     // Track the opened chat action
-                    analyticsClient.openedChat();
+                    analyticsClient.trackAdminEvent("chat.opened");
 
                     if (!get(userIsConnected)) {
                         modals.open(RequiresLoginForChatModal);
@@ -294,13 +288,5 @@ export class RemotePlayer extends Character implements ActivatableInterface {
         });
 
         return actions;
-    }
-
-    private bindEventHandlers(): void {
-        this.on(Phaser.Input.Events.POINTER_DOWN, (event: Phaser.Input.Pointer) => {
-            if (event.downElement.nodeName === "CANVAS" && event.leftButtonDown()) {
-                this.emit(RemotePlayerEvent.Clicked);
-            }
-        });
     }
 }

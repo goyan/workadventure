@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
 import { getTileCenter } from "../Player/TileSnap";
@@ -5,7 +6,7 @@ import { Player } from "../Player/Player";
 import { RemotePlayer } from "../Entity/RemotePlayer";
 import type { UserInputHandlerInterface } from "../../Interfaces/UserInputHandlerInterface";
 import type { GameScene } from "../Game/GameScene";
-import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+import { mapEditorModeStore, mapExplorationModeStore } from "../../Stores/MapEditorStore";
 import { isActivatable } from "../Game/ActivatableInterface";
 import { mapManagerActivated } from "../../Stores/MenuStore";
 import { displayEmote, isEmoteIndex } from "../../Stores/EmoteStore";
@@ -19,10 +20,15 @@ import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
+import { cameraDetachedStore } from "../../Stores/CameraStore";
+import { waScaleManager } from "../Services/WaScaleManager";
+import { MapDragPointerCapture } from "./MapDragPointerCapture";
+import { MapDragGesture } from "./MapDragGesture";
+import { MapPanShortcut } from "./MapPanShortcut";
 import type { Shortcut } from "./UserInputManager";
 
-// Below this distance (in screen pixels), a press followed by a move is still a click, not a drag.
-const DRAG_THRESHOLD_PIXELS = 6;
+import Pointer = Phaser.Input.Pointer;
+import GameObject = Phaser.GameObjects.GameObject;
 
 // A notched mouse wheel reports a deltaY of about 100 per notch, a trackpad pinch (a wheel event with ctrlKey) reports a
 // burst of tiny deltas. The zoom formula is tuned for the wheel, so a pinch needs a gain to feel as fast as a few notches.
@@ -47,12 +53,42 @@ function isTrackpadScroll(event: WheelEvent): boolean {
 export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private gameScene: GameScene;
     private controlKeyisPressed: boolean = false;
-    private dragStart?: { x: number; y: number };
-    private isDragPanning = false;
+    private readonly mapDrag = new MapDragGesture();
+    private draggingMap = false;
+    // The current touch gesture involved two fingers or more (a pinch): lifting a finger must not count as a tap.
+    private multiTouch = false;
+    private pinchFreedView = false;
+    private readonly pointerCapture: MapDragPointerCapture;
+    private readonly panShortcut: MapPanShortcut;
+    private readonly spaceKey: Phaser.Input.Keyboard.Key | undefined;
     public shortcuts: Shortcut[] = [];
 
     constructor(gameScene: GameScene) {
         this.gameScene = gameScene;
+        this.pointerCapture = new MapDragPointerCapture(
+            gameScene.game.canvas,
+            () => this.canDragMap(),
+            () => this.handlePointerCancelEvent(),
+        );
+        // Same Key object as the "interact" key: addKey returns the existing one.
+        this.spaceKey = gameScene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE, false);
+        this.panShortcut = new MapPanShortcut(gameScene.game.canvas, {
+            // Middle button everywhere. Space + left button only in the map editor: in game mode, Space interacts.
+            canStart: (event) =>
+                (event.button === 1 ||
+                    (event.button === 0 && this.spaceKey?.isDown === true && get(mapEditorModeStore))) &&
+                this.canMoveView(),
+            start: () => this.gameScene.getCameraManager().startManualPan(),
+            pan: (deltaX, deltaY) => {
+                // CSS pixels to game pixels, the unit Phaser pointers (and so panBy) use.
+                const scale = this.gameScene.scale.displayScale;
+                this.gameScene.getCameraManager().panBy(deltaX * scale.x, deltaY * scale.y);
+            },
+        });
+        gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+            this.pointerCapture.destroy();
+            this.panShortcut.destroy();
+        });
 
         this.initShortcuts();
     }
@@ -125,37 +161,50 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public handleMouseWheelEvent(
-        pointer: Phaser.Input.Pointer,
-        gameObjects: Phaser.GameObjects.GameObject[],
+        pointer: Pointer,
+        gameObjects: GameObject[],
         deltaX: number,
         deltaY: number,
         deltaZ: number,
     ): void {
         const event = pointer.event;
-        if (event instanceof WheelEvent && isTrackpadScroll(event) && this.canPan(true)) {
-            // Two-finger scroll on a trackpad moves the view. Pinch and Ctrl+wheel (ctrlKey) and notched
-            // mouse wheels still zoom.
-            this.gameScene.getCameraManager().panBy(deltaX, deltaY);
+        if (event instanceof WheelEvent && isTrackpadScroll(event) && this.canMoveView()) {
+            // Two-finger scroll on a trackpad moves the view, in the map editor too. Pinch and Ctrl+wheel
+            // (ctrlKey) and notched mouse wheels still zoom.
+            const cameraManager = this.gameScene.getCameraManager();
+            if (!get(mapEditorModeStore) && !get(cameraDetachedStore)) {
+                cameraManager.startManualPan();
+            }
+            cameraManager.panBy(deltaX, deltaY);
             return;
         }
         const isPinch = event instanceof WheelEvent && event.ctrlKey && Math.abs(deltaY) < PINCH_MAX_DELTA_Y;
-        this.gameScene.handleMouseWheel(deltaY, isPinch ? PINCH_ZOOM_RATE_MULTIPLIER : 1);
+        this.gameScene.handleMouseWheel(deltaY, pointer, isPinch ? PINCH_ZOOM_RATE_MULTIPLIER : 1);
     }
 
-    // The trackpad moves the view in the map editor too; dragging with the left button stays reserved to the tools.
-    private canPan(allowInMapEditor = false): boolean {
-        return (allowInMapEditor || !get(mapEditorModeStore)) && this.gameScene.getCameraManager().canPan();
-    }
-
-    public handlePointerUpEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
-        this.dragStart = undefined;
-        if (this.isDragPanning) {
-            // The end of a drag must neither move the avatar nor activate what is under the cursor.
-            this.isDragPanning = false;
+    public handlePointerUpEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        if (pointer.leftButtonReleased()) {
+            const wasDragging = this.draggingMap;
+            const dragged = this.mapDrag.end(pointer.id);
+            this.restoreDragCursor();
+            this.pointerCapture.release();
+            if (dragged) {
+                if (wasDragging && this.canDragMap() && pointer.velocity) {
+                    this.gameScene.getCameraManager().releaseManualPan(pointer.velocity);
+                }
+                return;
+            }
+        }
+        if (pointer.wasTouch && this.multiTouch) {
             return;
         }
-
+        if (get(mapEditorModeStore)) {
+            return;
+        }
         if (pointer.wasTouch || pointer.leftButtonReleased()) {
+            if (!this.gameScene.userInputManager.isControlsEnabled) {
+                return;
+            }
             for (const object of gameObjects) {
                 if (isActivatable(object)) {
                     this.gameScene.getActivatablesManager().handlePointerDownEvent(object);
@@ -175,8 +224,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             return;
         }
 
-        // Editor gestures must never start avatar navigation, including right-clicks and touch releases.
-        if (get(mapEditorModeStore) || (isDoubleClick && !this.gameScene.userInputManager.isControlsEnabled)) {
+        if (isDoubleClick && !this.gameScene.userInputManager.isControlsEnabled) {
             return;
         }
 
@@ -197,8 +245,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
         }
-        const camera = this.gameScene.getCameraManager().getCamera();
-        const worldPoint = camera.getWorldPoint(pointer.x, pointer.y);
+        const cameraManager = this.gameScene.getCameraManager();
+        const worldPoint = cameraManager.getCamera().getWorldPoint(pointer.x, pointer.y);
         if (
             isDoubleClick &&
             (worldPoint.x < 0 ||
@@ -211,6 +259,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // A double-click ends at the center of the targeted tile, like the avatar does when it stops.
         const target =
             isDoubleClick && ENABLE_TILE_SNAP ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint;
+        // Keep the avatar and the spot the user pointed at in view while walking there.
+        const walk = cameraManager.startWalkFraming({ x: target.x, y: target.y });
         this.gameScene
             .moveTo(
                 {
@@ -222,7 +272,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             )
             .catch((reason) => {
                 console.warn(reason);
-            });
+            })
+            .finally(() => cameraManager.endWalkFraming(walk));
     }
 
     private getTileCenterOf(x: number, y: number): { x: number; y: number } {
@@ -230,31 +281,97 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         return getTileCenter(x, y, width, height);
     }
 
-    public handlePointerDownEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
-        // Touch screens already use the finger for the joystick. Dragging starts on an empty spot of the map only.
-        if (pointer.wasTouch || !pointer.leftButtonDown() || gameObjects.length > 0 || !this.canPan()) {
+    public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        if (pointer.wasTouch) {
+            // A first finger starts a new gesture; a second one turns it into a pinch and ends the one-finger drag.
+            this.multiTouch = this.touchPointersDown() > 1;
+            if (!this.multiTouch) this.pinchFreedView = false;
+            if (this.multiTouch) {
+                this.handlePointerCancelEvent();
+                return;
+            }
+        }
+        if (!pointer.leftButtonDown() || !this.canDragMap()) {
             return;
         }
-        this.dragStart = { x: pointer.x, y: pointer.y };
-        this.isDragPanning = false;
+        pointer.motionFactor = 0.35;
+        this.gameScene.getCameraManager().stopManualPanInertia();
+        this.restoreDragCursor();
+        this.mapDrag.begin(pointer);
     }
 
-    public handlePointerMoveEvent(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): void {
-        if (!this.dragStart) {
+    public handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        if (pointer.wasTouch && this.multiTouch) {
             return;
         }
         if (!pointer.leftButtonDown()) {
-            this.dragStart = undefined;
-            this.isDragPanning = false;
+            if (this.draggingMap) this.handlePointerCancelEvent();
             return;
         }
-        if (!this.isDragPanning) {
-            if (Math.hypot(pointer.x - this.dragStart.x, pointer.y - this.dragStart.y) < DRAG_THRESHOLD_PIXELS) {
-                return;
-            }
-            this.isDragPanning = true;
+        if (!this.canDragMap()) {
+            this.handlePointerCancelEvent();
+            return;
         }
-        this.gameScene.getCameraManager().panBy(pointer.prevPosition.x - pointer.x, pointer.prevPosition.y - pointer.y);
+        const delta = this.mapDrag.move(pointer);
+        if (!delta) {
+            return;
+        }
+        const cameraManager = this.gameScene.getCameraManager();
+        if (!this.draggingMap) {
+            cameraManager.startManualPan();
+            this.draggingMap = true;
+            this.gameScene.input.setDefaultCursor("grabbing");
+        }
+        cameraManager.panBy(delta.x, delta.y);
+    }
+
+    public handlePointerOutEvent(): void {
+        if (this.draggingMap && !this.pointerCapture.active) this.handlePointerCancelEvent();
+    }
+
+    public handlePointerCancelEvent(): void {
+        this.pointerCapture.release();
+        this.gameScene.getCameraManager().stopManualPanInertia();
+        this.mapDrag.cancel();
+        this.restoreDragCursor();
+    }
+
+    /** Whether the user may move the view: not behind a modal or a zoom lock, nor (in game mode) in a focus zone. */
+    private canMoveView(): boolean {
+        if (!this.gameScene.userInputManager.isControlsEnabled || this.gameScene.getCameraManager().isZoomLocked()) {
+            return false;
+        }
+        // The explorer list sets a focus target on hover, which must not hold the editor's view like a focus zone.
+        return get(mapEditorModeStore) || !waScaleManager.getFocusTarget();
+    }
+
+    private canDragMap(): boolean {
+        // The other editor tools use the left drag themselves; they pan with MapPanShortcut instead.
+        return this.canMoveView() && (!get(mapEditorModeStore) || get(mapExplorationModeStore));
+    }
+
+    public handlePinch(zoomFactor: number, centre: { x: number; y: number }, pan: { x: number; y: number }): void {
+        const cameraManager = this.gameScene.getCameraManager();
+        if (this.canMoveView()) {
+            // As in map apps, a pinch keeps the map under the fingers: its first move frees the view from the avatar.
+            if (!this.pinchFreedView) {
+                cameraManager.startManualPan();
+                this.pinchFreedView = true;
+            }
+            cameraManager.panBy(pan.x, pan.y);
+        }
+        this.gameScene.zoomByFactor(zoomFactor, false, this.gameScene.zoomAnchor(centre));
+    }
+
+    private touchPointersDown(): number {
+        return this.gameScene.input.manager.pointers.filter((pointer) => pointer.wasTouch && pointer.isDown).length;
+    }
+
+    private restoreDragCursor(): void {
+        if (this.draggingMap) {
+            this.gameScene.input.setDefaultCursor(get(mapExplorationModeStore) ? "grab" : "auto");
+            this.draggingMap = false;
+        }
     }
 
     private handleKeyF() {
@@ -395,9 +512,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         popupStore.addPopup(SayPopUp, { type: this.controlKeyisPressed ? "think" : "say" }, "say");
         if (this.controlKeyisPressed) {
-            analyticsClient.openThinkBubble();
+            analyticsClient.trackAdminEvent("bubble.think.opened");
         } else {
-            analyticsClient.openSayBubble();
+            analyticsClient.trackAdminEvent("bubble.say.opened");
         }
     }
 

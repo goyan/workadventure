@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { Unsubscriber, Readable } from "svelte/store";
 import { get, readable } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
@@ -22,10 +23,14 @@ import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager"
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
 import { ThinkingCloud } from "./ThinkingCloud";
+
 import Container = Phaser.GameObjects.Container;
-import Sprite = Phaser.GameObjects.Sprite;
-import DOMElement = Phaser.GameObjects.DOMElement;
 import RenderTexture = Phaser.GameObjects.RenderTexture;
+import DOMElement = Phaser.GameObjects.DOMElement;
+import Sprite = Phaser.GameObjects.Sprite;
+import Tween = Phaser.Tweens.Tween;
+import Circle = Phaser.Geom.Circle;
+import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
 const interactiveRadius = 25;
@@ -37,7 +42,16 @@ export const CHARACTER_BODY_OFFSET_Y = 8;
 
 export const PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX = "playtext-mediadevice-";
 
-export type PathFollowResult = { x: number; y: number; cancelled: boolean };
+export type PathFollowResult = {
+    x: number;
+    y: number;
+    cancelled: boolean;
+    /**
+     * Set when the path was aborted because its next waypoint started colliding (e.g. an area got locked
+     * mid-walk); the character stopped just before the blocking tile.
+     */
+    blocked?: boolean;
+};
 
 export abstract class Character extends Container implements OutlineableInterface, Movable {
     private readonly movedSubject = new Subject<PositionInterface>();
@@ -46,6 +60,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private bubble: RenderTexture | null | DOMElement = null;
     private usernameDisplay: UsernameDisplay | undefined;
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
+    private raisedHand = false;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -53,9 +68,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     private invisible: boolean;
     private clickable: boolean;
     public companion?: Companion;
-    private emote: Phaser.GameObjects.DOMElement | null = null;
-    private emoteTween: Phaser.Tweens.Tween | null = null;
-    private texts: Map<string, Phaser.GameObjects.DOMElement> = new Map();
+    private emote: DOMElement | null = null;
+    private emoteTween: Tween | null = null;
+    private texts: Map<string, DOMElement> = new Map();
     private textsToBuild = new Map();
     scene: GameScene;
     private lastRenderedSprite: string | undefined;
@@ -180,7 +195,8 @@ export abstract class Character extends Container implements OutlineableInterfac
                 this.playerName,
                 playerNameOutlineColor,
             );
-            this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true, true);
+            this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
+            this.usernameDisplay.setRaisedHand(this.raisedHand, true);
             this.usernameDisplay.setPlayerDepth(this.depth);
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
@@ -192,8 +208,8 @@ export abstract class Character extends Container implements OutlineableInterfac
 
         if (isClickable) {
             this.setInteractive({
-                hitArea: new Phaser.Geom.Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Phaser.Geom.Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
+                hitArea: new Circle(8, 8, interactiveRadius),
+                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
                 useHandCursor: true,
             });
         }
@@ -257,8 +273,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.clickable = clickable;
         if (clickable) {
             this.setInteractive({
-                hitArea: new Phaser.Geom.Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Phaser.Geom.Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
+                hitArea: new Circle(8, 8, interactiveRadius),
+                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
                 useHandCursor: true,
             });
             return;
@@ -318,11 +334,17 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.usernameDisplay?.setTalking(show, this.getAvailabilityStatus() === AvailabilityStatus.SPEAKER);
     }
 
+    public setRaisedHand(raised: boolean): void {
+        this.raisedHand = raised;
+        this.usernameDisplay?.setRaisedHand(raised);
+        this.scene.markDirty();
+    }
+
     public setAvailabilityStatus(availabilityStatus: AvailabilityStatusType, instant = false): void {
         if (availabilityStatus !== AvailabilityStatus.UNCHANGED) {
             this.availabilityStatus = availabilityStatus;
         }
-        this.usernameDisplay?.setAvailabilityStatus(availabilityStatus, instant, false);
+        this.usernameDisplay?.setAvailabilityStatus(availabilityStatus, instant);
     }
 
     public getAvailabilityStatus() {
@@ -378,9 +400,9 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
     }
 
-    protected getBody(): Phaser.Physics.Arcade.Body {
+    protected getBody(): Body {
         const body = this.body;
-        if (!(body instanceof Phaser.Physics.Arcade.Body)) {
+        if (!(body instanceof Body)) {
             throw new Error("Container does not have arcade body");
         }
         return body;
@@ -417,7 +439,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         });
     }
 
-    public finishFollowingPath(cancelled = false): void {
+    public finishFollowingPath(cancelled = false, blocked = false): void {
         this.pathToFollow = undefined;
         this.pathWalkingSpeed = undefined;
         this.currentPathSegmentDistanceFromStart = 0;
@@ -425,7 +447,7 @@ export abstract class Character extends Container implements OutlineableInterfac
 
         const resolve = this.pathFollowingResolve;
         this.pathFollowingResolve = undefined;
-        resolve?.({ x: this.x, y: this.y, cancelled });
+        resolve?.({ x: this.x, y: this.y, cancelled, blocked });
     }
 
     protected isFollowingPath(): boolean {
@@ -435,6 +457,12 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected getPathWalkingSpeed(): number {
         return this.pathWalkingSpeed ?? WOKA_SPEED;
     }
+
+    /**
+     * Called each time a waypoint of the followed path is reached, i.e. on each tile change.
+     * Subclasses can abort the path following from here (e.g. when the next waypoint started colliding).
+     */
+    protected onPathWaypointReached(): void {}
 
     protected adjustPathToColliderBounds(path: { x: number; y: number }[]): { x: number; y: number }[] {
         const body = this.getBody();
@@ -468,6 +496,12 @@ export abstract class Character extends Container implements OutlineableInterfac
             if (this.pathToFollow.length === 1) {
                 this.setPosition(this.pathToFollow[0].x, this.pathToFollow[0].y);
                 this.finishFollowingPath();
+                return;
+            }
+
+            this.onPathWaypointReached();
+            if (!this.pathToFollow) {
+                // The hook aborted the path following.
                 return;
             }
 
@@ -577,7 +611,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.cancelPreviousEmote();
         const emoteY = -45;
         const span = document.createElement("span");
-        span.innerHTML = emote;
+        // The emote comes from another player: it is plain text (an emoji) and must never be interpreted as HTML.
+        span.textContent = emote;
         this.emote = new DOMElement(this.scene, -1, 0, span, "z-index:10;");
         this.emote.setAlpha(0);
         this.add(this.emote);

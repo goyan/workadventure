@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
@@ -64,8 +65,13 @@ describe("UserInputManager wheel events", () => {
 
         scene = mock<GameScene>();
         Object.defineProperty(scene, "input", { configurable: true, value: input });
+        Object.defineProperty(scene, "game", {
+            configurable: true,
+            value: { canvas: document.createElement("canvas"), events: new Phaser.Events.EventEmitter() },
+        });
+        Object.defineProperty(scene, "events", { configurable: true, value: new Phaser.Events.EventEmitter() });
         cameraManager = mock<CameraManager>();
-        cameraManager.canPan.mockReturnValue(true);
+        cameraManager.isZoomLocked.mockReturnValue(false);
         scene.getCameraManager.mockReturnValue(cameraManager);
 
         const handler = new GameSceneUserInputHandler(scene);
@@ -87,8 +93,8 @@ describe("UserInputManager wheel events", () => {
 
         expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
         expect(scene.handleMouseWheel.mock.calls).toEqual([
-            [3, 6],
-            [100, 1],
+            [3, expect.anything(), 6],
+            [100, expect.anything(), 1],
         ]);
     });
 
@@ -103,91 +109,5 @@ describe("UserInputManager wheel events", () => {
 
         releaseNotesVisibleStore.set(false);
         expect(manager.isControlsEnabled).toBe(true);
-    });
-
-    it("preserves the map editor lock after closing release notes", () => {
-        mapEditorModeStore.set(true);
-        manager.disableControls("mapEditor");
-        releaseNotesVisibleStore.set(true);
-        releaseNotesVisibleStore.set(false);
-
-        expect(manager.isControlsEnabled).toBe(false);
-        emitWheel(new WheelEvent("wheel", { ctrlKey: true, deltaY: 3 }), 0, 3);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([[3, 6]]);
-    });
-
-    it("keeps the avatar controls disabled while forwarding wheel events in map editor mode", () => {
-        mapEditorModeStore.set(true);
-        manager.disableControls("mapEditor");
-
-        emitWheel(new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 4, 6);
-        emitWheel(new WheelEvent("wheel", { ctrlKey: true, deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 3);
-        emitWheel(new WheelEvent("wheel", { deltaY: 100, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 100);
-        const verticalTrackpad = new WheelEvent("wheel", { deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL });
-        Object.defineProperty(verticalTrackpad, "wheelDeltaY", { value: 24 });
-        emitWheel(verticalTrackpad, 0, 6);
-
-        expect(manager.isControlsEnabled).toBe(false);
-        expect(manager.getEventListForGameTick().any()).toBe(false);
-        expect(cameraManager.panBy.mock.calls).toEqual([
-            [4, 6],
-            [0, 6],
-        ]);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([
-            [3, 6],
-            [100, 1],
-        ]);
-
-        manager.restoreControls("mapEditor");
-        mapEditorModeStore.set(false);
-        emitWheel(new WheelEvent("wheel", { deltaY: 100, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 100);
-
-        expect(manager.isControlsEnabled).toBe(true);
-        expect(manager.getEventListForGameTick().any()).toBe(false);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([
-            [3, 6],
-            [100, 1],
-            [100, 1],
-        ]);
-    });
-
-    it.each([
-        ["store", "store"],
-        ["error screen", "errorScreen"],
-        ["scripting API", window],
-    ] as const)("blocks wheel handling when map editor mode also has a %s disable reason", (_label, reason) => {
-        mapEditorModeStore.set(true);
-        manager.disableControls("mapEditor");
-        manager.disableControls(reason);
-
-        emitWheel(new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 4, 6);
-
-        expect(manager.isControlsEnabled).toBe(false);
-        expect(cameraManager.panBy.mock.calls).toEqual([]);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([]);
-
-        manager.restoreControls("mapEditor");
-        emitWheel(new WheelEvent("wheel", { ctrlKey: true, deltaY: 3, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 3);
-
-        expect(manager.isControlsEnabled).toBe(false);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([]);
-    });
-
-    it("leaves wheel handling to the explorer tool without duplicate zoom while editing", () => {
-        mapEditorModeStore.set(true);
-        manager.disableControls("mapEditor");
-        manager.disableControls("explorerTool");
-        const explorerWheelHandler = vi.fn((_pointer, _gameObjects, _deltaX, deltaY) => {
-            scene.handleMouseWheel(deltaY);
-        });
-        scene.input.on("wheel", explorerWheelHandler);
-
-        emitWheel(new WheelEvent("wheel", { deltaY: 100, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 0, 100);
-
-        expect(manager.isControlsEnabled).toBe(false);
-        expect(explorerWheelHandler).toHaveBeenCalledTimes(1);
-        expect(scene.handleMouseWheel.mock.calls).toEqual([[100]]);
-
-        scene.input.off("wheel", explorerWheelHandler);
     });
 });

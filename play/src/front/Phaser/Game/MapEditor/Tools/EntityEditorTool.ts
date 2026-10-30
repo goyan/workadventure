@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { AreaData, EntityData, EntityPrefab, WAMEntityData } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/svelte";
 import type { EditMapCommandMessage } from "@workadventure/messages";
@@ -33,6 +34,10 @@ import { isPlacementFree, shouldSnapToGrid } from "../EntityPlacementSnapping";
 import { mapEditorActivated } from "../../../../Stores/MenuStore";
 import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 
+import Key = Phaser.Input.Keyboard.Key;
+import Pointer = Phaser.Input.Pointer;
+import GameObject = Phaser.GameObjects.GameObject;
+
 const ENTITY_EDITOR_AREA_PREVIEW_DEPTH = -1;
 const FLOOR_COLLECTION_NAME = "Infogène Sols";
 const FLOOR_TAG = "Sols";
@@ -52,17 +57,11 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
      */
     protected areaPreviews: AreaPreview[] = [];
 
-    protected ctrlKey?: Phaser.Input.Keyboard.Key;
-    protected shiftKey?: Phaser.Input.Keyboard.Key;
-    protected pointerMoveEventHandler!: (
-        pointer: Phaser.Input.Pointer,
-        gameObjects: Phaser.GameObjects.GameObject[],
-    ) => void;
-    protected pointerDownEventHandler!: (
-        pointer: Phaser.Input.Pointer,
-        gameObjects: Phaser.GameObjects.GameObject[],
-    ) => void;
-    protected readonly pointerUpEventHandler = (pointer: Phaser.Input.Pointer): void => {
+    protected ctrlKey?: Key;
+    protected shiftKey?: Key;
+    protected pointerMoveEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
+    protected pointerDownEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
+    protected readonly pointerUpEventHandler = (pointer: Pointer): void => {
         this.handlePointerUpEvent(pointer);
     };
     protected readonly pointerOutEventHandler = (): void => {
@@ -272,11 +271,11 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     protected bindEventHandlers() {
-        this.pointerMoveEventHandler = (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]) =>
+        this.pointerMoveEventHandler = (pointer: Pointer, gameObjects: GameObject[]) =>
             this.handlePointerMoveEvent(pointer, gameObjects);
         this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
 
-        this.pointerDownEventHandler = (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]) =>
+        this.pointerDownEventHandler = (pointer: Pointer, gameObjects: GameObject[]) =>
             this.handlePointerDownEvent(pointer, gameObjects);
         this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
 
@@ -358,10 +357,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         );
     }
 
-    protected handlePointerMoveEvent(
-        pointer: Phaser.Input.Pointer,
-        gameObjects: Phaser.GameObjects.GameObject[],
-    ): void {
+    protected handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
         this.continueFloorStroke(pointer);
 
         // TODO: add shadow when moving into the area
@@ -370,20 +366,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             return;
         }
 
-        if (this.isSnappingToGrid()) {
-            const offset = this.getEntityPrefabAlignWithGridOffset();
-            this.entityPrefabPreview.setPosition(
-                Math.floor(pointer.worldX / 32) * 32 + offset.x,
-                Math.floor(pointer.worldY / 32) * 32 + offset.y,
-            );
-        } else {
-            this.entityPrefabPreview.setPosition(Math.floor(pointer.worldX), Math.floor(pointer.worldY));
-        }
-        this.entityPrefabPreview.setDepth(
-            this.entityPrefabPreview.y +
-                this.entityPrefabPreview.displayHeight * 0.5 +
-                (this.entityPrefab.depthOffset ?? 0),
-        );
+        this.updateEntityPrefabPreviewPosition(pointer);
         this.changePreviewTint();
     }
 
@@ -403,10 +386,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         this.scene.markDirty();
     }
 
-    protected handlePointerDownEvent(
-        pointer: Phaser.Input.Pointer,
-        gameObjects: Phaser.GameObjects.GameObject[],
-    ): void {
+    protected handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
         if (pointer.button === 2 || pointer.rightButtonDown()) {
             this.stopFloorStroke();
             this.cleanPreview();
@@ -431,11 +411,13 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             // Check that the user can open map editor to edit an area
             if (get(mapEditorActivated)) {
                 if (clickedAreaPreview && get(mapEditorSelectedToolStore) !== EditorToolName.AreaEditor) {
-                    this.scene.getMapEditorModeManager().equipTool(EditorToolName.AreaEditor);
+                    this.scene.getMapEditorModeManager()?.equipTool(EditorToolName.AreaEditor);
                 }
             }
             return;
         }
+
+        this.updateEntityPrefabPreviewPosition(pointer);
 
         if (this.isFloorPrefab(this.entityPrefab)) {
             if (
@@ -566,7 +548,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         });
     }
 
-    private isAreaPreviewClicked(pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[]): boolean {
+    private isAreaPreviewClicked(pointer: Pointer, gameObjects: GameObject[]): boolean {
         if (gameObjects.some((obj) => obj instanceof AreaPreview)) {
             return true;
         }
@@ -733,6 +715,28 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
 
     private stopFloorStroke(): void {
         this.floorStroke = undefined;
+    }
+
+    private updateEntityPrefabPreviewPosition(pointer: Pointer): void {
+        if (!this.entityPrefabPreview || !this.entityPrefab) {
+            return;
+        }
+
+        if (this.isSnappingToGrid()) {
+            const offset = this.getEntityPrefabAlignWithGridOffset();
+            this.entityPrefabPreview.setPosition(
+                Math.floor(pointer.worldX / 32) * 32 + offset.x,
+                Math.floor(pointer.worldY / 32) * 32 + offset.y,
+            );
+        } else {
+            this.entityPrefabPreview.setPosition(Math.floor(pointer.worldX), Math.floor(pointer.worldY));
+        }
+
+        this.entityPrefabPreview.setDepth(
+            this.entityPrefabPreview.y +
+                this.entityPrefabPreview.displayHeight * 0.5 +
+                (this.entityPrefab.depthOffset ?? 0),
+        );
     }
 
     private updateEntity(entityData: EntityData) {

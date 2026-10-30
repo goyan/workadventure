@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { AreaData, EntityDimensions, WAMEntityData, WamFile } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/svelte";
 import type { EditMapCommandMessage } from "@workadventure/messages";
@@ -18,7 +19,7 @@ import type { EntitiesManager } from "../../GameMap/EntitiesManager";
 import type { GameScene } from "../../GameScene";
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
 import { gameManager } from "../../GameManager";
-import { isTextEditingTarget } from "../EditorCameraKeys";
+import { isTextEditingTarget } from "../isTextEditingTarget";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { CreateAreaFrontCommand } from "../Commands/Area/CreateAreaFrontCommand";
 import { DeleteAreaFrontCommand } from "../Commands/Area/DeleteAreaFrontCommand";

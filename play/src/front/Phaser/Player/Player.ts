@@ -6,6 +6,9 @@ import type { GameScene } from "../Game/GameScene";
 import type { ActiveEventList } from "../UserInput/UserInputManager";
 import { UserInputEvent } from "../UserInput/UserInputManager";
 import { Character } from "../Entity/Character";
+import type { PathFollowResult } from "../Entity/Character";
+import { PathTileType } from "../../Utils/PathfindingManager";
+import { isWaypointBlocked } from "../../Utils/PathValidation";
 
 import { userMovingStore } from "../../Stores/GameStore";
 import { followStateStore, followRoleStore, followUsersStore } from "../../Stores/FollowStore";
@@ -13,6 +16,7 @@ import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { visibilityStore } from "../../Stores/VisibilityStore";
 import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctions";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 
 export const hasMovedEventName = "hasMoved";
@@ -21,6 +25,7 @@ export const requestEmoteEventName = "requestEmote";
 
 export class Player extends Character {
     private readonly unsubscribeVisibilityStore: Unsubscriber;
+    private readonly destinationMarker: WalkDestinationMarker;
     private isMoving = false;
 
     constructor(
@@ -36,6 +41,7 @@ export class Player extends Character {
         super(Scene, x, y, texturesPromise, name, direction, moving, 1, true, companionTexturePromise, "me");
         //the current player model should be push away by other players to prevent conflict
         this.getBody().setImmovable(false);
+        this.destinationMarker = new WalkDestinationMarker(Scene);
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -89,26 +95,26 @@ export class Player extends Character {
         this.scene.connection?.emitFollowConfirmation(get(followUsersStore)[0]);
     }
 
-    public setPathToFollow(
-        path: { x: number; y: number }[],
-        speed?: number,
-    ): Promise<{ x: number; y: number; cancelled: boolean }> {
+    public setPathToFollow(path: { x: number; y: number }[], speed?: number): Promise<PathFollowResult> {
         if (!this.isMoving) {
             this.isMoving = true;
             this.emit(startMovingEventName, { direction: this._lastDirection, x: this.x, y: this.y });
         }
 
         this.getBody().setDirectControl(true);
+        // Every walk ends here (taps, right-clicks, scripts, reroutes...): mark where it goes until it ends.
+        const destination = path.at(-1);
+        const walk = destination ? this.destinationMarker.show(destination) : undefined;
         return super.setPathToFollow(path, speed).finally(() => {
             this.isMoving = false;
+            if (walk !== undefined) this.destinationMarker.hide(walk);
         });
     }
 
-    public getCurrentPathDestinationPoint(): { x: number; y: number } | undefined {
-        if (!this.pathToFollow) {
-            return undefined;
-        }
-        return this.pathToFollow[this.pathToFollow.length - 1];
+    /** The waypoints still ahead on the current walk, the last one being the destination (empty when not walking). */
+    public getPathAhead(): { x: number; y: number }[] {
+        // The first waypoint is where the current segment started, behind the avatar.
+        return this.pathToFollow?.slice(1) ?? [];
     }
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
@@ -144,12 +150,11 @@ export class Player extends Character {
         y = y * moveAmount;
 
         // Compute moving state
-        const joystickMovement = activeEvents.get(UserInputEvent.JoystickMove);
-        const moving = x !== 0 || y !== 0 || joystickMovement;
+        const moving = x !== 0 || y !== 0;
 
         // Compute direction
         let direction = this._lastDirection;
-        if (moving && !joystickMovement) {
+        if (moving) {
             if (Math.abs(x) > Math.abs(y)) {
                 direction = x < 0 ? PositionMessage_Direction.LEFT : PositionMessage_Direction.RIGHT;
             } else {
@@ -282,10 +287,38 @@ export class Player extends Character {
         super.moveToPathPosition(x, y);
     }
 
-    public finishFollowingPath(cancelled = false): void {
+    public finishFollowingPath(cancelled = false, blocked = false): void {
         const wasFollowing = this.isFollowingPath();
-        super.finishFollowingPath(cancelled);
+        super.finishFollowingPath(cancelled, blocked);
         this.onPathFinished(wasFollowing);
+    }
+
+    /**
+     * The collision grid can change while a path is being followed (an area gets locked or full, an
+     * entity is dropped...). Since the path following runs with direct body control, colliders would
+     * not stop us: check the next waypoint on each tile change and abort right before walking onto a
+     * tile that started colliding. Only the NEXT waypoint is checked, on purpose: the woka keeps
+     * walking up to the obstacle, so the blocked warning shows next to the area it talks about, and a
+     * lock lifted before the woka reaches the area never interrupts the walk. GameScene.moveTo() then
+     * reroutes to the destination, or stops there when it is not reachable anymore.
+     */
+    protected onPathWaypointReached(): void {
+        if (!this.pathToFollow || this.pathToFollow.length < 2) {
+            return;
+        }
+        const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
+        const body = this.getBody();
+        if (
+            isWaypointBlocked(
+                this.pathToFollow[1],
+                gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
+                gameMapFrontWrapper.getTileDimensions(),
+                body.height / 2 + body.offset.y,
+                PathTileType.Collider,
+            )
+        ) {
+            this.finishFollowingPath(true, true);
+        }
     }
 
     public teleportTo(x: number, y: number): void {
@@ -309,6 +342,7 @@ export class Player extends Character {
 
     destroy(): void {
         this.unsubscribeVisibilityStore();
+        this.destinationMarker.destroy();
         super.destroy();
     }
 }

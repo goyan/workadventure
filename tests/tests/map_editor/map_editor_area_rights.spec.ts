@@ -6,17 +6,23 @@ import Menu from "../utils/menu";
 import { map_storage_url } from "../utils/urls";
 import { oidcLogout } from "../utils/oidc";
 import EntityEditor from "../utils/map-editor/entityEditor";
+import AreaEditor from "../utils/map-editor/areaEditor";
 import AreaAccessRights from "../utils/areaAccessRights";
 import { evaluateScript } from "../utils/scripting";
 import { getPage } from "../utils/auth";
 import { isMobile } from "../utils/isMobile";
 import { clickCoordinates } from "../utils/gameCoordinates";
-import { dismissNoMicrophoneSoundInfoToast } from "../utils/noMicrophoneSoundInfoToast";
+import { dismissNoMicrophoneSoundToastWhenShown } from "../utils/noMicrophoneSoundToast";
 
 test.setTimeout(240_000); // Fix Webkit that can take more than 60s
 test.use({
     baseURL: map_storage_url,
 });
+
+// The rectangle drawn by AreaAccessRights.openAreaEditorAndAddAreaWithRights, tested at the Woka feet like the game does.
+function isInsideRightsArea({ x, y }: { x: number; y: number }): boolean {
+    return x >= 1 * 32 && x <= 7 * 32 && y + 16 >= 2 * 32 && y + 16 <= 7 * 32;
+}
 
 test.describe("Map editor area with rights @oidc @nomobile @nowebkit", () => {
     test.beforeEach(
@@ -275,7 +281,7 @@ test.describe("Map editor area with rights @oidc @nomobile @nowebkit", () => {
         await using page2 = await getPage(browser, "Member1", Map.url("empty"));
 
         // Required for Firefox that somehow does not manage to start the webcam twice (hence the "no sound" warning displayed that we must hide if it appears)
-        await dismissNoMicrophoneSoundInfoToast(page2);
+        await dismissNoMicrophoneSoundToastWhenShown(page2);
 
         // From browser 2
         // Try to remove entity and click on it to
@@ -422,5 +428,31 @@ test.describe("Map editor area with rights @oidc @nomobile @nowebkit", () => {
         // Check if the first area is not claimable
         await Map.teleportToPosition(page, 2 * 32, 2 * 32);
         await expect(page.getByTestId("claimPersonalAreaButton")).not.toBeAttached();
+    });
+
+    test("A user without access to an area does not spawn in it from its start area hash", async ({
+        browser,
+        request,
+    }) => {
+        await resetWamMaps(request);
+        await using page = await getPage(browser, "Admin1", Map.url("empty"));
+
+        // A restricted area that is also a "Use if URL contains #class5b" start area
+        await Menu.openMapEditor(page);
+        await AreaAccessRights.openAreaEditorAndAddAreaWithRights(page, ["admin"], ["admin"]);
+        await AreaEditor.setAreaName(page, "class5b");
+        await AreaEditor.addProperty(page, "startAreaProperty");
+        await page.locator("#startTypeSelector").selectOption({ index: 1 });
+        await Menu.closeMapEditor(page);
+        await page.close();
+
+        // The admin has access: the hash brings them into the area
+        await using adminPage = await getPage(browser, "Admin1", Map.url("empty") + "#class5b");
+        expect(isInsideRightsArea(await Map.getPosition(adminPage))).toBe(true);
+        await adminPage.close();
+
+        // Without access, the user spawns at the default start position of the map instead
+        await using userPage = await getPage(browser, "User1", Map.url("empty") + "#class5b");
+        expect(isInsideRightsArea(await Map.getPosition(userPage))).toBe(false);
     });
 });

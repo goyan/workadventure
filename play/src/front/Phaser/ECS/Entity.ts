@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type {
     AtLeast,
     EntityData,
@@ -9,7 +10,6 @@ import type {
 } from "@workadventure/map-editor";
 import { GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
-import type OutlinePipelinePlugin from "phaser3-rex-plugins/plugins/outlinepipeline-plugin.js";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
@@ -26,6 +26,9 @@ import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 
+import Image = Phaser.GameObjects.Image;
+import Graphics = Phaser.GameObjects.Graphics;
+
 export enum EntityEvent {
     Moved = "EntityEvent:Moved",
     Updated = "EntityEvent:Updated",
@@ -40,7 +43,7 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
-export class Entity extends Phaser.GameObjects.Image implements ActivatableInterface, OutlineableInterface {
+export class Entity extends Image implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
     private readonly outlineColorStoreUnsubscribe: Unsubscriber;
@@ -55,7 +58,7 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
 
     private speechDomElement: SpeechDomElement | null = null;
 
-    private debugActivationZoneCircle: Phaser.GameObjects.Graphics | null = null;
+    private debugActivationZoneCircle: Graphics | null = null;
 
     constructor(
         scene: GameScene,
@@ -89,8 +92,8 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
 
         this.setDepth(this.y + this.displayHeight + (this.prefab.depthOffset ?? 0));
 
-        this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
-            this.setOutline(color);
+        this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe(() => {
+            this.updateOutline();
         });
 
         this.scene.add.existing(this);
@@ -119,7 +122,9 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
     }
 
     public get canEdit(): boolean {
-        return (this.scene as GameScene).getEntityPermissions().canEdit(this.getCenter());
+        // Checked at the top-left corner (the entity position), like map-storage does: it is the only point
+        // of the entity the server knows, so any other point would let the UI offer edits the server refuses.
+        return (this.scene as GameScene).getEntityPermissions().canEdit({ x: this.x, y: this.y });
     }
 
     public get canRead(): boolean {
@@ -344,10 +349,6 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
         return { thickness: 2, color: get(this.outlineColorStore) };
     }
 
-    private getOutlinePlugin(): OutlinePipelinePlugin | undefined {
-        return this.scene.plugins.get("rexOutlinePipeline") as unknown as OutlinePipelinePlugin | undefined;
-    }
-
     private hasAnyPropertiesSet(): boolean {
         if (!this.canEdit && !this.canRead) {
             return false;
@@ -399,18 +400,9 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
         }
     }
 
-    private setOutline(color: number | undefined) {
-        if (color === undefined) {
-            this.getOutlinePlugin()?.remove(this);
-        } else {
-            this.getOutlinePlugin()?.remove(this);
-            this.getOutlinePlugin()?.add(this, {
-                thickness: 2,
-                outlineColor: color,
-            });
-        }
+    private updateOutline() {
         if (this.scene instanceof GameScene) {
-            this.scene.refreshSceneForOutline();
+            this.scene.getOutlineManager().update(this);
         } else {
             throw new Error("Not the Game Scene");
         }
@@ -485,18 +477,16 @@ export class Entity extends Phaser.GameObjects.Image implements ActivatableInter
                     break;
                 }
                 case "playAudio": {
-                    const audioLink = property.audioLink;
+                    const playAudioProperty = property;
                     actions.push({
                         actionName: property.buttonLabel ?? "",
                         protected: true,
                         priority: 1,
                         callback: () => {
-                            this.emit(EntityEvent.PropertyActivated, {
-                                propertyName: GameMapProperties.PLAY_AUDIO,
-                                propertyValue: audioLink,
-                            });
-                            // Fixme: close the menu without impact audio manager and playing
-                            //actionsMenuStore.clear();
+                            // Not routed through EntityEvent.PropertyActivated: that path only
+                            // reacts to values that change, so the same sound could not be played
+                            // twice in a row, and it carries the URL alone, losing the volume.
+                            (this.scene as GameScene).getEntityAudioManager().play(this.entityId, playAudioProperty);
                         },
                     });
                     break;

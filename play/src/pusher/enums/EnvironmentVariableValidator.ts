@@ -60,8 +60,6 @@ export const EnvironmentVariables = z.object({
         .describe(
             "Maximum uWebSockets backpressure bytes accepted on admin websocket connections. Defaults to 1048576.",
         ),
-    // Used only in development
-    VITE_URL: z.string().url().optional().describe("URL of the Vite development server (development only)"),
     // Use "*" to allow any domain
     ALLOWED_CORS_ORIGIN: z
         .string()
@@ -71,6 +69,24 @@ export const EnvironmentVariables = z.object({
         .describe("Allowed CORS origin for API requests. Use '*' to allow any domain"),
     PUSHER_URL: AbsoluteOrRelativeUrl.optional().describe("Public URL of the pusher service"),
     FRONT_URL: AbsoluteOrRelativeUrl.optional().describe("Public URL of the frontend application"),
+    ASSETS_URL: z
+        .string()
+        .url()
+        .or(z.literal(""))
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe(
+            "Public URL of the 'front' container serving the JS/CSS assets (for instance https://assets.example.com). If empty, the pusher serves the assets itself.",
+        ),
+    ASSETS_INTERNAL_URL: z
+        .string()
+        .url()
+        .or(z.literal(""))
+        .optional()
+        .transform(emptyStringToUndefined)
+        .describe(
+            "URL the pusher uses to fetch the index.html template and proxy the static files from the 'front' container, for instance http://front. Defaults to ASSETS_URL.",
+        ),
     MAP_STORAGE_API_TOKEN: z.string().describe("API token for authenticating with the map-storage service"),
     REDIS_HOST: z.string().optional().transform(emptyStringToUndefined).describe("Redis server hostname or IP address"),
     REDIS_PORT: PositiveIntAsString.optional()
@@ -214,13 +230,17 @@ export const EnvironmentVariables = z.object({
         .optional()
         .describe("OAuth2 scopes to request (space-separated). Defaults to 'openid email profile'"),
     OPENID_PROMPT: z.string().optional().describe("OpenID Connect prompt parameter (e.g., 'login', 'consent')"),
+    OPENID_ACCESS_TYPE: z
+        .string()
+        .optional()
+        .describe("OAuth2 'access_type' parameter sent on the authorization request (e.g. 'offline')"),
     OPENID_USERNAME_CLAIM: z
         .string()
         .optional()
         .describe("JWT claim to use as the username. Defaults to 'preferred_username'"),
     OPENID_LOCALE_CLAIM: z.string().optional().describe("JWT claim to use for user locale. Defaults to 'locale'"),
     OPENID_WOKA_NAME_POLICY: OpidWokaNamePolicy.optional().describe(
-        "Policy for avatar naming: 'user_input' or 'openid_nickname'",
+        "Policy for avatar naming: 'user_input', 'allow_override_opid', or 'force_opid'",
     ),
     OPENID_TAGS_CLAIM: z.string().optional().describe("JWT claim containing user tags/roles"),
 
@@ -256,6 +276,16 @@ export const EnvironmentVariables = z.object({
     SKIP_CAMERA_PAGE: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe("Whether to skip the camera permission request page. Defaults to false."),
+    DEFAULT_CAMERA_PRIVACY_SETTINGS: BoolAsString.optional()
+        .transform((val) => toBool(val, false))
+        .describe(
+            "Initial value of the camera privacy setting ('keep camera enabled when the tab is away') for users who have not set their own preference. Defaults to false.",
+        ),
+    DEFAULT_MICROPHONE_PRIVACY_SETTINGS: BoolAsString.optional()
+        .transform((val) => toBool(val, true))
+        .describe(
+            "Initial value of the microphone privacy setting ('keep microphone enabled when the tab is away') for users who have not set their own preference. Defaults to true.",
+        ),
     BYPASS_PWA: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe(
@@ -277,7 +307,7 @@ export const EnvironmentVariables = z.object({
         ),
     ENABLE_SAY: BoolAsString.optional()
         .transform((val) => toBool(val, true))
-        .describe("Whether the users can communicate via comics-style bubbles."),
+        .describe("Whether the users can communicate via comics-style bubbles. Defaults to true."),
     ENABLE_ISSUE_REPORT: BoolAsString.optional()
         .transform((val) => toBool(val, true))
         .describe("Whether the feature 'issue report' is enabled or not on this room. Defaults to true."),
@@ -288,18 +318,31 @@ export const EnvironmentVariables = z.object({
     ENABLE_OPENAPI_ENDPOINT: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe("Enable/disable the OpenAPI documentation endpoint. Defaults to false"),
-    VIDEO_ANALYTICS_FLUSH_INTERVAL_MS: PositiveIntAsString.optional()
+    ANALYTICS_FLUSH_INTERVAL_MS: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 10_000))
-        .describe("Interval in milliseconds between video quality analytics batch flushes. Defaults to 10000"),
-    VIDEO_ANALYTICS_TIMEOUT_MS: PositiveIntAsString.optional()
+        .describe(
+            "Interval in milliseconds between analytics batch flushes. Renamed from VIDEO_ANALYTICS_FLUSH_INTERVAL_MS: one queue now carries every analytics event, video quality samples included. Defaults to 10000",
+        ),
+    ANALYTICS_TIMEOUT_MS: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 2_000))
-        .describe("HTTP timeout in milliseconds for video quality analytics ingestion calls. Defaults to 2000"),
-    VIDEO_ANALYTICS_MAX_QUEUE_SIZE: PositiveIntAsString.optional()
+        .describe(
+            "HTTP timeout in milliseconds for analytics ingestion calls. Renamed from VIDEO_ANALYTICS_TIMEOUT_MS. Defaults to 2000",
+        ),
+    ANALYTICS_MAX_QUEUE_SIZE: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 10_000))
-        .describe("Maximum number of video quality samples queued in pusher memory. Defaults to 10000"),
-    VIDEO_ANALYTICS_MAX_BATCH_SIZE: PositiveIntAsString.optional()
+        .describe(
+            "Maximum number of analytics events queued in pusher memory. Renamed from VIDEO_ANALYTICS_MAX_QUEUE_SIZE. Defaults to 10000",
+        ),
+    ANALYTICS_MAX_BATCH_SIZE: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 1_000))
-        .describe("Maximum number of video quality samples sent in one admin batch. Defaults to 1000"),
+        .describe(
+            "Maximum number of analytics events sent in one admin batch. Renamed from VIDEO_ANALYTICS_MAX_BATCH_SIZE. Defaults to 1000",
+        ),
+    DRAIN_TIMEOUT_MS: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 20_000))
+        .describe(
+            "Maximum time in milliseconds spent draining in-memory buffers on SIGTERM / SIGINT before the process exits. Shared by every service that flushes on shutdown, not analytics alone. Must stay comfortably BELOW your orchestrator's grace period (Kubernetes terminationGracePeriodSeconds defaults to 30s), not merely equal to it: the drain has to finish and the process exit before SIGKILL lands, or the intervals it just closed die with it. Defaults to 20000, i.e. 10s of headroom under the Kubernetes default. Raising it above the grace period cannot buy more draining — it only converts a clean exit into a kill.",
+        ),
     START_ROOM_URL: z.string().optional().describe("Default room URL where users start when accessing the platform"),
 
     // Front related environment variables
@@ -319,9 +362,6 @@ export const EnvironmentVariables = z.object({
     SKIP_RENDER_OPTIMIZATIONS: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe("Skip rendering optimizations (useful for debugging). Defaults to false"),
-    DISABLE_NOTIFICATIONS: BoolAsString.optional()
-        .transform((val) => toBool(val, false))
-        .describe("Disable browser notifications. Defaults to false"),
     TURN_USER: z.string().optional().describe("Username for TURN server authentication"),
     TURN_PASSWORD: z.string().optional().describe("Password for TURN server authentication"),
     TURN_STATIC_AUTH_SECRET: z
@@ -332,9 +372,9 @@ export const EnvironmentVariables = z.object({
             "The auth secret to generate TURN credentials on the fly (enabled by the --use-auth-secret and --auth-secret in Coturn).",
         ),
     TURN_CREDENTIALS_RENEWAL_TIME: PositiveIntAsString.optional()
-        .transform((val) => toNumber(val, 3 * 60 * 60 * 1000))
+        .transform((val) => toNumber(val, 60 * 60 * 1000))
         .describe(
-            "Time interval (in milliseconds) for renewing TURN server credentials. Defaults to 10800000 milliseconds (3 hours)",
+            "Time interval (in milliseconds) for renewing TURN server credentials. Defaults to 3600000 milliseconds (1 hour). Must stay well below the 24 hours validity of the generated credentials.",
         ),
     JITSI_URL: z.string().optional().describe("URL of the Jitsi Meet server for video conferencing"),
     JITSI_PRIVATE_MODE: BoolAsString.optional()
@@ -346,6 +386,11 @@ export const EnvironmentVariables = z.object({
     MAX_PER_GROUP: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 4))
         .describe("Maximum number of users in a bubble/group. Defaults to 4"),
+    PROXIMITY_FILE_TRANSFER_MAX_USERS: PositiveIntAsString.optional()
+        .transform((val) => toNumber(val, 10))
+        .describe(
+            "Maximum number of users (sender included) in a proximity chat for files to be shared in it. Files travel peer to peer, so the sender uploads a copy to every recipient. Defaults to 10",
+        ),
     MAX_DISPLAYED_VIDEOS: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 16))
         .describe(
@@ -388,6 +433,7 @@ export const EnvironmentVariables = z.object({
         .describe("The sampling rate for Sentry traces. Only used if SENTRY_DSN is configured. Defaults to 0.1"),
 
     // RoomAPI related environment variables
+    ROOM_API_BIND_HOST: z.string().optional().describe("Bind host for the Room API gRPC server. Defaults to `[::]`."),
     ROOM_API_PORT: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 50051))
         .describe("Port for the Room API gRPC server. Defaults to 50051"),
@@ -421,9 +467,6 @@ export const EnvironmentVariables = z.object({
     WOKA_SPEED: PositiveIntAsString.optional()
         .transform((val) => toNumber(val, 9))
         .describe("Avatar (WOKA) movement speed. Defaults to 9"),
-    FEATURE_FLAG_BROADCAST_AREAS: BoolAsString.optional()
-        .transform((val) => toBool(val, false))
-        .describe("Enable broadcast areas feature. Defaults to false"),
 
     KLAXOON_ENABLED: BoolAsString.optional()
         .transform((val) => toBool(val, false))
@@ -458,7 +501,11 @@ export const EnvironmentVariables = z.object({
     EMBEDDED_DOMAINS_WHITELIST: z
         .string()
         .optional()
-        .transform((val) => toArray(val))
+        .transform((val) =>
+            toArray(val)
+                .map((domain) => domain.trim().toLowerCase())
+                .filter((domain) => domain !== ""),
+        )
         .describe("Comma-separated list of domains allowed for embedded iframes"),
     CARDS_ENABLED: BoolAsString.optional()
         .transform((val) => toBool(val, false))
@@ -527,12 +574,6 @@ export const EnvironmentVariables = z.object({
         .optional()
         .transform(emptyStringToUndefined)
         .describe("The S3 CDN endpoint for Livekit recording."),
-    BACKGROUND_TRANSFORMER_ENGINE: z
-        .enum(["tasks-vision", "selfie-segmentation", ""])
-        .optional()
-        .describe(
-            "Virtual background transformer engine: 'tasks-vision' (GPU-accelerated, experimental) or 'selfie-segmentation' (CPU-based, stable). Currently defaults to 'selfie-segmentation'; 'tasks-vision' is intended as the future default once considered stable.",
-        ),
 });
 
 export type EnvironmentVariables = z.infer<typeof EnvironmentVariables>;

@@ -77,8 +77,8 @@
         } else {
             mapEditorVisibilityStore.set(true);
         }
-        analyticsClient.openMapEditorTool(newTool);
-        gameManager.getCurrentGameScene().getMapEditorModeManager().equipTool(newTool);
+        analyticsClient.trackAdminEvent("map_editor.tool.opened", { name: newTool });
+        gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(newTool);
     }
 
     function toggleMapEditor() {

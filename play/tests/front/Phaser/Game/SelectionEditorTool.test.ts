@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { EntityPrefab, WamFile } from "@workadventure/map-editor";
 import type { EntityPrefab as EntityPrefabType, GameMap, WAMEntityData } from "@workadventure/map-editor";
 import { mock } from "vitest-mock-extended";

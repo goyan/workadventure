@@ -4,6 +4,7 @@
     import { getNavigatorType, isAndroid as isAndroidFct, NavigatorType } from "../../WebRtc/DeviceUtils";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
+    import Button from "../UI/Button.svelte";
     import { IconInfoCircle } from "@wa-icons";
 
     let isAndroid = isAndroidFct();
@@ -25,7 +26,7 @@
 </script>
 
 <form
-    class="helpNotificationSettings z-[600] bg-contrast/80 backdrop-filter text-center rounded-lg text-white self-center pointer-events-auto flex flex-col m-auto w-full md:w-2/3 xl:w-[380px] text-sm md:text-base absolute top-10 left-0 right-0 overflow-hidden"
+    class="helpNotificationSettings z-[901] bg-contrast/80 backdrop-filter text-center rounded-lg text-white self-center pointer-events-auto flex flex-col m-auto w-full md:w-2/3 xl:w-[380px] text-sm md:text-base absolute top-10 left-0 right-0 overflow-hidden"
     style={getBackgroundColor() ? `background-color: ${getBackgroundColor()};` : ""}
     onsubmit={(event) => {
         event.preventDefault();
@@ -48,46 +49,41 @@
         <div class="p-4 italic opacity-50 text-sm leading-4">
             {$LL.notification.help.content()}
         </div>
-        <div class="h-72 overflow-hidden opacity-80 saturate-50">
+        <div class="max-h-72 overflow-hidden opacity-80 saturate-50">
             {#if isFirefox}
                 <p class="err">
                     {$LL.notification.help.firefoxContent()}
                 </p>
-                <img
-                    draggable="false"
-                    src={$LL.notification.help.screen.firefox()}
-                    alt="help camera setup"
-                    class="w-full m-auto"
-                />
             {:else if isChrome && !isAndroid}
                 <img
                     draggable="false"
                     src={$LL.notification.help.screen.chrome()}
-                    alt="help camera setup"
+                    alt={$LL.notification.help.screenAlt()}
                     class="w-full m-auto"
                 />
             {/if}
         </div>
     </section>
     <section class="flex row justify-center p-4 bg-contrast">
-        <button
-            class="btn bg-white/10 hover:bg-white/20 mr-2 w-full justify-center"
+        <Button
+            class="bg-white/10 hover:bg-white/20 mr-2 w-full"
             onclick={(event) => {
                 event.preventDefault();
                 refresh();
             }}
         >
             {$LL.notification.help.refresh()}
-        </button>
-        <button
+        </Button>
+        <Button
             type="submit"
-            class="btn btn-danger w-full justify-center"
+            variant="danger"
+            class="w-full"
             onclick={(event) => {
                 event.preventDefault();
                 close();
             }}
         >
             {$LL.notification.help.continue()}
-        </button>
+        </Button>
     </section>
 </form>

@@ -12,9 +12,16 @@
         hasChatRoomMembershipManagement,
         hasChatRoomModeration,
         hasChatRoomNotificationControl,
+        hasChatRoomSettingsManagement,
+        hasProximityChatSidePanel,
         type ChatConversation,
         type ChatRoom,
+        type ChatRoomMembershipManagement,
+        type ChatRoomModeration,
+        type ChatRoomNotificationControl,
+        type ChatRoomSettingsManagement,
         type ChatThread,
+        type ProximityChatSidePanelRoom,
     } from "../Connection/ChatConnection";
     import { INITIAL_SIDEBAR_WIDTH, loginTokenErrorStore } from "../../Stores/ChatStore";
     import { userIsConnected } from "../../Stores/MenuStore";
@@ -97,7 +104,7 @@
         } catch (error) {
             console.error("Failed to initChatConnectionEncryption", error);
         }
-        analyticsClient.startMatrixEncryptionConfiguration();
+        analyticsClient.trackAdminEvent("chat.matrix_encryption_configuration.started");
     }
 
     const isEncryptionRequiredAndNotSet = chat.isEncryptionRequiredAndNotSet;
@@ -143,6 +150,32 @@
         return conversation?.conversationKind === "thread";
     }
 
+    function getRoomWithSidePanel(
+        conversation: ChatConversation | undefined,
+    ):
+        | (ChatRoom &
+              ChatRoomMembershipManagement &
+              ChatRoomModeration &
+              ChatRoomNotificationControl &
+              ChatRoomSettingsManagement)
+        | ProximityChatSidePanelRoom
+        | undefined {
+        if (hasProximityChatSidePanel(conversation)) {
+            return conversation;
+        }
+
+        if (
+            hasChatRoomMembershipManagement(conversation) &&
+            hasChatRoomModeration(conversation) &&
+            hasChatRoomNotificationControl(conversation) &&
+            hasChatRoomSettingsManagement(conversation)
+        ) {
+            return conversation;
+        }
+
+        return undefined;
+    }
+
     let filteredDirectRoom = $derived(
         $directRooms
             .filter(({ name }) => get(name).toLocaleLowerCase().includes($chatSearchBarValue.toLocaleLowerCase()))
@@ -166,13 +199,7 @@
         }),
     );
     let displayThreeColumnLayout = $derived(sideBarWidth >= THREAD_PANEL_LAYOUT_LIMIT);
-    let selectedRoomWithSidePanel = $derived(
-        hasChatRoomMembershipManagement($selectedRoomStore) &&
-            hasChatRoomModeration($selectedRoomStore) &&
-            hasChatRoomNotificationControl($selectedRoomStore)
-            ? $selectedRoomStore
-            : undefined,
-    );
+    let selectedRoomWithSidePanel = $derived(getRoomWithSidePanel($selectedRoomStore));
     let hasSelectedRoomWithSidePanel = $derived(selectedRoomWithSidePanel !== undefined);
     let showRoomSidePanelToggle = $derived(shouldShowRoomSidePanelToggle(hasSelectedRoomWithSidePanel));
     let roomSidePanelPlacement = $derived(
@@ -405,7 +432,7 @@
     {:else if $selectedRoomStore === undefined && displayTwoColumnLayout}
         <div class="flex flex-col flex-1 ps-4 items-center pt-8">
             <div class="text-center px-3 max-w-md">
-                <img src={getCloseImg} alt={$LL.chat.getCloserTitle()} draggable="false" />
+                <img class="mx-auto" src={getCloseImg} alt={$LL.chat.getCloserTitle()} draggable="false" />
                 <div class="text-lg font-bold text-center">{$LL.chat.noRoomOpen()}</div>
                 <div class="text-sm opacity-50 text-center">
                     {$LL.chat.noRoomOpenDescription()}
