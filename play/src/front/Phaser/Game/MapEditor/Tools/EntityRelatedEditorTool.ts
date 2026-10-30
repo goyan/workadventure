@@ -76,6 +76,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     public destroy(): void {
         this.cleanPreview();
         this.unsubscribeToStores();
+        this.entitiesManager.off(EntitiesManagerEvent.DeleteEntity, this.handleDeleteEntity);
     }
 
     public subscribeToGameMapFrontWrapperEvents(gameMapFrontWrapper: GameMapFrontWrapper): void {
@@ -191,6 +192,25 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         mapEditorSelectedEntityPrefabStore.set(undefined);
         mapEditorEntityFileDroppedStore.set(false);
         this.scene.markDirty();
+    }
+
+    protected isPointerInsideCanvas(pointer: Phaser.Input.Pointer): boolean {
+        if (pointer.event instanceof MouseEvent) {
+            const bounds = this.scene.game.canvas.getBoundingClientRect();
+            return (
+                pointer.event.clientX >= bounds.left &&
+                pointer.event.clientX < bounds.right &&
+                pointer.event.clientY >= bounds.top &&
+                pointer.event.clientY < bounds.bottom
+            );
+        }
+
+        return (
+            pointer.x >= 0 &&
+            pointer.y >= 0 &&
+            pointer.x < this.scene.scale.width &&
+            pointer.y < this.scene.scale.height
+        );
     }
 
     protected getEntityPrefabAlignWithGridOffset(): { x: number; y: number } {
