@@ -18,7 +18,7 @@ import { isPopupJustClosed } from "../Game/Say/SayManager";
 import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
-import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
+import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import type { Shortcut } from "./UserInputManager";
 
 // Below this distance (in screen pixels), a press followed by a move is still a click, not a drag.
@@ -208,7 +208,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             return;
         }
         // A double-click ends at the center of the targeted tile, like the avatar does when it stops.
-        const target = isDoubleClick ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint;
+        const target =
+            isDoubleClick && ENABLE_TILE_SNAP ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint;
         this.gameScene
             .moveTo(
                 {

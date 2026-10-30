@@ -242,6 +242,11 @@ export const EnvironmentVariables = z.object({
     ENABLE_CHAT_ONLINE_LIST: BoolAsString.optional()
         .transform((val) => toBool(val, true))
         .describe("Enable/disable online users list in chat. Defaults to true"),
+    ENABLE_TILE_SNAP: BoolAsString.optional()
+        .transform((val) => toBool(val, false))
+        .describe(
+            "Slide the local avatar to the center of its tile when it stops, and aim double-click moves at tile centers. Defaults to false.",
+        ),
     ENABLE_CHAT_DISCONNECTED_LIST: BoolAsString.optional()
         .transform((val) => toBool(val, true))
         .describe("Enable/disable offline users list in chat. Defaults to true"),
