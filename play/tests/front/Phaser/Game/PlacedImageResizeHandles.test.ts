@@ -68,6 +68,15 @@ function fixture(keepProportions = true) {
         frame: { name: "__BASE" },
     });
     Object.defineProperty(entity, "canEdit", { value: true, configurable: true });
+    const entityEvents = new Phaser.Events.EventEmitter();
+    entity.on.mockImplementation((name, listener) => {
+        entityEvents.on(name, listener);
+        return entity;
+    });
+    entity.off.mockImplementation((name, listener) => {
+        entityEvents.off(name, listener);
+        return entity;
+    });
     entity.setAlpha.mockImplementation((alpha) => {
         entity.alpha = alpha ?? 1;
         return entity;
@@ -96,6 +105,7 @@ function fixture(keepProportions = true) {
         pointer,
         squares,
         keyboardEvents,
+        entityEvents,
         controller,
         setBusy: () => {
             busy = true;
@@ -206,6 +216,26 @@ describe("Direct placed image resizing", () => {
         f.squares[3].emit(Phaser.Input.Events.DRAG_END, f.pointer);
         expect(f.onResize).not.toHaveBeenCalled();
         expect(f.entity.alpha).toBe(0.8);
+    });
+
+    it("removes the handles when native deletion destroys the entity during a drag", () => {
+        const f = fixture();
+        f.squares[3].emit(Phaser.Input.Events.DRAG_START, f.pointer);
+        f.squares[3].emit(Phaser.Input.Events.DRAG, f.pointer);
+        f.entityEvents.emit(Phaser.GameObjects.Events.DESTROY);
+        // Native GameObject.destroy clears scene; Entity.canEdit would then throw.
+        Object.defineProperty(f.entity, "canEdit", {
+            get: () => {
+                throw new Error("Entity has been destroyed");
+            },
+            configurable: true,
+        });
+        expect(() => f.scene.events.emit(Phaser.Scenes.Events.PRE_UPDATE)).not.toThrow();
+        expect(() => f.controller.destroy()).not.toThrow();
+        expect(f.entity.alpha).toBe(0.8);
+        expect(f.onResize).not.toHaveBeenCalled();
+        expect(f.squares.every((square) => !square.scene)).toBe(true);
+        expect(f.entityEvents.listenerCount(Phaser.GameObjects.Events.DESTROY)).toBe(0);
     });
 
     it("disables handles while saving and cleans up listeners and input configuration", () => {
