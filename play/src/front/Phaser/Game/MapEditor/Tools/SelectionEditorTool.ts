@@ -246,7 +246,8 @@ export class SelectionEditorTool extends MapEditorTool {
                 return false;
             }
             const roomUrl = this.getRoomUrl();
-            await createMapPattern(roomUrl, name, selectionToPatternPayload(items));
+            const tileDimensions = this.scene.getGameMapFrontWrapper().getTileDimensions();
+            await createMapPattern(roomUrl, name, selectionToPatternPayload(items, tileDimensions));
             created = true;
             await refreshMapPatterns(roomUrl);
         } catch (error: unknown) {

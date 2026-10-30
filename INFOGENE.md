@@ -129,8 +129,10 @@ liste les motifs de tous les éditeurs du monde (nom, nombre d'objets) : **un cl
 colle** (même mode Coller que le bouton, il remplace le contenu du presse-papiers interne) ; la poubelle à droite
 d'un motif le supprime. Le motif est partagé entre toutes les salles : il ne dépend pas de la carte d'origine.
 
-Le motif contient des positions relatives au coin haut-gauche de la sélection, sans les identifiants d'origine
-(de nouveaux sont créés au collage). Un objet dont le prefab n'est chargé dans aucune collection de la carte
+Le motif contient des positions relatives au coin de **case** qui contient le coin haut-gauche de la sélection (et non ce coin
+lui-même : un mur fin est centré sur une ligne de grille, donc 6 px avant elle, et le motif doit garder ce décalage pour que
+le collage, qui avance par cases entières, retombe sur la grille de la source), sans les identifiants d'origine
+(de nouveaux sont créés au collage). Un motif enregistré avant cette règle reste ancré sur son coin exact : à réenregistrer. Un objet dont le prefab n'est chargé dans aucune collection de la carte
 courante est ignoré, et un message indique combien d'objets l'ont été.
 **Les motifs ne contiennent que des objets** : le front n'envoie jamais de zone et le pusher refuse (400 `invalid`) un
 motif qui en contient. Le schéma commun continue de lire des éléments `area` : les anciens motifs enregistrés avec des
