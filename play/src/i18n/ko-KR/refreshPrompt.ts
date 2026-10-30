@@ -5,6 +5,10 @@ const refreshPrompt: DeepPartial<Translation["refreshPrompt"]> = {
     refresh: "새로 고침",
     newVersion: "새 버전을 사용할 수 있습니다. 페이지를 새로 고침하세요.",
     later: "나중에",
+    whatsNew: "새로운 소식",
+    feature: "기능",
+    fix: "수정",
+    noChanges: "업데이트 세부 정보가 없습니다.",
 };
 
 export default refreshPrompt;

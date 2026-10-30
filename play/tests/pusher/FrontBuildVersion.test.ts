@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { Application, Request, Response } from "express";
 import { FrontController } from "../../src/pusher/controllers/FrontController";
+import { releaseNotes } from "../../src/common/ReleaseNotes";
 
 const fixture = vi.hoisted(() => ({
     html: "",
@@ -69,7 +70,7 @@ describe("frontend build identity", () => {
 
         version(req, res);
 
-        expect(res.json).toHaveBeenCalledWith({ version: loadedVersion });
+        expect(res.json).toHaveBeenCalledWith({ version: loadedVersion, releaseNotes });
         expect(res.set.mock.calls).toContainEqual(["Cache-Control", "no-store"]);
     });
 

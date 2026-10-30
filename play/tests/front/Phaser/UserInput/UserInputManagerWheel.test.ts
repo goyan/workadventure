@@ -5,6 +5,7 @@ import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraMana
 import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInput/GameSceneUserInputHandler";
 import { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
+import { releaseNotesVisibleStore } from "../../../../src/front/Stores/ReleaseNotesStore";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 
@@ -73,6 +74,7 @@ describe("UserInputManager wheel events", () => {
     });
 
     afterEach(() => {
+        releaseNotesVisibleStore.set(false);
         manager.destroy();
         mapEditorModeStore.set(false);
         vi.restoreAllMocks();
@@ -88,6 +90,30 @@ describe("UserInputManager wheel events", () => {
             [3, 6],
             [100, 1],
         ]);
+    });
+
+    it("blocks game controls while reading release notes and restores them on close", () => {
+        releaseNotesVisibleStore.set(true);
+        emitWheel(new WheelEvent("wheel", { deltaY: 6 }), 0, 6);
+
+        expect(manager.isControlsEnabled).toBe(false);
+        expect(manager.getEventListForGameTick().any()).toBe(false);
+        expect(cameraManager.panBy.mock.calls).toEqual([]);
+        expect(scene.handleMouseWheel.mock.calls).toEqual([]);
+
+        releaseNotesVisibleStore.set(false);
+        expect(manager.isControlsEnabled).toBe(true);
+    });
+
+    it("preserves the map editor lock after closing release notes", () => {
+        mapEditorModeStore.set(true);
+        manager.disableControls("mapEditor");
+        releaseNotesVisibleStore.set(true);
+        releaseNotesVisibleStore.set(false);
+
+        expect(manager.isControlsEnabled).toBe(false);
+        emitWheel(new WheelEvent("wheel", { ctrlKey: true, deltaY: 3 }), 0, 3);
+        expect(scene.handleMouseWheel.mock.calls).toEqual([[3, 6]]);
     });
 
     it("keeps the avatar controls disabled while forwarding wheel events in map editor mode", () => {

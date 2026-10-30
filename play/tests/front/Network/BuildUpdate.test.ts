@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { watchForBuildUpdate } from "../../../src/front/Network/BuildUpdate";
+import { getNewReleaseNotes } from "../../../src/common/ReleaseNotes";
+import type { ReleaseNote } from "../../../src/common/ReleaseNotes";
 
 describe("build update notification", () => {
     const loadedVersion = "a".repeat(64);
@@ -7,6 +9,13 @@ describe("build update notification", () => {
     const fetchMock = vi.fn<typeof fetch>();
     const onUpdate = vi.fn();
     let stop: (() => void) | undefined;
+    const note: ReleaseNote = {
+        id: "c".repeat(40),
+        date: "2026-10-30T16:34:39+01:00",
+        author: "Hervé Meunier",
+        type: "feat",
+        description: "Historique des nouveautés dans Outils",
+    };
 
     beforeEach(() => {
         vi.useFakeTimers();
@@ -59,6 +68,30 @@ describe("build update notification", () => {
 
         expect(onUpdate).toHaveBeenCalledOnce();
     });
+
+    it("provides the deployed descriptions and excludes changes already loaded", async () => {
+        const previousNote: ReleaseNote = { ...note, id: "d".repeat(40), description: "Notification de version" };
+        fetchMock.mockResolvedValue(
+            new Response(JSON.stringify({ version: deployedVersion, releaseNotes: [note, previousNote] })),
+        );
+        stop = watchForBuildUpdate(loadedVersion, onUpdate);
+        await settle();
+
+        expect(onUpdate).toHaveBeenCalledWith([note, previousNote]);
+        expect(getNewReleaseNotes([note, previousNote], [previousNote])).toEqual([note]);
+        expect(getNewReleaseNotes([note, previousNote], [note, previousNote])).toEqual([]);
+    });
+
+    it.each([undefined, [{ ...note, type: "docs" }], [{ ...note, date: "invalid" }]])(
+        "still offers a refresh when release descriptions are absent or invalid %#",
+        async (releaseNotes) => {
+            fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: deployedVersion, releaseNotes })));
+            stop = watchForBuildUpdate(loadedVersion, onUpdate);
+            await settle();
+
+            expect(onUpdate).toHaveBeenCalledWith([]);
+        },
+    );
 
     it("retries after deployment downtime instead of displaying a false update", async () => {
         fetchMock.mockRejectedValueOnce(new TypeError("Offline"));

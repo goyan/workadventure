@@ -21,8 +21,10 @@
     import { chatVisibilityStore } from "../../../Stores/ChatStore";
     import ActionBarButton from "../ActionBarButton.svelte";
     import { EditorToolName } from "../../../Phaser/Game/MapEditor/MapEditorModeManager";
+    import ReleaseNotesModal from "../../Modal/ReleaseNotesModal.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
-    import { IconMapSearch, IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor } from "@wa-icons";
+    import { modals } from "@wa-modals";
+    import { IconMapSearch, IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor, IconHistory } from "@wa-icons";
 
     function resetChatVisibility() {
         chatVisibilityStore.set(false);
@@ -122,6 +124,17 @@
         }
     }
 </script>
+
+<ActionBarButton
+    dataTestId="release-notes-button"
+    label={$LL.refreshPrompt.whatsNew()}
+    onclick={() => {
+        openedMenuStore.closeAll();
+        modals.open(ReleaseNotesModal);
+    }}
+>
+    <IconHistory font-size="20" />
+</ActionBarButton>
 
 {#if $mapEditorMenuVisibleStore}
     <ActionBarButton

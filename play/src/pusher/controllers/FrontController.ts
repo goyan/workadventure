@@ -6,6 +6,7 @@ import { uuid } from "stanza/Utils";
 import * as Sentry from "@sentry/node";
 import { z } from "zod";
 import Debug from "debug";
+import { releaseNotes } from "../../common/ReleaseNotes";
 import { MetaTagsBuilder } from "../services/MetaTagsBuilder";
 import { adminService } from "../services/AdminService";
 import { getStringPalette, wrapWithStyleTag } from "../services/GenerateCustomColors";
@@ -96,7 +97,7 @@ export class FrontController extends BaseHttpController {
 
     front(): void {
         this.app.get("/build-version", (_req: Request, res: Response) => {
-            res.set("Cache-Control", "no-store").json({ version: this.buildVersion });
+            res.set("Cache-Control", "no-store").json({ version: this.buildVersion, releaseNotes });
         });
 
         this.app.get("/_/{*splat}", (req: Request, res: Response) => {

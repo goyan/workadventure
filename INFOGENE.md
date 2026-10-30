@@ -76,6 +76,16 @@ Le bandeau reprend `ToastContainer` et propose « Rafraîchir » ou « Plus tard
 « Plus tard » masque la notification pour cette session. Les pages déjà ouvertes avant l'installation de ce
 patch doivent être rafraîchies une première fois pour pouvoir recevoir les prochaines notifications.
 Les nouveaux messages sont traduits ; le haut et le bas sorabe utilisent provisoirement l'anglais.
+Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé.
+« Outils → Nouveautés » ouvre l'historique complet, accessible sans droit d'édition, avec
+type, date et auteur. Les textes sont les sujets français des commits publics `feat(front):`
+et `fix(front):` depuis `v1.32.6`, du plus récent au plus ancien ; les dates sont celles des
+commits appliqués et les auteurs sont leurs noms Git (sans email ni corps de commit).
+`build-play` régénère `play/src/common/release-notes.json` avant chaque image, beta ou release :
+la liste ne dépend donc pas d'un service GitHub pendant le jeu. Le snapshot versionné sert
+au développement local ; le régénérer depuis le clone complet avec
+`node play/scripts/generate-release-notes.mjs`. Une mise à jour sans commit fonctionnel affiche
+un message indiquant que le détail n'est pas disponible, et la proposition de rafraîchir reste active.
 Décor extérieur (`Phaser/Game/GameScene.ts`) : la propriété Tiled facultative `exteriorTexture`
 (type fichier, chemin relatif au TMJ) active une texture répétée derrière la carte. Son origine,
 son échelle et son déplacement suivent les tiles de la carte ; elle couvre les bornes étendues

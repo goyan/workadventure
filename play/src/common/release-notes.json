@@ -1,0 +1,226 @@
+[
+    {
+        "id": "e72ba2debe8bd1de403787d557658b32f92c0b0b",
+        "date": "2026-10-30T16:34:39+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "valider un motif seulement si la sélection n'est pas vide"
+    },
+    {
+        "id": "2a5fe308f741d33edf7a917e9dc22048bfd17c55",
+        "date": "2026-10-30T16:34:39+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "seul l'auteur d'un motif ou un administrateur peut le supprimer"
+    },
+    {
+        "id": "34d66dc51465854ece34cfd7fc018a427eeebcdb",
+        "date": "2026-10-30T16:16:35+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "fermer le champ de nom dès que le motif est créé"
+    },
+    {
+        "id": "07c5bc8d242ec5de9f001e091c7d3c381f798248",
+        "date": "2026-10-30T16:16:35+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "motifs partagés de l'édition en masse (pusher et panneau)"
+    },
+    {
+        "id": "bef37066eb22e13277543422bd99604eb42b4b7f",
+        "date": "2026-10-30T15:42:46+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "magnétisme des objets de l'éditeur avec interrupteur"
+    },
+    {
+        "id": "eda2d8007644836e0be6f18582397118fe6b0a7a",
+        "date": "2026-10-30T15:41:21+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "bloquer les déplacements au clic pendant l’édition"
+    },
+    {
+        "id": "faf15b59febb35db0ff0ca3f0289fcd1039b1372",
+        "date": "2026-10-30T15:13:00+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "rétablir le scroll et le zoom trackpad dans l’éditeur"
+    },
+    {
+        "id": "611532cb861060e5475073066ae1c5d6efb88756",
+        "date": "2026-10-30T14:41:18+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "variable ENABLE_TILE_SNAP, recentrage désactivé par défaut (Refs #1)"
+    },
+    {
+        "id": "9e3de1119ef652b2650ec990762b936028399732",
+        "date": "2026-10-30T14:32:41+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "sélectionner et éditer une zone en masse"
+    },
+    {
+        "id": "3cfb58fb63f70d14edc229c45e8648b52688d729",
+        "date": "2026-10-30T14:16:15+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "recentrer l'avatar sur la case à l'arrêt (Refs #1)"
+    },
+    {
+        "id": "1e6642625dab8a94e6f0552c96b962187c444b4d",
+        "date": "2026-10-30T11:59:32+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "caméra libre en mode éditeur, flèches et trackpad déplacent la carte"
+    },
+    {
+        "id": "4f2ab0275165230ce35d9609c7b57f407a7fe9fe",
+        "date": "2026-10-30T11:52:24+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "effacer les sols et murs au clic maintenu"
+    },
+    {
+        "id": "96242ae8fde7ef734367b376039d0e6f40270bb1",
+        "date": "2026-10-30T10:48:14+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "peindre les sols au clic maintenu"
+    },
+    {
+        "id": "547b4f7f209c2e7679c7c5343abf70afc00f868f",
+        "date": "2026-10-30T00:10:48+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "bibliothèques d'objets communes à toutes les cartes"
+    },
+    {
+        "id": "84b6cbb5a2c92dcbc3f890386bf1116e2f5dda37",
+        "date": "2026-10-29T23:18:05+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "création de carte déléguée à l'Admin API"
+    },
+    {
+        "id": "29006ff6847723f55690b333ce08812b1284f1f5",
+        "date": "2026-10-29T23:18:05+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "créer une carte depuis l'éditeur de sortie"
+    },
+    {
+        "id": "97e6d79cc2c22e4b163abdf0269f5fd64ff5c120",
+        "date": "2026-10-29T21:33:23+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "rectangles de collision pour les entités des catalogues"
+    },
+    {
+        "id": "565fcc4c2b7c5cee71f285a167ae2ca229d44d66",
+        "date": "2026-10-29T16:39:12+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "trier les façades de murs par leur pied"
+    },
+    {
+        "id": "e040ec7a6497e2cc8c71e5d41bfa32e973936d09",
+        "date": "2026-10-29T16:39:12+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "prendre en charge les rectangles de collision Tiled"
+    },
+    {
+        "id": "d311529e683b3e7fce8b8e0f76df13bb81cdb804",
+        "date": "2026-10-28T16:03:20+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "courir vers un point au double-clic"
+    },
+    {
+        "id": "569eed951536e473741e18514662123d49625fe5",
+        "date": "2026-10-28T15:08:41+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "prolonger le sol au-delà des limites de la carte"
+    },
+    {
+        "id": "9870d4a634e38159a0573ca8732fa739f9889e49",
+        "date": "2026-10-28T12:07:05+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "préciser le bouton à utiliser pour charger une nouvelle version"
+    },
+    {
+        "id": "f109582d225a20731ed88a2a59b4e4b5b7881998",
+        "date": "2026-10-28T11:28:09+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "notifier les nouvelles versions et proposer un rafraîchissement"
+    },
+    {
+        "id": "2ddb56082d78c3d71fe0759b290ab111ed1c3c82",
+        "date": "2026-10-28T10:56:55+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "facteur de zoom par défaut 0,75"
+    },
+    {
+        "id": "67181b62a277f32d0391f14ff391d5a36c2d4e35",
+        "date": "2026-10-28T10:56:55+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "zoom par défaut deux fois plus large (avatars plus petits, façon Gather)"
+    },
+    {
+        "id": "54865461e1d0324656055d568312d4972e3f4926",
+        "date": "2026-10-28T09:49:13+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "vitesse normalisée en diagonale (plus de ×1,414)"
+    },
+    {
+        "id": "6ce09f8a862a83ffedfd441f2ca6eb12171a5be9",
+        "date": "2026-10-28T09:33:27+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "le pincement du trackpad zoome plus vite (gain sur les petits deltaY)"
+    },
+    {
+        "id": "07ab97c246a0642ea11e226108bdc8fbc471c62e",
+        "date": "2026-10-28T00:16:31Z",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "écouteurs anti-zoom de page nommés et retirés à la destruction du jeu (lint)"
+    },
+    {
+        "id": "671a8151256e210f944e7bd52ee09278b2a8211b",
+        "date": "2026-10-27T23:37:00Z",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "zoom par défaut par paliers de 0,25 au lieu d'un entier (cadrage plus serré, façon Gather)"
+    },
+    {
+        "id": "228da83cf0eaf501c7f8d67496dea2bd6d17376f",
+        "date": "2026-10-27T21:45:25Z",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "déplacement de la vue par glisser souris et défilement deux doigts au trackpad, retour sur l'avatar dès qu'il bouge"
+    },
+    {
+        "id": "9b4b8ee99ba9a6a8da0daeb9bd8b4959d5fbce23",
+        "date": "2026-10-27T21:37:01Z",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "la caméra reste centrée sur l'avatar à tout niveau de zoom (bornes élargies)"
+    },
+    {
+        "id": "2e967c0f0b1ada3865e5f7c03be6c8a6f199444f",
+        "date": "2026-10-27T21:28:11Z",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "le pincement/Ctrl+molette ne zoome plus la page (boutons et UI) hors du canvas"
+    }
+]
