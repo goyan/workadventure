@@ -36,7 +36,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         delete: "Supprimer",
         fill: "Remplir",
         tileToFillWith: "Tuile à poser",
-        placeInstruction: "Cliquez sur la carte pour placer le groupe. Appuyez sur Échap pour annuler.",
+        placeInstruction:
+            "Cliquez sur la carte pour poser le groupe, autant de fois que nécessaire. Échap pour terminer.",
         cancel: "Annuler",
         blocked:
             "Cette action est impossible. Vérifiez la zone sélectionnée, les limites de la carte et vos droits d’édition.",

@@ -47,3 +47,7 @@ export function setMapPatternError(error: MapPatternStoreError | undefined): voi
 export function setPatternIgnoredCount(ignoredCount: number): void {
     mapEditorPatternStore.update((state) => ({ ...state, ignoredCount }));
 }
+
+export function setArmedPattern(armedPatternId: string | undefined): void {
+    mapEditorPatternStore.update((state) => ({ ...state, armedPatternId }));
+}

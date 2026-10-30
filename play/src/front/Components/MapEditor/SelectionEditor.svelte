@@ -304,8 +304,12 @@
                 {#each $mapEditorPatternStore.patterns as pattern (pattern.id)}
                     <li class="flex items-center gap-1" data-testid="mapEditorSelectionPattern">
                         <button
-                            class="min-w-0 flex-1 rounded px-2 py-1 text-left hover:bg-white/10 disabled:opacity-50"
+                            class="min-w-0 flex-1 rounded px-2 py-1 text-left hover:bg-white/10 disabled:opacity-50 {pattern.id ===
+                            $mapEditorPatternStore.armedPatternId
+                                ? 'bg-white/20 ring-1 ring-white/60'
+                                : ''}"
                             data-testid="mapEditorSelectionPatternPaste"
+                            aria-pressed={pattern.id === $mapEditorPatternStore.armedPatternId}
                             aria-label={$LL.mapEditor.selection.pastePattern({ name: pattern.name })}
                             disabled={$mapEditorSelectionStore.busy}
                             onclick={() => pastePattern(pattern)}

@@ -104,7 +104,11 @@ ayant le droit global. Le rectangle et les contours restent visibles après le t
 
 Le panneau propose Copier, Coller, Déplacer, Supprimer et Remplir. Copier conserve un instantané
 dans le presse-papiers interne à la salle. Coller et Déplacer affichent un aperçu :
-un clic confirme la destination, Échap l'annule. Les éléments gardent leurs positions relatives.
+un clic confirme la destination, Échap l'annule. Déplacer se termine après un clic ; Coller est un **tampon** : le mode reste armé
+avec le même contenu après chaque pose (une nouvelle copie, de nouveaux identifiants et une entrée d'annulation par clic)
+et ne se termine que par Échap, le bouton Annuler, un changement d'outil ou la fermeture de l'éditeur. Une pose refusée garde le mode
+et affiche l'erreur ; un clic pendant une pose en cours est ignoré. Le motif armé est surligné dans la liste « Motifs » ;
+cliquer un autre motif change de motif sans quitter le mode. Les éléments gardent leurs positions relatives.
 Remplir répète la tuile choisie dans la palette dans le rectangle sans déborder ni recréer
 une instance identique au même emplacement. Les actions indisponibles sont désactivées.
 
