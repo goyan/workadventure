@@ -49,6 +49,7 @@ export const ENABLE_CHAT = true;
 export const ENABLE_CHAT_UPLOAD = true;
 export const ENABLE_CHAT_ONLINE_LIST = true;
 export const ENABLE_CHAT_DISCONNECTED_LIST = true;
+export const ENABLE_TILE_SNAP = false;
 export const DEFAULT_WOKA_NAME = "";
 export const DEFAULT_WOKA_TEXTURE = "";
 export const SKIP_CAMERA_PAGE = false;
@@ -168,6 +169,7 @@ export const FRONT_ENVIRONMENT_VARIABLES: FrontConfigurationInterface = {
     ENABLE_CHAT,
     ENABLE_CHAT_ONLINE_LIST,
     ENABLE_CHAT_DISCONNECTED_LIST,
+    ENABLE_TILE_SNAP,
     MATRIX_ADMIN_USER,
     MATRIX_DOMAIN,
     ENABLE_SAY,

@@ -9,7 +9,7 @@ import { Character } from "../Entity/Character";
 
 import { userMovingStore } from "../../Stores/GameStore";
 import { followStateStore, followRoleStore, followUsersStore } from "../../Stores/FollowStore";
-import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
+import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { visibilityStore } from "../../Stores/VisibilityStore";
 import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctions";
 import { localUserStore } from "../../Connection/LocalUserStore";
@@ -184,7 +184,7 @@ export class Player extends Character {
      * Any new movement key cancels the slide (see moveUser).
      */
     private snapToTileCenter(): void {
-        if (get(followStateStore) !== "off" || this.isFollowingPath()) {
+        if (!ENABLE_TILE_SNAP || get(followStateStore) !== "off" || this.isFollowingPath()) {
             return;
         }
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();

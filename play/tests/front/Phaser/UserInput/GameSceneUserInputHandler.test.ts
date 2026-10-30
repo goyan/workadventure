@@ -12,6 +12,14 @@ import { WOKA_SPEED } from "../../../../src/front/Enum/EnvironmentVariable";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 
+const tileSnap = vi.hoisted(() => ({ enabled: false }));
+vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    get ENABLE_TILE_SNAP() {
+        return tileSnap.enabled;
+    },
+}));
+
 // Pointer navigation does not need character rendering or the chat and menu UI.
 vi.mock("../../../../src/front/Phaser/Player/Player", () => ({ Player: class {} }));
 vi.mock("../../../../src/front/Phaser/Entity/RemotePlayer", () => ({ RemotePlayer: class {} }));
@@ -51,6 +59,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        tileSnap.enabled = false;
         mapEditorModeStore.set(false);
         vi.mocked(isActivatable).mockReturnValue(false);
         camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
@@ -74,12 +83,27 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         vi.restoreAllMocks();
     });
 
-    it("runs to the world point under a double left-click using the existing pathfinding", () => {
+    it("runs to the exact world point under a double left-click when tile snapping is disabled", () => {
+        handler.handlePointerUpEvent(pointer(0, 1), []);
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+    });
+
+    it("runs to the center of the tile under a double left-click when tile snapping is enabled", () => {
+        tileSnap.enabled = true;
         handler.handlePointerUpEvent(pointer(0, 1), []);
         handler.handlePointerUpEvent(pointer(0, 2), []);
 
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 496, y: 656 }, true, WOKA_SPEED * 2.5]]);
         expect(camera.getWorldPoint.mock.calls).toEqual([[120, 160]]);
+    });
+
+    it("keeps the exact point for right-click navigation even when tile snapping is enabled", () => {
+        tileSnap.enabled = true;
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, undefined]]);
     });
 
     it("does not start navigation after a single left-click", () => {
