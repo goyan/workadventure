@@ -333,6 +333,8 @@ Le moteur officiel ne sauvegarde pas une échelle par instance. Le front importe
 de l'image, avec sa grille de collision et sa profondeur adaptées, puis remplace cet exemplaire par les commandes
 natives. Son identifiant, son nom et ses propriétés sont conservés ; les autres exemplaires restent
 à leur taille précédente. La version redimensionnée est aussi disponible dans le catalogue des images importées.
+À l'ouverture de la carte, les catalogues sont revalidés auprès du serveur pour charger les nouveaux imports,
+même si le navigateur possède encore une ancienne copie en cache.
 Ctrl/Cmd+Z annule le remplacement en une étape ; le rétablissement le réapplique. L'image importée reste dans
 le catalogue pour que le rétablissement et les copies restent possibles.
 
