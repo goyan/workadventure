@@ -616,25 +616,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         );
     }
 
-    private isPointerInsideCanvas(pointer: Phaser.Input.Pointer): boolean {
-        if (pointer.event instanceof MouseEvent) {
-            const bounds = this.scene.game.canvas.getBoundingClientRect();
-            return (
-                pointer.event.clientX >= bounds.left &&
-                pointer.event.clientX < bounds.right &&
-                pointer.event.clientY >= bounds.top &&
-                pointer.event.clientY < bounds.bottom
-            );
-        }
-
-        return (
-            pointer.x >= 0 &&
-            pointer.y >= 0 &&
-            pointer.x < this.scene.scale.width &&
-            pointer.y < this.scene.scale.height
-        );
-    }
-
     private startFloorStroke(pointer: Phaser.Input.Pointer, prefab: EntityPrefab): void {
         const tileIndex = this.scene.getGameMapFrontWrapper().getTileIndexAt(pointer.worldX, pointer.worldY);
         this.floorStroke = {

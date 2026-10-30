@@ -204,3 +204,20 @@ Les dalles restent des entités WAM : les commandes natives assurent leur sauveg
 joueurs et l'annulation, une dalle à la fois. Les meubles et murs gardent leur placement au clic.
 Deux éditeurs qui peignent simultanément la même case peuvent encore créer un doublon avant de recevoir les
 commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
+
+## Effacer les sols et murs dans l'éditeur
+
+En mode poubelle, maintenir le bouton gauche dans le canvas et déplacer la souris efface les entités
+éditables portant le tag `Sols` ou `Murs`. Le segment entre deux positions est pris en compte, y compris
+les dalles intermédiaires et les exemplaires superposés. Les dimensions réelles des sprites déterminent
+le rectangle traversé, indépendamment de leur collection.
+
+Un clic sans mouvement garde la suppression au relâchement de l'objet ou de la zone pointée.
+Pendant un glisser, les meubles et les zones restent en place. Relâcher le bouton, sortir du canvas,
+perdre le focus, changer d'outil ou appuyer sur Échap termine le geste ; il faut presser à nouveau
+dans le canvas pour reprendre.
+
+Les commandes WAM natives assurent la sauvegarde, la diffusion et l'annulation par entité.
+L'annulation d'une suppression conserve désormais les dimensions avant de détruire l'instance,
+ce qui permet de restaurer son identifiant, sa position et ses propriétés. Les calques de fond TMJ
+restent gérés dans Tiled.
