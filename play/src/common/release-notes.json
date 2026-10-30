@@ -1,5 +1,82 @@
 [
     {
+        "id": "a399745c180376242f44c14d2cf248a60433f690",
+        "date": "2026-10-30T21:50:14+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "système de murs v2 : murs continus, raccords d'angle, T et croix, face de bout, sols unis ombrés sous les murs"
+    },
+    {
+        "id": "1aa58356f14554dccdb07497d44cc88e8b398365",
+        "date": "2026-10-30T21:50:14+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "outil Carte pour dessiner sols et murs, sur toutes les salles"
+    },
+    {
+        "id": "a274d7958f5d8417f6274d63a9f83b2c045a8c6e",
+        "date": "2026-10-30T20:27:48+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "afficher l'indisponibilité de l'enregistrement"
+    },
+    {
+        "id": "4030619dbcb460defe89d505792d12a7c78642d0",
+        "date": "2026-10-30T19:07:50+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "retrouver les images redimensionnées après rechargement"
+    },
+    {
+        "id": "c6a7034f65919d27d7d46f7a5858492139341f87",
+        "date": "2026-10-30T18:30:41+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "retirer les poignées quand une image est supprimée"
+    },
+    {
+        "id": "1ca5c2375fcb2d651910614ef8c157b31a328a39",
+        "date": "2026-10-30T18:30:41+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "conserver un seul geste de redimensionnement"
+    },
+    {
+        "id": "47a19fdc8276512d752680db157c8a2b0a9bc34c",
+        "date": "2026-10-30T18:30:41+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "redimensionner les images à la souris"
+    },
+    {
+        "id": "86e4a2665b25105bfcfadf5c03b1edaf7dd8ea2c",
+        "date": "2026-10-30T18:03:14+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "redimensionner les images importées posées au sol"
+    },
+    {
+        "id": "3ab82f455967f7963248cec3b302e8476efccfec",
+        "date": "2026-10-30T17:33:38+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "copies et motifs sans zones"
+    },
+    {
+        "id": "7cac786c0a2089e18e99111d4ff91ff0967ec047",
+        "date": "2026-10-30T17:10:27+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "le mode Coller devient un tampon"
+    },
+    {
+        "id": "cffd15180f6e82cab7d04015ea1d91dd52cd7e9e",
+        "date": "2026-10-30T17:06:46+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "décrire les mises à jour et afficher les nouveautés dans Outils"
+    },
+    {
         "id": "e72ba2debe8bd1de403787d557658b32f92c0b0b",
         "date": "2026-10-30T16:34:39+01:00",
         "author": "Hervé Meunier",
