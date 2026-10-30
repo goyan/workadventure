@@ -138,6 +138,21 @@ describe("Direct placed image resizing", () => {
         expect(f.onResize).toHaveBeenCalledWith(expect.objectContaining({ x: 200, y: 150, width: 200, height: 200 }));
     });
 
+    it("keeps the active gesture when another pointer tries to grab a second corner", () => {
+        const f = fixture();
+        f.squares[3].emit(Phaser.Input.Events.DRAG_START, f.pointer);
+        const otherPointer = mock<Phaser.Input.Pointer>({ id: 1, x: 100, y: 100 });
+        otherPointer.leftButtonDown.mockReturnValue(true);
+        f.squares[0].emit(Phaser.Input.Events.DRAG_START, otherPointer);
+        f.squares[0].emit(Phaser.Input.Events.DRAG_END, otherPointer);
+        f.squares[3].emit(Phaser.Input.Events.DRAG, f.pointer);
+        f.squares[3].emit(Phaser.Input.Events.DRAG_END, f.pointer);
+        expect(f.onResize).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ x: 200, y: 150, width: 200, height: 100 }),
+        );
+        expect(f.entity.alpha).toBe(0.8);
+    });
+
     it("uses the real Phaser pointer dispatcher to prevent a handle click reaching placement or the image", () => {
         const f = fixture();
         const placementDown = vi.fn();
