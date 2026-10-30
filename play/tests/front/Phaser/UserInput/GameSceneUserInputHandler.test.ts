@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
+import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraManager";
 import type { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/ActivatablesManager";
@@ -61,6 +62,9 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         scene.Map = mock<Phaser.Tilemaps.Tilemap>({ widthInPixels: 1504, heightInPixels: 1184 });
         scene.getCameraManager.mockReturnValue(cameraManager);
         scene.getActivatablesManager.mockReturnValue(activatablesManager);
+        scene.getGameMapFrontWrapper.mockReturnValue(
+            mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
+        );
         scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
         handler = new GameSceneUserInputHandler(scene);
     });
@@ -74,7 +78,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         handler.handlePointerUpEvent(pointer(0, 1), []);
         handler.handlePointerUpEvent(pointer(0, 2), []);
 
-        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, WOKA_SPEED * 2.5]]);
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 496, y: 656 }, true, WOKA_SPEED * 2.5]]);
         expect(camera.getWorldPoint.mock.calls).toEqual([[120, 160]]);
     });
 

@@ -13,6 +13,7 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { visibilityStore } from "../../Stores/VisibilityStore";
 import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctions";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 
 export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
@@ -171,10 +172,45 @@ export class Player extends Character {
             }
             this.stop();
             emit();
+            this.snapToTileCenter();
         }
 
         // Update state
         userMovingStore.set(moving);
+    }
+
+    /**
+     * Slides the avatar to the center of the tile under its feet once it stops.
+     * Any new movement key cancels the slide (see moveUser).
+     */
+    private snapToTileCenter(): void {
+        if (get(followStateStore) !== "off" || this.isFollowingPath()) {
+            return;
+        }
+        const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
+        const { width, height } = gameMapFrontWrapper.getTileDimensions();
+        const body = this.getBody();
+        const geometry = {
+            tileWidth: width,
+            tileHeight: height,
+            bodyHeight: body.height,
+            bodyOffsetY: body.offset.y,
+        };
+        const target = computeTileSnapTarget(this.x, this.y, geometry);
+        if (!target) {
+            return;
+        }
+
+        const { tileX, tileY } = getFeetTile(this.x, this.y, geometry);
+        const collisionGrid = gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false });
+        if (collisionGrid[tileY]?.[tileX] !== 0) {
+            return;
+        }
+        const path = [target];
+        if (!gameMapFrontWrapper.isTileCollisionPathClear(this, path)) {
+            return;
+        }
+        this.setPathToFollow(path, WOKA_SPEED).catch((e) => console.warn(e));
     }
 
     private computeFollowMovement(): number[] {
