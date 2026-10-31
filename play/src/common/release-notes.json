@@ -1,5 +1,12 @@
 [
     {
+        "id": "b706894ad8ba0b66a50f25560db05f6ca8a0a906",
+        "date": "2026-10-31T13:41:43+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep the pathfinder to the first row of vertical doors"
+    },
+    {
         "id": "2c2ebe0c4c379d209185fb57cc2b09bab63012ab",
         "date": "2026-10-31T13:24:09+01:00",
         "author": "Antoine Hésèque",
