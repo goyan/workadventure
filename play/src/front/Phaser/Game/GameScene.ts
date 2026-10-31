@@ -254,6 +254,8 @@ import { ScriptingEventsManager } from "./ScriptingEventsManager";
 import { FollowManager } from "./FollowManager";
 import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
+import { DuckRushManager } from "./DuckRushManager";
+import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
 import { UsernameDomLayer } from "./UsernameDomLayer";
@@ -392,6 +394,8 @@ export class GameScene extends DirtyScene {
     private followManager!: FollowManager;
     public inviteManager?: InviteManager;
     private locateManager!: LocateManager;
+    private duckRushManager: DuckRushManager | undefined;
+    private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
     private proximitySpaceManager: ProximitySpaceManager | undefined;
@@ -513,6 +517,7 @@ export class GameScene extends DirtyScene {
         this.load.image("iconSpeakerMegaphone", "/resources/icons/icon_speaker.png");
         this.load.image("iconSilent", "/resources/icons/icon_silent.png");
         this.load.image("iconMeeting", "/resources/icons/icon_meeting.png");
+        DuckRushManager.preload(this);
 
         // Load the selected bubble sound from bubbleSoundStore
         const selectedBubbleSound = get(bubbleSoundStore);
@@ -1376,6 +1381,8 @@ export class GameScene extends DirtyScene {
 
         // Cleanup locate manager
         this.locateManager?.destroy();
+        this.konamiCodeDetector?.destroy();
+        this.duckRushManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
         gameSceneStore.set(undefined);
@@ -1390,7 +1397,7 @@ export class GameScene extends DirtyScene {
      * @param time
      * @param delta The delta time in ms since the last frame. This is a smoothed and capped value based on the FPS rate.
      */
-    /** The doors of the map layer open when a player, or a companion, comes near. */
+    /** The doors of the map layer open when a player, a companion or a duck comes near. */
     private updateDoors(time: number): void {
         this.doorAnimator ??= new DoorAnimator(
             this,
@@ -1407,6 +1414,7 @@ export class GameScene extends DirtyScene {
             characters.push(player);
             if (player.companion) characters.push(player.companion);
         }
+        this.duckRushManager?.forEachDoorOpener((position) => characters.push(position));
         this.doorAnimator.update(time, characters, this.CurrentPlayer);
     }
 
@@ -1888,6 +1896,17 @@ export class GameScene extends DirtyScene {
     }
 
     public getPathfindingManager(): PathfindingManager {
+        return this.pathfindingManager;
+    }
+
+    /**
+     * The pathfinding manager, fed with the current collisions and walls of the map.
+     */
+    public getUpToDatePathfindingManager(): PathfindingManager {
+        this.pathfindingManager.setCollisionGrid(
+            this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
+        );
+        this.pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
         return this.pathfindingManager;
     }
 
@@ -2382,6 +2401,10 @@ export class GameScene extends DirtyScene {
                 this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y);
 
                 this.emoteManager = new EmoteManager(this, this.connection);
+                this.duckRushManager = new DuckRushManager(this);
+                this.konamiCodeDetector = new KonamiCodeDetector(() =>
+                    this.duckRushManager?.start(this.CurrentPlayer.x, this.CurrentPlayer.y),
+                );
                 this.entityAudioManager = new EntityAudioManager(this, this.connection);
                 this.CurrentPlayer.on(hasMovedEventName, () => this.entityAudioManager.onPlayerMoved());
 
