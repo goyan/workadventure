@@ -352,7 +352,13 @@ export class Player extends Character {
     public teleportTo(x: number, y: number): void {
         this.setPosition(x, y);
         this.finishFollowingPath(true);
-        this.emit(hasMovedEventName, { moving: false, direction: this._lastDirection, x: this.x, y: this.y });
+        this.emit(hasMovedEventName, {
+            moving: false,
+            running: false,
+            direction: this._lastDirection,
+            x: this.x,
+            y: this.y,
+        });
         this.scene.markDirty();
     }
 

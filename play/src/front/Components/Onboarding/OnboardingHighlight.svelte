@@ -386,6 +386,7 @@
                                         y: simulatedRemotePlayer.y,
                                         direction: PositionMessage_Direction.DOWN,
                                         moving: false,
+                                        running: false,
                                     });
                                     // Play the 👋 emoji
                                     simulatedRemotePlayer?.playEmote("👋");
@@ -539,6 +540,7 @@
                         y: currentPlayer.y - 32,
                         direction: PositionMessage_Direction.DOWN,
                         moving: false,
+                        running: false,
                     });
                 })
                 .catch((error) => {
