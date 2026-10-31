@@ -399,6 +399,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "如何使用？",
         description: "在地圖上繪製一個區域以建立新區域。",
+        create: "在地板上繪製矩形即可建立區域，區域會貼合房間大小。",
+        open: "點擊區域即可檢視並修改其內容。",
+        remove: "可透過「刪除區域」按鈕或橡皮擦刪除區域。",
     },
     mapLayer: {
         groups: {

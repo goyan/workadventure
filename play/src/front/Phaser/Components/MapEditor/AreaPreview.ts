@@ -325,15 +325,11 @@ export class AreaPreview extends Rectangle {
         });
         this.on(Phaser.Input.Events.DRAG, (pointer: Pointer, dragX: number, dragY: number) => {
             if (pointer.isDown && this.selected && !this.squareSelected) {
-                if (this.shiftKey?.isDown) {
-                    const topLeftX = Math.floor((dragX - this.displayWidth * 0.5) / 32) * 32;
-                    const topLeftY = Math.floor((dragY - this.displayHeight * 0.5) / 32) * 32;
-                    this.x = Math.round(topLeftX + this.displayWidth * 0.5);
-                    this.y = Math.round(topLeftY + this.displayHeight * 0.5);
-                } else {
-                    this.x = Math.round(dragX);
-                    this.y = Math.round(dragY);
-                }
+                // Areas always stay on the tile grid.
+                const topLeftX = Math.round((dragX - this.displayWidth * 0.5) / 32) * 32;
+                const topLeftY = Math.round((dragY - this.displayHeight * 0.5) / 32) * 32;
+                this.x = Math.round(topLeftX + this.displayWidth * 0.5);
+                this.y = Math.round(topLeftY + this.displayHeight * 0.5);
                 this.updateSquaresPositions();
                 this.moved = true;
                 if (this.scene instanceof GameScene) {
@@ -379,13 +375,8 @@ export class AreaPreview extends Rectangle {
                 const oldX = square.x;
                 const oldY = square.y;
 
-                if (this.shiftKey?.isDown) {
-                    square.x = Math.floor(dragX / 32) * 32;
-                    square.y = Math.floor(dragY / 32) * 32;
-                } else {
-                    square.x = dragX;
-                    square.y = dragY;
-                }
+                square.x = Math.round(dragX / 32) * 32;
+                square.y = Math.round(dragY / 32) * 32;
 
                 let newWidth = 0;
                 let newHeight = 0;

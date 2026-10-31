@@ -408,6 +408,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Hoe werkt het?",
         description: "Teken een zone op de kaart om een nieuwe te maken.",
+        create: "Teken een rechthoek op de vloer om een zone te maken: die past zich aan de grootte van de ruimte aan.",
+        open: "Klik op een zone om de inhoud te bekijken en te wijzigen.",
+        remove: "Verwijder een zone met de knop Gebied verwijderen of met de gum.",
     },
     mapLayer: {
         groups: {

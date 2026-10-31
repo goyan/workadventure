@@ -406,6 +406,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Kak to funkcioněrujo?",
         description: "Cyrkajśo wobcerk na kórśe, aby nowy napórał.",
+        create: "Nakreslij pśirunowanje na slězinje, aby zónu napórał: wóna se wjelikosći rumnosći pśiměrijo.",
+        open: "Klikni na zónu, aby jeje wopśimjeśe wiźeł a změnił.",
+        remove: "Wulašuj zónu z tastu „Wulašowaś wobcerk“ abo z gumju.",
     },
     mapLayer: {
         groups: {

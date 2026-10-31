@@ -406,6 +406,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Com funciona?",
         description: "Dibuixeu una zona al mapa per crear-ne una de nova.",
+        create: "Dibuixeu un rectangle a terra per crear una zona: s'adapta a la mida de la sala.",
+        open: "Feu clic en una zona per veure i modificar-ne el contingut.",
+        remove: "Suprimiu una zona amb el botó Suprimeix l'àrea o amb la goma.",
     },
     mapLayer: {
         groups: {

@@ -25,6 +25,9 @@ import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCo
 import ActionPopupOnPersonalAreaWithEntities from "../../../../Components/MapEditor/ActionPopupOnPersonalAreaWithEntities.svelte";
 import { SpeechDomElement } from "../../../Entity/SpeechDomElement";
 import { LL } from "../../../../../i18n/i18n-svelte";
+import { MAP_LAYER_TILE_SIZE } from "../MapLayer/MapLayerCatalog";
+import { modelFromPlacedPrefabs } from "../MapLayer/MapLayerOperations";
+import { snapRectToFloors } from "../MapLayer/MapLayerAreaSnap";
 import { MapEditorTool } from "./MapEditorTool";
 import { modals } from "@wa-modals";
 
@@ -49,6 +52,7 @@ export class AreaEditorTool extends MapEditorTool {
     private drawinNewAreaStartPos?: { x: number; y: number };
     private newAreaPreview!: Graphics;
     private areaOldPositionPreview!: Graphics;
+    private hoverMarker!: Graphics;
 
     private draggingdArea: boolean;
     private wasAreaMoved: boolean;
@@ -61,7 +65,7 @@ export class AreaEditorTool extends MapEditorTool {
 
     private selectedAreaPreviewStoreSubscriber!: Unsubscriber;
 
-    private pointerMoveEventHandler!: (pointer: Pointer) => void;
+    private pointerMoveEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
     private pointerUpEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
 
     private pointerDownEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
@@ -84,6 +88,7 @@ export class AreaEditorTool extends MapEditorTool {
 
         this.newAreaPreview = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
         this.areaOldPositionPreview = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
+        this.hoverMarker = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
 
         this.subscribeToStores();
     }
@@ -239,8 +244,8 @@ export class AreaEditorTool extends MapEditorTool {
     }
 
     private bindEventHandlers(): void {
-        this.pointerMoveEventHandler = (pointer: Pointer) => {
-            this.handlePointerMoveEvent(pointer);
+        this.pointerMoveEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
+            this.handlePointerMoveEvent(pointer, gameObjects);
         };
         this.pointerUpEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
             this.handlePointerUpEvent(pointer, gameObjects);
@@ -276,6 +281,7 @@ export class AreaEditorTool extends MapEditorTool {
     }
 
     private unbindEventHandlers(): void {
+        this.clearHoverMarker();
         this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUpOutsideEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
@@ -305,6 +311,7 @@ export class AreaEditorTool extends MapEditorTool {
     };
 
     private pointerOutEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {
+        this.clearHoverMarker();
         if (!this.active) {
             return;
         }
@@ -340,14 +347,15 @@ export class AreaEditorTool extends MapEditorTool {
             this.wasAreaMoved = false;
 
             if (mode === "ADD") {
+                this.clearHoverMarker();
                 this.drawingNewArea = true;
-                this.drawinNewAreaStartPos = { x: pointer.worldX, y: pointer.worldY };
+                this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
             if (mode === "EDIT") {
                 this.changeAreaMode("ADD");
                 this.drawingNewArea = true;
-                this.drawinNewAreaStartPos = { x: pointer.worldX, y: pointer.worldY };
+                this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
             return;
@@ -442,13 +450,48 @@ export class AreaEditorTool extends MapEditorTool {
         }
     }
 
-    private handlePointerMoveEvent(pointer: Pointer): void {
+    private handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
+        this.updateHoverMarker(pointer, gameObjects);
         if (this.drawingNewArea && this.drawinNewAreaStartPos) {
             this.drawNewArea(pointer);
         }
         if (this.draggingdArea) {
             this.wasAreaMoved = true;
         }
+    }
+
+    // Same dot as the wall tool: shows the tile the first click of a new area will start from.
+    // Over an existing area a click selects it instead of starting a new one: no marker, and a pointer cursor.
+    private updateHoverMarker(pointer: Pointer, gameObjects: GameObject[]): void {
+        if (
+            !this.active ||
+            this.drawingNewArea ||
+            get(mapEditorAreaEraserStore) ||
+            get(mapEditorAreaModeStore) !== "ADD"
+        ) {
+            this.clearHoverMarker();
+            return;
+        }
+        if (gameObjects.some((obj) => this.isAreaPreview(obj))) {
+            this.clearHoverMarker();
+            this.scene.input.setDefaultCursor("pointer");
+            return;
+        }
+        this.scene.input.setDefaultCursor("crosshair");
+        const corner = this.snapToCorner(pointer.worldX, pointer.worldY);
+        this.hoverMarker.clear().fillStyle(0xffffff, 0.8).fillCircle(corner.x, corner.y, 4);
+        this.scene.markDirty();
+    }
+
+    // The corners of the tiles are the only places where an area can start or end.
+    private snapToCorner(worldX: number, worldY: number): { x: number; y: number } {
+        const size = MAP_LAYER_TILE_SIZE;
+        return { x: Math.round(worldX / size) * size, y: Math.round(worldY / size) * size };
+    }
+
+    private clearHoverMarker(): void {
+        this.hoverMarker.clear();
+        this.scene.markDirty();
     }
 
     private drawNewArea(pointer: Pointer): void {
@@ -475,24 +518,28 @@ export class AreaEditorTool extends MapEditorTool {
         if (!this.drawinNewAreaStartPos) {
             return { x: 0, y: 0, width: 0, height: 0 };
         }
-        const width = Math.abs(pointer.worldX - this.drawinNewAreaStartPos.x);
-        const height = Math.abs(pointer.worldY - this.drawinNewAreaStartPos.y);
-        const x = Math.min(this.drawinNewAreaStartPos.x, pointer.worldX);
-        const y = Math.min(this.drawinNewAreaStartPos.y, pointer.worldY);
-        if (this.shiftKey?.isDown) {
-            return {
-                x: Math.floor(x / 32) * 32,
-                y: Math.floor(y / 32) * 32,
-                width: Math.floor(width / 32) * 32 + 32,
-                height: Math.floor(height / 32) * 32 + 32,
-            };
+        const end = this.snapToCorner(pointer.worldX, pointer.worldY);
+        const width = Math.abs(end.x - this.drawinNewAreaStartPos.x);
+        const height = Math.abs(end.y - this.drawinNewAreaStartPos.y);
+        const x = Math.min(this.drawinNewAreaStartPos.x, end.x);
+        const y = Math.min(this.drawinNewAreaStartPos.y, end.y);
+        // Areas always snap to the floors of the map layer (the size of a room), or to the grid without any floor.
+        return this.snapToFloors({ x, y, width, height });
+    }
+
+    private snapToFloors(rect: { x: number; y: number; width: number; height: number }): {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    } {
+        const items: { x: number; y: number; collectionName: string; prefabId: string }[] = [];
+        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+            const prefab = entity.getPrefab();
+            items.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
         }
-        return {
-            x,
-            y,
-            width,
-            height,
-        };
+        // Outside of the floors there is nothing to snap to: an empty rectangle is not created.
+        return snapRectToFloors(modelFromPlacedPrefabs(items), rect) ?? { x: rect.x, y: rect.y, width: 0, height: 0 };
     }
 
     private getAreaEditorToolObjectsFromGameObjects(gameObjects: GameObject[]): (AreaPreview | SizeAlteringSquare)[] {

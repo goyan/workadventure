@@ -404,6 +404,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Cách hoạt động?",
         description: "Vẽ một vùng trên bản đồ để tạo vùng mới.",
+        create: "Vẽ một hình chữ nhật trên sàn để tạo vùng: vùng sẽ khớp với kích thước của phòng.",
+        open: "Nhấp vào một vùng để xem và chỉnh sửa nội dung.",
+        remove: "Xóa vùng bằng nút Xóa khu vực hoặc bằng cục tẩy.",
     },
     mapLayer: {
         groups: {

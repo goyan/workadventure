@@ -401,6 +401,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "كيف يعمل؟", // How does it work?
         description: "ارسم منطقة على الخريطة لإنشاء منطقة جديدة.", // Draw an area on the map to create a new one.
+        create: "ارسم مستطيلاً على الأرضية لإنشاء منطقة: تتكيف مع حجم الغرفة.",
+        open: "انقر على منطقة لعرض محتواها وتعديله.",
+        remove: "احذف منطقة باستخدام زر حذف المنطقة أو الممحاة.",
     },
     mapLayer: {
         groups: {

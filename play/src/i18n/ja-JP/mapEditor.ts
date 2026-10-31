@@ -405,6 +405,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "どのように機能しますか？",
         description: "マップ上にゾーンを描き、新しいゾーンを作成します。",
+        create: "床の上に長方形を描くとエリアが作成され、部屋の大きさに合わせられます。",
+        open: "エリアをクリックすると、その内容を確認・編集できます。",
+        remove: "エリアは「エリアを削除」ボタンまたは消しゴムで削除できます。",
     },
     mapLayer: {
         groups: {
