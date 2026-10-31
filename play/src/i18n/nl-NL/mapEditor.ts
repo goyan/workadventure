@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Entiteit editor tool",
         tileEditor: "Tegel editor tool",
         configureMyRoom: "Configureer mijn kamer",
-        trashEditor: "Prullenbak",
         exploreTheRoom: "Verken de kamer",
         mapLayerEditor: "Kaartgereedschap (vloeren en muren)",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Verken de kamer geactiveerd",
         areaEditorActivated: "Gebied editor geactiveerd",
         entityEditorActivated: "Entiteit editor geactiveerd",
-        trashEditorActivated: "Prullenbak editor geactiveerd",
         configureMyRoomActivated: "Configureer mijn kamer geactiveerd",
     },
     selection: {
@@ -385,6 +383,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "Geen eigenschappen gedefinieerd",
     },
     areaEditor: {
+        eraser: "Gum",
+        eraserHint: "Klik op een zone om deze te verwijderen.",
+        deleteButton: "Zone verwijderen",
         editInstructions: "Klik op een gebied om de eigenschappen te wijzigen.",
         nameLabel: "Naam",
         nameLabelPlaceholder: "MijnGebied",
@@ -457,6 +458,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "Gum",
+        eraserHint: "Klik of sleep over objecten om ze te verwijderen.",
         resize: {
             title: "Afbeeldingsgrootte",
             width: "Breedte (px)",
@@ -478,9 +481,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "Zoeken",
             backToSelectObject: "Terug om object te selecteren",
-        },
-        trashTool: {
-            delete: "Klik op het object om het te verwijderen!",
         },
         deleteButton: "Verwijderen",
         testInteractionButton: "Test Interactie",

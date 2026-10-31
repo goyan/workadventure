@@ -111,6 +111,11 @@ export class Player extends Character {
         });
     }
 
+    /** Whether the avatar is walking a computed path, which moves it directly instead of by its velocity. */
+    public isWalkingPath(): boolean {
+        return this.pathToFollow !== undefined;
+    }
+
     /** The waypoints still ahead on the current walk, the last one being the destination (empty when not walking). */
     public getPathAhead(): { x: number; y: number }[] {
         // The first waypoint is where the current segment started, behind the avatar.

@@ -30,11 +30,11 @@ import { EntityEditorTool } from "./Tools/EntityEditorTool";
 import { WAMSettingsEditorTool } from "./Tools/WAMSettingsEditorTool";
 import type { FrontCommandInterface } from "./Commands/FrontCommandInterface";
 import type { FrontCommand } from "./Commands/FrontCommand";
-import { TrashEditorTool } from "./Tools/TrashEditorTool";
 import { ExplorerTool } from "./Tools/ExplorerTool";
 import { CloseTool } from "./Tools/CloseTool";
 import { CreateEntityFrontCommand } from "./Commands/Entity/CreateEntityFrontCommand";
 import { UpdateAreaFrontCommand } from "./Commands/Area/UpdateAreaFrontCommand";
+import { isMapLayerPrefab } from "./MapLayer/MapLayerCatalog";
 import { SelectionEditorTool } from "./Tools/SelectionEditorTool";
 
 export enum EditorToolName {
@@ -42,7 +42,6 @@ export enum EditorToolName {
     MapLayerEditor = "MapLayerEditor",
     EntityEditor = "EntityEditor",
     WAMSettingsEditor = "WAMSettingsEditor",
-    TrashEditor = "TrashEditor",
     SelectionEditor = "SelectionEditor",
     ExploreTheRoom = "ExploreTheRoom",
     CloseMapEditor = "CloseMapEditor",
@@ -135,7 +134,6 @@ export class MapEditorModeManager {
             [EditorToolName.EntityEditor]: new EntityEditorTool(this),
             [EditorToolName.MapLayerEditor]: new MapLayerEditorTool(this),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
-            [EditorToolName.TrashEditor]: new TrashEditorTool(this, areaEditorTool),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
             [EditorToolName.ExploreTheRoom]: new ExplorerTool(this.scene),
             [EditorToolName.CloseMapEditor]: new CloseTool(),
@@ -538,11 +536,6 @@ export class MapEditorModeManager {
                 this.equipTool(EditorToolName.WAMSettingsEditor);
                 break;
             }
-            case "5": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.TrashEditor);
-                break;
-            }
             case "6": {
                 if (!mapEditorModeActivated) break;
                 this.equipTool(EditorToolName.CloseMapEditor);
@@ -748,13 +741,39 @@ export class MapEditorModeManager {
      */
     private clearToNeutralState(): void {
         this.currentlyActiveTool?.clear();
+        this.applyEntitiesDimming(undefined);
     }
 
     /**
      * Show things necessary for tool's usage
      */
     private activateTool(): void {
+        this.applyEntitiesDimming(this.activeTool);
         this.currentlyActiveTool?.activate();
+    }
+
+    /**
+     * Each tool works on its own kind of content: the others are faded (objects, floors and walls) or hidden (areas,
+     * handled by the area tool itself).
+     * - Areas: everything else is faded, the areas are shown.
+     * - Map (floors and walls): objects are faded, areas are hidden.
+     * - Objects: floors and walls stay fully visible, areas are hidden.
+     */
+    private applyEntitiesDimming(tool: EditorToolName | undefined): void {
+        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
+        switch (tool) {
+            case EditorToolName.AreaEditor:
+                entitiesManager.setEntitiesDimming(() => true);
+                break;
+            case EditorToolName.MapLayerEditor:
+                entitiesManager.setEntitiesDimming((entity) => {
+                    const prefab = entity.getPrefab();
+                    return !isMapLayerPrefab(prefab.collectionName, prefab.id);
+                });
+                break;
+            default:
+                entitiesManager.setEntitiesDimming(undefined);
+        }
     }
 
     private subscribeToStores(): void {

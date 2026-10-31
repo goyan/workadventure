@@ -23,8 +23,9 @@ class MapEditor {
         await page.locator("section.side-bar-container .side-bar .tool-button button#ExploreTheRoom").first().click();
     }
 
-    async openTrashEditor(page: Page) {
-        await page.locator("section.side-bar-container .side-bar .tool-button button#TrashEditor").first().click();
+    async openEntityEraser(page: Page) {
+        await this.openEntityEditor(page);
+        await page.getByTestId("entityEraserButton").click();
     }
 }
 

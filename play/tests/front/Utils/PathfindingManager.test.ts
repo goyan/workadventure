@@ -1,282 +1,272 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
-// Mock EasyStar to avoid external dependencies
-const { mockEasyStar, EasyStarConstructor } = vi.hoisted(() => {
-    const mockEasyStar = {
-        findPath: vi.fn(),
-        calculate: vi.fn(),
-        cancelPath: vi.fn(),
-        setGrid: vi.fn(),
-        setAcceptableTiles: vi.fn(),
-        enableDiagonals: vi.fn(),
-        disableCornerCutting: vi.fn(),
-        setTileCost: vi.fn(),
-        setIterationsPerCalculation: vi.fn(),
-    };
-
-    const EasyStarConstructor = vi.fn(function EasyStarMock() {
-        return mockEasyStar;
-    });
-
-    return { mockEasyStar, EasyStarConstructor };
-});
-
-vi.mock("easystarjs", () => ({
-    js: EasyStarConstructor,
-}));
-
-// Mock character constants
+// The body of the character: 16 px wide, its feet 16 px under the center of the avatar.
 vi.mock("../../../src/front/Phaser/Entity/Character", () => ({
     CHARACTER_BODY_HEIGHT: 16,
     CHARACTER_BODY_OFFSET_X: 0,
-    CHARACTER_BODY_OFFSET_Y: 0,
-}));
-
-// Mock math utils
-vi.mock("@workadventure/math-utils", () => ({
-    MathUtils: {
-        distanceBetween: vi.fn((a, b) => Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2)),
-        isBetween: vi.fn((value, min, max) => value >= min && value < max),
-    },
+    CHARACTER_BODY_OFFSET_Y: 8,
 }));
 
 import { PathfindingManager } from "../../../src/front/Utils/PathfindingManager";
+import { TileBarriers } from "../../../src/front/Utils/TileBarriers";
+
+const tile = { width: 32, height: 32 };
+const centerOf = (x: number, y: number) => ({ x: x * 32 + 16, y: y * 32 + 16 });
+/** Where the avatar is when its feet are at the center of a tile: it is positioned by its center, 16 px higher. */
+const avatarAt = (x: number, y: number) => ({ x: x * 32 + 16, y: y * 32 });
+const emptyGrid = (columns: number, rows: number): number[][] =>
+    Array.from({ length: rows }, () => Array<number>(columns).fill(0));
+
+/** A closed room of 3 x 3 tiles at (2, 2), walled on its four sides. */
+function closedRoom(): TileBarriers {
+    const barriers = new TileBarriers();
+    for (let x = 2; x < 5; x += 1) {
+        barriers.addSouthBorder(x, 1); // north side
+        barriers.addSouthBorder(x, 4); // south side
+    }
+    for (let y = 2; y < 5; y += 1) {
+        barriers.addWestBorder(2, y); // west side
+        barriers.addWestBorder(5, y); // east side
+    }
+    return barriers;
+}
 
 describe("PathfindingManager", () => {
-    let pathfindingManager: PathfindingManager;
-    let mockGrid: number[][];
-    const tileDimensions = { width: 32, height: 32 };
+    it("finds a straight way on an empty map, from the avatar to the point", async () => {
+        const manager = new PathfindingManager(emptyGrid(10, 10), tile);
 
-    beforeEach(() => {
-        vi.clearAllMocks();
-        // Reset the mock implementation
-        mockEasyStar.findPath.mockReturnValue(1); // Return instance ID
+        const path = await manager.findPathFromGameCoordinates(centerOf(1, 1), centerOf(6, 1));
 
-        // Create a simple 5x5 grid with some obstacles
-        mockGrid = [
-            [0, 0, 0, 0, 0], // 0 = walkable
-            [0, 1, 1, 1, 0], // 1 = collider
-            [0, 0, 0, 1, 0],
-            [0, 1, 0, 1, 0],
-            [0, 0, 0, 0, 0],
-        ];
-        pathfindingManager = new PathfindingManager(mockGrid, tileDimensions);
+        expect(path.length).toBeGreaterThan(1);
+        expect(path[0].x).toBe(centerOf(1, 1).x);
+        expect(path[path.length - 1]).toEqual(centerOf(6, 1));
     });
 
-    afterEach(() => {
-        pathfindingManager.cleanup();
-        vi.clearAllMocks();
+    it("walks around the tiles that are blocked", async () => {
+        const grid = emptyGrid(7, 5);
+        for (let y = 0; y < 4; y += 1) {
+            grid[y][3] = 1;
+        }
+        const manager = new PathfindingManager(grid, tile);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(1, 1), centerOf(5, 1));
+
+        expect(path.length).toBeGreaterThan(2);
+        expect(path.some((step) => step.y > 4 * 32)).toBe(true);
     });
 
-    describe("Basic pathfinding functionality", () => {
-        it("should find a simple path between two walkable points", async () => {
-            const start = { x: 16, y: 16 }; // Center of tile (0,0)
-            const end = { x: 16, y: 144 }; // Center of tile (0,4)
+    it("walks around a thin wall between two free tiles", async () => {
+        // A wall between the columns 2 and 3, from the row 0 to the row 3: the way is by the row 4.
+        const barriers = new TileBarriers();
+        for (let y = 0; y < 4; y += 1) {
+            barriers.addWestBorder(3, y);
+        }
+        const manager = new PathfindingManager(emptyGrid(7, 5), tile);
+        manager.setBarriers(barriers);
 
-            // Mock a successful path result
-            mockEasyStar.findPath.mockImplementation((sx, sy, ex, ey, callback) => {
-                // Simulate async callback with a simple path
-                setTimeout(() => {
-                    callback([
-                        { x: sx, y: sy },
-                        { x: sx, y: sy + 1 },
-                        { x: ex, y: ey },
-                    ]);
-                }, 10);
-                return 1; // instance ID
-            });
+        const path = await manager.findPathFromGameCoordinates(centerOf(2, 1), centerOf(4, 1));
 
-            const path = await pathfindingManager.findPathFromGameCoordinates(start, end);
-
-            expect(path.length).toBeGreaterThan(0);
-            expect(mockEasyStar.findPath).toHaveBeenCalled();
-            expect(mockEasyStar.calculate).toHaveBeenCalled();
-        });
-
-        it("should return empty path when no path exists", async () => {
-            const start = { x: 16, y: 16 }; // Center of tile (0,0)
-            const end = { x: 144, y: 48 }; // Center of tile (4,1) - blocked by walls
-
-            // Mock no path found
-            mockEasyStar.findPath.mockImplementation((sx, sy, ex, ey, callback) => {
-                setTimeout(() => callback(null), 10);
-                return 1; // instance ID
-            });
-
-            const path = await pathfindingManager.findPathFromGameCoordinates(start, end);
-
-            expect(path).toEqual([]);
-        });
-
-        it("should find alternative path when exact target is blocked", async () => {
-            const start = { x: 16, y: 16 }; // Center of tile (0,0)
-            const end = { x: 48, y: 48 }; // Center of tile (1,1) - blocked
-
-            // Mock finding a path to alternative target
-            mockEasyStar.findPath.mockImplementation((sx, sy, ex, ey, callback) => {
-                setTimeout(() => {
-                    callback([
-                        { x: sx, y: sy },
-                        { x: ex + 32, y: ey }, // Alternative nearby position
-                    ]);
-                }, 10);
-                return 1; // instance ID
-            });
-
-            const path = await pathfindingManager.findPathFromGameCoordinates(start, end, true);
-
-            // Should find a path to a nearby walkable tile
-            expect(path.length).toBeGreaterThan(0);
-        });
+        expect(path.length).toBeGreaterThan(2);
+        expect(path.some((step) => step.y > 4 * 32)).toBe(true);
     });
 
-    describe("Multiple concurrent pathfinding requests - cancellation behavior", () => {
-        it("should cancel previous pathfinding when new request is made", async () => {
-            const start = { x: 16, y: 16 };
-            const end1 = { x: 144, y: 16 };
-            const end2 = { x: 16, y: 144 };
+    it("does not cut the corner of a wall with a diagonal move", async () => {
+        // The wall ends at the corner shared by the tiles (1, 1), (2, 1), (1, 2) and (2, 2).
+        const barriers = new TileBarriers();
+        barriers.addSouthBorder(1, 1);
+        const manager = new PathfindingManager(emptyGrid(4, 4), tile);
+        manager.setBarriers(barriers);
 
-            // First pathfinding request - should be canceled
-            mockEasyStar.findPath.mockImplementationOnce((sx, sy, ex, ey, callback) => {
-                setTimeout(() => {
-                    callback([
-                        { x: sx, y: sy },
-                        { x: ex, y: ey },
-                    ]);
-                }, 50);
-                return 1; // instance ID
-            });
+        const path = await manager.findPathFromGameCoordinates(avatarAt(1, 1), centerOf(2, 2));
 
-            // Start first request
-            const firstPromise = pathfindingManager.findPathFromGameCoordinates(start, end1);
+        // Not one step, which would go through the wall: through the free side.
+        expect(path.length).toBeGreaterThan(2);
+    });
 
-            // Second pathfinding request - should succeed
-            mockEasyStar.findPath.mockImplementationOnce((sx, sy, ex, ey, callback) => {
-                setTimeout(() => {
-                    callback([
-                        { x: sx, y: sy },
-                        { x: ex, y: ey },
-                    ]);
-                }, 10);
-                return 2; // instance ID
-            });
+    it("refuses a room closed by walls, wherever the point is in it", async () => {
+        const manager = new PathfindingManager(emptyGrid(8, 8), tile);
+        manager.setBarriers(closedRoom());
 
-            // Start second request quickly after first
-            setTimeout(() => {
-                pathfindingManager.findPathFromGameCoordinates(start, end2).catch((e) => console.error(e));
-            }, 5);
+        expect(await manager.findPathFromGameCoordinates(centerOf(0, 3), centerOf(3, 3))).toEqual([]);
+        // Even when asked for the nearest point: it is not moved to the other side of the wall.
+        expect(await manager.findPathFromGameCoordinates(centerOf(0, 3), centerOf(3, 3), true)).toEqual([]);
+    });
 
-            await firstPromise;
+    it("walks inside a closed room that the avatar is in", async () => {
+        const manager = new PathfindingManager(emptyGrid(8, 8), tile);
+        manager.setBarriers(closedRoom());
 
-            // Verify that cancelPath was called for the first request
-            expect(mockEasyStar.cancelPath).toHaveBeenCalledWith(1);
-        });
+        const path = await manager.findPathFromGameCoordinates(centerOf(2, 2), centerOf(4, 4));
 
-        it("should handle rapid successive pathfinding requests without memory leaks", async () => {
-            const start = { x: 16, y: 16 };
+        expect(path.length).toBeGreaterThan(1);
+        expect(path[path.length - 1]).toEqual(centerOf(4, 4));
+    });
 
-            // Mock quick responses
-            mockEasyStar.findPath.mockImplementation((sx, sy, ex, ey, callback) => {
-                setTimeout(
-                    () =>
-                        callback([
-                            { x: sx, y: sy },
-                            { x: ex, y: ey },
-                        ]),
-                    1,
-                );
-                return Math.random(); // different instance IDs
-            });
+    it("walks to the free tile next to an object that cannot be stood on, when asked to", async () => {
+        const grid = emptyGrid(8, 8);
+        grid[3][3] = 1; // a desk
+        const manager = new PathfindingManager(grid, tile);
 
-            // Fire multiple requests in quick succession
-            const promises: Promise<{ x: number; y: number }[]>[] = [];
-            for (let i = 0; i < 5; i++) {
-                const end = { x: 16 + i * 32, y: 144 };
-                promises.push(pathfindingManager.findPathFromGameCoordinates(start, end));
+        expect(await manager.findPathFromGameCoordinates(centerOf(0, 3), centerOf(3, 3))).toEqual([]);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(0, 3), centerOf(3, 3), true);
+        const last = path[path.length - 1];
+        expect(path.length).toBeGreaterThan(1);
+        // On the side of the avatar, next to the desk.
+        expect(Math.abs(Math.floor(last.x / 32) - 3)).toBeLessThanOrEqual(1);
+        expect(Math.abs(Math.floor(last.y / 32) - 3)).toBeLessThanOrEqual(1);
+        expect(Math.floor(last.x / 32)).toBe(2);
+    });
+
+    it("does not move an object that is against a wall to the tile on the other side of that wall", async () => {
+        const grid = emptyGrid(8, 8);
+        grid[3][3] = 1;
+        const barriers = new TileBarriers();
+        // A wall closes the room of the desk on its west side, from the row 1 to the row 5.
+        for (let y = 1; y < 6; y += 1) {
+            barriers.addWestBorder(3, y);
+            barriers.addWestBorder(5, y);
+            barriers.addSouthBorder(3, 0);
+        }
+        barriers.addSouthBorder(3, 5);
+        barriers.addSouthBorder(4, 5);
+        barriers.addSouthBorder(4, 0);
+        const manager = new PathfindingManager(grid, tile);
+        manager.setBarriers(barriers);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(0, 3), centerOf(3, 3), true);
+
+        expect(path).toEqual([]);
+    });
+
+    it("stops at the center of a tile that has a wall on one side", async () => {
+        const barriers = new TileBarriers();
+        barriers.addWestBorder(6, 1);
+        const manager = new PathfindingManager(emptyGrid(10, 10), tile);
+        manager.setBarriers(barriers);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(1, 1), { x: 6 * 32 + 3, y: 1 * 32 + 5 });
+
+        expect(path[path.length - 1]).toEqual(centerOf(6, 1));
+    });
+
+    it("keeps the exact point inside a tile with no wall, as long as the body fits in it", async () => {
+        const manager = new PathfindingManager(emptyGrid(10, 10), tile);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(1, 1), { x: 6 * 32 + 20, y: 1 * 32 + 20 });
+
+        expect(path[path.length - 1]).toEqual({ x: 6 * 32 + 20, y: 1 * 32 + 20 });
+    });
+
+    it("returns no path for the tile the avatar is in", async () => {
+        const manager = new PathfindingManager(emptyGrid(4, 4), tile);
+
+        expect(await manager.findPathFromGameCoordinates(avatarAt(1, 1), centerOf(1, 1))).toEqual([]);
+    });
+
+    it("avoids the tiles that cost more when another way exists", async () => {
+        const grid = emptyGrid(7, 3);
+        for (let x = 1; x < 6; x += 1) {
+            grid[1][x] = 2; // exit tiles, costly
+        }
+        const manager = new PathfindingManager(grid, tile);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(0, 1), centerOf(6, 1));
+
+        expect(path.every((step) => Math.floor(step.y / 32) !== 1 || step.x < 32 || step.x >= 6 * 32)).toBe(true);
+    });
+
+    it("finds its way on a large map at once", async () => {
+        const grid = emptyGrid(240, 160);
+        const manager = new PathfindingManager(grid, tile);
+        const barriers = new TileBarriers();
+        for (let y = 0; y < 150; y += 1) {
+            barriers.addWestBorder(120, y);
+        }
+        manager.setBarriers(barriers);
+
+        const startTime = Date.now();
+        const path = await manager.findPathFromGameCoordinates(centerOf(10, 10), centerOf(230, 10));
+
+        expect(path.length).toBeGreaterThan(2);
+        expect(Date.now() - startTime).toBeLessThan(2000);
+    });
+
+    it("takes the side of a wall from the feet of the avatar, not from its center", async () => {
+        // A wall under the row 2, from the column 1 to the column 5. The center of the avatar is in the row 2, but its
+        // feet, 16 px under, are in the row 3: it is in front of the wall, and the point behind it is not a step away.
+        const barriers = new TileBarriers();
+        for (let x = 1; x < 6; x += 1) {
+            barriers.addSouthBorder(x, 2);
+        }
+        const manager = new PathfindingManager(emptyGrid(8, 8), tile);
+        manager.setBarriers(barriers);
+
+        const path = await manager.findPathFromGameCoordinates({ x: 3 * 32 + 16, y: 2 * 32 + 20 }, centerOf(3, 1));
+
+        expect(path.length).toBeGreaterThan(2);
+    });
+
+    it("does not let a straight line brush a wall, even when it saves a turn", async () => {
+        // A wall between the columns 4 and 5, from the row 0 to the row 5: a line to the tile right of its end would pass
+        // at a few pixels from it.
+        const barriers = new TileBarriers(6);
+        for (let y = 0; y < 6; y += 1) {
+            barriers.addWestBorder(5, y);
+        }
+        const manager = new PathfindingManager(emptyGrid(10, 10), tile);
+        manager.setBarriers(barriers);
+
+        const path = await manager.findPathFromGameCoordinates(centerOf(4, 5), centerOf(5, 7));
+
+        // Never within the width of the body and of the wall of the line x = 5 * 32 above the end of the wall.
+        for (let index = 1; index < path.length; index += 1) {
+            const from = path[index - 1];
+            const to = path[index];
+            for (let step = 0; step <= 20; step += 1) {
+                const point = { x: from.x + ((to.x - from.x) * step) / 20, y: from.y + ((to.y - from.y) * step) / 20 };
+                if (point.y < 6 * 32) {
+                    expect(Math.abs(point.x - 5 * 32)).toBeGreaterThanOrEqual(14 - 0.001);
+                }
             }
-
-            const results = await Promise.all(promises);
-
-            // Should complete without throwing errors
-            expect(results).toHaveLength(5);
-            // cancelPath should have been called for intermediate requests
-            expect(mockEasyStar.cancelPath).toHaveBeenCalled();
-        });
+        }
     });
 
-    describe("Timeout and edge cases", () => {
-        it("should timeout when pathfinding takes too long", async () => {
-            const start = { x: 16, y: 16 };
-            const end = { x: 144, y: 144 };
+    describe("straight lines", () => {
+        it("walks a diagonal in one go instead of in stairs", async () => {
+            const manager = new PathfindingManager(emptyGrid(12, 12), tile);
 
-            // Mock a pathfinding that never calls the callback
-            mockEasyStar.findPath.mockImplementation(() => {
-                // Never call callback - simulate stuck pathfinding
-                return 1;
-            });
+            const path = await manager.findPathFromGameCoordinates(centerOf(1, 1), centerOf(9, 6));
 
-            const startTime = Date.now();
-            const path = await pathfindingManager.findPathFromGameCoordinates(start, end);
-            const endTime = Date.now();
-
-            // Should timeout and return empty path
-            expect(path).toEqual([]);
-            expect(endTime - startTime).toBeLessThan(5000); // Should timeout in under 5 seconds
-            expect(mockEasyStar.cancelPath).toHaveBeenCalledWith(1);
+            expect(path).toHaveLength(2);
         });
 
-        it("should handle same start and end positions", async () => {
-            const position = { x: 16, y: 16 };
+        it("still turns where a wall is in the way, and keeps away from its end", async () => {
+            // A wall between the columns 4 and 5, from the row 0 to the row 5.
+            const barriers = new TileBarriers(6);
+            for (let y = 0; y < 6; y += 1) {
+                barriers.addWestBorder(5, y);
+            }
+            const manager = new PathfindingManager(emptyGrid(10, 10), tile);
+            manager.setBarriers(barriers);
 
-            mockEasyStar.findPath.mockImplementation((sx, sy, ex, ey, callback) => {
-                setTimeout(() => callback([{ x: sx, y: sy }]), 10);
-                return 1;
-            });
+            const path = await manager.findPathFromGameCoordinates(centerOf(3, 2), centerOf(7, 2));
 
-            const path = await pathfindingManager.findPathFromGameCoordinates(position, position);
-
-            // Should return single point or empty path
-            expect(path.length).toBeLessThanOrEqual(1);
+            expect(path.length).toBeGreaterThan(2);
+            // Round the end of the wall, which is at the bottom of the row 5: under it, by more than the body and the wall.
+            const lowest = Math.max(...path.map((step) => step.y));
+            expect(lowest).toBeGreaterThanOrEqual(6 * 32 + 8 + 6);
         });
 
-        it("should properly cleanup when cleanup() is called", () => {
-            const start = { x: 16, y: 16 };
-            const end = { x: 144, y: 144 };
+        it("does not lead the body into a blocked tile", async () => {
+            const grid = emptyGrid(10, 10);
+            grid[3][4] = 1;
+            const manager = new PathfindingManager(grid, tile);
 
-            // Start a pathfinding operation
-            mockEasyStar.findPath.mockImplementation(() => 1);
-            pathfindingManager.findPathFromGameCoordinates(start, end).catch((e) => console.error(e));
+            const path = await manager.findPathFromGameCoordinates(centerOf(1, 3), centerOf(8, 3));
 
-            // Call cleanup
-            pathfindingManager.cleanup();
-
-            // Should have canceled the pathfinding
-            expect(mockEasyStar.cancelPath).toHaveBeenCalledWith(1);
-        });
-    });
-
-    describe("Maximum calculation limit", () => {
-        it("should stop after maximum calculations and return empty path", async () => {
-            const start = { x: 16, y: 16 };
-            const end = { x: 144, y: 144 };
-
-            let calculateCallCount = 0;
-            mockEasyStar.calculate.mockImplementation(() => {
-                calculateCallCount++;
-            });
-
-            // Mock pathfinding that never finds a path
-            mockEasyStar.findPath.mockImplementation(() => {
-                // Never call callback to simulate no path found
-                return 1;
-            });
-
-            const path = await pathfindingManager.findPathFromGameCoordinates(start, end);
-
-            // Should return empty path due to max calculations reached
-            expect(path).toEqual([]);
-            expect(calculateCallCount).toBeGreaterThan(0);
-            expect(mockEasyStar.cancelPath).toHaveBeenCalledWith(1);
+            // A straight line along the row 3 would run into the tile: the way goes round it.
+            expect(path.length).toBeGreaterThan(2);
         });
     });
 });

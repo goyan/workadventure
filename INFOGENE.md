@@ -156,9 +156,20 @@ et la poubelle n'apparaît que si `canDelete` est vrai. Le navigateur ne reçoit
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse
-de course habituelle (celle de Maj), via le pathfinding existant. Les murs et collisions
-sont pris en compte, les diagonales ne coupent pas les coins des obstacles. Si la case
-visée est bloquée, le moteur essaie les cases voisines accessibles.
+de course habituelle (celle de Maj), via le pathfinding (`Utils/PathfindingManager.ts`, A* sur les cases, sans
+dépendance). Les cases bloquées de la grille de collision et les **murs de la couche carte** sont pris en compte : ces
+murs sont des **barrières fines entre deux cases** (`Utils/TileBarriers.ts`, déduites du modèle de la couche carte par
+`MapLayerBarriers`), pas des volumes, et les cases de part et d'autre restent libres. Un mur horizontal sépare sa case de
+celle au sud ; un mur vertical sépare les cases ouest et est sur la rangée **sous** celle où il est dessiné, car sa collision
+arrête les pieds de l'avatar (le corps monte de 16 px au-dessus). La case se juge sur les **pieds** de l'avatar, pas sur son
+centre. Les diagonales ne coupent pas les coins ; un coin touché par une barrière interdit la diagonale. Le trajet est
+ensuite lissé en lignes droites, en gardant la largeur du corps et celle du mur de chaque côté.
+La case visée est atteinte exactement (au centre de la case si elle touche un mur). Une pièce fermée est **refusée**, jamais
+reportée de l'autre côté du mur. Seule une case qui ne peut pas être occupée (un objet volumineux, via `collisionGrid`) est
+remplacée par la case libre voisine la plus proche de l'avatar, sans traverser de mur.
+Pendant un trajet calculé, les colliders des murs de la couche carte ne repoussent plus l'avatar (le trajet les évite déjà ;
+sinon le recouvrement d'1 px des rectangles de 18 px faisait saccader). Le clavier garde toutes ses collisions.
+L'anneau de destination est dessiné au-dessus des sols de la couche carte.
 Un double-clic au-delà des limites de la carte, sur le décor extérieur, est ignoré.
 Une touche de déplacement reprend le contrôle de l'avatar. Un clic simple garde
 l'activation des objets, le glisser garde le pan de caméra et le clic droit garde
@@ -181,8 +192,9 @@ Le catalogue est lu par le front seul (`EntitiesCollectionsManager`) : les image
 rectangles ; ils se déclarent dans le JSON du catalogue statique. Ne pas les écrire à la main dans le catalogue des
 entités personnalisées : `map-storage` l'ouvre et le réécrit avec son schéma, qui supprime le champ.
 Une liste de rectangles invalide est ignorée (l'entité reste, sans collision fine) sans faire rejeter le catalogue.
-Le pathfinding du double-clic en tient compte en **refusant** le trajet qui les traverse, sans contournement (la grille
-de navigation voit la case libre quand `collisionGrid` vaut `[[0]]`). Ajouter un mur annule un trajet en cours du joueur
+Le pathfinding du double-clic ne **route** que les murs de la couche carte (barrières entre cases, voir « Déplacement au
+double-clic ») ; pour tout autre objet à rectangles, il **refuse** le trajet qui les traverse, sans contournement (la grille
+de navigation voit la case libre quand `collisionGrid` vaut `[[0]]`). Router ces objets est à faire plus tard. Ajouter un mur annule un trajet en cours du joueur
 local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
 Phaser sans navigateur) : comportement validé en jeu uniquement.
 
@@ -273,22 +285,27 @@ joueurs et l'annulation, une dalle à la fois. Les meubles et murs gardent leur 
 Deux éditeurs qui peignent simultanément la même case peuvent encore créer un doublon avant de recevoir les
 commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
 
-## Effacer les sols et murs dans l'éditeur
+## Gommes et suppression dans l'éditeur
 
-En mode poubelle, maintenir le bouton gauche dans le canvas et déplacer la souris efface les entités
-éditables portant le tag `Sols` ou `Murs`. Le segment entre deux positions est pris en compte, y compris
-les dalles intermédiaires et les exemplaires superposés. Les dimensions réelles des sprites déterminent
-le rectangle traversé, indépendamment de leur collection.
+L'outil « Corbeille » (raccourci `5`) est supprimé : chaque outil a sa propre suppression.
+- **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation).
+- **Objets** : un bouton « Gomme » (à bascule) supprime l'objet cliqué ou survolé le bouton enfoncé ; un bouton « Supprimer »
+  dans le panneau de l'objet sélectionné le supprime (la touche Suppr reste). Les sols et murs de la couche carte
+  n'en font jamais partie : ils se gomment avec l'outil Carte, qui garde leurs raccords cohérents.
+- **Zones** : un bouton « Gomme » supprime la zone cliquée (la plus petite sous le pointeur) ; un bouton « Supprimer la zone »
+  dans son panneau la supprime.
+Choisir un objet à poser quitte la gomme ; changer d'outil la désactive. Les commandes WAM natives assurent la sauvegarde,
+la diffusion et l'annulation. Les calques de fond TMJ restent gérés dans Tiled.
 
-Un clic sans mouvement garde la suppression au relâchement de l'objet ou de la zone pointée.
-Pendant un glisser, les meubles et les zones restent en place. Relâcher le bouton, sortir du canvas,
-perdre le focus, changer d'outil ou appuyer sur Échap termine le geste ; il faut presser à nouveau
-dans le canvas pour reprendre.
+## Outils de l'éditeur indépendants
 
-Les commandes WAM natives assurent la sauvegarde, la diffusion et l'annulation par entité.
-L'annulation d'une suppression conserve désormais les dimensions avant de détruire l'instance,
-ce qui permet de restaurer son identifiant, sa position et ses propriétés. Les calques de fond TMJ
-restent gérés dans Tiled.
+Chaque outil ne montre que ce qui le concerne ; le reste est atténué (opacité 0,4, `EntitiesManager.setEntitiesDimming`,
+appliqué aussi aux entités qui arrivent d'un autre éditeur) ou masqué :
+- **Zones** : les zones sont visibles ; objets, sols et murs sont atténués.
+- **Carte** : sols et murs à pleine opacité, objets atténués, zones masquées.
+- **Objets** : sols et murs restent à pleine opacité, zones masquées (un clic ne bascule plus vers l'outil Zones).
+- Exploration, réglages de la salle et Sélection : rendu normal.
+Les zones ne sont jamais incluses dans les motifs partagés.
 
 ## Caméra en mode éditeur
 
@@ -366,7 +383,7 @@ unifiée qui n'efface que sols et murs. Un geste = une entrée d'annulation ; l'
 Architecture (`Phaser/Game/MapEditor/MapLayer/`, sans Phaser, testée) :
 - `MapLayerModel` : la **source de vérité sémantique** (cellules de sol avec leur famille, segments de mur sur les lignes de la grille avec leur teinte).
   Un futur générateur (tracé → pièces) n'a qu'à remplir ce modèle.
-- `MapLayerAutotile` : dérive les prefabs à poser (sol uni, ou « ombre » sous le pied d'un mur horizontal ; façade fermée ou continue, raccord de chaque sommet) et
+- `MapLayerAutotile` : dérive les prefabs à poser (sol uni, ou « ombre » sur la tuile qui suit un mur horizontal : l'image `ombre` du catalogue est assombrie sur ses premières lignes, la plus foncée contre le mur et estompée vers le bas ; façade fermée ou continue, raccord de chaque sommet) et
   calcule la différence minimale avec les entités déjà posées.
 - `MapLayerOperations` : géométrie des gestes et lecture du modèle depuis les entités existantes.
 - `MapLayerCatalog` : vocabulaire et identifiants de prefab (**contrat avec les catalogues privés**, jamais renommés).
@@ -374,8 +391,10 @@ Architecture (`Phaser/Game/MapEditor/MapLayer/`, sans Phaser, testée) :
 Le stockage reste des entités WAM ordinaires : aucun champ ajouté au schéma, `map-storage`, `back` et `messages` inchangés. La signification passe par
 l'identifiant de prefab (collections `Carte Sols` et `Carte Murs`, tag `Carte`). Les modèles sont relus depuis les entités à chaque geste, donc modifier
 un mur recalcule ses raccords. Les anciennes entités `Sols` / `Murs` ne sont pas migrées et restent éditables avec l'outil Objets ; l'éditeur d'objets ne
-propose plus les prefabs `Carte`. Les murs sont vus du sud : chaque mur a une surface supérieure (le « capuchon », 12 px, centré sur sa ligne de grille) ; un mur horizontal montre en plus
-sa face sud de 20 px, un mur vertical n'est qu'un trait. Les capuchons forment un réseau unique : une pièce « raccord » de 12 × 12 px est posée sur chaque sommet
+propose plus les prefabs `Carte`. Les murs sont vus du sud : chaque mur a une surface supérieure (le « capuchon », 12 px) ; un mur horizontal occupe **entièrement la rangée de tuiles de sa ligne
+de grille** (capuchon sur les 12 premiers px, face sud de 20 px dessous, pied à la limite de la tuile), pour que sols et murs s'alignent sur la grille ;
+un mur vertical n'est qu'un trait. Les murs posés avec l'ancienne géométrie (capuchon centré sur la ligne) sont toujours lus et redessinés alignés à la
+prochaine modification de la couche carte. Les capuchons forment un réseau unique : une pièce « raccord » de 12 × 12 px est posée sur chaque sommet
 et dessine l'angle, le T, la croix ou le bout fermé selon les murs qui y arrivent. Les façades se suivent sans trait de séparation et se ferment (6 px de plus) quand le
 mur s'arrête ; le sprite vertical est une pièce de 12 × 20 px entre deux raccords, par teinte ; un mur vertical qui finit seul (un seul bras au sommet du bas) reçoit sous son capuchon une face sud de 12 × 20 px (`bout-<teinte>`), comme un mur horizontal. Collisions : 6 px au pied de la façade, 6 px pour la bande verticale, décalée de la
 hauteur du mur (20 px) car l'empreinte au sol est plus bas que le dessus. Profondeurs : un mur vertical passe devant les façades qu'il croise, les raccords devant les deux.
@@ -385,3 +404,12 @@ transmise au front) ajoute les deux catalogues aux collections de chaque salle ;
 collections : les sols et murs posés comme objets classiques ne sont jamais touchés. Sans la variable (ou si le catalogue est injoignable), l'outil l'indique et ne pose rien.
 Limites connues : plafond de 4000 entités par geste, remplissage limité à 2500 cases, pas de contrôle de présence des joueurs, pas de portes ni fenêtres, pas de
 raccords décoratifs au nord. **Comportement visuel non validé dans le jeu.**
+
+Mises à jour de l'outil Carte :
+- Aperçu des tracés : le point suit la **base** du mur, pas son sommet.
+- Profondeur : les sols sont au niveau le plus bas visible, juste au-dessus des tuiles de fond (`MAP_LAYER_FLOOR_DEPTH`), sous les objets, les murs, les
+  avatars et le compagnon, qui ne passent plus tantôt dessus tantôt dessous en traversant une rangée.
+- Sélection : Déplacer, Coller, Supprimer et Remplir recalculent sprites et raccords des murs et sols touchés, dans la **même** entrée d'annulation
+  (`MapLayerSync`).
+- Chargement : chaque collection d'objets de la salle dispose de 10 secondes ; une collection qui ne répond pas ne bloque plus le chargement des
+  entités, ni le message « Vérification des catalogues » de l'outil.

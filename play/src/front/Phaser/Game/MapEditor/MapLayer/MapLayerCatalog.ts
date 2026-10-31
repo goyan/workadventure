@@ -8,6 +8,12 @@
 
 export const MAP_LAYER_TILE_SIZE = 32;
 
+/**
+ * Depth of the floors: just above the ground tiles of the map (depth 0), under everything that is sorted by its y
+ * (objects, walls, characters, companions), whatever the row they stand on.
+ */
+export const MAP_LAYER_FLOOR_DEPTH = 0.5;
+
 export const MAP_LAYER_FLOOR_COLLECTION = "Carte Sols";
 export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, MAP_LAYER_WALL_COLLECTION];
@@ -28,28 +34,32 @@ export const MAP_LAYER_WALL_TINTS = ["blanc", "lavande", "gris", "brique"] as co
 export type WallTint = (typeof MAP_LAYER_WALL_TINTS)[number];
 
 /**
- * A floor family is one seamless tile. A cell whose top is covered by a horizontal wall uses the "ombre" variant:
- * the bottom of the tile, just under the foot of that wall, is shaded.
+ * A floor family is one seamless tile. A cell that comes right after a horizontal wall (the wall stands on the
+ * previous tile row) uses the "ombre" variant, shaded at the top, under the wall (the catalogs draw the first rows of the sprite darker).
  */
 export type FloorVariant = "uni" | "ombre";
 
 /**
  * Geometry of the walls, in pixels. Walls are seen from the south, like the Room Builder pack draws them:
- * - every wall has a top surface (the "cap"), a band WALL_THICKNESS thick centered on its grid line;
+ * - every wall has a top surface (the "cap"), a band WALL_THICKNESS thick. A horizontal wall of the grid line y stands
+ *   entirely on the tile row y, its cap on the top of the row; the caps of the vertical walls and the joints follow it;
  * - a horizontal wall also shows its south face under the cap, FACADE_FACE_HEIGHT high;
  * - a vertical wall only shows its top, a strip.
  * The caps of all walls form one network: the joint pieces drawn on each vertex close its corners.
  */
 export const WALL_THICKNESS = 12;
 export const WALL_HALF = WALL_THICKNESS / 2;
+/**
+ * How far the collision of a wall reaches on each side of its line, as the catalogs declare it (18 px for a vertical
+ * wall, a bit more than its 12 px to keep the head of the avatar clear of it).
+ */
+export const WALL_COLLISION_HALF = 9;
 export const FACADE_FACE_HEIGHT = 20;
 export const FACADE_HEIGHT = WALL_THICKNESS + FACADE_FACE_HEIGHT;
 /** A vertical wall piece spans the grid row between the joints drawn on its two vertices. */
 export const VERTICAL_WALL_HEIGHT = MAP_LAYER_TILE_SIZE - WALL_THICKNESS;
 /** A horizontal wall that stops on a vertex extends its face by this much to close the corner. */
 export const FACADE_END_EXTENSION = WALL_HALF;
-/** The wall is as tall as its face: its footprint on the ground is that much lower than its top surface. */
-export const WALL_GROUND_OFFSET = FACADE_FACE_HEIGHT;
 
 /** Which sides of a horizontal wall stop on a vertex ("mid" continues on both sides, "single" stops on both). */
 export type FacadeEnds = "mid" | "left" | "right" | "single";

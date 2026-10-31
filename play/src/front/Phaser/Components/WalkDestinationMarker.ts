@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import type { GameScene } from "../Game/GameScene";
+import { MAP_LAYER_FLOOR_DEPTH } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
 
 /** The theme's primary colour when the room doesn't set one (same default as the loading screen). */
 const DEFAULT_PRIMARY_COLOR = "#4056F6";
@@ -33,8 +34,12 @@ export class WalkDestinationMarker {
         }
         const floor = scene.add.container(0, 0, [ring]).setScale(1, 0.5);
         const dot = scene.add.graphics().fillStyle(color).fillEllipse(0, 0, 8, 4);
-        // On the floor: above the ground tile layers (depth -2), below avatars and furniture (sorted by y from 0).
-        this.container = scene.add.container(0, 0, [floor, dot]).setDepth(-1).setVisible(false);
+        // On the floor: above the ground tile layers (depth -2) and the floors of the map layer, below avatars and
+        // furniture (sorted by y from 0).
+        this.container = scene.add
+            .container(0, 0, [floor, dot])
+            .setDepth(MAP_LAYER_FLOOR_DEPTH + 0.1)
+            .setVisible(false);
         // Each loop: fade in at twice the size and close in to the ring's size (so the resting ring keeps the minimum
         // width) around the dot, while turning a quarter turn at a steady pace.
         this.lockOn = scene.tweens.addCounter({

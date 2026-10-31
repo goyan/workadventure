@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Herramienta de edición de entidades",
         tileEditor: "Herramienta de edición de baldosas",
         configureMyRoom: "Configurar mi sala",
-        trashEditor: "Papelera",
         exploreTheRoom: "Explorar la sala",
         mapLayerEditor: "Herramienta de mapa (suelos y paredes)",
         selectionEditor: "Selection tool",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Explorar la sala activado",
         areaEditorActivated: "Editor de zonas activado",
         entityEditorActivated: "Editor de entidades activado",
-        trashEditorActivated: "Editor de papelera activado",
         configureMyRoomActivated: "Configurar mi sala activado",
     },
     selection: {
@@ -384,6 +382,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "No hay propiedades definidas",
     },
     areaEditor: {
+        eraser: "Borrador",
+        eraserHint: "Haz clic en una zona para eliminarla.",
+        deleteButton: "Eliminar la zona",
         editInstructions: "Haga clic en una zona para modificar sus propiedades.",
         nameLabel: "Nombre",
         nameLabelPlaceholder: "MiZona",
@@ -457,6 +458,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "Borrador",
+        eraserHint: "Haz clic o arrastra sobre los objetos para eliminarlos.",
         resize: {
             title: "Tamaño de imagen",
             width: "Anchura (px)",
@@ -478,9 +481,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "Buscar",
             backToSelectObject: "Volver a seleccionar objeto",
-        },
-        trashTool: {
-            delete: "Haga clic en el objeto para eliminarlo.",
         },
         deleteButton: "Eliminar",
         testInteractionButton: "Probar interacción",

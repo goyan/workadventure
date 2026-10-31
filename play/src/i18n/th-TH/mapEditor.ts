@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "เครื่องมือแก้ไขวัตถุ",
         tileEditor: "เครื่องมือแก้ไขไทล์",
         configureMyRoom: "ตั้งค่าห้องของฉัน",
-        trashEditor: "ถังขยะ",
         exploreTheRoom: "สำรวจห้อง",
         mapLayerEditor: "เครื่องมือแผนที่ (พื้นและผนัง)",
         selectionEditor: "เครื่องมือเลือก",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "เปิดใช้การสำรวจห้องแล้ว",
         areaEditorActivated: "เปิดใช้ตัวแก้ไขพื้นที่แล้ว",
         entityEditorActivated: "เปิดใช้ตัวแก้ไขวัตถุแล้ว",
-        trashEditorActivated: "เปิดใช้ตัวแก้ไขถังขยะแล้ว",
         configureMyRoomActivated: "เปิดใช้การตั้งค่าห้องของฉันแล้ว",
     },
     selection: {
@@ -378,6 +376,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "ยังไม่ได้กำหนดคุณสมบัติ",
     },
     areaEditor: {
+        eraser: "ยางลบ",
+        eraserHint: "คลิกที่พื้นที่เพื่อลบ",
+        deleteButton: "ลบพื้นที่",
         editInstructions: "คลิกที่พื้นที่เพื่อแก้ไขคุณสมบัติ",
         nameLabel: "ชื่อ",
         nameLabelPlaceholder: "MyArea",
@@ -450,6 +451,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "ยางลบ",
+        eraserHint: "คลิกหรือลากผ่านวัตถุเพื่อลบ",
         resize: {
             title: "ขนาดรูปภาพ",
             width: "ความกว้าง (px)",
@@ -471,9 +474,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "ค้นหา",
             backToSelectObject: "กลับไปเลือกวัตถุ",
-        },
-        trashTool: {
-            delete: "คลิกที่วัตถุเพื่อลบ!",
         },
         deleteButton: "ลบ",
         testInteractionButton: "ทดสอบการโต้ตอบ",

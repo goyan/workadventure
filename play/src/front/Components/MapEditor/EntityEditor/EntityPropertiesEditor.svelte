@@ -14,7 +14,7 @@
     import PlayAudioPropertyEditor from "../PropertyEditor/PlayAudioPropertyEditor.svelte";
     import OpenWebsitePropertyEditor from "../PropertyEditor/OpenWebsitePropertyEditor.svelte";
 
-    import { IconChevronDown, IconArrowLeft } from "../../Icons";
+    import { IconChevronDown, IconArrowLeft, IconTrash } from "../../Icons";
     import Input from "../../Input/Input.svelte";
     import TextArea from "../../Input/TextArea.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
@@ -263,6 +263,13 @@
         }
     }
 
+    function deleteSelectedEntity() {
+        // Same as the Delete key: the entity tool removes the entity through a command.
+        $mapEditorSelectedEntityStore?.delete();
+        mapEditorSelectedEntityStore.set(undefined);
+        mapEditorEntityModeStore.set("ADD");
+    }
+
     function backToSelectObject() {
         mapEditorSelectedEntityStore.set(undefined);
         mapEditorSelectedEntityPrefabStore.set(undefined);
@@ -298,6 +305,15 @@
             <IconArrowLeft font-size="12" class="cursor-pointer" />
             <span class="ml-1 cursor-pointer">{$LL.mapEditor.entityEditor.itemPicker.backToSelectObject()}</span>
         </p>
+        <button
+            type="button"
+            class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-danger"
+            data-testid="deleteEntityButton"
+            onclick={deleteSelectedEntity}
+        >
+            <IconTrash font-size="18" />
+            <span>{$LL.mapEditor.entityEditor.deleteButton()}</span>
+        </button>
         <div class="properties-buttons flex flex-row m-2">
             <AddPropertyButtonWrapper
                 property="playAudio"

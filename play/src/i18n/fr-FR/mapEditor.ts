@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Outil d'édition d'entités",
         tileEditor: "Outil d'édition de tuiles",
         configureMyRoom: "Configurer le salon",
-        trashEditor: "Corbeille",
         exploreTheRoom: "Explorer le salon",
         mapLayerEditor: "Outil carte (sols et murs)",
         selectionEditor: "Outil de sélection",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Exploration de la carte activée",
         areaEditorActivated: "Édition de zone activée",
         entityEditorActivated: "Édition d'objets activée",
-        trashEditorActivated: "Corbeille activée",
         configureMyRoomActivated: "Configuration de la salle activée",
     },
     selection: {
@@ -386,6 +384,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "Aucune propriété définie",
     },
     areaEditor: {
+        eraser: "Gomme",
+        eraserHint: "Cliquez sur une zone pour la supprimer.",
+        deleteButton: "Supprimer la zone",
         editInstructions: "Sélectionnez une zone pour modifier ses propriétés.",
         nameLabel: "Nom de la zone",
         nameLabelPlaceholder: "MaZone",
@@ -480,10 +481,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             searchPlaceholder: "Rechercher",
             backToSelectObject: "Retour à la sélection d'objet",
         },
-        trashTool: {
-            delete: "Supprimer un item en cliquant dessus !",
-        },
         deleteButton: "Supprimer",
+        eraser: "Gomme",
+        eraserHint: "Cliquez ou glissez sur des objets pour les supprimer.",
         testInteractionButton: "Tester interaction",
         buttonLabel: "Texte du bouton",
         editInstructions: "Sélectionnez un objet pour modifier ses propriétés.",

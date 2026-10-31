@@ -9,6 +9,7 @@ import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
+    mapEditorEntityEraserStore,
     mapEditorEntityModeStore,
     mapEditorModeStore,
     mapEditorSelectedEntityDraggedStore,
@@ -17,6 +18,7 @@ import {
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
 } from "../../../Stores/MapEditorStore";
+import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
@@ -59,7 +61,12 @@ export enum EntitiesManagerEvent {
     CopyEntity = "EntitiesManagerEvent:CopyEntity",
 }
 
+/** Opacity of the entities that are not the subject of the map editor tool in use. */
+const DIMMED_ENTITY_ALPHA = 0.4;
+
 export class EntitiesManager extends EventEmitter {
+    private readonly erasingEntityIds = new Set<string>();
+    private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
     private gameMapFrontWrapper: GameMapFrontWrapper;
 
@@ -131,10 +138,8 @@ export class EntitiesManager extends EventEmitter {
             .then(() => {
                 const entity = this.entities.get(entityId);
                 if (entity) {
-                    entity
-                        .setTexture(prefab.imagePath)
-                        .setDepth(entity.y + entity.displayHeight + (entity.getPrefab().depthOffset ?? 0))
-                        .setVisible(true);
+                    entity.setTexture(prefab.imagePath).setVisible(true);
+                    entity.updateDepth();
                     if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
                         mapEditorSelectedEntityStore.set(entity);
                     }
@@ -156,6 +161,7 @@ export class EntitiesManager extends EventEmitter {
         this.gameMapFrontWrapper.addEntityCollisionRectangles(entity);
 
         this.entities.set(entityId, entity);
+        this.applyEntityDimming(entity);
 
         // We use the promise to be sure that the entity is fully loaded before we check if it is activatable and push it to the activatableEntities array
         this.scene
@@ -177,6 +183,7 @@ export class EntitiesManager extends EventEmitter {
     }
 
     public deleteEntity(id: string): boolean {
+        this.erasingEntityIds.delete(id);
         const entity = this.entities.get(id);
         if (!entity) {
             console.warn(`Entity ${id} already deleted`);
@@ -212,7 +219,7 @@ export class EntitiesManager extends EventEmitter {
             const entityPrefab = entity.getPrefab();
             if (entityPrefab.id === modifiedEntityPrefabId) {
                 if (entityPrefab.depthOffset !== depthOffset) {
-                    entity.setDepth(entity.y + entity.displayHeight + depthOffset);
+                    entity.updateDepth(depthOffset);
                 }
             }
         }
@@ -220,6 +227,20 @@ export class EntitiesManager extends EventEmitter {
 
     public getProperties(): Map<string, string | boolean | number> {
         return this.properties;
+    }
+
+    /**
+     * Fades the entities matching the predicate (undefined: none), so that the tool in use stands out.
+     * Entities added later, e.g. by another editor, follow the same rule.
+     */
+    public setEntitiesDimming(shouldDim: ((entity: Entity) => boolean) | undefined): void {
+        this.shouldDimEntity = shouldDim;
+        this.entities.forEach((entity) => this.applyEntityDimming(entity));
+        this.scene.markDirty();
+    }
+
+    private applyEntityDimming(entity: Entity): void {
+        entity.setAlpha(this.shouldDimEntity?.(entity) ? DIMMED_ENTITY_ALPHA : 1);
     }
 
     public clearAllEntitiesTint(): void {
@@ -316,7 +337,7 @@ export class EntitiesManager extends EventEmitter {
                 const snapToGrid = this.isSnappingToGrid();
                 entity.x = snapToGrid ? Math.floor(dragX / tileDim.width) * tileDim.width : Math.floor(dragX);
                 entity.y = snapToGrid ? Math.floor(dragY / tileDim.height) * tileDim.height : Math.floor(dragY);
-                entity.setDepth(entity.y + entity.displayHeight + depthOffset);
+                entity.updateDepth(depthOffset);
 
                 this.changeEntityTint(entity);
             }
@@ -386,7 +407,9 @@ export class EntitiesManager extends EventEmitter {
                     document.activeElement.blur();
                 }
 
-                if (this.isTrashEditorToolActive()) {
+                if (get(mapEditorEntityEraserStore)) {
+                    // The eraser of the entity tool deletes the object instead of selecting it.
+                    this.eraseEntity(entity);
                     return;
                 }
 
@@ -402,8 +425,13 @@ export class EntitiesManager extends EventEmitter {
                     return;
                 }
                 if (this.isEntityEditorToolActive()) {
-                    entity.setPointedToEditColor(this.isTrashEditorToolActive() ? 0xff0000 : 0x00ff00);
+                    const eraser = get(mapEditorEntityEraserStore);
+                    entity.setPointedToEditColor(eraser ? 0xff0000 : 0x00ff00);
                     this.scene.markDirty();
+                    // Dragging over objects with the button down erases them.
+                    if (eraser && pointer.leftButtonDown()) {
+                        this.eraseEntity(entity);
+                    }
                 }
                 if (this.isExplorerToolActive()) {
                     entity.setPointedToEditColor(0xf9e82d);
@@ -471,15 +499,18 @@ export class EntitiesManager extends EventEmitter {
         this.scene.markDirty();
     }
 
-    private isEntityEditorToolActive(): boolean {
-        return (
-            get(mapEditorSelectedToolStore) === EditorToolName.EntityEditor ||
-            get(mapEditorSelectedToolStore) === EditorToolName.TrashEditor
-        );
+    private eraseEntity(entity: Entity): void {
+        const prefab = entity.getPrefab();
+        // Floors and walls of the map layer are erased with the Map tool, which keeps their joints consistent.
+        if (isMapLayerPrefab(prefab.collectionName, prefab.id) || this.erasingEntityIds.has(entity.entityId)) {
+            return;
+        }
+        this.erasingEntityIds.add(entity.entityId);
+        entity.delete();
     }
 
-    private isTrashEditorToolActive(): boolean {
-        return get(mapEditorSelectedToolStore) === EditorToolName.TrashEditor;
+    private isEntityEditorToolActive(): boolean {
+        return get(mapEditorSelectedToolStore) === EditorToolName.EntityEditor;
     }
 
     private isExplorerToolActive(): boolean {

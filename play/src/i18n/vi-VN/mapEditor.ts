@@ -14,7 +14,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         entityEditor: "Công cụ chỉnh sửa đối tượng",
         tileEditor: "Công cụ chỉnh sửa tile",
         configureMyRoom: "Cấu hình phòng của tôi",
-        trashEditor: "Thùng rác",
         exploreTheRoom: "Khám phá phòng",
         mapLayerEditor: "Công cụ bản đồ (sàn và tường)",
         selectionEditor: "Công cụ chọn",
@@ -24,7 +23,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         exploreTheRoomActivated: "Đã bật khám phá phòng",
         areaEditorActivated: "Đã bật trình chỉnh sửa khu vực",
         entityEditorActivated: "Đã bật trình chỉnh sửa đối tượng",
-        trashEditorActivated: "Đã bật công cụ thùng rác",
         configureMyRoomActivated: "Đã bật cấu hình phòng của tôi",
     },
     selection: {
@@ -381,6 +379,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noProperties: "Chưa có thuộc tính nào",
     },
     areaEditor: {
+        eraser: "Cục tẩy",
+        eraserHint: "Nhấp vào một khu vực để xóa nó.",
+        deleteButton: "Xóa khu vực",
         editInstructions: "Bấm vào một khu vực để sửa thuộc tính của nó.",
         nameLabel: "Tên",
         nameLabelPlaceholder: "MyArea",
@@ -453,6 +454,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     entityEditor: {
+        eraser: "Cục tẩy",
+        eraserHint: "Nhấp hoặc kéo qua các đối tượng để xóa chúng.",
         resize: {
             title: "Kích thước hình ảnh",
             width: "Chiều rộng (px)",
@@ -474,9 +477,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         itemPicker: {
             searchPlaceholder: "Tìm kiếm",
             backToSelectObject: "Quay lại chọn đối tượng",
-        },
-        trashTool: {
-            delete: "Bấm vào đối tượng để xóa nó!",
         },
         deleteButton: "Xóa",
         testInteractionButton: "Thử tương tác",
