@@ -1,17 +1,59 @@
 [
     {
-        "id": "a399745c180376242f44c14d2cf248a60433f690",
-        "date": "2026-10-30T21:50:14+01:00",
+        "id": "799807cb60ad6e3fbd957a14d2422f62997c4777",
+        "date": "2026-10-31T02:18:24+01:00",
         "author": "Antoine Hésèque",
-        "type": "feat",
-        "description": "système de murs v2 : murs continus, raccords d'angle, T et croix, face de bout, sols unis ombrés sous les murs"
+        "type": "fix",
+        "description": "do not wait for a slow entity collection forever"
     },
     {
-        "id": "1aa58356f14554dccdb07497d44cc88e8b398365",
-        "date": "2026-10-30T21:50:14+01:00",
+        "id": "2b2ec7efe6b55a7c23a431c1c0952d8c2dbe9fe2",
+        "date": "2026-10-31T02:18:24+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "route the pathfinder around walls and show the destination ring over floors"
+    },
+    {
+        "id": "6f3dd26476893eb29678a5c420b8b6d36094789f",
+        "date": "2026-10-31T02:18:24+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "align floors and walls on the tile grid"
+    },
+    {
+        "id": "f73adfd958cfa68c2cfe493abee3973e1dfc9958",
+        "date": "2026-10-30T23:44:21+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep characters and companions above the map layer floors"
+    },
+    {
+        "id": "c50b7959fdcc89ffb1eff3543e44d13a6212c65f",
+        "date": "2026-10-30T23:44:21+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
-        "description": "outil Carte pour dessiner sols et murs, sur toutes les salles"
+        "description": "make the map editor tools independent"
+    },
+    {
+        "id": "16627e9e068adc68fb47b648985f89fcf3240d09",
+        "date": "2026-10-30T23:44:20+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "replace the trash tool with erasers and delete buttons"
+    },
+    {
+        "id": "364b00679efad2804ede2b7f235e15b2e260cf16",
+        "date": "2026-10-30T23:44:20+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "re-sync floors and walls after selection move, paste and delete"
+    },
+    {
+        "id": "5d2092043a482fbf23a1fa221e92170a4e55ff96",
+        "date": "2026-10-30T22:05:11+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "outil Carte et système de murs v2"
     },
     {
         "id": "a274d7958f5d8417f6274d63a9f83b2c045a8c6e",
