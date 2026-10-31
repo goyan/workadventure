@@ -1,5 +1,4 @@
 <script lang="ts">
-    import DrowAreaGif from "../../images/draw-area.gif";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { mapEditorAreaEraserStore } from "../../../Stores/MapEditorStore";
     import { IconEraser } from "../../Icons";
@@ -23,12 +22,11 @@
     {:else}
         <h3>{$LL.mapEditor.areaEditorInstructions.title()}</h3>
         <p>{$LL.mapEditor.areaEditorInstructions.description()}</p>
-        <img
-            draggable="false"
-            src={DrowAreaGif}
-            class="w-full"
-            alt={$LL.mapEditor.areaEditorInstructions.description()}
-        />
+        <ul class="list-disc pl-5 text-sm opacity-80">
+            <li>{$LL.mapEditor.areaEditorInstructions.create()}</li>
+            <li>{$LL.mapEditor.areaEditorInstructions.open()}</li>
+            <li>{$LL.mapEditor.areaEditorInstructions.remove()}</li>
+        </ul>
     {/if}
 </div>
 

@@ -405,6 +405,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "Kako deluje?",
         description: "Če želite ustvariti novo območje, ga narišite na zemljevidu.",
+        create: "Narysuj praworóžk na špatnje, zo by zonu wutworił: wona so wulkosći rumnosće přiměri.",
+        open: "Klikń na zonu, zo by jeje wobsah widźał a změnił.",
+        remove: "Zhaš zonu z tłóčatkom „Wobwod zhašeć“ abo z gumu.",
     },
     mapLayer: {
         groups: {

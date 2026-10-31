@@ -407,8 +407,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         nameHelpText: "Le nom de la zone sera affiché aux utilisateurs lorsqu'ils entreront dans la zone.",
     },
     areaEditorInstructions: {
-        title: "Comment ça marche ?",
-        description: "Dessinez une zone sur la carte afin d'en créer une nouvelle.",
+        title: "Zones",
+        description:
+            "Les zones donnent un comportement à une partie de la carte : message, lien, sortie, salle de réunion…",
+        create: "Tracez un rectangle sur le sol pour créer une zone : elle s'adapte à la taille de la pièce.",
+        open: "Cliquez sur une zone pour voir et modifier son contenu.",
+        remove: "Supprimez une zone avec le bouton « Supprimer la zone » ou avec la gomme.",
     },
     mapLayer: {
         groups: {

@@ -404,6 +404,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "사용 방법",
         description: "지도에서 영역을 그려 새로운 영역을 만드세요.",
+        create: "바닥 위에 사각형을 그려 영역을 만드세요. 방 크기에 맞춰집니다.",
+        open: "영역을 클릭하면 내용을 보고 수정할 수 있습니다.",
+        remove: "영역 삭제 버튼이나 지우개로 영역을 삭제하세요.",
     },
     mapLayer: {
         groups: {

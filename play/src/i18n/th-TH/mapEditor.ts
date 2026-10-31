@@ -401,6 +401,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     areaEditorInstructions: {
         title: "ใช้งานอย่างไร?",
         description: "วาดพื้นที่บนแผนที่เพื่อสร้างพื้นที่ใหม่",
+        create: "วาดสี่เหลี่ยมบนพื้นเพื่อสร้างโซน โซนจะปรับตามขนาดของห้อง",
+        open: "คลิกที่โซนเพื่อดูและแก้ไขเนื้อหา",
+        remove: "ลบโซนด้วยปุ่มลบพื้นที่หรือยางลบ",
     },
     mapLayer: {
         groups: {

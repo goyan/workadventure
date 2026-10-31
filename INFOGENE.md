@@ -307,6 +307,19 @@ appliqué aussi aux entités qui arrivent d'un autre éditeur) ou masqué :
 - Exploration, réglages de la salle et Sélection : rendu normal.
 Les zones ne sont jamais incluses dans les motifs partagés.
 
+Les sols et murs atténués sont assombris par une teinte grise (`DIMMED_MAP_LAYER_TINT`) et non par l'opacité : leurs
+sprites se chevauchent et une opacité de 0,4 par sprite dessinait un damier le long des murs. Les objets gardent l'opacité.
+
+### Zones calées sur le sol
+
+Le premier clic et la fin du glisser se calent sur le coin de tuile le plus proche (un point blanc, comme l'outil mur, montre
+ce coin avant le clic ; il disparaît au-dessus d'une zone existante, où le curseur devient une main : un clic l'ouvre).
+Le rectangle est ensuite réduit à la boîte englobante des sols qu'il touche (`MapLayerAreaSnap.ts`) : une zone tracée sur une
+pièce prend la taille de la pièce. Sans aucun sol sur la carte (carte TMJ classique), elle reste sur la grille de 32 px ; avec
+des sols mais aucun sous le rectangle, aucune zone n'est créée. Le déplacement et le redimensionnement d'une zone restent
+toujours sur la grille (plus besoin de Maj) ; ils ne sont pas contraints au sol. Le panneau de l'outil Zones explique
+créer, ouvrir/modifier et supprimer (bouton ou gomme).
+
 ## Caméra en mode éditeur
 
 À l'ouverture de l'éditeur, quel que soit l'outil, la caméra se détache de l'avatar sans saut et les contrôles de

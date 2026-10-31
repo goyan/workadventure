@@ -1,5 +1,19 @@
 [
     {
+        "id": "01fce3227818830101b932638ec2634886cb1ac3",
+        "date": "2026-10-31T03:00:18+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "dim floors and walls with a tint to avoid the grid effect"
+    },
+    {
+        "id": "e131d670aaa2eca9c3be961672bddc4b0d38f0bd",
+        "date": "2026-10-31T02:57:45+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "snap map editor areas to the floors of the room"
+    },
+    {
         "id": "799807cb60ad6e3fbd957a14d2422f62997c4777",
         "date": "2026-10-31T02:18:24+01:00",
         "author": "Antoine Hésèque",

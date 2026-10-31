@@ -400,8 +400,11 @@ const mapEditor: BaseTranslation = {
         nameHelpText: "This input will be shown to the user if they enter the area.",
     },
     areaEditorInstructions: {
-        title: "How it works ?",
-        description: "Draw a zone on the map to create a new one.",
+        title: "Zones",
+        description: "Zones give a behavior to a part of the map: message, link, exit, meeting room…",
+        create: "Draw a rectangle on the floor to create a zone: it fits the size of the room.",
+        open: "Click a zone to see and edit its content.",
+        remove: "Delete a zone with the Delete area button or with the eraser.",
     },
     mapLayer: {
         groups: {
