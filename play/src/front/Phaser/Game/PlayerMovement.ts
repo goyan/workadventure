@@ -38,6 +38,7 @@ export class PlayerMovement {
             oldY: this.startPosition.y,
             direction: this.endPosition.direction,
             moving: this.isOutdated(tick) ? false : this.endPosition.moving,
+            running: this.isOutdated(tick) ? false : this.endPosition.running,
         };
     }
 }

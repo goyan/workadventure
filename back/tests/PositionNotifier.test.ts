@@ -37,7 +37,7 @@ describe("PositionNotifier", () => {
             () => {},
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1 = await User.create(
@@ -49,6 +49,7 @@ describe("PositionNotifier", () => {
                 x: 500,
                 y: 500,
                 moving: false,
+                running: false,
                 direction: "down",
             },
             positionNotifier,
@@ -61,7 +62,7 @@ describe("PositionNotifier", () => {
             [],
             "https://example.com/room.json",
             undefined,
-            new VoidBrothersFinder()
+            new VoidBrothersFinder(),
         );
 
         const user2 = await User.create(
@@ -73,6 +74,7 @@ describe("PositionNotifier", () => {
                 x: -9999,
                 y: -9999,
                 moving: false,
+                running: false,
                 direction: "down",
             },
             positionNotifier,
@@ -85,7 +87,7 @@ describe("PositionNotifier", () => {
             [],
             "https://example.com/room.json",
             undefined,
-            new VoidBrothersFinder()
+            new VoidBrothersFinder(),
         );
 
         positionNotifier.addZoneListener({} as RoomSocket, 0, 0);
@@ -99,21 +101,21 @@ describe("PositionNotifier", () => {
             bottom: 500
         });*/
 
-        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false });
+        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false, running: false });
 
         expect(enterTriggered).toBe(true);
         expect(moveTriggered).toBe(false);
         enterTriggered = false;
 
         // Move inside the zone
-        user2.setPosition({ x: 501, y: 500, direction: "down", moving: false });
+        user2.setPosition({ x: 501, y: 500, direction: "down", moving: false, running: false });
 
         expect(enterTriggered).toBe(false);
         expect(moveTriggered).toBe(true);
         moveTriggered = false;
 
         // Move out of the zone in a zone that we don't track
-        user2.setPosition({ x: 901, y: 500, direction: "down", moving: false });
+        user2.setPosition({ x: 901, y: 500, direction: "down", moving: false, running: false });
 
         expect(enterTriggered).toBe(false);
         expect(moveTriggered).toBe(false);
@@ -121,7 +123,7 @@ describe("PositionNotifier", () => {
         leaveTriggered = false;
 
         // Move back in
-        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false });
+        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false, running: false });
         expect(enterTriggered).toBe(true);
         expect(moveTriggered).toBe(false);
         expect(leaveTriggered).toBe(false);
@@ -156,7 +158,7 @@ describe("PositionNotifier", () => {
             () => {},
             () => {},
             () => {},
-            () => {}
+            () => {},
         );
 
         const user1 = await User.create(
@@ -168,6 +170,7 @@ describe("PositionNotifier", () => {
                 x: 500,
                 y: 500,
                 moving: false,
+                running: false,
                 direction: "down",
             },
             positionNotifier,
@@ -180,7 +183,7 @@ describe("PositionNotifier", () => {
             [],
             "https://example.com/room.json",
             undefined,
-            new VoidBrothersFinder()
+            new VoidBrothersFinder(),
         );
 
         const user2 = await User.create(
@@ -192,6 +195,7 @@ describe("PositionNotifier", () => {
                 x: 0,
                 y: 0,
                 moving: false,
+                running: false,
                 direction: "down",
             },
             positionNotifier,
@@ -204,7 +208,7 @@ describe("PositionNotifier", () => {
             [],
             "https://example.com/room.json",
             undefined,
-            new VoidBrothersFinder()
+            new VoidBrothersFinder(),
         );
 
         const listener = {} as RoomSocket;
@@ -226,7 +230,7 @@ describe("PositionNotifier", () => {
         enterTriggered = false;
 
         //positionNotifier.updatePosition(user2, {x:500, y:500}, {x:0, y: 0})
-        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false });
+        user2.setPosition({ x: 500, y: 500, direction: "down", moving: false, running: false });
 
         expect(enterTriggered).toBe(true);
         expect(moveTriggered).toBe(false);

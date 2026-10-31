@@ -161,6 +161,15 @@ sous l'avatar et ne sont pas envoyées aux autres joueurs. Le déplacement au do
 
 À valider en beta (visuel) : courir dans les quatre directions, vérifier la taille et la durée de la fumée.
 
+### Animation de course
+
+Quand le joueur court (Maj maintenu en se déplaçant, hors mode suivi), l'animation de marche de l'avatar est jouée deux fois plus vite
+(`RUN_ANIMATION_SPEED` dans `Phaser/Player/Animation.ts`, `timeScale` de l'animation dans `Character.playAnimation`). L'état est envoyé aux
+autres joueurs par le champ `running` de `PositionMessage` (le pusher et le back le relaient tel quel) : ils voient donc aussi l'avatar courir.
+Un changement d'état (début ou fin de course) est envoyé immédiatement, sans attendre le délai d'envoi des positions.
+
+À valider en beta (visuel) : courir avec deux navigateurs et comparer la vitesse d'animation vue de l'autre côté.
+
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse

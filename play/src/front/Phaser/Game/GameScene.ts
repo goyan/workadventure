@@ -334,6 +334,7 @@ export class GameScene extends DirtyScene {
     lastMoveEventSent: HasPlayerMovedInterface = {
         direction: PositionMessage_Direction.DOWN,
         moving: false,
+        running: false,
         x: -1000,
         y: -1000,
         oldX: -1000,
@@ -1203,6 +1204,7 @@ export class GameScene extends DirtyScene {
                 y: this.CurrentPlayer.y,
                 direction: this.CurrentPlayer.lastDirection,
                 moving: false,
+                running: false,
             });
 
             this.markDirty();
@@ -2482,6 +2484,7 @@ export class GameScene extends DirtyScene {
                 y: this.CurrentPlayer.y,
                 direction: PositionMessage_Direction.DOWN,
                 moving: false,
+                running: false,
             },
             this.getViewport(true),
             get(availabilityStatusStore),
@@ -4446,8 +4449,8 @@ ${escapedMessage}
             return;
         }
 
-        // If the player is moving, and if it changed direction, let's send an event
-        if (event.direction !== this.lastMoveEventSent.direction) {
+        // If the player is moving, and if it changed direction or started/stopped running, let's send an event
+        if (event.direction !== this.lastMoveEventSent.direction || event.running !== this.lastMoveEventSent.running) {
             this.doPushPlayerPosition(event);
             return;
         }
@@ -4465,7 +4468,14 @@ ${escapedMessage}
         this.lastMoveEventSent = event;
         this.lastSentTick = this.currentTick;
 
-        this.connection?.sharePosition(event.x, event.y, event.direction, event.moving, this.getViewport());
+        this.connection?.sharePosition(
+            event.x,
+            event.y,
+            event.direction,
+            event.moving,
+            event.running,
+            this.getViewport(),
+        );
         iframeListener.hasPlayerMoved(event);
     }
 

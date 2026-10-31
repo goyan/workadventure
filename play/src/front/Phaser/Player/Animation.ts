@@ -9,6 +9,9 @@ export enum PlayerAnimationTypes {
     Idle = "idle",
 }
 
+// Running plays the walking animation twice as fast
+export const RUN_ANIMATION_SPEED = 2;
+
 export interface AnimationData {
     key: string;
     frameRate: number;

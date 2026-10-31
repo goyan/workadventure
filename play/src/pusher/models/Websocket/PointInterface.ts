@@ -5,6 +5,7 @@ export const PointInterface = z.object({
     y: z.number(),
     direction: z.string(),
     moving: z.boolean(),
+    running: z.boolean(),
 });
 
 export type PointInterface = z.infer<typeof PointInterface>;

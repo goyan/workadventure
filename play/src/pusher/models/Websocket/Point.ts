@@ -6,5 +6,6 @@ export class Point implements PointInterface {
         public y: number,
         public direction: string = "none",
         public moving: boolean = false,
+        public running: boolean = false,
     ) {}
 }

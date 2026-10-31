@@ -38,6 +38,7 @@ message PositionMessage {
   }
   Direction direction = 3;
   bool moving = 4;
+  bool running = 5;
 }
 
 message PointMessage {

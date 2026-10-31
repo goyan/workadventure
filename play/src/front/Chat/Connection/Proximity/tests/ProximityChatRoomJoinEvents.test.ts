@@ -88,7 +88,7 @@ function player(userId: number): MessageUserJoined {
         userId,
         name: `User ${userId}`,
         characterTextures: [],
-        position: { x: 0, y: 0, direction: 0, moving: false },
+        position: { x: 0, y: 0, direction: 0, moving: false, running: false },
         availabilityStatus: AvailabilityStatus.ONLINE,
         visitCardUrl: null,
         companionTexture: undefined,

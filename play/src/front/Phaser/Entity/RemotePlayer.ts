@@ -11,6 +11,7 @@ import {
 import type { WokaMenuAction } from "../../Stores/WokaMenuStore";
 import { wokaMenuStore } from "../../Stores/WokaMenuStore";
 import { Character } from "../Entity/Character";
+import { RUN_ANIMATION_SPEED } from "../Player/Animation";
 import type { GameScene } from "../Game/GameScene";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
@@ -72,7 +73,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
 
     public updatePosition(position: PositionMessage): void {
         this.stopMoveTo();
-        this.playAnimation(position.direction, position.moving);
+        this.playAnimation(position.direction, position.moving, position.running ? RUN_ANIMATION_SPEED : 1);
         this.setPosition(position.x, position.y);
 
         if (this.companion) {
