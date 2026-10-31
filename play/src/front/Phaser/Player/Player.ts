@@ -19,6 +19,8 @@ import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
+import type { Seat } from "./Seat";
+import { findSeatUnderFeet, isSeatTaken } from "./Seat";
 
 export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
@@ -29,6 +31,11 @@ export class Player extends Character {
     private readonly destinationMarker: WalkDestinationMarker;
     private readonly runSmokeTrail: RunSmokeTrail;
     private isMoving = false;
+    private isSlidingToSeat = false;
+    // The keys held to walk onto the seat must be released before a key press makes the player stand up.
+    private mustReleaseKeysBeforeStandingUp = false;
+    // Seat the player just left (or stopped sliding to): it is not sat on again until the player leaves its tile.
+    private ignoredSeatId: string | undefined;
 
     constructor(
         Scene: GameScene,
@@ -58,6 +65,27 @@ export class Player extends Character {
         const state = get(followStateStore);
         const role = get(followRoleStore);
 
+        if (this.isSlidingToSeat) {
+            // Keys held while walking onto the seat must not cancel the slide.
+            this.followPath(delta);
+            return;
+        }
+        if (this.isSeated()) {
+            const hasMovementInput = this.hasMovementInput(activeUserInputEvents);
+            if (!hasMovementInput) {
+                this.mustReleaseKeysBeforeStandingUp = false;
+            }
+            if (!hasMovementInput || this.mustReleaseKeysBeforeStandingUp) {
+                return;
+            }
+            this.standUp();
+        } else if (!this.pathToFollow && state === "off") {
+            this.trySitDown();
+            if (this.isSlidingToSeat) {
+                return;
+            }
+        }
+
         if (this.pathToFollow && activeUserInputEvents.anyExcept(UserInputEvent.SpeedUp)) {
             this.finishFollowingPath(true);
         }
@@ -72,6 +100,51 @@ export class Player extends Character {
         } else {
             this.inputStep(activeUserInputEvents, x, y);
         }
+    }
+
+    private hasMovementInput(activeUserInputEvents: ActiveEventList): boolean {
+        return (
+            activeUserInputEvents.get(UserInputEvent.MoveUp) ||
+            activeUserInputEvents.get(UserInputEvent.MoveDown) ||
+            activeUserInputEvents.get(UserInputEvent.MoveLeft) ||
+            activeUserInputEvents.get(UserInputEvent.MoveRight)
+        );
+    }
+
+    /**
+     * Sits on the free seat under the feet of the player: slides to its center, then faces the way of the seat.
+     */
+    private trySitDown(): void {
+        const body = this.getBody();
+        const seat = findSeatUnderFeet(this.scene, { x: this.x, y: this.y + body.height / 2 + body.offset.y });
+        if (seat?.id !== this.ignoredSeatId) {
+            this.ignoredSeatId = undefined;
+        }
+        if (!seat || seat.id === this.ignoredSeatId || isSeatTaken(this.scene, seat)) {
+            return;
+        }
+        this.slideToSeat(seat);
+    }
+
+    private slideToSeat(seat: Seat): void {
+        this.isSlidingToSeat = true;
+        this.stop();
+        userMovingStore.set(false);
+        this.setPathToFollow([seat.feet], WOKA_SPEED)
+            .then((result) => {
+                if (result.cancelled) {
+                    this.ignoredSeatId = seat.id;
+                    return;
+                }
+                this.ignoredSeatId = seat.id;
+                this.sit(seat.direction);
+                this.mustReleaseKeysBeforeStandingUp = true;
+                this.emit(hasMovedEventName, { moving: false, direction: seat.direction, x: this.x, y: this.y });
+            })
+            .catch((e) => console.warn(e))
+            .finally(() => {
+                this.isSlidingToSeat = false;
+            });
     }
 
     public rotate(): void {
@@ -99,6 +172,10 @@ export class Player extends Character {
     }
 
     public setPathToFollow(path: { x: number; y: number }[], speed?: number): Promise<PathFollowResult> {
+        if (!this.isSlidingToSeat) {
+            // Walking away (a click on the map, a script...) makes the player stand up.
+            this.standUp();
+        }
         if (!this.isMoving) {
             this.isMoving = true;
             this.emit(startMovingEventName, { direction: this._lastDirection, x: this.x, y: this.y });
@@ -335,6 +412,7 @@ export class Player extends Character {
     }
 
     public teleportTo(x: number, y: number): void {
+        this.standUp();
         this.setPosition(x, y);
         this.finishFollowingPath(true);
         this.emit(hasMovedEventName, { moving: false, direction: this._lastDirection, x: this.x, y: this.y });

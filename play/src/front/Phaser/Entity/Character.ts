@@ -19,6 +19,7 @@ import { ProtobufClientUtils } from "../../Network/ProtobufClientUtils";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 
 import { UsernameDisplay } from "../Components/UsernameDisplay";
+import { findSeatUnderFeet } from "../Player/Seat";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -39,6 +40,9 @@ export const CHARACTER_BODY_WIDTH = 16;
 export const CHARACTER_BODY_HEIGHT = 16;
 export const CHARACTER_BODY_OFFSET_X = 0;
 export const CHARACTER_BODY_OFFSET_Y = 8;
+
+// A seated character is drawn a bit higher, so that its feet do not stick out below the seat.
+const SEATED_SPRITE_OFFSET_Y = -4;
 
 export const PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX = "playtext-mediadevice-";
 
@@ -83,8 +87,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected pathWalkingSpeed?: number;
     private currentPathSegmentDistanceFromStart = 0;
     private pathFollowingResolve?: (result: PathFollowResult) => void;
+    private seated = false;
+    private depthCache: { x: number; y: number; depth: number } | undefined;
     private readonly syncDisplayPositionWithPhysics = (): void => {
-        this.setDepthIfNeeded(this.y + 16);
+        this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
     };
 
@@ -226,7 +232,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         body.setSize(CHARACTER_BODY_WIDTH, CHARACTER_BODY_HEIGHT); //edit the hitbox to better match the character model
         body.setOffset(CHARACTER_BODY_OFFSET_X, CHARACTER_BODY_OFFSET_Y);
         this.scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
-        this.setDepthIfNeeded(this.y + 16);
+        this.setDepthIfNeeded(this.computeDepth());
     }
 
     private waitAndGetSnapshot(): Promise<string> {
@@ -414,11 +420,63 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     setPosition(x: number, y: number): this {
         super.setPosition(Math.round(x), Math.round(y));
-        this.setDepth(this.y + 16);
+        this.setDepth(this.computeDepth());
         this.usernameDisplay?.setPlayerDepth(this.depth);
         this.updateUsernameDisplayPosition();
         this.movedSubject?.next({ x: this.x, y: this.y });
         return this;
+    }
+
+    /**
+     * Characters are sorted by the y of their feet. A character standing on a seat takes the depth of the seat
+     * (walking past or sitting), so that it shows above it, or below it when turning its back: only the characters
+     * on the tiles behind the seat are hidden by it.
+     */
+    private computeDepth(): number {
+        if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
+            const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
+            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
+            this.depthCache = { x: this.x, y: this.y, depth: seat?.depth ?? this.y + 16 };
+        }
+        return this.depthCache.depth;
+    }
+
+    public isSeated(): boolean {
+        return this.seated;
+    }
+
+    /**
+     * Position of the character when its feet are at the given point, as expected by the pathfinding conventions.
+     */
+    public getPositionForFeet(feet: { x: number; y: number }): { x: number; y: number } {
+        const body = this.getBody();
+        return { x: feet.x, y: feet.y - body.height / 2 - body.offset.y };
+    }
+
+    public sit(direction: PositionMessage_Direction): void {
+        this._lastDirection = direction;
+        this.seated = true;
+        this.depthCache = undefined;
+        for (const sprite of this.sprites.values()) {
+            sprite.y = SEATED_SPRITE_OFFSET_Y;
+        }
+        this.playAnimation(direction, false);
+        this.setDepthIfNeeded(this.computeDepth());
+        this.companion?.setTarget(this.x, this.y, direction);
+        this.scene.markDirty();
+    }
+
+    public standUp(): void {
+        if (!this.seated) {
+            return;
+        }
+        this.seated = false;
+        this.depthCache = undefined;
+        for (const sprite of this.sprites.values()) {
+            sprite.y = 0;
+        }
+        this.setDepthIfNeeded(this.computeDepth());
+        this.scene.markDirty();
     }
 
     stop() {

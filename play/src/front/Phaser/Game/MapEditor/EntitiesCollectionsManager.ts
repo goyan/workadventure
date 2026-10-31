@@ -101,6 +101,7 @@ export class EntitiesCollectionsManager {
                                 color: entity.color,
                                 collisionGrid: entity.collisionGrid,
                                 collisionRectangles: entity.collisionRectangles,
+                                seat: entity.seat,
                                 type: entity.type,
                                 ownerId: entity.ownerId,
                             });

@@ -13,6 +13,7 @@ import { wokaMenuStore } from "../../Stores/WokaMenuStore";
 import { Character } from "../Entity/Character";
 import type { GameScene } from "../Game/GameScene";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
+import { findSeatOfCharacter } from "../Player/Seat";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { LL } from "../../../i18n/i18n-svelte";
 import { blackListManager } from "../../WebRtc/BlackListManager";
@@ -74,9 +75,22 @@ export class RemotePlayer extends Character implements ActivatableInterface {
         this.stopMoveTo();
         this.playAnimation(position.direction, position.moving);
         this.setPosition(position.x, position.y);
+        this.updateSeatedState(position.moving);
 
         if (this.companion) {
             this.companion.setTarget(position.x, position.y, position.direction);
+        }
+    }
+
+    /**
+     * A remote player is seated when it does not move and stands on the center of a seat: no dedicated message is sent.
+     */
+    private updateSeatedState(moving: boolean): void {
+        const seat = moving ? undefined : findSeatOfCharacter(this.scene, this);
+        if (seat) {
+            this.sit(seat.direction);
+        } else {
+            this.standUp();
         }
     }
 
