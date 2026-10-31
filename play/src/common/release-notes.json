@@ -1,5 +1,12 @@
 [
     {
+        "id": "0cc7aacd16c4908be33828c534430bc078c34ba2",
+        "date": "2026-10-31T14:23:24+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep swinging door leaves whole, use recorded door sounds and harmonize the door widths"
+    },
+    {
         "id": "97935eb053924b5be39f76253c7d84c98fff065f",
         "date": "2026-10-31T13:59:59+01:00",
         "author": "Antoine Hésèque",
