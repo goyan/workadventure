@@ -17,6 +17,7 @@ import { visibilityStore } from "../../Stores/VisibilityStore";
 import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctions";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
+import { RunSmokeTrail } from "../Components/RunSmokeTrail";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 
 export const hasMovedEventName = "hasMoved";
@@ -26,6 +27,7 @@ export const requestEmoteEventName = "requestEmote";
 export class Player extends Character {
     private readonly unsubscribeVisibilityStore: Unsubscriber;
     private readonly destinationMarker: WalkDestinationMarker;
+    private readonly runSmokeTrail: RunSmokeTrail;
     private isMoving = false;
 
     constructor(
@@ -42,6 +44,7 @@ export class Player extends Character {
         //the current player model should be push away by other players to prevent conflict
         this.getBody().setImmovable(false);
         this.destinationMarker = new WalkDestinationMarker(Scene);
+        this.runSmokeTrail = new RunSmokeTrail(Scene);
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -149,7 +152,8 @@ export class Player extends Character {
 
         // Compute movement deltas
         const followMode = get(followStateStore) !== "off";
-        const speed = this.deduceSpeed(activeEvents.get(UserInputEvent.SpeedUp), followMode);
+        const speedUp = activeEvents.get(UserInputEvent.SpeedUp);
+        const speed = this.deduceSpeed(speedUp, followMode);
         const moveAmount = speed * 20;
         x = x * moveAmount;
         y = y * moveAmount;
@@ -175,6 +179,10 @@ export class Player extends Character {
                 this.emit(startMovingEventName, { direction, x: this.x, y: this.y });
             }
             this.moveBy(x, y);
+            if (speedUp && !followMode) {
+                const body = this.getBody();
+                this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
+            }
             emit();
         } else if (get(userMovingStore)) {
             if (this.isMoving) {
