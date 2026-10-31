@@ -352,7 +352,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     public addCompanion(texturePromise: CancelablePromise<string>): void {
-        this.companion = new Companion(this.scene, this.x, this.y, texturePromise);
+        this.companion = new Companion(this.scene, this, texturePromise);
     }
 
     private addTextures(textures: string[], frame?: string | number): void {

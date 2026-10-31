@@ -21,10 +21,29 @@ export interface CompanionStatus {
     direction: PositionMessage_Direction;
 }
 
+// Minimal distance between two recorded points of the player's trail.
+const TRAIL_SPACING = 6;
+const MAX_TRAIL_LENGTH = 400;
+// The companion stays idle when it is closer than this (path distance) to the player.
+const FOLLOW_DISTANCE = 56;
+// Delay (ms) without movement before the companion switches to its idle animation.
+const IDLE_DELAY = 150;
+// The walking axis (horizontal / vertical) only changes when the other one is this much larger.
+const DIRECTION_HYSTERESIS = 1.5;
+// The companion is drawn slightly below the player's position.
+const COMPANION_Y_OFFSET = 4;
+const TELEPORT_DISTANCE = 300;
+const MAX_SPEED = 1500;
+// Below this lag (px), the companion is considered to be at its spot.
+const MIN_LAG_TO_WALK = 0.01;
+
 export class Companion extends Container {
     public sprites: Map<string, Sprite>;
 
-    private delta: number;
+    private lastMoveTime = 0;
+    private exactX: number;
+    private exactY: number;
+    private trail: { x: number; y: number }[] = [];
     private invisible: boolean;
     private updateListener: (time: number, delta: number) => void;
     private target: { x: number; y: number; direction: PositionMessage_Direction };
@@ -34,14 +53,19 @@ export class Companion extends Container {
     private readonly _pictureStore: Writable<string | undefined>;
     private texturePromise: CancelablePromise<string | void> | undefined;
 
-    constructor(scene: Phaser.Scene, x: number, y: number, texturePromise: CancelablePromise<string>) {
-        super(scene, x + 14, y + 4);
+    constructor(
+        scene: Phaser.Scene,
+        private readonly owner: { x: number; y: number },
+        texturePromise: CancelablePromise<string>,
+    ) {
+        super(scene, owner.x, owner.y + COMPANION_Y_OFFSET);
 
         this.sprites = new Map<string, Sprite>();
 
-        this.delta = 0;
+        this.exactX = owner.x;
+        this.exactY = owner.y + COMPANION_Y_OFFSET;
         this.invisible = true;
-        this.target = { x, y, direction: PositionMessage_Direction.DOWN };
+        this.target = { x: owner.x, y: owner.y + COMPANION_Y_OFFSET, direction: PositionMessage_Direction.DOWN };
 
         this.direction = PositionMessage_Direction.DOWN;
         this.animationType = PlayerAnimationTypes.Idle;
@@ -69,63 +93,137 @@ export class Companion extends Container {
         this.setDepth(-1);
 
         this.updateListener = this.step.bind(this);
-        this.scene.events.addListener("update", this.updateListener);
+        // After the update of the player (which sets the target), so that the companion never is a frame behind it.
+        this.scene.events.addListener("postupdate", this.updateListener);
 
         this.scene.add.existing(this);
     }
 
     public setTarget(x: number, y: number, direction: PositionMessage_Direction) {
-        this.target = { x, y: y + 4, direction };
+        const targetY = y + COMPANION_Y_OFFSET;
+        this.target = { x, y: targetY, direction };
+
+        const last = this.trail[this.trail.length - 1];
+        const lastX = last?.x ?? this.exactX;
+        const lastY = last?.y ?? this.exactY;
+        const jump = Math.hypot(x - lastX, targetY - lastY);
+
+        if (jump > TELEPORT_DISTANCE) {
+            // The player teleported: do not walk through the map, jump with them.
+            this.trail = [];
+            this.placeAt(x, targetY);
+            return;
+        }
+
+        if (jump >= TRAIL_SPACING) {
+            this.trail.push({ x, y: targetY });
+            if (this.trail.length > MAX_TRAIL_LENGTH) {
+                this.trail.shift();
+            }
+        }
+    }
+
+    /**
+     * The direction only changes when the other axis clearly dominates: on a zigzagging trail (keyboard
+     * movement), flipping the direction on every frame would restart the animation continuously.
+     */
+    /**
+     * The position is kept with its decimals, but the container is drawn on whole pixels: the sprite is blurry
+     * otherwise (the player can have half pixels when running).
+     */
+    private placeAt(x: number, y: number): void {
+        this.exactX = x;
+        this.exactY = y;
+        this.setPosition(Math.round(x), Math.round(y));
+    }
+
+    private updateDirection(dx: number, dy: number): void {
+        const horizontal =
+            this.direction === PositionMessage_Direction.LEFT || this.direction === PositionMessage_Direction.RIGHT;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        if (ax === 0 && ay === 0) {
+            return;
+        }
+        // Keep the current axis unless the other one clearly dominates.
+        const useHorizontal = horizontal ? !(ay > ax * DIRECTION_HYSTERESIS) : ax > ay * DIRECTION_HYSTERESIS;
+        if (useHorizontal) {
+            this.direction = dx < 0 ? PositionMessage_Direction.LEFT : PositionMessage_Direction.RIGHT;
+        } else {
+            this.direction = dy < 0 ? PositionMessage_Direction.UP : PositionMessage_Direction.DOWN;
+        }
     }
 
     public step(time: number, delta: number) {
         if (typeof this.target === "undefined") return;
 
-        this.delta += delta;
-        if (this.delta < 128) {
-            return;
-        }
-        this.delta = 0;
+        // The owner is read directly: it is moved by the physics after the update of the scene, so the position
+        // given by setTarget is one frame old.
+        this.setTarget(this.owner.x, this.owner.y, this.target.direction);
 
-        const xDist = this.target.x - this.x;
-        const yDist = this.target.y - this.y;
+        // Distance the companion still has to walk along the trail to be at FOLLOW_DISTANCE from the player.
+        const lag = this.getRemainingPathLength() - FOLLOW_DISTANCE;
 
-        const distance = Math.pow(xDist, 2) + Math.pow(yDist, 2);
-
-        if (distance < 650) {
-            this.animationType = PlayerAnimationTypes.Idle;
-            this.direction = this.target.direction;
-
-            this.getBody().stop();
-        } else {
+        if (lag > MIN_LAG_TO_WALK) {
+            this.lastMoveTime = time;
             this.animationType = PlayerAnimationTypes.Walk;
 
-            const xDir = xDist / Math.max(Math.abs(xDist), 1);
-            const yDir = yDist / Math.max(Math.abs(yDist), 1);
+            // The companion covers exactly what the player just walked, in the same frame: the distance between
+            // them stays constant, whatever the irregularities of the player's steps. Only a big delay
+            // (teleport, lag) is caught up progressively, capped by MAX_SPEED.
+            let remaining = Math.min(lag, (MAX_SPEED * delta) / 1000);
+            const startX = this.exactX;
+            const startY = this.exactY;
 
-            const speed = 256;
-            this.getBody().setVelocity(
-                Math.min(Math.abs(xDist * 2.5), speed) * xDir,
-                Math.min(Math.abs(yDist * 2.5), speed) * yDir,
-            );
+            // Walk exactly along the player's trail, like the tail of a snake follows its head: the position is
+            // moved along the recorded segments (never in a straight line to the player), so it cannot cut
+            // through walls the player went around.
+            while (remaining > 0) {
+                const waypoint = this.trail[0] ?? this.target;
+                const xDist = waypoint.x - this.exactX;
+                const yDist = waypoint.y - this.exactY;
+                const distance = Math.hypot(xDist, yDist);
 
-            if (Math.abs(xDist) > Math.abs(yDist)) {
-                if (xDist < 0) {
-                    this.direction = PositionMessage_Direction.LEFT;
+                if (distance <= remaining) {
+                    this.placeAt(waypoint.x, waypoint.y);
+                    remaining -= distance;
+                    if (this.trail.length === 0) {
+                        break;
+                    }
+                    this.trail.shift();
                 } else {
-                    this.direction = PositionMessage_Direction.RIGHT;
-                }
-            } else {
-                if (yDist < 0) {
-                    this.direction = PositionMessage_Direction.UP;
-                } else {
-                    this.direction = PositionMessage_Direction.DOWN;
+                    this.placeAt(
+                        this.exactX + (xDist / distance) * remaining,
+                        this.exactY + (yDist / distance) * remaining,
+                    );
+                    remaining = 0;
                 }
             }
+
+            this.updateDirection(this.exactX - startX, this.exactY - startY);
+        } else if (time - this.lastMoveTime > IDLE_DELAY) {
+            // Wait a little before stopping, so that a slow frame rate does not flicker walk / idle animations.
+            this.animationType = PlayerAnimationTypes.Idle;
+            this.direction = this.target.direction;
         }
 
-        this.setDepth(this.y);
+        this.setDepth(this.exactY);
         this.playAnimation(this.direction, this.animationType);
+    }
+
+    /**
+     * Length of the path the companion has to walk to reach the player: through every waypoint of the trail.
+     */
+    private getRemainingPathLength(): number {
+        let length = 0;
+        let fromX = this.exactX;
+        let fromY = this.exactY;
+        for (const point of this.trail) {
+            length += Math.hypot(point.x - fromX, point.y - fromY);
+            fromX = point.x;
+            fromY = point.y;
+        }
+        return length + Math.hypot(this.target.x - fromX, this.target.y - fromY);
     }
 
     public async getSnapshot(): Promise<string> {
@@ -240,7 +338,7 @@ export class Companion extends Container {
         }
 
         if (this.scene) {
-            this.scene.events.removeListener("update", this.updateListener);
+            this.scene.events.removeListener("postupdate", this.updateListener);
         }
 
         super.destroy();
