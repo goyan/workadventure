@@ -78,9 +78,10 @@ patch doivent être rafraîchies une première fois pour pouvoir recevoir les pr
 Les nouveaux messages sont traduits ; le haut et le bas sorabe utilisent provisoirement l'anglais.
 Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le front chargé.
 « Outils → Nouveautés » ouvre l'historique complet, accessible sans droit d'édition, avec
-type, date et auteur. Les textes sont les sujets français des commits publics `feat(front):`
+type, date, heure et auteur. Les textes sont les sujets français des commits publics `feat(front):`
 et `fix(front):` depuis `v1.32.6`, du plus récent au plus ancien ; les dates sont celles des
-commits appliqués et les auteurs sont leurs noms Git (sans email ni corps de commit).
+commits appliqués, affichées avec l'heure dans le fuseau et la langue du lecteur
+(`formatReleaseNoteDate`), et les auteurs sont leurs noms Git (sans email ni corps de commit).
 `build-play` régénère `play/src/common/release-notes.json` avant chaque image, beta ou release :
 la liste ne dépend donc pas d'un service GitHub pendant le jeu. Le snapshot versionné sert
 au développement local ; le régénérer depuis le clone complet avec
