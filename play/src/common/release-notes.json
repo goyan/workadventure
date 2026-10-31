@@ -7,6 +7,13 @@
         "description": "Courir enfume le chien"
     },
     {
+        "id": "10a696ae5a5d3fbd6fc97aa3d763767c73125e37",
+        "date": "2026-10-31T20:40:54+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "add a button above the selected object to rotate it between its available directions"
+    },
+    {
         "id": "129e66aa091d5b0a76e319ccba10a2572b75f81a",
         "date": "2026-10-31T17:51:40+01:00",
         "author": "Antoine Hésèque",
