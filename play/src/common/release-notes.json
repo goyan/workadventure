@@ -1,5 +1,12 @@
 [
     {
+        "id": "1f04b5fd677d1b5fb37787efa1e82103a58deb52",
+        "date": "2026-10-31T21:29:03+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "Courir accélère l'animation du personnage, y compris pour les autres joueurs"
+    },
+    {
         "id": "793de97f47bf23fbcab7d0f80f0f6556e24855f9",
         "date": "2026-10-31T20:12:22+01:00",
         "author": "Antoine Hésèque",
