@@ -20,7 +20,7 @@ const FRAME_DURATION_MS = 40;
 /** A door stays open this long after the last character left its surroundings, so it does not flap. */
 const CLOSE_DELAY_MS = 500;
 /** How far from the door a character opens it. */
-const OPENING_DISTANCE = MAP_LAYER_TILE_SIZE;
+const OPENING_DISTANCE = 24;
 /** The set of doors is read again at this rhythm: doors are added and removed by the map editor. */
 const RESCAN_PERIOD_MS = 500;
 /** The recordings are loud: a door right next to the player plays at this volume, and fades out with the distance. */
@@ -174,7 +174,7 @@ export class DoorAnimator {
             character.x >= rect.left - OPENING_DISTANCE &&
             character.x <= rect.right + OPENING_DISTANCE &&
             character.y >= rect.top - OPENING_DISTANCE &&
-            character.y <= rect.bottom + OPENING_DISTANCE + MAP_LAYER_TILE_SIZE / 2
+            character.y <= rect.bottom + OPENING_DISTANCE
         );
     }
 
