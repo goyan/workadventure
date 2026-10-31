@@ -227,6 +227,7 @@ import { EmoteManager } from "./EmoteManager";
 import { EntityAudioManager } from "./EntityAudioManager";
 import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
+import { DOOR_SOUND_VARIANTS, DoorAnimator, doorSoundKey, doorSoundUrl } from "./MapEditor/MapLayer/DoorAnimator";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -379,6 +380,7 @@ export class GameScene extends DirtyScene {
     private entityAudioManager!: EntityAudioManager;
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
+    private doorAnimator: DoorAnimator | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
     private activatablesManager!: ActivatablesManager;
@@ -524,6 +526,10 @@ export class GameScene extends DirtyScene {
         );
         this.load.audio("audio-cloud", "/resources/objects/cloud.mp3");
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
+        for (let variant = 1; variant <= DOOR_SOUND_VARIANTS; variant += 1) {
+            this.load.audio(doorSoundKey("open", variant), doorSoundUrl("open", variant));
+            this.load.audio(doorSoundKey("close", variant), doorSoundUrl("close", variant));
+        }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
 
@@ -1386,6 +1392,26 @@ export class GameScene extends DirtyScene {
      * @param time
      * @param delta The delta time in ms since the last frame. This is a smoothed and capped value based on the FPS rate.
      */
+    /** The doors of the map layer open when a player, or a companion, comes near. */
+    private updateDoors(time: number): void {
+        this.doorAnimator ??= new DoorAnimator(
+            this,
+            () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+            (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
+            (key, volume, rate) => {
+                this.sound.play(key, { volume, rate });
+            },
+            () => this.markDirty(),
+        );
+        const characters: { x: number; y: number }[] = [this.CurrentPlayer];
+        if (this.CurrentPlayer.companion) characters.push(this.CurrentPlayer.companion);
+        for (const player of this.MapPlayersByKey.values()) {
+            characters.push(player);
+            if (player.companion) characters.push(player.companion);
+        }
+        this.doorAnimator.update(time, characters, this.CurrentPlayer);
+    }
+
     public update(time: number, delta: number): void {
         this.dirty = false;
         this.currentTick = time;
@@ -1417,6 +1443,9 @@ export class GameScene extends DirtyScene {
         }
         if (this.mapEditorModeManager?.isActive()) {
             this.mapEditorModeManager.update(time, delta);
+        }
+        if (this.hasJoinedRoom) {
+            this.updateDoors(time);
         }
 
         for (const addedPlayer of this.remotePlayersRepository.getAddedPlayers()) {

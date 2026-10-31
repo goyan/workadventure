@@ -1,5 +1,47 @@
 [
     {
+        "id": "34605f25064fa300c70eb032f2a3dba990130301",
+        "date": "2026-10-31T14:37:02+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "play the door sounds more softly"
+    },
+    {
+        "id": "0cc7aacd16c4908be33828c534430bc078c34ba2",
+        "date": "2026-10-31T14:23:24+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep swinging door leaves whole, use recorded door sounds and harmonize the door widths"
+    },
+    {
+        "id": "97935eb053924b5be39f76253c7d84c98fff065f",
+        "date": "2026-10-31T13:59:59+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "push the doors away from the character and layer the door sounds"
+    },
+    {
+        "id": "b706894ad8ba0b66a50f25560db05f6ca8a0a906",
+        "date": "2026-10-31T13:41:43+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep the pathfinder to the first row of vertical doors"
+    },
+    {
+        "id": "2c2ebe0c4c379d209185fb57cc2b09bab63012ab",
+        "date": "2026-10-31T13:24:09+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "draw horizontal doors over the whole wall and animate them in eight frames"
+    },
+    {
+        "id": "056b0016da39254b37cf346f3cdcdf1363d09a06",
+        "date": "2026-10-31T12:53:12+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "add doors to the map layer tool"
+    },
+    {
         "id": "fdbc35e1c528b037a7d7eb32795c18f37ca779e6",
         "date": "2026-10-31T04:11:45+01:00",
         "author": "Antoine Hésèque",

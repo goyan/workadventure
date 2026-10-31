@@ -61,6 +61,7 @@ export { default as IconMail } from "~icons/tabler/mail";
 export { default as IconClock } from "~icons/tabler/clock";
 export { default as IconHistory } from "~icons/tabler/history";
 export { default as IconPoint } from "~icons/tabler/point";
+export { default as IconDoor } from "~icons/tabler/door";
 export { default as IconDoorExit } from "~icons/tabler/door-exit";
 export { default as IconUserMinus } from "~icons/tabler/user-minus";
 export { default as IconInbox } from "~icons/tabler/mailbox";

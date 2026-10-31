@@ -413,6 +413,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "フリーハンドで描く",
             area: "範囲を描く",
+            placed: "要素を配置",
         },
         title: "マップ",
         modes: {
@@ -421,6 +422,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "床ブラシ",
             floorRectangle: "床の矩形",
             floorFill: "床を塗りつぶす",
+            door: "ドア",
             erase: "消しゴム",
         },
         hints: {
@@ -429,6 +431,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "ボタンを押したまま床タイルを塗ります。",
             floorRectangle: "矩形をドラッグして床で埋めます。",
             floorFill: "閉じた部屋をクリックして塗りつぶします。",
+            door: "壁をクリックすると、その2区画がドアになります。誰かが近づくと開きます。",
             erase: "ボタンを押したまま壁と床を消します。オブジェクトは残ります。",
         },
         floors: "床",
@@ -438,6 +441,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "この変更は大きすぎます。もっと小さな範囲を描いてください。",
             fillTooLarge: "範囲が閉じていないか、大きすぎて塗りつぶせません。先に壁で囲んでください。",
+            doorInvalid: "ドアには、隣り合う空いた壁の2区画が必要です。壁をクリックしてください。",
             failed: "変更を適用できませんでした。",
         },
         families: {

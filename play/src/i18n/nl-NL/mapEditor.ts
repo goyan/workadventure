@@ -416,6 +416,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Vrij tekenen",
             area: "Een gebied tekenen",
+            placed: "Element plaatsen",
         },
         title: "Kaart",
         modes: {
@@ -424,6 +425,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Vloerpenseel",
             floorRectangle: "Vloerrechthoek",
             floorFill: "Vloer vullen",
+            door: "Deur",
             erase: "Gum",
         },
         hints: {
@@ -432,6 +434,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Houd de knop ingedrukt en schilder vloertegels.",
             floorRectangle: "Sleep een rechthoek om die met vloer te vullen.",
             floorFill: "Klik in een gesloten ruimte om die te vullen.",
+            door: "Klik op een muur om twee segmenten ervan in een deur te veranderen. Ze gaat open als iemand dichterbij komt.",
             erase: "Houd de knop ingedrukt om muren en vloeren te wissen. Objecten blijven staan.",
         },
         floors: "Vloer",
@@ -441,6 +444,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Deze wijziging is te groot. Teken een kleiner gebied.",
             fillTooLarge: "Het gebied is niet gesloten of te groot om te vullen. Sluit het eerst met muren.",
+            doorInvalid: "Een deur heeft twee vrije muursegmenten naast elkaar nodig. Klik op een muur.",
             failed: "De wijziging kon niet worden toegepast.",
         },
         families: {

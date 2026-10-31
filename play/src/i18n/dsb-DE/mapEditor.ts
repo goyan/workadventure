@@ -414,6 +414,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Draw freehand",
             area: "Draw an area",
+            placed: "Element połožyś",
         },
         title: "Map",
         modes: {
@@ -422,6 +423,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Floor brush",
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
+            door: "Źwjerce",
             erase: "Eraser",
         },
         hints: {
@@ -430,6 +432,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Hold the button and paint floor tiles.",
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
+            door: "Klikni na seśanu, aby dwa jeje wótrězka do źwjercow pśemějał. Wóno se wócyni, gaž něchten pśiźo.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
         },
         floors: "Floor",
@@ -439,6 +442,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "This change is too large. Draw a smaller area.",
             fillTooLarge: "The area is not closed or too large to fill. Close it with walls first.",
+            doorInvalid: "Źwjerce trjebaju dwa lube wótrězka seśany pódla se. Klikni na seśanu.",
             failed: "The change could not be applied.",
         },
         families: {

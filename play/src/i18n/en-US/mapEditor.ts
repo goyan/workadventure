@@ -410,6 +410,7 @@ const mapEditor: BaseTranslation = {
         groups: {
             freehand: "Draw freehand",
             area: "Draw an area",
+            placed: "Place an item",
         },
         title: "Map",
         modes: {
@@ -418,6 +419,7 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Floor brush",
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
+            door: "Door",
             erase: "Eraser",
         },
         hints: {
@@ -426,6 +428,7 @@ const mapEditor: BaseTranslation = {
             floorBrush: "Hold the button and paint floor tiles.",
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
+            door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
         },
         floors: "Floor",
@@ -435,6 +438,7 @@ const mapEditor: BaseTranslation = {
         status: {
             tooLarge: "This change is too large. Draw a smaller area.",
             fillTooLarge: "The area is not closed or too large to fill. Close it with walls first.",
+            doorInvalid: "A door needs two free wall segments side by side. Click on a wall.",
             failed: "The change could not be applied.",
         },
         families: {

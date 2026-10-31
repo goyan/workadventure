@@ -414,6 +414,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Dibuixa a mà alçada",
             area: "Dibuixa una zona",
+            placed: "Col·loca un element",
         },
         title: "Mapa",
         modes: {
@@ -422,6 +423,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pinzell de terra",
             floorRectangle: "Rectangle de terra",
             floorFill: "Omple el terra",
+            door: "Porta",
             erase: "Goma",
         },
         hints: {
@@ -430,6 +432,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Mantén el botó i pinta rajoles de terra.",
             floorRectangle: "Arrossega un rectangle per omplir-lo de terra.",
             floorFill: "Fes clic en una sala tancada per omplir-la.",
+            door: "Feu clic en una paret per convertir-ne dos segments en una porta. S'obre quan algú s'hi acosta.",
             erase: "Mantén el botó per esborrar parets i terres. Els objectes es conserven.",
         },
         floors: "Terra",
@@ -439,6 +442,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Aquest canvi és massa gran. Dibuixa una zona més petita.",
             fillTooLarge: "La zona no està tancada o és massa gran per omplir-la. Tanca-la primer amb parets.",
+            doorInvalid:
+                "Una porta necessita dos segments de paret lliures un al costat de l'altre. Feu clic en una paret.",
             failed: "No s'ha pogut aplicar el canvi.",
         },
         families: {

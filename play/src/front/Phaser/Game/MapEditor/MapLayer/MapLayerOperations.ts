@@ -1,13 +1,15 @@
 import type { FloorFamily, WallTint } from "./MapLayerCatalog";
 import {
     MAP_LAYER_TILE_SIZE,
+    DOOR_CLOSED_FRAME,
+    DOOR_VERTICAL_WIDTH,
     WALL_HALF,
     WALL_THICKNESS,
     facadeLeftExtension,
     parseMapLayerPrefab,
 } from "./MapLayerCatalog";
-import type { WallOrientation } from "./MapLayerModel";
-import { MapLayerModel, cellKey } from "./MapLayerModel";
+import type { DoorRef, WallEdgeRef, WallOrientation } from "./MapLayerModel";
+import { MapLayerModel, cellKey, doorEdges, edgeKey } from "./MapLayerModel";
 
 export interface Point {
     x: number;
@@ -21,12 +23,6 @@ export interface MapBounds {
 
 /** Upper bound of a flood fill, so that filling a huge empty map cannot create an unbounded number of entities. */
 export const MAX_FILL_CELLS = 2500;
-
-export interface WallEdgeRef {
-    orientation: WallOrientation;
-    x: number;
-    y: number;
-}
 
 export interface PlacedPrefabLike {
     x: number;
@@ -77,6 +73,27 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                     model.setWall("v", x, y, piece.tint);
                 } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
                     model.setWall("v", x, legacyY, piece.tint);
+                }
+                break;
+            }
+            case "door": {
+                // The first piece of the door gives its place; the walls under the door are not drawn, so they are read from it.
+                if (piece.frame !== DOOR_CLOSED_FRAME || (piece.side !== "g" && piece.side !== "haut")) {
+                    break;
+                }
+                const door: DoorRef =
+                    piece.orientation === "h"
+                        ? { orientation: "h", x: item.x / size + 1, y: item.y / size }
+                        : {
+                              orientation: "v",
+                              x: (item.x + DOOR_VERTICAL_WIDTH / 2) / size,
+                              y: (item.y - WALL_THICKNESS) / size + 1,
+                          };
+                if (Number.isInteger(door.x) && Number.isInteger(door.y)) {
+                    for (const edge of doorEdges(door)) {
+                        model.setWall(edge.orientation, edge.x, edge.y, piece.tint);
+                    }
+                    model.setDoor(door);
                 }
                 break;
             }
@@ -279,12 +296,89 @@ export function applyWalls(
     }
 }
 
-export function eraseAt(model: MapLayerModel, worldX: number, worldY: number): void {
+/**
+ * Erases what is under a position: a door first (the walls it stands on stay as they were), else a wall, else a
+ * floor. `keptEdges` collects the segments of the doors erased, which a drag then leaves alone: one pass of the
+ * eraser removes the door, the next one the wall.
+ */
+export function eraseAt(
+    model: MapLayerModel,
+    worldX: number,
+    worldY: number,
+    keptEdges: Set<string> = new Set(),
+): void {
     const wall = wallAtPoint(model, worldX, worldY);
     if (wall) {
+        if (keptEdges.has(edgeKey(wall.orientation, wall.x, wall.y))) {
+            return;
+        }
+        const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
+        if (door) {
+            model.removeDoor(door);
+            for (const edge of doorEdges(door)) {
+                keptEdges.add(edgeKey(edge.orientation, edge.x, edge.y));
+            }
+            return;
+        }
         model.removeWall(wall.orientation, wall.x, wall.y);
         return;
     }
     const cell = cellAt(worldX, worldY);
     model.removeFloor(cell.x, cell.y);
+}
+
+/** A door the cursor would place, and whether the walls under it allow it. */
+export interface DoorCandidate extends DoorRef {
+    valid: boolean;
+}
+
+/**
+ * The door under a world position, centered on the cursor: it stands on the wall segment hit by the cursor, on the
+ * vertex nearest to it along that wall. Without a wall under the cursor the candidate is an invalid horizontal door.
+ */
+export function doorCandidateAt(model: MapLayerModel, worldX: number, worldY: number): DoorCandidate {
+    const size = MAP_LAYER_TILE_SIZE;
+    const wall = wallAtPoint(model, worldX, worldY);
+    const orientation: WallOrientation = wall?.orientation ?? "h";
+    const door: DoorRef =
+        orientation === "h"
+            ? { orientation, x: Math.round(worldX / size), y: wall?.y ?? Math.floor(worldY / size) }
+            : { orientation, x: wall?.x ?? Math.round(worldX / size), y: Math.round((worldY - WALL_THICKNESS) / size) };
+    return { ...door, valid: wall !== undefined && model.canSetDoor(door) };
+}
+
+/** Floor under the segments of a horizontal door when there is none: the one of the room it opens to (south first). */
+function defaultDoorFloor(model: MapLayerModel, cell: Point): FloorFamily | undefined {
+    const around: Point[] = [
+        { x: cell.x, y: cell.y + 1 },
+        { x: cell.x, y: cell.y - 1 },
+        { x: cell.x - 1, y: cell.y },
+        { x: cell.x + 1, y: cell.y },
+    ];
+    for (const neighbour of around) {
+        const floor = model.getFloor(neighbour.x, neighbour.y);
+        if (floor) {
+            return floor.family;
+        }
+    }
+    return undefined;
+}
+
+/** Sets a door and gives its horizontal segments the floor of the room, unless they already have one. */
+export function applyDoor(model: MapLayerModel, door: DoorRef, bounds: MapBounds): void {
+    if (!model.setDoor(door)) {
+        return;
+    }
+    if (door.orientation !== "h") {
+        return;
+    }
+    for (const edge of doorEdges(door)) {
+        const cell = { x: edge.x, y: edge.y };
+        if (model.getFloor(cell.x, cell.y) === undefined && inBounds(cell, bounds)) {
+            const family = defaultDoorFloor(model, cell);
+            if (family) {
+                model.setFloor(cell.x, cell.y, family);
+            }
+        }
+    }
 }
