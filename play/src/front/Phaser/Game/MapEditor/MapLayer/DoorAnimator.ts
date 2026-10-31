@@ -23,6 +23,8 @@ const CLOSE_DELAY_MS = 500;
 const OPENING_DISTANCE = MAP_LAYER_TILE_SIZE;
 /** The set of doors is read again at this rhythm: doors are added and removed by the map editor. */
 const RESCAN_PERIOD_MS = 500;
+/** The recordings are loud: a door right next to the player plays at this volume, and fades out with the distance. */
+const DOOR_MAX_VOLUME = 0.3;
 /** Doors farther than this from the local player are silent. */
 const HEARING_DISTANCE = 10 * MAP_LAYER_TILE_SIZE;
 
@@ -163,7 +165,12 @@ export class DoorAnimator {
         if (distance < HEARING_DISTANCE) {
             const variant = 1 + Math.floor(Math.random() * DOOR_SOUND_VARIANTS);
             // A little change of pitch makes each of the recordings sound like another door.
-            this.playSound(doorSoundKey(kind, variant), 1 - distance / HEARING_DISTANCE, 0.94 + Math.random() * 0.12);
+            const closeness = 1 - distance / HEARING_DISTANCE;
+            this.playSound(
+                doorSoundKey(kind, variant),
+                DOOR_MAX_VOLUME * closeness * closeness,
+                0.94 + Math.random() * 0.12,
+            );
         }
     }
 
