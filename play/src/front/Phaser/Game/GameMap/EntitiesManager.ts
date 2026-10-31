@@ -401,7 +401,13 @@ export class EntitiesManager extends EventEmitter {
                 return;
             }
 
-            if (get(mapEditorSelectedToolStore) === EditorToolName.SelectionEditor) {
+            // The selection, area and floor/wall tools own the pointer: objects must not be interactive while they are active.
+            const selectedTool = get(mapEditorSelectedToolStore);
+            if (
+                selectedTool === EditorToolName.SelectionEditor ||
+                selectedTool === EditorToolName.AreaEditor ||
+                selectedTool === EditorToolName.MapLayerEditor
+            ) {
                 return;
             }
 
