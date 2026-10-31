@@ -1,5 +1,12 @@
 [
     {
+        "id": "2c2ebe0c4c379d209185fb57cc2b09bab63012ab",
+        "date": "2026-10-31T13:24:09+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "draw horizontal doors over the whole wall and animate them in eight frames"
+    },
+    {
         "id": "056b0016da39254b37cf346f3cdcdf1363d09a06",
         "date": "2026-10-31T12:53:12+01:00",
         "author": "Antoine Hésèque",
