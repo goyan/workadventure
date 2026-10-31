@@ -1,5 +1,12 @@
 [
     {
+        "id": "fdbc35e1c528b037a7d7eb32795c18f37ca779e6",
+        "date": "2026-10-31T04:11:45+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "make the companion follow the player's trail"
+    },
+    {
         "id": "01fce3227818830101b932638ec2634886cb1ac3",
         "date": "2026-10-31T03:00:18+01:00",
         "author": "Antoine Hésèque",
