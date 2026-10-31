@@ -1,5 +1,12 @@
 [
     {
+        "id": "97935eb053924b5be39f76253c7d84c98fff065f",
+        "date": "2026-10-31T13:59:59+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "push the doors away from the character and layer the door sounds"
+    },
+    {
         "id": "b706894ad8ba0b66a50f25560db05f6ca8a0a906",
         "date": "2026-10-31T13:41:43+01:00",
         "author": "Antoine Hésèque",
