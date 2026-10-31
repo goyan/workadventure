@@ -426,3 +426,5 @@ Mises à jour de l'outil Carte :
   (`MapLayerSync`).
 - Chargement : chaque collection d'objets de la salle dispose de 10 secondes ; une collection qui ne répond pas ne bloque plus le chargement des
   entités, ni le message « Vérification des catalogues » de l'outil.
+- Clics : avec l'outil Carte (comme avec l'outil Zones), un clic sur un objet ne le sélectionne plus ni ne bascule vers l'éditeur d'objets ; seuls sols et murs
+  sont touchés (`EntitiesManager`).

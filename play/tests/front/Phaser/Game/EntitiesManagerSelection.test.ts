@@ -109,7 +109,7 @@ describe("Native entity clicks while selecting a group", () => {
     });
 
     it("preserves the native single object editing flow from another editor tool", () => {
-        mapEditorSelectedToolStore.set(EditorToolName.MapLayerEditor);
+        mapEditorSelectedToolStore.set(EditorToolName.WAMSettingsEditor);
         clickEntity();
 
         expect(manager.equipTool.mock.calls).toEqual([[EditorToolName.EntityEditor]]);
@@ -118,6 +118,14 @@ describe("Native entity clicks while selecting a group", () => {
 
     it("ignores entity clicks while the area editor tool is active", () => {
         mapEditorSelectedToolStore.set(EditorToolName.AreaEditor);
+        clickEntity();
+
+        expect(manager.equipTool.mock.calls).toHaveLength(0);
+        expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+    });
+
+    it("ignores entity clicks while the floor and wall tool is active", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.MapLayerEditor);
         clickEntity();
 
         expect(manager.equipTool.mock.calls).toHaveLength(0);
