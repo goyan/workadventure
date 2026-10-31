@@ -57,11 +57,13 @@ describe("doors", () => {
         expect(items).toContain("porte-h-gris-d@160,160");
         expect(items.filter((item) => item.startsWith("facade-"))).toHaveLength(4);
         expect(items).not.toContain("raccord-EW@154,160");
-        // The walls close on the door: an end on their last vertex and no cap above the door.
-        expect(items).toContain("facade-gris-right@96,160");
-        expect(items).toContain("facade-gris-left@186,160");
-        expect(items).toContain("raccord-W@122,160");
-        expect(items).toContain("raccord-E@186,160");
+        // The walls go on up to the door, which draws the ends of the wall: no cap above it, no end or joint next to it.
+        expect(items).toContain("facade-gris-left@58,160");
+        expect(items).toContain("facade-gris-mid@96,160");
+        expect(items).toContain("facade-gris-mid@192,160");
+        expect(items).toContain("facade-gris-right@224,160");
+        expect(items.some((item) => item.startsWith("raccord-") && item.endsWith("@122,160"))).toBe(false);
+        expect(items.some((item) => item.startsWith("raccord-") && item.endsWith("@186,160"))).toBe(false);
     });
 
     it("refuses a door without a wall under it or over another door", () => {

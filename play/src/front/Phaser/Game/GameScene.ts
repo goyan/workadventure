@@ -227,7 +227,7 @@ import { EmoteManager } from "./EmoteManager";
 import { EntityAudioManager } from "./EntityAudioManager";
 import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
-import { DOOR_CLOSE_SOUND, DOOR_OPEN_SOUND, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
+import { DOOR_SOUND_VARIANTS, DoorAnimator, doorSoundKey, doorSoundUrl } from "./MapEditor/MapLayer/DoorAnimator";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -526,8 +526,10 @@ export class GameScene extends DirtyScene {
         );
         this.load.audio("audio-cloud", "/resources/objects/cloud.mp3");
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
-        this.load.audio(DOOR_OPEN_SOUND, "/resources/objects/door-open.wav");
-        this.load.audio(DOOR_CLOSE_SOUND, "/resources/objects/door-close.wav");
+        for (let variant = 1; variant <= DOOR_SOUND_VARIANTS; variant += 1) {
+            this.load.audio(doorSoundKey("open", variant), doorSoundUrl("open", variant));
+            this.load.audio(doorSoundKey("close", variant), doorSoundUrl("close", variant));
+        }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
 
@@ -1396,8 +1398,8 @@ export class GameScene extends DirtyScene {
             this,
             () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
             (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
-            (key, volume) => {
-                this.sound.play(key, { volume });
+            (key, volume, rate) => {
+                this.sound.play(key, { volume, rate });
             },
             () => this.markDirty(),
         );

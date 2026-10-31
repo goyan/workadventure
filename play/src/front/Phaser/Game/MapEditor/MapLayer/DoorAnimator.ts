@@ -4,6 +4,7 @@ import type { Entity } from "../../../ECS/Entity";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import {
     DOOR_CLOSED_FRAME,
+    DOOR_FRAME_MARGIN,
     DOOR_VERTICAL_WIDTH,
     MAP_LAYER_TILE_SIZE,
     doorPrefabName,
@@ -25,8 +26,11 @@ const RESCAN_PERIOD_MS = 500;
 /** Doors farther than this from the local player are silent. */
 const HEARING_DISTANCE = 10 * MAP_LAYER_TILE_SIZE;
 
-export const DOOR_OPEN_SOUND = "audio-door-open";
-export const DOOR_CLOSE_SOUND = "audio-door-close";
+/** Recorded door sounds (CC0, see `resources/objects/doors/CREDITS.txt`): one is picked at random, so a door never sounds the same twice. */
+export const DOOR_SOUND_VARIANTS = 6;
+export const doorSoundKey = (kind: "open" | "close", variant: number): string => `audio-door-${kind}-${variant}`;
+export const doorSoundUrl = (kind: "open" | "close", variant: number): string =>
+    `/resources/objects/doors/door-${kind}-${variant}.ogg`;
 
 export interface DoorCharacter {
     x: number;
@@ -75,7 +79,7 @@ export class DoorAnimator {
         private readonly scene: Phaser.Scene,
         private readonly getEntities: () => Iterable<Entity>,
         private readonly getPrefab: (collectionName: string, id: string) => Promise<EntityPrefab | undefined>,
-        private readonly playSound: (key: string, volume: number) => void,
+        private readonly playSound: (key: string, volume: number, rate: number) => void,
         private readonly markDirty: () => void,
     ) {}
 
@@ -139,26 +143,27 @@ export class DoorAnimator {
             door.frame += Math.sign(target - door.frame);
             door.nextFrameAt = time + FRAME_DURATION_MS;
             if (previous === DOOR_CLOSED_FRAME || door.frame === DOOR_CLOSED_FRAME) {
-                this.playDoorSound(
-                    previous === DOOR_CLOSED_FRAME ? DOOR_OPEN_SOUND : DOOR_CLOSE_SOUND,
-                    state,
-                    listener,
-                );
+                this.playDoorSound(previous === DOOR_CLOSED_FRAME ? "open" : "close", state, listener);
             }
         }
         const texture = state.textures?.[door.reverse ? 1 : 0][door.frame];
         if (texture !== undefined && state.entity.texture.key !== texture) {
             state.entity.setTexture(texture);
+            // The frames of a horizontal door have a margin above the door, the closed door (the prefab of the entity) has none.
+            const margin = state.piece.orientation === "h" && door.frame !== DOOR_CLOSED_FRAME ? DOOR_FRAME_MARGIN : 0;
+            state.entity.setOrigin(0, margin / state.entity.height);
             this.markDirty();
         }
     }
 
-    private playDoorSound(key: string, state: DoorPieceState, listener: DoorCharacter): void {
+    private playDoorSound(kind: "open" | "close", state: DoorPieceState, listener: DoorCharacter): void {
         const centerX = (state.rect.left + state.rect.right) / 2;
         const centerY = (state.rect.top + state.rect.bottom) / 2;
         const distance = Math.hypot(centerX - listener.x, centerY - listener.y);
         if (distance < HEARING_DISTANCE) {
-            this.playSound(key, 1 - distance / HEARING_DISTANCE);
+            const variant = 1 + Math.floor(Math.random() * DOOR_SOUND_VARIANTS);
+            // A little change of pitch makes each of the recordings sound like another door.
+            this.playSound(doorSoundKey(kind, variant), 1 - distance / HEARING_DISTANCE, 0.94 + Math.random() * 0.12);
         }
     }
 

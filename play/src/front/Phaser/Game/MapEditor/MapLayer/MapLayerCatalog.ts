@@ -86,6 +86,11 @@ export type JointArm = (typeof JOINT_ARMS)[number];
  */
 export const DOOR_FRAME_COUNT = 8;
 export const DOOR_CLOSED_FRAME = DOOR_FRAME_COUNT - 1;
+/**
+ * The frames of the horizontal doors keep this many rows of margin above (and under) the 32 rows of the door, so that a
+ * leaf swinging up or down stays whole: the animation aligns the row after the margin on the top of the door.
+ */
+export const DOOR_FRAME_MARGIN = 14;
 export const DOOR_VERTICAL_WIDTH = 2 * MAP_LAYER_TILE_SIZE;
 export const DOOR_SIDES = { h: ["g", "d"], v: ["haut", "bas"] } as const;
 export type DoorSide = "g" | "d" | "haut" | "bas";
