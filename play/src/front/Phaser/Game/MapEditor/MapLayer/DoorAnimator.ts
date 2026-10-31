@@ -15,7 +15,7 @@ import type { MapLayerPiece } from "./MapLayerCatalog";
 type DoorPiece = Extract<MapLayerPiece, { kind: "door" }>;
 
 /** Time between two frames of the animation. */
-const FRAME_DURATION_MS = 70;
+const FRAME_DURATION_MS = 40;
 /** A door stays open this long after the last character left its surroundings, so it does not flap. */
 const CLOSE_DELAY_MS = 500;
 /** How far from the door a character opens it. */

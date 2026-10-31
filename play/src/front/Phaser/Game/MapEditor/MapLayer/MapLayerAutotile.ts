@@ -43,12 +43,20 @@ function endsOf(continuesLeft: boolean, continuesRight: boolean): FacadeEnds {
     return "mid";
 }
 
+/**
+ * A horizontal door replaces the whole wall on its two segments, cap included: for the walls next to it, it is a gap,
+ * and they close on it with an end. A vertical door is drawn between its joints, which stay.
+ */
+function isSolid(model: MapLayerModel, orientation: "h" | "v", x: number, y: number): boolean {
+    return model.hasWall(orientation, x, y) && !(orientation === "h" && model.getDoorOn("h", x, y));
+}
+
 function jointArmsAt(model: MapLayerModel, x: number, y: number): JointArm[] {
     const arms: JointArm[] = [];
-    if (model.hasWall("v", x, y - 1)) arms.push("N");
-    if (model.hasWall("h", x, y)) arms.push("E");
-    if (model.hasWall("v", x, y)) arms.push("S");
-    if (model.hasWall("h", x - 1, y)) arms.push("W");
+    if (isSolid(model, "v", x, y - 1)) arms.push("N");
+    if (isSolid(model, "h", x, y)) arms.push("E");
+    if (isSolid(model, "v", x, y)) arms.push("S");
+    if (isSolid(model, "h", x - 1, y)) arms.push("W");
     return arms;
 }
 
@@ -125,7 +133,7 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
             continue;
         }
         if (wall.orientation === "h") {
-            const ends = endsOf(model.hasWall("h", wall.x - 1, wall.y), model.hasWall("h", wall.x + 1, wall.y));
+            const ends = endsOf(isSolid(model, "h", wall.x - 1, wall.y), isSolid(model, "h", wall.x + 1, wall.y));
             placements.push(
                 placement(
                     MAP_LAYER_WALL_COLLECTION,
@@ -166,6 +174,7 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                 ),
             );
         }
+        if (arms.length === 0) continue;
         placements.push(
             placement(MAP_LAYER_WALL_COLLECTION, jointPrefabName(arms), vertex.x * size - WALL_HALF, vertex.y * size),
         );

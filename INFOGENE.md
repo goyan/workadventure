@@ -439,6 +439,7 @@ Portes (mode « Porte » de l'outil Carte) :
   Le remplissage traite la porte comme un mur : les deux côtés restent dissociés.
 - Comportement : toujours fermée, elle s'ouvre quand un joueur (local ou distant) ou un compagnon est à une tuile (`DoorAnimator`), se referme 0,5 s après. Calcul local,
   rien n'est envoyé. Elle ne bloque jamais (le pathfinder la traverse, collisions du prefab vides). Sons `door-open.wav` / `door-close.wav`, volume selon la distance.
-- Animation : frames `...-0` (ouverte) à `...-3` ; la frame fermée est le prefab sans suffixe. Sans les frames, la porte reste fermée.
+- Animation : 8 frames, `...-0` (ouverte) à `...-6` ; la frame fermée est le prefab sans suffixe (40 ms par frame). Sans les frames, la porte reste fermée.
+- Rendu : une porte horizontale remplace tout le mur (chapeau compris) ; les murs voisins se ferment dessus par un bout et un raccord. Une porte verticale a deux vantaux, un par tuile, dessinés entre les raccords des sommets.
 - Sprites à ajouter au dépôt privé : voir la maquette « Sprites de porte WorkAdventure » (horizontal 32 × 32 par panneau, vertical 64 × 32 par pièce, vertical
-  haut qui commence sous le raccord du premier sommet, 5 frames, 4 teintes, depthOffset de `bas` à régler sous le raccord du sommet suivant). **Non validé dans le jeu.**
+  haut qui commence sous le raccord du premier sommet, 8 frames, 4 teintes, depthOffset de `bas` à régler sous le raccord du sommet suivant). **Non validé dans le jeu.**

@@ -79,10 +79,10 @@ export type JointArm = (typeof JOINT_ARMS)[number];
  *   leaf) on the first segment and the "d" piece (its mirror) on the second one;
  * - vertical door (seen from above): the "haut" and "bas" pieces, 64 x 32, centered on the line of the wall, the leaf
  *   swinging to the west; "haut" starts under the joint of the first vertex, "bas" is its vertical mirror under it.
- * The prefab with no frame number is the closed door, the one that is stored in the map. Frames 0 (open) to 3 are only
+ * The prefab with no frame number is the closed door, the one that is stored in the map. Frames 0 (open) to the one before the last are only
  * used by the animation, that plays them from the open door to the closed one, and back.
  */
-export const DOOR_FRAME_COUNT = 5;
+export const DOOR_FRAME_COUNT = 8;
 export const DOOR_CLOSED_FRAME = DOOR_FRAME_COUNT - 1;
 export const DOOR_VERTICAL_WIDTH = 2 * MAP_LAYER_TILE_SIZE;
 export const DOOR_SIDES = { h: ["g", "d"], v: ["haut", "bas"] } as const;
@@ -136,7 +136,7 @@ const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni
 const FACADE_NAME = new RegExp(`^facade-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
 const END_NAME = new RegExp(`^bout-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
-const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-([0-3]))?$`);
+const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-(\\d))?$`);
 const JOINT_NAME = /^raccord-(N?E?S?W?)$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not part of the map layer. */
@@ -178,6 +178,10 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         if (!door) {
             return undefined;
         }
+        const frame = door[4] === undefined ? DOOR_CLOSED_FRAME : Number(door[4]);
+        if (door[4] !== undefined && frame >= DOOR_CLOSED_FRAME) {
+            return undefined;
+        }
         const orientation = door[1] as "h" | "v";
         const side = door[3] as DoorSide;
         if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
@@ -188,7 +192,7 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
             orientation,
             tint: door[2] as WallTint,
             side,
-            frame: door[4] === undefined ? DOOR_CLOSED_FRAME : Number(door[4]),
+            frame,
         };
     }
     return undefined;
