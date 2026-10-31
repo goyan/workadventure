@@ -44,14 +44,19 @@ interface DoorPieceState {
     entity: Entity;
     piece: DoorPiece;
     rect: DoorRect;
-    /** Textures of the frames, by frame number; undefined while they are loading or when the catalog lacks them. */
-    textures: (string | undefined)[] | undefined;
+    /**
+     * Textures of the frames of both sets (swinging towards the north / west, then towards the south / east), by frame
+     * number; undefined while they are loading or when the catalog lacks them.
+     */
+    textures: [string[], string[]] | undefined;
 }
 
 interface DoorState {
     frame: number;
     /** Time (scene clock) until which the door must stay open. */
     openUntil: number;
+    /** Whether the door swings towards the south or the east: it is pushed away from the character who opens it. */
+    reverse: boolean;
     nextFrameAt: number;
 }
 
@@ -87,17 +92,18 @@ export class DoorAnimator {
             return;
         }
 
-        const near = new Map<string, boolean>();
+        const nearest = new Map<string, DoorCharacter | undefined>();
         for (const state of this.pieces.values()) {
             const key = this.doorKey(state);
-            if (!near.has(key)) {
-                near.set(
-                    key,
-                    characters.some((character) => this.isNear(state.rect, character)),
-                );
+            if (!nearest.has(key)) {
+                nearest.set(key, this.nearestCharacter(state, characters));
             }
             const door = this.getDoorState(key, time);
-            if (near.get(key)) {
+            const pusher = nearest.get(key);
+            if (pusher) {
+                if (door.frame === DOOR_CLOSED_FRAME) {
+                    door.reverse = this.isPushedTowardsViewer(state, pusher);
+                }
                 door.openUntil = time + CLOSE_DELAY_MS;
             }
             this.step(state, door, time, listener);
@@ -118,7 +124,7 @@ export class DoorAnimator {
     private getDoorState(key: string, time: number): DoorState {
         let door = this.states.get(key);
         if (!door) {
-            door = { frame: DOOR_CLOSED_FRAME, openUntil: 0, nextFrameAt: time };
+            door = { frame: DOOR_CLOSED_FRAME, openUntil: 0, reverse: false, nextFrameAt: time };
             this.states.set(key, door);
         }
         return door;
@@ -140,7 +146,7 @@ export class DoorAnimator {
                 );
             }
         }
-        const texture = state.textures?.[door.frame];
+        const texture = state.textures?.[door.reverse ? 1 : 0][door.frame];
         if (texture !== undefined && state.entity.texture.key !== texture) {
             state.entity.setTexture(texture);
             this.markDirty();
@@ -163,6 +169,33 @@ export class DoorAnimator {
             character.y >= rect.top - OPENING_DISTANCE &&
             character.y <= rect.bottom + OPENING_DISTANCE + MAP_LAYER_TILE_SIZE / 2
         );
+    }
+
+    /** The character near the door that is the closest to its middle, if any. */
+    private nearestCharacter(state: DoorPieceState, characters: readonly DoorCharacter[]): DoorCharacter | undefined {
+        const centerX = (state.rect.left + state.rect.right) / 2;
+        const centerY = (state.rect.top + state.rect.bottom) / 2;
+        let best: DoorCharacter | undefined;
+        let bestDistance = Infinity;
+        for (const character of characters) {
+            if (!this.isNear(state.rect, character)) continue;
+            const distance = Math.hypot(character.x - centerX, character.y - centerY);
+            if (distance < bestDistance) {
+                best = character;
+                bestDistance = distance;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * The door is pushed away from the character: a character north of a horizontal door, or west of a vertical one,
+     * makes it swing towards the south, or the east. Standing in the doorway counts as the south / east side.
+     */
+    private isPushedTowardsViewer(state: DoorPieceState, character: DoorCharacter): boolean {
+        return state.piece.orientation === "h"
+            ? character.y < state.rect.top
+            : character.x < (state.rect.left + state.rect.right) / 2;
     }
 
     private parse(collectionName: string, prefabId: string): DoorPiece | undefined {
@@ -229,27 +262,33 @@ export class DoorAnimator {
     /** Loads the textures of the frames; a door whose catalog has no frames simply does not move. */
     private async loadFrames(state: DoorPieceState): Promise<void> {
         const { piece } = state;
-        const prefabs = await Promise.all(
-            Array.from({ length: DOOR_CLOSED_FRAME + 1 }, (_, frame) =>
-                frame === DOOR_CLOSED_FRAME
-                    ? Promise.resolve(state.entity.getPrefab())
-                    : this.getPrefab(
-                          state.entity.getPrefab().collectionName,
-                          mapLayerPrefabId(
-                              state.entity.getPrefab().collectionName,
-                              doorPrefabName(piece.orientation, piece.tint, piece.side, frame),
+        const closed = state.entity.getPrefab();
+        const sets: EntityPrefab[][] = [];
+        for (const reverse of [false, true]) {
+            // The prefabs of one set are looked up together, the closed door being the prefab of the entity.
+            // eslint-disable-next-line no-await-in-loop
+            const prefabs = await Promise.all(
+                Array.from({ length: DOOR_CLOSED_FRAME + 1 }, (_, frame) =>
+                    frame === DOOR_CLOSED_FRAME
+                        ? Promise.resolve(closed)
+                        : this.getPrefab(
+                              closed.collectionName,
+                              mapLayerPrefabId(
+                                  closed.collectionName,
+                                  doorPrefabName(piece.orientation, piece.tint, piece.side, frame, reverse),
+                              ),
                           ),
-                      ),
-            ),
-        );
-        if (prefabs.some((prefab) => prefab === undefined)) {
-            return;
+                ),
+            );
+            if (prefabs.some((prefab) => prefab === undefined)) {
+                return;
+            }
+            sets.push(prefabs as EntityPrefab[]);
         }
-        const loaded = prefabs as EntityPrefab[];
         await Promise.all(
-            loaded.map((prefab) => TexturesHelper.loadEntityImage(this.scene, prefab.imagePath, prefab.imagePath)),
+            sets.flat().map((prefab) => TexturesHelper.loadEntityImage(this.scene, prefab.imagePath, prefab.imagePath)),
         );
-        const textures = loaded.map((prefab) => prefab.imagePath);
+        const textures = sets.map((set) => set.map((prefab) => prefab.imagePath));
         Object.assign(state, { textures });
     }
 }

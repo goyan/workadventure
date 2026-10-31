@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+    doorPrefabName,
+    mapLayerPrefabId,
+    parseMapLayerPrefab,
+} from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { wallBarriers } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerBarriers";
 import { computePlacements } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
@@ -29,6 +34,19 @@ function placed(model: MapLayerModel) {
         prefabId: item.prefabId,
     }));
 }
+
+describe("door prefabs", () => {
+    it("reads the frames of both swing directions and ignores the invalid ones", () => {
+        const read = (name: string) => parseMapLayerPrefab("Carte Portes", mapLayerPrefabId("Carte Portes", name));
+        expect(read("porte-h-gris-g")).toMatchObject({ orientation: "h", side: "g", frame: 7, reverse: false });
+        expect(read("porte-h-gris-g-3")).toMatchObject({ frame: 3, reverse: false });
+        expect(read("porte-v-brique-bas-b5")).toMatchObject({ orientation: "v", side: "bas", frame: 5, reverse: true });
+        expect(read("porte-h-gris-g-7")).toBeUndefined();
+        expect(read("porte-h-gris-haut")).toBeUndefined();
+        expect(doorPrefabName("v", "gris", "haut", 2, true)).toBe("porte-v-gris-haut-b2");
+        expect(doorPrefabName("v", "gris", "haut", 7, true)).toBe("porte-v-gris-haut");
+    });
+});
 
 describe("doors", () => {
     it("replaces two wall segments by two door pieces and no joint on the middle vertex", () => {
