@@ -63,6 +63,9 @@ export enum EntitiesManagerEvent {
 
 /** Opacity of the entities that are not the subject of the map editor tool in use. */
 const DIMMED_ENTITY_ALPHA = 0.4;
+// Floors and walls are made of sprites that overlap: fading each of them with an alpha stacks the opacity where they
+// overlap and draws a grid. They are darkened with a tint instead, which stays uniform.
+const DIMMED_MAP_LAYER_TINT = 0x808080;
 
 export class EntitiesManager extends EventEmitter {
     private readonly erasingEntityIds = new Set<string>();
@@ -240,11 +243,25 @@ export class EntitiesManager extends EventEmitter {
     }
 
     private applyEntityDimming(entity: Entity): void {
-        entity.setAlpha(this.shouldDimEntity?.(entity) ? DIMMED_ENTITY_ALPHA : 1);
+        const dimmed = this.shouldDimEntity?.(entity) === true;
+        const prefab = entity.getPrefab();
+        if (isMapLayerPrefab(prefab.collectionName, prefab.id)) {
+            entity.setAlpha(1);
+            if (dimmed) {
+                entity.setTint(DIMMED_MAP_LAYER_TINT);
+            } else {
+                entity.clearTint();
+            }
+            return;
+        }
+        entity.setAlpha(dimmed ? DIMMED_ENTITY_ALPHA : 1);
     }
 
     public clearAllEntitiesTint(): void {
-        this.entities.forEach((entity) => entity.clearTint());
+        this.entities.forEach((entity) => {
+            entity.clearTint();
+            this.applyEntityDimming(entity);
+        });
     }
 
     public clearAllEntitiesEditOutlines(): void {
