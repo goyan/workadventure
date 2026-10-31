@@ -414,6 +414,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Disegna a mano libera",
             area: "Disegna un'area",
+            placed: "Posiziona un elemento",
         },
         title: "Mappa",
         modes: {
@@ -422,6 +423,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pennello pavimento",
             floorRectangle: "Rettangolo pavimento",
             floorFill: "Riempi pavimento",
+            door: "Porta",
             erase: "Gomma",
         },
         hints: {
@@ -430,6 +432,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Tieni premuto il pulsante e dipingi le piastrelle.",
             floorRectangle: "Trascina un rettangolo per riempirlo di pavimento.",
             floorFill: "Clicca in una stanza chiusa per riempirla.",
+            door: "Fai clic su un muro per trasformare due dei suoi segmenti in una porta. Si apre quando qualcuno si avvicina.",
             erase: "Tieni premuto il pulsante per cancellare pareti e pavimenti. Gli oggetti restano.",
         },
         floors: "Pavimento",
@@ -439,6 +442,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Questa modifica è troppo grande. Disegna un'area più piccola.",
             fillTooLarge: "L'area non è chiusa o è troppo grande per essere riempita. Chiudila prima con delle pareti.",
+            doorInvalid: "Una porta richiede due segmenti di muro liberi affiancati. Fai clic su un muro.",
             failed: "Impossibile applicare la modifica.",
         },
         families: {

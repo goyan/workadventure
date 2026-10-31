@@ -415,6 +415,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Dibujar a mano alzada",
             area: "Dibujar una zona",
+            placed: "Colocar un elemento",
         },
         title: "Mapa",
         modes: {
@@ -423,6 +424,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pincel de suelo",
             floorRectangle: "Rectángulo de suelo",
             floorFill: "Rellenar suelo",
+            door: "Puerta",
             erase: "Borrador",
         },
         hints: {
@@ -431,6 +433,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Mantén el botón y pinta baldosas de suelo.",
             floorRectangle: "Arrastra un rectángulo para rellenarlo de suelo.",
             floorFill: "Haz clic en una sala cerrada para rellenarla.",
+            door: "Haz clic en una pared para convertir dos de sus segmentos en una puerta. Se abre cuando alguien se acerca.",
             erase: "Mantén el botón para borrar paredes y suelos. Los objetos se conservan.",
         },
         floors: "Suelo",
@@ -441,6 +444,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             tooLarge: "Este cambio es demasiado grande. Dibuja una zona más pequeña.",
             fillTooLarge:
                 "La zona no está cerrada o es demasiado grande para rellenarla. Ciérrala primero con paredes.",
+            doorInvalid: "Una puerta necesita dos segmentos de pared libres, uno junto al otro. Haz clic en una pared.",
             failed: "No se pudo aplicar el cambio.",
         },
         families: {

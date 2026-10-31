@@ -412,6 +412,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Vẽ tự do",
             area: "Vẽ một vùng",
+            placed: "Đặt một phần tử",
         },
         title: "Bản đồ",
         modes: {
@@ -420,6 +421,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Cọ sàn",
             floorRectangle: "Hình chữ nhật sàn",
             floorFill: "Lấp đầy sàn",
+            door: "Cửa",
             erase: "Cục tẩy",
         },
         hints: {
@@ -428,6 +430,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Giữ nút và vẽ gạch sàn.",
             floorRectangle: "Kéo một hình chữ nhật để lấp đầy bằng sàn.",
             floorFill: "Nhấp vào phòng kín để lấp đầy.",
+            door: "Nhấp vào một bức tường để biến hai đoạn của nó thành cửa. Cửa mở ra khi có người đến gần.",
             erase: "Giữ nút để xóa tường và sàn. Các vật thể được giữ lại.",
         },
         floors: "Sàn",
@@ -437,6 +440,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Thay đổi này quá lớn. Hãy vẽ vùng nhỏ hơn.",
             fillTooLarge: "Vùng chưa kín hoặc quá lớn để lấp đầy. Hãy khép kín bằng tường trước.",
+            doorInvalid: "Cửa cần hai đoạn tường trống nằm cạnh nhau. Nhấp vào một bức tường.",
             failed: "Không thể áp dụng thay đổi.",
         },
         families: {

@@ -6,6 +6,7 @@
     } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import {
         mapLayerCatalogAvailableStore,
+        mapLayerDoorsAvailableStore,
         mapLayerFloorFamilyStore,
         mapLayerFloorSwatchesStore,
         mapLayerModeStore,
@@ -14,7 +15,7 @@
         mapLayerWallTintStore,
     } from "../../Stores/MapLayerStore";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
-    import { IconBrush, IconBucket, IconEraser, IconHome, IconRectangle, IconWall } from "@wa-icons";
+    import { IconBrush, IconBucket, IconDoor, IconEraser, IconHome, IconRectangle, IconWall } from "@wa-icons";
 
     // "Freehand" modes act while the pointer moves, "area" modes act on the shape dragged between two points.
     const freehandModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
@@ -28,14 +29,19 @@
         { mode: "floorFill", icon: IconBucket },
     ];
 
-    let usesFloor = $derived($mapLayerModeStore !== "wall" && $mapLayerModeStore !== "erase");
+    const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [{ mode: "door", icon: IconDoor }];
+
+    let usesFloor = $derived(
+        $mapLayerModeStore !== "wall" && $mapLayerModeStore !== "erase" && $mapLayerModeStore !== "door",
+    );
     let usesWall = $derived($mapLayerModeStore === "wall" || $mapLayerModeStore === "room");
 </script>
 
 {#snippet modeButton(mode: MapLayerMode, Icon: typeof IconWall)}
     <button
         type="button"
-        class="flex flex-col items-center gap-1 p-2 rounded text-xs {$mapLayerModeStore === mode
+        disabled={mode === "door" && !$mapLayerDoorsAvailableStore}
+        class="flex flex-col items-center gap-1 p-2 rounded text-xs disabled:opacity-40 {$mapLayerModeStore === mode
             ? 'bg-secondary'
             : 'bg-white/10 hover:bg-white/20'}"
         data-testid="mapLayerMode-{mode}"
@@ -86,6 +92,14 @@
             <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.area()}</h3>
             <div class="grid grid-cols-3 gap-2">
                 {#each areaModes as { mode, icon } (mode)}
+                    {@render modeButton(mode, icon)}
+                {/each}
+            </div>
+        </section>
+        <section class="flex flex-col gap-2">
+            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.placed()}</h3>
+            <div class="grid grid-cols-3 gap-2">
+                {#each placedModes as { mode, icon } (mode)}
                     {@render modeButton(mode, icon)}
                 {/each}
             </div>

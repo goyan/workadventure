@@ -14,7 +14,12 @@ import type { PlacedPrefabLike } from "./MapLayerOperations";
  */
 export function wallBarriers(placedPrefabs: Iterable<PlacedPrefabLike>): TileBarriers {
     const barriers = new TileBarriers(WALL_COLLISION_HALF);
-    for (const wall of modelFromPlacedPrefabs(placedPrefabs).getWalls()) {
+    const model = modelFromPlacedPrefabs(placedPrefabs);
+    for (const wall of model.getWalls()) {
+        // A door is always passable: it opens when something comes near.
+        if (model.getDoorOn(wall.orientation, wall.x, wall.y)) {
+            continue;
+        }
         if (wall.orientation === "h") {
             barriers.addSouthBorder(wall.x, wall.y);
         } else {

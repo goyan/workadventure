@@ -1,4 +1,5 @@
 import {
+    MAP_LAYER_DOOR_COLLECTION,
     WALL_HALF,
     WALL_THICKNESS,
     facadePrefabName,
@@ -6,7 +7,9 @@ import {
     jointPrefabName,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_TILE_SIZE,
+    DOOR_VERTICAL_WIDTH,
     MAP_LAYER_WALL_COLLECTION,
+    doorPrefabName,
     facadeLeftExtension,
     mapLayerPrefabId,
     verticalWallPrefabName,
@@ -69,7 +72,58 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
         placements.push(placement(MAP_LAYER_FLOOR_COLLECTION, name, floor.x * size, floor.y * size));
     }
 
+    for (const door of model.getDoors()) {
+        const tint = model.getWall(
+            door.orientation,
+            door.x - (door.orientation === "h" ? 1 : 0),
+            door.y - (door.orientation === "v" ? 1 : 0),
+        )?.tint;
+        if (tint === undefined) continue;
+        if (door.orientation === "h") {
+            placements.push(
+                placement(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("h", tint, "g"),
+                    (door.x - 1) * size,
+                    door.y * size,
+                ),
+                placement(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", tint, "d"), door.x * size, door.y * size),
+            );
+        } else {
+            const x = door.x * size - DOOR_VERTICAL_WIDTH / 2;
+            placements.push(
+                placement(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("v", tint, "haut"),
+                    x,
+                    (door.y - 1) * size + WALL_THICKNESS,
+                ),
+                placement(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("v", tint, "bas"),
+                    x,
+                    door.y * size + WALL_THICKNESS,
+                ),
+            );
+        }
+    }
+
     for (const wall of model.getWalls()) {
+        // The walls under a door are drawn by the door itself; their vertices still get their joints.
+        if (model.getDoorOn(wall.orientation, wall.x, wall.y)) {
+            const ends =
+                wall.orientation === "h"
+                    ? [
+                          [wall.x, wall.y],
+                          [wall.x + 1, wall.y],
+                      ]
+                    : [
+                          [wall.x, wall.y],
+                          [wall.x, wall.y + 1],
+                      ];
+            for (const [vx, vy] of ends) vertices.set(`${vx},${vy}`, { x: vx, y: vy });
+            continue;
+        }
         if (wall.orientation === "h") {
             const ends = endsOf(model.hasWall("h", wall.x - 1, wall.y), model.hasWall("h", wall.x + 1, wall.y));
             placements.push(
@@ -97,6 +151,8 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
     }
 
     for (const vertex of vertices.values()) {
+        // The door draws its own cap on its middle vertex.
+        if (model.hasDoorAt("h", vertex.x, vertex.y) || model.hasDoorAt("v", vertex.x, vertex.y)) continue;
         const arms = jointArmsAt(model, vertex.x, vertex.y);
         const lastWall = model.getWall("v", vertex.x, vertex.y - 1);
         if (arms.length === 1 && arms[0] === "N" && lastWall) {

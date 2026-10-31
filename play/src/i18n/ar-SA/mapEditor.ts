@@ -409,6 +409,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "الرسم الحر",
             area: "رسم منطقة",
+            placed: "وضع عنصر",
         },
         title: "الخريطة",
         modes: {
@@ -417,6 +418,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "فرشاة الأرضية",
             floorRectangle: "مستطيل أرضية",
             floorFill: "ملء الأرضية",
+            door: "باب",
             erase: "ممحاة",
         },
         hints: {
@@ -425,6 +427,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "اضغط مع الاستمرار وارسم بلاط الأرضية.",
             floorRectangle: "اسحب مستطيلاً لملئه بالأرضية.",
             floorFill: "انقر داخل غرفة مغلقة لملئها.",
+            door: "انقر على جدار لتحويل جزأين منه إلى باب. يُفتح عندما يقترب أحدهم.",
             erase: "اضغط مع الاستمرار لمسح الجدران والأرضيات. تبقى الأغراض.",
         },
         floors: "الأرضية",
@@ -434,6 +437,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "هذا التغيير كبير جداً. ارسم منطقة أصغر.",
             fillTooLarge: "المنطقة غير مغلقة أو كبيرة جداً للملء. أغلقها بالجدران أولاً.",
+            doorInvalid: "يحتاج الباب إلى جزأين حرّين من الجدار جنبًا إلى جنب. انقر على جدار.",
             failed: "تعذّر تطبيق التغيير.",
         },
         families: {

@@ -16,7 +16,12 @@ export const MAP_LAYER_FLOOR_DEPTH = 0.5;
 
 export const MAP_LAYER_FLOOR_COLLECTION = "Carte Sols";
 export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
-export const MAP_LAYER_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, MAP_LAYER_WALL_COLLECTION];
+export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
+export const MAP_LAYER_COLLECTIONS: readonly string[] = [
+    MAP_LAYER_FLOOR_COLLECTION,
+    MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_DOOR_COLLECTION,
+];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
     "carrelage-gris",
@@ -68,6 +73,21 @@ export type FacadeEnds = "mid" | "left" | "right" | "single";
 export const JOINT_ARMS = ["N", "E", "S", "W"] as const;
 export type JointArm = (typeof JOINT_ARMS)[number];
 
+/**
+ * Doors replace two consecutive wall segments, centered on the vertex between them, and are drawn in two pieces:
+ * - horizontal door (seen from the south, like a facade): the "g" piece (32 x 32, a facade row: cap and face, left
+ *   leaf) on the first segment and the "d" piece (its mirror) on the second one;
+ * - vertical door (seen from above): the "haut" and "bas" pieces, 64 x 32, centered on the line of the wall, the leaf
+ *   swinging to the west; "haut" starts under the joint of the first vertex, "bas" is its vertical mirror under it.
+ * The prefab with no frame number is the closed door, the one that is stored in the map. Frames 0 (open) to 3 are only
+ * used by the animation, that plays them from the open door to the closed one, and back.
+ */
+export const DOOR_FRAME_COUNT = 5;
+export const DOOR_CLOSED_FRAME = DOOR_FRAME_COUNT - 1;
+export const DOOR_VERTICAL_WIDTH = 2 * MAP_LAYER_TILE_SIZE;
+export const DOOR_SIDES = { h: ["g", "d"], v: ["haut", "bas"] } as const;
+export type DoorSide = "g" | "d" | "haut" | "bas";
+
 const VERTICAL_WALL_PREFIX = "mur-vertical-";
 const WALL_END_PREFIX = "bout-";
 const JOINT_PREFIX = "raccord-";
@@ -98,17 +118,25 @@ export function wallEndPrefabName(tint: WallTint): string {
     return `${WALL_END_PREFIX}${tint}`;
 }
 
+/** Name of a piece of a door; without `frame`, the closed door. */
+export function doorPrefabName(orientation: "h" | "v", tint: WallTint, side: DoorSide, frame?: number): string {
+    const base = `porte-${orientation}-${tint}-${side}`;
+    return frame === undefined || frame === DOOR_CLOSED_FRAME ? base : `${base}-${frame}`;
+}
+
 export type MapLayerPiece =
     | { kind: "floor"; family: FloorFamily; variant: FloorVariant }
     | { kind: "facade"; tint: WallTint; ends: FacadeEnds }
     | { kind: "vertical"; tint: WallTint }
     | { kind: "end"; tint: WallTint }
-    | { kind: "joint"; arms: JointArm[] };
+    | { kind: "joint"; arms: JointArm[] }
+    | { kind: "door"; orientation: "h" | "v"; tint: WallTint; side: DoorSide; frame: number };
 
 const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni|ombre)$`);
 const FACADE_NAME = new RegExp(`^facade-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
 const END_NAME = new RegExp(`^bout-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
+const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-([0-3]))?$`);
 const JOINT_NAME = /^raccord-(N?E?S?W?)$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not part of the map layer. */
@@ -145,6 +173,24 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         }
         return undefined;
     }
+    if (collectionName === MAP_LAYER_DOOR_COLLECTION) {
+        const door = DOOR_NAME.exec(name);
+        if (!door) {
+            return undefined;
+        }
+        const orientation = door[1] as "h" | "v";
+        const side = door[3] as DoorSide;
+        if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
+            return undefined;
+        }
+        return {
+            kind: "door",
+            orientation,
+            tint: door[2] as WallTint,
+            side,
+            frame: door[4] === undefined ? DOOR_CLOSED_FRAME : Number(door[4]),
+        };
+    }
     return undefined;
 }
 
@@ -168,6 +214,11 @@ export function mapLayerPieceSize(piece: MapLayerPiece): { width: number; height
             };
         case "floor":
             return { width: MAP_LAYER_TILE_SIZE, height: MAP_LAYER_TILE_SIZE };
+        case "door":
+            return {
+                width: piece.orientation === "h" ? MAP_LAYER_TILE_SIZE : DOOR_VERTICAL_WIDTH,
+                height: MAP_LAYER_TILE_SIZE,
+            };
     }
 }
 

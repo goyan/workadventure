@@ -415,7 +415,7 @@ Les catalogues et leurs images (pack sous licence) sont dans le dépôt privé, 
 de `workadventure-selfhost`. Disponible sur **toutes les salles**, anciennes comprises : la variable `MAP_LAYER_CATALOG_URLS` (URL séparées par des virgules, lue par le pusher et
 transmise au front) ajoute les deux catalogues aux collections de chaque salle ; aucun WAM n'a à être modifié. L'outil ne lit et n'écrit que les entités de ces
 collections : les sols et murs posés comme objets classiques ne sont jamais touchés. Sans la variable (ou si le catalogue est injoignable), l'outil l'indique et ne pose rien.
-Limites connues : plafond de 4000 entités par geste, remplissage limité à 2500 cases, pas de contrôle de présence des joueurs, pas de portes ni fenêtres, pas de
+Limites connues : plafond de 4000 entités par geste, remplissage limité à 2500 cases, pas de contrôle de présence des joueurs, pas de fenêtres, pas de
 raccords décoratifs au nord. **Comportement visuel non validé dans le jeu.**
 
 Mises à jour de l'outil Carte :
@@ -428,3 +428,17 @@ Mises à jour de l'outil Carte :
   entités, ni le message « Vérification des catalogues » de l'outil.
 - Clics : avec l'outil Carte (comme avec l'outil Zones), un clic sur un objet ne le sélectionne plus ni ne bascule vers l'éditeur d'objets ; seuls sols et murs
   sont touchés (`EntitiesManager`).
+
+Portes (mode « Porte » de l'outil Carte) :
+- Une porte remplace **deux segments de mur consécutifs**, centrée sur le curseur, horizontale (vue du sud) ou verticale (vue de dessus). L'aperçu est vert si
+  les deux segments sont des murs libres, rouge sinon (message « doorInvalid » au clic). Elle prend la teinte du mur.
+- Stockage : deux entités WAM de la collection `Carte Portes` (`porte-h-<teinte>-g|d`, `porte-v-<teinte>-haut|bas`, image = porte fermée). Les murs sous la
+  porte restent dans le modèle mais ne sont pas dessinés : gommer la porte rend le mur à l'identique (la gomme enlève la porte, le passage suivant le mur) ;
+  gommer le mur retire la porte. Le catalogue est facultatif : sans lui, le bouton est grisé.
+- Sol : le sol sous une porte horizontale est un sol ordinaire (pinceau, remplissage, gomme). À la pose, il reprend le sol de la pièce (sud d'abord) s'il n'y en a pas.
+  Le remplissage traite la porte comme un mur : les deux côtés restent dissociés.
+- Comportement : toujours fermée, elle s'ouvre quand un joueur (local ou distant) ou un compagnon est à une tuile (`DoorAnimator`), se referme 0,5 s après. Calcul local,
+  rien n'est envoyé. Elle ne bloque jamais (le pathfinder la traverse, collisions du prefab vides). Sons `door-open.wav` / `door-close.wav`, volume selon la distance.
+- Animation : frames `...-0` (ouverte) à `...-3` ; la frame fermée est le prefab sans suffixe. Sans les frames, la porte reste fermée.
+- Sprites à ajouter au dépôt privé : voir la maquette « Sprites de porte WorkAdventure » (horizontal 32 × 32 par panneau, vertical 64 × 32 par pièce, vertical
+  haut qui commence sous le raccord du premier sommet, 5 frames, 4 teintes, depthOffset de `bas` à régler sous le raccord du sommet suivant). **Non validé dans le jeu.**
