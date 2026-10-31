@@ -18,6 +18,7 @@ import {
     mapEditorVisibilityStore,
 } from "../../../../Stores/MapEditorStore";
 import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
+import { CreateEntityFrontCommand } from "../Commands/Entity/CreateEntityFrontCommand";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import type { Entity } from "../../../ECS/Entity";
@@ -41,6 +42,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     protected mapEditorSelectedEntityStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorSelectedEntityDraggedStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorEntityEraserStoreUnsubscriber: Unsubscriber | undefined;
+    private rotateButton: Phaser.GameObjects.Text | undefined;
 
     protected constructor(mapEditorModeManager: MapEditorModeManager) {
         super();
@@ -122,6 +124,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         this.mapEditorSelectedEntityStoreUnsubscriber?.();
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber?.();
         this.mapEditorEntityEraserStoreUnsubscriber?.();
+        this.destroyRotateButton();
     }
 
     protected subscribeToStores(): void {
@@ -170,6 +173,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
 
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber = mapEditorSelectedEntityDraggedStore.subscribe(
             (dragged) => {
+                this.rotateButton?.setVisible(!dragged);
                 if (!dragged) {
                     this.entityOldPositionPreview?.destroy();
                 }
@@ -178,9 +182,11 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
 
         this.mapEditorSelectedEntityStoreUnsubscriber = mapEditorSelectedEntityStore.subscribe((entity) => {
             this.entityOldPositionPreview?.destroy();
+            this.destroyRotateButton();
             if (!entity) {
                 return;
             }
+            this.createRotateButton(entity);
             this.entityOldPositionPreview = this.scene.add
                 .image(entity.x, entity.y, entity.texture)
                 .setOrigin(0)
@@ -203,6 +209,68 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
                 }
             }
         });
+    }
+
+    /**
+     * Prefabs sharing the color of the entity prefab, one per available direction (e.g. the sides of a chair).
+     */
+    private getRotations(entity: Entity): EntityPrefab[] {
+        const prefab = entity.getPrefab();
+        const variant = get(this.scene.getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore()).find(
+            (entityVariant) => entityVariant.prefabIds.includes(prefab.id),
+        );
+        return variant?.getEntityPrefabsPositions(prefab.color) ?? [];
+    }
+
+    private createRotateButton(entity: Entity): void {
+        if (!entity.canEdit || this.getRotations(entity).length < 2) {
+            return;
+        }
+        this.rotateButton = this.scene.add
+            .text(entity.x + entity.displayWidth / 2, entity.y - 8, "⟳", {
+                fontSize: "18px",
+                color: "#ffffff",
+                backgroundColor: "#1b2a41",
+                padding: { x: 6, y: 2 },
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(Number.MAX_SAFE_INTEGER)
+            .setInteractive({ cursor: "pointer" })
+            .on(Phaser.Input.Events.POINTER_DOWN, () => {
+                this.rotateEntity(entity).catch((e) => console.error(e));
+            });
+        this.scene.markDirty();
+    }
+
+    private destroyRotateButton(): void {
+        this.rotateButton?.destroy();
+        this.rotateButton = undefined;
+    }
+
+    private async rotateEntity(entity: Entity): Promise<void> {
+        const rotations = this.getRotations(entity);
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (rotations.length < 2 || !wamFile) {
+            return;
+        }
+        const current = rotations.findIndex((rotation) => rotation.id === entity.getPrefab().id);
+        const next = rotations[(current + 1) % rotations.length];
+        const data = structuredClone(entity.getEntityData());
+        await this.mapEditorModeManager.executeCommands([
+            new DeleteEntityFrontCommand(wamFile, entity.entityId, undefined, this.entitiesManager),
+            new CreateEntityFrontCommand(
+                wamFile,
+                entity.entityId,
+                { ...data, prefabRef: { collectionName: next.collectionName, id: next.id } },
+                undefined,
+                this.entitiesManager,
+                { width: entity.width, height: entity.height },
+            ),
+        ]);
+        const rotated = this.entitiesManager.getEntities().get(entity.entityId);
+        if (rotated) {
+            mapEditorSelectedEntityStore.set(rotated);
+        }
     }
 
     protected cleanPreview(): void {
