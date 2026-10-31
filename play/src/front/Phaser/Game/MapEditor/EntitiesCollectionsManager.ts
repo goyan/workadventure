@@ -12,6 +12,9 @@ import { asError } from "catch-unknown";
 import { EntityVariant } from "./Entities/EntityVariant";
 import { takeUnseenEntities } from "./EntityCollectionUrls";
 
+/** How long a collection of entities is waited for, in milliseconds. */
+const COLLECTION_FETCH_TIMEOUT_MS = 10_000;
+
 export class EntitiesCollectionsManager {
     private entitiesPrefabsMapPromise!: Promise<Map<string, EntityPrefab>>;
     private tags: string[] = [];
@@ -206,7 +209,12 @@ export class EntitiesCollectionsManager {
     private async fetchRawCollection(url: string): Promise<EntityCollectionRaw> {
         // Catalogs change when images are uploaded. Revalidate even after a page reload,
         // otherwise a cached catalog can hide entities referencing a new prefab.
-        const response = await fetch(url, { cache: "no-cache" });
+        // A collection that does not answer must not hold back all the others: the entities of the map, and the floors and
+        // walls of the map tool, wait for every collection to be loaded or to have failed.
+        const response = await fetch(url, {
+            cache: "no-cache",
+            signal: AbortSignal.timeout(COLLECTION_FETCH_TIMEOUT_MS),
+        });
         if (!response.ok) {
             throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
         }
