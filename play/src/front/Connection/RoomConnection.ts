@@ -928,6 +928,7 @@ export class RoomConnection implements RoomConnection {
                             position.y,
                             position.direction,
                             position.moving,
+                            position.running,
                         ),
                         viewportMessage: this.toViewportMessage(viewport),
                         availabilityStatus,
@@ -1035,13 +1036,14 @@ export class RoomConnection implements RoomConnection {
         y: number,
         direction: PositionMessage_Direction,
         moving: boolean,
+        running: boolean,
         viewport: ViewportInterface,
     ): void {
         if (!this.socket) {
             return;
         }
 
-        const positionMessage = this.toPositionMessage(x, y, direction, moving);
+        const positionMessage = this.toPositionMessage(x, y, direction, moving, running);
 
         const viewportMessage = this.toViewportMessage(viewport);
 
@@ -2159,11 +2161,13 @@ export class RoomConnection implements RoomConnection {
         y: number,
         direction: PositionMessage_Direction,
         moving: boolean,
+        running: boolean,
     ): PositionMessageTsProto {
         return {
             x: Math.floor(x),
             y: Math.floor(y),
             moving,
+            running,
             direction,
         };
     }

@@ -18,6 +18,7 @@ import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctio
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
+import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatUnderFeet, isSeatTaken } from "./Seat";
@@ -151,6 +152,7 @@ export class Player extends Character {
         const direction = (this._lastDirection + 1) % (PositionMessage_Direction.LEFT + 1);
         this.emit(hasMovedEventName, {
             moving: false,
+            running: false,
             direction: (this._lastDirection + 1) % (PositionMessage_Direction.LEFT + 1),
             x: this.x,
             y: this.y,
@@ -249,14 +251,15 @@ export class Player extends Character {
         }
 
         // Send movement events
-        const emit = () => this.emit(hasMovedEventName, { moving, direction, x: this.x, y: this.y });
+        const running = moving && speedUp && !followMode;
+        const emit = () => this.emit(hasMovedEventName, { moving, running, direction, x: this.x, y: this.y });
         if (moving) {
             if (!this.isMoving) {
                 this.isMoving = true;
                 this.emit(startMovingEventName, { direction, x: this.x, y: this.y });
             }
-            this.moveBy(x, y);
-            if (speedUp && !followMode) {
+            this.moveBy(x, y, running);
+            if (running) {
                 const body = this.getBody();
                 this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
             }
@@ -334,7 +337,7 @@ export class Player extends Character {
     /**
      * Moves the character by the given speed amount.
      */
-    private moveBy(x: number, y: number) {
+    private moveBy(x: number, y: number, running = false) {
         const body = this.getBody();
 
         body.setVelocity(x, y);
@@ -353,7 +356,7 @@ export class Player extends Character {
             }
         }
         passStatusToOnline();
-        this.playAnimation(this._lastDirection, true);
+        this.playAnimation(this._lastDirection, true, running ? RUN_ANIMATION_SPEED : 1);
 
         if (this.companion) {
             this.companion.setTarget(this.x, this.y, this._lastDirection);
@@ -363,13 +366,25 @@ export class Player extends Character {
     protected onPathFinished(wasFollowing: boolean): void {
         this.getBody().setDirectControl(false);
         if (wasFollowing) {
-            this.emit(hasMovedEventName, { moving: false, direction: this._lastDirection, x: this.x, y: this.y });
+            this.emit(hasMovedEventName, {
+                moving: false,
+                running: false,
+                direction: this._lastDirection,
+                x: this.x,
+                y: this.y,
+            });
         }
     }
 
     protected followPath(delta: number): void {
         super.followPath(delta);
-        this.emit(hasMovedEventName, { moving: true, direction: this._lastDirection, x: this.x, y: this.y });
+        this.emit(hasMovedEventName, {
+            moving: true,
+            running: false,
+            direction: this._lastDirection,
+            x: this.x,
+            y: this.y,
+        });
     }
 
     protected moveToPathPosition(x: number, y: number): void {
@@ -415,7 +430,13 @@ export class Player extends Character {
         this.standUp();
         this.setPosition(x, y);
         this.finishFollowingPath(true);
-        this.emit(hasMovedEventName, { moving: false, direction: this._lastDirection, x: this.x, y: this.y });
+        this.emit(hasMovedEventName, {
+            moving: false,
+            running: false,
+            direction: this._lastDirection,
+            x: this.x,
+            y: this.y,
+        });
         this.scene.markDirty();
     }
 

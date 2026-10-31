@@ -390,7 +390,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
     }
 
-    protected playAnimation(direction: PositionMessage_Direction, moving: boolean): void {
+    protected playAnimation(direction: PositionMessage_Direction, moving: boolean, animationSpeed = 1): void {
         if (this.invisible) return;
         for (const [texture, sprite] of this.sprites.entries()) {
             if (!sprite.anims) {
@@ -398,6 +398,7 @@ export abstract class Character extends Container implements OutlineableInterfac
                 return;
             }
             const directionStr = ProtobufClientUtils.toDirectionString(direction);
+            sprite.anims.timeScale = moving ? animationSpeed : 1;
             if (moving && (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== directionStr)) {
                 sprite.play(texture + "-" + directionStr + "-" + PlayerAnimationTypes.Walk, true);
             } else if (!moving) {

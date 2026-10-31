@@ -28,6 +28,7 @@ describe("Interpolation / Extrapolation", () => {
                 oldX: 100,
                 oldY: 200,
                 moving: true,
+                running: false,
                 direction: PositionMessage_Direction.UP,
             },
             END_TICK,
@@ -43,6 +44,7 @@ describe("Interpolation / Extrapolation", () => {
             oldY: 200,
             direction: PositionMessage_Direction.UP,
             moving: true,
+            running: false,
         });
 
         expect(playerMovement.getPosition(START_TICK + MAX_EXTRAPOLATION_TIME * 2)).toEqual({
@@ -52,6 +54,7 @@ describe("Interpolation / Extrapolation", () => {
             oldY: 200,
             direction: PositionMessage_Direction.UP,
             moving: true,
+            running: false,
         });
 
         expect(playerMovement.getPosition(START_TICK + MAX_EXTRAPOLATION_TIME * 3)).toEqual({
@@ -61,6 +64,7 @@ describe("Interpolation / Extrapolation", () => {
             oldY: 200,
             direction: PositionMessage_Direction.UP,
             moving: true,
+            running: false,
         });
     });
 
@@ -77,6 +81,7 @@ describe("Interpolation / Extrapolation", () => {
                 oldX: 100,
                 oldY: 200,
                 moving: false,
+                running: false,
                 direction: PositionMessage_Direction.UP,
             },
             END_TICK,
@@ -89,6 +94,7 @@ describe("Interpolation / Extrapolation", () => {
             oldY: 200,
             direction: PositionMessage_Direction.UP,
             moving: false,
+            running: false,
         });
     });
 
@@ -105,6 +111,7 @@ describe("Interpolation / Extrapolation", () => {
                 oldX: 100,
                 oldY: 200,
                 moving: false,
+                running: false,
                 direction: PositionMessage_Direction.UP,
             },
             END_TICK,
@@ -117,6 +124,7 @@ describe("Interpolation / Extrapolation", () => {
             oldY: 200,
             direction: PositionMessage_Direction.UP,
             moving: false,
+            running: false,
         });
     });
 });
