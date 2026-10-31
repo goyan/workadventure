@@ -438,7 +438,7 @@ Portes (mode « Porte » de l'outil Carte) :
 - Sol : le sol sous une porte horizontale est un sol ordinaire (pinceau, remplissage, gomme). À la pose, il reprend le sol de la pièce (sud d'abord) s'il n'y en a pas.
   Le remplissage traite la porte comme un mur : les deux côtés restent dissociés.
 - Comportement : toujours fermée, elle s'ouvre quand un joueur (local ou distant) ou un compagnon est à une tuile (`DoorAnimator`), se referme 0,5 s après. Calcul local,
-  rien n'est envoyé. Elle ne bloque jamais (le pathfinder la traverse, collisions du prefab vides). Sons `door-open.wav` / `door-close.wav`, volume selon la distance.
+  rien n'est envoyé. Elle ne bloque jamais (collisions du prefab vides) ; une porte verticale ferme pourtant le bas de son passage par une collision du prefab `bas` (l'avatar se tient plus bas que son sprite : sans elle il se placerait dans l'axe du mur, devant lui), et le pathfinder ne la traverse que par sa première rangée. Sons `door-open.wav` / `door-close.wav`, volume selon la distance.
 - Animation : 8 frames, `...-0` (ouverte) à `...-6` ; la frame fermée est le prefab sans suffixe (40 ms par frame). Sans les frames, la porte reste fermée.
 - Rendu : une porte horizontale remplace tout le mur (chapeau compris) ; les murs voisins se ferment dessus par un bout et un raccord. Une porte verticale a deux vantaux, un par tuile, dessinés entre les raccords des sommets.
 - Sprites à ajouter au dépôt privé : voir la maquette « Sprites de porte WorkAdventure » (horizontal 32 × 32 par panneau, vertical 64 × 32 par pièce, vertical

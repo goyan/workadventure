@@ -91,6 +91,17 @@ describe("doors", () => {
         expect(barriers.blocksMove({ x: 2, y: 5 }, { x: 2, y: 6 })).toBe(true);
     });
 
+    it("keeps the pathfinder to the first row of a vertical door, the middle of the way through it", () => {
+        const model = new MapLayerModel();
+        applyWalls(model, lineWallEdges({ x: 4, y: 2 }, { x: 4, y: 9 }), "blanc", bounds);
+        model.setDoor({ orientation: "v", x: 4, y: 5 });
+        const barriers = wallBarriers(placed(model));
+        // The door is on the segments 4 and 5, which block the rows 5 and 6 of the feet: only the first one is open.
+        expect(barriers.blocksMove({ x: 3, y: 4 }, { x: 4, y: 4 })).toBe(true);
+        expect(barriers.blocksMove({ x: 3, y: 5 }, { x: 4, y: 5 })).toBe(false);
+        expect(barriers.blocksMove({ x: 3, y: 6 }, { x: 4, y: 6 })).toBe(true);
+    });
+
     it("gives the door the floor of the room, and keeps the floor it already has", () => {
         const model = roomWithWall();
         applyFloor(

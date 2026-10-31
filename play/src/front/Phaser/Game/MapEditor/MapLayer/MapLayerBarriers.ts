@@ -1,5 +1,6 @@
 import { TileBarriers } from "../../../../Utils/TileBarriers";
 import { WALL_COLLISION_HALF } from "./MapLayerCatalog";
+import { doorEdges } from "./MapLayerModel";
 import { modelFromPlacedPrefabs } from "./MapLayerOperations";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
 
@@ -24,6 +25,15 @@ export function wallBarriers(placedPrefabs: Iterable<PlacedPrefabLike>): TileBar
             barriers.addSouthBorder(wall.x, wall.y);
         } else {
             barriers.addWestBorder(wall.x, wall.y + 1);
+        }
+    }
+    // A vertical door is wider than the way through it: the avatar stands lower than its sprite, so the end of the
+    // doorway, under the last leaf, is closed by a collision of the catalog (see `Carte Portes`). The pathfinder only
+    // goes through the first tile row of the door, which is also the middle of the way.
+    for (const door of model.getDoors()) {
+        if (door.orientation === "v") {
+            const last = doorEdges(door)[1];
+            barriers.addWestBorder(last.x, last.y + 1);
         }
     }
     return barriers;
