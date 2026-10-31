@@ -7,6 +7,13 @@
         "description": "Courir enfume le chien"
     },
     {
+        "id": "6826e22c1a6c8226dafd68cdc953ebab8864ccb1",
+        "date": "2026-10-31T23:23:05+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "let players sit on chairs and sofas"
+    },
+    {
         "id": "10a696ae5a5d3fbd6fc97aa3d763767c73125e37",
         "date": "2026-10-31T20:40:54+01:00",
         "author": "Antoine Hésèque",
