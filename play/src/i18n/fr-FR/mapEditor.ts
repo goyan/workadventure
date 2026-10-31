@@ -418,6 +418,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Tracer à la volée",
             area: "Tracer une zone",
+            placed: "Poser un élément",
         },
         title: "Carte",
         modes: {
@@ -426,6 +427,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Pinceau de sol",
             floorRectangle: "Rectangle de sol",
             floorFill: "Remplir un sol",
+            door: "Porte",
             erase: "Gomme",
         },
         hints: {
@@ -434,6 +436,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Maintenez le bouton et peignez les dalles de sol.",
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
+            door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
         },
         floors: "Sol",
@@ -443,6 +446,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Cette modification est trop grande. Dessinez une zone plus petite.",
             fillTooLarge: "La zone n'est pas fermée ou trop grande pour être remplie. Fermez-la d'abord avec des murs.",
+            doorInvalid: "Une porte demande deux segments de mur libres côte à côte. Cliquez sur un mur.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {

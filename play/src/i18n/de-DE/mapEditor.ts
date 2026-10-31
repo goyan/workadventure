@@ -416,6 +416,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "Freihand zeichnen",
             area: "Bereich zeichnen",
+            placed: "Element platzieren",
         },
         title: "Karte",
         modes: {
@@ -424,6 +425,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Bodenpinsel",
             floorRectangle: "Bodenrechteck",
             floorFill: "Boden füllen",
+            door: "Tür",
             erase: "Radierer",
         },
         hints: {
@@ -432,6 +434,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "Taste gedrückt halten und Bodenfliesen malen.",
             floorRectangle: "Rechteck ziehen, um es mit Boden zu füllen.",
             floorFill: "In einen geschlossenen Raum klicken, um ihn zu füllen.",
+            door: "Klicke auf eine Wand, um zwei ihrer Abschnitte in eine Tür zu verwandeln. Sie öffnet sich, wenn jemand näher kommt.",
             erase: "Taste gedrückt halten, um Wände und Böden zu löschen. Objekte bleiben erhalten.",
         },
         floors: "Boden",
@@ -441,6 +444,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "Diese Änderung ist zu groß. Zeichne einen kleineren Bereich.",
             fillTooLarge: "Der Bereich ist nicht geschlossen oder zu groß zum Füllen. Schließe ihn zuerst mit Wänden.",
+            doorInvalid: "Eine Tür braucht zwei freie, nebeneinanderliegende Wandabschnitte. Klicke auf eine Wand.",
             failed: "Die Änderung konnte nicht angewendet werden.",
         },
         families: {

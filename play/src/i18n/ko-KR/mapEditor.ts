@@ -412,6 +412,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "자유롭게 그리기",
             area: "영역 그리기",
+            placed: "요소 배치",
         },
         title: "지도",
         modes: {
@@ -420,6 +421,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "바닥 브러시",
             floorRectangle: "바닥 사각형",
             floorFill: "바닥 채우기",
+            door: "문",
             erase: "지우개",
         },
         hints: {
@@ -428,6 +430,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "버튼을 누른 채 바닥 타일을 칠합니다.",
             floorRectangle: "사각형을 드래그하여 바닥으로 채웁니다.",
             floorFill: "닫힌 방을 클릭하여 채웁니다.",
+            door: "벽을 클릭하면 벽 두 칸이 문으로 바뀝니다. 누군가 다가가면 열립니다.",
             erase: "버튼을 누른 채 벽과 바닥을 지웁니다. 오브젝트는 유지됩니다.",
         },
         floors: "바닥",
@@ -437,6 +440,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "변경 사항이 너무 큽니다. 더 작은 영역을 그리세요.",
             fillTooLarge: "영역이 닫혀 있지 않거나 너무 커서 채울 수 없습니다. 먼저 벽으로 닫으세요.",
+            doorInvalid: "문에는 나란히 있는 비어 있는 벽 두 칸이 필요합니다. 벽을 클릭하세요.",
             failed: "변경 사항을 적용할 수 없습니다.",
         },
         families: {

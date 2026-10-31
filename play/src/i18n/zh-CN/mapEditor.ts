@@ -407,6 +407,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "自由绘制",
             area: "绘制区域",
+            placed: "放置元素",
         },
         title: "地图",
         modes: {
@@ -415,6 +416,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "地板画笔",
             floorRectangle: "地板矩形",
             floorFill: "填充地板",
+            door: "门",
             erase: "橡皮擦",
         },
         hints: {
@@ -423,6 +425,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "按住按钮并绘制地板砖。",
             floorRectangle: "拖动矩形以用地板填充。",
             floorFill: "点击封闭的房间以填充。",
+            door: "点击墙壁，将其中两段变成门。有人靠近时会自动打开。",
             erase: "按住按钮擦除墙壁和地板。物体将保留。",
         },
         floors: "地板",
@@ -432,6 +435,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "此更改过大。请绘制更小的区域。",
             fillTooLarge: "该区域未封闭或过大，无法填充。请先用墙壁封闭。",
+            doorInvalid: "门需要相邻的两段空闲墙壁。请点击一面墙。",
             failed: "无法应用此更改。",
         },
         families: {

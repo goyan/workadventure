@@ -409,6 +409,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         groups: {
             freehand: "วาดอิสระ",
             area: "วาดเป็นพื้นที่",
+            placed: "วางองค์ประกอบ",
         },
         title: "แผนที่",
         modes: {
@@ -417,6 +418,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "แปรงพื้น",
             floorRectangle: "สี่เหลี่ยมพื้น",
             floorFill: "เติมพื้น",
+            door: "ประตู",
             erase: "ยางลบ",
         },
         hints: {
@@ -425,6 +427,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorBrush: "กดปุ่มค้างแล้วระบายกระเบื้องพื้น",
             floorRectangle: "ลากสี่เหลี่ยมเพื่อเติมด้วยพื้น",
             floorFill: "คลิกในห้องที่ปิดเพื่อเติม",
+            door: "คลิกที่ผนังเพื่อเปลี่ยนผนังสองช่วงให้เป็นประตู ประตูจะเปิดเมื่อมีคนเข้าใกล้",
             erase: "กดปุ่มค้างเพื่อลบผนังและพื้น วัตถุจะยังอยู่",
         },
         floors: "พื้น",
@@ -434,6 +437,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         status: {
             tooLarge: "การเปลี่ยนแปลงนี้ใหญ่เกินไป โปรดวาดพื้นที่ที่เล็กลง",
             fillTooLarge: "พื้นที่ไม่ปิดหรือใหญ่เกินกว่าจะเติมได้ โปรดปิดด้วยผนังก่อน",
+            doorInvalid: "ประตูต้องใช้ผนังสองช่วงที่ว่างอยู่ติดกัน คลิกที่ผนัง",
             failed: "ไม่สามารถใช้การเปลี่ยนแปลงได้",
         },
         families: {

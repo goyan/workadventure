@@ -6,6 +6,7 @@ import { get } from "svelte/store";
 import type { FloorFamily, WallTint } from "../MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorsAvailableStore,
     mapLayerFloorFamilyStore,
     mapLayerFloorSwatchesStore,
     mapLayerWallSwatchesStore,
@@ -20,11 +21,15 @@ import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
 import {
+    MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_FLOOR_FAMILIES,
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
+    WALL_HALF,
+    WALL_THICKNESS,
+    doorPrefabName,
     facadePrefabName,
     floorPrefabName,
     mapLayerPieceSize,
@@ -35,12 +40,17 @@ import { computePlacements, diffPlacements, placementKey } from "../MapLayer/Map
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
+import { cellKey } from "../MapLayer/MapLayerModel";
 import {
+    applyDoor,
     applyFloor,
     applyWalls,
     cellAt,
     cellsBetween,
+    doorCandidateAt,
+    doorPixelRect,
     eraseAt,
+    eraseTargetAt,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
@@ -81,6 +91,8 @@ export class MapLayerEditorTool extends MapEditorTool {
     private gesture: Gesture | undefined;
     private graphics: Phaser.GameObjects.Graphics | undefined;
     private hover: Point | undefined;
+    /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
+    private hoverModel: MapLayerModel | undefined;
 
     private readonly pointerDownEventHandler = (pointer: Phaser.Input.Pointer): void => {
         this.handlePointerDown(pointer);
@@ -118,6 +130,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         window.addEventListener("blur", this.cancelEventHandler);
         mapEditorVisibilityStore.set(true);
         mapLayerStatusStore.set(undefined);
+        this.hoverModel = undefined;
         this.checkCatalogs().catch((error: unknown) => {
             console.error("Map layer catalog check failed", error);
             mapLayerCatalogAvailableStore.set(false);
@@ -172,6 +185,12 @@ export class MapLayerEditorTool extends MapEditorTool {
         ]);
         mapLayerCatalogAvailableStore.set(floor !== undefined && wall !== undefined);
         if (floor === undefined || wall === undefined) return;
+        // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
+        const door = await manager.getEntityPrefab(
+            MAP_LAYER_DOOR_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", "blanc", "g")),
+        );
+        mapLayerDoorsAvailableStore.set(door !== undefined);
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -245,6 +264,9 @@ export class MapLayerEditorTool extends MapEditorTool {
         ) {
             return;
         }
+        if (get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore)) {
+            return;
+        }
         mapLayerStatusStore.set(undefined);
         const world = { x: pointer.worldX, y: pointer.worldY };
         this.gesture = {
@@ -286,10 +308,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         const gesture = this.gesture;
         if (!gesture || gesture.pointerId !== pointer.id || pointer.button !== 0) return;
         const operation = this.buildOperation(gesture);
+        const mode = get(mapLayerModeStore);
         this.gesture = undefined;
         this.clearPreview();
         if (operation) {
             this.commit(operation);
+        } else if (mode === "door") {
+            mapLayerStatusStore.set("doorInvalid");
         }
     }
 
@@ -332,8 +357,15 @@ export class MapLayerEditorTool extends MapEditorTool {
                     applyFloor(model, cells, family, bounds);
                     return;
                 };
+            case "door": {
+                const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
+                return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
+            }
             case "erase":
                 return (model) => {
+                    const keptEdges = new Set<string>();
+                    // The tiles where a door has been erased: the floor of a tile is not erased with a door that stands on it.
+                    const doorTiles = new Set<string>();
                     // Walk along the drag in steps shorter than a wall so no thin wall is jumped over.
                     const steps = Math.max(
                         1,
@@ -343,18 +375,21 @@ export class MapLayerEditorTool extends MapEditorTool {
                     );
                     for (let step = 0; step <= steps; step++) {
                         const ratio = step / steps;
-                        eraseAt(
-                            model,
-                            worldPath.start.x + (worldPath.end.x - worldPath.start.x) * ratio,
-                            worldPath.start.y + (worldPath.end.y - worldPath.start.y) * ratio,
-                        );
+                        const x = worldPath.start.x + (worldPath.end.x - worldPath.start.x) * ratio;
+                        const y = worldPath.start.y + (worldPath.end.y - worldPath.start.y) * ratio;
+                        if (eraseAt(model, x, y, keptEdges)) {
+                            const tile = cellAt(x, y);
+                            doorTiles.add(cellKey(tile.x, tile.y));
+                        }
                     }
                     // A freehand erase passes through every tile of the path, not only the straight line.
                     for (const cell of path) {
+                        if (doorTiles.has(cellKey(cell.x, cell.y))) continue;
                         eraseAt(
                             model,
                             cell.x * MAP_LAYER_TILE_SIZE + MAP_LAYER_TILE_SIZE / 2,
                             cell.y * MAP_LAYER_TILE_SIZE + MAP_LAYER_TILE_SIZE / 2,
+                            keptEdges,
                         );
                     }
                 };
@@ -371,7 +406,14 @@ export class MapLayerEditorTool extends MapEditorTool {
         if (!gesture) {
             if (this.hover) {
                 const mode = get(mapLayerModeStore);
-                if (mode === "wall" || mode === "room") {
+                if (mode === "door") {
+                    this.hoverModel ??= this.readModel();
+                    this.drawDoorPreview(graphics, this.hoverModel, this.hover);
+                } else if (mode === "erase") {
+                    // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
+                    this.hoverModel ??= this.readModel();
+                    this.drawEraseHover(graphics, this.hoverModel, this.hover);
+                } else if (mode === "wall" || mode === "room") {
                     const vertex = vertexAt(this.hover.x, this.hover.y);
                     graphics.fillStyle(0xffffff, 0.8).fillCircle(vertex.x * size, (vertex.y + 1) * size, 4);
                 } else {
@@ -383,6 +425,11 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
 
+        if (get(mapLayerModeStore) === "door") {
+            this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
+            this.scene.markDirty();
+            return;
+        }
         const operation = this.buildOperation(gesture);
         if (operation) {
             const model = gesture.baseModel.clone();
@@ -405,6 +452,49 @@ export class MapLayerEditorTool extends MapEditorTool {
             }
         }
         this.scene.markDirty();
+    }
+
+    /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
+    private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
+        const door = doorCandidateAt(model, world.x, world.y);
+        const { x, y, width, height } = doorPixelRect(door);
+        graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */
+    private drawEraseHover(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const target = eraseTargetAt(model, world.x, world.y);
+        if (!target) {
+            const cell = cellAt(world.x, world.y);
+            graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(cell.x * size, cell.y * size, size, size);
+            return;
+        }
+        let rect: { x: number; y: number; width: number; height: number };
+        switch (target.kind) {
+            case "door":
+                rect = doorPixelRect(target.door);
+                break;
+            case "wall":
+                rect =
+                    target.wall.orientation === "h"
+                        ? { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size }
+                        : {
+                              x: target.wall.x * size - WALL_HALF,
+                              y: target.wall.y * size + WALL_THICKNESS,
+                              width: WALL_THICKNESS,
+                              height: size - WALL_THICKNESS,
+                          };
+                break;
+            case "floor":
+                rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
+                break;
+        }
+        graphics
+            .fillStyle(0xff3b30, 0.4)
+            .fillRect(rect.x, rect.y, rect.width, rect.height)
+            .lineStyle(2, 0xff3b30, 0.9)
+            .strokeRect(rect.x, rect.y, rect.width, rect.height);
     }
 
     private fillPlacement(graphics: Phaser.GameObjects.Graphics, placement: MapLayerPlacement): void {
@@ -440,11 +530,17 @@ export class MapLayerEditorTool extends MapEditorTool {
             return buildMapLayerCommands(wamFile, entitiesManager, diff);
         };
 
-        this.mapEditorModeManager.executeCommands(factory).catch((error: unknown) => {
-            const cause = asError(error);
-            console.error("Failed to edit the map layer", cause);
-            mapLayerStatusStore.set("failed");
-            Sentry.captureException(cause);
-        });
+        this.hoverModel = undefined;
+        this.mapEditorModeManager
+            .executeCommands(factory)
+            .then(() => {
+                this.hoverModel = undefined;
+            })
+            .catch((error: unknown) => {
+                const cause = asError(error);
+                console.error("Failed to edit the map layer", cause);
+                mapLayerStatusStore.set("failed");
+                Sentry.captureException(cause);
+            });
     }
 }
