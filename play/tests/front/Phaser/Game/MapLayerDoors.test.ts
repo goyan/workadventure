@@ -12,7 +12,9 @@ import {
     applyFloor,
     applyWalls,
     doorCandidateAt,
+    doorPixelRect,
     eraseAt,
+    eraseTargetAt,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
@@ -157,6 +159,26 @@ describe("doors", () => {
         expect(model.hasWall("h", 5, 5)).toBe(true);
         eraseAt(model, 5 * 32 + 10, 5 * 32 + 20);
         expect(model.hasWall("h", 5, 5)).toBe(false);
+    });
+
+    it("tells that a door was erased, and what the eraser would remove under the cursor", () => {
+        const model = roomWithWall();
+        model.setDoor({ orientation: "h", x: 5, y: 5 });
+        expect(eraseTargetAt(model, 5 * 32 + 3, 5 * 32 + 20)).toEqual({
+            kind: "door",
+            door: { orientation: "h", x: 5, y: 5 },
+        });
+        expect(eraseTargetAt(model, 2 * 32 + 3, 5 * 32 + 20)).toMatchObject({ kind: "wall" });
+        expect(eraseTargetAt(model, 2 * 32 + 3, 8 * 32)).toBeUndefined();
+        applyFloor(model, [{ x: 2, y: 8 }], "parquet-clair", bounds);
+        expect(eraseTargetAt(model, 2 * 32 + 3, 8 * 32 + 5)).toEqual({ kind: "floor", cell: { x: 2, y: 8 } });
+        expect(eraseAt(model, 5 * 32 + 3, 5 * 32 + 20)).toBe(true);
+        expect(eraseAt(model, 2 * 32 + 3, 5 * 32 + 20)).toBe(false);
+    });
+
+    it("highlights a door over its opening, not over the swing of its leaves", () => {
+        expect(doorPixelRect({ orientation: "h", x: 5, y: 5 })).toEqual({ x: 128, y: 160, width: 64, height: 32 });
+        expect(doorPixelRect({ orientation: "v", x: 4, y: 5 })).toEqual({ x: 122, y: 140, width: 12, height: 52 });
     });
 
     it("drops the door when one of its walls is removed", () => {

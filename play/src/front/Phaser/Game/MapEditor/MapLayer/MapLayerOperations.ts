@@ -299,18 +299,18 @@ export function applyWalls(
 /**
  * Erases what is under a position: a door first (the walls it stands on stay as they were), else a wall, else a
  * floor. `keptEdges` collects the segments of the doors erased, which a drag then leaves alone: one pass of the
- * eraser removes the door, the next one the wall.
+ * eraser removes the door, the next one the wall. Returns whether a door was erased: the floor around a door stays.
  */
 export function eraseAt(
     model: MapLayerModel,
     worldX: number,
     worldY: number,
     keptEdges: Set<string> = new Set(),
-): void {
+): boolean {
     const wall = wallAtPoint(model, worldX, worldY);
     if (wall) {
         if (keptEdges.has(edgeKey(wall.orientation, wall.x, wall.y))) {
-            return;
+            return false;
         }
         const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
         if (door) {
@@ -318,13 +318,43 @@ export function eraseAt(
             for (const edge of doorEdges(door)) {
                 keptEdges.add(edgeKey(edge.orientation, edge.x, edge.y));
             }
-            return;
+            return true;
         }
         model.removeWall(wall.orientation, wall.x, wall.y);
-        return;
+        return false;
     }
     const cell = cellAt(worldX, worldY);
     model.removeFloor(cell.x, cell.y);
+    return false;
+}
+
+/** What the eraser would remove under a position, for the highlight shown before the click. */
+export type EraseTarget =
+    | { kind: "door"; door: DoorRef }
+    | { kind: "wall"; wall: WallEdgeRef }
+    | { kind: "floor"; cell: Point };
+
+export function eraseTargetAt(model: MapLayerModel, worldX: number, worldY: number): EraseTarget | undefined {
+    const wall = wallAtPoint(model, worldX, worldY);
+    if (wall) {
+        const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
+        return door ? { kind: "door", door } : { kind: "wall", wall };
+    }
+    const cell = cellAt(worldX, worldY);
+    return model.getFloor(cell.x, cell.y) ? { kind: "floor", cell } : undefined;
+}
+
+/** Pixel rectangle of a door itself: its opening along the wall (the swinging leaves are not counted). */
+export function doorPixelRect(door: DoorRef): { x: number; y: number; width: number; height: number } {
+    const size = MAP_LAYER_TILE_SIZE;
+    return door.orientation === "h"
+        ? { x: (door.x - 1) * size, y: door.y * size, width: 2 * size, height: size }
+        : {
+              x: door.x * size - WALL_HALF,
+              y: (door.y - 1) * size + WALL_THICKNESS,
+              width: WALL_THICKNESS,
+              height: 2 * size - WALL_THICKNESS,
+          };
 }
 
 /** A door the cursor would place, and whether the walls under it allow it. */

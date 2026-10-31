@@ -27,6 +27,7 @@ import {
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
+    WALL_HALF,
     WALL_THICKNESS,
     doorPrefabName,
     facadePrefabName,
@@ -39,6 +40,7 @@ import { computePlacements, diffPlacements, placementKey } from "../MapLayer/Map
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
+import { cellKey } from "../MapLayer/MapLayerModel";
 import {
     applyDoor,
     applyFloor,
@@ -46,7 +48,9 @@ import {
     cellAt,
     cellsBetween,
     doorCandidateAt,
+    doorPixelRect,
     eraseAt,
+    eraseTargetAt,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
@@ -360,6 +364,8 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "erase":
                 return (model) => {
                     const keptEdges = new Set<string>();
+                    // The tiles where a door has been erased: the floor of a tile is not erased with a door that stands on it.
+                    const doorTiles = new Set<string>();
                     // Walk along the drag in steps shorter than a wall so no thin wall is jumped over.
                     const steps = Math.max(
                         1,
@@ -369,15 +375,16 @@ export class MapLayerEditorTool extends MapEditorTool {
                     );
                     for (let step = 0; step <= steps; step++) {
                         const ratio = step / steps;
-                        eraseAt(
-                            model,
-                            worldPath.start.x + (worldPath.end.x - worldPath.start.x) * ratio,
-                            worldPath.start.y + (worldPath.end.y - worldPath.start.y) * ratio,
-                            keptEdges,
-                        );
+                        const x = worldPath.start.x + (worldPath.end.x - worldPath.start.x) * ratio;
+                        const y = worldPath.start.y + (worldPath.end.y - worldPath.start.y) * ratio;
+                        if (eraseAt(model, x, y, keptEdges)) {
+                            const tile = cellAt(x, y);
+                            doorTiles.add(cellKey(tile.x, tile.y));
+                        }
                     }
                     // A freehand erase passes through every tile of the path, not only the straight line.
                     for (const cell of path) {
+                        if (doorTiles.has(cellKey(cell.x, cell.y))) continue;
                         eraseAt(
                             model,
                             cell.x * MAP_LAYER_TILE_SIZE + MAP_LAYER_TILE_SIZE / 2,
@@ -402,6 +409,10 @@ export class MapLayerEditorTool extends MapEditorTool {
                 if (mode === "door") {
                     this.hoverModel ??= this.readModel();
                     this.drawDoorPreview(graphics, this.hoverModel, this.hover);
+                } else if (mode === "erase") {
+                    // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
+                    this.hoverModel ??= this.readModel();
+                    this.drawEraseHover(graphics, this.hoverModel, this.hover);
                 } else if (mode === "wall" || mode === "room") {
                     const vertex = vertexAt(this.hover.x, this.hover.y);
                     graphics.fillStyle(0xffffff, 0.8).fillCircle(vertex.x * size, (vertex.y + 1) * size, 4);
@@ -445,14 +456,45 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
-        const size = MAP_LAYER_TILE_SIZE;
         const door = doorCandidateAt(model, world.x, world.y);
-        graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45);
-        if (door.orientation === "h") {
-            graphics.fillRect((door.x - 1) * size, door.y * size, 2 * size, size);
-        } else {
-            graphics.fillRect(door.x * size - size, (door.y - 1) * size + WALL_THICKNESS, 2 * size, 2 * size);
+        const { x, y, width, height } = doorPixelRect(door);
+        graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */
+    private drawEraseHover(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const target = eraseTargetAt(model, world.x, world.y);
+        if (!target) {
+            const cell = cellAt(world.x, world.y);
+            graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(cell.x * size, cell.y * size, size, size);
+            return;
         }
+        let rect: { x: number; y: number; width: number; height: number };
+        switch (target.kind) {
+            case "door":
+                rect = doorPixelRect(target.door);
+                break;
+            case "wall":
+                rect =
+                    target.wall.orientation === "h"
+                        ? { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size }
+                        : {
+                              x: target.wall.x * size - WALL_HALF,
+                              y: target.wall.y * size + WALL_THICKNESS,
+                              width: WALL_THICKNESS,
+                              height: size - WALL_THICKNESS,
+                          };
+                break;
+            case "floor":
+                rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
+                break;
+        }
+        graphics
+            .fillStyle(0xff3b30, 0.4)
+            .fillRect(rect.x, rect.y, rect.width, rect.height)
+            .lineStyle(2, 0xff3b30, 0.9)
+            .strokeRect(rect.x, rect.y, rect.width, rect.height);
     }
 
     private fillPlacement(graphics: Phaser.GameObjects.Graphics, placement: MapLayerPlacement): void {
