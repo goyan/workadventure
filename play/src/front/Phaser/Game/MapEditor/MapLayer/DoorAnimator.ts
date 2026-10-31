@@ -7,6 +7,7 @@ import {
     DOOR_FRAME_MARGIN,
     DOOR_VERTICAL_WIDTH,
     MAP_LAYER_TILE_SIZE,
+    WALL_THICKNESS,
     doorPrefabName,
     mapLayerPrefabId,
     parseMapLayerPrefab,
@@ -228,15 +229,50 @@ export class DoorAnimator {
         return { left: center - size / 2, top, right: center + size / 2, bottom: top + 2 * size };
     }
 
+    /**
+     * A vertical door starting under a corner or a T would hide behind the south face of the horizontal wall above it,
+     * which reaches 20 px under the cap: the door would hang in the void under the wall. It is drawn right over that
+     * face instead, so that it keeps looking attached to the wall.
+     */
+    private depthOverFacadeAbove(entity: Entity, piece: DoorPiece, facades: readonly Entity[]): number | undefined {
+        if (piece.orientation !== "v" || piece.side !== "haut") {
+            return undefined;
+        }
+        const center = entity.x + DOOR_VERTICAL_WIDTH / 2;
+        let depth: number | undefined;
+        for (const facade of facades) {
+            // The door starts one cap (WALL_THICKNESS) under the line of the wall it hangs from.
+            const above =
+                facade.y === entity.y - WALL_THICKNESS &&
+                facade.x <= center &&
+                center <= facade.x + facade.displayWidth;
+            if (above) {
+                const facadeDepth = facade.y + facade.displayHeight + (facade.getPrefab().depthOffset ?? 0);
+                depth = Math.max(depth ?? facadeDepth, facadeDepth) + 1;
+            }
+        }
+        return depth;
+    }
+
     private scan(): void {
         const seen = new Set<string>();
-        for (const entity of this.getEntities()) {
+        const entities = Array.from(this.getEntities());
+        const facades = entities.filter(
+            (entity) =>
+                parseMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id)?.kind === "facade",
+        );
+        for (const entity of entities) {
             const prefab = entity.getPrefab();
             const piece = this.parse(prefab.collectionName, prefab.id);
             if (!piece) {
                 continue;
             }
             seen.add(entity.entityId);
+            const depth = this.depthOverFacadeAbove(entity, piece, facades);
+            if (depth !== undefined && entity.depth < depth) {
+                entity.setDepth(depth);
+                this.markDirty();
+            }
             const known = this.pieces.get(entity.entityId);
             if (known && known.entity === entity && known.piece === piece) {
                 known.rect = this.doorRect(entity, piece);

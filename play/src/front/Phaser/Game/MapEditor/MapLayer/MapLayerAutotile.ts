@@ -74,7 +74,9 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
     const vertices = new Map<string, { x: number; y: number }>();
 
     for (const floor of model.getFloors()) {
-        const name = floorPrefabName(floor.family, model.hasWall("h", floor.x, floor.y - 1) ? "ombre" : "uni");
+        // A door leaves the doorway open, so the wall under it casts no shadow.
+        const shaded = model.hasWall("h", floor.x, floor.y - 1) && !model.getDoorOn("h", floor.x, floor.y - 1);
+        const name = floorPrefabName(floor.family, shaded ? "ombre" : "uni");
         placements.push(placement(MAP_LAYER_FLOOR_COLLECTION, name, floor.x * size, floor.y * size));
     }
 

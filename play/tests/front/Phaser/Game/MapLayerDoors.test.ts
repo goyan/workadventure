@@ -17,6 +17,7 @@ import {
     eraseTargetAt,
     floodFillCells,
     lineWallEdges,
+    rectangleCells,
     modelFromPlacedPrefabs,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
 
@@ -66,6 +67,20 @@ describe("doors", () => {
         expect(items).toContain("facade-gris-right@224,160");
         expect(items.some((item) => item.startsWith("raccord-") && item.endsWith("@122,160"))).toBe(false);
         expect(items.some((item) => item.startsWith("raccord-") && item.endsWith("@186,160"))).toBe(false);
+    });
+
+    it("does not shade the floor in front of a horizontal door, but still shades it behind the wall around", () => {
+        const model = roomWithWall();
+        applyFloor(model, rectangleCells({ x: 2, y: 5 }, { x: 7, y: 6 }), "moquette-grise", bounds);
+        model.setDoor({ orientation: "h", x: 5, y: 5 });
+        const floors = computePlacements(model)
+            .filter((item) => item.prefabId.includes("sol-"))
+            .map((item) => `${item.prefabId.split(":")[1]}@${item.x},${item.y}`);
+        // The door stands on the segments 4 and 5 (tiles 4 and 5); tiles 2, 3, 6 and 7 stay under the wall.
+        expect(floors).toContain("sol-moquette-grise-ombre@64,192");
+        expect(floors).toContain("sol-moquette-grise-uni@128,192");
+        expect(floors).toContain("sol-moquette-grise-uni@160,192");
+        expect(floors).toContain("sol-moquette-grise-ombre@192,192");
     });
 
     it("refuses a door without a wall under it or over another door", () => {

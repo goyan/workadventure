@@ -1,5 +1,12 @@
 [
     {
+        "id": "129e66aa091d5b0a76e319ccba10a2572b75f81a",
+        "date": "2026-10-31T17:51:40+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "remove the shadow in front of a door and keep the vertical doors attached to the wall above"
+    },
+    {
         "id": "056b0016da39254b37cf346f3cdcdf1363d09a06",
         "date": "2026-10-31T12:53:12+01:00",
         "author": "Antoine Hésèque",
