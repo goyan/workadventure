@@ -153,6 +153,14 @@ et la poubelle n'apparaît que si `canDelete` est vrai. Le navigateur ne reçoit
 
 À valider en beta (visuel) : enregistrer, voir le motif dans la liste d'une autre salle, le coller, le supprimer.
 
+### Fumée de course
+
+Quand le joueur local court (Maj maintenu en se déplaçant, hors mode suivi), des bouffées de fumée grises restent au sol derrière
+lui (`Phaser/Components/RunSmokeTrail.ts`, appelé par `Player`). Elles grossissent en s'estompant (environ 0,3 s), sont dessinées
+sous l'avatar et ne sont pas envoyées aux autres joueurs. Le déplacement au double-clic n'en produit pas.
+
+À valider en beta (visuel) : courir dans les quatre directions, vérifier la taille et la durée de la fumée.
+
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse
