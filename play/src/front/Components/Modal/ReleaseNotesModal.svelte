@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import type { ReleaseNote } from "../../../common/ReleaseNotes";
-    import { releaseNotes } from "../../../common/ReleaseNotes";
+    import { formatReleaseNoteDate, releaseNotes } from "../../../common/ReleaseNotes";
     import LL, { locale } from "../../../i18n/i18n-svelte";
     import { releaseNotesVisibleStore } from "../../Stores/ReleaseNotesStore";
     import Popup from "./Popup.svelte";
@@ -12,7 +12,6 @@
     }
 
     let { isOpen, notes = releaseNotes }: Props = $props();
-    let dateFormatter = $derived(new Intl.DateTimeFormat($locale, { dateStyle: "long" }));
 
     onMount(() => {
         releaseNotesVisibleStore.set(true);
@@ -36,7 +35,7 @@
                                 <span class="font-semibold text-secondary">
                                     {note.type === "feat" ? $LL.refreshPrompt.feature() : $LL.refreshPrompt.fix()}
                                 </span>
-                                <time datetime={note.date}>{dateFormatter.format(new Date(note.date))}</time>
+                                <time datetime={note.date}>{formatReleaseNoteDate(note.date, $locale)}</time>
                                 <span>· {note.author}</span>
                             </div>
                             <p class="mt-2 mb-0 break-words">{note.description}</p>
