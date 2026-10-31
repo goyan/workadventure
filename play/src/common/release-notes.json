@@ -1,5 +1,12 @@
 [
     {
+        "id": "bb60ddfce12d946a99f399f8cf62eaf8e20440c9",
+        "date": "2026-10-31T15:55:22+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "play a single sound to open a door and a single one to close it"
+    },
+    {
         "id": "34605f25064fa300c70eb032f2a3dba990130301",
         "date": "2026-10-31T14:37:02+01:00",
         "author": "Antoine Hésèque",
