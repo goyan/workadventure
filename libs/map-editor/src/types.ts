@@ -318,6 +318,15 @@ export const EntityRawPrefab = z.object({
     // which would make every placed entity of the catalog lose its prefab.
     collisionRectangles: z.array(CollisionRectangle).optional().catch(undefined),
     depthOffset: z.number().optional(),
+    /**
+     * Places of the entity a player can sit on (e.g. two for a couch), as the position of the sitter's feet in
+     * tiles from the top-left corner of the image. The player sits facing `direction`. Fail open like
+     * `collisionRectangles`.
+     */
+    seat: z
+        .array(z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }))
+        .optional()
+        .catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
