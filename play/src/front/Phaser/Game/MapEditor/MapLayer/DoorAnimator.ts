@@ -28,11 +28,12 @@ const DOOR_MAX_VOLUME = 0.3;
 /** Doors farther than this from the local player are silent. */
 const HEARING_DISTANCE = 10 * MAP_LAYER_TILE_SIZE;
 
-/** Recorded door sounds (CC0, see `resources/objects/doors/CREDITS.txt`): one is picked at random, so a door never sounds the same twice. */
-export const DOOR_SOUND_VARIANTS = 6;
-export const doorSoundKey = (kind: "open" | "close", variant: number): string => `audio-door-${kind}-${variant}`;
-export const doorSoundUrl = (kind: "open" | "close", variant: number): string =>
-    `/resources/objects/doors/door-${kind}-${variant}.ogg`;
+/** Recorded door sounds (CC0, see `resources/objects/doors/CREDITS.txt`): one to open a door, one to close it. */
+export const DOOR_SOUND_KEYS = { open: "audio-door-open", close: "audio-door-close" } as const;
+export const DOOR_SOUND_URLS = {
+    open: "/resources/objects/doors/door-open.ogg",
+    close: "/resources/objects/doors/door-close.ogg",
+} as const;
 
 export interface DoorCharacter {
     x: number;
@@ -81,7 +82,7 @@ export class DoorAnimator {
         private readonly scene: Phaser.Scene,
         private readonly getEntities: () => Iterable<Entity>,
         private readonly getPrefab: (collectionName: string, id: string) => Promise<EntityPrefab | undefined>,
-        private readonly playSound: (key: string, volume: number, rate: number) => void,
+        private readonly playSound: (key: string, volume: number) => void,
         private readonly markDirty: () => void,
     ) {}
 
@@ -163,14 +164,8 @@ export class DoorAnimator {
         const centerY = (state.rect.top + state.rect.bottom) / 2;
         const distance = Math.hypot(centerX - listener.x, centerY - listener.y);
         if (distance < HEARING_DISTANCE) {
-            const variant = 1 + Math.floor(Math.random() * DOOR_SOUND_VARIANTS);
-            // A little change of pitch makes each of the recordings sound like another door.
             const closeness = 1 - distance / HEARING_DISTANCE;
-            this.playSound(
-                doorSoundKey(kind, variant),
-                DOOR_MAX_VOLUME * closeness * closeness,
-                0.94 + Math.random() * 0.12,
-            );
+            this.playSound(DOOR_SOUND_KEYS[kind], DOOR_MAX_VOLUME * closeness * closeness);
         }
     }
 
