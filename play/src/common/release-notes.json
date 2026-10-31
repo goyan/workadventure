@@ -1,5 +1,12 @@
 [
     {
+        "id": "34605f25064fa300c70eb032f2a3dba990130301",
+        "date": "2026-10-31T14:37:02+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "play the door sounds more softly"
+    },
+    {
         "id": "0cc7aacd16c4908be33828c534430bc078c34ba2",
         "date": "2026-10-31T14:23:24+01:00",
         "author": "Antoine Hésèque",
