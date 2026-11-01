@@ -1,5 +1,12 @@
 [
     {
+        "id": "aaab229a0bf9b8f951c9dfba5296c0e2e2426c36",
+        "date": "2026-11-01T02:22:56+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "let players move an object over or under the images it overlaps"
+    },
+    {
         "id": "ba02fb63d63693a948988d95a987d77361c34297",
         "date": "2026-11-01T02:14:24+01:00",
         "author": "Antoine Hésèque",

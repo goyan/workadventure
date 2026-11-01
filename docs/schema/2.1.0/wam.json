@@ -441,6 +441,9 @@
                   ]
                 }
               },
+              "depthStep": {
+                "type": "integer"
+              },
               "prefabRef": {
                 "type": "object",
                 "properties": {
