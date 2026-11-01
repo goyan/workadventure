@@ -27,8 +27,13 @@ import {
     isMapLayerPrefab,
     parseMapLayerPrefab,
 } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
-import { applySupportDepthFloor, applyWallDepthFloor } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
-import type { SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import {
+    applyDepthStep,
+    applySupportDepthFloor,
+    applyWallDepthFloor,
+    getDepthStepRange,
+} from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import type { DepthStepRange, SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -56,6 +61,8 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
     private readonly outlineColorStoreUnsubscribe: Unsubscriber;
 
     private entityData: Required<WAMEntityData>;
+    /** Depth before the manual stacking, from the position of the foot and the neighbouring images. */
+    private automaticDepth = 0;
     private prefab: EntityPrefab;
 
     private activatable!: boolean;
@@ -82,6 +89,7 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
             ...data,
             name: data.name ?? "",
             properties: data.properties ?? [],
+            depthStep: data.depthStep ?? 0,
         };
         this.prefab = prefab;
 
@@ -357,7 +365,21 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
         // Sorted above its foot: a wall crossing it must not hide it when it stands on the tile in front of that wall.
         const wallDepth = applyWallDepthFloor(naturalDepth, box, walls);
         // An object standing on another one (a plant on a table) is drawn over it.
-        this.setDepth(applySupportDepthFloor(wallDepth, box, supports));
+        this.automaticDepth = applySupportDepthFloor(wallDepth, box, supports);
+        // Then the manual stacking chosen in the editor, relative to the images it overlaps.
+        this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
+    }
+
+    /** Depths of the images this one overlaps. The floors stay under everything: no object goes below them. */
+    private getStackableDepths(): number[] {
+        return this.getOverlappingEntities()
+            .filter((entity) => parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor")
+            .map((entity) => entity.depth);
+    }
+
+    /** How many images the object can still be moved over (`up`) or under (`down`) with its manual stacking. */
+    public getDepthStepRange(): DepthStepRange {
+        return getDepthStepRange(this.automaticDepth, this.getStackableDepths());
     }
 
     /** The other entities whose image overlaps this one. */

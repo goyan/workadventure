@@ -146,6 +146,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
                     },
                     properties: createEntityMessage.properties,
                     name: createEntityMessage.name,
+                    depthStep: createEntityMessage.depthStep,
                 };
                 // execute command locally
                 await this.mapEditorModeManager.executeLocalCommand(
