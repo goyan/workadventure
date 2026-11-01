@@ -429,6 +429,8 @@ message CreateEntityMessage {
   optional string name = 7;
   uint32 width = 8;
   uint32 height = 9;
+  // See EntityData.depthStep (libs/map-editor).
+  optional sint32 depthStep = 10;
 }
 
 message DeleteEntityMessage {
@@ -509,6 +511,8 @@ message ModifyEntityMessage {
   optional string name = 6;
   uint32 width = 7;
   uint32 height = 8;
+  // Optional so that a move or a property edit leaves the manual stacking untouched. See EntityData.depthStep.
+  optional sint32 depthStep = 9;
 }
 
 // Transport envelope for websocket frames sent from front to pusher.

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+    applyDepthStep,
     applySupportDepthFloor,
     applyWallDepthFloor,
+    getDepthStepRange,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/ObjectDepthFloor";
 
 describe("applyWallDepthFloor", () => {
@@ -37,6 +39,7 @@ describe("applySupportDepthFloor", () => {
         width: 64,
         height: 96,
         depth: 60,
+        naturalDepth: 60,
         collisionGrid: [
             [0, 0],
             [1, 1],
@@ -56,5 +59,50 @@ describe("applySupportDepthFloor", () => {
 
     it("does not lower an object already above the support", () => {
         expect(applySupportDepthFloor(100, plant(32, 0), [table])).toBe(100);
+    });
+
+    it("draws books inside a shelf over it when a wall raised the shelf", () => {
+        // 2x3 tiles shelf sorted on its top (natural depth 0), raised to 85.5 by the wall behind it.
+        const shelf = { x: 0, y: 0, width: 64, height: 96, depth: 85.5, naturalDepth: 0 };
+        const books = { x: 16, y: 32, width: 32, height: 32 };
+        expect(applySupportDepthFloor(64, books, [shelf])).toBeGreaterThan(shelf.depth);
+    });
+
+    it("keeps an object behind a shelf when its foot is above the shelf", () => {
+        const shelf = { x: 0, y: 64, width: 64, height: 96, depth: 64, naturalDepth: 64 };
+        expect(applySupportDepthFloor(40, { x: 16, y: 0, width: 32, height: 40 }, [shelf])).toBe(40);
+    });
+});
+
+describe("applyDepthStep", () => {
+    const overlapping = [10, 20, 30, 20];
+
+    it("keeps the automatic depth without a step", () => {
+        expect(applyDepthStep(15, 0, overlapping)).toBe(15);
+    });
+
+    it("goes over the nth image above, counting each depth once", () => {
+        expect(applyDepthStep(15, 1, overlapping)).toBe(20.5);
+        expect(applyDepthStep(15, 2, overlapping)).toBe(30.5);
+    });
+
+    it("goes under the nth image below", () => {
+        expect(applyDepthStep(25, -1, overlapping)).toBe(19.5);
+        expect(applyDepthStep(25, -2, overlapping)).toBe(9.5);
+    });
+
+    it("stays beyond the last image when the step is too large", () => {
+        expect(applyDepthStep(15, 9, overlapping)).toBe(30.5);
+        expect(applyDepthStep(15, -9, overlapping)).toBe(9.5);
+    });
+
+    it("keeps the automatic depth without any image to cross", () => {
+        expect(applyDepthStep(15, 1, [])).toBe(15);
+    });
+});
+
+describe("getDepthStepRange", () => {
+    it("counts the distinct depths above and below", () => {
+        expect(getDepthStepRange(15, [10, 20, 30, 20, 15])).toEqual({ down: 1, up: 2 });
     });
 });

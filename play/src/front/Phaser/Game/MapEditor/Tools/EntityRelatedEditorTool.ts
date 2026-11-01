@@ -18,10 +18,12 @@ import {
     mapEditorVisibilityStore,
 } from "../../../../Stores/MapEditorStore";
 import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
+import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCommand";
 import { CreateEntityFrontCommand } from "../Commands/Entity/CreateEntityFrontCommand";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import type { Entity } from "../../../ECS/Entity";
+import { isMapLayerPrefab } from "../MapLayer/MapLayerCatalog";
 import { MapEditorTool } from "./MapEditorTool";
 
 import Image = Phaser.GameObjects.Image;
@@ -42,7 +44,8 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     protected mapEditorSelectedEntityStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorSelectedEntityDraggedStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorEntityEraserStoreUnsubscriber: Unsubscriber | undefined;
-    private rotateButton: Phaser.GameObjects.Text | undefined;
+    /** Buttons shown above the selected entity: rotate, then bring forward / send backward. */
+    private entityButtons: Phaser.GameObjects.Text[] = [];
 
     protected constructor(mapEditorModeManager: MapEditorModeManager) {
         super();
@@ -124,7 +127,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         this.mapEditorSelectedEntityStoreUnsubscriber?.();
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber?.();
         this.mapEditorEntityEraserStoreUnsubscriber?.();
-        this.destroyRotateButton();
+        this.destroyEntityButtons();
     }
 
     protected subscribeToStores(): void {
@@ -173,7 +176,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
 
         this.mapEditorSelectedEntityDraggedStoreUnsubscriber = mapEditorSelectedEntityDraggedStore.subscribe(
             (dragged) => {
-                this.rotateButton?.setVisible(!dragged);
+                this.entityButtons.forEach((button) => button.setVisible(!dragged));
                 if (!dragged) {
                     this.entityOldPositionPreview?.destroy();
                 }
@@ -182,11 +185,11 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
 
         this.mapEditorSelectedEntityStoreUnsubscriber = mapEditorSelectedEntityStore.subscribe((entity) => {
             this.entityOldPositionPreview?.destroy();
-            this.destroyRotateButton();
+            this.destroyEntityButtons();
             if (!entity) {
                 return;
             }
-            this.createRotateButton(entity);
+            this.createEntityButtons(entity);
             this.entityOldPositionPreview = this.scene.add
                 .image(entity.x, entity.y, entity.texture)
                 .setOrigin(0)
@@ -222,29 +225,88 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         return variant?.getEntityPrefabsPositions(prefab.color) ?? [];
     }
 
-    private createRotateButton(entity: Entity): void {
-        if (!entity.canEdit || this.getRotations(entity).length < 2) {
+    private createEntityButtons(entity: Entity): void {
+        if (!entity.canEdit) {
             return;
         }
-        this.rotateButton = this.scene.add
-            .text(entity.x + entity.displayWidth / 2, entity.y - 8, "⟳", {
-                fontSize: "18px",
-                color: "#ffffff",
-                backgroundColor: "#1b2a41",
-                padding: { x: 6, y: 2 },
-            })
-            .setOrigin(0.5, 1)
-            .setDepth(Number.MAX_SAFE_INTEGER)
-            .setInteractive({ cursor: "pointer" })
-            .on(Phaser.Input.Events.POINTER_DOWN, () => {
-                this.rotateEntity(entity).catch((e) => console.error(e));
+        const buttons: { label: string; onClick: () => void }[] = [];
+        if (this.getRotations(entity).length >= 2) {
+            buttons.push({
+                label: "⟳",
+                onClick: () => {
+                    this.rotateEntity(entity).catch(console.error);
+                },
             });
+        }
+        if (!isMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id)) {
+            buttons.push(
+                {
+                    label: "▲",
+                    onClick: () => {
+                        this.stepEntityDepth(entity, 1).catch(console.error);
+                    },
+                },
+                {
+                    label: "▼",
+                    onClick: () => {
+                        this.stepEntityDepth(entity, -1).catch(console.error);
+                    },
+                },
+            );
+        }
+        this.entityButtons = buttons.map(({ label, onClick }) =>
+            this.scene.add
+                .text(0, entity.y - 8, label, {
+                    fontSize: "18px",
+                    color: "#ffffff",
+                    backgroundColor: "#1b2a41",
+                    padding: { x: 6, y: 2 },
+                })
+                .setOrigin(0, 1)
+                .setDepth(Number.MAX_SAFE_INTEGER)
+                .setInteractive({ cursor: "pointer" })
+                .on(Phaser.Input.Events.POINTER_DOWN, onClick),
+        );
+        // Centered above the entity, side by side.
+        const gap = 4;
+        const totalWidth =
+            this.entityButtons.reduce((width, button) => width + button.width, 0) +
+            gap * (this.entityButtons.length - 1);
+        let left = entity.x + entity.displayWidth / 2 - totalWidth / 2;
+        for (const button of this.entityButtons) {
+            button.setX(left);
+            left += button.width + gap;
+        }
         this.scene.markDirty();
     }
 
-    private destroyRotateButton(): void {
-        this.rotateButton?.destroy();
-        this.rotateButton = undefined;
+    private destroyEntityButtons(): void {
+        this.entityButtons.forEach((button) => button.destroy());
+        this.entityButtons = [];
+    }
+
+    /**
+     * Moves the entity over (`direction` 1) or under (-1) the next image it overlaps. Nothing happens when there is no
+     * image left to cross in that direction.
+     */
+    private async stepEntityDepth(entity: Entity, direction: 1 | -1): Promise<void> {
+        const range = entity.getDepthStepRange();
+        const current = entity.getEntityData().depthStep;
+        const next = Math.min(range.up, Math.max(-range.down, current + direction));
+        if (next === current) {
+            return;
+        }
+        await this.mapEditorModeManager.executeCommand(
+            new UpdateEntityFrontCommand(
+                this.scene.getGameMap().getWamFile()!,
+                entity.entityId,
+                { depthStep: next },
+                undefined,
+                { depthStep: current },
+                this.entitiesManager,
+                this.scene,
+            ),
+        );
     }
 
     private async rotateEntity(entity: Entity): Promise<void> {
