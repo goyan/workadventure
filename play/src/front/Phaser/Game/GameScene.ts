@@ -1417,9 +1417,13 @@ export class GameScene extends DirtyScene {
             x: number;
             y: number;
             getPathAhead?: () => { x: number; y: number }[];
+            lastDirection?: PositionMessage_Direction;
         }): DoorCharacter => ({
             x: character.x,
             y: character.y + CHARACTER_BODY_OFFSET_Y,
+            facingSideways:
+                character.lastDirection === PositionMessage_Direction.LEFT ||
+                character.lastDirection === PositionMessage_Direction.RIGHT,
             // A character following a computed path opens the doors it is going through ahead of time.
             path: (character.getPathAhead?.() ?? []).map((point) => ({
                 x: point.x,

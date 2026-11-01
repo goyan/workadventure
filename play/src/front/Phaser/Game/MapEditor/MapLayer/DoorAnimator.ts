@@ -41,6 +41,8 @@ export interface DoorCharacter {
     y: number;
     /** Waypoints still ahead when the character follows a computed path (auto walk, follow a player, click on the map). */
     path?: readonly { x: number; y: number }[];
+    /** Whether the character faces left / right (it walks along a horizontal wall) rather than up / down. */
+    facingSideways?: boolean;
 }
 
 interface DoorRect {
@@ -176,9 +178,14 @@ export class DoorAnimator {
      * A character that follows a path opens the door when the path really goes through it (not just along it), a few steps ahead. A character that
      * walks freely only opens it when it starts crossing it, so that passing along a corridor opens no door.
      */
-    private isNear(rect: DoorRect, character: DoorCharacter): boolean {
+    private isNear(rect: DoorRect, orientation: DoorPiece["orientation"], character: DoorCharacter): boolean {
         if (character.path && character.path.length > 0) {
             return this.pathCrosses(rect, character, character.path);
+        }
+        // A character that goes through a horizontal door moves vertically: walking along the wall north of it, whose
+        // collision is at its foot, puts the body inside the door without crossing it.
+        if (orientation === "h" && character.facingSideways) {
+            return false;
         }
         return (
             character.x >= rect.left &&
@@ -218,7 +225,7 @@ export class DoorAnimator {
         let best: DoorCharacter | undefined;
         let bestDistance = Infinity;
         for (const character of characters) {
-            if (!this.isNear(state.rect, character)) continue;
+            if (!this.isNear(state.rect, state.piece.orientation, character)) continue;
             const distance = Math.hypot(character.x - centerX, character.y - centerY);
             if (distance < bestDistance) {
                 best = character;
