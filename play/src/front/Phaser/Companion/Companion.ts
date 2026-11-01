@@ -99,6 +99,10 @@ export class Companion extends Container {
         this.scene.add.existing(this);
     }
 
+    public get lastDirection(): PositionMessage_Direction {
+        return this.direction;
+    }
+
     public setTarget(x: number, y: number, direction: PositionMessage_Direction) {
         const targetY = y + COMPANION_Y_OFFSET;
         this.target = { x, y: targetY, direction };
