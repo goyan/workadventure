@@ -143,6 +143,7 @@ export class EntitiesManager extends EventEmitter {
                 if (entity) {
                     entity.setTexture(prefab.imagePath).setVisible(true);
                     entity.updateDepth();
+                    this.refreshObjectsDepth(entity);
                     if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
                         mapEditorSelectedEntityStore.set(entity);
                     }
@@ -205,15 +206,30 @@ export class EntitiesManager extends EventEmitter {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid);
         }
         this.gameMapFrontWrapper.removeEntityCollisionRectangles(id);
+        const overlappingEntities = entity.getOverlappingEntities();
         entity.destroy();
         this.scene.markDirty();
 
-        return this.entities.delete(id);
+        const deleted = this.entities.delete(id);
+        for (const overlappingEntity of overlappingEntities) {
+            overlappingEntity.updateDepth();
+        }
+        return deleted;
     }
 
     public deleteEntities(idsToRemove: string[]): boolean {
         const removedEntitiesStatus: boolean[] = idsToRemove.map((id) => this.deleteEntity(id));
         return removedEntitiesStatus.every(Boolean);
+    }
+
+    /**
+     * An object that appears, moves or disappears changes how the entities overlapping it stack against it
+     * (an object sorted above its foot against a wall, an object standing on a table).
+     */
+    private refreshObjectsDepth(changedEntity: Entity): void {
+        for (const entity of changedEntity.getOverlappingEntities()) {
+            entity.updateDepth();
+        }
     }
 
     public updateEntitiesDepth(modifiedEntityPrefabId: string, depthOffset: number) {
@@ -393,6 +409,7 @@ export class EntitiesManager extends EventEmitter {
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
                 }
+                this.refreshObjectsDepth(entity);
                 this.scene.markDirty();
             }
         });
