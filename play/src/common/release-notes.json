@@ -1,5 +1,12 @@
 [
     {
+        "id": "f63133b693477d3b81c9ed936d2689acaba7f550",
+        "date": "2026-11-01T01:17:34+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep objects in front of walls and over the tables they stand on"
+    },
+    {
         "id": "1f04b5fd677d1b5fb37787efa1e82103a58deb52",
         "date": "2026-10-31T21:29:03+01:00",
         "author": "Antoine Hésèque",
