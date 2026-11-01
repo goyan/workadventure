@@ -212,7 +212,7 @@ import {
 import type { ChatConnectionInterface, ChatUser } from "../../Chat/Connection/ChatConnection";
 import { selectedRoomStore } from "../../Chat/Stores/SelectRoomStore";
 import { getCustomEntityCollectionUrl } from "../../Utils/MapStorageUrl";
-import { PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "../Entity/Character";
+import { CHARACTER_BODY_OFFSET_Y, PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "../Entity/Character";
 import { type Avatar, ConversationBubble } from "../Entity/ConversationBubble";
 import { DarkenOutsideAreaEffect } from "../Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
 import { isInsidePersonalAreaStore } from "../../Stores/PersonalDeskStore";
@@ -228,6 +228,7 @@ import { EntityAudioManager } from "./EntityAudioManager";
 import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
+import type { DoorCharacter } from "./MapEditor/MapLayer/DoorAnimator";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -1410,11 +1411,26 @@ export class GameScene extends DirtyScene {
             },
             () => this.markDirty(),
         );
-        const characters: { x: number; y: number }[] = [this.CurrentPlayer];
-        if (this.CurrentPlayer.companion) characters.push(this.CurrentPlayer.companion);
+        // Doors react to the collision body of a character (the one that is blocked by the walls), not to the middle of
+        // its sprite, which overlaps the wall when the character walks along it.
+        const asDoorCharacter = (character: {
+            x: number;
+            y: number;
+            getPathAhead?: () => { x: number; y: number }[];
+        }): DoorCharacter => ({
+            x: character.x,
+            y: character.y + CHARACTER_BODY_OFFSET_Y,
+            // A character following a computed path opens the doors it is going through ahead of time.
+            path: (character.getPathAhead?.() ?? []).map((point) => ({
+                x: point.x,
+                y: point.y + CHARACTER_BODY_OFFSET_Y,
+            })),
+        });
+        const characters: DoorCharacter[] = [asDoorCharacter(this.CurrentPlayer)];
+        if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
         for (const player of this.MapPlayersByKey.values()) {
-            characters.push(player);
-            if (player.companion) characters.push(player.companion);
+            characters.push(asDoorCharacter(player));
+            if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
         this.duckRushManager?.forEachDoorOpener((position) => characters.push(position));
         this.doorAnimator.update(time, characters, this.CurrentPlayer);
