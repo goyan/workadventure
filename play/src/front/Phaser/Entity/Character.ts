@@ -509,6 +509,12 @@ export abstract class Character extends Container implements OutlineableInterfac
         resolve?.({ x: this.x, y: this.y, cancelled, blocked });
     }
 
+    /** The waypoints still ahead on the current walk, the last one being the destination (empty when not walking). */
+    public getPathAhead(): { x: number; y: number }[] {
+        // The first waypoint is where the current segment started, behind the avatar.
+        return this.pathToFollow?.slice(1) ?? [];
+    }
+
     protected isFollowingPath(): boolean {
         return this.pathToFollow !== undefined || this.pathFollowingResolve !== undefined;
     }

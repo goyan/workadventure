@@ -20,8 +20,8 @@ type DoorPiece = Extract<MapLayerPiece, { kind: "door" }>;
 const FRAME_DURATION_MS = 40;
 /** A door stays open this long after the last character left its surroundings, so it does not flap. */
 const CLOSE_DELAY_MS = 500;
-/** How far from the door a character opens it. */
-const OPENING_DISTANCE = 24;
+/** A character that walks a path opens the doors it goes through when they are this close along the path. */
+const PATH_LOOKAHEAD = 4 * MAP_LAYER_TILE_SIZE;
 /** The set of doors is read again at this rhythm: doors are added and removed by the map editor. */
 const RESCAN_PERIOD_MS = 500;
 /** The recordings are loud: a door right next to the player plays at this volume, and fades out with the distance. */
@@ -39,6 +39,8 @@ export const DOOR_SOUND_URLS = {
 export interface DoorCharacter {
     x: number;
     y: number;
+    /** Waypoints still ahead when the character follows a computed path (auto walk, follow a player, click on the map). */
+    path?: readonly { x: number; y: number }[];
 }
 
 interface DoorRect {
@@ -170,13 +172,43 @@ export class DoorAnimator {
         }
     }
 
+    /**
+     * A character that follows a path opens the door when the path really goes through it (not just along it), a few steps ahead. A character that
+     * walks freely only opens it when it starts crossing it, so that passing along a corridor opens no door.
+     */
     private isNear(rect: DoorRect, character: DoorCharacter): boolean {
+        if (character.path && character.path.length > 0) {
+            return this.pathCrosses(rect, character, character.path);
+        }
         return (
-            character.x >= rect.left - OPENING_DISTANCE &&
-            character.x <= rect.right + OPENING_DISTANCE &&
-            character.y >= rect.top - OPENING_DISTANCE &&
-            character.y <= rect.bottom + OPENING_DISTANCE
+            character.x >= rect.left &&
+            character.x <= rect.right &&
+            character.y >= rect.top &&
+            character.y <= rect.bottom
         );
+    }
+
+    private pathCrosses(rect: DoorRect, character: DoorCharacter, path: readonly { x: number; y: number }[]): boolean {
+        let from = { x: character.x, y: character.y };
+        let walked = 0;
+        for (const to of path) {
+            const length = Math.hypot(to.x - from.x, to.y - from.y);
+            // The segment is sampled: its length is small compared to the size of a door.
+            const steps = Math.max(1, Math.ceil(length / 8));
+            for (let i = 0; i <= steps; i++) {
+                if (walked + (length * i) / steps > PATH_LOOKAHEAD) {
+                    return false;
+                }
+                const x = from.x + ((to.x - from.x) * i) / steps;
+                const y = from.y + ((to.y - from.y) * i) / steps;
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    return true;
+                }
+            }
+            walked += length;
+            from = to;
+        }
+        return false;
     }
 
     /** The character near the door that is the closest to its middle, if any. */
@@ -197,12 +229,13 @@ export class DoorAnimator {
     }
 
     /**
-     * The door is pushed away from the character: a character north of a horizontal door, or west of a vertical one,
-     * makes it swing towards the south, or the east. Standing in the doorway counts as the south / east side.
+     * The door is pushed away from the character: a character on the north half of a horizontal door, or on the west half
+     * of a vertical one, makes it swing towards the south, or the east. The side is read when the door starts opening,
+     * that is when the character has only just reached the door, so it is the side the character comes from.
      */
     private isPushedTowardsViewer(state: DoorPieceState, character: DoorCharacter): boolean {
         return state.piece.orientation === "h"
-            ? character.y < state.rect.top
+            ? character.y < (state.rect.top + state.rect.bottom) / 2
             : character.x < (state.rect.left + state.rect.right) / 2;
     }
 
