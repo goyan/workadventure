@@ -85,6 +85,7 @@ function fixture() {
         name: "Entrance",
         prefabRef: { id: "source", collectionName: "custom entities" },
         properties: [],
+        depthStep: 0,
     };
     const entity = mock<Entity>({ entityId: "image", x: 32, y: 64, width: 64, height: 32 });
     Object.defineProperty(entity, "canEdit", { value: true });

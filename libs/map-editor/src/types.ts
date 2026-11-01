@@ -366,6 +366,11 @@ export const EntityData = z.object({
     y: z.number(),
     name: z.string().optional(),
     properties: EntityDataProperties.optional(),
+    /**
+     * Manual stacking against the objects the entity overlaps: +1 draws it over the next one it overlaps, -1 under the
+     * previous one. Absent or 0 keeps the automatic order, which follows the position of the foot.
+     */
+    depthStep: z.number().int().optional(),
     prefab: EntityRawPrefab,
     prefabRef: EntityPrefabRef,
 });

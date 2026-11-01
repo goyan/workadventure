@@ -75,3 +75,41 @@ export function applySupportDepthFloor(
     }
     return depth;
 }
+
+export interface DepthStepRange {
+    /** How many distinct stacking levels lie below the object among the images it overlaps. */
+    down: number;
+    /** How many distinct stacking levels lie above the object among the images it overlaps. */
+    up: number;
+}
+
+function sortedLevels(baseDepth: number, overlappingDepths: Iterable<number>): { below: number[]; above: number[] } {
+    const levels = [...new Set(overlappingDepths)];
+    return {
+        below: levels.filter((level) => level < baseDepth).sort((a, b) => b - a),
+        above: levels.filter((level) => level > baseDepth).sort((a, b) => a - b),
+    };
+}
+
+export function getDepthStepRange(baseDepth: number, overlappingDepths: Iterable<number>): DepthStepRange {
+    const { below, above } = sortedLevels(baseDepth, overlappingDepths);
+    return { down: below.length, up: above.length };
+}
+
+/**
+ * Manual stacking: each step crosses one more of the depths of the images the object overlaps, so that a step of +1
+ * draws it over the next image above it, +2 over the second one, and so on. A step beyond the last image stays on top
+ * of it (or under it, for a negative step).
+ */
+export function applyDepthStep(baseDepth: number, step: number, overlappingDepths: Iterable<number>): number {
+    if (step === 0) {
+        return baseDepth;
+    }
+    const { below, above } = sortedLevels(baseDepth, overlappingDepths);
+    if (step > 0) {
+        const crossed = above[Math.min(step, above.length) - 1];
+        return crossed === undefined ? baseDepth : crossed + 0.5;
+    }
+    const crossed = below[Math.min(-step, below.length) - 1];
+    return crossed === undefined ? baseDepth : crossed - 0.5;
+}
