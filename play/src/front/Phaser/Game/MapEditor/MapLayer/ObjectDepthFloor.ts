@@ -37,14 +37,20 @@ export function applyWallDepthFloor(naturalDepth: number, object: DepthBox, wall
 }
 
 export interface SupportDepthBox extends DepthBox {
+    /** Depth actually applied to the support, possibly raised above its natural depth by a wall. */
     depth: number;
+    /** Depth the support has from its own position and depth offset alone. */
+    naturalDepth: number;
     /** Collision grid of the support, one cell per tile from its top-left corner (1 = solid). */
-    collisionGrid: number[][];
+    collisionGrid?: number[][];
 }
 
 /**
- * An object whose foot stands on the solid cells of another object (a plant on a big table) sits on it: it must be
- * drawn over it, even when the support is sorted on a lower foot.
+ * An object whose foot stands on another object (a plant on a big table, books on a shelf) sits on it: it must be
+ * drawn over it. Two cases tell that the object stands on it:
+ * - its foot is on a solid cell of the support's collision grid, even when the support is sorted on a lower foot;
+ * - its foot is inside the support's image and is naturally in front of the support. The support may have been raised
+ *   above that natural depth (a shelf against a wall), which would otherwise hide the object behind it.
  */
 export function applySupportDepthFloor(
     naturalDepth: number,
@@ -57,7 +63,13 @@ export function applySupportDepthFloor(
     for (const support of supports) {
         const column = Math.floor((footX - support.x) / MAP_LAYER_TILE_SIZE);
         const row = Math.floor((footY - support.y) / MAP_LAYER_TILE_SIZE);
-        if (column >= 0 && row >= 0 && support.collisionGrid[row]?.[column] === 1) {
+        const onSolidCell = support.collisionGrid?.[row]?.[column] === 1;
+        const insideImage =
+            footX >= support.x &&
+            footX < support.x + support.width &&
+            footY >= support.y &&
+            footY < support.y + support.height;
+        if (onSolidCell || (insideImage && naturalDepth > support.naturalDepth)) {
             depth = Math.max(depth, support.depth + 0.5);
         }
     }

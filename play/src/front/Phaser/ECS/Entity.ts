@@ -344,12 +344,13 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
                 width: neighbour.displayWidth,
                 height: neighbour.displayHeight,
                 depth: neighbour.depth,
+                naturalDepth: neighbour.y + neighbour.displayHeight + (prefab.depthOffset ?? 0),
             };
             if (isMapLayerPrefab(prefab.collectionName, prefab.id)) {
                 if (depthOffset < 0 && parseMapLayerPrefab(prefab.collectionName, prefab.id)?.kind !== "floor") {
                     walls.push(neighbourBox);
                 }
-            } else if (prefab.collisionGrid && this.prefab.seat === undefined) {
+            } else if (this.prefab.seat === undefined) {
                 supports.push({ ...neighbourBox, collisionGrid: prefab.collisionGrid });
             }
         }

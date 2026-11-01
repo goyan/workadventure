@@ -37,6 +37,7 @@ describe("applySupportDepthFloor", () => {
         width: 64,
         height: 96,
         depth: 60,
+        naturalDepth: 60,
         collisionGrid: [
             [0, 0],
             [1, 1],
@@ -56,5 +57,17 @@ describe("applySupportDepthFloor", () => {
 
     it("does not lower an object already above the support", () => {
         expect(applySupportDepthFloor(100, plant(32, 0), [table])).toBe(100);
+    });
+
+    it("draws books inside a shelf over it when a wall raised the shelf", () => {
+        // 2x3 tiles shelf sorted on its top (natural depth 0), raised to 85.5 by the wall behind it.
+        const shelf = { x: 0, y: 0, width: 64, height: 96, depth: 85.5, naturalDepth: 0 };
+        const books = { x: 16, y: 32, width: 32, height: 32 };
+        expect(applySupportDepthFloor(64, books, [shelf])).toBeGreaterThan(shelf.depth);
+    });
+
+    it("keeps an object behind a shelf when its foot is above the shelf", () => {
+        const shelf = { x: 0, y: 64, width: 64, height: 96, depth: 64, naturalDepth: 64 };
+        expect(applySupportDepthFloor(40, { x: 16, y: 0, width: 32, height: 40 }, [shelf])).toBe(40);
     });
 });

@@ -286,6 +286,8 @@ reste désormais devant les murs qu'il chevauche dont le pied est sur une rangé
 posé sur la tuile du mur ou derrière, il passe toujours derrière (`ObjectDepthFloor.ts`).
 Un objet dont le pied est sur une case pleine de la grille de collision d'un autre (une plante sur une grande table)
 est dessiné devant lui ; les places assises sont exclues, une chaise glissée sous une table reste derrière.
+Il en va de même d'un objet dont le pied est dans l'image d'un autre devant lequel il est naturellement placé
+(des livres dans une étagère) : sans cela, l'étagère remontée par le mur derrière elle passait devant eux.
 
 Sans la nouvelle propriété, les cartes gardent leurs collisions actuelles. Ce prototype
 reste local, sans push ni déploiement. La recette dans le jeu WorkAdventure reste à faire
