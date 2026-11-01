@@ -1,5 +1,12 @@
 [
     {
+        "id": "ba02fb63d63693a948988d95a987d77361c34297",
+        "date": "2026-11-01T02:14:24+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "keep objects placed inside a shelf in front of it"
+    },
+    {
         "id": "f63133b693477d3b81c9ed936d2689acaba7f550",
         "date": "2026-11-01T01:17:34+01:00",
         "author": "Antoine Hésèque",
