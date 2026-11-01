@@ -1,5 +1,12 @@
 [
     {
+        "id": "493b67379336122ad89ab4dfad72383d2dc947b4",
+        "date": "2026-11-01T02:34:33+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "do not open the doors below a corridor when walking along them"
+    },
+    {
         "id": "aaab229a0bf9b8f951c9dfba5296c0e2e2426c36",
         "date": "2026-11-01T02:22:56+01:00",
         "author": "Antoine Hésèque",
