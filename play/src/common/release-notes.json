@@ -12,6 +12,8 @@
         "author": "Antoine Hésèque",
         "type": "fix",
         "description": "keep objects placed inside a shelf in front of it"
+    },
+    {
         "id": "7973f53bd073de2dc304eb6c1720849b56ef9e3c",
         "date": "2026-11-01T02:02:09+01:00",
         "author": "Antoine Hésèque",
