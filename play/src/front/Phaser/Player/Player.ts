@@ -198,12 +198,6 @@ export class Player extends Character {
         return this.pathToFollow !== undefined;
     }
 
-    /** The waypoints still ahead on the current walk, the last one being the destination (empty when not walking). */
-    public getPathAhead(): { x: number; y: number }[] {
-        // The first waypoint is where the current segment started, behind the avatar.
-        return this.pathToFollow?.slice(1) ?? [];
-    }
-
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
         return this.pathWalkingSpeed ? this.pathWalkingSpeed : speedUp && !followMode ? 2.5 * WOKA_SPEED : WOKA_SPEED;
     }
