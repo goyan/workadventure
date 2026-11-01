@@ -27,6 +27,8 @@ import {
     isMapLayerPrefab,
     parseMapLayerPrefab,
 } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
+import { applySupportDepthFloor, applyWallDepthFloor } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import type { SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -147,6 +149,7 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
         }
 
         this.setPosition(this.entityData.x, this.entityData.y);
+        this.updateDepth();
         this.oldPosition = this.getPosition();
         const wasActivatable = this.activatable;
         this.activatable = this.hasAnyPropertiesSet();
@@ -325,7 +328,53 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
             return;
         }
-        this.setDepth(this.y + this.displayHeight + depthOffset);
+        const naturalDepth = this.y + this.displayHeight + depthOffset;
+        if (isMapLayerPrefab(this.prefab.collectionName, this.prefab.id)) {
+            this.setDepth(naturalDepth);
+            return;
+        }
+        const box = { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight };
+        const walls: WallDepthBox[] = [];
+        const supports: SupportDepthBox[] = [];
+        for (const neighbour of this.getOverlappingEntities()) {
+            const prefab = neighbour.getPrefab();
+            const neighbourBox = {
+                x: neighbour.x,
+                y: neighbour.y,
+                width: neighbour.displayWidth,
+                height: neighbour.displayHeight,
+                depth: neighbour.depth,
+            };
+            if (isMapLayerPrefab(prefab.collectionName, prefab.id)) {
+                if (depthOffset < 0 && parseMapLayerPrefab(prefab.collectionName, prefab.id)?.kind !== "floor") {
+                    walls.push(neighbourBox);
+                }
+            } else if (prefab.collisionGrid && this.prefab.seat === undefined) {
+                supports.push({ ...neighbourBox, collisionGrid: prefab.collisionGrid });
+            }
+        }
+        // Sorted above its foot: a wall crossing it must not hide it when it stands on the tile in front of that wall.
+        const wallDepth = applyWallDepthFloor(naturalDepth, box, walls);
+        // An object standing on another one (a plant on a table) is drawn over it.
+        this.setDepth(applySupportDepthFloor(wallDepth, box, supports));
+    }
+
+    /** The other entities whose image overlaps this one. */
+    public getOverlappingEntities(): Entity[] {
+        const entitiesManager = (this.scene as GameScene).getGameMapFrontWrapper?.()?.getEntitiesManager?.();
+        const overlapping: Entity[] = [];
+        for (const entity of entitiesManager?.getEntities().values() ?? []) {
+            if (
+                entity !== this &&
+                entity.x < this.x + this.displayWidth &&
+                this.x < entity.x + entity.displayWidth &&
+                entity.y < this.y + this.displayHeight &&
+                this.y < entity.y + entity.displayHeight
+            ) {
+                overlapping.push(entity);
+            }
+        }
+        return overlapping;
     }
 
     public getProperties(): EntityDataProperties {

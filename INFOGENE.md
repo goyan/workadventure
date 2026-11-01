@@ -279,6 +279,14 @@ indépendante du dessin et peut occuper uniquement les derniers pixels de la tui
 Sans cette propriété, ou avec une valeur non numérique/non finie, l'ordre existant
 par rapport à `floorLayer` est conservé.
 
+Les murs de l'outil Carte portent un `depthOffset` positif pour masquer ce qui est derrière eux.
+Un objet trié sur sa rangée du haut (`depthOffset` négatif, comme les tables du pack de base)
+passait donc derrière un mur qu'il chevauche, même posé sur la tuile devant ce mur. Un tel objet
+reste désormais devant les murs qu'il chevauche dont le pied est sur une rangée au nord du sien ;
+posé sur la tuile du mur ou derrière, il passe toujours derrière (`ObjectDepthFloor.ts`).
+Un objet dont le pied est sur une case pleine de la grille de collision d'un autre (une plante sur une grande table)
+est dessiné devant lui ; les places assises sont exclues, une chaise glissée sous une table reste derrière.
+
 Sans la nouvelle propriété, les cartes gardent leurs collisions actuelles. Ce prototype
 reste local, sans push ni déploiement. La recette dans le jeu WorkAdventure reste à faire
 sur une salle séparée, avant toute modification de la carte beta habituelle.
