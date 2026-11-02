@@ -523,6 +523,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Objecte flotant",
             floatingObjectDescription:
                 "Un objecte flotant es pot col·locar lliurement al mapa. Altrament, s'alinearà a la graella del mapa.",
+            animatedObject: "Imatge animada",
+            animatedObjectDescription:
+                "La imatge és una tira horitzontal de fotogrames de la mateixa amplada, reproduïts en bucle.",
+            frameCount: "Nombre de fotogrames",
+            frameRate: "Fotogrames per segon",
             depth: "Profunditat",
             groundLevel: "Nivell del terra",
             custom: "Personalitzat",

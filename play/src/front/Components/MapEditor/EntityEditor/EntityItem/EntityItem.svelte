@@ -23,6 +23,7 @@
     <EntityImage
         classNames="cursor-pointer w-14 h-14 object-contain rounded-md"
         imageSource={entityVariant.defaultPrefab.imagePath}
+        animation={entityVariant.defaultPrefab.animation}
         imageAlt={entityVariant.defaultPrefab.name}
     />
 </div>

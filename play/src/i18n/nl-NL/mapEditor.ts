@@ -524,6 +524,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Vloeiend object",
             floatingObjectDescription:
                 "Een vloeiend object kan vrij op de kaart worden geplaatst. Anders wordt het uitgelijnd op het kaartrooster.",
+            animatedObject: "Geanimeerde afbeelding",
+            animatedObjectDescription:
+                "De afbeelding is een horizontale strook van even brede frames, die in een lus worden afgespeeld.",
+            frameCount: "Aantal frames",
+            frameRate: "Frames per seconde",
             depth: "Diepte",
             groundLevel: "Grondniveau",
             custom: "Aangepast",

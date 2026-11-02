@@ -521,6 +521,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "フローティングオブジェクト",
             floatingObjectDescription:
                 "フローティングオブジェクトはマップ上に自由に配置することができます。そうでない場合は、マップグリッド上に整列されます。",
+            animatedObject: "アニメーション画像",
+            animatedObjectDescription: "画像は同じ幅のフレームを横に並べたストリップで、ループ再生されます。",
+            frameCount: "フレーム数",
+            frameRate: "1秒あたりのフレーム数",
             depth: "奥行",
             groundLevel: "地上レベル",
             custom: "カスタム",

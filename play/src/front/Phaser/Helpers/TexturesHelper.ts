@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { asError } from "catch-unknown";
+import type { EntityAnimation } from "@workadventure/map-editor";
 
 import Sprite = Phaser.GameObjects.Sprite;
 
@@ -81,10 +82,16 @@ export class TexturesHelper {
         circleTexture.destroy();
     }
 
-    public static async loadEntityImage(scene: Phaser.Scene, key: string, url: string): Promise<void> {
-        return new Promise<void>((resolve, reject) => {
+    public static async loadEntityImage(
+        scene: Phaser.Scene,
+        key: string,
+        url: string,
+        animation?: EntityAnimation,
+    ): Promise<void> {
+        await new Promise<void>((resolve) => {
             if (scene.textures.exists(key)) {
                 resolve();
+                return;
             }
             scene.load.once(`filecomplete-image-${key}`, () => {
                 resolve();
@@ -92,5 +99,41 @@ export class TexturesHelper {
             scene.load.image(key, url);
             scene.load.start();
         });
+        if (animation) {
+            TexturesHelper.addEntityAnimation(scene, key, animation);
+        }
+    }
+
+    /**
+     * Cuts the loaded strip of an animated entity into its frames and creates its looping animation. Once cut, a
+     * texture shown without a frame (editor previews, selection) shows its first frame instead of the whole strip.
+     *
+     * @returns the key of the animation, or undefined when the texture is not loaded or too narrow for its frames.
+     */
+    public static addEntityAnimation(scene: Phaser.Scene, key: string, animation: EntityAnimation): string | undefined {
+        if (!scene.textures.exists(key)) {
+            return undefined;
+        }
+        const texture = scene.textures.get(key);
+        const source = texture.getSourceImage();
+        const frameWidth = Math.floor(source.width / animation.frameCount);
+        if (frameWidth < 1) {
+            return undefined;
+        }
+        if (!texture.has("0")) {
+            for (let index = 0; index < animation.frameCount; index++) {
+                texture.add(index, 0, index * frameWidth, 0, frameWidth, source.height);
+            }
+        }
+        const animationKey = `entity-animation:${key}`;
+        if (!scene.anims.exists(animationKey)) {
+            scene.anims.create({
+                key: animationKey,
+                frames: Array.from({ length: animation.frameCount }, (_, index) => ({ key, frame: index })),
+                frameRate: animation.frameRate,
+                repeat: -1,
+            });
+        }
+        return animationKey;
     }
 }

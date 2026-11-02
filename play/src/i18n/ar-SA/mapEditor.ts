@@ -516,6 +516,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             objectType: "نوع الكائن", // Object type
             floatingObject: "كائن عائم", // Floating object
             floatingObjectDescription: "يمكن وضع الكائن العائم بحرية على الخريطة. وإلا، سيتم ضبطه على شبكة الخريطة.", // A floating object can be placed freely on the map. Otherwise, it will snap to the map's grid.
+            animatedObject: "صورة متحركة",
+            animatedObjectDescription: "الصورة شريط أفقي من الإطارات بنفس العرض، يتم تشغيلها في حلقة.",
+            frameCount: "عدد الإطارات",
+            frameRate: "إطارات في الثانية",
             depth: "العمق", // Depth
             groundLevel: "مستوى الأرض", // Ground level
             custom: "مخصص", // Custom

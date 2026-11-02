@@ -1,5 +1,10 @@
 <script lang="ts">
-    import type { EntityPrefab } from "@workadventure/map-editor";
+    import type { EntityAnimation, EntityPrefab } from "@workadventure/map-editor";
+    import { MAX_ENTITY_ANIMATION_FRAME_COUNT, MAX_ENTITY_ANIMATION_FRAME_RATE } from "@workadventure/map-editor";
+    import {
+        DEFAULT_ENTITY_ANIMATION_FRAME_RATE,
+        detectEntityAnimationFrameCount,
+    } from "../../../../Utils/EntityAnimationDetection";
     import LL from "../../../../../i18n/i18n-svelte";
     import EntityImage from "../EntityItem/EntityImage.svelte";
     import type { InputTagOption } from "../../../Input/InputTagOption";
@@ -39,6 +44,19 @@
     let floatingObject = $state((() => (isUploadForm ? false : customEntityCollisionGrid === undefined))());
     let depthOffset: number = $state(depthOffsetCustomEntity ? depthOffsetCustomEntity * -1 : 0);
     let entityImageRef: HTMLImageElement | undefined = $state();
+    let entityImageHeight = $state(0);
+    const initialAnimation = (() => customEntity.animation)();
+    let animated = $state(initialAnimation !== undefined);
+    let frameCount = $state(initialAnimation?.frameCount ?? 2);
+    let frameRate = $state(initialAnimation?.frameRate ?? DEFAULT_ENTITY_ANIMATION_FRAME_RATE);
+    // The animation is chosen once, on upload: the placed copies of the image are not re-cut afterwards.
+    const animation: EntityAnimation | undefined = $derived(
+        isUploadForm
+            ? animated && isValidAnimation(frameCount, frameRate)
+                ? { frameCount, frameRate }
+                : undefined
+            : initialAnimation,
+    );
     let displayDepthCustomSelector = $state(false);
 
     const depthOptions = {
@@ -60,16 +78,59 @@
             tags: inputTagOptions !== undefined ? inputTagOptions.map((tagOption) => tagOption.value) : [],
             collisionGrid: floatingObject ? undefined : collisionGrid,
             depthOffset: depthOffset !== 0 ? -depthOffset : 0,
+            animation,
         };
+    }
+
+    function isValidAnimation(frameCount: number, frameRate: number): boolean {
+        return (
+            Number.isInteger(frameCount) &&
+            frameCount >= 2 &&
+            frameCount <= MAX_ENTITY_ANIMATION_FRAME_COUNT &&
+            frameRate > 0 &&
+            frameRate <= MAX_ENTITY_ANIMATION_FRAME_RATE &&
+            (entityImageRef === undefined || entityImageRef.naturalWidth >= frameCount)
+        );
+    }
+
+    /** Ticks the animation box when the uploaded image looks like a strip of frames, with its number of frames. */
+    function detectAnimation(imageRef: HTMLImageElement) {
+        const canvas = document.createElement("canvas");
+        canvas.width = imageRef.naturalWidth;
+        canvas.height = imageRef.naturalHeight;
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        if (!context || canvas.width === 0 || canvas.height === 0) return;
+        context.drawImage(imageRef, 0, 0);
+        const detectedFrameCount = detectEntityAnimationFrameCount(
+            context.getImageData(0, 0, canvas.width, canvas.height),
+        );
+        if (detectedFrameCount !== undefined) {
+            animated = true;
+            frameCount = detectedFrameCount;
+        }
     }
 
     const COLLISION_GRID_SIZE = 32;
 
-    function generateCollisionGridIfNotExists(imageRef: HTMLImageElement) {
+    function onImageLoad(imageRef: HTMLImageElement) {
+        const firstLoad = entityImageRef === undefined;
         entityImageRef = imageRef;
-        if (collisionGrid.length === 0) {
-            const nbColumn = Math.ceil(imageRef.naturalWidth / COLLISION_GRID_SIZE);
-            const nbRow = Math.ceil(imageRef.naturalHeight / COLLISION_GRID_SIZE);
+        if (firstLoad && isUploadForm) {
+            detectAnimation(imageRef);
+        }
+        generateCollisionGridIfNotExists(animation?.frameCount ?? 1);
+    }
+
+    /**
+     * One cell per 32px of a frame: the collision grid covers one frame of an animated strip. On upload, the grid is
+     * redrawn when the number of frames changes the width of a frame.
+     */
+    function generateCollisionGridIfNotExists(imageFrameCount: number) {
+        if (!entityImageRef) return;
+        const nbColumn = Math.ceil(entityImageRef.naturalWidth / imageFrameCount / COLLISION_GRID_SIZE);
+        const nbRow = Math.ceil(entityImageRef.naturalHeight / COLLISION_GRID_SIZE);
+        const sizeChanged = collisionGrid.length !== nbRow || collisionGrid[0]?.length !== nbColumn;
+        if (collisionGrid.length === 0 || (isUploadForm && sizeChanged)) {
             collisionGrid = Array(nbRow)
                 .fill(0)
                 .map(() => Array(nbColumn).fill(0));
@@ -103,6 +164,12 @@
     }
 
     $effect(() => {
+        if (isUploadForm) {
+            generateCollisionGridIfNotExists(animation?.frameCount ?? 1);
+        }
+    });
+
+    $effect(() => {
         if (selectedDepthOption) {
             updateDepthOffset(selectedDepthOption);
         }
@@ -112,25 +179,23 @@
 <div class="flex flex-col flex-1 gap-2">
     <div class="self-center relative flex items-center">
         {#if !floatingObject}
-            <EntityEditionCollisionGrid
-                {collisionGrid}
-                {updateCollisionGrid}
-                collisionGridHeight={entityImageRef?.height ?? 0}
-            />
+            <EntityEditionCollisionGrid {collisionGrid} {updateCollisionGrid} collisionGridHeight={entityImageHeight} />
         {/if}
         <EntityImage
             classNames="w-32 max-h-32 object-contain"
-            imageLoad={(image) => generateCollisionGridIfNotExists(image)}
+            imageLoad={(image) => onImageLoad(image)}
             imageSource={customEntity.imagePath}
             imageAlt={customEntity.name}
+            {animation}
+            bind:displayedHeight={entityImageHeight}
         />
         {#if displayDepthCustomSelector}
             <div>
                 <p class="m-0 p-0 text-xs">{$LL.mapEditor.entityEditor.customEntityEditorForm.wokaAbove()}</p>
-                <div class="rotate-[270deg]" style="width: 30px;margin-top: {(entityImageRef?.height ?? 0) - 30}px">
+                <div class="rotate-[270deg]" style="width: 30px;margin-top: {entityImageHeight - 30}px">
                     <input
                         class="!cursor-grab active:!cursor-grabbing slider"
-                        style="width: {entityImageRef?.height ?? 0}px"
+                        style="width: {entityImageHeight}px"
                         bind:value={depthOffset}
                         type="range"
                         max={entityImageRef?.naturalHeight}
@@ -183,6 +248,37 @@
                 {$LL.mapEditor.entityEditor.customEntityEditorForm.floatingObjectDescription()}
             </label>
         </div>
+        <div class="flex gap-2 mt-2 hover:cursor-pointer">
+            <InputCheckbox id="animatedObject" dataTestId="animatedObject" bind:value={animated} />
+            <label class="my-[4px]" for="animatedObject"
+                ><b class="-mb-2 block">{$LL.mapEditor.entityEditor.customEntityEditorForm.animatedObject()}</b>
+                <br />
+                {$LL.mapEditor.entityEditor.customEntityEditorForm.animatedObjectDescription()}
+            </label>
+        </div>
+        {#if animated}
+            <div class="flex gap-2">
+                <Input
+                    id="frameCount"
+                    dataTestId="frameCount"
+                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.frameCount()}
+                    type="number"
+                    min={2}
+                    max={MAX_ENTITY_ANIMATION_FRAME_COUNT}
+                    step={1}
+                    bind:value={frameCount}
+                />
+                <Input
+                    id="frameRate"
+                    dataTestId="frameRate"
+                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.frameRate()}
+                    type="number"
+                    min={1}
+                    max={MAX_ENTITY_ANIMATION_FRAME_RATE}
+                    bind:value={frameRate}
+                />
+            </div>
+        {/if}
     {/if}
     <div class="flex gap-2 flex-wrap justify-center w-full text-sm">
         {#if !isUploadForm}

@@ -522,6 +522,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Oggetto fluttuante",
             floatingObjectDescription:
                 "Un oggetto fluttuante può essere posizionato liberamente sulla mappa. Altrimenti, sarà allineato sulla griglia della mappa.",
+            animatedObject: "Immagine animata",
+            animatedObjectDescription:
+                "L'immagine è una striscia orizzontale di fotogrammi della stessa larghezza, riprodotti in loop.",
+            frameCount: "Numero di fotogrammi",
+            frameRate: "Fotogrammi al secondo",
             depth: "Profondità",
             groundLevel: "Livello del suolo",
             custom: "Personalizzato",

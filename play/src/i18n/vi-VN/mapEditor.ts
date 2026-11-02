@@ -520,6 +520,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Đối tượng tự do",
             floatingObjectDescription:
                 "Đối tượng tự do có thể đặt tùy ý trên bản đồ. Nếu không, nó sẽ được căn theo lưới bản đồ.",
+            animatedObject: "Hình ảnh động",
+            animatedObjectDescription:
+                "Hình ảnh là một dải ngang gồm các khung hình cùng chiều rộng, được phát lặp lại.",
+            frameCount: "Số khung hình",
+            frameRate: "Khung hình mỗi giây",
             depth: "Độ sâu",
             groundLevel: "Mặt đất",
             custom: "Tùy chỉnh",

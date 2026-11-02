@@ -306,6 +306,18 @@ export const CollisionRectangle = z.object({
     height: z.number().positive(),
 });
 
+export const MAX_ENTITY_ANIMATION_FRAME_COUNT = 64;
+export const MAX_ENTITY_ANIMATION_FRAME_RATE = 60;
+
+/**
+ * An animated image is a horizontal strip of `frameCount` frames of the same width, played in a loop. Every size of
+ * the entity (placement, collision grid, depth) is the size of one frame.
+ */
+export const EntityAnimation = z.object({
+    frameCount: z.number().int().min(2).max(MAX_ENTITY_ANIMATION_FRAME_COUNT),
+    frameRate: z.number().positive().max(MAX_ENTITY_ANIMATION_FRAME_RATE),
+});
+
 export const EntityRawPrefab = z.object({
     id: z.string(),
     name: z.string(),
@@ -318,6 +330,8 @@ export const EntityRawPrefab = z.object({
     // which would make every placed entity of the catalog lose its prefab.
     collisionRectangles: z.array(CollisionRectangle).optional().catch(undefined),
     depthOffset: z.number().optional(),
+    // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
+    animation: EntityAnimation.optional().catch(undefined),
     /**
      * Places of the entity a player can sit on (e.g. two for a couch), as the position of the sitter's feet in
      * tiles from the top-left corner of the image. The player sits facing `direction`. Fail open like
@@ -490,6 +504,7 @@ export type EntityCollectionRaw = z.infer<typeof EntityCollectionRaw>;
 export type CollectionUrl = z.infer<typeof CollectionUrl>;
 export type CollisionGrid = z.infer<typeof CollisionGrid>;
 export type CollisionRectangle = z.infer<typeof CollisionRectangle>;
+export type EntityAnimation = z.infer<typeof EntityAnimation>;
 export type EntityData = z.infer<typeof EntityData>;
 export type EntityDimensions = z.infer<typeof EntityDimensions>;
 export type EntityCoordinates = z.infer<typeof EntityCoordinates>;

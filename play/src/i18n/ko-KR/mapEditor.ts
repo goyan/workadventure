@@ -520,6 +520,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "부유 오브젝트",
             floatingObjectDescription:
                 "부유 오브젝트는 지도에서 격자에 맞추지 않고 자유롭게 배치할 수 있습니다. 비활성화하면 타일 격자에 맞춰집니다.",
+            animatedObject: "애니메이션 이미지",
+            animatedObjectDescription: "이미지는 같은 너비의 프레임을 가로로 나열한 스트립이며, 반복 재생됩니다.",
+            frameCount: "프레임 수",
+            frameRate: "초당 프레임 수",
             depth: "깊이",
             groundLevel: "지면 레벨",
             custom: "사용자 정의",

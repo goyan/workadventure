@@ -76,6 +76,7 @@
                 imagePath: `${generatedId}-${fileToUpload.name}`,
                 collisionGrid: customEditedEntity.collisionGrid,
                 depthOffset: customEditedEntity.depthOffset,
+                animation: $state.snapshot(customEditedEntity.animation),
                 color: "",
                 // Lets us edit and delete our own upload without waiting for the round trip to
                 // map-storage, which overwrites this with the authenticated user UUID anyway.

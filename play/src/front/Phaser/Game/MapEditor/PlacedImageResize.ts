@@ -134,14 +134,16 @@ export async function resizePlacedImage(
     const response = await fetch(prefab.imagePath, { signal });
     if (!response.ok) throw new Error("Could not load image");
     const bitmap = await createImageBitmap(await response.blob());
+    // `size` is the size of one frame: every frame of an animated strip is scaled alike.
+    const frameCount = prefab.animation?.frameCount ?? 1;
     const canvas = document.createElement("canvas");
-    canvas.width = size.width;
+    canvas.width = size.width * frameCount;
     canvas.height = size.height;
     try {
         signal.throwIfAborted();
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Could not resize image");
-        context.drawImage(bitmap, 0, 0, size.width, size.height);
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     } finally {
         bitmap.close();
     }
@@ -166,6 +168,7 @@ export async function resizePlacedImage(
             collisionGrid,
             depthOffset: Math.round((prefab.depthOffset ?? 0) * (size.height / source.height)),
             color: prefab.color,
+            animation: prefab.animation,
         },
         entities,
         collections,

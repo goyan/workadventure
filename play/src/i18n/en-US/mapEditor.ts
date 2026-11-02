@@ -518,6 +518,10 @@ const mapEditor: BaseTranslation = {
             floatingObject: "Floating object",
             floatingObjectDescription:
                 "A floating object can be placed freely on the map. Otherwise, it will be aligned on the map grid.",
+            animatedObject: "Animated image",
+            animatedObjectDescription: "The image is a horizontal strip of frames of the same width, played in a loop.",
+            frameCount: "Number of frames",
+            frameRate: "Frames per second",
             depth: "Depth",
             groundLevel: "Ground level",
             custom: "Custom",

@@ -524,6 +524,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Objeto flutuante",
             floatingObjectDescription:
                 "Um objeto flutuante pode ser colocado livremente no mapa. Caso contrário, será alinhado na grade do mapa.",
+            animatedObject: "Imagem animada",
+            animatedObjectDescription:
+                "A imagem é uma faixa horizontal de quadros da mesma largura, reproduzidos em loop.",
+            frameCount: "Número de quadros",
+            frameRate: "Quadros por segundo",
             depth: "Profundidade",
             groundLevel: "Nível do solo",
             custom: "Personalizado",

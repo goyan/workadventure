@@ -62,6 +62,31 @@ describe("CustomEntityCollectionService", () => {
         expect((await readCollection(service))?.ownerId).toBe(OWNER_UUID);
     });
 
+    it("persists the animation of an image strip and keeps it when the entity is modified", async () => {
+        const service = new CustomEntityCollectionService("play.workadventure.localhost");
+        await service.uploadEntity(uploadMessage({ animation: { frameCount: 4, frameRate: 8 } }));
+
+        expect((await readCollection(service))?.animation).toEqual({ frameCount: 4, frameRate: 8 });
+
+        await service.modifyEntity({
+            id: "entity-1",
+            name: "Renamed",
+            tags: ["Other"],
+            collisionGrid: undefined,
+            depthOffset: undefined,
+        });
+
+        expect((await readCollection(service))?.animation).toEqual({ frameCount: 4, frameRate: 8 });
+    });
+
+    it("stores an invalid animation as a still image", async () => {
+        const service = new CustomEntityCollectionService("play.workadventure.localhost");
+
+        await service.uploadEntity(uploadMessage({ animation: { frameCount: 1, frameRate: 8 } }));
+
+        expect((await readCollection(service))?.animation).toBeUndefined();
+    });
+
     it("keeps the ownerId when the entity is modified", async () => {
         const service = new CustomEntityCollectionService("play.workadventure.localhost");
         await service.uploadEntity(uploadMessage());

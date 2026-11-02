@@ -361,6 +361,7 @@
                         <EntityImage
                             classNames="h-16 w-[64px] object-contain rounded"
                             imageSource={pickedEntity.imagePath}
+                            animation={pickedEntity.animation}
                             imageAlt={pickedEntity.name}
                         />
                         <div>

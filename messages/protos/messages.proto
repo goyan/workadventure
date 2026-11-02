@@ -474,6 +474,13 @@ message UploadEntityMessage {
   // authenticated user UUID: any value sent by the client is discarded. It is sent back in the
   // broadcast copy of the command so every client knows who owns the asset.
   optional string ownerId = 10;
+  // Set when the image is a horizontal strip of frames to play in a loop (EntityAnimation in libs/map-editor).
+  optional EntityAnimationMessage animation = 11;
+}
+
+message EntityAnimationMessage {
+  uint32 frameCount = 1;
+  float frameRate = 2;
 }
 
 // What an uploaded file is for, which decides where map-storage stores it and which formats it accepts.
