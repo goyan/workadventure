@@ -16,6 +16,7 @@
     import AddPropertyButtonWrapper from "../MapEditor/PropertyEditor/AddPropertyButtonWrapper.svelte";
     import Button from "../UI/Button.svelte";
     import LL from "../../../i18n/i18n-svelte";
+    import EntityImage from "../MapEditor/EntityEditor/EntityItem/EntityImage.svelte";
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { warningMessageStore } from "../../Stores/ErrorStore";
     import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
@@ -199,12 +200,11 @@
         {#if $mapExplorationObjectSelectedStore instanceof Entity}
             <div class="p-8 flex flex-col justify-center items-center">
                 <h1 class="p-2">{objectDisplayName.toUpperCase()}</h1>
-                <img
-                    src={$mapExplorationObjectSelectedStore?.getPrefab().imagePath}
-                    id={$mapExplorationObjectSelectedStore.entityId}
-                    alt="Object"
-                    class="w-32 h-32 mb-4 object-contain"
-                    draggable="false"
+                <EntityImage
+                    classNames="w-32 h-32 mb-4 object-contain"
+                    imageSource={$mapExplorationObjectSelectedStore.getPrefab().imagePath}
+                    imageAlt="Object"
+                    animation={$mapExplorationObjectSelectedStore.getPrefab().animation}
                 />
                 <p class="p-0 m-0">
                     {description ?? $LL.mapEditor.explorer.noDescriptionFound()}

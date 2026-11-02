@@ -126,12 +126,14 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
                     return;
                 }
 
-                TexturesHelper.loadEntityImage(this.scene, entityPrefab.imagePath, entityPrefab.imagePath)
+                TexturesHelper.loadEntityImage(
+                    this.scene,
+                    entityPrefab.imagePath,
+                    entityPrefab.imagePath,
+                    entityPrefab.animation,
+                )
                     .then(() => {
-                        this.entitiesManager
-                            .getEntities()
-                            .get(createEntityMessage.id)
-                            ?.setTexture(entityPrefab.imagePath);
+                        this.entitiesManager.getEntities().get(createEntityMessage.id)?.showPrefabTexture();
                     })
                     .catch((reason) => {
                         console.warn(reason);

@@ -524,6 +524,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Schwebendes Objekt",
             floatingObjectDescription:
                 "Ein schwebendes Objekt kann frei auf der Karte platziert werden. Andernfalls wird es an das Raster der Karte ausgerichtet.",
+            animatedObject: "Animiertes Bild",
+            animatedObjectDescription:
+                "Das Bild ist ein horizontaler Streifen gleich breiter Einzelbilder, die in einer Schleife abgespielt werden.",
+            frameCount: "Anzahl der Einzelbilder",
+            frameRate: "Bilder pro Sekunde",
             depth: "Tiefe",
             groundLevel: "Bodenhöhe",
             custom: "Benutzerdefiniert",

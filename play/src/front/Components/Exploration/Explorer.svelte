@@ -16,6 +16,7 @@
     import type { AreaPreview } from "../../Phaser/Components/MapEditor/AreaPreview";
     import type { ExplorerTool } from "../../Phaser/Game/MapEditor/Tools/ExplorerTool";
     import AddPropertyButtonWrapper from "../MapEditor/PropertyEditor/AddPropertyButtonWrapper.svelte";
+    import EntityImage from "../MapEditor/EntityEditor/EntityItem/EntityImage.svelte";
 
     import { mapExplorerSearchinputFocusStore } from "../../Stores/UserInputStore";
     import Input from "../Input/Input.svelte";
@@ -429,11 +430,11 @@
                                 },
                             ]}
                         >
-                            <img
-                                draggable="false"
-                                class="w-6 max-h-10 h-auto mr-2 pointer-events-none object-contain"
-                                src={entity.getPrefab().imagePath}
-                                alt="link icon"
+                            <EntityImage
+                                classNames="w-6 max-h-10 h-auto mr-2 pointer-events-none object-contain"
+                                imageSource={entity.getPrefab().imagePath}
+                                imageAlt="link icon"
+                                animation={entity.getPrefab().animation}
                             />
                             <span
                                 class="pointer-events-none w-full text-nowrap text-ellipsis overflow-hidden whitespace-nowrap"

@@ -102,6 +102,7 @@ export class EntitiesCollectionsManager {
                                 collisionGrid: entity.collisionGrid,
                                 collisionRectangles: entity.collisionRectangles,
                                 seat: entity.seat,
+                                animation: entity.animation,
                                 type: entity.type,
                                 ownerId: entity.ownerId,
                             });

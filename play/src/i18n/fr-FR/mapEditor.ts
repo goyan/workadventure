@@ -526,6 +526,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Objet flottant",
             floatingObjectDescription:
                 "Un objet flottant peut être placé librement sur la carte. Autrement, il sera aligné sur la grille de la carte.",
+            animatedObject: "Image animée",
+            animatedObjectDescription: "L'image est une bande horizontale d'images de même largeur, jouées en boucle.",
+            frameCount: "Nombre d'images",
+            frameRate: "Images par seconde",
             depth: "Profondeur",
             groundLevel: "Au sol",
             custom: "Personnalisé",

@@ -137,11 +137,16 @@ export class EntitiesManager extends EventEmitter {
         const entity = new Entity(this.scene, entityId, data, prefab);
         entity.setVisible(false);
 
-        TexturesHelper.loadEntityImage(this.scene, prefab.imagePath, `${imagePathPrefix ?? ""}${prefab.imagePath}`)
+        TexturesHelper.loadEntityImage(
+            this.scene,
+            prefab.imagePath,
+            `${imagePathPrefix ?? ""}${prefab.imagePath}`,
+            prefab.animation,
+        )
             .then(() => {
                 const entity = this.entities.get(entityId);
                 if (entity) {
-                    entity.setTexture(prefab.imagePath).setVisible(true);
+                    entity.showPrefabTexture().setVisible(true);
                     entity.updateDepth();
                     this.refreshObjectsDepth(entity);
                     if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {

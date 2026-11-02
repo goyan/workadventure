@@ -37,8 +37,9 @@ import type { DepthStepRange, SupportDepthBox, WallDepthBox } from "../Game/MapE
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
+import { TexturesHelper } from "../Helpers/TexturesHelper";
 
-import Image = Phaser.GameObjects.Image;
+import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
 
 export enum EntityEvent {
@@ -55,7 +56,7 @@ export enum EntityEvent {
 export const DEFAULT_ACTIVABLE_RADIUS = 14;
 
 // NOTE: Tiles-based entity for now. Individual images later on
-export class Entity extends Image implements ActivatableInterface, OutlineableInterface {
+export class Entity extends Sprite implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
     private readonly outlineColorStoreUnsubscribe: Unsubscriber;
@@ -120,6 +121,19 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
         this.on(Phaser.Input.Events.DRAG, () => {
             this.updateDebugActivationZone();
         });
+    }
+
+    /** Shows the loaded image of the prefab, played in a loop when it is an animated strip. */
+    public showPrefabTexture(): this {
+        const animation = this.prefab.animation;
+        const animationKey = animation
+            ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
+            : undefined;
+        this.setTexture(this.prefab.imagePath);
+        if (animationKey) {
+            this.play(animationKey);
+        }
+        return this;
     }
 
     public get description(): string | undefined {
@@ -654,7 +668,7 @@ export class Entity extends Image implements ActivatableInterface, OutlineableIn
         };
     }
 
-    // Play text on the Image entity
+    // Play text on the entity
     public playText(id: string, text: string, duration = 10000, callback = () => this.destroyText()) {
         const x = this.x + this.width / 2;
         this.speechDomElement = new SpeechDomElement(id, text, this.scene, x, this.y - 10, callback);

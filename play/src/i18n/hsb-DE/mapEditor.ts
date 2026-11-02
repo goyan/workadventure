@@ -521,6 +521,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floatingObject: "Płujacy objekt",
             floatingObjectDescription:
                 "Płujacy objekt da so lichotnje na karće stajić. Inak budźe so na kartowej gridźe wusměrić.",
+            animatedObject: "Animěrowany wobraz",
+            animatedObjectDescription:
+                "Wobraz je horicontalny pas runje šěrokich wobrazkow, kotrež so w smyčce wothrawaja.",
+            frameCount: "Ličba wobrazkow",
+            frameRate: "Wobrazki na sekundu",
             depth: "Hłubokosć",
             groundLevel: "Zemjowa runina",
             custom: "Swójski",

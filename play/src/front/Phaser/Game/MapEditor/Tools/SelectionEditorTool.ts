@@ -380,17 +380,17 @@ export class SelectionEditorTool extends MapEditorTool {
                 return;
             }
 
-            await TexturesHelper.loadEntityImage(this.scene, prefab.imagePath, prefab.imagePath);
+            await TexturesHelper.loadEntityImage(this.scene, prefab.imagePath, prefab.imagePath, prefab.animation);
             if (!this.active || lifecycleVersion !== this.lifecycleVersion) {
                 return;
             }
             const texture = this.scene.textures.get(prefab.imagePath);
             const frame = texture.get();
             const source = texture.getSourceImage();
-            const dimensions: EntityDimensions = {
-                width: source.width || frame.width,
-                height: source.height || frame.height,
-            };
+            // The first frame of an animated strip, which is cut into frames on load.
+            const dimensions: EntityDimensions = prefab.animation
+                ? { width: frame.width, height: frame.height }
+                : { width: source.width || frame.width, height: source.height || frame.height };
             if (dimensions.width <= 0 || dimensions.height <= 0) {
                 this.setError("blocked");
                 return;

@@ -33,6 +33,7 @@
                 <EntityImage
                     classNames="w-[32px] h-[32px] object-contain"
                     imageSource={entitiesPrefabsVariants[0].defaultPrefab.imagePath}
+                    animation={entitiesPrefabsVariants[0].defaultPrefab.animation}
                     imageAlt={entitiesPrefabsVariants[0].defaultPrefab.name}
                 />
             </div>
