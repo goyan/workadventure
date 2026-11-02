@@ -31,6 +31,7 @@ import { WokaService } from "./services/WokaService";
 import { UserController } from "./controllers/UserController";
 import { MapCreationController } from "./controllers/MapCreationController";
 import { MapPatternController } from "./controllers/MapPatternController";
+import { NpcRegisterController } from "./controllers/NpcRegisterController";
 import { MatrixRoomAreaController } from "./controllers/MatrixRoomAreaController";
 import { LocalScriptController } from "./controllers/LocalScriptController";
 import { LivekitWebhookController } from "./controllers/LivekitWebhookController";
@@ -103,6 +104,7 @@ class App {
         new UserController(this.app);
         new MapCreationController(this.app);
         new MapPatternController(this.app);
+        new NpcRegisterController(this.app);
         new MatrixRoomAreaController(this.app);
 
         frontAssets.registerStaticRoutes(this.app);

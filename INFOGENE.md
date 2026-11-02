@@ -96,6 +96,18 @@ pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doiv
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
 
+### Enregistrement des NPC par API
+
+`pusher/controllers/NpcRegisterController.ts` ajoute `POST /register` pour la carte d'entrée beta
+`https://wa-beta.goyan.fr/~/carte-antoine-naria-ff0813/office.wam`. Une invitation de 2048 caractères maximum
+est validée à chaque appel par l'Admin API interne (`/api/login-url`), via une instance axios sans cache.
+L'appel exclut la capture HTTP Sentry pour ne pas enregistrer l'invitation dans son URL.
+L'Admin API vérifie sa signature, sa durée et sa salle ; un refus renvoie 403, une indisponibilité 503,
+un corps invalide 400. La limite est de dix tentatives par IP par minute, via le même en-tête du proxy
+de confiance que les autres routes d'authentification. Le JWT émis ne contient ni accessToken ni tags :
+les droits et bans restent vérifiés par `/api/room/access`. La clé NPC vide et le domaine prod font
+refuser toutes les invitations par l'Admin API prod. Aucun changement de protobuf ou de back.
+
 ### Sélection et édition en masse
 
 L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.
