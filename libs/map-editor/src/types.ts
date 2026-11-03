@@ -352,6 +352,12 @@ export const EntityRawPrefab = z.object({
      * surface. Fail open like `collisionRectangles`: an unknown value is ignored.
      */
     footstepSound: z.enum(["grass", "wood", "carpet", "stone"]).optional().catch(undefined),
+    /**
+     * When set, the entity is replaced in game by a sprite that walks around (e.g. a duck). `sheetPath` is the
+     * spritesheet, relative to the catalog file. The WAM format is unchanged: this lives in the catalog only.
+     * Fail open like `seat`: an invalid value shows the entity as a plain image.
+     */
+    wander: z.object({ sheetPath: z.string() }).optional().catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be

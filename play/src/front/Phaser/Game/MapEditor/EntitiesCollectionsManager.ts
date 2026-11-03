@@ -103,6 +103,9 @@ export class EntitiesCollectionsManager {
                                 collisionRectangles: entity.collisionRectangles,
                                 seat: entity.seat,
                                 animation: entity.animation,
+                                wander: entity.wander
+                                    ? { sheetPath: new URL(entity.wander.sheetPath, url).toString() }
+                                    : undefined,
                                 type: entity.type,
                                 ownerId: entity.ownerId,
                             });

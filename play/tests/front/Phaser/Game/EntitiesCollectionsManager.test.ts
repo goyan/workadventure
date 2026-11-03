@@ -48,4 +48,36 @@ describe("EntitiesCollectionsManager reload", () => {
         });
         expect(await afterReload.getEntityPrefab("custom entities", original.id)).toBeDefined();
     });
+
+    it("resolves wander.sheetPath against the catalog URL like imagePath", async () => {
+        const url = "https://beta.example/map-storage/infogene-animaux/animaux-entities.json";
+        const duck: EntityRawPrefab = {
+            id: "duck",
+            name: "Duck",
+            imagePath: "duck.png",
+            direction: "Down",
+            tags: [],
+            color: "",
+            wander: { sheetPath: "canard-sheet.png" },
+        };
+        const still: EntityRawPrefab = { ...duck, id: "still", wander: undefined };
+        const catalog: EntityCollectionRaw = {
+            collectionName: "animaux",
+            collection: [duck, still],
+            tags: [],
+            version: "1.0",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(catalog)))),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url, type: "Default" }]);
+
+        const loadedDuck = await manager.getEntityPrefab("animaux", "duck");
+        expect(loadedDuck?.wander?.sheetPath).toBe(
+            "https://beta.example/map-storage/infogene-animaux/canard-sheet.png",
+        );
+        expect((await manager.getEntityPrefab("animaux", "still"))?.wander).toBeUndefined();
+    });
 });

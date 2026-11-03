@@ -273,6 +273,7 @@ import { FollowManager } from "./FollowManager";
 import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
+import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
@@ -418,6 +419,7 @@ export class GameScene extends DirtyScene {
     public inviteManager?: InviteManager;
     private locateManager!: LocateManager;
     private duckRushManager: DuckRushManager | undefined;
+    private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
@@ -1413,6 +1415,7 @@ export class GameScene extends DirtyScene {
         this.locateManager?.destroy();
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
+        this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
         gameSceneStore.set(undefined);
@@ -1541,6 +1544,7 @@ export class GameScene extends DirtyScene {
             if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
         this.duckRushManager?.forEachDoorOpener((position) => characters.push(position));
+        this.wanderingCharactersManager?.forEachDoorOpener((position) => characters.push(position));
         this.doorAnimator.update(time, characters, listener);
     }
 
@@ -2564,6 +2568,9 @@ export class GameScene extends DirtyScene {
 
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
+                // Its listeners are on the scene: never two of them at once.
+                this.wanderingCharactersManager?.destroy();
+                this.wanderingCharactersManager = new WanderingCharactersManager(this);
                 const connection = this.connection;
                 this.konamiCodeDetector = new KonamiCodeDetector(() => {
                     this.duckRushManager?.start(connection.getUserId(), () => ({
