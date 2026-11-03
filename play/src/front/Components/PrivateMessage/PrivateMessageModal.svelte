@@ -97,7 +97,7 @@
                 onscroll={handleHistoryScroll}
             >
                 {#each messages as message (message.id)}
-                    <div class="shrink-0 rounded bg-white/10 p-3">
+                    <div class="select-text shrink-0 rounded bg-white/10 p-3">
                         <strong>{message.incoming ? message.peerName : $LL.chat.you()}</strong>
                         <p class="m-0 whitespace-pre-wrap break-words">{message.text}</p>
                     </div>

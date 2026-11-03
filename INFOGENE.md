@@ -120,6 +120,11 @@ Recette beta : remplir l'historique, recevoir une réponse en bas, remonter puis
 recevoir une autre réponse ; vérifier la position conservée. Envoyer depuis cette
 position, puis vérifier le retour au dernier message et le suivi des réponses.
 
+Les noms et textes de l'historique privé sont sélectionnables, comme les messages
+du chat classique, malgré la sélection désactivée par défaut sur le jeu.
+Recette beta : sélectionner un texte reçu ou envoyé puis le copier avec
+Cmd+C/Ctrl+C ; vérifier la copie et le défilement de l'historique.
+
 Les annonces texte affichent le nom de leur auteur, humain ou NPC. Le pusher ajoute `{uuid, name}`
 depuis l'identité de la connexion dans le Delta Quill et remplace tout auteur fourni par le client.
 Le texte enrichi est conservé, le nom est échappé par Svelte, les anciens messages sans auteur restent lisibles.
