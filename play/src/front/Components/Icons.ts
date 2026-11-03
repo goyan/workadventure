@@ -96,6 +96,7 @@ export { default as IconTooltip } from "~icons/tabler/tooltip";
 export { default as IconSpeakerPhone } from "~icons/tabler/speakerphone";
 export { default as IconHeadphones } from "~icons/tabler/headphones-filled";
 export { default as IconBrandSpotify } from "~icons/tabler/brand-spotify";
+export { default as IconBrandApple } from "~icons/tabler/brand-apple";
 export { default as IconFile } from "~icons/tabler/file";
 export { default as IconMap } from "~icons/tabler/map";
 export { default as IconPlus } from "~icons/tabler/plus";

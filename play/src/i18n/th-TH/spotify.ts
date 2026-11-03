@@ -36,9 +36,14 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             clientIdPlaceholder: "เว้นว่างไว้เพื่อใช้แอปของเซิร์ฟเวอร์นี้",
         },
     },
+    card: {
+        listeningNow: "กำลังฟัง",
+        listenToo: "ฟังด้วย",
+    },
     userList: {
         jam: "Jam · {area}",
         listenOnSpotify: "ฟังบน Spotify",
+        listenOnAppleMusic: "ฟังบน Apple Music",
     },
     listeningZone: {
         defaultName: "โซนฟังเพลง",

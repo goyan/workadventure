@@ -19,6 +19,7 @@ import { isPopupJustClosed } from "../Game/Say/SayManager";
 import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
+import { wokaMenuStore } from "../../Stores/WokaMenuStore";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { cameraDetachedStore } from "../../Stores/CameraStore";
 import { waScaleManager } from "../Services/WaScaleManager";
@@ -210,6 +211,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     this.gameScene.getActivatablesManager().handlePointerDownEvent(object);
                     return;
                 }
+                if (object instanceof Player) {
+                    this.toggleOwnCard(object);
+                    return;
+                }
             }
         }
 
@@ -279,6 +284,17 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private getTileCenterOf(x: number, y: number): { x: number; y: number } {
         const { width, height } = this.gameScene.getGameMapFrontWrapper().getTileDimensions();
         return getTileCenter(x, y, width, height);
+    }
+
+    /** A click on one's own woka shows one's own card, as others see it, without the actions meant for others. */
+    private toggleOwnCard(player: Player): void {
+        const uuid = localUserStore.getLocalUser()?.uuid;
+        if (!uuid) return;
+        if (get(wokaMenuStore)?.isSelf) {
+            wokaMenuStore.clear();
+            return;
+        }
+        wokaMenuStore.openOwnCard(player.playerName, uuid);
     }
 
     public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {

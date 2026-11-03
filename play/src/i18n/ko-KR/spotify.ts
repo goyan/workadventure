@@ -36,9 +36,14 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             clientIdPlaceholder: "비워 두면 이 서버의 앱을 사용합니다",
         },
     },
+    card: {
+        listeningNow: "지금 듣는 중",
+        listenToo: "같이 듣기",
+    },
     userList: {
         jam: "Jam · {area}",
         listenOnSpotify: "Spotify에서 듣기",
+        listenOnAppleMusic: "Apple Music에서 듣기",
     },
     listeningZone: {
         defaultName: "청취 구역",

@@ -35,9 +35,14 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             clientIdPlaceholder: "留空則使用此伺服器的應用程式",
         },
     },
+    card: {
+        listeningNow: "正在收聽",
+        listenToo: "一起聽",
+    },
     userList: {
         jam: "Jam · {area}",
         listenOnSpotify: "在 Spotify 上收聽",
+        listenOnAppleMusic: "在 Apple Music 上收聽",
     },
     listeningZone: {
         defaultName: "收聽區",

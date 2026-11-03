@@ -19,6 +19,8 @@ export interface WokaMenuData {
     visitCardUrl?: string;
     userId: number; // -1 if the user is not found yet and woka menu is in progress
     userUuid: string;
+    /** The local user's own card: no action, their own woka and status. */
+    isSelf?: boolean;
 }
 
 function createWokaMenuStore() {
@@ -34,6 +36,10 @@ function createWokaMenuStore() {
                 userId,
                 userUuid,
             });
+        },
+        /** The local user's own card, from a click on their own woka: what others see, without actions. */
+        openOwnCard: (wokaName: string, userUuid: string) => {
+            set({ wokaName, actions: [], userId: -1, userUuid, isSelf: true });
         },
         addAction: (action: WokaMenuAction) => {
             update((data) => {
