@@ -10,6 +10,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "Unlink",
         linked: "Your Spotify account is linked.",
         share: "Share what I listen to",
+        desktopDetected:
+            "Read from the Spotify app of this computer: no account to link, a free Spotify account is enough.",
+        desktopAppHint:
+            "No account to link or Premium needed with the WorkAdventure desktop app: it reads the Spotify app of your Mac.",
+        desktopAppLink: "Get the desktop app",
         serverAppNotice:
             "Without a client ID of your own, you link through the Spotify app of this server: ask an administrator to add your Spotify account to it first (5 people at most).",
         accessDenied:

@@ -10,6 +10,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "Hủy liên kết",
         linked: "Tài khoản Spotify của bạn đã được liên kết.",
         share: "Chia sẻ những gì tôi đang nghe",
+        desktopDetected:
+            "Đọc từ ứng dụng Spotify trên máy này: không cần liên kết tài khoản, tài khoản miễn phí là đủ.",
+        desktopAppHint:
+            "Với ứng dụng desktop WorkAdventure, không cần liên kết tài khoản hay Premium: ứng dụng đọc Spotify trên máy Mac của bạn.",
+        desktopAppLink: "Tải ứng dụng desktop",
         serverAppNotice:
             "Nếu không có Client ID riêng, việc liên kết sẽ dùng ứng dụng Spotify của máy chủ này: hãy nhờ quản trị viên thêm tài khoản Spotify của bạn vào trước (tối đa 5 người).",
         accessDenied:

@@ -10,6 +10,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "連携を解除",
         linked: "Spotify アカウントは連携済みです。",
         share: "聴いている曲を共有する",
+        desktopDetected:
+            "このコンピューターの Spotify アプリから読み取ります。アカウント連携は不要で、無料アカウントで使えます。",
+        desktopAppHint:
+            "WorkAdventure デスクトップアプリならアカウント連携も Premium も不要。Mac の Spotify アプリから読み取ります。",
+        desktopAppLink: "デスクトップアプリを入手",
         serverAppNotice:
             "自分のクライアント ID がない場合は、このサーバーの Spotify アプリで連携します。先に管理者に Spotify アカウントの追加を依頼してください（最大 5 人）。",
         accessDenied:

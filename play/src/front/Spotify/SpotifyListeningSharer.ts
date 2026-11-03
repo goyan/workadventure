@@ -3,6 +3,7 @@ import { derived, type Readable, type Unsubscriber } from "svelte/store";
 import { EMPTY_SPOTIFY_LISTENING } from "../../common/SpotifyListening";
 import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
 import type { SpotifyAccount } from "./SpotifyAccount";
+import type { LocalSpotifyPlayer } from "./LocalSpotifyPlayer";
 import { type CurrentlyPlayingResult, fetchCurrentlyPlaying, type SpotifyTrack } from "./SpotifyPlayerApi";
 
 /** Spotify has no push API for the player: we poll, at a pace that stays far below its rate limit. */
@@ -11,8 +12,9 @@ export const SPOTIFY_POLL_INTERVAL_MS = 15_000;
 const ACCESS_DENIED_POLL_INTERVAL_MS = 5 * 60_000;
 
 /**
- * Publishes what the local user listens to (when linked and sharing) and the Jam they joined, as their
- * `spotifyListening` in the world space.
+ * Publishes what the local user listens to (when sharing) and the Jam they joined, as their `spotifyListening` in
+ * the world space. The track comes from the Spotify app of this computer when the desktop app can read it
+ * (`localPlayer`), otherwise from the Web API of a linked account.
  */
 export class SpotifyListeningSharer {
     private track: SpotifyTrack | undefined;
@@ -21,6 +23,7 @@ export class SpotifyListeningSharer {
     // Incremented on every start and stop, so that a poll still in flight never schedules a second loop.
     private pollGeneration = 0;
     private pollTimeout: ReturnType<typeof setTimeout> | undefined;
+    private stopWatchingLocalPlayer: (() => void) | undefined;
     private readonly unsubscriber: Unsubscriber;
 
     constructor(
@@ -33,16 +36,18 @@ export class SpotifyListeningSharer {
         joinedJam: Readable<JoinedJam | undefined>,
         private readonly fetchTrack: (accessToken: string) => Promise<CurrentlyPlayingResult> = fetchCurrentlyPlaying,
         private readonly pollIntervalMs = SPOTIFY_POLL_INTERVAL_MS,
+        private readonly localPlayer: LocalSpotifyPlayer | undefined = undefined,
     ) {
         let sharing = false;
         this.unsubscriber = derived([account.linked, sharingEnabled, joinedJam], (values) => values).subscribe(
             ([linked, enabled, jam]) => {
                 this.jam = jam;
-                const shouldShare = linked && enabled;
+                // The local player needs no account: sharing is enough.
+                const shouldShare = (linked || localPlayer !== undefined) && enabled;
                 if (shouldShare && !sharing) {
-                    this.startPolling();
+                    this.startReading();
                 } else if (!shouldShare && sharing) {
-                    this.stopPolling();
+                    this.stopReading();
                 }
                 sharing = shouldShare;
                 this.publishIfChanged();
@@ -52,6 +57,23 @@ export class SpotifyListeningSharer {
 
     public destroy(): void {
         this.unsubscriber();
+        this.stopReading();
+    }
+
+    private startReading(): void {
+        if (!this.localPlayer) {
+            this.startPolling();
+            return;
+        }
+        this.stopWatchingLocalPlayer = this.localPlayer.watch((track) => {
+            this.track = track;
+            this.publishIfChanged();
+        });
+    }
+
+    private stopReading(): void {
+        this.stopWatchingLocalPlayer?.();
+        this.stopWatchingLocalPlayer = undefined;
         this.stopPolling();
     }
 

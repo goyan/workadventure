@@ -3,6 +3,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { settingsSubMenuTargetStore } from "../../Stores/MenuStore";
     import { getSpotifyRedirectUri, SpotifyLinkError, spotifyAccount } from "../../Spotify/SpotifyAccount";
+    import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
     import {
         spotifyClientIdStore,
         spotifyPersonalClientIdStore,
@@ -16,6 +17,9 @@
     const linked = spotifyAccount.linked;
     const accessDenied = spotifyAccount.accessDenied;
     const redirectUri = getSpotifyRedirectUri();
+    // The desktop app reads the Spotify app of this computer: no account, no developer app, no Premium.
+    const readsLocalPlayer = desktopSpotifyPlayer() !== undefined;
+    const DESKTOP_APP_URL = "https://github.com/aminekun90/workadventure-desktop/releases/latest";
 
     let linking = $state(false);
     let errorMessage: string | undefined = $state(undefined);
@@ -77,7 +81,17 @@
     </div>
 
     <div class="flex flex-col gap-3 m-4">
-        {#if $linked}
+        {#if readsLocalPlayer}
+            <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-detected">
+                {$LL.spotify.settings.desktopDetected()}
+            </p>
+            <InputSwitch
+                id="spotify-sharing-toggle"
+                bind:value={sharing}
+                onchange={() => spotifySharingEnabledStore.set(sharing)}
+                label={$LL.spotify.settings.share()}
+            />
+        {:else if $linked}
             <div class="flex items-center gap-3">
                 <span class="grow text-sm">{$LL.spotify.settings.linked()}</span>
                 <Button variant="light" appearance="border" size="sm" onclick={() => spotifyAccount.unlink()}>
@@ -96,6 +110,12 @@
                 </p>
             {/if}
         {:else}
+            <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-app-hint">
+                {$LL.spotify.settings.desktopAppHint()}
+                <a class="underline" href={DESKTOP_APP_URL} target="_blank" rel="noopener noreferrer">
+                    {$LL.spotify.settings.desktopAppLink()}
+                </a>
+            </p>
             {#if usesServerApp}
                 <p class="text-sm text-white/75 m-0">{$LL.spotify.settings.serverAppNotice()}</p>
             {/if}
@@ -108,27 +128,29 @@
             <p class="text-sm text-danger m-0">{errorMessage}</p>
         {/if}
 
-        <InputSwitch
-            id="spotify-personal-app-toggle"
-            bind:value={showPersonalApp}
-            label={$LL.spotify.settings.personalApp.title()}
-        />
-        {#if showPersonalApp}
-            <div class="flex flex-col gap-2 text-sm text-white/75">
-                <p class="m-0">{$LL.spotify.settings.personalApp.explanation()}</p>
-                <ol class="m-0 ps-5 flex flex-col gap-1">
-                    <li>{$LL.spotify.settings.personalApp.step1()}</li>
-                    <li class="break-all">{$LL.spotify.settings.personalApp.step2({ redirectUri })}</li>
-                    <li>{$LL.spotify.settings.personalApp.step3()}</li>
-                </ol>
-                <Input
-                    id="spotify-personal-client-id"
-                    label={$LL.spotify.settings.personalApp.clientIdLabel()}
-                    placeholder={$LL.spotify.settings.personalApp.clientIdPlaceholder()}
-                    bind:value={personalClientId}
-                    onchange={() => spotifyPersonalClientIdStore.set(personalClientId)}
-                />
-            </div>
+        {#if !readsLocalPlayer}
+            <InputSwitch
+                id="spotify-personal-app-toggle"
+                bind:value={showPersonalApp}
+                label={$LL.spotify.settings.personalApp.title()}
+            />
+            {#if showPersonalApp}
+                <div class="flex flex-col gap-2 text-sm text-white/75">
+                    <p class="m-0">{$LL.spotify.settings.personalApp.explanation()}</p>
+                    <ol class="m-0 ps-5 flex flex-col gap-1">
+                        <li>{$LL.spotify.settings.personalApp.step1()}</li>
+                        <li class="break-all">{$LL.spotify.settings.personalApp.step2({ redirectUri })}</li>
+                        <li>{$LL.spotify.settings.personalApp.step3()}</li>
+                    </ol>
+                    <Input
+                        id="spotify-personal-client-id"
+                        label={$LL.spotify.settings.personalApp.clientIdLabel()}
+                        placeholder={$LL.spotify.settings.personalApp.clientIdPlaceholder()}
+                        bind:value={personalClientId}
+                        onchange={() => spotifyPersonalClientIdStore.set(personalClientId)}
+                    />
+                </div>
+            {/if}
         {/if}
     </div>
 </section>

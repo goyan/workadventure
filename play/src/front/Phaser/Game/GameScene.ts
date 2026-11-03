@@ -197,6 +197,7 @@ import { externalSvelteComponentService } from "../../Stores/Utils/externalSvelt
 import type { ExtensionModule } from "../../ExternalModule/ExtensionModule";
 import type { SpaceInterface } from "../../Space/SpaceInterface";
 import { spotifyAccount } from "../../Spotify/SpotifyAccount";
+import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
 import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
 import {
     bindListeningDirectory,
@@ -1863,6 +1864,9 @@ export class GameScene extends DirtyScene {
             spotifyAccount,
             spotifySharingEnabledStore,
             joinedJamStore,
+            undefined,
+            undefined,
+            desktopSpotifyPlayer(),
         );
         return [
             bindListeningDirectory(worldSpace.usersStore),

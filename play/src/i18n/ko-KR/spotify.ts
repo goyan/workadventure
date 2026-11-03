@@ -10,6 +10,9 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "연결 해제",
         linked: "Spotify 계정이 연결되었습니다.",
         share: "듣고 있는 음악 공유",
+        desktopDetected: "이 컴퓨터의 Spotify 앱에서 읽어요. 계정 연결이 필요 없고 무료 계정으로도 충분해요.",
+        desktopAppHint: "WorkAdventure 데스크톱 앱이면 계정 연결도 Premium도 필요 없어요. Mac의 Spotify 앱에서 읽어요.",
+        desktopAppLink: "데스크톱 앱 받기",
         serverAppNotice:
             "내 클라이언트 ID가 없으면 이 서버의 Spotify 앱으로 연결합니다. 먼저 관리자에게 Spotify 계정 추가를 요청하세요 (최대 5명).",
         accessDenied:

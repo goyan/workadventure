@@ -245,6 +245,11 @@ Spotify : cocher **Web API** et déclarer les *Redirect URIs* `https://wa-beta.g
 `https://wa.goyan.fr/spotify/callback` (`<PUSHER_URL>/spotify/callback`). Spotify refuse `http://localhost` : la
 liaison se teste en beta. Sans `SPOTIFY_CLIENT_ID`, seules les apps personnelles fonctionnent.
 
+**Depuis le client desktop** ([workadventure-desktop](https://github.com/aminekun90/workadventure-desktop)) : le
+morceau est lu dans l'app Spotify de l'ordinateur (`window.WAD.watchSpotifyTrack`, `Spotify/LocalSpotifyPlayer.ts`),
+sans liaison, sans app de développeur, sans Premium ni limite de cinq comptes. La section n'affiche alors que
+l'interrupteur de partage ; dans un navigateur, elle propose le client desktop en plus de la liaison.
+
 Affichage : une note ♫ animée dans l'étiquette du nom des wokas qui écoutent ou sont dans une Jam, et dans la liste des
 utilisateurs « ♫ Artiste — Titre » (lien vers le morceau), ou « 🎧 Artiste — Titre · Jam Salle détente ».
 

@@ -10,6 +10,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "Desvincular",
         linked: "Tu cuenta de Spotify está vinculada.",
         share: "Compartir lo que escucho",
+        desktopDetected:
+            "Leído desde la app de Spotify de este ordenador: sin cuenta que vincular, basta con una cuenta gratuita.",
+        desktopAppHint:
+            "Con la app de escritorio de WorkAdventure no hace falta vincular cuenta ni Premium: lee la app de Spotify de tu Mac.",
+        desktopAppLink: "Descargar la app de escritorio",
         serverAppNotice:
             "Sin un Client ID propio, la vinculación usa la app de Spotify de este servidor: pide antes a un administrador que añada tu cuenta de Spotify (5 personas como máximo).",
         accessDenied:
