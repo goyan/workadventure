@@ -231,7 +231,6 @@ import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapL
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
-import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -1423,7 +1422,19 @@ export class GameScene extends DirtyScene {
     private updateFootsteps(): void {
         if (!this.footstepSounds) {
             const surfaces = new FootstepSurfaces(
-                () => readMapLayerEntityStates(this.gameMapFrontWrapper.getEntitiesManager()),
+                () =>
+                    Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) => {
+                        const prefab = entity.getPrefab();
+                        return {
+                            x: entity.x,
+                            y: entity.y,
+                            width: entity.displayWidth,
+                            height: entity.displayHeight,
+                            collectionName: prefab.collectionName,
+                            prefabId: prefab.id,
+                            footstepSound: prefab.footstepSound,
+                        };
+                    }),
                 (x, y) =>
                     (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({ x, y })
                         .length ?? 0) > 0,

@@ -104,6 +104,11 @@ facultatifs de `window.WAD`. `onStatusRequest` laisse le client desktop
 ([workadventure-desktop](https://github.com/aminekun90/workadventure-desktop)) choisir En ligne, Occupé,
 Ne pas déranger ou De retour bientôt (mêmes choix que le menu de statut) ; `reportStatus` lui transmet le
 statut effectif et son libellé. Sans ces membres, rien ne change.
+Bruits de pas (`Phaser/Game/FootstepSounds.ts`, `FootstepSurfaces.ts`) : un pas très discret (volume max 0,03, atténué
+jusqu'à 8 cases) pour les joueurs qui marchent dans la même zone que soi, selon le sol sous leurs pieds. Le son vient de la
+propriété facultative `footstepSound` du prefab (`grass`, `wood`, `carpet`, `stone`, schéma `libs/map-editor`), sinon de la
+famille du sol de la couche carte, sinon bois dans une zone et herbe dehors. Sons CC0 de Kenney
+(`resources/objects/footsteps/CREDITS.txt`). Les catalogues de sols (dépôt d'infra) doivent porter `footstepSound`.
 Tenir cette liste à jour à chaque patch.
 
 ### Auteur des annonces et messages privés natifs

@@ -341,6 +341,11 @@ export const EntityRawPrefab = z.object({
         .array(z.object({ x: z.number().nonnegative(), y: z.number().nonnegative() }))
         .optional()
         .catch(undefined),
+    /**
+     * Sound of a step on this entity (a floor tile, a rug): players walking over it play the recordings of this
+     * surface. Fail open like `collisionRectangles`: an unknown value is ignored.
+     */
+    footstepSound: z.enum(["grass", "wood", "carpet", "stone"]).optional().catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
