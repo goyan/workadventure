@@ -42,6 +42,7 @@
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import MaxUsersInAreaPropertyEditor from "../PropertyEditor/MaxUsersInAreaPropertyEditor.svelte";
     import LockableAreaPropertyEditor from "../PropertyEditor/LockableAreaPropertyEditor.svelte";
+    import ListeningZonePropertyEditor from "../PropertyEditor/ListeningZonePropertyEditor.svelte";
     import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 
     let properties: AreaDataProperties = $state([]);
@@ -65,6 +66,7 @@
     let hasLivekitRoomProperty: boolean = $state(false);
     let hasMaxUsersInAreaProperty: boolean = $state(false);
     let hasLockableAreaProperty: boolean = $state(false);
+    let hasListeningZoneProperty: boolean = $state(false);
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -401,6 +403,11 @@
                     // Note: lock state is stored in area property variables, not in the WAM
                     allowedTags: [],
                 };
+            case "listeningZonePropertyData":
+                return {
+                    id,
+                    type,
+                };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -527,6 +534,7 @@
         hasLivekitRoomProperty = hasProperty("livekitRoomProperty");
         hasMaxUsersInAreaProperty = hasProperty("maxUsersInAreaPropertyData");
         hasLockableAreaProperty = hasProperty("lockableAreaPropertyData");
+        hasListeningZoneProperty = hasProperty("listeningZonePropertyData");
     }
 
     function openKlaxoonActivityPicker(app: AreaDataProperty) {
@@ -708,6 +716,14 @@
                     property="maxUsersInAreaPropertyData"
                     onclick={() => {
                         onAddProperty("maxUsersInAreaPropertyData");
+                    }}
+                />
+            {/if}
+            {#if !hasListeningZoneProperty}
+                <AddPropertyButtonWrapper
+                    property="listeningZonePropertyData"
+                    onclick={() => {
+                        onAddProperty("listeningZonePropertyData");
                     }}
                 />
             {/if}
@@ -1053,6 +1069,12 @@
                                     onDeleteProperty(property.id);
                                 }}
                                 onchange={() => onUpdateProperty(property)}
+                            />
+                        {:else if property.type === "listeningZonePropertyData"}
+                            <ListeningZonePropertyEditor
+                                onclose={() => {
+                                    onDeleteProperty(property.id);
+                                }}
                             />
                         {/if}
                     </div>

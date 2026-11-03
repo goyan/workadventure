@@ -139,6 +139,7 @@ function createSpaceUser(overrides: Partial<SpaceUser> & Pick<SpaceUser, "spaceU
         attendeesState: overrides.attendeesState ?? false,
         cpuLimited: overrides.cpuLimited ?? false,
         listenerState: overrides.listenerState ?? false,
+        spotifyListening: overrides.spotifyListening,
     };
 }
 

@@ -80,6 +80,7 @@
     import PictureInPicture from "./Video/PictureInPicture.svelte";
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
+    import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
@@ -426,6 +427,7 @@
                     <CalendarReminders />
                 {/if}
                 <RaisedHandsDock />
+                <ListeningZoneBubble />
             </div>
 
             {#if $showRecordingList}

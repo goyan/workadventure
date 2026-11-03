@@ -372,6 +372,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Definir o número máximo de usuários na área.",
             placeholder: "15",
         },
+        listeningZonePropertyData: {
+            label: "Zona de escuta",
+            description: "Permite compartilhar uma Jam do Spotify da qual todos na zona podem participar.",
+        },
         lockableAreaPropertyData: {
             label: "Área bloqueável",
             description: "Bloquear a área para impedir a entrada do exterior.",

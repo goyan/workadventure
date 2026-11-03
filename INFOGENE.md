@@ -217,6 +217,51 @@ toujours des bulles une fois la réunion démarrée.
 Recette en beta : entrer seul dans une zone de réunion et changer de statut ; faire entrer un second joueur
 (réunion des deux côtés, en moins d'une seconde) ; le faire sortir (réunion quittée, statut d'avant).
 
+### Spotify : ce qu'on écoute et zones d'écoute
+
+**Menu → Réglages → Spotify** : « Lier Spotify » ouvre une fenêtre d'autorisation Spotify (flux *authorization
+code* avec PKCE, sans secret ; seul le scope `user-read-currently-playing` est demandé). Les jetons restent dans le
+`localStorage` du navigateur. Une fois lié, l'interrupteur « Partager ce que j'écoute » (activé par défaut) publie le
+morceau en cours, relevé toutes les 15 s ; rien n'est affiché en pause, pour les podcasts ou les publicités.
+
+Une app Spotify en mode développement n'accepte que **cinq comptes**, inscrits à la main dans son tableau de bord
+(*User Management*), et l'*extended quota* nous est inaccessible. Sans Client ID personnel, la liaison passe par l'app
+du serveur et la section le dit : demander d'abord aux administrateurs d'y ajouter son compte Spotify (5 personnes
+maximum). Spotify laisse un compte non inscrit autoriser l'app, puis répond 403 à ses lectures : la section affiche
+alors ce même conseil, et le front ne réinterroge Spotify que toutes les 5 minutes. N'importe qui peut à tout moment
+utiliser sa propre app (compte Premium) en collant son Client ID dans « Utiliser ma propre app Spotify » ; la section
+affiche les étapes et l'URI à déclarer. Le Client ID utilisé est celui de la liaison : en changer demande de délier
+puis de relier.
+
+Configuration (repo d'infra, beta et prod) : `SPOTIFY_CLIENT_ID=<Client ID>` (public, aucun secret). Dans l'app
+Spotify : cocher **Web API** et déclarer les *Redirect URIs* `https://wa-beta.goyan.fr/spotify/callback` et
+`https://wa.goyan.fr/spotify/callback` (`<PUSHER_URL>/spotify/callback`). Spotify refuse `http://localhost` : la
+liaison se teste en beta. Sans `SPOTIFY_CLIENT_ID`, seules les apps personnelles fonctionnent.
+
+Affichage : une note ♫ animée dans l'étiquette du nom des wokas qui écoutent ou sont dans une Jam, et dans la liste des
+utilisateurs « ♫ Artiste — Titre » (lien vers le morceau), ou « 🎧 Artiste — Titre · Jam Salle détente ».
+
+**Zone d'écoute** : propriété « Zone d'écoute » de l'éditeur de zones (`listeningZonePropertyData`). Spotify n'a pas
+d'API pour les Jams : quelqu'un dans la zone colle le lien d'invitation de sa Jam (`spotify.link/…` ou
+`open.spotify.com/socialsession/…`), la bulle en haut à droite le propose à tous ceux qui sont dans la zone
+(« Rejoindre » ouvre Spotify), avec le morceau du DJ s'il a lié son compte et le nombre de participants. Une seule
+Jam par zone ; seul son DJ peut la remplacer ou la retirer, et le back la retire dès que le DJ quitte la zone ou se
+déconnecte. « Dans la Jam » veut dire « a cliqué Rejoindre et est resté dans la zone » : Spotify ne dit pas qui est
+réellement dans une Jam. La bulle invite à lier Spotify ceux qui ne l'ont pas fait.
+
+Réseau : le champ `SpaceUser.spotifyListening` (protobuf) circule dans le space « monde ». Le pusher ne laisse le
+client écrire que ce champ, tronque les textes et ne garde qu'un lien `open.spotify.com/track/…`. Le lien de Jam est
+une variable de propriété de zone (`jam`), validée par le back (`canUpdateListeningZoneJam`,
+`libs/map-editor/src/ListeningZone/ListeningZoneJam.ts`) et retirée par `ListeningZoneManager`. Le protobuf change :
+les images `play` et `back` doivent être déployées ensemble.
+
+Code : `front/Spotify/` (compte, lecture du lecteur, diffusion, annuaire), `front/ListeningZone/`,
+`pusher/controllers/SpotifyCallbackController.ts`, `back/src/Model/AreaPropertyEvents/ListeningZoneManager.ts`.
+
+Recette en beta : lier Spotify, lancer un morceau, vérifier la note et la liste depuis un second compte ; couper le
+partage. Créer une zone d'écoute, y partager une Jam, la rejoindre depuis le second compte (compteur à 2, badge Jam),
+faire sortir le DJ (bulle revenue à « Partager ma Jam »). Vérifier si Spotify exige Premium pour rejoindre à distance.
+
 ### Sélection et édition en masse
 
 L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.

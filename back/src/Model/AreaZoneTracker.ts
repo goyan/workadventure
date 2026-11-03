@@ -146,7 +146,7 @@ export class AreaZoneTracker {
         }
     }
 
-    private static isPositionInArea(position: { x: number; y: number }, area: AreaData): boolean {
+    public static isPositionInArea(position: { x: number; y: number }, area: AreaData): boolean {
         return (
             position.x >= area.x &&
             position.x <= area.x + area.width &&

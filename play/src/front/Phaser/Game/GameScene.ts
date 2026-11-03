@@ -196,6 +196,16 @@ import { isActivatedStore as isTodoListActiveStore, todoListsStore } from "../..
 import { externalSvelteComponentService } from "../../Stores/Utils/externalSvelteComponentService";
 import type { ExtensionModule } from "../../ExternalModule/ExtensionModule";
 import type { SpaceInterface } from "../../Space/SpaceInterface";
+import { spotifyAccount } from "../../Spotify/SpotifyAccount";
+import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
+import {
+    bindListeningDirectory,
+    type ListeningByUserUuid,
+    listeningByUserUuidStore,
+} from "../../Spotify/SpotifyListeningDirectory";
+import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
+import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
+import { syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
 import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
 import { popupStore } from "../../Stores/PopupStore";
@@ -372,6 +382,7 @@ export class GameScene extends DirtyScene {
     private rxJsSubscriptions: Array<Subscription> = [];
     // Player ids of remote players whose raised hand is currently shown above their woka (to diff on store updates).
     private previousRaisedHandPlayerIds = new Set<number>();
+    private listeningUserUuids = new Set<string>();
     private localVolumeStoreUnsubscriber: Unsubscriber | undefined;
     private unsubscribers: Unsubscriber[] = [];
     private storesSubscribed = false;
@@ -1842,6 +1853,34 @@ export class GameScene extends DirtyScene {
      * SpaceUser (see SpacePeerManager), so this also covers participants who joined the meeting after the
      * hand was raised.
      */
+    /**
+     * Shares the local user's Spotify listening in the world space, and shows a music note on the woka of everyone
+     * who listens to something or takes part in a Jam.
+     */
+    private startSpotifyListening(worldSpace: SpaceInterface): Unsubscriber[] {
+        const sharer = new SpotifyListeningSharer(
+            (spotifyListening) => worldSpace.emitUpdateUser({ spotifyListening }),
+            spotifyAccount,
+            spotifySharingEnabledStore,
+            joinedJamStore,
+        );
+        return [
+            bindListeningDirectory(worldSpace.usersStore),
+            () => sharer.destroy(),
+            syncJoinedJam(),
+            listeningByUserUuidStore.subscribe((listeningByUuid) => this.updateListeningWokas(listeningByUuid)),
+        ];
+    }
+
+    private updateListeningWokas(listeningByUuid: ListeningByUserUuid): void {
+        this.listeningUserUuids = new Set(listeningByUuid.keys());
+        for (const player of this.MapPlayersByKey.values()) {
+            player.setListeningMusic(this.listeningUserUuids.has(player.userUuid));
+        }
+        const localUuid = localUserStore.getLocalUser()?.uuid;
+        this.CurrentPlayer?.setListeningMusic(localUuid !== undefined && this.listeningUserUuids.has(localUuid));
+    }
+
     private setRemotePlayerRaisedHand(playerId: number, raised: boolean): void {
         this.MapPlayersByKey.get(playerId)?.setRaisedHand(raised);
     }
@@ -2721,11 +2760,12 @@ export class GameScene extends DirtyScene {
             .joinSpace(
                 WORLD_SPACE_NAME,
                 FilterType.ALL_USERS,
-                ["availabilityStatus", "chatID"],
+                ["availabilityStatus", "chatID", "spotifyListening"],
                 this.abortController.signal,
             )
             .then((space) => {
                 this.allUserSpace = space;
+                this.unsubscribers.push(...this.startSpotifyListening(space));
                 worldUserProvider = new WorldUserProvider(space);
                 this._worldUserCounter.forward(worldUserProvider.userCount);
                 return gameManager.getChatConnection();
@@ -4709,6 +4749,7 @@ ${escapedMessage}
         if (get(raisedHandPlayerIdsStore).has(player.userId)) {
             player.setRaisedHand(true);
         }
+        player.setListeningMusic(this.listeningUserUuids.has(player.userUuid));
         this.MapPlayersByKey.set(player.userId, player);
         player.updatePosition(addPlayerData.position);
         this.remotePlayersSpatialIndex.set(player.userId, player);

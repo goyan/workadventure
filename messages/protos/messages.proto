@@ -2083,11 +2083,24 @@ message SpaceUser{
   // Raised by a client whose video encoders could not keep up while it encoded for several P2P peers: the back moves
   // the space to LiveKit and keeps it there while such a user is present. Never lowered within a session.
   bool cpuLimited = 20;
-  // A listener next to a bubble: out of the bubble's filter, so its members neither see nor list them,
-  // but connected to each member to hear them.
-  bool listenerState = 21;
   // Raise-hand state is NOT stored per-user here: it lives in the space state (SpaceStateQuery / SpaceStatePatchMessage),
   // which is broadcast to all members, including a megaphone speaker without seeAttendees.
+  SpotifyListening spotifyListening = 21;
+  // A listener next to a bubble: out of the bubble's filter, so its members neither see nor list them,
+  // but connected to each member to hear them.
+  bool listenerState = 22;
+}
+
+// What a user shares about their Spotify listening. The client always sends every field: space updates are deep
+// merged, so an empty string (not an absent field) is what clears a value.
+message SpotifyListening {
+  // Empty when the user is not playing a track or does not share it.
+  string trackTitle = 1;
+  string artistName = 2;
+  string trackUrl = 3;
+  // Set while the user takes part in the Spotify Jam shared in a listening zone.
+  string jamAreaId = 4;
+  string jamAreaName = 5;
 }
 
 /*message PartialSpaceUser{

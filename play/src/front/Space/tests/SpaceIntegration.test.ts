@@ -288,6 +288,7 @@ describe("", () => {
             attendeesState: false,
             cpuLimited: false,
             listenerState: false,
+            spotifyListening: undefined,
         } satisfies SpaceUser;
 
         const addSpaceUserMessage: AddSpaceUserMessage = {
@@ -346,6 +347,7 @@ describe("", () => {
             attendeesState: false,
             cpuLimited: false,
             listenerState: false,
+            spotifyListening: undefined,
         } satisfies SpaceUser;
 
         const addSpaceUserMessage: AddSpaceUserMessage = {
@@ -399,6 +401,7 @@ describe("", () => {
             attendeesState: false,
             cpuLimited: false,
             listenerState: false,
+            spotifyListening: undefined,
         } satisfies SpaceUser;
 
         const addSpaceUserMessage: AddSpaceUserMessage = {
@@ -546,6 +549,7 @@ describe("", () => {
                 attendeesState: false,
                 cpuLimited: false,
                 listenerState: false,
+                spotifyListening: undefined,
             },
             $case: "muteVideo",
             muteVideo: {

@@ -2,7 +2,12 @@ import path from "path";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
 import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
-import { GameMapProperties } from "@workadventure/map-editor";
+import {
+    canUpdateListeningZoneJam,
+    GameMapProperties,
+    LISTENING_ZONE_JAM_VARIABLE,
+    parseListeningZoneJam,
+} from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import type {
@@ -72,6 +77,7 @@ import type { UserSocket } from "./User";
 import { User } from "./User";
 import type { PointInterface } from "./Websocket/PointInterface";
 import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
+import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
 import type { BubbleListeningCallbacks } from "./BubbleListeners";
@@ -239,6 +245,9 @@ export class GameRoom implements BrothersFinder {
         // Let's instantiate the class that will track maxUsersInArea areas and keep the maxUsersReached variable updated.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
         new MaxUsersInAreaManager(gameRoom, areaZoneTracker);
+        // Let's instantiate the class that will remove the Jam of a listening zone when its host leaves the zone.
+        // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
+        new ListeningZoneManager(gameRoom, areaZoneTracker);
 
         return gameRoom;
     }
@@ -814,6 +823,10 @@ export class GameRoom implements BrothersFinder {
             return false;
         }
 
+        return GameRoom.hasAreaPropertyTagPermission(userTags, property);
+    }
+
+    private static hasAreaPropertyTagPermission(userTags: string[], property: AreaDataProperty): boolean {
         // Only check permissions for lockableAreaPropertyData
         if (property.type === "lockableAreaPropertyData") {
             const allowedTags = GameRoom.getLockableAllowedTags(property);
@@ -828,6 +841,27 @@ export class GameRoom implements BrothersFinder {
 
         // For other property types, allow by default
         return true;
+    }
+
+    /**
+     * A listening zone only holds the Jam variable, and only the host of the shared Jam may replace or remove it.
+     */
+    private canUpdateListeningZoneVariable(
+        userUuid: string,
+        areaId: string,
+        propertyId: string,
+        key: string,
+        value: string,
+    ): boolean {
+        if (key !== LISTENING_ZONE_JAM_VARIABLE) {
+            return false;
+        }
+        const next = parseListeningZoneJam(value);
+        if (next === null && value !== "null") {
+            return false;
+        }
+        const current = parseListeningZoneJam(this.getAreaPropertyVariable(areaId, propertyId, key));
+        return canUpdateListeningZoneJam(current, next, userUuid);
     }
 
     /**
@@ -884,7 +918,7 @@ export class GameRoom implements BrothersFinder {
      * Sets an area property variable with permission checking.
      * Verifies the user has appropriate permissions based on the property's allowedTags.
      *
-     * @param userTags - The tags of the user
+     * @param user - The user setting the variable
      * @param areaId - The ID of the area
      * @param propertyId - The ID of the property within the area
      * @param key - The variable key (e.g., "lock")
@@ -892,18 +926,28 @@ export class GameRoom implements BrothersFinder {
      * @returns { success: true, changed: boolean } if permitted, { success: false, error: string } if denied
      */
     public async setAreaPropertyVariableWithPermissionCheck(
-        userTags: string[],
+        user: Pick<User, "tags" | "uuid">,
         areaId: string,
         propertyId: string,
         key: string,
         value: string,
     ): Promise<{ success: true; changed: boolean } | { success: false; error: string }> {
-        const hasPermission = await this.hasAreaPropertyPermission(userTags, areaId, propertyId);
+        const property = await this.getAreaProperty(areaId, propertyId);
 
-        if (!hasPermission) {
+        if (!property || !GameRoom.hasAreaPropertyTagPermission(user.tags, property)) {
             return {
                 success: false,
                 error: "You don't have permission to modify this area property. Required tags not found.",
+            };
+        }
+
+        if (
+            property.type === "listeningZonePropertyData" &&
+            !this.canUpdateListeningZoneVariable(user.uuid, areaId, propertyId, key, value)
+        ) {
+            return {
+                success: false,
+                error: "Only the host of the shared Jam can replace or remove it.",
             };
         }
 

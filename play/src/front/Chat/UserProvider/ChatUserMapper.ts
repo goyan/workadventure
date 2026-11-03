@@ -15,5 +15,6 @@ export function mapExtendedSpaceUserToChatUser(user: SpaceUserExtended): AdminUs
         visitCardUrl: user.visitCardUrl,
         color: user.color,
         spaceUserId: user.spaceUserId,
+        spotifyListening: user.reactiveUser.spotifyListening,
     };
 }
