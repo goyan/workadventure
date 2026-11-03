@@ -1190,8 +1190,13 @@ export class SocketManager implements ZoneEventListener {
         playGlobalMessageEvent: PlayGlobalMessage,
     ): Promise<void> {
         const socketData = client.getUserData();
-        if (!socketData.tags.includes("admin")) {
-            throw new Error("Client is not an admin!");
+        const isNpcRoomBroadcast =
+            /^npc:[a-z0-9-]{1,40}$/.test(socketData.userUuid) &&
+            socketData.tags.includes("npc-global-message") &&
+            !playGlobalMessageEvent.broadcastToWorld &&
+            (playGlobalMessageEvent.type === "message" || playGlobalMessageEvent.type === "audio");
+        if (!socketData.tags.includes("admin") && !isNpcRoomBroadcast) {
+            throw new Error("Client is not authorised to broadcast this message!");
         }
 
         const clientRoomUrl = socketData.roomId;
