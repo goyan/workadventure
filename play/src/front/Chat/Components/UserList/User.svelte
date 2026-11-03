@@ -16,6 +16,7 @@
     import { createFloatingUiActions } from "../../../Utils/svelte-floatingui";
     import Avatar from "../Avatar.svelte";
     import UserActionButton from "./UserActionButton.svelte";
+    import SpotifyListeningLine from "./SpotifyListeningLine.svelte";
     import { IconLoader, IconSend } from "@wa-icons";
 
     interface Props {
@@ -104,7 +105,7 @@
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
-                class={`flex-auto ms-1 ${!$userStatus && "opacity-50"} cursor-pointer`}
+                class={`flex-auto min-w-0 ms-1 ${!$userStatus && "opacity-50"} cursor-pointer`}
                 onclick={(event) => {
                     event.stopPropagation();
                     openWokaMenu();
@@ -151,6 +152,9 @@
                         {$LL.chat.userList.disconnected()}
                     {/if}
                 </div>
+                {#if user.spotifyListening}
+                    <SpotifyListeningLine listening={user.spotifyListening} />
+                {/if}
             </div>
             <div class="flex flex-wrap justify-start items-start content-start">
                 <div class="transition-all">

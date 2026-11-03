@@ -68,6 +68,7 @@ if (typeof window !== "undefined" && window.env === undefined) {
         WOKA_SPEED: 8,
         KLAXOON_ENABLED: false,
         KLAXOON_CLIENT_ID: undefined,
+        SPOTIFY_CLIENT_ID: undefined,
         YOUTUBE_ENABLED: false,
         GOOGLE_DRIVE_ENABLED: false,
         GOOGLE_DOCS_ENABLED: false,

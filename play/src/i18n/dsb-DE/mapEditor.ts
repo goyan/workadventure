@@ -370,6 +370,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Stajśo maksimalnu licbu wužywarjow w wobcerjeju.",
             placeholder: "15",
         },
+        listeningZonePropertyData: {
+            label: "Listening zone",
+            description: "Lets people share a Spotify Jam that everyone in the zone can join.",
+        },
         lockableAreaPropertyData: {
             label: "Wobcerje, kótarež dajo se zawěriś",
             description: "Wobcerje zawěriś, aby se woglědanje z wónkaźi zawoborowało.",

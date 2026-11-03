@@ -28,6 +28,7 @@ import mapEditor from "./mapEditor";
 import externalModule from "./externalModule";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
+import spotify from "./spotify";
 import recording from "./recording";
 
 const vi_VN = deepmerge(en_US, {
@@ -59,6 +60,7 @@ const vi_VN = deepmerge(en_US, {
     externalModule,
     randomNames,
     onboarding,
+    spotify,
     recording,
 });
 

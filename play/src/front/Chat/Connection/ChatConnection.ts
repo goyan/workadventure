@@ -1,5 +1,5 @@
 import type { Readable, Writable } from "svelte/store";
-import type { AvailabilityStatus } from "@workadventure/messages";
+import type { AvailabilityStatus, SpotifyListening } from "@workadventure/messages";
 import type { MapStore } from "@workadventure/store-utils";
 import type { MatrixClient, StateEvents } from "matrix-js-sdk";
 import type { WorkAdventureComponent, WorkAdventureComponentProps } from "../../../types/component";
@@ -20,6 +20,7 @@ export type ChatUser = {
     visitCardUrl?: string;
     color: string | undefined;
     spaceUserId: string | undefined;
+    spotifyListening?: Readable<SpotifyListening | undefined>;
 };
 
 export type AdminUser = {
@@ -35,6 +36,7 @@ export type AdminUser = {
     visitCardUrl?: string;
     color: string | undefined;
     spaceUserId: string | undefined;
+    spotifyListening?: Readable<SpotifyListening | undefined>;
 };
 
 export type AnyKindOfUser = ChatUser | AdminUser;

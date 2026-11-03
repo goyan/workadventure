@@ -28,6 +28,7 @@ export const localSpaceUser = (name?: string): SpaceUserExtended => {
         characterTextures: [],
         attendeesState: false,
         cpuLimited: false,
+        spotifyListening: undefined,
         pictureStore: readable<string | undefined>(undefined, (set) => {
             const unsubscribe = gameManager
                 .getCurrentGameScene()
@@ -74,6 +75,7 @@ export const localSpaceUser = (name?: string): SpaceUserExtended => {
             microphoneState: writable(false),
             attendeesState: writable(false),
             cpuLimited: writable(false),
+            spotifyListening: writable(undefined),
             screenSharingState: writable(true),
             megaphoneState: writable(false),
             jitsiParticipantId: writable(undefined),

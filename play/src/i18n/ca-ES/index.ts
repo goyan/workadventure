@@ -28,6 +28,7 @@ import refreshPrompt from "./refreshPrompt";
 import megaphone from "./megaphone";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
+import spotify from "./spotify";
 import recording from "./recording";
 
 const ca_ES = deepmerge(en_US, {
@@ -59,6 +60,7 @@ const ca_ES = deepmerge(en_US, {
     megaphone,
     randomNames,
     onboarding,
+    spotify,
     recording,
 });
 

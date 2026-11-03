@@ -478,6 +478,12 @@ export const EnvironmentVariables = z.object({
         .transform((val) => toBool(val, false))
         .describe("Enable Klaxoon embedded application integration. Defaults to false"),
     KLAXOON_CLIENT_ID: z.string().optional().describe("Klaxoon OAuth2 client ID"),
+    SPOTIFY_CLIENT_ID: z
+        .string()
+        .optional()
+        .describe(
+            "Client ID of the Spotify app used to let users share what they listen to. The app must list <PUSHER_URL>/spotify/callback as a redirect URI. Leave empty to only allow users' own Spotify apps.",
+        ),
     YOUTUBE_ENABLED: BoolAsString.optional()
         .transform((val) => toBool(val, false))
         .describe("Enable YouTube map editor tool. Defaults to false"),

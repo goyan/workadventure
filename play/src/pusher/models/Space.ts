@@ -5,6 +5,7 @@ import Debug from "debug";
 import type { SpaceState } from "@workadventure/shared-utils";
 import { emptySpaceState } from "@workadventure/shared-utils";
 import type { PusherWebSocket } from "../services/PusherWebSocket";
+import { sanitizeSpotifyListening } from "../../common/SpotifyListening";
 import type { BackSpaceConnection } from "./Websocket/SocketData";
 import type { EventProcessor } from "./EventProcessor";
 import type { SpaceToBackForwarderInterface } from "./SpaceToBackForwarder";
@@ -35,6 +36,7 @@ const CLIENT_UPDATABLE_SPACE_USER_FIELDS: ReadonlySet<string> = new Set<keyof Sp
     "megaphoneState",
     "attendeesState",
     "cpuLimited",
+    "spotifyListening",
 ]);
 
 /**
@@ -378,10 +380,13 @@ export class Space implements SpaceForSpaceConnectionInterface {
             );
         }
 
-        const changedFields = updateSpaceUserMessage.updateMask.filter((field) =>
-            CLIENT_UPDATABLE_SPACE_USER_FIELDS.has(field),
+        // A message field shows up in the mask as the paths of its leaves ("spotifyListening.trackTitle"…): we
+        // forward the whole field, so that it is replaced at once by what we validated.
+        const allowedFields = updateSpaceUserMessage.updateMask.filter((field) =>
+            CLIENT_UPDATABLE_SPACE_USER_FIELDS.has(field.split(".")[0]),
         );
-        if (changedFields.length !== updateSpaceUserMessage.updateMask.length) {
+        const changedFields = [...new Set(allowedFields.map((field) => field.split(".")[0]))];
+        if (allowedFields.length !== updateSpaceUserMessage.updateMask.length) {
             const message = `[Space.extractUpdatedFieldsFromUpdateSpaceUserMessage] User ${spaceUser.spaceUserId} tried to update read-only fields in space ${this.name}: ${updateSpaceUserMessage.updateMask.join(", ")}`;
             console.warn(message);
             Sentry.captureException(new Error(message));
@@ -390,10 +395,15 @@ export class Space implements SpaceForSpaceConnectionInterface {
             return null;
         }
 
-        return {
-            changedFields,
-            partialSpaceUser: { ...updateSpaceUserMessage.user, spaceUserId: spaceUser.spaceUserId },
+        const partialSpaceUser: PartialSpaceUser = {
+            ...updateSpaceUserMessage.user,
+            spaceUserId: spaceUser.spaceUserId,
         };
+        if (changedFields.includes("spotifyListening")) {
+            partialSpaceUser.spotifyListening = sanitizeSpotifyListening(updateSpaceUserMessage.user.spotifyListening);
+        }
+
+        return { changedFields, partialSpaceUser };
     }
 
     getPropertiesToSync(): string[] {

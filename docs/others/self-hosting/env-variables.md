@@ -115,6 +115,7 @@ Environment variables for the Play service (frontend and pusher).
 | `WOKA_SPEED` | No | Avatar (WOKA) movement speed. Defaults to 9 |
 | `KLAXOON_ENABLED` | No | Enable Klaxoon embedded application integration. Defaults to false |
 | `KLAXOON_CLIENT_ID` | No | Klaxoon OAuth2 client ID |
+| `SPOTIFY_CLIENT_ID` | No | Client ID of the Spotify app used to let users share what they listen to. The app must list <PUSHER_URL>/spotify/callback as a redirect URI. Leave empty to only allow users' own Spotify apps. |
 | `YOUTUBE_ENABLED` | No | Enable YouTube map editor tool. Defaults to false |
 | `GOOGLE_DRIVE_ENABLED` | No | Enable Google Drive map editor tool. Defaults to false |
 | `GOOGLE_DOCS_ENABLED` | No | Enable Google Docs map editor tool. Defaults to false |

@@ -363,6 +363,10 @@ const mapEditor: BaseTranslation = {
             description: "Set the maximum number of users in the area.",
             placeholder: "Empty = no limit, 0 = closed",
         },
+        listeningZonePropertyData: {
+            label: "Listening zone",
+            description: "Lets people share a Spotify Jam that everyone in the zone can join.",
+        },
         lockableAreaPropertyData: {
             label: "Lockable area",
             description: "Lock the area to prevent entry from outside.",

@@ -80,6 +80,7 @@ export const MAP_EDITOR_ALLOWED_USERS: string[] = [];
 export const MAP_EDITOR_ALLOW_ALL_USERS = true;
 export const KLAXOON_ENABLED = false;
 export const KLAXOON_CLIENT_ID: string | undefined = undefined;
+export const SPOTIFY_CLIENT_ID: string | undefined = undefined;
 export const YOUTUBE_ENABLED = false;
 export const GOOGLE_DRIVE_ENABLED = false;
 export const GOOGLE_DOCS_ENABLED = false;
@@ -153,6 +154,7 @@ export const FRONT_ENVIRONMENT_VARIABLES: FrontConfigurationInterface = {
     WOKA_SPEED: 9,
     KLAXOON_ENABLED,
     KLAXOON_CLIENT_ID,
+    SPOTIFY_CLIENT_ID,
     YOUTUBE_ENABLED,
     GOOGLE_DRIVE_ENABLED,
     GOOGLE_DOCS_ENABLED,
