@@ -4,6 +4,7 @@ import {
     mapLayerPrefabId,
     parseMapLayerPrefab,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import { isDoorInZone } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { wallBarriers } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerBarriers";
 import { computePlacements } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
@@ -208,5 +209,27 @@ describe("doors", () => {
         expect(doorCandidateAt(model, 5 * 32 + 3, 5 * 32 + 20)).toEqual({ orientation: "h", x: 5, y: 5, valid: true });
         expect(doorCandidateAt(model, 2 * 32 + 3, 5 * 32 + 20).valid).toBe(false);
         expect(doorCandidateAt(model, 5 * 32, 9 * 32).valid).toBe(false);
+    });
+});
+
+describe("hearing doors", () => {
+    // The area of a room snapped on its floor: columns 2 to 5, rows 2 to 4, walls on the lines x = 2, x = 6, y = 1, y = 5.
+    const room = { x: 64, y: 64, width: 128, height: 96 };
+
+    it("hears the horizontal doors on the walls above and under the room", () => {
+        expect(isDoorInZone({ left: 96, top: 32, right: 160, bottom: 64 }, "h", room)).toBe(true);
+        expect(isDoorInZone({ left: 96, top: 160, right: 160, bottom: 192 }, "h", room)).toBe(true);
+    });
+
+    it("hears the vertical doors on the walls left and right of the room", () => {
+        expect(isDoorInZone({ left: 48, top: 76, right: 80, bottom: 140 }, "v", room)).toBe(true);
+        expect(isDoorInZone({ left: 176, top: 76, right: 208, bottom: 140 }, "v", room)).toBe(true);
+    });
+
+    it("does not hear the doors of the next rooms on the same wall lines, nor the far ones", () => {
+        expect(isDoorInZone({ left: 192, top: 32, right: 256, bottom: 64 }, "h", room)).toBe(false);
+        expect(isDoorInZone({ left: 48, top: 172, right: 80, bottom: 236 }, "v", room)).toBe(false);
+        expect(isDoorInZone({ left: 48, top: 160, right: 80, bottom: 224 }, "v", room)).toBe(false);
+        expect(isDoorInZone({ left: 320, top: 320, right: 384, bottom: 352 }, "h", room)).toBe(false);
     });
 });

@@ -215,7 +215,7 @@ import { getCustomEntityCollectionUrl } from "../../Utils/MapStorageUrl";
 import { CHARACTER_BODY_OFFSET_Y, PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "../Entity/Character";
 import { type Avatar, ConversationBubble } from "../Entity/ConversationBubble";
 import { DarkenOutsideAreaEffect } from "../Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
-import { isInsidePersonalAreaStore } from "../../Stores/PersonalDeskStore";
+import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../Stores/PersonalDeskStore";
 import { areaPropertyVariablesManagerStore } from "../../Stores/AreaPropertyVariablesStore";
 import { ApplicationManager } from "../../Chat/Applications/ApplicationManager";
 import { audioPlaybackStore } from "../../Stores/AudioPlaybackStore";
@@ -228,7 +228,7 @@ import { EntityAudioManager } from "./EntityAudioManager";
 import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
-import type { DoorCharacter } from "./MapEditor/MapLayer/DoorAnimator";
+import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -1410,6 +1410,16 @@ export class GameScene extends DirtyScene {
                 this.sound.play(key, { volume });
             },
             () => this.markDirty(),
+            () => {
+                const zones: HearingZone[] =
+                    this.gameMapFrontWrapper
+                        .getGameMap()
+                        .getWamFile()
+                        ?.getGameMapAreas()
+                        .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
+                const personalArea = get(personalAreaDataStore);
+                return personalArea ? [...zones, personalArea] : zones;
+            },
         );
         // Doors react to the collision body of a character (the one that is blocked by the walls), not to the middle of
         // its sprite, which overlaps the wall when the character walks along it.
@@ -1430,14 +1440,15 @@ export class GameScene extends DirtyScene {
                 y: point.y + CHARACTER_BODY_OFFSET_Y,
             })),
         });
-        const characters: DoorCharacter[] = [asDoorCharacter(this.CurrentPlayer)];
+        const listener = asDoorCharacter(this.CurrentPlayer);
+        const characters: DoorCharacter[] = [listener];
         if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
         for (const player of this.MapPlayersByKey.values()) {
             characters.push(asDoorCharacter(player));
             if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
         this.duckRushManager?.forEachDoorOpener((position) => characters.push(position));
-        this.doorAnimator.update(time, characters, this.CurrentPlayer);
+        this.doorAnimator.update(time, characters, listener);
     }
 
     public update(time: number, delta: number): void {

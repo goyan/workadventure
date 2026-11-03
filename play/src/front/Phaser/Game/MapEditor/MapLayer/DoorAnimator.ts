@@ -52,6 +52,30 @@ interface DoorRect {
     bottom: number;
 }
 
+/** Rectangle of an area of the map, as the map editor stores it. */
+export interface HearingZone {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
+/**
+ * Whether a door belongs to a zone. Areas are snapped onto the floors of the rooms, so the doors of a room sit on the
+ * border of its area: a horizontal door stands on the tile row of its wall, just above or under the area, and a
+ * vertical door straddles its left or right edge. The door must therefore overlap the zone or touch it across the wall,
+ * but a door that only touches it along the wall belongs to the next room on that line, and is left out.
+ */
+export function isDoorInZone(rect: DoorRect, orientation: DoorPiece["orientation"], zone: HearingZone): boolean {
+    const zoneRight = zone.x + zone.width;
+    const zoneBottom = zone.y + zone.height;
+    const acrossX = rect.left < zoneRight && rect.right > zone.x;
+    const acrossY = rect.top < zoneBottom && rect.bottom > zone.y;
+    const touchesX = rect.left <= zoneRight && rect.right >= zone.x;
+    const touchesY = rect.top <= zoneBottom && rect.bottom >= zone.y;
+    return orientation === "h" ? acrossX && touchesY : touchesX && acrossY;
+}
+
 interface DoorPieceState {
     entity: Entity;
     piece: DoorPiece;
@@ -70,6 +94,8 @@ interface DoorState {
     /** Whether the door swings towards the south or the east: it is pushed away from the character who opens it. */
     reverse: boolean;
     nextFrameAt: number;
+    /** Whether the local player opened the door: they always hear the doors they go through. */
+    openedByListener: boolean;
 }
 
 /**
@@ -89,11 +115,13 @@ export class DoorAnimator {
         private readonly getPrefab: (collectionName: string, id: string) => Promise<EntityPrefab | undefined>,
         private readonly playSound: (key: string, volume: number) => void,
         private readonly markDirty: () => void,
+        /** The areas the local player stands in, and their personal desk: only the doors of these zones are heard. */
+        private readonly getHearingZones: () => readonly HearingZone[],
     ) {}
 
     /**
      * @param characters Every character that opens doors: the players, local and remote, and their companions.
-     * @param listener Position of the local player, which sets how loud the doors are.
+     * @param listener The local player, one of `characters`: sets how loud the doors are.
      */
     public update(time: number, characters: readonly DoorCharacter[], listener: DoorCharacter): void {
         if (time >= this.nextScanAt) {
@@ -115,6 +143,7 @@ export class DoorAnimator {
             if (pusher) {
                 if (door.frame === DOOR_CLOSED_FRAME) {
                     door.reverse = this.isPushedTowardsViewer(state, pusher);
+                    door.openedByListener = pusher === listener;
                 }
                 door.openUntil = time + CLOSE_DELAY_MS;
             }
@@ -136,7 +165,13 @@ export class DoorAnimator {
     private getDoorState(key: string, time: number): DoorState {
         let door = this.states.get(key);
         if (!door) {
-            door = { frame: DOOR_CLOSED_FRAME, openUntil: 0, reverse: false, nextFrameAt: time };
+            door = {
+                frame: DOOR_CLOSED_FRAME,
+                openUntil: 0,
+                reverse: false,
+                nextFrameAt: time,
+                openedByListener: false,
+            };
             this.states.set(key, door);
         }
         return door;
@@ -151,7 +186,7 @@ export class DoorAnimator {
             door.frame += Math.sign(target - door.frame);
             door.nextFrameAt = time + FRAME_DURATION_MS;
             if (previous === DOOR_CLOSED_FRAME || door.frame === DOOR_CLOSED_FRAME) {
-                this.playDoorSound(previous === DOOR_CLOSED_FRAME ? "open" : "close", state, listener);
+                this.playDoorSound(previous === DOOR_CLOSED_FRAME ? "open" : "close", state, door, listener);
             }
         }
         const texture = state.textures?.[door.reverse ? 1 : 0][door.frame];
@@ -164,11 +199,22 @@ export class DoorAnimator {
         }
     }
 
-    private playDoorSound(kind: "open" | "close", state: DoorPieceState, listener: DoorCharacter): void {
+    private playDoorSound(
+        kind: "open" | "close",
+        state: DoorPieceState,
+        door: DoorState,
+        listener: DoorCharacter,
+    ): void {
         const centerX = (state.rect.left + state.rect.right) / 2;
         const centerY = (state.rect.top + state.rect.bottom) / 2;
         const distance = Math.hypot(centerX - listener.x, centerY - listener.y);
-        if (distance < HEARING_DISTANCE) {
+        if (distance >= HEARING_DISTANCE) {
+            return;
+        }
+        const heard =
+            door.openedByListener ||
+            this.getHearingZones().some((zone) => isDoorInZone(state.rect, state.piece.orientation, zone));
+        if (heard) {
             const closeness = 1 - distance / HEARING_DISTANCE;
             this.playSound(DOOR_SOUND_KEYS[kind], DOOR_MAX_VOLUME * closeness * closeness);
         }
