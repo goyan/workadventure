@@ -10,12 +10,14 @@ import {
 } from "@workadventure/messages";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
+import { privateMessageEventName } from "@workadventure/shared-utils";
+import { mock } from "vitest-mock-extended";
 import type { ConnectCallback, DisconnectCallback } from "../src/Model/GameRoom";
 import { GameRoom } from "../src/Model/GameRoom";
 import { Point } from "../src/Model/Websocket/MessageUserPosition";
 import { Group } from "../src/Model/Group";
 import type { User, UserSocket } from "../src/Model/User";
-import type { RoomSocket, VariableSocket } from "../src/RoomManager";
+import type { EventSocket, RoomSocket, VariableSocket } from "../src/RoomManager";
 import { socketManager } from "../src/Services/SocketManager";
 import type { EmoteCallback, ZonePosition } from "../src/Model/Zone";
 
@@ -112,6 +114,59 @@ function createWorld(): Promise<GameRoom> {
 }
 
 describe("GameRoom", () => {
+    it("never broadcasts a private message or exposes it to Room API listeners", async () => {
+        const world = await createWorld();
+        const senderSocket = createMockUserSocket();
+        const recipientSocket = createMockUserSocket();
+        const secondRecipientSocket = createMockUserSocket();
+        const bystanderSocket = createMockUserSocket();
+        const sender = await world.join(senderSocket.socket, createJoinRoomMessage("human", 100, 100));
+        const recipient = await world.join(recipientSocket.socket, createJoinRoomMessage("npc:ada", 900, 900));
+        const secondRecipient = await world.join(
+            secondRecipientSocket.socket,
+            createJoinRoomMessage("npc:ada", 1200, 1200, "another-tab"),
+        );
+        const bystander = await world.join(bystanderSocket.socket, createJoinRoomMessage("other", 500, 500));
+        const emitRecipient = vi.spyOn(recipient, "emitInBatch");
+        const emitSecondRecipient = vi.spyOn(secondRecipient, "emitInBatch");
+        const emitBystander = vi.spyOn(bystander, "emitInBatch");
+        const writeListener = vi.fn();
+        const listener = mock<EventSocket>({
+            request: { name: privateMessageEventName },
+            write: writeListener,
+        });
+        world.addEventListener(listener);
+        const request = { recipientUuid: "npc:ada", text: "Confidentiel" };
+
+        expect(() => world.sendPrivateMessage(mock<User>({ id: sender.id }), request)).toThrow(/connected sender/);
+        world.sendPrivateMessage(sender, request);
+
+        const delivered = {
+            message: {
+                $case: "receivedEventMessage",
+                receivedEventMessage: {
+                    name: privateMessageEventName,
+                    data: {
+                        recipientUuid: "npc:ada",
+                        text: "Confidentiel",
+                        sender: { uuid: "human", name: "foo" },
+                    },
+                    senderId: sender.id,
+                },
+            },
+        };
+        expect(emitRecipient).toHaveBeenCalledExactlyOnceWith(delivered);
+        expect(emitSecondRecipient).toHaveBeenCalledExactlyOnceWith(delivered);
+        expect(emitBystander).not.toHaveBeenCalled();
+        expect(writeListener).not.toHaveBeenCalled();
+        expect(() => world.dispatchEvent(privateMessageEventName, request, sender.id, [bystander.id])).toThrow(
+            /dedicated query/,
+        );
+        expect(() => world.dispatchEvent(privateMessageEventName, request, "RoomApi", [])).toThrow(/dedicated query/);
+        expect(emitBystander).not.toHaveBeenCalled();
+        expect(writeListener).not.toHaveBeenCalled();
+        world.removeEventListener(listener);
+    });
     it("should connect user1 and user2", async () => {
         let connectCalledNumber = 0;
         const connect: ConnectCallback = (user: User, group: Group): void => {

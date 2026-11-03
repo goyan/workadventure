@@ -33,7 +33,13 @@ const ROOM = "https://play.test/@/org/world/room";
 
 function sender(userUuid: string, tags: string[]): PusherWebSocket {
     return mock<PusherWebSocket>({
-        getUserData: () => mock<ReturnType<PusherWebSocket["getUserData"]>>({ userUuid, tags, roomId: ROOM }),
+        getUserData: () =>
+            mock<ReturnType<PusherWebSocket["getUserData"]>>({
+                userUuid,
+                name: userUuid === "npc:ada" ? "NPC · Ada" : "Hervé",
+                tags,
+                roomId: ROOM,
+            }),
     });
 }
 
@@ -54,7 +60,19 @@ describe("SocketManager global messages", () => {
         });
 
         expect(forwarded.rooms).toEqual([ROOM]);
-        expect(forwarded.messages).toEqual([{ roomId: ROOM, type, message: content }]);
+        expect(forwarded.messages).toEqual([
+            {
+                roomId: ROOM,
+                type,
+                message:
+                    type === "message"
+                        ? JSON.stringify({
+                              ops: [{ insert: "Annonce\n" }],
+                              sender: { uuid: "npc:ada", name: "NPC · Ada" },
+                          })
+                        : content,
+            },
+        ]);
         expect(sameWorld).not.toHaveBeenCalled();
     });
 
@@ -81,7 +99,46 @@ describe("SocketManager global messages", () => {
             content: "Announcement",
             broadcastToWorld: false,
         });
-        expect(forwarded.messages).toEqual([{ roomId: ROOM, type: "message", message: "Announcement" }]);
+        expect(forwarded.messages).toEqual([
+            {
+                roomId: ROOM,
+                type: "message",
+                message: JSON.stringify({
+                    ops: [{ insert: "Announcement\n" }],
+                    sender: { uuid: "human-admin", name: "Hervé" },
+                }),
+            },
+        ]);
+    });
+
+    it("overrides a supplied author using the authenticated identity while preserving rich text", async () => {
+        await new SocketManager().emitPlayGlobalMessage(sender("npc:ada", ["npc-global-message"]), {
+            type: "message",
+            content: JSON.stringify({
+                ops: [{ insert: "Café", attributes: { bold: true } }, { insert: "\n" }],
+                sender: { uuid: "human-admin", name: "Admin" },
+            }),
+            broadcastToWorld: false,
+        });
+        expect(JSON.parse(forwarded.messages[0].message)).toEqual({
+            ops: [{ insert: "Café", attributes: { bold: true } }, { insert: "\n" }],
+            sender: { uuid: "npc:ada", name: "NPC · Ada" },
+        });
+    });
+
+    it("ignores malformed client author metadata without losing the rich message", async () => {
+        await new SocketManager().emitPlayGlobalMessage(sender("npc:ada", ["npc-global-message"]), {
+            type: "message",
+            content: JSON.stringify({
+                ops: [{ insert: "Café", attributes: { bold: true } }],
+                sender: { uuid: null, name: { forged: true } },
+            }),
+            broadcastToWorld: false,
+        });
+        expect(JSON.parse(forwarded.messages[0].message)).toEqual({
+            ops: [{ insert: "Café", attributes: { bold: true } }],
+            sender: { uuid: "npc:ada", name: "NPC · Ada" },
+        });
     });
 
     it("preserves the admin world lookup and its empty result", async () => {

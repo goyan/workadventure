@@ -63,6 +63,7 @@
     import Lazy from "./Lazy.svelte";
     import UiWebsiteContainer from "./UI/Website/UIWebsiteContainer.svelte";
     import Modal from "./Modal/Modal.svelte";
+    import PrivateMessageNotification from "./PrivateMessage/PrivateMessageNotification.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
     import ObjectDetails from "./Modal/ObjectDetails.svelte";
@@ -409,6 +410,7 @@
                  stacked under it so nothing covers anything else's buttons (the dock self-gates on
                  visibleRaisedHandSectionsStore). Opening the agenda settles the reminders: it lists the same meetings. -->
             <div class="absolute top-0 right-2 z-[999] flex flex-col gap-2 items-end">
+                <PrivateMessageNotification />
                 {#each [...$toastStore.entries()] as toastEntry (toastEntry[0])}
                     {@const toast = toastEntry[1]}
                     {@const ToastComponent = toast.component}

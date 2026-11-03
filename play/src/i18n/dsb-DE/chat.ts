@@ -21,6 +21,11 @@ const chat: DeepPartial<Translation["chat"]> = {
     typing: "pišo...",
     users: "wužywarje",
     chat: "Chat",
+    privateMessage: {
+        label: "Priwatna powěsć",
+        unavailable: "Sćelanje njeda se wobkšuśiś. Pśidostawaŕ jo snaź kórtu spušćił; wopytaj pózdźej hyšći raz.",
+        sending: "Sćelo se…",
+    },
     userList: {
         disconnected: "Njezwězany ze swětom",
         isHere: "Jo na toś tej kórśe",

@@ -71,6 +71,7 @@ import type { Movable } from "@workadventure/shared-utils";
 import { GameRoom } from "../Model/GameRoom";
 import type { UserSocket } from "../Model/User";
 import { User } from "../Model/User";
+import { PrivateMessageRefusedError } from "../Model/PrivateMessages";
 import { ProtobufUtils } from "../Model/Websocket/ProtobufUtils";
 import { Group } from "../Model/Group";
 import { GROUP_RADIUS, MINIMUM_DISTANCE } from "../Enum/EnvironmentVariable";
@@ -727,6 +728,14 @@ export class SocketManager {
                     };
                     break;
                 }
+                case "sendPrivateMessageQuery": {
+                    gameRoom.sendPrivateMessage(user, queryMessage.query.sendPrivateMessageQuery);
+                    answerMessage.answer = {
+                        $case: "sendPrivateMessageAnswer",
+                        sendPrivateMessageAnswer: {},
+                    };
+                    break;
+                }
                 case "iceServersQuery":
                 case "embeddableWebsiteQuery":
                 case "roomTagsQuery":
@@ -754,14 +763,24 @@ export class SocketManager {
             }
         } catch (e) {
             const error = asError(e);
-            console.error("An error happened while answering a query:", e);
-            Sentry.captureException(`An error happened while answering a query: ${error.message}`, {
-                extra: { queryMessage, userId: user.id, userUuid: user.uuid, roomId: gameRoom.roomUrl },
-            });
+            // Keep private content out of error context, including refused generic-event attempts.
+            const isPrivateQuery = queryCase === "sendPrivateMessageQuery";
+            const isPrivateRefusal =
+                error instanceof PrivateMessageRefusedError || (isPrivateQuery && error instanceof z.ZodError);
+            if (isPrivateQuery && !isPrivateRefusal) {
+                const context = { queryCase, userId: user.id, roomId: gameRoom.roomUrl };
+                console.error("Failed to send a private message", context, error);
+                Sentry.captureException(error, { extra: context });
+            } else if (!isPrivateQuery && !isPrivateRefusal) {
+                console.error("An error happened while answering a query:", e);
+                Sentry.captureException(`An error happened while answering a query: ${error.message}`, {
+                    extra: { queryMessage, userId: user.id, userUuid: user.uuid, roomId: gameRoom.roomUrl },
+                });
+            }
             answerMessage.answer = {
                 $case: "error",
                 error: {
-                    message: error.message,
+                    message: isPrivateQuery && !isPrivateRefusal ? "Private message could not be sent" : error.message,
                 },
             };
         } finally {

@@ -21,6 +21,11 @@ const chat: DeepPartial<Translation["chat"]> = {
     typing: "が入力中...",
     users: "ユーザー",
     chat: "チャット",
+    privateMessage: {
+        label: "プライベートメッセージ",
+        unavailable: "送信を確認できませんでした。相手がマップを離れた可能性があります。後でもう一度お試しください。",
+        sending: "送信中…",
+    },
     userList: {
         disconnected: "ワールドに接続されていません",
         isHere: "このマップ上",

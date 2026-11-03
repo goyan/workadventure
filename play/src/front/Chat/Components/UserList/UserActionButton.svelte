@@ -14,8 +14,10 @@
     import { LL } from "../../../../i18n/i18n-svelte";
     import { openModerationModal } from "../../../Components/Moderation/openModerationModal";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
+    import { openPrivateMessage } from "../../../Components/PrivateMessage/openPrivateMessage";
+    import { blackListManager } from "../../../WebRtc/BlackListManager";
     import type { UserProviderMerger } from "../../UserProviderMerger/UserProviderMerger";
-    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus } from "@wa-icons";
+    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus, IconSend } from "@wa-icons";
 
     interface Props {
         user: ChatUser;
@@ -196,6 +198,21 @@
             class="wa-dropdown-menu z-10 mr-1 fixed bg-contrast/80 backdrop-blur-md rounded-md p-1"
         >
             {#if isInTheSameMap}
+                {#if user.uuid && !blackListManager.isBlackListed(user.uuid)}
+                    <button
+                        type="button"
+                        class="wa-dropdown-item text-nowrap flex gap-2 items-center hover:bg-white/10 m-0 p-2 w-full text-sm rounded"
+                        data-testid="user-list-private-message"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            if (user.uuid) openPrivateMessage(user.uuid, user.username ?? "");
+                            closeChatUserMenu();
+                        }}
+                    >
+                        <IconSend class="w-4" />
+                        {$LL.chat.privateMessage.label()}
+                    </button>
+                {/if}
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <span

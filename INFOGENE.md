@@ -1,7 +1,7 @@
 # Contribuer au fork Infogène de WorkAdventure
 
 Ce dépôt est un fork de [workadventure/workadventure](https://github.com/workadventure/workadventure) (base `v1.32.6`)
-qui alimente notre WorkAdventure interne. Seul le service **`play`** (front + pusher) est notre image ; le reste est officiel.
+qui alimente notre WorkAdventure interne. La CI construit les images **`play`**, **`back`** et **`map-storage`** du fork.
 Les conventions de code de WorkAdventure sont dans `AGENTS.md` / `play/AGENTS.md`.
 
 Le développement du front se fait dans ce fork. Les cartes, bundles et configurations
@@ -43,11 +43,12 @@ confirmée côté VPS et comportement visuel confirmé par l'utilisateur.
 
 ## Vérifications automatiques d'une PR (`pr-checks`)
 
-Même chaîne que la CI d'origine de WorkAdventure, sur `play/` : typecheck, svelte-check, lint, formatage Prettier,
-complétude des traductions, tests unitaires. Pour les lancer en local (Node 24, `protoc` installé) :
+Sur `play/` : typecheck, svelte-check, lint, formatage Prettier, complétude des traductions et tests unitaires.
+Les contrats partagés et le back sont également vérifiés, avec les tests du back et les fichiers des messages privés.
+Pour les lancer en local (Node 24, `protoc` installé) :
 
 ```bash
-npm ci --workspace=workadventure-play
+npm ci --workspace=workadventure-play --workspace=workadventureback
 (cd messages && npm ci && npm run ts-proto)
 cd play
 npm run typesafe-i18n && npm run typecheck && npm run svelte-check && npm run lint && npm run pretty-check && npm test
@@ -95,6 +96,29 @@ Utiliser une image dont la largeur et la hauteur sont des puissances de deux (pa
 pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doivent utiliser
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
+
+### Auteur des annonces et messages privés natifs
+
+Les annonces texte affichent le nom de leur auteur, humain ou NPC. Le pusher ajoute `{uuid, name}`
+depuis l'identité de la connexion dans le Delta Quill et remplace tout auteur fourni par le client.
+Le texte enrichi est conservé, le nom est échappé par Svelte, les anciens messages sans auteur restent lisibles.
+Les droits et la portée des annonces, ainsi que le transport audio, gardent leur comportement existant.
+
+« Message privé » dans la fiche d'un avatar et le menu des utilisateurs envoie un texte à distance, sans déplacement
+ni conversation de proximité. La requête native `sendPrivateMessageQuery` adresse un UUID présent sur cette carte ;
+le back envoie l'événement réservé uniquement aux onglets du destinataire, avec l'identité réelle de l'expéditeur.
+Il refuse l'usage de cet événement par les scripts et la Room API. Aucune diffusion de secours n'est utilisée.
+Le texte est limité à 500 caractères, à trente messages par minute par connexion ; les destinataires absents
+et l'envoi à soi-même sont refusés. Le back et le front doivent prendre en charge cette nouvelle requête protobuf.
+
+La notification privée permet de répondre. L'historique de session conserve les cent derniers messages, est effacé
+à la fermeture de la connexion et respecte les utilisateurs bloqués. Le formulaire attend l'accusé du serveur
+avant d'ajouter un message sortant ; cet accusé confirme l'acceptation par le serveur, pas la lecture par le destinataire.
+En cas d'erreur, le brouillon reste disponible. Un résultat tardif après fermeture du formulaire ne modifie plus l'interface.
+
+Recette beta : envoyer un texte privé à un humain puis à un NPC éloigné, vérifier la réponse privée et l'absence
+du message chez un troisième joueur et dans le chat public. Tester aussi un départ du destinataire et une annonce
+texte enrichie dont le nom de l'auteur s'affiche. Comportement visuel à valider par un joueur.
 
 ### Bascule du chat entre bulle et réunion
 

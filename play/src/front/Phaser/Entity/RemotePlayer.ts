@@ -26,7 +26,8 @@ import chat from "../../Components/images/chat.png";
 import { userIsConnected } from "../../Stores/MenuStore";
 import RequiresLoginForChatModal from "../../Chat/Components/RequiresLoginForChatModal.svelte";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { IconCamera, IconUserPlus } from "@wa-icons";
+import { openPrivateMessage } from "../../Components/PrivateMessage/openPrivateMessage";
+import { IconCamera, IconUserPlus, IconSend } from "@wa-icons";
 import { modals } from "@wa-modals";
 
 /**
@@ -233,6 +234,14 @@ export class RemotePlayer extends Character implements ActivatableInterface {
             actionIcon: banIcon,
         });
         if (!blackListManager.isBlackListed(this.userUuid)) {
+            actions.push({
+                actionName: get(LL).chat.privateMessage.label(),
+                protected: false,
+                priority: 2,
+                style: "bg-white/10 hover:bg-white/30",
+                callback: () => openPrivateMessage(this.userUuid, this.playerName),
+                actionIcon: IconSend,
+            });
             actions.push({
                 actionName: get(LL).chat.userList.TalkTo(),
                 protected: false,

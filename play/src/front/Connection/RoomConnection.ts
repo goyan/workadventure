@@ -3,7 +3,7 @@ import Debug from "debug";
 import * as Sentry from "@sentry/svelte";
 
 import type { AreaData, AtLeast, EntityDimensions, WAMEntityData } from "@workadventure/map-editor";
-import { Deferred } from "@workadventure/shared-utils";
+import { Deferred, privateMessageEventName, privateMessageRequestSchema } from "@workadventure/shared-utils";
 import type {
     AddSpaceFilterMessage,
     AnswerMessage,
@@ -105,6 +105,7 @@ import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { asError } from "catch-unknown";
 import { abortAny } from "@workadventure/shared-utils/src/Abort/AbortAny";
 import { abortTimeout } from "@workadventure/shared-utils/src/Abort/AbortTimeout";
+import { clearPrivateMessages, receivePrivateMessage } from "../Stores/PrivateMessageStore";
 import type { ReceiveEventEvent } from "../Api/Events/ReceiveEventEvent";
 import type { SetPlayerVariableEvent } from "../Api/Events/SetPlayerVariableEvent";
 import { iframeListener } from "../Api/IframeListener";
@@ -483,6 +484,10 @@ export class RoomConnection implements RoomConnection {
                                     break;
                                 }
                                 case "receivedEventMessage": {
+                                    if (subMessage.receivedEventMessage.name === privateMessageEventName) {
+                                        receivePrivateMessage(subMessage.receivedEventMessage.data);
+                                        break;
+                                    }
                                     this._receivedEventMessageStream.next({
                                         name: subMessage.receivedEventMessage.name,
                                         data: subMessage.receivedEventMessage.data,
@@ -1149,6 +1154,14 @@ export class RoomConnection implements RoomConnection {
                 },
             },
         });
+    }
+
+    public async emitPrivateMessage(recipientUuid: string, text: string): Promise<void> {
+        const answer = await this.query({
+            $case: "sendPrivateMessageQuery",
+            sendPrivateMessageQuery: privateMessageRequestSchema.parse({ recipientUuid, text }),
+        });
+        if (answer.$case !== "sendPrivateMessageAnswer") throw new Error("Unexpected private message answer");
     }
 
     public async emitScriptableEvent(name: string, data: unknown, targetUserIds: number[] | undefined): Promise<void> {
@@ -2267,6 +2280,7 @@ export class RoomConnection implements RoomConnection {
      * Sends a message to all observers: we are not going to send anything anymore on streams.
      */
     private completeStreams(): void {
+        clearPrivateMessages();
         this._errorMessageStream.complete();
         this._errorScreenMessageStream.complete();
         this._teleportMessageMessageStream.complete();

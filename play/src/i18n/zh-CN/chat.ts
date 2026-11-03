@@ -19,6 +19,11 @@ const chat: DeepPartial<Translation["chat"]> = {
     typing: "正在输入...",
     users: "用户",
     chat: "聊天",
+    privateMessage: {
+        label: "私信",
+        unavailable: "无法确认发送。对方可能已离开此地图，请稍后重试。",
+        sending: "发送中…",
+    },
     userList: {
         disconnected: "未连接到世界",
         isHere: "在此地图上",
