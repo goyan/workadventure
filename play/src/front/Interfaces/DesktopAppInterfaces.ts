@@ -14,8 +14,13 @@ export interface DesktopCapturerSource {
 export interface DesktopSpotifyTrack {
     title: string;
     artist: string;
-    /** https://open.spotify.com/track/… */
+    /** https://open.spotify.com/track/…, or empty when the player gives no public link (Apple Music). */
     url: string;
+    album?: string;
+    /** https://i.scdn.co/image/… (Spotify only). */
+    artworkUrl?: string;
+    /** Spotify when absent. */
+    source?: "spotify" | "apple-music";
 }
 
 /** Statuses a desktop app may request (see DESKTOP_STATUS_REQUESTS in Api/Desktop/index.ts). */

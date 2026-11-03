@@ -2101,6 +2101,11 @@ message SpotifyListening {
   // Set while the user takes part in the Spotify Jam shared in a listening zone.
   string jamAreaId = 4;
   string jamAreaName = 5;
+  string albumName = 6;
+  // Cover of the album, on the Spotify image CDN only (https://i.scdn.co/image/…).
+  string artworkUrl = 7;
+  // Where the track plays: "spotify" or "apple-music" (empty for older clients: Spotify).
+  string source = 8;
 }
 
 /*message PartialSpaceUser{

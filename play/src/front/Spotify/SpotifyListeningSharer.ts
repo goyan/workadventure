@@ -130,6 +130,9 @@ export class SpotifyListeningSharer {
             trackUrl: this.track?.url ?? "",
             jamAreaId: this.jam?.areaId ?? "",
             jamAreaName: this.jam?.areaName ?? "",
+            albumName: this.track?.album ?? "",
+            artworkUrl: this.track?.artworkUrl ?? "",
+            source: this.track?.source ?? "",
         };
         if (JSON.stringify(listening) === JSON.stringify(this.published)) {
             return;
