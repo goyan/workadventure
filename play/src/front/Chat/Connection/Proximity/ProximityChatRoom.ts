@@ -1312,23 +1312,6 @@ export class ProximityChatRoom implements ChatRoom {
 
         this.saveChatState();
 
-        const actualStatus = get(availabilityStatusStore);
-        if (!isAChatRoomIsVisible()) {
-            selectedRoomStore.set(this);
-            navChat.switchToChat();
-            if (
-                !get(requestedMicrophoneState) &&
-                !get(requestedCameraState) &&
-                (actualStatus === AvailabilityStatus.ONLINE || actualStatus === AvailabilityStatus.AWAY)
-            ) {
-                // If the user is not on the mobile, open the chat
-                // The user experience is disrupted by the chat on mobile
-                if (!isMediaBreakpointUp("md")) {
-                    chatVisibilityStore.set(true);
-                    chatNotificationStore.clearRoom(this.id);
-                }
-            }
-        }
         await this.throwIfAborted(joinSignal, spaceForThisJoin);
 
         let users: SpaceUserExtended[] = [];
@@ -1489,6 +1472,25 @@ export class ProximityChatRoom implements ChatRoom {
         } catch (e) {
             initialJoinEvents.reject(asError(e));
             throw e;
+        }
+
+        // Follow confirmed local conversation transitions while preserving an open Matrix conversation.
+        const selectedRoom = get(selectedRoomStore);
+        if (!isAChatRoomIsVisible() || selectedRoom instanceof ProximityChatRoom) {
+            selectedRoomStore.set(this);
+            navChat.switchToChat();
+            const actualStatus = get(availabilityStatusStore);
+            if (
+                (this.currentChatVisibility && this.currentMatrixRoom instanceof ProximityChatRoom) ||
+                (!get(requestedMicrophoneState) &&
+                    !get(requestedCameraState) &&
+                    (actualStatus === AvailabilityStatus.ONLINE || actualStatus === AvailabilityStatus.AWAY) &&
+                    !isMediaBreakpointUp("md"))
+            ) {
+                // Preserve an open local chat even when the old space leaves before this join completes.
+                chatVisibilityStore.set(true);
+                chatNotificationStore.clearRoom(this.id);
+            }
         }
 
         this.joinSpaceAbortController = undefined;
@@ -1794,6 +1796,11 @@ export class ProximityChatRoom implements ChatRoom {
     }
 
     private restoreChatState() {
+        const selectedRoom = get(selectedRoomStore);
+        // A late departure from the previous space must not close the newly selected local chat.
+        if (selectedRoom instanceof ProximityChatRoom && selectedRoom !== this && get(selectedRoom.isJoined)) {
+            return;
+        }
         if (get(selectedRoomStore) == this && get(shouldRestoreChatStateStore)) {
             selectedRoomStore.set(this.currentMatrixRoom);
         }

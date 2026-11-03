@@ -3,10 +3,12 @@ import * as Phaser from "phaser";
 globalThis.Phaser = Phaser;
 
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { mock } from "vitest-mock-extended";
 import { Subject } from "rxjs";
 import { get, writable } from "svelte/store";
 import type { ProximityPoll, SpaceState } from "@workadventure/shared-utils";
 import { emptySpaceState } from "@workadventure/shared-utils";
+import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { AvailabilityStatus, FilterType } from "@workadventure/messages";
 import { loadLocaleAsync } from "../../../../../i18n/i18n-util.async";
 import { setLocale } from "../../../../../i18n/i18n-svelte";
@@ -16,8 +18,11 @@ import type { MessageUserJoined } from "../../../../Connection/ConnexionModels";
 import { RemotePlayersRepository } from "../../../../Phaser/Game/RemotePlayersRepository";
 import { iframeListener } from "../../../../Api/IframeListener";
 import { ProximityChatRoom } from "../ProximityChatRoom";
-import { DEFAULT_PROXIMITY_SPACE_NAME } from "../ProximityChatRoomManager";
+import { DEFAULT_PROXIMITY_SPACE_NAME, type ProximityChatRoomKind } from "../ProximityChatRoomManager";
 import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
+import { chatVisibilityStore } from "../../../../Stores/ChatStore";
+import { navChat, shouldRestoreChatStateStore } from "../../../Stores/ChatStore";
+import type { ChatConversation } from "../../ChatConnection";
 
 vi.mock("../../../../Api/IframeListener", () => {
     // Anything the room (or a module it pulls in) calls is a spy; anything it subscribes to is a stream.
@@ -39,7 +44,9 @@ vi.mock("../../../../Phaser/Game/GameScene", () => ({ GameScene: class {} }));
 vi.mock("../../../../Notification/NotificationManager", () => ({
     notificationManager: { createNotification: vi.fn() },
 }));
-vi.mock("../../../../WebRtc/FaviconManager", () => ({ faviconManager: { pushNotificationFavicon: vi.fn() } }));
+vi.mock("../../../../WebRtc/FaviconManager", () => ({
+    faviconManager: { pushNotificationFavicon: vi.fn(), pushOriginalFavicon: vi.fn() },
+}));
 vi.mock("../../../../Components/ActionBar/AvailabilityStatus/statusChanger", () => ({
     statusChanger: { setUserNameInteraction: vi.fn(), applyInteractionRules: vi.fn(), changeStatusTo: vi.fn() },
 }));
@@ -98,7 +105,7 @@ function player(userId: number): MessageUserJoined {
     };
 }
 
-function createFakeSpace(users: Map<string, SpaceUserExtended>) {
+function createFakeSpace(users: Map<string, SpaceUserExtended>, spaceName = "bubble") {
     const observeUserJoined = new Subject<SpaceUserExtended>();
     const observeUserLeft = new Subject<SpaceUserExtended>();
     const stateStore = writable<SpaceState>(emptySpaceState());
@@ -109,7 +116,7 @@ function createFakeSpace(users: Map<string, SpaceUserExtended>) {
         stateStore.set(state);
     };
     const space = {
-        getName: () => "bubble",
+        getName: () => spaceName,
         destroyed: false,
         usersStore: writable(users),
         getMetadata: () => new Map(),
@@ -119,12 +126,20 @@ function createFakeSpace(users: Map<string, SpaceUserExtended>) {
         observeUserJoined,
         observeUserLeft,
         getUsers: () => Promise.resolve(users),
+        emitPublicMessage: vi.fn(),
     } as unknown as SpaceInterface;
     return { space, observeUserJoined, observeUserLeft, users, stateStore, receiveState };
 }
 
-function createRoom(space: SpaceInterface, repository: RemotePlayersRepository): ProximityChatRoom {
-    const spaceRegistry = { joinSpace: () => Promise.resolve(space) } as unknown as SpaceRegistryInterface;
+function createRoom(
+    space: SpaceInterface,
+    repository: RemotePlayersRepository,
+    kind: ProximityChatRoomKind = "default",
+): ProximityChatRoom {
+    const spaceRegistry = mock<SpaceRegistryInterface>({
+        joinSpace: () => Promise.resolve(space),
+        leaveSpace: () => Promise.resolve(),
+    });
     const soundManager = {
         playBubbleInSound: vi.fn(),
         playBubbleOutSound: vi.fn(),
@@ -132,9 +147,9 @@ function createRoom(space: SpaceInterface, repository: RemotePlayersRepository):
         playMeetingOutSound: vi.fn(),
     } as unknown as ConstructorParameters<typeof ProximityChatRoom>[7];
     return new ProximityChatRoom(
-        DEFAULT_PROXIMITY_SPACE_NAME,
+        kind === "default" ? DEFAULT_PROXIMITY_SPACE_NAME : space.getName(),
         "Proximity",
-        "default",
+        kind,
         MY_SPACE_USER_ID,
         spaceRegistry,
         iframeListener,
@@ -161,8 +176,151 @@ describe("ProximityChatRoom join events", () => {
     });
 
     afterEach(() => {
+        selectedRoomStore.set(undefined);
+        chatVisibilityStore.set(false);
+        shouldRestoreChatStateStore.set(false);
         vi.clearAllMocks();
         vi.useRealTimers();
+    });
+
+    it("switches an open bubble chat to the meeting and sends to that meeting space", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const bubble = createRoom(createFakeSpace(users).space, repository);
+        await bubble.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const meetingSpace = createFakeSpace(users, "meeting").space;
+        const meeting = createRoom(meetingSpace, repository, "meeting");
+
+        await meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false);
+
+        expect(get(selectedRoomStore)?.id).toBe(meeting.id);
+        get(selectedRoomStore)?.sendMessage("Message dans la réunion");
+        expect(meetingSpace.emitPublicMessage).toHaveBeenCalledWith({
+            $case: "spaceMessage",
+            spaceMessage: expect.objectContaining({ message: "Message dans la réunion" }),
+        });
+        // The server can remove the old bubble after the meeting has joined.
+        await bubble.leaveSpace("bubble");
+        expect(get(selectedRoomStore)?.id).toBe(meeting.id);
+        expect(get(chatVisibilityStore)).toBe(true);
+    });
+
+    it("switches an open meeting chat to the newly joined bubble", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const meeting = createRoom(createFakeSpace(users, "meeting").space, repository, "meeting");
+        await meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const bubbleSpace = createFakeSpace(users).space;
+        const bubble = createRoom(bubbleSpace, repository);
+
+        await bubble.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+
+        expect(get(selectedRoomStore)?.id).toBe(bubble.id);
+        get(selectedRoomStore)?.sendMessage("Message dehors");
+        expect(bubbleSpace.emitPublicMessage).toHaveBeenCalledWith({
+            $case: "spaceMessage",
+            spaceMessage: expect.objectContaining({ message: "Message dehors" }),
+        });
+        await meeting.leaveSpace("meeting", true);
+        expect(get(selectedRoomStore)?.id).toBe(bubble.id);
+        expect(get(chatVisibilityStore)).toBe(true);
+    });
+
+    it("keeps an open private conversation selected while joining a meeting", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const privateRoom = mock<ChatConversation>({
+            id: "private-conversation",
+            conversationKind: "room",
+            isEncrypted: writable(false),
+            ensureTimelineInitialized: () => Promise.resolve(),
+        });
+        selectedRoomStore.set(privateRoom);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const meeting = createRoom(createFakeSpace(users, "meeting").space, repository, "meeting");
+
+        await meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false);
+
+        expect(get(selectedRoomStore)).toBe(privateRoom);
+        expect(get(chatVisibilityStore)).toBe(true);
+    });
+
+    it("does not select a meeting whose admission is aborted while waiting for participant data", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const bubble = createRoom(createFakeSpace(users).space, repository);
+        await bubble.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const meetingRepository = new RemotePlayersRepository();
+        const meeting = createRoom(createFakeSpace(users, "meeting").space, meetingRepository, "meeting");
+        const controller = new AbortController();
+        const joining = meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false, controller.signal);
+        await flush();
+
+        controller.abort();
+        meetingRepository.addPlayer(player(2));
+
+        await expect(joining).rejects.toThrow(AbortError);
+        expect(get(selectedRoomStore)?.id).toBe(bubble.id);
+        expect(get(chatVisibilityStore)).toBe(true);
+    });
+
+    it("keeps the chat open when the old bubble leaves before the meeting admission completes", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const bubble = createRoom(createFakeSpace(users).space, repository);
+        await bubble.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const meetingRepository = new RemotePlayersRepository();
+        const meeting = createRoom(createFakeSpace(users, "meeting").space, meetingRepository, "meeting");
+        const joining = meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false);
+        await flush();
+
+        await bubble.leaveSpace("bubble");
+        meetingRepository.addPlayer(player(2));
+        await joining;
+
+        expect(get(selectedRoomStore)?.id).toBe(meeting.id);
+        expect(get(chatVisibilityStore)).toBe(true);
+    });
+
+    it("preserves a private conversation opened while the meeting admission is pending", async () => {
+        const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
+        const repository = new RemotePlayersRepository();
+        repository.addPlayer(player(2));
+        const bubble = createRoom(createFakeSpace(users).space, repository);
+        await bubble.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+        chatVisibilityStore.set(true);
+        navChat.switchToChat();
+        const meetingRepository = new RemotePlayersRepository();
+        const meeting = createRoom(createFakeSpace(users, "meeting").space, meetingRepository, "meeting");
+        const joining = meeting.joinSpace("meeting", [], true, FilterType.ALL_USERS, false);
+        await flush();
+        const privateRoom = mock<ChatConversation>({
+            id: "private-conversation",
+            conversationKind: "room",
+            isEncrypted: writable(false),
+            ensureTimelineInitialized: () => Promise.resolve(),
+        });
+
+        selectedRoomStore.set(privateRoom);
+        meetingRepository.addPlayer(player(2));
+        await joining;
+
+        expect(get(selectedRoomStore)).toBe(privateRoom);
+        expect(get(chatVisibilityStore)).toBe(true);
     });
 
     it("waits for the zone data of users already in the space and announces them all in one go", async () => {
