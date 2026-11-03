@@ -104,11 +104,18 @@ facultatifs de `window.WAD`. `onStatusRequest` laisse le client desktop
 ([workadventure-desktop](https://github.com/aminekun90/workadventure-desktop)) choisir En ligne, Occupé,
 Ne pas déranger ou De retour bientôt (mêmes choix que le menu de statut) ; `reportStatus` lui transmet le
 statut effectif et son libellé. Sans ces membres, rien ne change.
-Bruits de pas (`Phaser/Game/FootstepSounds.ts`, `FootstepSurfaces.ts`) : un pas très discret (volume max 0,03, atténué
-jusqu'à 8 cases) pour les joueurs qui marchent dans la même zone que soi, selon le sol sous leurs pieds. Le son vient de la
+Bruits de pas (`Phaser/Game/FootstepSounds.ts`, `FootstepSurfaces.ts`) : un pas très discret (volume max 0,015, atténué
+jusqu'à 8 cases) pour les joueurs qui marchent dans la même zone que soi, selon le sol sous leurs pieds. Chaque pas varie
+(enregistrement tiré au hasard, hauteur, volume, foulée, placement gauche-droite). Le son vient de la
 propriété facultative `footstepSound` du prefab (`grass`, `wood`, `carpet`, `stone`, schéma `libs/map-editor`), sinon de la
 famille du sol de la couche carte, sinon bois dans une zone et herbe dehors. Sons CC0 de Kenney
 (`resources/objects/footsteps/CREDITS.txt`). Les catalogues de sols (dépôt d'infra) doivent porter `footstepSound`.
+Écoute d'une bulle depuis son bord, derrière `ENABLE_BUBBLE_LISTENING` (back, désactivée par défaut) : un joueur arrêté
+à une case et demie d'une bulle, hors bulle et sans statut silencieux, l'entend à 4 % du volume, plus bas en s'éloignant,
+sans vidéo ni publication. Une bulle verrouillée n'est pas entendue. Le back choisit les auditeurs (`Model/BubbleListeners.ts`)
+et les fait entrer dans l'espace de la bulle avec `SpaceUser.listenerState` (hors filtre `ALL_USERS`, mais reliés en
+WebRTC aux membres). Le front (`WebRtc/BubbleListeningManager.ts`, `Components/Video/BubbleListeningHint.svelte`) joue
+les voix et affiche « Hervé vous entend » aux membres.
 Tenir cette liste à jour à chaque patch.
 
 ### Auteur des annonces et messages privés natifs
