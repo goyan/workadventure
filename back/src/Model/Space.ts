@@ -308,7 +308,8 @@ export class Space implements CustomJsonReplacerInterface, ICommunicationSpace {
     private filterOneUser(user: SpaceUser): boolean {
         switch (this._filterType) {
             case FilterType.ALL_USERS: {
-                return true;
+                // A listener at the edge of a bubble is connected to its members but is not one of them.
+                return !user.listenerState;
             }
             case FilterType.LIVE_STREAMING_USERS: {
                 return user.megaphoneState;

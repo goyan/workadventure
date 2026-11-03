@@ -393,6 +393,10 @@ export class SocketManager {
                 (currentZone: ZonePosition, group: Group, listener: RoomSocket) => {
                     this.onUserEntersOrLeavesBubble(currentZone, group, listener);
                 },
+                {
+                    startListening: (user: User, group: Group) => this.startListeningToBubble(user, group),
+                    stopListening: (user: User, group: Group) => this.stopListeningToBubble(user, group),
+                },
             )
                 .then((gameRoom) => {
                     // The room may have been invalidated while it was still loading.
@@ -662,7 +666,23 @@ export class SocketManager {
                 // FIXME: before fixing the fact that spaceName is undefined, let's try to understand why I don't have any info about the user in the error caught above
                 spaceName: group.spaceName,
                 propertiesToSync: ["cameraState", "microphoneState", "screenSharingState"],
+                listener: false,
             },
+        });
+    }
+
+    /** The user stands at the edge of the bubble: they hear it without joining it (see BubbleListeners). */
+    private startListeningToBubble(user: User, group: Group): void {
+        user.write({
+            $case: "joinSpaceRequestMessage",
+            joinSpaceRequestMessage: { spaceName: group.spaceName, propertiesToSync: [], listener: true },
+        });
+    }
+
+    private stopListeningToBubble(user: User, group: Group): void {
+        user.write({
+            $case: "leaveSpaceRequestMessage",
+            leaveSpaceRequestMessage: { spaceName: group.spaceName, listener: true },
         });
     }
 
@@ -672,6 +692,7 @@ export class SocketManager {
             $case: "leaveSpaceRequestMessage",
             leaveSpaceRequestMessage: {
                 spaceName: group.spaceName,
+                listener: false,
             },
         });
     }

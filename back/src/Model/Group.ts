@@ -218,6 +218,10 @@ export class Group implements Movable, CustomJsonReplacerInterface {
         }
     }
 
+    get isDestroyed(): boolean {
+        return this.wasDestroyed;
+    }
+
     get getSize() {
         return this.users.size;
     }

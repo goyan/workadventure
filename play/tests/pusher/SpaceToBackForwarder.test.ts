@@ -47,7 +47,7 @@ describe("SpaceToBackForwarder", () => {
             const spaceForwarder = new SpaceToBackForwarder(mockSpace, eventProcessor);
 
             await expect(
-                async () => await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS),
+                async () => await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS, { listener: false }),
             ).rejects.toThrow();
         });
 
@@ -64,7 +64,7 @@ describe("SpaceToBackForwarder", () => {
             const spaceForwarder = new SpaceToBackForwarder(mockSpace, eventProcessor);
 
             await expect(
-                async () => await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS),
+                async () => await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS, { listener: false }),
             ).rejects.toThrow();
         });
 
@@ -114,7 +114,7 @@ describe("SpaceToBackForwarder", () => {
 
             const spaceForwarder = new SpaceToBackForwarder(mockSpace, eventProcessor);
 
-            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS);
+            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS, { listener: false });
             await flushPromises();
 
             expect(mockSendQuery).toHaveBeenCalledWith({
@@ -187,7 +187,7 @@ describe("SpaceToBackForwarder", () => {
 
             const spaceForwarder = new SpaceToBackForwarder(mockSpace, eventProcessor);
 
-            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS);
+            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS, { listener: false });
             await flushPromises();
 
             expect(mockNotifyMeFunction).toHaveBeenCalledWith(mockSocket, {
@@ -257,7 +257,7 @@ describe("SpaceToBackForwarder", () => {
 
             const spaceForwarder = new SpaceToBackForwarder(mockSpace, eventProcessor);
 
-            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS);
+            await spaceForwarder.registerUser(mockSocket, FilterType.ALL_USERS, { listener: false });
             await flushPromises();
 
             expect(mockNotifyMeFunction).not.toHaveBeenCalled();

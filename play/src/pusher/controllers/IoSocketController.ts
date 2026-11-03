@@ -947,6 +947,8 @@ export class IoSocketController {
                                                 message.message.queryMessage.query.joinSpaceQuery.propertiesToSync,
                                                 {
                                                     signal: abortController.signal,
+                                                    listener:
+                                                        message.message.queryMessage.query.joinSpaceQuery.listener,
                                                 },
                                             );
 

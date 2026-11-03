@@ -24,7 +24,7 @@ import {
 const debug = Debug("space-to-back-forwarder");
 
 export interface SpaceToBackForwarderInterface {
-    registerUser(client: PusherWebSocket, filterType: FilterType): Promise<void>;
+    registerUser(client: PusherWebSocket, filterType: FilterType, options: { listener: boolean }): Promise<void>;
     updateUser(spaceUser: PartialSpaceUser, updateMask: string[]): void;
     unregisterUser(socket: PusherWebSocket): Promise<void>;
     updateMetadata(metadata: { [key: string]: unknown }, senderId: string): void;
@@ -43,7 +43,11 @@ export class SpaceToBackForwarder implements SpaceToBackForwarderInterface {
         private readonly eventProcessor: EventProcessor,
         private readonly _clientEventsEmitter = clientEventsEmitter,
     ) {}
-    async registerUser(client: PusherWebSocket, filterType: FilterType): Promise<void> {
+    async registerUser(
+        client: PusherWebSocket,
+        filterType: FilterType,
+        { listener }: { listener: boolean },
+    ): Promise<void> {
         const socketData = client.getUserData();
         const spaceUserId = socketData.spaceUserId;
 
@@ -91,6 +95,7 @@ export class SpaceToBackForwarder implements SpaceToBackForwarderInterface {
                 screenSharingState: false,
                 microphoneState: false,
                 megaphoneState: false,
+                listenerState: listener,
                 characterTextures: socketData.characterTextures,
                 visitCardUrl: socketData.visitCardUrl ?? undefined,
                 chatID: socketData.chatID ?? undefined,
