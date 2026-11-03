@@ -10,6 +10,12 @@ const video: DeepPartial<Translation["video"]> = {
     reconnecting: "재연결 중...",
     persistent_connection_issue: "재연결 중... 연결이 불안정합니다...",
     click_to_unblock: "클릭하여 차단 해제",
+    bubble_listening: {
+        heard_by_one: "{name}님이 듣고 있어요",
+        heard_by_two: "{first}님과 {second}님이 듣고 있어요",
+        heard_by_many: "근처의 {count}명이 듣고 있어요",
+        overhearing: "{names}의 대화가 들려요",
+    },
     click_and_drag_to_resize: "클릭하고 드래그하여 크기 조정",
 };
 

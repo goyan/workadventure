@@ -102,6 +102,12 @@ export interface SpaceInterface {
     watchInitSpaceUsersMessage(): Observable<InitSpaceUsersMessage>;
     videoStreamStore: Readable<Map<string, VideoBox>>;
     screenShareStreamStore: Readable<Map<string, VideoBox>>;
+    /** Joined from the edge of a bubble: hears its members at a low volume, publishes nothing, shows no video. */
+    readonly listener: boolean;
+    /** For a listener: the members it hears. */
+    readonly heardVideoBoxesStore: Readable<Map<string, VideoBox>>;
+    /** For a member of a bubble: the spaceUserIds of the users at its edge who hear it. */
+    readonly listenersStore: Readable<string[]>;
 
     allVideoStreamStore: MapStore<string, VideoBox>;
     allScreenShareStreamStore: MapStore<string, VideoBox>;

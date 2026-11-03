@@ -17,6 +17,8 @@ export interface SpaceRegistryInterface {
             canRecord?: boolean;
             // What the space is, declared to the back; a space that declares nothing is measured as nothing.
             spaceKind?: SpaceKind;
+            // Joins a bubble from its edge, to hear it (see Space.listener).
+            listener?: boolean;
         },
     ): Promise<SpaceInterface>;
     exist(spaceName: string): boolean;
@@ -24,6 +26,10 @@ export interface SpaceRegistryInterface {
     destroy(): Promise<void>;
     videoStreamStore: Readable<Map<string, VideoBox>>;
     screenShareStreamStore: Readable<Map<string, VideoBox>>;
+    /** The bubble members heard from its edge, in the spaces joined as a listener. */
+    readonly heardVideoBoxesStore: Readable<VideoBox[]>;
+    /** The users at the edge of our bubbles who hear them (spaceUserIds). */
+    readonly bubbleListenersStore: Readable<string[]>;
     readonly isLiveStreamingStore: Readable<boolean>;
     readonly isLiveStreamingAudioStore: Readable<boolean>;
     readonly raisedHandSectionsStore: Readable<RaisedHandSection[]>;

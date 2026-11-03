@@ -10,6 +10,12 @@ const video: DeepPartial<Translation["video"]> = {
     reconnecting: "Znowu zwjazujo so...",
     persistent_connection_issue: "Znowu zwjazujo so... Njestabilny zwjazk...",
     click_to_unblock: "Klikńće, zo byšće blokowanje wotstronił",
+    bubble_listening: {
+        heard_by_one: "{name} was słyši",
+        heard_by_two: "{first} a {second} was słyšitaj",
+        heard_by_many: "{count} ludźi pódla was słyši",
+        overhearing: "Słyšiće {names}",
+    },
     click_and_drag_to_resize: "Klikńće a ćahńće, zo byšće wulkosć změnił",
 };
 

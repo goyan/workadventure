@@ -68,6 +68,14 @@ export class Space implements SpaceInterface {
     public allScreenShareStreamStore: MapStore<string, VideoBox> = new MapStore<string, VideoBox>();
     public readonly videoStreamStore: Readable<Map<string, VideoBox>>;
     public readonly screenShareStreamStore: Readable<Map<string, VideoBox>>;
+    /** For a listener: the members it hears. Empty for a member, whose video boxes are in videoStreamStore. */
+    public readonly heardVideoBoxesStore: Readable<Map<string, VideoBox>>;
+    /**
+     * For a member of a bubble: the users at its edge who hear it (their spaceUserIds). They are not users of the
+     * space, they only show up as peers connected to us.
+     */
+    private readonly _videoPeerIdsStore = new MapStore<string, true>();
+    public readonly listenersStore: Readable<string[]>;
     public readonly state: SpaceStateManager;
     // private readonly blockedUsersVideoBox: Map<string, VideoBox> = new Map<string, VideoBox>();
     // private readonly blockedUsersScreenShareVideoBox: Map<string, VideoBox> = new Map<string, VideoBox>();
@@ -139,6 +147,8 @@ export class Space implements SpaceInterface {
         // True if the user has the right to start recording in this space
         canRecord: boolean,
         public readonly kind: SpaceKind | undefined,
+        /** Joined from the edge of a bubble: hears its members at a low volume, publishes nothing, shows no video. */
+        public readonly listener: boolean,
         private _blackListManager: BlackListManager = blackListManager,
         private _highlightedEmbedScreenStore = highlightedEmbedScreen,
     ) {
@@ -223,7 +233,7 @@ export class Space implements SpaceInterface {
             };
         });
 
-        this.videoStreamStore = derived(
+        const memberVideoBoxesStore = derived(
             [this.allVideoStreamStore, this.usersStore],
             ([videoStreamStore, usersStore]) => {
                 const newVideoStreamStore = new Map<string, VideoBox>();
@@ -235,7 +245,17 @@ export class Space implements SpaceInterface {
                 return newVideoStreamStore;
             },
         );
-        this.screenShareStreamStore = derived(
+        // Derived from the users rather than tracked on each event: a member's peer often connects before its user is
+        // known (initUsers, addUser), and must not be taken for a listener then.
+        this.listenersStore = derived([this._videoPeerIdsStore, this.usersStore], ([$peerIds, $users]) =>
+            this.filterType === FilterType.ALL_USERS && !this.listener
+                ? [...$peerIds.keys()].filter((spaceUserId) => !$users.has(spaceUserId))
+                : [],
+        );
+        // A listener keeps the members out of the video grid: it only plays their voice, through heardVideoBoxesStore.
+        this.videoStreamStore = this.listener ? readable(new Map<string, VideoBox>()) : memberVideoBoxesStore;
+        this.heardVideoBoxesStore = this.listener ? memberVideoBoxesStore : readable(new Map<string, VideoBox>());
+        const memberScreenSharesStore = derived(
             [this.allScreenShareStreamStore, this.usersStore],
             ([screenShareStreamStore, usersStore]) => {
                 const newScreenShareStreamStore = new Map<string, VideoBox>();
@@ -247,6 +267,7 @@ export class Space implements SpaceInterface {
                 return newScreenShareStreamStore;
             },
         );
+        this.screenShareStreamStore = this.listener ? readable(new Map<string, VideoBox>()) : memberScreenSharesStore;
 
         this._isRecordingStore = derived(this.state.observe("recording"), ($recording) => $recording.status !== "idle");
 
@@ -294,8 +315,9 @@ export class Space implements SpaceInterface {
         this._isSpeakerStreamingStore = writable(false);
         this._isListenerStreamingStore = writable(false);
 
-        // Condition for ALL_USERS filter type with video properties
-        const isAllUsersVideoSpace = filterType === FilterType.ALL_USERS && this.isVideoSpace();
+        // Condition for ALL_USERS filter type with video properties.
+        // A listener at the edge of a bubble hears it but never streams to it
+        const isAllUsersVideoSpace = filterType === FilterType.ALL_USERS && this.isVideoSpace() && !listener;
 
         // Derived store: true if speaker OR listener streaming is active, or if ALL_USERS video space
         this._isStreamingVideoStore = derived(
@@ -375,10 +397,12 @@ export class Space implements SpaceInterface {
             // True if the user is allowed to start/stop recording in the space
             canRecord?: boolean;
             spaceKind?: SpaceKind;
+            listener?: boolean;
         },
     ): Promise<Space> {
         const spaceUserId = await connection.emitJoinSpace(name, filterType, propertiesToSync, {
             signal,
+            ...(options?.listener && { listener: true }),
         });
         return new Space(
             name,
@@ -389,6 +413,7 @@ export class Space implements SpaceInterface {
             spaceUserId,
             options?.canRecord ?? false,
             options?.spaceKind,
+            options?.listener ?? false,
         );
     }
 
@@ -991,6 +1016,14 @@ export class Space implements SpaceInterface {
     public getScreenSharingPeerVideoBox(id: SpaceUser["spaceUserId"]): VideoBox | undefined {
         return this.allScreenShareStreamStore.get(id);
     }
+    /**
+     * In a bubble, everyone connected to us is a user of the space, except the listeners at its edge: they are out of
+     * its filter (see the back's Space.filterOneUser), so we only know them by their peer connection.
+     */
+    private isBubbleListener(spaceUserId: SpaceUser["spaceUserId"]): boolean {
+        return this.filterType === FilterType.ALL_USERS && !this.listener && !this._users.has(spaceUserId);
+    }
+
     public getVideoPeerVideoBox(id: SpaceUser["spaceUserId"]): VideoBox | undefined {
         const videoBox = this.allVideoStreamStore.get(id);
         if (!videoBox) {
@@ -1134,6 +1167,8 @@ export class Space implements SpaceInterface {
     }
 
     public isVideoSpace(): boolean {
+        // A listener syncs nothing of its own, but it hears a bubble: a video space
+        if (this.listener) return true;
         return this._propertiesToSync.some((prop) =>
             ["cameraState", "microphoneState", "screenSharingState"].includes(prop),
         );
@@ -1311,6 +1346,7 @@ export class Space implements SpaceInterface {
                 this._propertiesToSync,
                 {
                     signal,
+                    ...(this.listener && { listener: true }),
                 },
             );
 
@@ -1352,6 +1388,11 @@ export class Space implements SpaceInterface {
                 return;
             }
 
+            this._videoPeerIdsStore.set(spaceUserId, true);
+            if (this.isBubbleListener(spaceUserId)) {
+                return;
+            }
+
             const videoBox = this.getVideoPeerVideoBox(spaceUserId);
 
             if (!videoBox) {
@@ -1376,6 +1417,7 @@ export class Space implements SpaceInterface {
                 console.error("observeVideoPeerRemoved : peer has no spaceUserId");
                 return;
             }
+            this._videoPeerIdsStore.delete(spaceUserId);
 
             const videoBox = this.getVideoPeerVideoBox(spaceUserId);
 

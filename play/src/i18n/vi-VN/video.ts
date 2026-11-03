@@ -11,6 +11,12 @@ const video: DeepPartial<Translation["video"]> = {
     persistent_connection_issue: "Đang kết nối lại... Kết nối không ổn định...",
     click_and_drag_to_resize: "Bấm và kéo để thay đổi kích thước",
     click_to_unblock: "Bấm để bỏ chặn",
+    bubble_listening: {
+        heard_by_one: "{name} có thể nghe thấy bạn",
+        heard_by_two: "{first} và {second} có thể nghe thấy bạn",
+        heard_by_many: "{count} người gần đó có thể nghe thấy bạn",
+        overhearing: "Bạn nghe thấy {names}",
+    },
 };
 
 export default video;

@@ -14,6 +14,12 @@ export const raisedHandSectionsStore = new ForwardableStore<RaisedHandSection[]>
 // Spaces the local user syncs their media with (SpaceRegistry.spacesSynchronizingMedia): where a hand can be raised.
 export const mediaSynchronizedSpacesStore = new ForwardableStore<SpaceInterface[]>([]);
 
+// The bubble members heard from its edge (SpaceRegistry.heardVideoBoxesStore): their voice only, at a low volume.
+export const heardVideoBoxesStore = new ForwardableStore<VideoBox[]>([]);
+
+// The users at the edge of our bubble who hear it (SpaceRegistry.bubbleListenersStore), by spaceUserId.
+export const bubbleListenersStore = new ForwardableStore<string[]>([]);
+
 export const videoStreamElementsStore = derived(videoStreamStore, ($videoStreamStore) => {
     return Array.from($videoStreamStore.values());
 });

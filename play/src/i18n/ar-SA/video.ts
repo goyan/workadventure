@@ -10,6 +10,12 @@ const video: DeepPartial<Translation["video"]> = {
     reconnecting: "جاري إعادة الاتصال...",
     persistent_connection_issue: "جاري إعادة الاتصال... اتصال غير مستقر...",
     click_to_unblock: "انقر لإلغاء الحظر",
+    bubble_listening: {
+        heard_by_one: "{name} يمكنه سماعك",
+        heard_by_two: "{first} و{second} يمكنهما سماعك",
+        heard_by_many: "{count} أشخاص بالقرب يمكنهم سماعك",
+        overhearing: "أنت تسمع {names}",
+    },
     click_and_drag_to_resize: "انقر واسحب لتغيير الحجم",
 };
 
