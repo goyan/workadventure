@@ -1,0 +1,2 @@
+Footstep sounds: "RPG Audio" by Kenney (Kenney Vleugels, https://kenney.nl/assets/rpg-audio), CC0 1.0 (public domain).
+Files kept: footstep00 to footstep03 (footstep-0.ogg to footstep-3.ogg).

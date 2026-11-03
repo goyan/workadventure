@@ -229,6 +229,7 @@ import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
+import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -385,6 +386,7 @@ export class GameScene extends DirtyScene {
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
     private doorAnimator: DoorAnimator | undefined;
+    private footstepSounds: FootstepSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
     private activatablesManager!: ActivatablesManager;
@@ -535,6 +537,9 @@ export class GameScene extends DirtyScene {
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
+        for (const { key, url } of FOOTSTEP_SOUNDS) {
+            this.load.audio(key, url);
+        }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
 
@@ -1400,6 +1405,34 @@ export class GameScene extends DirtyScene {
      * @param time
      * @param delta The delta time in ms since the last frame. This is a smoothed and capped value based on the FPS rate.
      */
+    /** The areas the local player stands in, and their personal desk: doors and footsteps are only heard there. */
+    private getHearingZones(): HearingZone[] {
+        const zones: HearingZone[] =
+            this.gameMapFrontWrapper
+                .getGameMap()
+                .getWamFile()
+                ?.getGameMapAreas()
+                .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
+        const personalArea = get(personalAreaDataStore);
+        return personalArea ? [...zones, personalArea] : zones;
+    }
+
+    /** Quiet footsteps of the players walking nearby, the local player included. */
+    private updateFootsteps(): void {
+        this.footstepSounds ??= new FootstepSounds(
+            (key, volume) => {
+                this.sound.play(key, { volume });
+            },
+            () => this.getHearingZones(),
+        );
+        const listener = { id: "local", x: this.CurrentPlayer.x, y: this.CurrentPlayer.y };
+        const characters = [listener];
+        for (const player of this.MapPlayersByKey.values()) {
+            characters.push({ id: String(player.userId), x: player.x, y: player.y });
+        }
+        this.footstepSounds.update(characters, listener);
+    }
+
     /** The doors of the map layer open when a player, a companion or a duck comes near. */
     private updateDoors(time: number): void {
         this.doorAnimator ??= new DoorAnimator(
@@ -1410,16 +1443,7 @@ export class GameScene extends DirtyScene {
                 this.sound.play(key, { volume });
             },
             () => this.markDirty(),
-            () => {
-                const zones: HearingZone[] =
-                    this.gameMapFrontWrapper
-                        .getGameMap()
-                        .getWamFile()
-                        ?.getGameMapAreas()
-                        .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
-                const personalArea = get(personalAreaDataStore);
-                return personalArea ? [...zones, personalArea] : zones;
-            },
+            () => this.getHearingZones(),
         );
         // Doors react to the collision body of a character (the one that is blocked by the walls), not to the middle of
         // its sprite, which overlaps the wall when the character walks along it.
@@ -1485,6 +1509,7 @@ export class GameScene extends DirtyScene {
         }
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
+            this.updateFootsteps();
         }
 
         for (const addedPlayer of this.remotePlayersRepository.getAddedPlayers()) {
