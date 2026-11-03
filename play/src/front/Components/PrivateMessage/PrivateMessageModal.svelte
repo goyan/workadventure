@@ -18,8 +18,13 @@
     let text = $state("");
     let sending = $state(false);
     let failed = $state(false);
+    let messageInput: HTMLTextAreaElement | undefined = $state();
     const lifetime = new AbortController();
     const messages = $derived($privateMessageHistoryStore.filter((message) => message.peerUuid === userUuid));
+
+    $effect(() => {
+        if (isOpen && !sending) messageInput?.focus({ preventScroll: true });
+    });
 
     onDestroy(() => {
         lifetime.abort();
@@ -77,6 +82,7 @@
                     id="private-message-text"
                     class="input-text w-full min-h-20"
                     maxlength={500}
+                    bind:this={messageInput}
                     bind:value={text}
                     placeholder={$LL.chat.enter()}
                     disabled={sending}

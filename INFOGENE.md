@@ -99,6 +99,17 @@ Tenir cette liste à jour à chaque patch.
 
 ### Auteur des annonces et messages privés natifs
 
+Focus du formulaire privé : le champ prend le focus dès l'ouverture, puis le
+reprend lorsqu'un envoi se termine et qu'il redevient disponible. Les entrées
+de déplacement de l'avatar restent désactivées pendant la saisie et sont
+rétablies à la fermeture. Un message reçu n'impose pas un nouveau focus.
+Régression reproduite sur le DOM avant correction ; tests de focus,
+conservation du brouillon, clavier, envoi et nettoyage dans
+`PrivateMessageModal.test.ts`.
+Recette beta : ouvrir « Message privé » depuis une fiche, la liste puis une
+notification ; taper immédiatement, envoyer, puis taper un second message
+sans cliquer dans le champ. Fermer et vérifier les déplacements ordinaires.
+
 Les annonces texte affichent le nom de leur auteur, humain ou NPC. Le pusher ajoute `{uuid, name}`
 depuis l'identité de la connexion dans le Delta Quill et remplace tout auteur fourni par le client.
 Le texte enrichi est conservé, le nom est échappé par Svelte, les anciens messages sans auteur restent lisibles.
