@@ -95,6 +95,10 @@ de la caméra. Les limites physiques de la carte restent celles du TMJ.
 Utiliser une image dont la largeur et la hauteur sont des puissances de deux (par exemple 128 × 128)
 pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doivent utiliser
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
+Notifications de messages sans service worker (`Notification/MessageNotification.ts`) : si le service worker
+est absent (fenêtre privée Firefox) ou si `showNotification()` ne répond pas sous 3 s (client desktop Electron),
+une notification de page prend le relais ; son clic ramène l'onglet et ouvre le chat sur le salon, comme le
+`notificationclick` du service worker.
 Tenir cette liste à jour à chaque patch.
 
 ### Auteur des annonces et messages privés natifs
