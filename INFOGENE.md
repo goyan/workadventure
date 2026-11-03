@@ -110,6 +110,16 @@ Recette beta : ouvrir « Message privé » depuis une fiche, la liste puis une
 notification ; taper immédiatement, envoyer, puis taper un second message
 sans cliquer dans le champ. Fermer et vérifier les déplacements ordinaires.
 
+L'historique privé affiche les derniers messages à l'ouverture et après un envoi
+réussi. Les réponses reçues font défiler l'historique si le lecteur est déjà en
+bas (tolérance de 20 px, comme le chat). Remonter lire les anciens messages
+suspend ce défilement ; revenir en bas le réactive. Modifier le brouillon,
+recevoir un message d'une autre conversation ou subir un échec d'envoi ne
+déplace pas l'historique. Ce comportement reste actif au plafond des cent messages.
+Recette beta : remplir l'historique, recevoir une réponse en bas, remonter puis
+recevoir une autre réponse ; vérifier la position conservée. Envoyer depuis cette
+position, puis vérifier le retour au dernier message et le suivi des réponses.
+
 Les annonces texte affichent le nom de leur auteur, humain ou NPC. Le pusher ajoute `{uuid, name}`
 depuis l'identité de la connexion dans le Delta Quill et remplace tout auteur fourni par le client.
 Le texte enrichi est conservé, le nom est échappé par Svelte, les anciens messages sans auteur restent lisibles.

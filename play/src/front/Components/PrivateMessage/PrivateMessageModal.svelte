@@ -19,12 +19,40 @@
     let sending = $state(false);
     let failed = $state(false);
     let messageInput: HTMLTextAreaElement | undefined = $state();
+    let messageHistory: HTMLDivElement | undefined = $state();
+    let followLatest = true;
+    let lastPeerUuid: string | undefined;
+    let lastMessageId: number | undefined;
     const lifetime = new AbortController();
     const messages = $derived($privateMessageHistoryStore.filter((message) => message.peerUuid === userUuid));
 
     $effect(() => {
         if (isOpen && !sending) messageInput?.focus({ preventScroll: true });
     });
+
+    $effect(() => {
+        const latest = messages.at(-1);
+        if (!isOpen || !messageHistory) {
+            lastPeerUuid = undefined;
+            lastMessageId = undefined;
+            followLatest = true;
+            return;
+        }
+        const openingConversation = lastPeerUuid !== userUuid;
+        const newMessage = latest?.id !== lastMessageId;
+        lastPeerUuid = userUuid;
+        lastMessageId = latest?.id;
+        if (openingConversation || (newMessage && (!latest?.incoming || followLatest))) {
+            messageHistory.scrollTop = messageHistory.scrollHeight;
+            followLatest = true;
+        }
+    });
+
+    function handleHistoryScroll(): void {
+        if (!messageHistory) return;
+        // Match the chat timeline's 20px bottom tolerance, without a smooth-scroll animation.
+        followLatest = messageHistory.scrollHeight - messageHistory.scrollTop - messageHistory.clientHeight <= 20;
+    }
 
     onDestroy(() => {
         lifetime.abort();
@@ -62,9 +90,14 @@
     {/snippet}
     {#snippet content()}
         <div class="flex flex-col gap-3 w-full">
-            <div class="max-h-64 overflow-y-auto flex flex-col gap-2" aria-live="polite">
+            <div
+                bind:this={messageHistory}
+                class="max-h-64 overflow-y-auto flex flex-col gap-2"
+                aria-live="polite"
+                onscroll={handleHistoryScroll}
+            >
                 {#each messages as message (message.id)}
-                    <div class="rounded bg-white/10 p-3">
+                    <div class="shrink-0 rounded bg-white/10 p-3">
                         <strong>{message.incoming ? message.peerName : $LL.chat.you()}</strong>
                         <p class="m-0 whitespace-pre-wrap break-words">{message.text}</p>
                     </div>

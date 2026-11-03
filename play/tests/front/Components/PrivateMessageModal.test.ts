@@ -35,6 +35,18 @@ let component: ReturnType<typeof mount> | undefined;
 
 beforeEach(() => {
     document.body.append(target);
+    // jsdom has no layout: each rendered message occupies 100px in a 100px history viewport.
+    const positions = new WeakMap<Element, number>();
+    vi.spyOn(Element.prototype, "scrollHeight", "get").mockImplementation(function () {
+        return this.matches('[aria-live="polite"]') ? this.querySelectorAll("p").length * 100 : 0;
+    });
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(100);
+    vi.spyOn(Element.prototype, "scrollTop", "get").mockImplementation(function () {
+        return positions.get(this) ?? 0;
+    });
+    vi.spyOn(Element.prototype, "scrollTop", "set").mockImplementation(function (value) {
+        positions.set(this, Math.max(0, Math.min(value, this.scrollHeight - this.clientHeight)));
+    });
 });
 
 function renderModal(send: (text: string) => Promise<void> = () => Promise.resolve()): HTMLTextAreaElement {
@@ -68,6 +80,22 @@ function enter(textarea: HTMLTextAreaElement, options: KeyboardEventInit = {}): 
     return event;
 }
 
+function history(): HTMLDivElement {
+    const element = target.querySelector<HTMLDivElement>('[aria-live="polite"]');
+    if (!element) throw new Error("Private message history did not render");
+    return element;
+}
+
+function receive(text: string, peerUuid = "peer-ada"): void {
+    flushSync(() => recordPrivateMessage({ peerUuid, peerName: "Ada", text, incoming: true }));
+}
+
+function scrollHistory(top: number): void {
+    const element = history();
+    element.scrollTop = top;
+    flushSync(() => element.dispatchEvent(new Event("scroll")));
+}
+
 afterEach(async () => {
     const mountedComponent = component;
     component = undefined;
@@ -77,9 +105,84 @@ afterEach(async () => {
     clearPrivateMessages();
     inputFormFocusStore.set(false);
     blackListManager.cancelBlackList("peer-ada");
+    vi.restoreAllMocks();
 });
 
 describe("PrivateMessageModal", () => {
+    it("opens at the newest message and follows incoming replies while at the bottom", () => {
+        receive("First");
+        receive("Second");
+        receive("Third");
+        renderModal();
+
+        expect(history().scrollTop).toBe(200);
+        receive("Fourth");
+        expect(history().scrollTop).toBe(300);
+        receive("Fifth");
+        expect(history().scrollTop).toBe(400);
+    });
+
+    it("preserves reading position on incoming replies and resumes following after scrolling down", () => {
+        receive("First");
+        receive("Second");
+        receive("Third");
+        renderModal();
+        scrollHistory(50);
+
+        receive("Fourth");
+        expect(history().scrollTop).toBe(50);
+
+        scrollHistory(300);
+        receive("Fifth");
+        expect(history().scrollTop).toBe(400);
+    });
+
+    it("jumps to a successful outgoing message even when reading older messages", async () => {
+        receive("First");
+        receive("Second");
+        receive("Third");
+        const textarea = renderModal();
+        scrollHistory(50);
+        setText(textarea, "My reply");
+
+        submitForm();
+
+        await vi.waitFor(() => expect(history().scrollTop).toBe(300));
+        expect(target.textContent).toContain("My reply");
+        receive("Ada's reply");
+        expect(history().scrollTop).toBe(400);
+    });
+
+    it("does not scroll on draft edits, failed sends, or messages from another peer", async () => {
+        receive("First");
+        receive("Second");
+        receive("Third");
+        const textarea = renderModal(() => Promise.reject(new Error("offline")));
+        scrollHistory(50);
+
+        setText(textarea, "My draft");
+        expect(history().scrollTop).toBe(50);
+        receive("Other conversation", "peer-other");
+        expect(history().scrollTop).toBe(50);
+        submitForm();
+        await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
+        expect(history().scrollTop).toBe(50);
+    });
+
+    it("jumps to an outgoing message after the hundred-message history reaches its limit", async () => {
+        for (let index = 0; index < 100; index++) receive(`Message ${index}`);
+        const textarea = renderModal();
+        scrollHistory(50);
+        setText(textarea, "Newest reply");
+        submitForm();
+
+        await vi.waitFor(() => expect(history().scrollTop).toBe(9900));
+        expect(get(privateMessageHistoryStore)).toHaveLength(100);
+        expect(history().scrollTop).toBe(9900);
+        expect(target.textContent).not.toContain("Message 0");
+        expect(target.textContent).toContain("Newest reply");
+    });
+
     it("focuses the composer on opening and disables avatar inputs while typing", () => {
         const textarea = renderModal();
 
