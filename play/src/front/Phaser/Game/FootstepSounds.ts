@@ -2,16 +2,22 @@ import type { HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { FOOTSTEP_SURFACES } from "./FootstepSurfaces";
 import type { FootstepSurface } from "./FootstepSurfaces";
 
-/** A footstep every this many pixels walked (about two steps per tile). */
+/** A footstep every this many pixels walked (about two steps per tile), give or take STRIDE_JITTER. */
 const STRIDE = 20;
+const STRIDE_JITTER = 3;
+/** Each step is a little higher or lower (in cents) and softer than the last, so a walk never sounds looped. */
+const MAX_DETUNE = 120;
+const MIN_VOLUME_RATIO = 0.7;
+/** A step on the side is heard on that side, never fully in one ear. */
+const MAX_PAN = 0.6;
 /** Footsteps stay barely audible: one right next to the player plays at this volume, and fades with the distance. */
-export const FOOTSTEP_MAX_VOLUME = 0.03;
+export const FOOTSTEP_MAX_VOLUME = 0.015;
 /** Footsteps farther than this from the local player are silent (8 tiles). */
 export const FOOTSTEP_HEARING_DISTANCE = 8 * 32;
 /** A jump larger than this between two frames is a teleport or a map change, not walking: no burst of steps. */
 const TELEPORT_DISTANCE = 64;
 
-/** Recordings per surface (CC0, see `resources/objects/footsteps/CREDITS.txt`), played in turn so steps do not sound looped. */
+/** Recordings per surface (CC0, see `resources/objects/footsteps/CREDITS.txt`), picked at random so steps do not sound looped. */
 const VARIANTS_PER_SURFACE = 5;
 export const FOOTSTEP_SOUNDS = FOOTSTEP_SURFACES.flatMap((surface) =>
     Array.from({ length: VARIANTS_PER_SURFACE }, (_, index) => ({
@@ -31,10 +37,20 @@ export interface WalkingCharacter {
     y: number;
 }
 
+export interface FootstepPlayback {
+    volume: number;
+    /** Pitch shift, in cents. */
+    detune: number;
+    /** -1 left, 1 right. */
+    pan: number;
+}
+
 interface Track {
     x: number;
     y: number;
     walked: number;
+    /** Distance to walk before the next step: STRIDE, with a bit of irregularity. */
+    stride: number;
 }
 
 /**
@@ -43,14 +59,15 @@ interface Track {
  */
 export class FootstepSounds {
     private readonly tracks = new Map<string, Track>();
-    private nextVariant = 0;
+    private lastVariant = -1;
 
     constructor(
-        private readonly playSound: (key: string, volume: number) => void,
+        private readonly playSound: (key: string, playback: FootstepPlayback) => void,
         /** The areas the local player stands in, and their personal desk. */
         private readonly getHearingZones: () => readonly HearingZone[],
         /** What the floor is made of at a position: each surface has its own sound. */
         private readonly getSurfaceAt: (x: number, y: number) => FootstepSurface,
+        private readonly random: () => number = Math.random,
     ) {}
 
     /**
@@ -71,7 +88,7 @@ export class FootstepSounds {
     private track(character: WalkingCharacter, listener: WalkingCharacter): void {
         const track = this.tracks.get(character.id);
         if (!track) {
-            this.tracks.set(character.id, { x: character.x, y: character.y, walked: 0 });
+            this.tracks.set(character.id, { x: character.x, y: character.y, walked: 0, stride: this.nextStride() });
             return;
         }
         const moved = Math.hypot(character.x - track.x, character.y - track.y);
@@ -82,8 +99,9 @@ export class FootstepSounds {
             return;
         }
         track.walked += moved;
-        if (track.walked < STRIDE) return;
-        track.walked %= STRIDE;
+        if (track.walked < track.stride) return;
+        track.walked %= track.stride;
+        track.stride = this.nextStride();
         this.playStep(character, listener);
     }
 
@@ -91,9 +109,24 @@ export class FootstepSounds {
         const distance = Math.hypot(character.x - listener.x, character.y - listener.y);
         if (distance >= FOOTSTEP_HEARING_DISTANCE || !this.isHeard(character, listener)) return;
         const closeness = 1 - distance / FOOTSTEP_HEARING_DISTANCE;
-        const key = footstepSoundKey(this.getSurfaceAt(character.x, character.y), this.nextVariant);
-        this.nextVariant = (this.nextVariant + 1) % VARIANTS_PER_SURFACE;
-        this.playSound(key, FOOTSTEP_MAX_VOLUME * closeness * closeness);
+        const loudness = MIN_VOLUME_RATIO + (1 - MIN_VOLUME_RATIO) * this.random();
+        this.playSound(footstepSoundKey(this.getSurfaceAt(character.x, character.y), this.nextVariant()), {
+            volume: FOOTSTEP_MAX_VOLUME * closeness * closeness * loudness,
+            detune: (this.random() * 2 - 1) * MAX_DETUNE,
+            pan: Math.max(-1, Math.min(1, (character.x - listener.x) / FOOTSTEP_HEARING_DISTANCE)) * MAX_PAN,
+        });
+    }
+
+    /** A random recording of the surface, never the one just played. */
+    private nextVariant(): number {
+        const isFirst = this.lastVariant < 0;
+        const variant = Math.floor(this.random() * (VARIANTS_PER_SURFACE - (isFirst ? 0 : 1)));
+        this.lastVariant = !isFirst && variant >= this.lastVariant ? variant + 1 : variant;
+        return this.lastVariant;
+    }
+
+    private nextStride(): number {
+        return STRIDE + (this.random() * 2 - 1) * STRIDE_JITTER;
     }
 
     /** In a room or at a desk, only the steps inside it are heard; in the open, every step nearby is. */

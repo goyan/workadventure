@@ -179,6 +179,7 @@ import {
     type ProximityChatRoomKind,
 } from "../../Chat/Connection/Proximity/ProximityChatRoomManager";
 import { ProximitySpaceManager } from "../../WebRtc/ProximitySpaceManager";
+import { BubbleListeningManager } from "../../WebRtc/BubbleListeningManager";
 import { audioContextManager } from "../../WebRtc/AudioContextManager";
 import { bindAudioOutput, pendingSinkRequests } from "../../WebRtc/AudioOutputManager";
 import { noMicrophoneSoundWarningVisibleStore } from "../../Stores/NoMicrophoneSoundWarningVisibleStore";
@@ -205,6 +206,8 @@ import { enableUserInputsStore } from "../../Stores/UserInputStore";
 import { ScriptLoadedError } from "../../Api/ScriptLoadedError";
 import {
     mediaSynchronizedSpacesStore,
+    heardVideoBoxesStore,
+    bubbleListenersStore,
     raisedHandSectionsStore,
     screenShareStreamStore,
     videoStreamStore,
@@ -404,6 +407,7 @@ export class GameScene extends DirtyScene {
     private hasMovedThisFrame: boolean = false;
 
     private proximitySpaceManager: ProximitySpaceManager | undefined;
+    private bubbleListeningManager: BubbleListeningManager | undefined;
     private scriptingVideoManager: ScriptingVideoManager | undefined;
     private gameMapPropertiesListener: GameMapPropertiesListener | undefined;
     private objectsByType = new Map<string, ITiledMapObject[]>();
@@ -1289,6 +1293,7 @@ export class GameScene extends DirtyScene {
         });
         megaphoneSpaceStore.set(undefined);
         this.proximitySpaceManager?.destroy();
+        this.bubbleListeningManager?.destroy();
         if (this._proximityChatRoomManager) {
             this._proximityChatRoomManager.destroy();
         } else {
@@ -1440,8 +1445,11 @@ export class GameScene extends DirtyScene {
                         .length ?? 0) > 0,
             );
             this.footstepSounds = new FootstepSounds(
-                (key, volume) => {
-                    this.sound.play(key, { volume });
+                (key, { volume, detune, pan }) => {
+                    const sound = this.sound.add(key, { volume, detune });
+                    if (sound instanceof Phaser.Sound.WebAudioSound) sound.setPan(pan);
+                    sound.once(Phaser.Sound.Events.COMPLETE, () => sound.destroy());
+                    sound.play();
                 },
                 () => this.getHearingZones(),
                 (x, y) => surfaces.surfaceAt(x, y),
@@ -2292,6 +2300,9 @@ export class GameScene extends DirtyScene {
                 screenShareStreamStore.forward(this._spaceRegistry.screenShareStreamStore);
                 raisedHandSectionsStore.forward(this._spaceRegistry.raisedHandSectionsStore);
                 mediaSynchronizedSpacesStore.forward(this._spaceRegistry.spacesSynchronizingMedia);
+                heardVideoBoxesStore.forward(this._spaceRegistry.heardVideoBoxesStore);
+                bubbleListenersStore.forward(this._spaceRegistry.bubbleListenersStore);
+                this.bubbleListeningManager = new BubbleListeningManager(this.connection, this._spaceRegistry);
 
                 this.initExtensionModule();
 
