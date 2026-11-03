@@ -179,6 +179,8 @@ import {
     type ProximityChatRoomKind,
 } from "../../Chat/Connection/Proximity/ProximityChatRoomManager";
 import { ProximitySpaceManager } from "../../WebRtc/ProximitySpaceManager";
+import { BubbleListeningManager } from "../../WebRtc/BubbleListeningManager";
+import { overheardLoudness, overheardLoudnessStore, userIdOfSpaceUser } from "../../Stores/BubbleListeningStore";
 import { audioContextManager } from "../../WebRtc/AudioContextManager";
 import { bindAudioOutput, pendingSinkRequests } from "../../WebRtc/AudioOutputManager";
 import { noMicrophoneSoundWarningVisibleStore } from "../../Stores/NoMicrophoneSoundWarningVisibleStore";
@@ -215,6 +217,8 @@ import { enableUserInputsStore } from "../../Stores/UserInputStore";
 import { ScriptLoadedError } from "../../Api/ScriptLoadedError";
 import {
     mediaSynchronizedSpacesStore,
+    heardVideoBoxesStore,
+    bubbleListenersStore,
     raisedHandSectionsStore,
     screenShareStreamStore,
     videoStreamStore,
@@ -239,6 +243,8 @@ import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
+import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
+import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -288,6 +294,8 @@ import Clamp = Phaser.Math.Clamp;
 
 const MOUSE_WHEEL_ZOOM_RATE = 0.5;
 const CONVERSATION_BUBBLE_SPATIAL_GRID_SIZE = 64;
+/** How often the volumes of an overheard bubble follow the players: often enough for a walk, not every frame. */
+const OVERHEARD_LOUDNESS_PERIOD_MS = 200;
 
 export interface GameSceneInitInterface {
     reconnecting: boolean;
@@ -396,6 +404,7 @@ export class GameScene extends DirtyScene {
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
     private doorAnimator: DoorAnimator | undefined;
+    private footstepSounds: FootstepSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
     private activatablesManager!: ActivatablesManager;
@@ -412,6 +421,8 @@ export class GameScene extends DirtyScene {
     private hasMovedThisFrame: boolean = false;
 
     private proximitySpaceManager: ProximitySpaceManager | undefined;
+    private bubbleListeningManager: BubbleListeningManager | undefined;
+    private overheardLoudnessUpdatedAt = -Infinity;
     private scriptingVideoManager: ScriptingVideoManager | undefined;
     private gameMapPropertiesListener: GameMapPropertiesListener | undefined;
     private objectsByType = new Map<string, ITiledMapObject[]>();
@@ -546,6 +557,9 @@ export class GameScene extends DirtyScene {
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
+        for (const { key, url } of FOOTSTEP_SOUNDS) {
+            this.load.audio(key, url);
+        }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
         this.load.audio("meeting-out", "/resources/objects/meeting-out.wav");
 
@@ -1294,6 +1308,7 @@ export class GameScene extends DirtyScene {
         });
         megaphoneSpaceStore.set(undefined);
         this.proximitySpaceManager?.destroy();
+        this.bubbleListeningManager?.destroy();
         if (this._proximityChatRoomManager) {
             this._proximityChatRoomManager.destroy();
         } else {
@@ -1411,6 +1426,81 @@ export class GameScene extends DirtyScene {
      * @param time
      * @param delta The delta time in ms since the last frame. This is a smoothed and capped value based on the FPS rate.
      */
+    /** The areas the local player stands in, and their personal desk: doors and footsteps are only heard there. */
+    private getHearingZones(): HearingZone[] {
+        const zones: HearingZone[] =
+            this.gameMapFrontWrapper
+                .getGameMap()
+                .getWamFile()
+                ?.getGameMapAreas()
+                .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
+        const personalArea = get(personalAreaDataStore);
+        return personalArea ? [...zones, personalArea] : zones;
+    }
+
+    /** The voices of a bubble overheard from its edge fade as the local player walks away from each member. */
+    private updateOverheardLoudness(): void {
+        const now = performance.now();
+        if (now - this.overheardLoudnessUpdatedAt < OVERHEARD_LOUDNESS_PERIOD_MS) return;
+        this.overheardLoudnessUpdatedAt = now;
+        const heard = get(heardVideoBoxesStore);
+        if (heard.length === 0 && get(overheardLoudnessStore).size === 0) return;
+        const loudness = new Map<string, number>();
+        for (const { spaceUser } of heard) {
+            const member = this.MapPlayersByKey.get(userIdOfSpaceUser(spaceUser.spaceUserId));
+            if (!member) continue;
+            const distance = Math.hypot(member.x - this.CurrentPlayer.x, member.y - this.CurrentPlayer.y);
+            // Rounded, so that standing still does not refresh the volumes every period
+            loudness.set(spaceUser.spaceUserId, Math.round(overheardLoudness(distance) * 20) / 20);
+        }
+        const previous = get(overheardLoudnessStore);
+        const changed =
+            loudness.size !== previous.size ||
+            [...loudness].some(([spaceUserId, value]) => previous.get(spaceUserId) !== value);
+        if (changed) overheardLoudnessStore.set(loudness);
+    }
+
+    /** Quiet footsteps of the players walking nearby, the local player included, sounding like the floor they walk on. */
+    private updateFootsteps(): void {
+        if (!this.footstepSounds) {
+            const surfaces = new FootstepSurfaces(
+                () =>
+                    Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) => {
+                        const prefab = entity.getPrefab();
+                        return {
+                            x: entity.x,
+                            y: entity.y,
+                            width: entity.displayWidth,
+                            height: entity.displayHeight,
+                            collectionName: prefab.collectionName,
+                            prefabId: prefab.id,
+                            footstepSound: prefab.footstepSound,
+                        };
+                    }),
+                (x, y) =>
+                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({ x, y })
+                        .length ?? 0) > 0,
+            );
+            this.footstepSounds = new FootstepSounds(
+                (key, { volume, detune, pan }) => {
+                    const sound = this.sound.add(key, { volume, detune });
+                    if (sound instanceof Phaser.Sound.WebAudioSound) sound.setPan(pan);
+                    sound.once(Phaser.Sound.Events.COMPLETE, () => sound.destroy());
+                    sound.play();
+                },
+                () => this.getHearingZones(),
+                (x, y) => surfaces.surfaceAt(x, y),
+            );
+        }
+        // The feet, not the middle of the sprite, tell which floor tile is walked on.
+        const listener = { id: "local", x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y };
+        const characters = [listener];
+        for (const player of this.MapPlayersByKey.values()) {
+            characters.push({ id: String(player.userId), x: player.x, y: player.y + CHARACTER_BODY_OFFSET_Y });
+        }
+        this.footstepSounds.update(characters, listener);
+    }
+
     /** The doors of the map layer open when a player, a companion or a duck comes near. */
     private updateDoors(time: number): void {
         this.doorAnimator ??= new DoorAnimator(
@@ -1421,16 +1511,7 @@ export class GameScene extends DirtyScene {
                 this.sound.play(key, { volume });
             },
             () => this.markDirty(),
-            () => {
-                const zones: HearingZone[] =
-                    this.gameMapFrontWrapper
-                        .getGameMap()
-                        .getWamFile()
-                        ?.getGameMapAreas()
-                        .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
-                const personalArea = get(personalAreaDataStore);
-                return personalArea ? [...zones, personalArea] : zones;
-            },
+            () => this.getHearingZones(),
         );
         // Doors react to the collision body of a character (the one that is blocked by the walls), not to the middle of
         // its sprite, which overlaps the wall when the character walks along it.
@@ -1496,6 +1577,8 @@ export class GameScene extends DirtyScene {
         }
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
+            this.updateFootsteps();
+            this.updateOverheardLoudness();
         }
 
         for (const addedPlayer of this.remotePlayersRepository.getAddedPlayers()) {
@@ -2283,6 +2366,9 @@ export class GameScene extends DirtyScene {
                 screenShareStreamStore.forward(this._spaceRegistry.screenShareStreamStore);
                 raisedHandSectionsStore.forward(this._spaceRegistry.raisedHandSectionsStore);
                 mediaSynchronizedSpacesStore.forward(this._spaceRegistry.spacesSynchronizingMedia);
+                heardVideoBoxesStore.forward(this._spaceRegistry.heardVideoBoxesStore);
+                bubbleListenersStore.forward(this._spaceRegistry.bubbleListenersStore);
+                this.bubbleListeningManager = new BubbleListeningManager(this.connection, this._spaceRegistry);
 
                 this.initExtensionModule();
 

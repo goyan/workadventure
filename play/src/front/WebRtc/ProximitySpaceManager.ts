@@ -1,4 +1,5 @@
 import type { Subscription } from "rxjs";
+import { filter } from "rxjs";
 import Debug from "debug";
 import * as Sentry from "@sentry/svelte";
 import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
@@ -21,8 +22,10 @@ export class ProximitySpaceManager {
         roomConnection: RoomConnection,
         private proximityChatRoomManager: ProximityChatRoomManager,
     ) {
-        this.joinSpaceRequestMessageSubscription = roomConnection.joinSpaceRequestMessage.subscribe(
-            ({ spaceName, propertiesToSync }) => {
+        // The bubbles heard from their edge are BubbleListeningManager's.
+        this.joinSpaceRequestMessageSubscription = roomConnection.joinSpaceRequestMessage
+            .pipe(filter((message) => !message.listener))
+            .subscribe(({ spaceName, propertiesToSync }) => {
                 const abortController = new AbortController();
                 this.pendingJoins.set(spaceName, abortController);
                 this.proximityChatRoomManager
@@ -41,19 +44,18 @@ export class ProximitySpaceManager {
                             this.pendingJoins.delete(spaceName);
                         }
                     });
-            },
-        );
+            });
 
-        this.leaveSpaceRequestMessageSubscription = roomConnection.leaveSpaceRequestMessage.subscribe(
-            ({ spaceName }) => {
+        this.leaveSpaceRequestMessageSubscription = roomConnection.leaveSpaceRequestMessage
+            .pipe(filter((message) => !message.listener))
+            .subscribe(({ spaceName }) => {
                 this.pendingJoins.get(spaceName)?.abort(new AbortError("Left the bubble before it was joined"));
                 this.pendingJoins.delete(spaceName);
                 this.proximityChatRoomManager.leaveDefaultSpace(spaceName).catch((e) => {
                     console.error("Error while leaving space", e);
                     Sentry.captureException(e);
                 });
-            },
-        );
+            });
     }
 
     public destroy() {

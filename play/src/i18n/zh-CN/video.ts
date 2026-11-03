@@ -10,6 +10,12 @@ const video: DeepPartial<Translation["video"]> = {
     reconnecting: "重新连接中...",
     persistent_connection_issue: "重新连接中... 连接不稳定...",
     click_to_unblock: "点击解除屏蔽",
+    bubble_listening: {
+        heard_by_one: "{name} 能听到你",
+        heard_by_two: "{first} 和 {second} 能听到你",
+        heard_by_many: "附近有 {count} 人能听到你",
+        overhearing: "你听到了 {names}",
+    },
     click_and_drag_to_resize: "单击并拖动以调整大小",
 };
 

@@ -156,6 +156,7 @@ Environment variables for the Back service (backend API).
 | `MINIMUM_DISTANCE` | No | Minimum distance (in pixels) before users are considered to be in proximity. Defaults to 64 |
 | `GROUP_RADIUS` | No | Radius (in pixels) of a group/bubble. Defaults to 48 |
 | `ADMIN_API_URL` | No | URL of the admin API for centralized configuration |
+| `ENABLE_BUBBLE_LISTENING` | No | Let a user standing right next to a bubble overhear it at a low volume, without joining it. Defaults to false |
 | `ADMIN_API_TOKEN` | No | Authentication token for the admin API |
 | `CPU_OVERHEAT_THRESHOLD` | No | CPU usage threshold (in %) that triggers dropping intermediate movement packets to ease to CPU load. Defaults to 80 |
 | `JITSI_URL` | No | URL of the Jitsi Meet server for video conferencing |

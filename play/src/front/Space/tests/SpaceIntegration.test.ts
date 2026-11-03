@@ -287,6 +287,7 @@ describe("", () => {
             showVoiceIndicator: false,
             attendeesState: false,
             cpuLimited: false,
+            listenerState: false,
             spotifyListening: undefined,
         } satisfies SpaceUser;
 
@@ -345,6 +346,7 @@ describe("", () => {
             showVoiceIndicator: false,
             attendeesState: false,
             cpuLimited: false,
+            listenerState: false,
             spotifyListening: undefined,
         } satisfies SpaceUser;
 
@@ -398,6 +400,7 @@ describe("", () => {
             showVoiceIndicator: false,
             attendeesState: false,
             cpuLimited: false,
+            listenerState: false,
             spotifyListening: undefined,
         } satisfies SpaceUser;
 
@@ -545,6 +548,7 @@ describe("", () => {
                 jitsiParticipantId: undefined,
                 attendeesState: false,
                 cpuLimited: false,
+                listenerState: false,
                 spotifyListening: undefined,
             },
             $case: "muteVideo",

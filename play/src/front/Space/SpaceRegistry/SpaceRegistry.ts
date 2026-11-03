@@ -116,6 +116,18 @@ export class SpaceRegistry implements SpaceRegistryInterface {
         return unsubscribe;
     });
 
+    /** The bubble members heard from its edge, in the spaces joined as a listener. */
+    public readonly heardVideoBoxesStore: Readable<VideoBox[]> = this.combineSpaces(
+        (space) => space.heardVideoBoxesStore,
+        (maps) => maps.flatMap((videoBoxes) => [...videoBoxes.values()]),
+    );
+
+    /** The users at the edge of our bubbles who hear them (spaceUserIds). */
+    public readonly bubbleListenersStore: Readable<string[]> = this.combineSpaces(
+        (space) => space.listenersStore,
+        (lists) => [...new Set(lists.flat())],
+    );
+
     public readonly isLiveStreamingStore: Readable<boolean> = derived(this.spaces, ($spaces, set) => {
         if ($spaces.size === 0) {
             set(false);
@@ -157,6 +169,12 @@ export class SpaceRegistry implements SpaceRegistryInterface {
     });
 
     /** The joined spaces for which `select` currently holds, kept up to date as spaces come and go. */
+    private combineSpaces<T, R>(select: (space: Space) => Readable<T>, combine: (values: T[]) => R): Readable<R> {
+        return derived(this.spaces, ($spaces, set) =>
+            derived(Array.from($spaces.values(), select), (values) => combine(values)).subscribe(set),
+        );
+    }
+
     private spacesWhere(select: (space: Space) => Readable<boolean>): Readable<Space[]> {
         return derived(this.spaces, ($spaces, set) => {
             const spaces = Array.from($spaces.values());
@@ -327,6 +345,8 @@ export class SpaceRegistry implements SpaceRegistryInterface {
              * measures nothing in it.
              */
             spaceKind?: SpaceKind;
+            /** Joins a bubble from its edge, to hear it (see Space.listener). */
+            listener?: boolean;
         },
     ): Promise<SpaceInterface> {
         const leavingPromise = this.leavingSpacesPromises.get(spaceName);

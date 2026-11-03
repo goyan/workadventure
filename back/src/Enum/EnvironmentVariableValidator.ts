@@ -19,6 +19,11 @@ export const EnvironmentVariables = z.object({
     ADMIN_API_URL: AbsoluteOrRelativeUrl.optional()
         .transform(emptyStringToUndefined)
         .describe("URL of the admin API for centralized configuration"),
+    ENABLE_BUBBLE_LISTENING: BoolAsString.optional()
+        .transform((val) => toBool(val, false))
+        .describe(
+            "Let a user standing right next to a bubble overhear it at a low volume, without joining it. Defaults to false",
+        ),
     ADMIN_API_TOKEN: z
         .string()
         .optional()

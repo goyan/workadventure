@@ -505,7 +505,7 @@ export class SocketManager implements ZoneEventListener {
         localSpaceName: string,
         filterType: FilterType,
         propertiesToSync: string[],
-        options: { signal: AbortSignal },
+        options: { signal: AbortSignal; listener: boolean },
     ): Promise<void> {
         const socketData = client.getUserData();
 
@@ -550,7 +550,7 @@ export class SocketManager implements ZoneEventListener {
 
         const joinPromise = (async () => {
             try {
-                await space.forwarder.registerUser(client, filterType);
+                await space.forwarder.registerUser(client, filterType, { listener: options.listener });
                 if (options.signal.aborted) {
                     // The user has aborted the request, we should not add them to the space
                     await space.forwarder.unregisterUser(client);

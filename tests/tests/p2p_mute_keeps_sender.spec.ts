@@ -4,9 +4,7 @@ import Menu from "./utils/menu";
 import { getPage } from "./utils/auth";
 import { evaluateScript } from "./utils/scripting";
 import { expectWebRtcConnectionsCountToBe } from "./utils/webRtc";
-import { play_url, publicTestMapUrl } from "./utils/urls";
-
-const MAP_URL = publicTestMapUrl("tests/E2E/empty.json", "p2p-mute-keeps-sender");
+import { attemptTestSlug, play_url, publicTestMapUrl } from "./utils/urls";
 
 declare global {
     interface Window {
@@ -81,7 +79,10 @@ test.describe("P2P mute keeps the audio sender @nomobile", () => {
 
     test("muting and unmuting neither renegotiates nor replaces the viewer's audio", async ({ browser }) => {
         test.setTimeout(180_000);
-        const url = new URL(MAP_URL, play_url).toString();
+        const url = new URL(
+            publicTestMapUrl("tests/E2E/empty.json", attemptTestSlug("p2p-mute-keeps-sender")),
+            play_url,
+        ).toString();
         await using alice = await getPage(browser, "Alice", url, { pageCreatedHook: instrument });
         await using bob = await getPage(browser, "Bob", url, { pageCreatedHook: instrument });
 

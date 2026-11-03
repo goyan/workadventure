@@ -796,6 +796,8 @@ message JoinSpaceQuery{
   string spaceName = 1;
   FilterType filterType = 2;
   repeated string propertiesToSync = 3;
+  // Joins a bubble as a listener standing next to it: hears its members, publishes nothing, is not one of them.
+  bool listener = 4;
 }
 
 message LeaveSpaceQuery{
@@ -1638,6 +1640,8 @@ message PrivateEventFrontToPusher {
 message JoinSpaceRequestMessage {
   string spaceName = 1;
   repeated string propertiesToSync = 2;
+  // The user stands next to the bubble, outside it: join it as a listener (see JoinSpaceQuery.listener).
+  bool listener = 3;
 }
 
 /**
@@ -1645,6 +1649,8 @@ message JoinSpaceRequestMessage {
  */
 message LeaveSpaceRequestMessage {
   string spaceName = 1;
+  // Leaves the bubble the user was listening to, not one they are a member of.
+  bool listener = 2;
 }
 
 /**
@@ -2080,6 +2086,9 @@ message SpaceUser{
   // Raise-hand state is NOT stored per-user here: it lives in the space state (SpaceStateQuery / SpaceStatePatchMessage),
   // which is broadcast to all members, including a megaphone speaker without seeAttendees.
   SpotifyListening spotifyListening = 21;
+  // A listener next to a bubble: out of the bubble's filter, so its members neither see nor list them,
+  // but connected to each member to hear them.
+  bool listenerState = 22;
 }
 
 // What a user shares about their Spotify listening. The client always sends every field: space updates are deep

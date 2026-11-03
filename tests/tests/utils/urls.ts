@@ -1,3 +1,4 @@
+import { test } from "@playwright/test";
 import { RENDERER_MODE } from "./environment";
 
 export const play_url =
@@ -16,6 +17,15 @@ export function publicTestMapUrl(path: string, testSlug: string, rendererMode: s
     }
 
     return new URL(`/_/${testSlug}/${maps_domain}/${path}?phaserMode=${rendererMode}`, play_url).toString();
+}
+
+/**
+ * A room of its own for each attempt of a test (project, retry, --repeat-each): the players of an earlier attempt stay
+ * in their room until the back notices their socket closed, and would otherwise join the next attempt's bubbles.
+ */
+export function attemptTestSlug(testSlug: string): string {
+    const { project, retry, repeatEachIndex } = test.info();
+    return `${testSlug}-${project.name}-${retry}-${repeatEachIndex}`;
 }
 
 export const matrix_server_url = process.env.MATRIX_PUBLIC_URI ?? "http://matrix.workadventure.localhost";

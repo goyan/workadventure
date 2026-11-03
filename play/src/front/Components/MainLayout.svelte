@@ -33,6 +33,9 @@
     import { chatSidebarWidthStore } from "../Chat/ChatSidebarWidthStore";
     import { EditorToolName } from "../Phaser/Game/MapEditor/MapEditorModeManager";
     import { streamableCollectionStore } from "../Stores/StreamableCollectionStore";
+    import { heardVideoBoxesStore } from "../Stores/PeerStore";
+    import { LISTENED_BUBBLE_VOLUME } from "../WebRtc/BubbleListeningManager";
+    import { overheardLoudnessStore } from "../Stores/BubbleListeningStore";
     import { inputFormFocusStore } from "../Stores/UserInputStore";
     import { showRecordingList } from "../Stores/RecordingStore";
     import { toastStore } from "../Stores/ToastStoreSingleton";
@@ -84,6 +87,7 @@
     import CalendarReminders from "./Calendar/CalendarReminders.svelte";
     import TodoList from "./TodoList/TodoList.svelte";
     import ProximityNotificationContainer from "./ProximityNotification/ProximityNotificationContainer.svelte";
+    import BubbleListeningHint from "./Video/BubbleListeningHint.svelte";
     import MeetingInvitationPopup from "./MeetingInvitation/MeetingInvitationPopup.svelte";
     import ChevronLeftIcon from "./Icons/ChevronLeftIcon.svelte";
     import { IconArrowsMinimize, IconMessageCircle2, IconUserPlus } from "@wa-icons";
@@ -375,6 +379,7 @@
                 <TextMessageContainer />
             {/if}
             <ProximityNotificationContainer />
+            <BubbleListeningHint />
             {#if $notificationPlayingStore}
                 <div class="flex flex-col absolute w-auto end-0">
                     {#each [...$notificationPlayingStore.values()] as notification, index (`${index}-${notification.id}`)}
@@ -441,6 +446,13 @@
             <!-- So we need to split the audio playing (played in the main frame) from the video streams (that can be embedded in PiP) -->
             {#each [...$streamableCollectionStore.values()] as videoBox (videoBox.uniqueId)}
                 <AudioStreamWrapper {videoBox} />
+            {/each}
+            {#each $heardVideoBoxesStore as videoBox (videoBox.uniqueId)}
+                <AudioStreamWrapper
+                    {videoBox}
+                    volumeFactor={LISTENED_BUBBLE_VOLUME *
+                        ($overheardLoudnessStore.get(videoBox.spaceUser.spaceUserId) ?? 1)}
+                />
             {/each}
 
             {#if $uiWebsitesStore}

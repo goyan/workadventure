@@ -10,6 +10,12 @@ const video: DeepPartial<Translation["video"]> = {
     reconnecting: "Reconectando...",
     persistent_connection_issue: "Reconectando... Conexão instável...",
     click_to_unblock: "Clique para desbloquear",
+    bubble_listening: {
+        heard_by_one: "{name} pode ouvir você",
+        heard_by_two: "{first} e {second} podem ouvir você",
+        heard_by_many: "{count} pessoas por perto podem ouvir você",
+        overhearing: "Você ouve {names}",
+    },
     click_and_drag_to_resize: "Clique e arraste para redimensionar",
 };
 

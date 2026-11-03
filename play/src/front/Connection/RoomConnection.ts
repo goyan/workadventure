@@ -1787,7 +1787,7 @@ export class RoomConnection implements RoomConnection {
         spaceName: string,
         filterType: FilterType,
         propertiesToSync: string[],
-        options?: { signal: AbortSignal },
+        options?: { signal: AbortSignal; listener?: boolean },
     ): Promise<SpaceUser["spaceUserId"]> {
         const answer = await this.query(
             {
@@ -1796,9 +1796,10 @@ export class RoomConnection implements RoomConnection {
                     spaceName,
                     filterType,
                     propertiesToSync,
+                    listener: options?.listener ?? false,
                 },
             },
-            options,
+            options && { signal: options.signal },
         );
 
         if (answer.$case !== "joinSpaceAnswer") {
