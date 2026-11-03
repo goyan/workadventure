@@ -394,6 +394,26 @@ de navigation voit la case libre quand `collisionGrid` vaut `[[0]]`). Router ces
 local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
 Phaser sans navigateur) : comportement validé en jeu uniquement.
 
+### Canards promeneurs (champ de catalogue `wander`)
+
+Un prefab de catalogue peut déclarer `wander: { "sheetPath": "canard-sheet.png" }` : une planche au format woka
+(96 × 128, 3 colonnes × 4 lignes de 32 px ; lignes bas, gauche, droite, haut ; colonnes pas, immobile, pas), résolue
+comme `imagePath`. Hors éditeur, l'objet posé est masqué et remplacé par un personnage animé qui se promène autour de son
+point de pose (le « nid ») : il entre et sort des pièces, ouvre les portes et ne bloque personne. Dans l'éditeur, l'objet
+immobile réapparaît et s'édite comme un meuble. Champ « fail open » comme `seat` : invalide, il est ignoré ; une planche
+introuvable ou trop petite laisse l'objet immobile. Le format WAM ne change pas (catalogue lu par le front seul).
+
+Synchro **déterministe, sans réseau** (`Phaser/Game/Wander/`) : le temps est découpé en étapes de 20 s ; la destination
+de chaque étape est tirée d'un hash de l'identifiant de l'entité (FNV-1a puis mulberry32), dans un rayon de 10 cases,
+praticable et atteignable depuis le nid. Tous les clients calculent donc la même position, à l'écart d'horloge près. La
+vitesse (2 cases/s au moins) est relevée pour garder 3 s de pause en fin d'étape. Les collisions utilisées sont communes à
+tous les clients : `getSharedCollisionGrid()` (sans les zones bloquées pour le seul joueur courant), les murs de la couche
+carte en barrières, et les cases touchées par les `collisionRectangles` des objets (les personnages n'ont pas de physique).
+Tout changement de ces collisions recalcule les trajets. Écarts acceptés : deux versions différentes du front, ou une
+carte en cours d'édition, peuvent montrer brièvement des positions différentes.
+
+Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
+
 ### Création de carte depuis l'éditeur
 
 Dans l'éditeur, la propriété de zone « Quitter la carte » (`exit`) propose un bloc **« Créer une nouvelle carte »** : nom, bouton, et la sortie pointe
