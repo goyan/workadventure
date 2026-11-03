@@ -96,6 +96,20 @@ pour que Phaser conserve l'échelle du motif en WebGL. Le jardin et le fond doiv
 cette même image avec le même alignement. Les cartes sans cette propriété gardent leur fond habituel.
 Tenir cette liste à jour à chaque patch.
 
+### Bascule du chat entre bulle et réunion
+
+Si le panneau affiche déjà une conversation locale, rejoindre une réunion sélectionne son chat ;
+rejoindre une nouvelle bulle sélectionne le chat de cette bulle. La sélection attend la confirmation
+de l'entrée : une admission annulée ne détourne pas les prochains messages vers ce salon.
+Le départ de l'ancien espace ne ferme pas le nouveau chat. Une discussion privée Matrix
+ouverte reste sélectionnée, y compris si elle a été choisie pendant l'entrée dans la réunion.
+
+Le correctif est dans `Chat/Connection/Proximity/ProximityChatRoom.ts`, avec des tests de transition,
+d'envoi dans le nouvel espace et d'annulation. Aucun changement du protocole ou du back.
+Recette : garder le panneau ouvert, entrer dans une zone de réunion, envoyer un message,
+puis sortir et rejoindre un autre joueur ; vérifier la sélection et la réception dans chaque espace.
+Comportement en jeu à valider en beta.
+
 ### Enregistrement des NPC par API
 
 `pusher/controllers/NpcRegisterController.ts` ajoute `POST /register` pour la carte d'entrée beta
