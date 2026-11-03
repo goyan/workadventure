@@ -43,6 +43,7 @@
     import InputRadioBox from "../Input/InputRadioBox.svelte";
     import Select from "../Input/Select.svelte";
     import Chip from "../UI/Chip.svelte";
+    import SpotifySettings from "./SpotifySettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -721,6 +722,7 @@
             />
         </div>
     </section>
+    <SpotifySettings />
     <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
         <div class="bg-contrast font-bold text-lg p-4 flex items-center">
             <div class="me-4 opacity-50"><IconAdjustements /></div>

@@ -37,6 +37,7 @@ export interface FrontConfigurationInterface {
     WOKA_SPEED: number;
     KLAXOON_ENABLED: boolean;
     KLAXOON_CLIENT_ID: string | undefined;
+    SPOTIFY_CLIENT_ID: string | undefined;
     YOUTUBE_ENABLED: boolean;
     GOOGLE_DRIVE_ENABLED: boolean;
     GOOGLE_DOCS_ENABLED: boolean;

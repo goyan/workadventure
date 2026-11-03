@@ -239,6 +239,11 @@ export const LockableAreaPropertyData = PropertyBase.extend({
     allowedTags: z.array(z.string()).optional(),
 });
 
+export const ListeningZonePropertyData = PropertyBase.extend({
+    type: z.literal("listeningZonePropertyData"),
+    // Note: the Spotify Jam shared in the zone is stored in area property variables, not in the WAM
+});
+
 export const AreaDataProperty = z.discriminatedUnion("type", [
     StartPropertyData,
     ExitPropertyData,
@@ -260,6 +265,7 @@ export const AreaDataProperty = z.discriminatedUnion("type", [
     LivekitRoomPropertyData,
     MaxUsersInAreaPropertyData,
     LockableAreaPropertyData,
+    ListeningZonePropertyData,
 ]);
 
 export const AreaDataProperties = z.array(AreaDataProperty);
@@ -551,6 +557,7 @@ export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleArea
 export type TooltipPropertyData = z.infer<typeof TooltipPropertyData>;
 export type MaxUsersInAreaPropertyData = z.infer<typeof MaxUsersInAreaPropertyData>;
 export type LockableAreaPropertyData = z.infer<typeof LockableAreaPropertyData>;
+export type ListeningZonePropertyData = z.infer<typeof ListeningZonePropertyData>;
 
 export enum GameMapProperties {
     ALLOW_API = "allowApi",

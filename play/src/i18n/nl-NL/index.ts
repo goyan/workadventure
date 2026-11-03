@@ -28,6 +28,7 @@ import locate from "./locate";
 import messageScreen from "./messageScreen";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
+import spotify from "./spotify";
 import recording from "./recording";
 
 const nl_NL = deepmerge(en_US, {
@@ -59,6 +60,7 @@ const nl_NL = deepmerge(en_US, {
     messageScreen,
     randomNames,
     onboarding,
+    spotify,
     recording,
 });
 

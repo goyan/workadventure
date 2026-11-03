@@ -4,6 +4,7 @@ import type { GameScene } from "../Game/GameScene";
 import { waScaleManager, WaScaleManagerEvent } from "../Services/WaScaleManager";
 import { PLAYER_NAME_GAP, PLAYER_NAME_HEIGHT } from "./UsernameDisplaySizes";
 import { UsernameMegaphoneDisplay } from "./UsernameMegaphoneDisplay";
+import { UsernameMusicDisplay } from "./UsernameMusicDisplay";
 import { UsernameRaisedHandDisplay } from "./UsernameRaisedHandDisplay";
 import { UsernameStatusDisplay } from "./UsernameStatusDisplay";
 
@@ -29,6 +30,7 @@ export class UsernameDisplay {
     private readonly statusDisplay: UsernameStatusDisplay;
     private readonly megaphoneDisplay: UsernameMegaphoneDisplay;
     private readonly raisedHandDisplay: UsernameRaisedHandDisplay;
+    private readonly musicDisplay: UsernameMusicDisplay;
 
     private readonly onZoomChanged = (zoomModifier: number): void => {
         this.displayScale = this.getDisplayScale(zoomModifier);
@@ -57,6 +59,7 @@ export class UsernameDisplay {
         this.statusDisplay = new UsernameStatusDisplay();
         this.megaphoneDisplay = new UsernameMegaphoneDisplay();
         this.raisedHandDisplay = new UsernameRaisedHandDisplay();
+        this.musicDisplay = new UsernameMusicDisplay();
         this.playerNameElement = this.createPlayerNameElement();
 
         this.element = document.createElement("div");
@@ -72,6 +75,7 @@ export class UsernameDisplay {
             this.playerNameElement,
             this.megaphoneDisplay.element,
             this.raisedHandDisplay.element,
+            this.musicDisplay.element,
         );
         this.updateUsernameBackgroundColor(outlineColor);
 
@@ -115,6 +119,10 @@ export class UsernameDisplay {
         this.raisedHandDisplay.show(raised, forceClose);
     }
 
+    public setListeningMusic(listening: boolean): void {
+        this.musicDisplay.show(listening);
+    }
+
     public getAvailabilityStatus(): AvailabilityStatus {
         return this.statusDisplay.availabilityStatus;
     }
@@ -144,6 +152,7 @@ export class UsernameDisplay {
         this.statusDisplay.destroy();
         this.megaphoneDisplay.destroy();
         this.raisedHandDisplay.destroy();
+        this.musicDisplay.destroy();
         this.scene.game.events.off(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
     }
 

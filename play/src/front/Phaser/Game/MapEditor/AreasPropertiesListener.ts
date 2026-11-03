@@ -97,6 +97,7 @@ import FilePopup from "../../../Components/PopUp/FilePopup.svelte";
 import { isInsidePersonalAreaStore } from "../../../Stores/PersonalDeskStore";
 import { currentPlayerLockableAreasStore, type LockableAreaEntry } from "../../../Stores/CurrentPlayerAreaLockStore";
 import { areaPropertyVariablesManagerStore } from "../../../Stores/AreaPropertyVariablesStore";
+import { enterListeningZone, leaveListeningZone } from "../../../ListeningZone/ListeningZoneController";
 import { touchScreenManager } from "../../../Touch/TouchScreenManager";
 import { MeetingAreaPresence } from "./MeetingAreaPresence";
 
@@ -481,6 +482,10 @@ export class AreasPropertiesListener {
                 );
                 break;
             }
+            case "listeningZonePropertyData": {
+                enterListeningZone({ areaId: areaData.id, propertyId: property.id, areaName: areaData.name });
+                break;
+            }
 
             default: {
                 break;
@@ -666,6 +671,10 @@ export class AreasPropertiesListener {
             }
             case "openFile": {
                 this.handleOpenFileOnLeave(property);
+                break;
+            }
+            case "listeningZonePropertyData": {
+                leaveListeningZone(property.id);
                 break;
             }
             default: {

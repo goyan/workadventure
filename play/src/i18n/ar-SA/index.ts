@@ -28,6 +28,7 @@ import say from "./say";
 import locate from "./locate";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
+import spotify from "./spotify";
 import recording from "./recording";
 
 const ar_SA = deepmerge(en_US, {
@@ -59,6 +60,7 @@ const ar_SA = deepmerge(en_US, {
     locate,
     randomNames,
     onboarding,
+    spotify,
     recording,
 });
 

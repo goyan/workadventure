@@ -65,6 +65,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private usernameDisplay: UsernameDisplay | undefined;
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
+    private listeningMusic = false;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -203,6 +204,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             );
             this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
             this.usernameDisplay.setRaisedHand(this.raisedHand, true);
+            this.usernameDisplay.setListeningMusic(this.listeningMusic);
             this.usernameDisplay.setPlayerDepth(this.depth);
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
@@ -343,6 +345,12 @@ export abstract class Character extends Container implements OutlineableInterfac
     public setRaisedHand(raised: boolean): void {
         this.raisedHand = raised;
         this.usernameDisplay?.setRaisedHand(raised);
+        this.scene.markDirty();
+    }
+
+    public setListeningMusic(listening: boolean): void {
+        this.listeningMusic = listening;
+        this.usernameDisplay?.setListeningMusic(listening);
         this.scene.markDirty();
     }
 

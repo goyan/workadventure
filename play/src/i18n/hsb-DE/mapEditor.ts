@@ -369,6 +369,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Nastajić maksimalnu ličbu wužiwarjow w wokrjesu.",
             placeholder: "15",
         },
+        listeningZonePropertyData: {
+            label: "Listening zone",
+            description: "Lets people share a Spotify Jam that everyone in the zone can join.",
+        },
         lockableAreaPropertyData: {
             label: "Wokrjes, kotryž hodźi so zawrjeć",
             description: "Wokrjes zawrjeć, zo by so wotewrjenje z wotka zawoborowało.",

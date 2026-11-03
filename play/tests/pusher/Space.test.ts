@@ -348,6 +348,41 @@ describe("Space.extractUpdatedFieldsFromUpdateSpaceUserMessage", () => {
         }
     });
 
+    it("lets a client share its Spotify listening, keeping only a Spotify track link", () => {
+        const space = createSpace();
+        const socket = createSocket("room_207");
+        space._localConnectedUserWithSpaceUser.set(socket, {
+            ...SpaceUser.fromPartial({ spaceUserId: "room_207", uuid: "uuid" }),
+            lowercaseName: "fabio",
+        });
+
+        const result = space.extractUpdatedFieldsFromUpdateSpaceUserMessage(socket, {
+            spaceName: "test",
+            user: SpaceUser.fromPartial({
+                spaceUserId: "room_207",
+                spotifyListening: {
+                    trackTitle: "Song".repeat(100),
+                    artistName: "Artist",
+                    trackUrl: "javascript:alert(1)",
+                    jamAreaId: "",
+                    jamAreaName: "",
+                },
+            }),
+            updateMask: [
+                "spotifyListening.trackTitle",
+                "spotifyListening.artistName",
+                "spotifyListening.trackUrl",
+                "spotifyListening.jamAreaId",
+                "spotifyListening.jamAreaName",
+            ],
+        });
+
+        expect(result?.changedFields).toEqual(["spotifyListening"]);
+        expect(result?.partialSpaceUser.spotifyListening?.trackTitle).toHaveLength(200);
+        expect(result?.partialSpaceUser.spotifyListening?.artistName).toBe("Artist");
+        expect(result?.partialSpaceUser.spotifyListening?.trackUrl).toBe("");
+    });
+
     it("rejects an update from a socket that is not in the space", () => {
         const space = createSpace();
         const stranger = createSocket("room_1");

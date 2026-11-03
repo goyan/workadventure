@@ -34,6 +34,7 @@
         IconShieldLock,
         IconLockHash,
         IconLock,
+        IconHeadphones,
     } from "@wa-icons";
 
     interface Props {
@@ -462,6 +463,19 @@
         }}
         testId="lockableAreaPropertyData"
         img={IconLock}
+    />
+{/if}
+{#if property === "listeningZonePropertyData"}
+    <AddPropertyButton
+        headerText={$LL.mapEditor.properties.listeningZonePropertyData.label()}
+        descriptionText={$LL.mapEditor.properties.listeningZonePropertyData.description()}
+        style={`z-index: 175;${isActive ? "background-color: #4156f6;" : ""}`}
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        testId="listeningZonePropertyData"
+        img={IconHeadphones}
     />
 {/if}
 {#each applicationManager.applications as app, index (`my-own-app-${index}`)}

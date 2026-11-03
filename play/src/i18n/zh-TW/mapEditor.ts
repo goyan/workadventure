@@ -360,6 +360,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "設定區域內的最大使用者數。",
             placeholder: "15",
         },
+        listeningZonePropertyData: {
+            label: "收聽區",
+            description: "可分享一個區域內所有人都能加入的 Spotify Jam。",
+        },
         lockableAreaPropertyData: {
             label: "可鎖定區域",
             description: "鎖定區域以防止從外部進入。",

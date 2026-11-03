@@ -59,6 +59,7 @@ export class UserProviderMerger {
                             visitCardUrl: user.visitCardUrl || acc.visitCardUrl,
                             color: user.color || acc.color,
                             spaceUserId: user.spaceUserId || acc.spaceUserId,
+                            spotifyListening: user.spotifyListening || acc.spotifyListening,
                         } as AnyKindOfUser;
                     });
 

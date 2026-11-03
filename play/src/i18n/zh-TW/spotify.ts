@@ -1,0 +1,56 @@
+import type { Translation } from "../i18n-types";
+import type { DeepPartial } from "../DeepPartial";
+
+const spotify: DeepPartial<Translation["spotify"]> = {
+    settings: {
+        title: "Spotify",
+        description: "連結你的 Spotify 帳號，向同事顯示你正在聽的音樂。",
+        link: "連結 Spotify",
+        linking: "正在等待 Spotify…",
+        unlink: "取消連結",
+        linked: "你的 Spotify 帳號已連結。",
+        share: "分享我正在聽的音樂",
+        serverAppNotice:
+            "沒有自己的用戶端 ID 時，會透過此伺服器的 Spotify 應用程式連結：請先請管理員將你的 Spotify 帳號加入該應用程式（最多 5 人）。",
+        accessDenied:
+            "Spotify 拒絕分享你正在聽的音樂：你的帳號未加入此伺服器的 Spotify 應用程式。請管理員加入（最多 5 人），或使用你自己的 Spotify 應用程式。",
+        errors: {
+            popupBlocked: "瀏覽器封鎖了 Spotify 視窗。請允許此網站的彈出式視窗後再試一次。",
+            cancelled: "Spotify 視窗在連結完成前被關閉。",
+            denied: "你在 Spotify 上拒絕了存取。",
+            failed: "無法連結 Spotify。請檢查 Spotify 應用程式的用戶端 ID 與重新導向 URI。",
+            noClientId: "此伺服器未設定 Spotify 應用程式：請在下方輸入你自己應用程式的用戶端 ID。",
+        },
+        personalApp: {
+            title: "使用我自己的 Spotify 應用程式",
+            explanation:
+                "一個 Spotify 應用程式只接受五個人。如果此伺服器的應用程式已滿，幾分鐘就能建立你自己的應用程式：",
+            step1: "開啟 developer.spotify.com/dashboard 並建立應用程式（需要 Spotify Premium 帳號）。",
+            step2: "新增此重新導向 URI：{redirectUri}",
+            step3: "勾選「Web API」，儲存後將應用程式的用戶端 ID 貼到這裡。",
+            clientIdLabel: "我的應用程式的用戶端 ID",
+            clientIdPlaceholder: "留空則使用此伺服器的應用程式",
+        },
+    },
+    userList: {
+        jam: "Jam · {area}",
+        listenOnSpotify: "在 Spotify 上收聽",
+    },
+    listeningZone: {
+        defaultName: "收聽區",
+        jamOf: "{name} 的 Jam",
+        participants: "Jam 中有 {count} 人",
+        join: "加入",
+        joined: "已在 Jam 中",
+        share: "分享我的 Jam",
+        sharePlaceholder: "貼上你的 Jam 邀請連結",
+        invalidLink: "這不是 Spotify Jam 邀請連結。",
+        submit: "分享",
+        cancel: "取消",
+        stop: "停止分享",
+        noJam: "這裡還沒有分享 Jam。",
+        linkInvite: "連結 Spotify 以分享你正在聽的音樂",
+    },
+};
+
+export default spotify;
