@@ -98,7 +98,7 @@ export class GameRoom implements BrothersFinder {
     private itemsState = new Map<number, unknown>();
 
     private readonly positionNotifier: PositionNotifier;
-    private readonly bubbleListeners: BubbleListeners;
+    private readonly bubbleListeners: BubbleListeners | undefined;
 
     // Ephemeral variables attached to area properties (not persisted)
     private readonly areaPropertyVariablesManager = new AreaPropertyVariablesManager();
@@ -142,7 +142,8 @@ export class GameRoom implements BrothersFinder {
         private _mapUrl: string,
         private _wamUrl?: string,
         initialWam?: WAMFileFormat,
-        listeningCallbacks: BubbleListeningCallbacks = { startListening: () => {}, stopListening: () => {} },
+        /** Overhearing bubbles from their edge (ENABLE_BUBBLE_LISTENING): nobody overhears anything without it. */
+        listeningCallbacks?: BubbleListeningCallbacks,
     ) {
         // uniq id for the room is timestamp
         this.id = Date.now().toString();
@@ -168,12 +169,14 @@ export class GameRoom implements BrothersFinder {
         const spatialIndexCellSize = Math.max(this.minDistance, this.groupRadius, 1);
         this.users = new SpatialMap<number, User>(spatialIndexCellSize);
         this.groups = new SpatialMap<number, Group>(spatialIndexCellSize);
-        this.bubbleListeners = new BubbleListeners(
-            this.groupRadius,
-            listeningCallbacks,
-            (x, y, radius) => this.groups.queryCircle(x, y, radius),
-            (x, y, radius) => this.users.queryCircle(x, y, radius),
-        );
+        this.bubbleListeners =
+            listeningCallbacks &&
+            new BubbleListeners(
+                this.groupRadius,
+                listeningCallbacks,
+                (x, y, radius) => this.groups.queryCircle(x, y, radius),
+                (x, y, radius) => this.users.queryCircle(x, y, radius),
+            );
     }
 
     public static async create(
@@ -404,7 +407,7 @@ export class GameRoom implements BrothersFinder {
         if (user.group !== undefined) {
             this.leaveGroup(user);
         }
-        this.bubbleListeners.forget(user, { notify: false });
+        this.bubbleListeners?.forget(user, { notify: false });
 
         this.users.delete(user.id);
 
@@ -448,9 +451,9 @@ export class GameRoom implements BrothersFinder {
         const oldPosition = user.getPosition();
         user.setPosition(userPosition);
         this.updateUserGroup(user);
-        this.bubbleListeners.update(user);
+        this.bubbleListeners?.update(user);
         if (user.group) {
-            this.bubbleListeners.updateAround(user.group);
+            this.bubbleListeners?.updateAround(user.group);
         }
         this._userMoveStream.next({ user, oldPosition });
     }
@@ -464,7 +467,7 @@ export class GameRoom implements BrothersFinder {
             // Back from a silent status (DND, sound blocked...): join whoever is next to us, without waiting for a move.
             this.updateUserGroup(user);
         }
-        this.bubbleListeners.update(user);
+        this.bubbleListeners?.update(user);
     }
 
     private updateUserGroup(user: User): void {
@@ -618,7 +621,7 @@ export class GameRoom implements BrothersFinder {
         group.leave(user);
         if (group.isEmpty()) {
             group.destroy();
-            this.bubbleListeners.dropGroup(group);
+            this.bubbleListeners?.dropGroup(group);
             if (!this.groups.has(group.getId())) {
                 throw new Error(`Could not find group ${group.getId()} referenced by user ${user.id} in World.`);
             }
@@ -1034,12 +1037,12 @@ export class GameRoom implements BrothersFinder {
     public emitLockGroupEvent(group: Group) {
         this.positionNotifier.emitLockGroupEvent(group);
         // Locking a bubble makes the conversation private: its listeners stop hearing it.
-        this.bubbleListeners.updateAround(group);
+        this.bubbleListeners?.updateAround(group);
     }
 
     /** A user hearing a bubble from its edge stops listening to it when they join a bubble, that one or another. */
     private readonly joinGroupCallback: ConnectCallback = (user, group) => {
-        this.bubbleListeners.forget(user, { notify: true });
+        this.bubbleListeners?.forget(user, { notify: true });
         this.connectCallback(user, group);
     };
 

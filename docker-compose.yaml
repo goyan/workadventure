@@ -242,6 +242,7 @@ services:
       PLAY_URL: http://play.workadventure.localhost
       MINIMUM_DISTANCE: "${MINIMUM_DISTANCE}"
       GROUP_RADIUS: "${GROUP_RADIUS}"
+      ENABLE_BUBBLE_LISTENING: "${ENABLE_BUBBLE_LISTENING:-false}"
       # On startup, we ask the messages container to regenerate the files.
       # Note: we need to use this "messages" container because of ARM64 processors that are not supported with protoc (used in "messages" container)
       #STARTUP_COMMAND_0: touch /usr/src/app/back/src/Messages/generate_request/need_regenerate
