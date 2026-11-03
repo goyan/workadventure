@@ -56,7 +56,9 @@ describe("MessageNotification", () => {
 
     it("falls back to a page notification when the service worker never displays it", async () => {
         vi.useFakeTimers();
-        useServiceWorker({ ready: Promise.resolve({ showNotification: () => new Promise(() => undefined) }) });
+        // A promise that never settles, like showNotification() in Electron.
+        const neverSettles = new Promise<void>(vi.fn());
+        useServiceWorker({ ready: Promise.resolve({ showNotification: () => neverSettles }) });
 
         const sending = notification.sendNotification();
         await vi.advanceTimersByTimeAsync(SERVICE_WORKER_NOTIFICATION_TIMEOUT_MS);
