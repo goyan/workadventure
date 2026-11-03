@@ -39,9 +39,14 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             clientIdPlaceholder: "Leeg laten om de app van deze server te gebruiken",
         },
     },
+    card: {
+        listeningNow: "Luistert nu",
+        listenToo: "Ook luisteren",
+    },
     userList: {
         jam: "Jam · {area}",
         listenOnSpotify: "Luisteren op Spotify",
+        listenOnAppleMusic: "Luisteren op Apple Music",
     },
     listeningZone: {
         defaultName: "Luisterzone",

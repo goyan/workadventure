@@ -18,6 +18,12 @@ const DesktopSpotifyTrack = z
         url: z.string().refine((url) => url === "" || url.startsWith("https://open.spotify.com/"), {
             message: "Not a Spotify link",
         }),
+        album: z.string().optional(),
+        artworkUrl: z
+            .string()
+            .refine((url) => url.startsWith("https://i.scdn.co/image/"), { message: "Not a Spotify cover" })
+            .optional(),
+        source: z.enum(["spotify", "apple-music"]).optional(),
     })
     .nullable();
 

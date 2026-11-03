@@ -6,6 +6,11 @@ export interface SpotifyTrack {
     title: string;
     artist: string;
     url: string;
+    album?: string;
+    /** Album cover on the Spotify image CDN. */
+    artworkUrl?: string;
+    /** Where it plays; Spotify when absent. */
+    source?: "spotify" | "apple-music";
 }
 
 /**
@@ -20,6 +25,12 @@ const CurrentlyPlayingResponse = z.object({
             name: z.string(),
             artists: z.array(z.object({ name: z.string() })),
             external_urls: z.object({ spotify: z.string().optional() }),
+            album: z
+                .object({
+                    name: z.string(),
+                    images: z.array(z.object({ url: z.string(), width: z.number().nullable().optional() })),
+                })
+                .optional(),
         })
         .nullable(),
 });
@@ -43,6 +54,10 @@ export function parseCurrentlyPlaying(json: unknown): SpotifyTrack | undefined {
         title: item.name,
         artist: item.artists.map((artist) => artist.name).join(", "),
         url: item.external_urls.spotify ?? "",
+        album: item.album?.name,
+        // Spotify lists the covers from the largest (640 px) down: the medium one (300 px) is enough for a card.
+        artworkUrl: (item.album?.images[1] ?? item.album?.images[0])?.url,
+        source: "spotify",
     };
 }
 

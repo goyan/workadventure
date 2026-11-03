@@ -13,6 +13,9 @@
     import { getColorHexOfStatus, getStatusLabel } from "../../Utils/AvailabilityStatus";
     import type { WokaMenuAction, WokaMenuData } from "../../Stores/WokaMenuStore";
     import { startMovingEventName } from "../../Phaser/Player/Player";
+    import { availabilityStatusStore } from "../../Stores/MediaStore";
+    import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
+    import ListeningCard from "../Listening/ListeningCard.svelte";
 
     let wokaMenuData: WokaMenuData | undefined = $state();
     let sortedActions: WokaMenuAction[] | undefined = $state();
@@ -96,7 +99,7 @@
 
                 <div class="flex items-center justify-center p-2">
                     <div class="text-white flex flex-col justify-center items-center font-bold text-xl">
-                        {#if wokaMenuData.userId != undefined && wokaMenuData.userId != -1}
+                        {#if wokaMenuData.isSelf || (wokaMenuData.userId != undefined && wokaMenuData.userId != -1)}
                             <div
                                 id="woka"
                                 class=" bt-3 overflow-hidden mt-9 border w-fit h-fit pt-3 rounded-lg cursor-not-allowed bg-[rgb(103,185,133)]"
@@ -111,7 +114,14 @@
                         <div class=" w-max mt-[29px]">
                             <h3>{wokaMenuData.wokaName}</h3>
                         </div>
-                        {#if remotePlayer}
+                        {#if wokaMenuData.isSelf}
+                            <div
+                                class="my-2 text-base font-bold"
+                                style="color: {getColorHexOfStatus($availabilityStatusStore)};filter: brightness(200%);"
+                            >
+                                {getStatusLabel($availabilityStatusStore)}
+                            </div>
+                        {:else if remotePlayer}
                             <div class="my-2">
                                 <div class="text-xxs bold whitespace-nowrap select-none flex items-center">
                                     <div
@@ -131,6 +141,8 @@
                         {/if}
                     </div>
                 </div>
+
+                <ListeningCard listening={$listeningByUserUuidStore.get(wokaMenuData.userUuid)} />
 
                 {#if wokaMenuData.visitCardUrl}
                     <VisitCard
@@ -156,7 +168,7 @@
             </div>
         </div>
 
-        {#if sortedActions}
+        {#if sortedActions && !wokaMenuData.isSelf}
             <div
                 class="flex items-center bg-contrast w-full justify-center"
                 class:margin-close={!wokaMenuData.wokaName}

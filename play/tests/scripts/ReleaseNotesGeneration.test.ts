@@ -65,4 +65,32 @@ describe("release history generation", () => {
         expect(serialized).not.toContain("Internal commit body");
         expect(serialized).not.toContain("upstream baseline");
     });
+
+    it("publishes the front commits of a pull request merged with a merge commit, at the date of the merge", () => {
+        git(["switch", "-q", "-c", "feature"]);
+        const feature = commit("feat(front): Bruits de pas");
+        commit("feat(back): Côté serveur seulement");
+        git(["switch", "-q", "main"]);
+        const direct = commit("fix(front): Correctif direct");
+        git([
+            "-c",
+            "user.name=Merger",
+            "-c",
+            "user.email=merger@example.org",
+            "merge",
+            "--no-ff",
+            "-q",
+            "-m",
+            "Merge pull request #1 from goyan/feature",
+            "feature",
+        ]);
+
+        execFileSync(execPath, [script], { cwd: repository });
+        const notes: unknown = JSON.parse(readFileSync(join(repository, "play/src/common/release-notes.json"), "utf8"));
+
+        expect(notes).toEqual([
+            { id: feature, date, author: "Contributor", type: "feat", description: "Bruits de pas" },
+            { id: direct, date, author: "Contributor", type: "fix", description: "Correctif direct" },
+        ]);
+    });
 });

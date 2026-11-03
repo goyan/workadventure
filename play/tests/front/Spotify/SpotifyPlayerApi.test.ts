@@ -8,6 +8,14 @@ const playingTrack = {
         name: "Harder, Better, Faster, Stronger",
         artists: [{ name: "Daft Punk" }, { name: "Kanye West" }],
         external_urls: { spotify: "https://open.spotify.com/track/abc" },
+        album: {
+            name: "Graduation",
+            images: [
+                { url: "https://i.scdn.co/image/large", width: 640 },
+                { url: "https://i.scdn.co/image/medium", width: 300 },
+                { url: "https://i.scdn.co/image/small", width: 64 },
+            ],
+        },
     },
 };
 
@@ -19,6 +27,9 @@ describe("parseCurrentlyPlaying", () => {
             title: "Harder, Better, Faster, Stronger",
             artist: "Daft Punk, Kanye West",
             url: "https://open.spotify.com/track/abc",
+            album: "Graduation",
+            artworkUrl: "https://i.scdn.co/image/medium",
+            source: "spotify",
         });
     });
 
