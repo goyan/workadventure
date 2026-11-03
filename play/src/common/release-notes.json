@@ -1,157 +1,269 @@
 [
     {
-        "id": "bb0fea7170efc34a21fdf9a91dbdc5cbf3e5f301",
-        "date": "2026-11-03T10:21:16+01:00",
-        "author": "Antoine Hésèque",
+        "id": "702e5ce39113ae7f39bdcd0793bee73609d8097d",
+        "date": "2026-11-03T22:00:42+01:00",
+        "author": "clamarque",
         "type": "feat",
-        "description": "only hear the doors of the area you stand in, or of your own desk"
+        "description": "canards promeneurs"
     },
     {
-        "id": "493b67379336122ad89ab4dfad72383d2dc947b4",
-        "date": "2026-11-01T02:34:33+01:00",
+        "id": "da23a247a1f2440299a421b12e08aff4cfe2e4d3",
+        "date": "2026-11-03T21:42:26+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "Spotify lu depuis l'app desktop, sans compte ni Premium"
+    },
+    {
+        "id": "354c536f9efb0e4739be2670f527897ebef74c4c",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "voix entendues plus basses, et qui baissent en s'éloignant"
+    },
+    {
+        "id": "25b7d60211a2a0253975fd7fc032995e9cd51785",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "écoute discrète d'une bulle et indicateur pour ses membres"
+    },
+    {
+        "id": "f09a1dbcc1ce7d8a9025d7653b62d79dfe8e8a9f",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "pas plus discrets et plus naturels"
+    },
+    {
+        "id": "e7cbbb5d06ef7572c8f0122793de14102ea40fb3",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "son de pas défini par le catalogue (footstepSound)"
+    },
+    {
+        "id": "488db1c5aa4651c3fd1cda9d54723612c3c60146",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "pas selon le sol, volume encore plus bas"
+    },
+    {
+        "id": "c55ccfc647d515c9164ffc26bd126efc15c11ce0",
+        "date": "2026-11-03T21:11:09+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "bruits de pas discrets des joueurs proches"
+    },
+    {
+        "id": "5ea1eaa2961c5f9bd23bb8aa215828259d29a36e",
+        "date": "2026-11-03T18:10:26+01:00",
         "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "partager ce qu'on écoute sur Spotify et rejoindre une Jam dans les zones d'écoute"
+    },
+    {
+        "id": "831f4db4a963623647dadc4a4a92771577392060",
+        "date": "2026-11-03T17:28:49+01:00",
+        "author": "Amine Bouzahar",
+        "type": "feat",
+        "description": "statut piloté depuis l'app desktop"
+    },
+    {
+        "id": "b6dbff7a0f80f5dfcfdf9134257dea42986d51a3",
+        "date": "2026-11-03T14:35:02+01:00",
+        "author": "Hervé Meunier",
         "type": "fix",
-        "description": "do not open the doors below a corridor when walking along them"
+        "description": "permettre la copie des messages privés"
     },
     {
-        "id": "aaab229a0bf9b8f951c9dfba5296c0e2e2426c36",
-        "date": "2026-11-01T02:22:56+01:00",
+        "id": "e297140739ee0d734ea30b8f8bc4182be9c08c42",
+        "date": "2026-11-03T14:32:31+01:00",
+        "author": "Amine Bouzahar",
+        "type": "fix",
+        "description": "notifications de messages sans service worker"
+    },
+    {
+        "id": "651e5c13bbf2e04f153249d2d02934daaa2ee807",
+        "date": "2026-11-03T13:52:54+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "suivre les nouveaux messages de l’historique privé"
+    },
+    {
+        "id": "151e20173ef790375fcb06a21169668276f016d6",
+        "date": "2026-11-03T13:25:42+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "donner le focus au formulaire de message privé"
+    },
+    {
+        "id": "5772e7baa5cd2acf2f05b7f1408d58075416c3b3",
+        "date": "2026-11-03T12:46:00+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "textes privés à distance et auteur des annonces"
+    },
+    {
+        "id": "f09bf9df8e8e25a8f134721957db0a37c48f323e",
+        "date": "2026-11-03T11:42:55+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
-        "description": "let players move an object over or under the images it overlaps"
+        "description": "ne démarrer la réunion de zone qu'à plusieurs"
     },
     {
-        "id": "ba02fb63d63693a948988d95a987d77361c34297",
-        "date": "2026-11-01T02:14:24+01:00",
+        "id": "bba92d89dbe60b486f247348d8befc61b7879b95",
+        "date": "2026-11-03T08:57:16+01:00",
+        "author": "Hervé Meunier",
+        "type": "feat",
+        "description": "autoriser les annonces de carte des NPC"
+    },
+    {
+        "id": "da509731933333156b3adb9624dda1d037fb5eba",
+        "date": "2026-11-03T08:43:06+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "basculer le chat entre bulle et réunion"
+    },
+    {
+        "id": "aba208198bc8a152eb85e36aa4bde0cf2477d0a7",
+        "date": "2026-11-02T22:43:51+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "enregistrer les NPC par API"
+    },
+    {
+        "id": "6cca65ad92f5d4a6761594ebea25702f8bcdcb05",
+        "date": "2026-11-02T18:21:13+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "play custom objects uploaded as a strip of animation frames"
+    },
+    {
+        "id": "4464a18e6f0490acce94d932ee88dae5dba1a008",
+        "date": "2026-11-02T10:33:32+01:00",
+        "author": "Hervé Meunier",
+        "type": "fix",
+        "description": "retirer la promesse d'enregistrer lorsque c'est désactivé"
+    },
+    {
+        "id": "0598bc1ac0df41b7a5a0903f363e0ca2d2e317e3",
+        "date": "2026-11-01T02:55:03+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
         "description": "keep objects placed inside a shelf in front of it"
     },
     {
-        "id": "7973f53bd073de2dc304eb6c1720849b56ef9e3c",
-        "date": "2026-11-01T02:02:09+01:00",
+        "id": "c9a56ce44489f2223ab8bc78763ffcb2f01f3a62",
+        "date": "2026-11-01T02:44:53+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "do not open the doors below a corridor when walking along them"
+    },
+    {
+        "id": "ff791682e3769a64d7a6ed822b641bc432425151",
+        "date": "2026-11-01T02:18:02+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
         "description": "open doors only when a character goes through them"
     },
     {
-        "id": "f63133b693477d3b81c9ed936d2689acaba7f550",
-        "date": "2026-11-01T01:17:34+01:00",
+        "id": "63c9ef5bfdccbfa0dcd26d7a9469bbe76fa8a3b5",
+        "date": "2026-11-01T01:40:48+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
         "description": "keep objects in front of walls and over the tables they stand on"
     },
     {
-        "id": "1f04b5fd677d1b5fb37787efa1e82103a58deb52",
-        "date": "2026-10-31T21:29:03+01:00",
+        "id": "8549d4bbb747176135357a29b9f812d04ec1b947",
+        "date": "2026-11-01T00:26:04+01:00",
         "author": "Antoine Hésèque",
-        "type": "feat",
-        "description": "Courir accélère l'animation du personnage, y compris pour les autres joueurs"
+        "type": "fix",
+        "description": "play the running animation twice as fast and share it with other players"
     },
     {
-        "id": "793de97f47bf23fbcab7d0f80f0f6556e24855f9",
-        "date": "2026-10-31T20:12:22+01:00",
-        "author": "Antoine Hésèque",
-        "type": "feat",
-        "description": "Courir enfume le chien"
-    },
-    {
-        "id": "6826e22c1a6c8226dafd68cdc953ebab8864ccb1",
-        "date": "2026-10-31T23:23:05+01:00",
+        "id": "f762c854a05c2b7a31e2d414d4608b69f1e8e86f",
+        "date": "2026-11-01T00:25:31+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
         "description": "let players sit on chairs and sofas"
     },
     {
-        "id": "10a696ae5a5d3fbd6fc97aa3d763767c73125e37",
-        "date": "2026-10-31T20:40:54+01:00",
-        "author": "Antoine Hésèque",
+        "id": "d03a9830c64a26e0dccba4ac7865c12654d68f87",
+        "date": "2026-11-01T00:16:31+01:00",
+        "author": "Hervé Meunier",
         "type": "feat",
-        "description": "add a button above the selected object to rotate it between its available directions"
+        "description": "ajouter l'heure à la date des nouveautés"
     },
     {
-        "id": "129e66aa091d5b0a76e319ccba10a2572b75f81a",
-        "date": "2026-10-31T17:51:40+01:00",
+        "id": "4b4a9abf575bededd322813a6c15d196686ccae5",
+        "date": "2026-10-31T21:20:05+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "add a button to rotate the selected object"
+    },
+    {
+        "id": "533371823a3b4bcfcf9beae0aa1f8d76e8c42f16",
+        "date": "2026-10-31T20:28:18+01:00",
+        "author": "Antoine Hésèque",
+        "type": "feat",
+        "description": "add a smoke trail behind the player when running"
+    },
+    {
+        "id": "9be5bba8995816ce9fd8989ce507221d94dad684",
+        "date": "2026-10-31T19:55:50+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
         "description": "remove the shadow in front of a door and keep the vertical doors attached to the wall above"
     },
     {
-        "id": "056b0016da39254b37cf346f3cdcdf1363d09a06",
-        "date": "2026-10-31T12:53:12+01:00",
+        "id": "03d4c31bf82a31d71be582573da844dea6f1885f",
+        "date": "2026-10-31T17:24:48+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
-        "description": "DOORS, and I don't speak about Squeezie's videos"
+        "description": "add doors to the map layer tool"
     },
     {
-        "id": "fdbc35e1c528b037a7d7eb32795c18f37ca779e6",
-        "date": "2026-10-31T04:11:45+01:00",
+        "id": "0c8b3a782e4f5d2fe02ea7076166c4e2cdf6d22c",
+        "date": "2026-10-31T05:33:36+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
-        "description": "make the companion follow the player's trail"
+        "description": "ignore entity clicks while the map layer tool is active"
     },
     {
-        "id": "01fce3227818830101b932638ec2634886cb1ac3",
-        "date": "2026-10-31T03:00:18+01:00",
+        "id": "fd753406eb0c77ffb1477e92f2ba193dc3159d27",
+        "date": "2026-10-31T05:33:36+01:00",
         "author": "Antoine Hésèque",
         "type": "fix",
-        "description": "dim floors and walls with a tint to avoid the grid effect"
+        "description": "ignore entity clicks while the area editor tool is active"
     },
     {
-        "id": "e131d670aaa2eca9c3be961672bddc4b0d38f0bd",
-        "date": "2026-10-31T02:57:45+01:00",
+        "id": "69aa9b8993d44c008d9e9076de0993ceacb2644a",
+        "date": "2026-10-31T04:28:20+01:00",
+        "author": "Antoine Hésèque",
+        "type": "fix",
+        "description": "make the companion follow the player's trail- #33"
+    },
+    {
+        "id": "3676c3e6dc11b8326a8ff4585395d73fbe7d3089",
+        "date": "2026-10-31T03:15:21+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
         "description": "snap map editor areas to the floors of the room"
     },
     {
-        "id": "799807cb60ad6e3fbd957a14d2422f62997c4777",
-        "date": "2026-10-31T02:18:24+01:00",
-        "author": "Antoine Hésèque",
-        "type": "fix",
-        "description": "do not wait for a slow entity collection forever"
-    },
-    {
-        "id": "2b2ec7efe6b55a7c23a431c1c0952d8c2dbe9fe2",
-        "date": "2026-10-31T02:18:24+01:00",
-        "author": "Antoine Hésèque",
-        "type": "fix",
-        "description": "route the pathfinder around walls and show the destination ring over floors"
-    },
-    {
-        "id": "6f3dd26476893eb29678a5c420b8b6d36094789f",
-        "date": "2026-10-31T02:18:24+01:00",
-        "author": "Antoine Hésèque",
-        "type": "fix",
-        "description": "align floors and walls on the tile grid"
-    },
-    {
-        "id": "f73adfd958cfa68c2cfe493abee3973e1dfc9958",
-        "date": "2026-10-30T23:44:21+01:00",
-        "author": "Antoine Hésèque",
-        "type": "fix",
-        "description": "keep characters and companions above the map layer floors"
-    },
-    {
-        "id": "c50b7959fdcc89ffb1eff3543e44d13a6212c65f",
-        "date": "2026-10-30T23:44:21+01:00",
+        "id": "28ff6f652b493788b7d113a79d86e6d0675f2915",
+        "date": "2026-10-31T02:29:02+01:00",
         "author": "Antoine Hésèque",
         "type": "feat",
-        "description": "make the map editor tools independent"
+        "description": "independent map editor tools with erasers"
     },
     {
-        "id": "16627e9e068adc68fb47b648985f89fcf3240d09",
-        "date": "2026-10-30T23:44:20+01:00",
-        "author": "Antoine Hésèque",
-        "type": "feat",
-        "description": "replace the trash tool with erasers and delete buttons"
-    },
-    {
-        "id": "364b00679efad2804ede2b7f235e15b2e260cf16",
-        "date": "2026-10-30T23:44:20+01:00",
-        "author": "Antoine Hésèque",
+        "id": "3734c240926ca31f342e985fce7028a83a00f29f",
+        "date": "2026-10-30T23:22:19+01:00",
+        "author": "Hervé Meunier",
         "type": "fix",
-        "description": "re-sync floors and walls after selection move, paste and delete"
+        "description": "un motif posé reste aligné sur la grille de sa source"
     },
     {
         "id": "5d2092043a482fbf23a1fa221e92170a4e55ff96",
