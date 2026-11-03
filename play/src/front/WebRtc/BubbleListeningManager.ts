@@ -8,7 +8,7 @@ import type { SpaceRegistryInterface } from "../Space/SpaceRegistry/SpaceRegistr
 import type { SpaceInterface } from "../Space/SpaceInterface";
 
 /** A bubble heard from its edge plays this much quieter than for its members: overheard, not talked to. */
-export const LISTENED_BUBBLE_VOLUME = 0.15;
+export const LISTENED_BUBBLE_VOLUME = 0.04;
 
 /**
  * Hears the bubble the local user stands at the edge of, like a conversation overheard in a corridor: the back

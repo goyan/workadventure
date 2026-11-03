@@ -3,11 +3,9 @@ import Map from "./utils/map";
 import { getPage } from "./utils/auth";
 import { evaluateScript } from "./utils/scripting";
 import { expectWebRtcConnectionsCountToBe } from "./utils/webRtc";
-import { play_url, publicTestMapUrl } from "./utils/urls";
+import { attemptTestSlug, play_url, publicTestMapUrl } from "./utils/urls";
 
-const MAP_URL = publicTestMapUrl("tests/E2E/empty.json", "bubble-listening");
-
-// GROUP_RADIUS is 48 in the test environment: the edge of the bubble is heard up to one tile past it (BubbleListeners).
+// GROUP_RADIUS is 48 in the test environment: the bubble is heard up to a tile and a half past it (BubbleListeners).
 const AT_THE_EDGE = 70;
 const FAR_AWAY = 200;
 
@@ -22,7 +20,10 @@ const remoteAudioVolumes = (page: Page) =>
 test.describe("Listening to a bubble from its edge @nowebkit @nofirefox", () => {
     test("is heard low from its edge, stops away from it, and its members see who listens", async ({ browser }) => {
         test.setTimeout(240_000);
-        const url = new URL(MAP_URL, play_url).toString();
+        const url = new URL(
+            publicTestMapUrl("tests/E2E/empty.json", attemptTestSlug("bubble-listening")),
+            play_url,
+        ).toString();
         await using alice = await getPage(browser, "Alice", url);
         await using bob = await getPage(browser, "Bob", url);
         await using charlie = await getPage(browser, "Charlie", url);
@@ -44,9 +45,12 @@ test.describe("Listening to a bubble from its edge @nowebkit @nofirefox", () => 
         await expect(charlie.getByTestId("bubble-listening-hint")).toContainText("You overhear");
         // Charlie is not one of them: no video box, and the voices play low
         await expect(alice.getByTestId("Charlie")).toHaveCount(0);
-        await expect
-            .poll(() => remoteAudioVolumes(charlie), { timeout: 15_000 })
-            .toEqual([expect.closeTo(0.15, 1), expect.closeTo(0.15, 1)]);
+        // Low, and lower with the distance (LISTENED_BUBBLE_VOLUME is 0.04 right next to a member)
+        await expect.poll(() => remoteAudioVolumes(charlie), { timeout: 15_000 }).toHaveLength(2);
+        for (const volume of await remoteAudioVolumes(charlie)) {
+            expect(volume).toBeGreaterThan(0);
+            expect(volume).toBeLessThan(0.04);
+        }
 
         // Charlie walks away: the conversation fades out for them
         await Map.teleportToPosition(charlie, center.x + FAR_AWAY, center.y);

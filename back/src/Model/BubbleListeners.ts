@@ -11,10 +11,10 @@ export interface BubbleListeningCallbacks {
     stopListening: (user: User, group: Group) => void;
 }
 
-/** A user hears a bubble from this far past its radius: one tile, they must stand right at its edge. */
-export const LISTENING_MARGIN = 32;
+/** A user hears a bubble from this far past its radius: a tile and a half, they must stand close to it. */
+export const LISTENING_MARGIN = 48;
 /** They stop hearing it a bit farther, so that a step back and forth on the edge does not cut the sound in and out. */
-export const LISTENING_RELEASE_MARGIN = 56;
+export const LISTENING_RELEASE_MARGIN = 72;
 
 export class BubbleListeners {
     private readonly listening = new Map<User, Group>();

@@ -35,6 +35,7 @@
     import { streamableCollectionStore } from "../Stores/StreamableCollectionStore";
     import { heardVideoBoxesStore } from "../Stores/PeerStore";
     import { LISTENED_BUBBLE_VOLUME } from "../WebRtc/BubbleListeningManager";
+    import { overheardLoudnessStore } from "../Stores/BubbleListeningStore";
     import { inputFormFocusStore } from "../Stores/UserInputStore";
     import { showRecordingList } from "../Stores/RecordingStore";
     import { toastStore } from "../Stores/ToastStoreSingleton";
@@ -445,7 +446,11 @@
                 <AudioStreamWrapper {videoBox} />
             {/each}
             {#each $heardVideoBoxesStore as videoBox (videoBox.uniqueId)}
-                <AudioStreamWrapper {videoBox} volumeFactor={LISTENED_BUBBLE_VOLUME} />
+                <AudioStreamWrapper
+                    {videoBox}
+                    volumeFactor={LISTENED_BUBBLE_VOLUME *
+                        ($overheardLoudnessStore.get(videoBox.spaceUser.spaceUserId) ?? 1)}
+                />
             {/each}
 
             {#if $uiWebsitesStore}
