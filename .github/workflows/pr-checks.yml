@@ -1,4 +1,4 @@
-# Vérifications d'une pull request vers `infogene` (partie `play`, la seule que nous modifions).
+# Vérifications d'une pull request vers `infogene` (play, back et contrats partagés).
 # Reprend les étapes de l'ancien « Continuous Integration Play » d'upstream : types, svelte-check, lint, formatage, tests.
 #
 # SÉCURITÉ : repo public. Déclencheur `pull_request` uniquement (jamais `pull_request_target`) : le jeton est en lecture
@@ -39,7 +39,7 @@ jobs:
           version: "3.x"
 
       - name: Dépendances
-        run: npm ci --workspace=workadventure-play
+        run: npm ci --workspace=workadventure-play --workspace=workadventureback
 
       - name: Dépendances des messages protobuf
         run: npm ci
@@ -76,3 +76,24 @@ jobs:
       - name: Tests unitaires
         run: npm test
         working-directory: play
+
+      - name: Typecheck back et contrats partagés
+        run: |
+          npm run typecheck --workspace=workadventureback
+          npm run typecheck --workspace=@workadventure/shared-utils
+
+      - name: Lint et formatage back
+        run: |
+          npx eslint src/Model/PrivateMessages.ts src/Model/GameRoom.ts src/Services/SocketManager.ts tests/PrivateMessages.test.ts tests/GameRoom.test.ts tests/SocketManagerPrivateMessages.test.ts
+          npx prettier --check src/Model/PrivateMessages.ts src/Model/GameRoom.ts src/Services/SocketManager.ts tests/PrivateMessages.test.ts tests/GameRoom.test.ts tests/SocketManagerPrivateMessages.test.ts
+        working-directory: back
+
+      - name: Lint et formatage des contrats
+        run: |
+          npx eslint src/Events/TextMessages.ts src/index.ts
+          npx prettier --check src/Events/TextMessages.ts src/index.ts
+        working-directory: libs/shared-utils
+
+      - name: Tests back
+        run: npm test -- --run
+        working-directory: back

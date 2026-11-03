@@ -21,6 +21,11 @@ const chat: DeepPartial<Translation["chat"]> = {
     typing: "đang nhập...",
     users: "Người dùng",
     chat: "Trò chuyện",
+    privateMessage: {
+        label: "Tin nhắn riêng",
+        unavailable: "Không thể xác nhận việc gửi. Người nhận có thể đã rời bản đồ; hãy thử lại sau.",
+        sending: "Đang gửi…",
+    },
     userList: {
         disconnected: "Chưa kết nối vào thế giới",
         isHere: "Đang ở bản đồ này",

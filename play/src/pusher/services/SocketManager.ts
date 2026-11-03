@@ -81,6 +81,7 @@ import type { ShortMapDescription } from "./ShortMapDescription";
 import { matrixProvider } from "./MatrixProvider";
 import RecordingService from "./RecordingService";
 import type { PusherWebSocket } from "./PusherWebSocket";
+import { identifyGlobalTextMessage } from "./GlobalTextMessage";
 import { analyticsTimedEventTracker, CONNECTION_SESSION_HANDLE } from "./AnalyticsTimedEventTracker";
 import { isFrameable } from "./EmbeddableHeaders";
 
@@ -1213,7 +1214,13 @@ export class SocketManager implements ZoneEventListener {
             //eslint-disable-next-line no-await-in-loop
             const apiRoom = await apiClientRepository.getClient(roomUrl, GRPC_MAX_MESSAGE_SIZE);
             const roomMessage: AdminRoomMessage = {
-                message: playGlobalMessageEvent.content,
+                message:
+                    playGlobalMessageEvent.type === "message"
+                        ? identifyGlobalTextMessage(playGlobalMessageEvent.content, {
+                              uuid: socketData.userUuid,
+                              name: socketData.name,
+                          })
+                        : playGlobalMessageEvent.content,
                 type: playGlobalMessageEvent.type,
                 roomId: roomUrl,
             };

@@ -20,7 +20,7 @@ import type {
     SubToPusherRoomMessage,
 } from "@workadventure/messages";
 import { isMapDetailsData, RefreshRoomMessage, VariableWithTagMessage } from "@workadventure/messages";
-import { Jitsi, type Movable, SpatialMap } from "@workadventure/shared-utils";
+import { Jitsi, type Movable, SpatialMap, privateMessageEventName } from "@workadventure/shared-utils";
 import type { ITiledMap, ITiledMapProperty, Json } from "@workadventure/tiled-map-type-guard";
 import { asError } from "catch-unknown";
 import { raceAbort } from "@workadventure/shared-utils/src/Abort/raceAbort";
@@ -62,6 +62,7 @@ import { VariableError } from "../Services/VariableError";
 import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
+import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { BrothersFinder } from "./BrothersFinder";
 import { Group } from "./Group";
@@ -81,6 +82,7 @@ const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
 export class GameRoom implements BrothersFinder {
+    private readonly privateMessages = new PrivateMessages((uuid) => this.getUsersByUuid(uuid));
     public readonly id: string;
     // Users, sorted by ID
     private readonly users: SpatialMap<number, User>;
@@ -1552,7 +1554,15 @@ export class GameRoom implements BrothersFinder {
         });
     }
 
+    public sendPrivateMessage(sender: User, data: unknown): void {
+        if (this.getUserById(sender.id) !== sender)
+            throw new PrivateMessageRefusedError("Private messages require a connected sender");
+        this.privateMessages.send(sender, data);
+    }
+
     public dispatchEvent(name: string, data: unknown, senderId: number | "RoomApi", targetUserIds: number[]): void {
+        if (name === privateMessageEventName)
+            throw new PrivateMessageRefusedError("Private messages require a dedicated query");
         if (targetUserIds.length === 0) {
             // Dispatch to all users
             this.sendSubMessageToRoom({

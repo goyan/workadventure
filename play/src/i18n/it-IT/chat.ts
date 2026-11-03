@@ -21,6 +21,12 @@ const chat: DeepPartial<Translation["chat"]> = {
     typing: "sta scrivendo...",
     users: "Utenti",
     chat: "Chat",
+    privateMessage: {
+        label: "Messaggio privato",
+        unavailable:
+            "Impossibile confermare l'invio. Il destinatario potrebbe aver lasciato la mappa; riprova più tardi.",
+        sending: "Invio…",
+    },
     userList: {
         disconnected: "Non connesso al mondo",
         isHere: "È su questa mappa",

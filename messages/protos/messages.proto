@@ -714,6 +714,7 @@ message QueryMessage {
     GetRecordingThumbnailsQuery getRecordingThumbnailsQuery = 23;
     BanIpPreviewQuery banIpPreviewQuery = 24;
     SpaceStateQueryFrontToPusher spaceStateQuery = 25;
+    SendPrivateMessageQuery sendPrivateMessageQuery = 26;
   }
 }
 
@@ -757,6 +758,12 @@ message SendEventQuery {
   google.protobuf.Value data = 2;
   // Leave empty to reach every player in the room, or list the ids to reach only those.
   repeated int32 targetUserIds = 3;
+}
+
+// Dedicated query: older backends cannot reinterpret a private text as a room broadcast.
+message SendPrivateMessageQuery {
+  string recipientUuid = 1;
+  string text = 2;
 }
 
 message SearchMemberQuery {
@@ -835,6 +842,7 @@ message AnswerMessage {
     GetRecordingThumbnailsAnswer getRecordingThumbnailsAnswer = 24;
     BanIpPreviewAnswer banIpPreviewAnswer = 25;
     SpaceStateAnswer spaceStateAnswer = 26;
+    SendPrivateMessageAnswer sendPrivateMessageAnswer = 27;
   }
 }
 
@@ -883,6 +891,8 @@ message RoomsFromSameWorldAnswer {
 message SendEventAnswer {
 }
 
+message SendPrivateMessageAnswer {
+}
 
 message SearchMemberAnswer {
   repeated Member members = 1;

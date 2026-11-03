@@ -19,6 +19,11 @@ const chat: BaseTranslation = {
     typing: "is typing...",
     users: "Users",
     chat: "Chat",
+    privateMessage: {
+        label: "Private message",
+        unavailable: "Sending could not be confirmed. The recipient may have left this map; try again later.",
+        sending: "Sending…",
+    },
     userList: {
         disconnected: "Not connected to the world",
         isHere: "Is on this map",

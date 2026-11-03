@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fade } from "svelte/transition";
     import { QuillDeltaToHtmlConverter } from "quill-delta-to-html";
+    import { textMessageSenderSchema } from "@workadventure/shared-utils";
     import type { Message } from "../../Stores/TypeMessageStore/MessageStore";
     import { textMessageStore } from "../../Stores/TypeMessageStore/TextMessageStore";
     import ButtonClose from "../Input/ButtonClose.svelte";
@@ -13,6 +14,7 @@
     let { message }: Props = $props();
 
     let content = $derived(JSON.parse(message.text));
+    let sender = $derived(textMessageSenderSchema.safeParse(content.sender));
     let converter = $derived(new QuillDeltaToHtmlConverter(content.ops, { inlineStyles: true }));
 
     function closeTextMessage() {
@@ -33,7 +35,10 @@
     out:fade={{ duration: 150 }}
 >
     <div class="icon mt-3 text-white text-xl">💬</div>
-    <div class="content-text-message flex text-white max-h-60 w-full overflow-auto mr-6">
+    <div class="content-text-message flex flex-col text-white max-h-60 w-full overflow-auto mr-6">
+        {#if sender.success}
+            <strong class="mb-1">{sender.data.name}</strong>
+        {/if}
         {@html converter.convert()}
     </div>
     <ButtonClose onclick={closeTextMessage} />
