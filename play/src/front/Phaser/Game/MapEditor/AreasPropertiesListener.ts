@@ -98,6 +98,7 @@ import { isInsidePersonalAreaStore } from "../../../Stores/PersonalDeskStore";
 import { currentPlayerLockableAreasStore, type LockableAreaEntry } from "../../../Stores/CurrentPlayerAreaLockStore";
 import { areaPropertyVariablesManagerStore } from "../../../Stores/AreaPropertyVariablesStore";
 import { touchScreenManager } from "../../../Touch/TouchScreenManager";
+import { MeetingAreaPresence } from "./MeetingAreaPresence";
 
 import Rectangle = Phaser.Geom.Rectangle;
 import Color = Phaser.Display.Color;
@@ -130,6 +131,13 @@ export function getAreaProximitySpaceName(rawName: string, fallbackId: string): 
     return Jitsi.slugifyJitsiRoomName(roomID, "", true).trim();
 }
 
+const MEETING_AREA_PRESENCE_CHECK_MS = 500;
+
+/** The technical identities of the NPCs registered through the pusher (`NpcRegisterService`). */
+function isNpcUserUuid(userUuid: string): boolean {
+    return userUuid.startsWith("npc:");
+}
+
 export class AreasPropertiesListener {
     private scene: GameScene;
 
@@ -160,9 +168,24 @@ export class AreasPropertiesListener {
      * belongs to a player who left the area (or left and came back) in the meantime.
      */
     private enteredMatrixRoomIds = new Map<string, symbol>();
+    /**
+     * The meeting areas (livekitRoomProperty) the player is in. Their meeting only runs while someone else is in
+     * the area: positions are checked every MEETING_AREA_PRESENCE_CHECK_MS while the player is in one.
+     */
+    private readonly meetingAreaPresence: MeetingAreaPresence<LivekitRoomPropertyData>;
+    private meetingAreaPresenceTimer: Phaser.Time.TimerEvent | undefined;
 
     constructor(scene: GameScene) {
         this.scene = scene;
+        this.meetingAreaPresence = new MeetingAreaPresence<LivekitRoomPropertyData>(
+            (areaId) => this.hasSomeoneElseInArea(areaId),
+            (property, signal) => this.handleLivekitRoomPropertyOnEnter(property, signal),
+            (property) => this.handleLivekitRoomPropertyOnLeave(property),
+            (error) => {
+                console.error(error);
+                Sentry.captureException(error);
+            },
+        );
 
         // Subscribe to area property variable changes to update lock state store
         // We subscribe to the manager store to handle cases where the manager is set later
@@ -403,13 +426,7 @@ export class AreasPropertiesListener {
                 break;
             }
             case "livekitRoomProperty": {
-                this.handleLivekitRoomPropertyOnEnter(property, abortController.signal).catch((e) => {
-                    if (e instanceof AbortError) {
-                        return;
-                    }
-                    console.error(e);
-                    Sentry.captureException(e);
-                });
+                this.enterMeetingArea(property, areaData.id);
                 break;
             }
             case "silent": {
@@ -513,17 +530,8 @@ export class AreasPropertiesListener {
                 break;
             }
             case "livekitRoomProperty": {
-                this.handleLivekitRoomPropertyOnLeave(oldProperty)
-                    .then(() => {
-                        return this.handleLivekitRoomPropertyOnEnter(newProperty, newAbortController.signal);
-                    })
-                    .catch((e) => {
-                        if (e instanceof AbortError) {
-                            return;
-                        }
-                        console.error(e);
-                        Sentry.captureException(e);
-                    });
+                this.leaveMeetingArea(oldProperty);
+                this.enterMeetingArea(newProperty, area.id);
                 break;
             }
             case "speakerMegaphone": {
@@ -619,10 +627,7 @@ export class AreasPropertiesListener {
                 break;
             }
             case "livekitRoomProperty": {
-                this.handleLivekitRoomPropertyOnLeave(property).catch((e) => {
-                    console.error(e);
-                    Sentry.captureException(e);
-                });
+                this.leaveMeetingArea(property);
                 break;
             }
             case "silent": {
@@ -1377,6 +1382,42 @@ export class AreasPropertiesListener {
             requestVisitCardsStore.set(null);
         }
         area?.unHighLightArea();
+    }
+
+    private enterMeetingArea(property: LivekitRoomPropertyData, areaId: string): void {
+        this.meetingAreaPresence.enter(property.id, areaId, property);
+        this.meetingAreaPresenceTimer ??= this.scene.time.addEvent({
+            delay: MEETING_AREA_PRESENCE_CHECK_MS,
+            loop: true,
+            callback: () => this.meetingAreaPresence.refresh(),
+        });
+    }
+
+    private leaveMeetingArea(property: LivekitRoomPropertyData): void {
+        this.meetingAreaPresence.leave(property.id);
+        if (this.meetingAreaPresence.size === 0) {
+            this.meetingAreaPresenceTimer?.remove();
+            this.meetingAreaPresenceTimer = undefined;
+        }
+    }
+
+    /**
+     * Whether another player stands in the area, judged like the local player is (`isPlayerInsideArea`).
+     * NPCs do not count: nobody would be there to see or hear the meeting.
+     * Only the players the pusher sends us are known, those around our viewport, which covers a meeting room
+     * we are in.
+     */
+    private hasSomeoneElseInArea(areaId: string): boolean {
+        const gameMapAreas = this.scene.getGameMapFrontWrapper().getGameMap().getWamFile()?.getGameMapAreas();
+        if (!gameMapAreas) {
+            return false;
+        }
+        for (const player of this.scene.getRemotePlayersRepository().getPlayers().values()) {
+            if (!isNpcUserUuid(player.userUuid) && gameMapAreas.isPlayerInsideArea(areaId, player.position)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private async handleLivekitRoomPropertyOnLeave(property: LivekitRoomPropertyData): Promise<void> {
@@ -2167,6 +2208,10 @@ export class AreasPropertiesListener {
             this._requestedCameraStateSubscription();
             this._requestedCameraStateSubscription = undefined;
         }
+
+        this.meetingAreaPresenceTimer?.remove();
+        this.meetingAreaPresenceTimer = undefined;
+        this.meetingAreaPresence.destroy();
 
         // Abort all pending operations
         for (const abortController of this.abortControllers.values()) {

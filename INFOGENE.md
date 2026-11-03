@@ -135,6 +135,24 @@ Tests du vrai `SocketManager` : texte et audio autorisés, refus sans tag, ident
 le tag technique, portée monde et type arbitraire, puis comportement administrateur conservé.
 Recette d'affichage et de lecture audio à faire en beta avec un joueur hors de la conversation du NPC.
 
+### Réunion de zone seulement à plusieurs
+
+Concerne uniquement les zones portant la propriété « démarrer une réunion » (`livekitRoomProperty`).
+Seul dans la zone, le joueur n'est pas en réunion : il garde son statut habituel (présent, absent…),
+le choisit librement et peut former une bulle, sans espace, chat, son ni flux de réunion.
+La réunion démarre dès qu'un autre joueur est dans la zone et s'arrête quand il n'y a plus personne d'autre.
+Un joueur qui entre là où quelqu'un se trouve déjà démarre la réunion tout de suite.
+
+`MeetingAreaPresence.ts` suit les zones de réunion du joueur et enchaîne démarrages et arrêts (un arrêt
+n'en devance jamais le démarrage). `AreasPropertiesListener` vérifie la présence toutes les 500 ms tant que
+le joueur est dans une telle zone, avec la même règle que pour le joueur local (`isPlayerInsideArea`), sur les
+joueurs distants connus du front (ceux autour de la vue, ce qui couvre la salle où l'on est). Les NPC
+(`npc:<id>`) ne comptent pas. Aucun changement du protocole ou du back : le statut « en réunion » exclut
+toujours des bulles une fois la réunion démarrée.
+
+Recette en beta : entrer seul dans une zone de réunion et changer de statut ; faire entrer un second joueur
+(réunion des deux côtés, en moins d'une seconde) ; le faire sortir (réunion quittée, statut d'avant).
+
 ### Sélection et édition en masse
 
 L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.
