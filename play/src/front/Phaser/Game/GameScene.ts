@@ -230,6 +230,8 @@ import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
+import { FootstepSurfaces } from "./FootstepSurfaces";
+import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
@@ -1417,18 +1419,28 @@ export class GameScene extends DirtyScene {
         return personalArea ? [...zones, personalArea] : zones;
     }
 
-    /** Quiet footsteps of the players walking nearby, the local player included. */
+    /** Quiet footsteps of the players walking nearby, the local player included, sounding like the floor they walk on. */
     private updateFootsteps(): void {
-        this.footstepSounds ??= new FootstepSounds(
-            (key, volume) => {
-                this.sound.play(key, { volume });
-            },
-            () => this.getHearingZones(),
-        );
-        const listener = { id: "local", x: this.CurrentPlayer.x, y: this.CurrentPlayer.y };
+        if (!this.footstepSounds) {
+            const surfaces = new FootstepSurfaces(
+                () => readMapLayerEntityStates(this.gameMapFrontWrapper.getEntitiesManager()),
+                (x, y) =>
+                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({ x, y })
+                        .length ?? 0) > 0,
+            );
+            this.footstepSounds = new FootstepSounds(
+                (key, volume) => {
+                    this.sound.play(key, { volume });
+                },
+                () => this.getHearingZones(),
+                (x, y) => surfaces.surfaceAt(x, y),
+            );
+        }
+        // The feet, not the middle of the sprite, tell which floor tile is walked on.
+        const listener = { id: "local", x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y };
         const characters = [listener];
         for (const player of this.MapPlayersByKey.values()) {
-            characters.push({ id: String(player.userId), x: player.x, y: player.y });
+            characters.push({ id: String(player.userId), x: player.x, y: player.y + CHARACTER_BODY_OFFSET_Y });
         }
         this.footstepSounds.update(characters, listener);
     }

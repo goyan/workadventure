@@ -4,7 +4,11 @@ import type { WalkingCharacter } from "./FootstepSounds";
 
 function setup(zones: { x: number; y: number; width: number; height: number }[] = []) {
     const playSound = vi.fn();
-    const footsteps = new FootstepSounds(playSound, () => zones);
+    const footsteps = new FootstepSounds(
+        playSound,
+        () => zones,
+        (x) => (x < 100 ? "wood" : "grass"),
+    );
     const listener: WalkingCharacter = { id: "local", x: 0, y: 0 };
     return { playSound, footsteps, listener };
 }
@@ -74,6 +78,14 @@ describe("FootstepSounds", () => {
             footsteps.update([listener], listener);
         }
 
-        expect(playSound).toHaveBeenCalledWith(expect.stringMatching(/^audio-footstep-/), FOOTSTEP_MAX_VOLUME);
+        expect(playSound).toHaveBeenCalledWith(expect.stringMatching(/^audio-footstep-wood-\d$/), FOOTSTEP_MAX_VOLUME);
+    });
+
+    it("plays the sound of the surface under the walking character", () => {
+        const { playSound, footsteps, listener } = setup();
+
+        walk(footsteps, { id: "7", x: 120, y: 0 }, listener, 20);
+
+        expect(playSound.mock.calls[0][0]).toMatch(/^audio-footstep-grass-\d$/);
     });
 });
