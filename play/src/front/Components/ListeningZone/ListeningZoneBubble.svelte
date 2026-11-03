@@ -12,6 +12,7 @@
     } from "../../ListeningZone/ListeningZoneController";
     import { currentListeningZoneStore, joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
     import { spotifyAccount } from "../../Spotify/SpotifyAccount";
+    import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { handleOpenMenuEvent, settingsSubMenuTargetStore, SubMenusInterface } from "../../Stores/MenuStore";
     import Input from "../Input/Input.svelte";
@@ -19,6 +20,8 @@
     import { IconHeadphones } from "@wa-icons";
 
     const linked = spotifyAccount.linked;
+    // The desktop app reads the Spotify app of this computer: there is no account to link.
+    const readsLocalPlayer = desktopSpotifyPlayer() !== undefined;
 
     let sharing = $state(false);
     let jamUrl = $state("");
@@ -138,7 +141,7 @@
                 </Button>
             {/if}
 
-            {#if !$linked}
+            {#if !$linked && !readsLocalPlayer}
                 <button
                     type="button"
                     class="m-0 p-0 bg-transparent border-none text-xs text-white/60 underline text-start cursor-pointer"
