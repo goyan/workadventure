@@ -99,6 +99,11 @@ Notifications de messages sans service worker (`Notification/MessageNotification
 est absent (fenêtre privée Firefox) ou si `showNotification()` ne répond pas sous 3 s (client desktop Electron),
 une notification de page prend le relais ; son clic ramène l'onglet et ouvre le chat sur le salon, comme le
 `notificationclick` du service worker.
+Statut depuis l'app desktop (`Api/Desktop/index.ts`, `Interfaces/DesktopAppInterfaces.ts`) : deux membres
+facultatifs de `window.WAD`. `onStatusRequest` laisse le client desktop
+([workadventure-desktop](https://github.com/aminekun90/workadventure-desktop)) choisir En ligne, Occupé,
+Ne pas déranger ou De retour bientôt (mêmes choix que le menu de statut) ; `reportStatus` lui transmet le
+statut effectif et son libellé. Sans ces membres, rien ne change.
 Tenir cette liste à jour à chaque patch.
 
 ### Auteur des annonces et messages privés natifs

@@ -1,12 +1,29 @@
 import { get } from "svelte/store";
-import { requestedCameraState, requestedMicrophoneState, silentStore } from "../../Stores/MediaStore";
-import type { WorkAdventureDesktopApi } from "../../Interfaces/DesktopAppInterfaces";
+import { AvailabilityStatus } from "@workadventure/messages";
+import {
+    availabilityStatusStore,
+    requestedCameraState,
+    requestedMicrophoneState,
+    silentStore,
+} from "../../Stores/MediaStore";
+import type { DesktopStatusRequest, WorkAdventureDesktopApi } from "../../Interfaces/DesktopAppInterfaces";
+import { resetAllStatusStoreExcept } from "../../Rules/StatusRules/statusChangerFunctions";
+import type { RequestedStatus } from "../../Rules/StatusRules/statusRules";
+import { getStatusLabel } from "../../Utils/AvailabilityStatus";
 
 declare global {
     interface Window {
         WAD?: WorkAdventureDesktopApi;
     }
 }
+
+/** The statuses a desktop app may ask for: the same choices as the status menu (null = online). */
+export const DESKTOP_STATUS_REQUESTS: Record<DesktopStatusRequest, RequestedStatus | null> = {
+    online: null,
+    busy: AvailabilityStatus.BUSY,
+    "do-not-disturb": AvailabilityStatus.DO_NOT_DISTURB,
+    "back-in-a-moment": AvailabilityStatus.BACK_IN_A_MOMENT,
+};
 
 class DesktopApi {
     isSilent = false;
@@ -40,6 +57,24 @@ class DesktopApi {
         //eslint-disable-next-line svelte/no-ignored-unsubscribe
         silentStore.subscribe((silent) => {
             this.isSilent = silent;
+        });
+
+        this.initStatus(window.WAD);
+    }
+
+    /** Optional: older desktop apps provide neither member, and nothing changes for them. */
+    private initStatus(desktop: WorkAdventureDesktopApi) {
+        desktop.onStatusRequest?.((request) => {
+            if (!Object.hasOwn(DESKTOP_STATUS_REQUESTS, request)) return;
+            resetAllStatusStoreExcept(DESKTOP_STATUS_REQUESTS[request]);
+        });
+
+        const reportStatus = desktop.reportStatus;
+        if (!reportStatus) return;
+        // Not unsubscribing is ok, this is a singleton.
+        //eslint-disable-next-line svelte/no-ignored-unsubscribe
+        availabilityStatusStore.subscribe((status) => {
+            reportStatus(AvailabilityStatus[status], getStatusLabel(status));
         });
     }
 }
