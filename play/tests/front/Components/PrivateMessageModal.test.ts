@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { get } from "svelte/store";
 import PrivateMessageModal from "../../../src/front/Components/PrivateMessage/PrivateMessageModal.svelte";
@@ -7,7 +7,7 @@ import {
     privateMessageHistoryStore,
     recordPrivateMessage,
 } from "../../../src/front/Stores/PrivateMessageStore";
-import { inputFormFocusStore } from "../../../src/front/Stores/UserInputStore";
+import { enableUserInputsStore, inputFormFocusStore } from "../../../src/front/Stores/UserInputStore";
 import { blackListManager } from "../../../src/front/WebRtc/BlackListManager";
 
 vi.mock("../../../src/i18n/i18n-svelte", async () => {
@@ -32,6 +32,10 @@ vi.mock("@wa-modals", () => ({ modals: { close: vi.fn() } }));
 
 const target = document.createElement("div");
 let component: ReturnType<typeof mount> | undefined;
+
+beforeEach(() => {
+    document.body.append(target);
+});
 
 function renderModal(send: (text: string) => Promise<void> = () => Promise.resolve()): HTMLTextAreaElement {
     flushSync(() => {
@@ -69,12 +73,34 @@ afterEach(async () => {
     component = undefined;
     if (mountedComponent) await unmount(mountedComponent, { outro: false });
     target.replaceChildren();
+    target.remove();
     clearPrivateMessages();
     inputFormFocusStore.set(false);
     blackListManager.cancelBlackList("peer-ada");
 });
 
 describe("PrivateMessageModal", () => {
+    it("focuses the composer on opening and disables avatar inputs while typing", () => {
+        const textarea = renderModal();
+
+        expect(document.activeElement).toBe(textarea);
+        expect(get(inputFormFocusStore)).toBe(true);
+        expect(get(enableUserInputsStore)).toBe(false);
+    });
+
+    it("does not steal focus when a new private message arrives", () => {
+        renderModal();
+        const close = target.querySelector<HTMLButtonElement>('[data-testid="closeModal"]');
+        if (!close) throw new Error("Private message close button did not render");
+        close.focus();
+
+        flushSync(() => {
+            recordPrivateMessage({ peerUuid: "peer-ada", peerName: "Ada", text: "New reply", incoming: true });
+        });
+
+        expect(document.activeElement).toBe(close);
+    });
+
     it("shows only the selected peer's history and renders message text as text", async () => {
         recordPrivateMessage({ peerUuid: "peer-other", peerName: "Other", text: "Other private text", incoming: true });
         recordPrivateMessage({ peerUuid: "peer-ada", peerName: "Ada", text: "Earlier message", incoming: true });
@@ -92,6 +118,8 @@ describe("PrivateMessageModal", () => {
         expect(target.querySelector("img")).toBeNull();
         expect(target.textContent).toContain("You");
         expect(textarea.value).toBe("");
+        expect(document.activeElement).toBe(textarea);
+        expect(get(inputFormFocusStore)).toBe(true);
     });
 
     it("keeps the draft and reports an unavailable peer when sending fails", async () => {
@@ -105,6 +133,7 @@ describe("PrivateMessageModal", () => {
         expect(send).toHaveBeenCalledWith("Please reply");
         expect(textarea.value).toBe("  Please reply  ");
         expect(get(privateMessageHistoryStore)).toEqual([]);
+        expect(document.activeElement).toBe(textarea);
     });
 
     it("blocks sends to a blacklisted peer without clearing the draft", () => {
@@ -153,9 +182,14 @@ describe("PrivateMessageModal", () => {
 
         expect(send).toHaveBeenCalledTimes(1);
         expect(textarea.disabled).toBe(true);
+        const close = target.querySelector<HTMLButtonElement>('[data-testid="closeModal"]');
+        if (!close) throw new Error("Private message close button did not render");
+        close.focus();
+        expect(document.activeElement).not.toBe(textarea);
         resolveSend();
         await vi.waitFor(() => expect(get(privateMessageHistoryStore)).toHaveLength(1));
         expect(textarea.value).toBe("");
+        expect(document.activeElement).toBe(textarea);
     });
 
     it("releases input focus and ignores a late send result after destruction", async () => {
@@ -177,6 +211,7 @@ describe("PrivateMessageModal", () => {
         if (!mountedComponent) throw new Error("Private message modal was not mounted");
         await unmount(mountedComponent, { outro: false });
         expect(get(inputFormFocusStore)).toBe(false);
+        expect(get(enableUserInputsStore)).toBe(true);
 
         resolveSend();
         await Promise.resolve();
