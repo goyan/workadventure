@@ -122,6 +122,19 @@ de confiance que les autres routes d'authentification. Le JWT émis ne contient 
 les droits et bans restent vérifiés par `/api/room/access`. La clé NPC vide et le domaine prod font
 refuser toutes les invitations par l'Admin API prod. Aucun changement de protobuf ou de back.
 
+### Annonces globales des NPC
+
+Le pusher accepte `playGlobalMessage` d'une identité technique `npc:<id>` portant le tag
+`npc-global-message`, uniquement pour les types natifs `message` et `audio` et pour sa carte.
+Le back distribue le même message d'administration à tous les joueurs de la carte, indépendamment
+des bulles et réunions. Ce tag ne donne aucun droit d'édition, de modération ou de diffusion entre cartes.
+Les droits des administrateurs humains restent ceux d'origine. L'Admin API beta décide quels droits
+elle attribue aux comptes techniques ; aucun tag ne vient du corps du message ou de l'invitation.
+
+Tests du vrai `SocketManager` : texte et audio autorisés, refus sans tag, identité humaine portant
+le tag technique, portée monde et type arbitraire, puis comportement administrateur conservé.
+Recette d'affichage et de lecture audio à faire en beta avec un joueur hors de la conversation du NPC.
+
 ### Sélection et édition en masse
 
 L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.
