@@ -36,6 +36,20 @@ describe("TileBarriers", () => {
         expect(barriers.touchesTile(3, 3)).toBe(false);
     });
 
+    it("compares the barriers and the thickness", () => {
+        const make = (halfThickness: number, west: number) => {
+            const barriers = new TileBarriers(halfThickness);
+            barriers.addSouthBorder(2, 3);
+            barriers.addWestBorder(west, 1);
+            return barriers;
+        };
+
+        expect(make(9, 5).equals(make(9, 5))).toBe(true);
+        expect(make(9, 5).equals(make(9, 6))).toBe(false);
+        expect(make(9, 5).equals(make(0, 5))).toBe(false);
+        expect(make(9, 5).equals(new TileBarriers(9))).toBe(false);
+    });
+
     it("has no barrier by default", () => {
         expect(TileBarriers.NONE.blocksMove({ x: 0, y: 0 }, { x: 1, y: 1 })).toBe(false);
         expect(TileBarriers.NONE.touchesTile(0, 0)).toBe(false);

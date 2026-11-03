@@ -61,4 +61,25 @@ export class TileBarriers {
             this.west.has(TileBarriers.key(x + 1, y))
         );
     }
+
+    /** Whether both have the same barriers and the same thickness. */
+    public equals(other: TileBarriers): boolean {
+        return (
+            this.halfThickness === other.halfThickness &&
+            TileBarriers.sameKeys(this.south, other.south) &&
+            TileBarriers.sameKeys(this.west, other.west)
+        );
+    }
+
+    private static sameKeys(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+        if (a.size !== b.size) {
+            return false;
+        }
+        for (const key of a) {
+            if (!b.has(key)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

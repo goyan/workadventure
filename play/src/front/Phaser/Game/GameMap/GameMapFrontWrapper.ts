@@ -123,6 +123,8 @@ export class GameMapFrontWrapper {
     private readonly entityCollisionRectangles: EntityCollisionRectangles;
 
     private collisionGridDirty = true;
+    private sharedCollisionGrid: number[][] = [];
+    private sharedCollisionGridDirty = true;
     private areasCollisionLayerDirty = true;
     private perLayerCollisionGridCache: Map<number, (0 | 1 | 2 | 3)[][]> = new Map<number, (0 | 1 | 2 | 3)[][]>();
     private dirtyLayerIndices: Set<number> = new Set<number>();
@@ -582,6 +584,7 @@ export class GameMapFrontWrapper {
             this.dirtyLayerIndices.add(modifiedLayer.layerIndex);
         }
         this.collisionGridDirty = true;
+        this.sharedCollisionGridDirty = true;
     }
 
     private rebuildAreasCollisionLayer(): void {
@@ -611,16 +614,45 @@ export class GameMapFrontWrapper {
             this.rebuildAreasCollisionLayer();
         }
 
+        this.collisionGrid = this.composeCollisionGrid(true);
+        this.collisionGridDirty = false;
+        if (emitMapChangedEvent) {
+            this.mapChangedSubject.next(this.collisionGrid);
+        }
+    }
+
+    /**
+     * The same collisions as getCollisionGrid, without the areas that collide for the current player only (access
+     * rights, locked or full rooms): identical on every client. The same array is returned as long as its content does
+     * not change.
+     */
+    public getSharedCollisionGrid(): number[][] {
+        if (this.sharedCollisionGridDirty) {
+            this.sharedCollisionGridDirty = false;
+            const grid = this.composeCollisionGrid(false);
+            if (!areSameGrids(grid, this.sharedCollisionGrid)) {
+                this.sharedCollisionGrid = grid;
+            }
+        }
+        return this.sharedCollisionGrid;
+    }
+
+    /**
+     * Merges the collisions of the layers into a new grid.
+     * @param includeAreasCollisions Whether the areas that collide for the current player are part of it
+     */
+    private composeCollisionGrid(includeAreasCollisions: boolean): number[][] {
         const map = this.gameMap.getMap();
         // initialize collision grid to write on
         if (map.height === undefined || map.width === undefined) {
-            this.collisionGrid = [];
-            this.collisionGridDirty = false;
-            return;
+            return [];
         }
         const grid: number[][] = Array.from(Array(map.height), (_) => Array(map.width).fill(PathTileType.Walkable));
         // go through all tilemap layers on map. Maintain order
         for (const layer of this.phaserLayers) {
+            if (layer === this.areasCollisionLayer && !includeAreasCollisions) {
+                continue;
+            }
             if (!layer.visible && layer !== this.entitiesCollisionLayer && layer !== this.areasCollisionLayer) {
                 continue;
             }
@@ -655,11 +687,7 @@ export class GameMapFrontWrapper {
             }
         }
         this.applyPathfindingAreaWeights(grid, map.width, map.height);
-        this.collisionGrid = grid;
-        this.collisionGridDirty = false;
-        if (emitMapChangedEvent) {
-            this.mapChangedSubject.next(this.collisionGrid);
-        }
+        return grid;
     }
 
     /**
@@ -1843,4 +1871,23 @@ export class GameMapFrontWrapper {
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }
+}
+
+function areSameGrids(a: number[][], b: number[][]): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+    for (let y = 0; y < a.length; y++) {
+        const rowA = a[y];
+        const rowB = b[y];
+        if (rowA.length !== rowB.length) {
+            return false;
+        }
+        for (let x = 0; x < rowA.length; x++) {
+            if (rowA[x] !== rowB[x]) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
