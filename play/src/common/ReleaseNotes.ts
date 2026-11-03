@@ -19,6 +19,47 @@ export function formatReleaseNoteDate(date: string, locale: string, timeZone?: s
     return new Intl.DateTimeFormat(locale, { dateStyle: "long", timeStyle: "short", timeZone }).format(new Date(date));
 }
 
+/** Time of a note, in the viewer's time zone unless one is given. */
+export function formatReleaseNoteTime(date: string, locale: string, timeZone?: string): string {
+    return new Intl.DateTimeFormat(locale, { timeStyle: "short", timeZone }).format(new Date(date));
+}
+
+export interface ReleaseNoteDay {
+    /** "today", "yesterday" in the viewer's language, otherwise the long date. */
+    label: string;
+    notes: ReleaseNote[];
+}
+
+/** The notes grouped by day, newest first, as they come: one heading per day instead of a date on every line. */
+export function groupReleaseNotesByDay(
+    notes: readonly ReleaseNote[],
+    { locale, timeZone, now = new Date() }: { locale: string; timeZone?: string; now?: Date },
+): ReleaseNoteDay[] {
+    const dayOf = new Intl.DateTimeFormat("en-CA", { dateStyle: "short", timeZone });
+    const relative = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+    const longDate = new Intl.DateTimeFormat(locale, { dateStyle: "long", timeZone });
+    const today = dayOf.format(now);
+    const yesterday = dayOf.format(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+    const days: ReleaseNoteDay[] = [];
+    let currentDay: string | undefined;
+    for (const note of notes) {
+        const date = new Date(note.date);
+        const day = dayOf.format(date);
+        if (day !== currentDay) {
+            currentDay = day;
+            const label =
+                day === today
+                    ? relative.format(0, "day")
+                    : day === yesterday
+                      ? relative.format(-1, "day")
+                      : longDate.format(date);
+            days.push({ label, notes: [] });
+        }
+        days[days.length - 1]?.notes.push(note);
+    }
+    return days;
+}
+
 export function getNewReleaseNotes(deployed: ReleaseNote[], loaded: ReleaseNote[]): ReleaseNote[] {
     const knownIds = new Set(loaded.map((note) => note.id));
     return deployed.filter((note) => !knownIds.has(note.id));

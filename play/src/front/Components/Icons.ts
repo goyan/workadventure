@@ -103,6 +103,8 @@ export { default as IconFocusCentered } from "~icons/tabler/focus-centered";
 export { default as IconWalk } from "~icons/tabler/walk";
 export { default as IconEye } from "~icons/tabler/eye";
 export { default as IconBug } from "~icons/tabler/bug";
+export { default as IconSparkles } from "~icons/tabler/sparkles";
+export { default as IconTool } from "~icons/tabler/tool";
 export { default as IconReload } from "~icons/tabler/reload";
 export { default as IconLockCancel } from "~icons/tabler/lock-cancel";
 export { default as IconLockHash } from "./Icons/LockHashIcon.svelte";
