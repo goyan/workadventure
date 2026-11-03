@@ -10,6 +10,9 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "取消关联",
         linked: "你的 Spotify 账号已关联。",
         share: "分享我正在听的音乐",
+        desktopDetected: "从本机的 Spotify 应用读取：无需关联账号，免费账号即可。",
+        desktopAppHint: "使用 WorkAdventure 桌面应用，无需关联账号或 Premium：它直接读取你 Mac 上的 Spotify 应用。",
+        desktopAppLink: "下载桌面应用",
         serverAppNotice:
             "没有自己的客户端 ID 时，将通过此服务器的 Spotify 应用关联：请先请管理员把你的 Spotify 账号加入该应用（最多 5 人）。",
         accessDenied:

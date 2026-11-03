@@ -10,6 +10,10 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unlink: "إلغاء الربط",
         linked: "حسابك في Spotify مرتبط.",
         share: "مشاركة ما أستمع إليه",
+        desktopDetected: "يُقرأ من تطبيق Spotify على هذا الحاسوب: لا حاجة لربط حساب، يكفي حساب Spotify مجاني.",
+        desktopAppHint:
+            "مع تطبيق WorkAdventure لسطح المكتب لا حاجة لربط حساب ولا لـ Premium: يقرأ تطبيق Spotify على جهاز Mac.",
+        desktopAppLink: "تنزيل تطبيق سطح المكتب",
         serverAppNotice:
             "بدون معرّف عميل خاص بك، يتم الربط عبر تطبيق Spotify الخاص بهذا الخادم: اطلب أولًا من أحد المسؤولين إضافة حسابك في Spotify إليه (5 أشخاص كحد أقصى).",
         accessDenied:

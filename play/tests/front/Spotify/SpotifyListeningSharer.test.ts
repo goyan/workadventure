@@ -3,7 +3,7 @@ import { writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { JoinedJam } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import { SpotifyListeningSharer } from "../../../src/front/Spotify/SpotifyListeningSharer";
-import type { CurrentlyPlayingResult } from "../../../src/front/Spotify/SpotifyPlayerApi";
+import type { CurrentlyPlayingResult, SpotifyTrack } from "../../../src/front/Spotify/SpotifyPlayerApi";
 
 const POLL_MS = 1_000;
 
@@ -107,5 +107,62 @@ describe("SpotifyListeningSharer", () => {
 
         expect(expireAccessToken).toHaveBeenCalled();
         sharer.destroy();
+    });
+
+    describe("with the Spotify app of this computer (desktop app)", () => {
+        function createLocalHarness() {
+            const linked = writable(false);
+            const sharing = writable(true);
+            const published: SpotifyListening[] = [];
+            const fetchTrack = vi
+                .fn<(accessToken: string) => Promise<CurrentlyPlayingResult>>()
+                .mockResolvedValue(song);
+            let onTrack: ((track: SpotifyTrack | undefined) => void) | undefined;
+            const stopWatching = vi.fn();
+            const watch = vi.fn((callback: (track: SpotifyTrack | undefined) => void) => {
+                onTrack = callback;
+                return stopWatching;
+            });
+            const sharer = new SpotifyListeningSharer(
+                (listening) => published.push(listening),
+                {
+                    linked,
+                    getAccessToken: () => Promise.resolve("token"),
+                    expireAccessToken: vi.fn(),
+                    reportAccessDenied: vi.fn(),
+                },
+                sharing,
+                writable<JoinedJam | undefined>(undefined),
+                fetchTrack,
+                POLL_MS,
+                { watch },
+            );
+            const play = (track: SpotifyTrack | undefined) => onTrack?.(track);
+            return { sharer, sharing, published, fetchTrack, watch, stopWatching, play };
+        }
+
+        it("shares without a linked account, and never calls the Web API", async () => {
+            const { sharer, published, fetchTrack, play } = createLocalHarness();
+
+            play({ title: "Local song", artist: "Band", url: "https://open.spotify.com/track/xyz" });
+            await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+
+            expect(published.at(-1)).toMatchObject({ trackTitle: "Local song", artistName: "Band" });
+            expect(fetchTrack).not.toHaveBeenCalled();
+            sharer.destroy();
+        });
+
+        it("clears the track when nothing plays, and stops reading when sharing is turned off", () => {
+            const { sharer, sharing, published, watch, stopWatching, play } = createLocalHarness();
+            play({ title: "Local song", artist: "Band", url: "" });
+            play(undefined);
+            expect(published.at(-1)?.trackTitle).toBe("");
+
+            sharing.set(false);
+            expect(stopWatching).toHaveBeenCalledOnce();
+            sharing.set(true);
+            expect(watch).toHaveBeenCalledTimes(2);
+            sharer.destroy();
+        });
     });
 });
