@@ -34,6 +34,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "فهمت، متابعة",
         dontRemindAgain: "عدم عرض هذه الرسالة مرة أخرى",
     },
+    sessionReplaced: {
+        title: "الجلسة مفتوحة في مكان آخر",
+        message:
+            "لقد فتحت هذه الغرفة في علامة تبويب أخرى أو متصفح آخر أو تطبيق سطح المكتب. يحتفظ كل حساب بجلسة واحدة فقط في الغرفة.",
+        takeBack: "استعادتها هنا",
+    },
     browserNotSupported: {
         title: "😢 المتصفح غير مدعوم",
         message: "المتصفح الخاص بك ({browserName}) لم يعد مدعوماً من WorkAdventure.",

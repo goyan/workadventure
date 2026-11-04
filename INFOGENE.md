@@ -224,6 +224,22 @@ toujours des bulles une fois la réunion démarrée.
 Recette en beta : entrer seul dans une zone de réunion et changer de statut ; faire entrer un second joueur
 (réunion des deux côtés, en moins d'une seconde) ; le faire sortir (réunion quittée, statut d'avant).
 
+### Une session par compte et par salle
+
+Un compte connecté n'a plus qu'un avatar par salle. Quand il rejoint la salle depuis un autre onglet, un autre
+navigateur ou le client desktop, `GameRoom.join` ferme ses sessions précédentes dans la salle : le dernier arrivé
+garde la place. L'ancienne page reçoit un `errorScreenMessage` de type `sessionReplaced` (constante partagée
+`SESSION_REPLACED_ERROR_TYPE`), affiche « Session ouverte ailleurs » avec un bouton « Reprendre ici » qui recharge
+la page, et ne se reconnecte pas seule : deux onglets ouverts ne se reprennent donc pas la place en boucle.
+Les anonymes (uuid tiré du localStorage) gardent l'avertissement d'origine (`duplicateUserConnectedMessage`).
+
+Un onglet déjà coupé du réseau (Mac en veille) ne reçoit pas l'écran : à son réveil, il ouvre une connexion
+neuve et reprend la place. Aucun changement du protocole.
+
+Recette en beta : ouvrir la même salle dans un navigateur puis dans le client desktop (un seul avatar, écran
+dans le navigateur) ; cliquer « Reprendre ici » (la place revient au navigateur, écran dans le desktop) ;
+ouvrir deux salles différentes (aucune éviction).
+
 ### Spotify : ce qu'on écoute et zones d'écoute
 
 **Menu → Réglages → Spotify** : « Lier Spotify » ouvre une fenêtre d'autorisation Spotify (flux *authorization

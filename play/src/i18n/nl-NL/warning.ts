@@ -34,6 +34,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "Begrepen, doorgaan",
         dontRemindAgain: "Dit bericht niet meer tonen",
     },
+    sessionReplaced: {
+        title: "Sessie elders geopend",
+        message:
+            "Je hebt deze ruimte geopend in een ander tabblad, een andere browser of de desktop-app. Per account blijft er maar één sessie in de ruimte.",
+        takeBack: "Hier terugnemen",
+    },
     browserNotSupported: {
         title: "😢 Browser niet ondersteund",
         message: "Uw browser ({browserName}) wordt niet meer ondersteund door WorkAdventure.",

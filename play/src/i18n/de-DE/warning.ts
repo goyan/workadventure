@@ -35,6 +35,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "Verstanden, fortfahren",
         dontRemindAgain: "Diese Meldung nicht mehr anzeigen",
     },
+    sessionReplaced: {
+        title: "Sitzung anderswo geöffnet",
+        message:
+            "Du hast diesen Raum in einem anderen Tab, Browser oder in der Desktop-App geöffnet. Pro Konto bleibt nur eine Sitzung im Raum.",
+        takeBack: "Hier zurückholen",
+    },
     browserNotSupported: {
         title: "😢 Browser wird nicht unterstützt",
         message: "Ihr Browser ({browserName}) wird von WorkAdventure nicht mehr unterstützt.",

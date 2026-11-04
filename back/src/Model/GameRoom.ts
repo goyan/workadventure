@@ -24,8 +24,19 @@ import type {
     SetPlayerDetailsMessage,
     SubToPusherRoomMessage,
 } from "@workadventure/messages";
-import { isMapDetailsData, RefreshRoomMessage, VariableWithTagMessage } from "@workadventure/messages";
-import { Jitsi, type Movable, SpatialMap, privateMessageEventName } from "@workadventure/shared-utils";
+import {
+    ErrorScreenMessage,
+    isMapDetailsData,
+    RefreshRoomMessage,
+    VariableWithTagMessage,
+} from "@workadventure/messages";
+import {
+    Jitsi,
+    type Movable,
+    SESSION_REPLACED_ERROR_TYPE,
+    SpatialMap,
+    privateMessageEventName,
+} from "@workadventure/shared-utils";
 import type { ITiledMap, ITiledMapProperty, Json } from "@workadventure/tiled-map-type-guard";
 import { asError } from "catch-unknown";
 import { raceAbort } from "@workadventure/shared-utils/src/Abort/raceAbort";
@@ -331,6 +342,12 @@ export class GameRoom implements BrothersFinder {
             }
         }
 
+        // A logged user keeps one avatar per room: the latest session replaces the others (other tab,
+        // browser or desktop app). Anonymous uuids come from localStorage, so they keep the warning below.
+        if (joinRoomMessage.isLogged) {
+            this.replaceOtherSessions(joinRoomMessage.userUuid);
+        }
+
         // Same-tab reconnections should not be reported as duplicate sessions.
         const sameUserAlreadyConnected = (this.getUsersByUuid(joinRoomMessage.userUuid)?.size ?? 0) >= 1;
 
@@ -392,6 +409,33 @@ export class GameRoom implements BrothersFinder {
         }
 
         return user;
+    }
+
+    /**
+     * Closes every session of this user in the room. The error screen is terminal on the front (no automatic
+     * reconnection), so two open tabs cannot take the place from each other in a loop: only a click on
+     * "take back here" does.
+     */
+    private replaceOtherSessions(userUuid: string): void {
+        for (const existingUser of [...this.getUsersByUuid(userUuid)]) {
+            console.info(`New session for user ${userUuid}. Replacing the previous one.`);
+            if (existingUser.socket.writable) {
+                existingUser.socket.write({
+                    message: {
+                        $case: "errorScreenMessage",
+                        errorScreenMessage: ErrorScreenMessage.fromPartial({
+                            type: SESSION_REPLACED_ERROR_TYPE,
+                            code: SESSION_REPLACED_ERROR_TYPE,
+                        }),
+                    },
+                });
+            }
+            this.leave(existingUser);
+            endUserConnectionWithReason(
+                existingUser.socket,
+                `A new session of user ${userUuid} replaced this connection.`,
+            );
+        }
     }
 
     public leave(user: User) {

@@ -33,6 +33,12 @@ const warning: BaseTranslation = {
         confirmContinue: "Entendi, continuar",
         dontRemindAgain: "Não mostrar esta mensagem novamente",
     },
+    sessionReplaced: {
+        title: "Sessão aberta em outro lugar",
+        message:
+            "Você abriu esta sala em outra aba, outro navegador ou no aplicativo desktop. Cada conta mantém apenas uma sessão na sala.",
+        takeBack: "Retomar aqui",
+    },
     browserNotSupported: {
         title: "😢 Navegador não suportado",
         message: "Seu navegador ({browserName}) não é mais suportado pelo WorkAdventure.",

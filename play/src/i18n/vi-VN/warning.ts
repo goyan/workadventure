@@ -34,6 +34,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "Tôi hiểu, tiếp tục",
         dontRemindAgain: "Không hiển thị thông báo này nữa",
     },
+    sessionReplaced: {
+        title: "Phiên đã mở ở nơi khác",
+        message:
+            "Bạn đã mở phòng này trong một tab khác, trình duyệt khác hoặc ứng dụng máy tính. Mỗi tài khoản chỉ giữ một phiên trong phòng.",
+        takeBack: "Lấy lại tại đây",
+    },
     browserNotSupported: {
         title: "😢 Trình duyệt không được hỗ trợ",
         message: "Trình duyệt của bạn ({browserName}) không còn được WorkAdventure hỗ trợ.",

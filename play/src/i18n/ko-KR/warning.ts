@@ -34,6 +34,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "이해했습니다, 계속",
         dontRemindAgain: "이 메시지를 다시 표시하지 않음",
     },
+    sessionReplaced: {
+        title: "다른 곳에서 세션이 열렸습니다",
+        message:
+            "이 방을 다른 탭, 다른 브라우저 또는 데스크톱 앱에서 열었습니다. 계정당 방에는 하나의 세션만 유지됩니다.",
+        takeBack: "여기서 다시 가져오기",
+    },
     browserNotSupported: {
         title: "😢 지원되지 않는 브라우저",
         message: "사용 중인 브라우저({browserName})는 더 이상 WorkAdventure에서 지원되지 않습니다.",
