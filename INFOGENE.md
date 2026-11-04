@@ -437,6 +437,16 @@ carte en cours d'édition, peuvent montrer brièvement des positions différente
 
 Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
 
+### Uploader : fichiers binaires dans Redis et image du fork
+
+`RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
+les relisait en chaîne UTF-8, ce qui détruisait les messages audio globaux et les fichiers du chat stockés dans Redis. Un
+fichier expiré ou inconnu répond 404, et non plus 200 avec un corps vide.
+
+`build-play` publie aussi `ghcr.io/goyan/workadventure-uploader`, sur le même commit que les trois autres images.
+L'image a un `HEALTHCHECK` sur `/ping` (par `fetch` de Node, l'image slim n'a pas curl), car `deploy.sh` attend l'état
+« healthy ». La beta la prend avec les trois autres quand l'image du même commit existe. La prod garde l'uploader officiel.
+
 ### Création de carte depuis l'éditeur
 
 Dans l'éditeur, la propriété de zone « Quitter la carte » (`exit`) propose un bloc **« Créer une nouvelle carte »** : nom, bouton, et la sortie pointe
