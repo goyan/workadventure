@@ -39,77 +39,80 @@
 </script>
 
 {#if playing && links}
-    <!-- Fixed width: the menu sizes to its content, so a long title would widen it and every track change resize it.
-         At a fixed width, the texts truncate instead. -->
+    <!-- Fills the menu, whose width is fixed: a long title is truncated instead of resizing it on every track. -->
     <div
-        class="mx-auto mb-3 flex w-80 max-w-full gap-3 items-center rounded-lg bg-white/10 p-2 text-start"
+        class="mx-4 mb-3 rounded-xl border border-white/10 bg-linear-to-br from-[#1ed760]/15 to-white/5 p-3 text-start"
         data-testid="listening-card"
     >
-        {#if playing.artworkUrl}
-            <img
-                src={playing.artworkUrl}
-                alt={playing.albumName}
-                class="w-16 h-16 shrink-0 rounded-md object-cover"
-                referrerpolicy="no-referrer"
-            />
-        {:else}
-            <div class="w-16 h-16 shrink-0 rounded-md bg-white/10 flex items-center justify-center">
-                <ListeningSourceIcon source={listeningSourceOf(playing)} size="32" />
-            </div>
-        {/if}
-        <div class="min-w-0 grow">
-            <div class="flex items-center gap-1 text-xs text-white/60">
-                <ListeningSourceIcon source={listeningSourceOf(playing)} size="14" />
-                {$LL.spotify.card.listeningNow()}
-            </div>
-            <div class="truncate font-bold text-white">{playing.trackTitle}</div>
-            <div class="truncate text-sm text-white/75">
-                {playing.artistName}{playing.albumName ? ` — ${playing.albumName}` : ""}
-            </div>
-            {#if context && contextUrl}
-                <a
-                    href={contextUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="block truncate text-xs text-white/75 hover:underline"
-                    data-testid="listening-context"
-                >
-                    {context.type === "album"
-                        ? $LL.spotify.card.album({ name: playing.contextName || "?" })
-                        : $LL.spotify.card.playlist({ name: playing.contextName || "?" })}
-                </a>
-            {/if}
-            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                <span class="text-white/60">{$LL.spotify.card.listenToo()}</span>
-                <a
-                    href={links.spotify}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center gap-1 text-[#1ed760] hover:underline"
-                    data-testid="listen-too-spotify"
-                >
-                    <ListeningSourceIcon source="spotify" size="14" />Spotify
-                </a>
-                <a
-                    href={links["apple-music"]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center gap-1 text-[#fa2d48] hover:underline"
-                    data-testid="listen-too-apple-music"
-                >
-                    <ListeningSourceIcon source="apple-music" size="14" />Apple Music
-                </a>
-            </div>
-            {#if followable || following}
-                <button
-                    type="button"
-                    class="mt-2 rounded-md border border-[#1ed760] px-2 py-1 text-xs font-bold text-[#1ed760] hover:bg-[#1ed760]/10"
-                    onclick={toggleFollow}
-                    data-testid="listen-along"
-                >
-                    {following ? $LL.spotify.card.stopListeningAlong() : $LL.spotify.card.listenAlong()}
-                </button>
-            {/if}
+        <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#1ed760]">
+            <ListeningSourceIcon source={listeningSourceOf(playing)} size="14" />
+            {$LL.spotify.card.listeningNow()}
         </div>
+        <div class="flex items-center gap-3">
+            {#if playing.artworkUrl}
+                <img
+                    src={playing.artworkUrl}
+                    alt={playing.albumName}
+                    class="h-16 w-16 shrink-0 rounded-lg object-cover shadow-lg"
+                    referrerpolicy="no-referrer"
+                />
+            {:else}
+                <div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white/10">
+                    <ListeningSourceIcon source={listeningSourceOf(playing)} size="32" />
+                </div>
+            {/if}
+            <div class="min-w-0 flex-1">
+                <div class="truncate font-bold text-white">{playing.trackTitle}</div>
+                <div class="truncate text-sm text-white/70">
+                    {playing.artistName}{playing.albumName ? ` — ${playing.albumName}` : ""}
+                </div>
+                {#if context && contextUrl}
+                    <a
+                        href={contextUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="block truncate text-xs text-white/60 hover:text-white hover:underline"
+                        data-testid="listening-context"
+                    >
+                        {context.type === "album"
+                            ? $LL.spotify.card.album({ name: playing.contextName || "?" })
+                            : $LL.spotify.card.playlist({ name: playing.contextName || "?" })}
+                    </a>
+                {/if}
+            </div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-white/50">{$LL.spotify.card.listenToo()}</span>
+            <a
+                href={links.spotify}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[#1ed760] hover:bg-white/20"
+                data-testid="listen-too-spotify"
+            >
+                <ListeningSourceIcon source="spotify" size="12" />Spotify
+            </a>
+            <a
+                href={links["apple-music"]}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[#fa2d48] hover:bg-white/20"
+                data-testid="listen-too-apple-music"
+            >
+                <ListeningSourceIcon source="apple-music" size="12" />Apple Music
+            </a>
+        </div>
+        {#if followable || following}
+            <button
+                type="button"
+                class="mt-3 w-full rounded-full py-1.5 text-xs font-bold transition-colors {following
+                    ? 'border border-[#1ed760] text-[#1ed760] hover:bg-[#1ed760]/10'
+                    : 'bg-[#1ed760] text-black hover:bg-[#3be477]'}"
+                onclick={toggleFollow}
+                data-testid="listen-along"
+            >
+                {following ? $LL.spotify.card.stopListeningAlong() : $LL.spotify.card.listenAlong()}
+            </button>
+        {/if}
     </div>
 {/if}

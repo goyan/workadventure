@@ -210,6 +210,10 @@
         }),
     );
     let marginRight = $derived(mapEditorReservedSpace + $sidePanelWidthStore);
+    // A player's menu, a visit card or an invitation opens on the right, where the toast stack is.
+    let sidePanelOpen = $derived(
+        Boolean($requestVisitCardsStore || $wokaMenuStore || $actionsMenuStore || $meetingInvitationRequestStore),
+    );
 
     function onHighlightFullscreenSendMessage() {
         if (get(chatVisibilityStore) && get(navChat).key === "chat") {
@@ -427,7 +431,10 @@
                     <CalendarReminders />
                 {/if}
                 <RaisedHandsDock />
-                <ListeningZoneBubble />
+                <!-- With a player's menu open, the bubble moves above it (see below) instead of covering it. -->
+                {#if !sidePanelOpen}
+                    <ListeningZoneBubble />
+                {/if}
             </div>
 
             {#if $showRecordingList}
@@ -476,11 +483,12 @@
             {/if}
 
             <ExternalComponents zone="popup" />
-            {#if $requestVisitCardsStore || $wokaMenuStore || $actionsMenuStore || $meetingInvitationRequestStore}
+            {#if sidePanelOpen}
                 <div
                     transition:fly={{ x: 210, duration: 500 }}
                     class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-0 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
+                    <ListeningZoneBubble />
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
                     {/if}
