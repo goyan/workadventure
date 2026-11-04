@@ -7,7 +7,7 @@ import {describe, expect, vi, it, beforeAll, afterAll} from 'vitest';
 import {PLAY_URL} from "../src/Enum/EnvironmentVariable";
 import {verifyResponseHeaders} from "./utils/verifyResponseHeaders";
 import {uploadFile} from "./utils/uploadFile";
-import {download} from "./utils/download";
+import {download, downloadBytes} from "./utils/download";
 import type {UploadedFileResponse} from "./UploaderTestCommon";
 import {uploadHtmlFileTest, uploadMultipleFilesTest, uploadSingleFileTest, XSS_PAYLOAD} from "./UploaderTestCommon";
 import {RedisContainer} from "./utils/RedisContainer";
@@ -149,5 +149,32 @@ describe("Redis Uploader tests", () => {
 
         const tempFileUrl = `${UPLOADER_URL}/download-audio-message/${data.id}`;
         expect(await download(tempFileUrl)).toEqual("temp file contents")
+    })
+
+    // Every byte value, most of them not valid UTF-8: an mp3 or an image is made of such bytes.
+    const BINARY_CONTENTS = Buffer.from(Array.from({length: 256}, (_, i) => i))
+
+    it("should give back an audio message byte for byte", async ()=> {
+        const uploadResponse = await uploadFile<UploadedFileResponse>(
+            `${UPLOADER_URL}/upload-audio-message`,
+            [{name: "sound.mp3", contents: BINARY_CONTENTS}]);
+
+        const downloaded = await downloadBytes(`${UPLOADER_URL}${uploadResponse.data.path ?? ""}`)
+        expect(downloaded.equals(BINARY_CONTENTS)).toBe(true)
+    })
+
+    it("should give back an uploaded file byte for byte", async ()=> {
+        const uploadResponse = await uploadFile<UploadedFileResponse[]>(
+            `${UPLOADER_URL}/upload-file`,
+            [{name: "image.png", contents: BINARY_CONTENTS}]);
+
+        const downloaded = await downloadBytes(uploadResponse.data[0].location)
+        expect(downloaded.equals(BINARY_CONTENTS)).toBe(true)
+    })
+
+    it("should answer 404 for an audio message that does not exist (or has expired)", async ()=> {
+        const response = await axios.get(`${UPLOADER_URL}/download-audio-message/unknown`, {validateStatus: () => true})
+
+        expect(response.status).toBe(404)
     })
 })

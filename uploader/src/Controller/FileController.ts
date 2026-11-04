@@ -90,7 +90,7 @@ export class FileController {
         .then((buffer) => {
           // Audio messages are played by an <audio> element, they are not downloaded.
           const targetDevice = new HttpResponseDevice(id, response, false);
-          return targetDevice.copyFromBuffer(Buffer.from(buffer ?? ""));
+          return targetDevice.copyFromBuffer(buffer);
         })
         .catch((e) => {
           console.error(e);

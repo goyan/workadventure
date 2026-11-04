@@ -2,10 +2,10 @@ import FormData from "form-data";
 import type {AxiosRequestConfig} from "axios";
 import axios from "axios";
 
-export async function uploadFile<T = unknown>(uploadUrl: string, fileList: {name: string, contents: string}[], config: AxiosRequestConfig = {}) {
+export async function uploadFile<T = unknown>(uploadUrl: string, fileList: {name: string, contents: string | Buffer}[], config: AxiosRequestConfig = {}) {
         const formData = new FormData();
         fileList.forEach(entry => {
-            const fileBuffer = Buffer.from(entry.contents, "utf-8")
+            const fileBuffer = typeof entry.contents === "string" ? Buffer.from(entry.contents, "utf-8") : entry.contents
             formData.append('file', fileBuffer, entry.name);
         })
 
