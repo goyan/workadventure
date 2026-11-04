@@ -206,6 +206,21 @@ Tests du vrai `SocketManager` : texte et audio autorisés, refus sans tag, ident
 le tag technique, portée monde et type arbitraire, puis comportement administrateur conservé.
 Recette d'affichage et de lecture audio à faire en beta avec un joueur hors de la conversation du NPC.
 
+### Vignettes des NPC sans audio
+
+Un participant dont l'UUID commence par `npc:` et dont les états micro, caméra et
+partage d'écran sont tous désactivés reste visible avec son avatar, sans attente
+ni erreur de connexion média. `isTextOnlyNpc` est partagé par `VideoBox` et
+`SimplePeer` : aucune création ou relance WebRTC vers ce participant, signaux
+média ignorés. Le client NPC annonce son audio par `microphoneState` dès sa
+connexion au jeu. Les humains au micro coupé et les NPC avec audio conservent
+leurs connexions et états habituels. Aucun changement du protocole ou du back.
+
+Recette beta : garder un NPC sans audio dans une réunion/Jam pendant au moins
+30 secondes ; son avatar reste visible sans « Reconnexion en cours ». Vérifier
+le chat, un humain sans caméra/micro et, si disponible, un NPC avec audio.
+Tests de régression sur les pairs et les vignettes, y compris leurs délais.
+
 ### Réunion de zone seulement à plusieurs
 
 Concerne uniquement les zones portant la propriété « démarrer une réunion » (`livekitRoomProperty`).

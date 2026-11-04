@@ -82,7 +82,9 @@ import type { SpaceInterface } from "../../../src/front/Space/SpaceInterface";
 
 const BOB = "bob";
 
-function makeSpace() {
+function makeSpace(
+    user = { uuid: `uuid-${BOB}`, microphoneState: false, cameraState: false, screenSharingState: false },
+) {
     const channels = new Map<string, Subject<unknown>>();
     const observePrivateEvent = vi.fn((name: string) => {
         let channel = channels.get(name);
@@ -95,7 +97,8 @@ function makeSpace() {
 
     const emitBackEvent = vi.fn();
     const userLeft = new Subject<{ spaceUserId: string }>();
-    const getSpaceUserBySpaceUserId = vi.fn(() => ({ spaceUserId: BOB, uuid: `uuid-${BOB}` }));
+    const sender = { spaceUserId: BOB, ...user };
+    const getSpaceUserBySpaceUserId = vi.fn(() => sender);
 
     const space = {
         observePrivateEvent,
@@ -108,11 +111,11 @@ function makeSpace() {
     const emitWebRtcStart = (connectionId: string, initiator: boolean) => {
         channels.get("webRtcStartMessage")?.next({
             webRtcStartMessage: { connectionId, initiator },
-            sender: { spaceUserId: BOB, uuid: `uuid-${BOB}` },
+            sender,
         });
     };
 
-    return { space, emitBackEvent, emitWebRtcStart, userLeft };
+    return { space, emitBackEvent, emitWebRtcStart, userLeft, channels, sender };
 }
 
 function makeStreamableSubjects() {
@@ -242,6 +245,7 @@ describe("SimplePeer peer lifecycle", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+        vi.useRealTimers();
     });
 
     function createSimplePeer(space: SpaceInterface) {
@@ -262,6 +266,57 @@ describe("SimplePeer peer lifecycle", () => {
             "handleConnectionFailure",
         );
     }
+
+    it("keeps a text-only NPC in the space without starting or retrying media", async () => {
+        vi.useFakeTimers();
+        const { space, emitWebRtcStart, emitBackEvent, channels, sender } = makeSpace({
+            uuid: "npc:bob",
+            microphoneState: false,
+            cameraState: false,
+            screenSharingState: false,
+        });
+        const peer = createSimplePeer(space);
+        try {
+            emitWebRtcStart("conn-text", true);
+            channels.get("webRtcSignal")?.next({
+                sender,
+                webRtcSignal: { connectionId: "conn-text", signal: JSON.stringify({ type: "offer", sdp: "fixture" }) },
+            });
+            channels.get("webRtcScreenSharingSignal")?.next({
+                sender,
+                webRtcScreenSharingSignal: {
+                    connectionId: "screen-text",
+                    signal: JSON.stringify({ type: "offer", sdp: "fixture" }),
+                },
+            });
+            await vi.advanceTimersByTimeAsync(30_000);
+            peer.retryConnection(BOB);
+            expect(remotePeerInstances).toHaveLength(0);
+            expect(emitBackEvent).not.toHaveBeenCalled();
+        } finally {
+            peer.destroy();
+        }
+    });
+
+    it.each([
+        { uuid: "uuid-muted-human", microphoneState: false },
+        { uuid: "npc:audio-bob", microphoneState: true },
+    ])("still connects media for $uuid", async ({ uuid, microphoneState }) => {
+        const { space, emitWebRtcStart } = makeSpace({
+            uuid,
+            microphoneState,
+            cameraState: false,
+            screenSharingState: false,
+        });
+        const peer = createSimplePeer(space);
+        try {
+            emitWebRtcStart("conn-media", true);
+            await vi.waitFor(() => expect(remotePeerInstances).toHaveLength(1));
+            expect(remotePeerInstances[0].connectionId).toBe("conn-media");
+        } finally {
+            peer.destroy();
+        }
+    });
 
     it("closes the peer of a user who left the space without entering the retry flow", async () => {
         const { space, emitWebRtcStart, userLeft } = makeSpace();
