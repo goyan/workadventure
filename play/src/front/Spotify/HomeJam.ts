@@ -21,7 +21,7 @@ const QueueRequest = z.object({
 
 export interface HomeJamContext {
     zone: Readable<ListeningZone | undefined>;
-    jam: Readable<ListeningZoneJam | null>;
+    jams: Readable<ListeningZoneJam[]>;
     joined: Readable<JoinedJam | undefined>;
     listeningByUserUuid: Readable<ListeningByUserUuid>;
     localUuid: () => string | undefined;
@@ -48,9 +48,14 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const { setHomeJam, enqueueOnSpotify } = desktop;
     const now = context.now ?? Date.now;
 
-    /** The home Jam this user takes part in as a guest. */
-    const guestOf = derived([context.jam, context.joined], ([jam, joined]) =>
-        isHomeJam(jam) && jam.hostUuid !== context.localUuid() && joined?.url === listeningZoneJamKey(jam) ? jam : null,
+    /** The home Jam room this user takes part in as a guest. */
+    const guestOf = derived(
+        [context.jams, context.joined],
+        ([jams, joined]) =>
+            jams.find(
+                (jam) =>
+                    isHomeJam(jam) && jam.hostUuid !== context.localUuid() && joined?.url === listeningZoneJamKey(jam),
+            ) ?? null,
     );
     // Only changes are told: the desktop app starts with no home Jam.
     let told: string | null = null;
@@ -72,12 +77,15 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const requestsBySender = new Map<number, number[]>();
     const unsubscribeEvents = context.onEvent((name, data, senderId) => {
         if (name !== HOME_JAM_QUEUE_EVENT || senderId === undefined) return;
-        const jam = get(context.jam);
+        const localUuid = context.localUuid();
+        const hostsHomeJam = get(context.jams).some((jam) => isHomeJam(jam) && jam.hostUuid === localUuid);
         const zone = get(context.zone);
         const sender = context.userById(senderId);
         const request = QueueRequest.safeParse(data);
-        if (!request.success || !sender || !zone || !isHomeJam(jam) || jam.hostUuid !== context.localUuid()) return;
-        if (get(context.listeningByUserUuid).get(sender.uuid)?.jamAreaId !== zone.areaId) return;
+        if (!request.success || !sender || !zone || !hostsHomeJam) return;
+        // Only participants of our room: they publish its zone and host in their listening.
+        const listening = get(context.listeningByUserUuid).get(sender.uuid);
+        if (listening?.jamAreaId !== zone.areaId || listening.jamHostUuid !== localUuid) return;
         const recent = (requestsBySender.get(senderId) ?? []).filter((at) => now() - at < 60_000);
         if (recent.length >= MAX_REQUESTS_PER_MINUTE) return;
         requestsBySender.set(senderId, [...recent, now()]);

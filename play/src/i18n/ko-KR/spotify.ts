@@ -72,6 +72,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "홈 Jam 나가기",
         homeQueueHint: 'Spotify에서 곡을 오른쪽 클릭: "홈 Jam에 추가".',
         homeDesktopOnly: "홈 Jam: 데스크톱 앱과 Spicetify에서만.",
+        rooms: "방 {count}개",
+        leave: "나가기",
+        createRoom: "방 만들기",
+        chooseKind: "어떤 방인가요?",
+        kindSpotify: "Spotify",
+        kindHome: "홈",
+        kindSpotifyTitle: "Spotify Jam",
+        kindSpotifyDescription: "Jam 초대 링크로. 각자 기기에서 소리를 내려면 Premium 필요.",
+        kindHomeTitle: "홈 Jam",
+        kindHomeDescription: "각자의 Spotify가 내 곡을 재생 (Free 포함). 데스크톱 앱과 Spicetify.",
+        zoneFull: "이 구역은 가득 찼습니다: 최대 6개 방.",
     },
 };
 

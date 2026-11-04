@@ -75,6 +75,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "ホーム Jam を退出",
         homeQueueHint: "Spotify で曲を右クリック:「ホーム Jam に追加」。",
         homeDesktopOnly: "ホーム Jam: デスクトップアプリと Spicetify のみ。",
+        rooms: "{count} ルーム",
+        leave: "退出",
+        createRoom: "ルームを開く",
+        chooseKind: "ルームの種類は?",
+        kindSpotify: "Spotify",
+        kindHome: "ホーム",
+        kindSpotifyTitle: "Spotify Jam",
+        kindSpotifyDescription: "Jam の招待リンクで。各自の端末で音を出すには Premium が必要。",
+        kindHomeTitle: "ホーム Jam",
+        kindHomeDescription: "各自の Spotify があなたの曲を再生(Free も可)。デスクトップアプリと Spicetify。",
+        zoneFull: "このゾーンは満員です(最大 6 ルーム)。",
     },
 };
 

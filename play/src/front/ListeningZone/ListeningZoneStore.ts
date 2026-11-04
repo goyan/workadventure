@@ -9,8 +9,10 @@ export interface ListeningZone {
 export interface JoinedJam {
     areaId: string;
     areaName: string;
-    // Joining is tied to one invite link: a new Jam in the same zone is not joined until "Join" is clicked again.
+    // Joining is tied to one room: its invite link, or "home:<host>" for a home Jam (listeningZoneJamKey).
     url: string;
+    // The room's host: the zone holds one room per host, and participants are counted by room.
+    hostUuid: string;
 }
 
 /** The listening zone the local player stands in, if any. */

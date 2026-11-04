@@ -80,11 +80,16 @@ describe("SpotifyListeningSharer", () => {
     it("publishes the joined Jam even without a linked account", async () => {
         const { sharer, joinedJam, published, fetchTrack } = createHarness({ linked: false });
 
-        joinedJam.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/abc" });
+        joinedJam.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/abc", hostUuid: "dj" });
         await vi.advanceTimersByTimeAsync(POLL_MS);
 
         expect(fetchTrack).not.toHaveBeenCalled();
-        expect(published.at(-1)).toMatchObject({ trackTitle: "", jamAreaId: "lounge", jamAreaName: "Lounge" });
+        expect(published.at(-1)).toMatchObject({
+            trackTitle: "",
+            jamAreaId: "lounge",
+            jamAreaName: "Lounge",
+            jamHostUuid: "dj",
+        });
         sharer.destroy();
     });
 

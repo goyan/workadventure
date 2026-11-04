@@ -75,6 +75,18 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "Sortir de la Jam casolana",
         homeQueueHint: "A Spotify, clic dret en una cançó: «Afegeix a la Jam casolana».",
         homeDesktopOnly: "Jam casolana: només amb l'app d'escriptori i Spicetify.",
+        rooms: "{count} sala/sales",
+        leave: "Sortir",
+        createRoom: "Crear una sala",
+        chooseKind: "Quin tipus de sala?",
+        kindSpotify: "Spotify",
+        kindHome: "Casolana",
+        kindSpotifyTitle: "Jam de Spotify",
+        kindSpotifyDescription: "Amb l'enllaç d'invitació de la teva Jam. El so a cada equip requereix Premium.",
+        kindHomeTitle: "Jam casolana",
+        kindHomeDescription:
+            "L'Spotify de cadascú reprodueix les teves cançons, Free inclòs. App d'escriptori i Spicetify.",
+        zoneFull: "Aquesta zona és plena: 6 sales com a màxim.",
     },
 };
 

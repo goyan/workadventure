@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-    canUpdateListeningZoneJam,
+    canUpdateListeningZoneJams,
     isHomeJam,
     isSpotifyJamUrl,
     listeningZoneJamKey,
     type ListeningZoneJam,
-    parseListeningZoneJam,
+    MAX_LISTENING_ZONE_JAMS,
+    parseListeningZoneJams,
+    parseListeningZoneJamsUpdate,
 } from "../src";
 
 const jamOf = (hostUuid: string): ListeningZoneJam => ({
@@ -30,46 +32,63 @@ describe("isSpotifyJamUrl", () => {
     });
 });
 
-describe("parseListeningZoneJam", () => {
-    it("reads a Jam stored as JSON", () => {
-        expect(parseListeningZoneJam(JSON.stringify(jamOf("alice")))).toEqual(jamOf("alice"));
+describe("parseListeningZoneJams", () => {
+    const home: ListeningZoneJam = { home: true, hostUuid: "bob", hostName: "Bob" };
+
+    it("reads the rooms stored as JSON, and an older single Jam as one room", () => {
+        expect(parseListeningZoneJams(JSON.stringify([jamOf("alice"), home]))).toEqual([jamOf("alice"), home]);
+        expect(parseListeningZoneJams(JSON.stringify(jamOf("alice")))).toEqual([jamOf("alice")]);
     });
 
-    it("reads anything else as no Jam", () => {
-        expect(parseListeningZoneJam(undefined)).toBeNull();
-        expect(parseListeningZoneJam("null")).toBeNull();
-        expect(parseListeningZoneJam("{not json")).toBeNull();
-        expect(parseListeningZoneJam({ ...jamOf("alice"), url: "https://example.com" })).toBeNull();
+    it("reads nothing, invalid rooms and a second room of the same host as no room", () => {
+        expect(parseListeningZoneJams(undefined)).toEqual([]);
+        expect(parseListeningZoneJams("null")).toEqual([]);
+        expect(parseListeningZoneJams("{not json")).toEqual([]);
+        expect(parseListeningZoneJams([{ ...jamOf("alice"), url: "https://example.com" }, home])).toEqual([home]);
+        expect(parseListeningZoneJams([jamOf("alice"), { ...home, hostUuid: "alice" }])).toEqual([jamOf("alice")]);
     });
 
-    it("reads a home Jam, which has a host and no invite link", () => {
-        const home = { home: true, hostUuid: "alice", hostName: "Alice" };
-        const parsed = parseListeningZoneJam(JSON.stringify(home));
-        expect(parsed).toEqual(home);
-        expect(isHomeJam(parsed)).toBe(true);
+    it("tells a home Jam, which has a host and no invite link", () => {
+        expect(isHomeJam(home)).toBe(true);
         expect(isHomeJam(jamOf("alice"))).toBe(false);
-        expect(parseListeningZoneJam({ home: false, hostUuid: "alice", hostName: "Alice" })).toBeNull();
+        expect(parseListeningZoneJams([{ home: false, hostUuid: "alice", hostName: "Alice" }])).toEqual([]);
     });
 
     it("tells Jams apart by their link, or by their host for a home Jam", () => {
         expect(listeningZoneJamKey(jamOf("alice"))).toBe("https://spotify.link/abc123");
-        expect(listeningZoneJamKey({ home: true, hostUuid: "alice", hostName: "Alice" })).toBe("home:alice");
+        expect(listeningZoneJamKey(home)).toBe("home:bob");
     });
 });
 
-describe("canUpdateListeningZoneJam", () => {
-    it("lets anyone share a Jam when none is shared", () => {
-        expect(canUpdateListeningZoneJam(null, jamOf("alice"), "alice")).toBe(true);
+describe("parseListeningZoneJamsUpdate", () => {
+    it("accepts a list of valid rooms, or null to close them all", () => {
+        expect(parseListeningZoneJamsUpdate(JSON.stringify([jamOf("alice")]))).toEqual([jamOf("alice")]);
+        expect(parseListeningZoneJamsUpdate("null")).toEqual([]);
     });
 
-    it("forbids sharing a Jam in someone else's name", () => {
-        expect(canUpdateListeningZoneJam(null, jamOf("bob"), "alice")).toBe(false);
+    it("refuses rather than trims an invalid room, two rooms of one host, or too many rooms", () => {
+        expect(
+            parseListeningZoneJamsUpdate(JSON.stringify([{ url: "https://example.com", hostUuid: "a", hostName: "" }])),
+        ).toBeNull();
+        expect(parseListeningZoneJamsUpdate(JSON.stringify([jamOf("alice"), jamOf("alice")]))).toBeNull();
+        const tooMany = Array.from({ length: MAX_LISTENING_ZONE_JAMS + 1 }, (_, index) => jamOf(`user-${index}`));
+        expect(parseListeningZoneJamsUpdate(JSON.stringify(tooMany))).toBeNull();
+        expect(parseListeningZoneJamsUpdate("{not json")).toBeNull();
+    });
+});
+
+describe("canUpdateListeningZoneJams", () => {
+    it("lets each user open, replace or close their own room", () => {
+        expect(canUpdateListeningZoneJams([], [jamOf("alice")], "alice")).toBe(true);
+        expect(canUpdateListeningZoneJams([jamOf("bob")], [jamOf("bob"), jamOf("alice")], "alice")).toBe(true);
+        expect(canUpdateListeningZoneJams([jamOf("bob"), jamOf("alice")], [jamOf("bob")], "alice")).toBe(true);
     });
 
-    it("lets only the host replace or remove the shared Jam", () => {
-        expect(canUpdateListeningZoneJam(jamOf("alice"), null, "alice")).toBe(true);
-        expect(canUpdateListeningZoneJam(jamOf("alice"), jamOf("alice"), "alice")).toBe(true);
-        expect(canUpdateListeningZoneJam(jamOf("alice"), null, "bob")).toBe(false);
-        expect(canUpdateListeningZoneJam(jamOf("alice"), jamOf("bob"), "bob")).toBe(false);
+    it("refuses to touch someone else's room, or to open two", () => {
+        expect(canUpdateListeningZoneJams([jamOf("bob")], [], "alice")).toBe(false);
+        expect(canUpdateListeningZoneJams([], [jamOf("bob")], "alice")).toBe(false);
+        expect(canUpdateListeningZoneJams([jamOf("bob")], [{ ...jamOf("bob"), hostName: "Mallory" }], "alice")).toBe(
+            false,
+        );
     });
 });

@@ -75,6 +75,18 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "Salir de la Jam casera",
         homeQueueHint: "En Spotify, clic derecho en una canción: «Añadir a la Jam casera».",
         homeDesktopOnly: "Jam casera: solo con la app de escritorio y Spicetify.",
+        rooms: "{count} sala(s)",
+        leave: "Salir",
+        createRoom: "Crear una sala",
+        chooseKind: "¿Qué tipo de sala?",
+        kindSpotify: "Spotify",
+        kindHome: "Casera",
+        kindSpotifyTitle: "Jam de Spotify",
+        kindSpotifyDescription: "Con el enlace de invitación de tu Jam. El sonido en cada equipo requiere Premium.",
+        kindHomeTitle: "Jam casera",
+        kindHomeDescription:
+            "El Spotify de cada uno reproduce tus canciones, Free incluido. App de escritorio y Spicetify.",
+        zoneFull: "Esta zona está llena: 6 salas como máximo.",
     },
 };
 

@@ -72,6 +72,17 @@ const spotify: BaseTranslation = {
         leaveHome: "Leave the home Jam",
         homeQueueHint: 'In Spotify, right-click a track: "Add to the home Jam".',
         homeDesktopOnly: "Home Jam: with the desktop app and Spicetify only.",
+        rooms: "{count} room{{s}}",
+        leave: "Leave",
+        createRoom: "Open a room",
+        chooseKind: "Which kind of room?",
+        kindSpotify: "Spotify",
+        kindHome: "Home",
+        kindSpotifyTitle: "Spotify Jam",
+        kindSpotifyDescription: "With your Jam's invite link. Sound on everyone's device with Premium.",
+        kindHomeTitle: "Home Jam",
+        kindHomeDescription: "Everyone's own Spotify plays your tracks, Free included. Desktop app and Spicetify.",
+        zoneFull: "This zone is full: 6 rooms at most.",
     },
 };
 

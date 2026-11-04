@@ -72,6 +72,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "ออกจาก Jam บ้าน",
         homeQueueHint: 'ใน Spotify คลิกขวาที่เพลง: "เพิ่มใน Jam บ้าน"',
         homeDesktopOnly: "Jam บ้าน: เฉพาะแอปเดสก์ท็อปกับ Spicetify",
+        rooms: "{count} ห้อง",
+        leave: "ออก",
+        createRoom: "เปิดห้อง",
+        chooseKind: "ห้องประเภทไหน?",
+        kindSpotify: "Spotify",
+        kindHome: "บ้าน",
+        kindSpotifyTitle: "Spotify Jam",
+        kindSpotifyDescription: "ด้วยลิงก์เชิญของ Jam เสียงบนเครื่องทุกคนต้องใช้ Premium",
+        kindHomeTitle: "Jam บ้าน",
+        kindHomeDescription: "Spotify ของทุกคนเล่นเพลงของคุณ รวมถึงฟรี แอปเดสก์ท็อปและ Spicetify",
+        zoneFull: "โซนนี้เต็มแล้ว: สูงสุด 6 ห้อง",
     },
 };
 

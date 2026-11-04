@@ -16,10 +16,12 @@ const area: AreaData = {
 };
 
 const jam: ListeningZoneJam = { url: "https://spotify.link/abc123", hostUuid: "host", hostName: "Host" };
+// Another room, whose host stays in the zone: it must survive the other host leaving.
+const otherJam: ListeningZoneJam = { home: true, hostUuid: "other", hostName: "Other" };
 
 function createHarness(hostPositions: { x: number; y: number }[]) {
     const leaveSubject = new Subject<AreaData>();
-    const variables = new Map<string, string>([["lounge:listening:jam", JSON.stringify(jam)]]);
+    const variables = new Map<string, string>([["lounge:listening:jam", JSON.stringify([jam, otherJam])]]);
     const setAreaPropertyVariable = vi.fn((areaId: string, propertyId: string, key: string, value: string) => {
         variables.set(`${areaId}:${propertyId}:${key}`, value);
         return true;
@@ -32,9 +34,9 @@ function createHarness(hostPositions: { x: number; y: number }[]) {
             setAreaPropertyVariable,
             getUsersByUuid: (uuid: string) =>
                 new Set(
-                    uuid === "host"
-                        ? hostPositions.map((position) => ({ getPosition: () => position }) as unknown as User)
-                        : [],
+                    (uuid === "host" ? hostPositions : uuid === "other" ? [{ x: 50, y: 50 }] : []).map(
+                        (position) => ({ getPosition: () => position }) as unknown as User,
+                    ),
                 ),
             destroyRoomStream: new Subject<void>().asObservable(),
         },
@@ -45,23 +47,23 @@ function createHarness(hostPositions: { x: number; y: number }[]) {
 }
 
 describe("ListeningZoneManager", () => {
-    it("removes the Jam when its host is no longer in the zone", () => {
+    it("closes the room of a host who is no longer in the zone, and only theirs", () => {
         const { leaveSubject, setAreaPropertyVariable } = createHarness([{ x: 500, y: 500 }]);
 
         leaveSubject.next(area);
 
-        expect(setAreaPropertyVariable).toHaveBeenCalledWith("lounge", "listening", "jam", "null");
+        expect(setAreaPropertyVariable).toHaveBeenCalledWith("lounge", "listening", "jam", JSON.stringify([otherJam]));
     });
 
-    it("removes the Jam when its host disconnected", () => {
+    it("closes the room of a host who disconnected", () => {
         const { leaveSubject, setAreaPropertyVariable } = createHarness([]);
 
         leaveSubject.next(area);
 
-        expect(setAreaPropertyVariable).toHaveBeenCalledWith("lounge", "listening", "jam", "null");
+        expect(setAreaPropertyVariable).toHaveBeenCalledWith("lounge", "listening", "jam", JSON.stringify([otherJam]));
     });
 
-    it("keeps the Jam while the host is still in the zone, in any tab", () => {
+    it("keeps a room while its host is still in the zone, in any tab", () => {
         const { leaveSubject, setAreaPropertyVariable } = createHarness([
             { x: 500, y: 500 },
             { x: 50, y: 50 },

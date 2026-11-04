@@ -74,6 +74,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "Esci dalla Jam di casa",
         homeQueueHint: "In Spotify, clic destro su un brano: «Aggiungi alla Jam di casa».",
         homeDesktopOnly: "Jam di casa: solo con l'app desktop e Spicetify.",
+        rooms: "{count} stanza/e",
+        leave: "Esci",
+        createRoom: "Apri una stanza",
+        chooseKind: "Che tipo di stanza?",
+        kindSpotify: "Spotify",
+        kindHome: "Casa",
+        kindSpotifyTitle: "Jam Spotify",
+        kindSpotifyDescription: "Con il link d'invito della tua Jam. L'audio su ogni dispositivo richiede Premium.",
+        kindHomeTitle: "Jam di casa",
+        kindHomeDescription: "Lo Spotify di ognuno riproduce i tuoi brani, Free incluso. App desktop e Spicetify.",
+        zoneFull: "Questa zona è piena: al massimo 6 stanze.",
     },
 };
 

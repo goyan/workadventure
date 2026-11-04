@@ -3,10 +3,11 @@ import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
 import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
 import {
-    canUpdateListeningZoneJam,
+    canUpdateListeningZoneJams,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
-    parseListeningZoneJam,
+    parseListeningZoneJams,
+    parseListeningZoneJamsUpdate,
 } from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
@@ -900,7 +901,7 @@ export class GameRoom implements BrothersFinder {
     }
 
     /**
-     * A listening zone only holds the Jam variable, and only the host of the shared Jam may replace or remove it.
+     * A listening zone only holds the Jam variable: a list of rooms, in which each user changes their own room only.
      */
     private canUpdateListeningZoneVariable(
         userUuid: string,
@@ -912,12 +913,12 @@ export class GameRoom implements BrothersFinder {
         if (key !== LISTENING_ZONE_JAM_VARIABLE) {
             return false;
         }
-        const next = parseListeningZoneJam(value);
-        if (next === null && value !== "null") {
+        const next = parseListeningZoneJamsUpdate(value);
+        if (next === null) {
             return false;
         }
-        const current = parseListeningZoneJam(this.getAreaPropertyVariable(areaId, propertyId, key));
-        return canUpdateListeningZoneJam(current, next, userUuid);
+        const current = parseListeningZoneJams(this.getAreaPropertyVariable(areaId, propertyId, key));
+        return canUpdateListeningZoneJams(current, next, userUuid);
     }
 
     /**

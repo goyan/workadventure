@@ -72,6 +72,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "مغادرة الجلسة المنزلية",
         homeQueueHint: "في Spotify، انقر بزر الماوس الأيمن على مقطع: «إضافة إلى الجلسة المنزلية».",
         homeDesktopOnly: "الجلسة المنزلية: مع تطبيق سطح المكتب وSpicetify فقط.",
+        rooms: "{count} غرفة",
+        leave: "مغادرة",
+        createRoom: "فتح غرفة",
+        chooseKind: "أي نوع من الغرف؟",
+        kindSpotify: "Spotify",
+        kindHome: "منزلية",
+        kindSpotifyTitle: "جلسة Spotify",
+        kindSpotifyDescription: "برابط دعوة جلستك. الصوت لدى الجميع يتطلب Premium.",
+        kindHomeTitle: "جلسة منزلية",
+        kindHomeDescription: "يشغّل Spotify لدى كل شخص مقاطعك، حتى المجاني. تطبيق سطح المكتب وSpicetify.",
+        zoneFull: "هذه المنطقة ممتلئة: 6 غرف على الأكثر.",
     },
 };
 

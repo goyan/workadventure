@@ -2,34 +2,50 @@ import type { ListeningZoneJam } from "@workadventure/map-editor";
 import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localUserStore } from "../../../src/front/Connection/LocalUserStore";
-import { joinHomeJam, leaveHomeJam, syncJoinedJam } from "../../../src/front/ListeningZone/ListeningZoneController";
+import {
+    joinHomeJam,
+    joinJam,
+    leaveJam,
+    shareJam,
+    startHomeJam,
+    syncJoinedJam,
+} from "../../../src/front/ListeningZone/ListeningZoneController";
 import { currentListeningZoneStore, joinedJamStore } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import type { AreaPropertyVariablesManager } from "../../../src/front/Phaser/Game/AreaPropertyVariablesManager";
 import { followedUserUuidStore } from "../../../src/front/Spotify/ListeningFollower";
 import { areaPropertyVariablesManagerStore } from "../../../src/front/Stores/AreaPropertyVariablesStore";
 
 const zone = { areaId: "lounge", propertyId: "listening", areaName: "Lounge" };
+const spotifyRoom: ListeningZoneJam = { url: "https://spotify.link/theirs", hostUuid: "dj", hostName: "DJ" };
+const homeRoom: ListeningZoneJam = { home: true, hostUuid: "nat", hostName: "Nat" };
 
-describe("syncJoinedJam", () => {
-    let jamVariable: ListeningZoneJam | null = null;
+describe("Jam rooms of a listening zone", () => {
+    let rooms: ListeningZoneJam[] = [];
     const variableChanges = writable<unknown>(undefined);
-    const setJam = (jam: ListeningZoneJam | null) => {
-        jamVariable = jam;
+    const setRooms = (next: ListeningZoneJam[]) => {
+        rooms = next;
         variableChanges.set({});
     };
+    const setVariable = vi.fn((_areaId: string, _propertyId: string, _key: string, value: unknown) => {
+        setRooms((value as ListeningZoneJam[] | null) ?? []);
+    });
 
     beforeEach(() => {
         vi.spyOn(localUserStore, "getLocalUser").mockReturnValue({ uuid: "me" } as ReturnType<
             typeof localUserStore.getLocalUser
         >);
+        vi.spyOn(localUserStore, "getName").mockReturnValue("Me");
+        vi.spyOn(window, "open").mockReturnValue(null);
         areaPropertyVariablesManagerStore.set({
             variableChanges,
-            getVariable: () => jamVariable,
+            getVariable: () => rooms,
+            setVariable,
         } as unknown as AreaPropertyVariablesManager);
         currentListeningZoneStore.set(zone);
         joinedJamStore.set(undefined);
         followedUserUuidStore.set(undefined);
-        jamVariable = null;
+        rooms = [];
+        setVariable.mockClear();
     });
 
     afterEach(() => {
@@ -38,67 +54,74 @@ describe("syncJoinedJam", () => {
         vi.restoreAllMocks();
     });
 
-    it("puts the host in their Jam once the server accepted it", () => {
+    it("opens our room next to the others, and puts us in it once the server accepted it", () => {
         const unsubscribe = syncJoinedJam();
+        setRooms([homeRoom]);
 
-        setJam({ url: "https://spotify.link/mine", hostUuid: "me", hostName: "Me" });
+        shareJam("https://spotify.link/mine");
 
-        expect(get(joinedJamStore)).toEqual({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/mine" });
+        expect(rooms).toEqual([homeRoom, { url: "https://spotify.link/mine", hostUuid: "me", hostName: "Me" }]);
+        expect(get(joinedJamStore)).toMatchObject({ url: "https://spotify.link/mine", hostUuid: "me" });
         unsubscribe();
     });
 
-    it("forgets a joined Jam once it is removed or replaced", () => {
+    it("replaces our room when we open another kind: one room per user", () => {
         const unsubscribe = syncJoinedJam();
-        setJam({ url: "https://spotify.link/theirs", hostUuid: "dj", hostName: "DJ" });
-        joinedJamStore.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/theirs" });
+        shareJam("https://spotify.link/mine");
 
-        setJam({ url: "https://spotify.link/theirs", hostUuid: "dj", hostName: "DJ" });
-        expect(get(joinedJamStore)).toBeDefined();
+        startHomeJam();
 
-        setJam({ url: "https://spotify.link/other", hostUuid: "dj2", hostName: "DJ 2" });
+        expect(rooms).toEqual([{ home: true, hostUuid: "me", hostName: "Me" }]);
+        expect(get(joinedJamStore)).toMatchObject({ url: "home:me" });
+        unsubscribe();
+    });
+
+    it("joins one room at a time: joining another leaves the home Jam and its follow", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms([spotifyRoom, homeRoom]);
+
+        joinHomeJam(homeRoom);
+        expect(get(followedUserUuidStore)).toBe("nat");
+        expect(get(joinedJamStore)).toEqual({ areaId: "lounge", areaName: "Lounge", url: "home:nat", hostUuid: "nat" });
+
+        joinJam(spotifyRoom);
+        expect(get(followedUserUuidStore)).toBeUndefined();
+        expect(get(joinedJamStore)).toMatchObject({ url: spotifyRoom.url, hostUuid: "dj" });
+        unsubscribe();
+    });
+
+    it("forgets a joined room once its host closes it, and keeps the others", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms([spotifyRoom, homeRoom]);
+        joinHomeJam(homeRoom);
+
+        setRooms([spotifyRoom]);
+
+        expect(get(joinedJamStore)).toBeUndefined();
+        expect(get(followedUserUuidStore)).toBeUndefined();
+        unsubscribe();
+    });
+
+    it("ends the home Jam for a guest who stops listening along from the host's card", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms([homeRoom]);
+        joinHomeJam(homeRoom);
+
+        followedUserUuidStore.set(undefined);
+
         expect(get(joinedJamStore)).toBeUndefined();
         unsubscribe();
     });
 
-    describe("home Jam", () => {
-        const homeJam: ListeningZoneJam = { home: true, hostUuid: "dj", hostName: "DJ" };
-        const joinedHome = { areaId: "lounge", areaName: "Lounge", url: "home:dj" };
+    it("leaves a room on request", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms([homeRoom]);
+        joinHomeJam(homeRoom);
 
-        it("is joined by listening along with its host, and left by stopping", () => {
-            const unsubscribe = syncJoinedJam();
-            setJam(homeJam);
+        leaveJam();
 
-            joinHomeJam();
-            expect(get(followedUserUuidStore)).toBe("dj");
-            expect(get(joinedJamStore)).toEqual(joinedHome);
-
-            leaveHomeJam();
-            expect(get(followedUserUuidStore)).toBeUndefined();
-            expect(get(joinedJamStore)).toBeUndefined();
-            unsubscribe();
-        });
-
-        it("ends for a guest who stops listening along from the host's card", () => {
-            const unsubscribe = syncJoinedJam();
-            setJam(homeJam);
-            joinHomeJam();
-
-            followedUserUuidStore.set(undefined);
-
-            expect(get(joinedJamStore)).toBeUndefined();
-            unsubscribe();
-        });
-
-        it("stops the follow when the host ends it", () => {
-            const unsubscribe = syncJoinedJam();
-            setJam(homeJam);
-            joinHomeJam();
-
-            setJam(null);
-
-            expect(get(joinedJamStore)).toBeUndefined();
-            expect(get(followedUserUuidStore)).toBeUndefined();
-            unsubscribe();
-        });
+        expect(get(joinedJamStore)).toBeUndefined();
+        expect(get(followedUserUuidStore)).toBeUndefined();
+        unsubscribe();
     });
 });
