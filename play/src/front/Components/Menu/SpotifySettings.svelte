@@ -17,7 +17,8 @@
     const linked = spotifyAccount.linked;
     const accessDenied = spotifyAccount.accessDenied;
     const redirectUri = getSpotifyRedirectUri();
-    // The desktop app reads the Spotify app of this computer: no account, no developer app, no Premium.
+    // The desktop app reads the Spotify app of this computer: no account, no developer app, no Premium. Linking an
+    // account there is optional, for music played on another device (phone, web player, speaker).
     const readsLocalPlayer = desktopSpotifyPlayer() !== undefined;
     const DESKTOP_APP_URL = "https://github.com/aminekun90/workadventure-desktop/releases/latest";
 
@@ -85,50 +86,59 @@
             <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-detected">
                 {$LL.spotify.settings.desktopDetected()}
             </p>
-            <InputSwitch
-                id="spotify-sharing-toggle"
-                bind:value={sharing}
-                onchange={() => spotifySharingEnabledStore.set(sharing)}
-                label={$LL.spotify.settings.share()}
-            />
-        {:else if $linked}
+        {/if}
+        {#if $linked}
             <div class="flex items-center gap-3">
                 <span class="grow text-sm">{$LL.spotify.settings.linked()}</span>
                 <Button variant="light" appearance="border" size="sm" onclick={() => spotifyAccount.unlink()}>
                     {$LL.spotify.settings.unlink()}
                 </Button>
             </div>
-            <InputSwitch
-                id="spotify-sharing-toggle"
-                bind:value={sharing}
-                onchange={() => spotifySharingEnabledStore.set(sharing)}
-                label={$LL.spotify.settings.share()}
-            />
             {#if $accessDenied}
                 <p class="text-sm text-warning m-0" data-testid="spotify-access-denied">
                     {$LL.spotify.settings.accessDenied()}
                 </p>
             {/if}
         {:else}
-            <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-app-hint">
-                {$LL.spotify.settings.desktopAppHint()}
-                <a class="underline" href={DESKTOP_APP_URL} target="_blank" rel="noopener noreferrer">
-                    {$LL.spotify.settings.desktopAppLink()}
-                </a>
-            </p>
+            {#if readsLocalPlayer}
+                <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-link-hint">
+                    {$LL.spotify.settings.desktopLinkOtherDevices()}
+                </p>
+            {:else}
+                <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-app-hint">
+                    {$LL.spotify.settings.desktopAppHint()}
+                    <a class="underline" href={DESKTOP_APP_URL} target="_blank" rel="noopener noreferrer">
+                        {$LL.spotify.settings.desktopAppLink()}
+                    </a>
+                </p>
+            {/if}
             {#if usesServerApp}
                 <p class="text-sm text-white/75 m-0">{$LL.spotify.settings.serverAppNotice()}</p>
             {/if}
-            <Button variant="success" disabled={linking} onclick={link} dataTestId="spotify-link-button">
+            <Button
+                variant={readsLocalPlayer ? "light" : "success"}
+                appearance={readsLocalPlayer ? "border" : undefined}
+                disabled={linking}
+                onclick={link}
+                dataTestId="spotify-link-button"
+            >
                 {linking ? $LL.spotify.settings.linking() : $LL.spotify.settings.link()}
             </Button>
+        {/if}
+        {#if readsLocalPlayer || $linked}
+            <InputSwitch
+                id="spotify-sharing-toggle"
+                bind:value={sharing}
+                onchange={() => spotifySharingEnabledStore.set(sharing)}
+                label={$LL.spotify.settings.share()}
+            />
         {/if}
 
         {#if errorMessage}
             <p class="text-sm text-danger m-0">{errorMessage}</p>
         {/if}
 
-        {#if !readsLocalPlayer}
+        {#if !$linked}
             <InputSwitch
                 id="spotify-personal-app-toggle"
                 bind:value={showPersonalApp}

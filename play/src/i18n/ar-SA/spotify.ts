@@ -11,6 +11,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         linked: "حسابك في Spotify مرتبط.",
         share: "مشاركة ما أستمع إليه",
         desktopDetected: "يُقرأ من تطبيق Spotify على هذا الحاسوب: لا حاجة لربط حساب، يكفي حساب Spotify مجاني.",
+        desktopLinkOtherDevices:
+            "لمشاركة الموسيقى التي تستمع إليها على جهاز آخر أيضًا (هاتف، مشغل الويب، مكبر صوت)، اربط حساب Spotify الخاص بك.",
         desktopAppHint:
             "مع تطبيق WorkAdventure لسطح المكتب لا حاجة لربط حساب ولا لـ Premium: يقرأ تطبيق Spotify على جهاز Mac.",
         desktopAppLink: "تنزيل تطبيق سطح المكتب",

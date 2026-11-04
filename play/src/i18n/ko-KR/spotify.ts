@@ -11,6 +11,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         linked: "Spotify 계정이 연결되었습니다.",
         share: "듣고 있는 음악 공유",
         desktopDetected: "이 컴퓨터의 Spotify 앱에서 읽어요. 계정 연결이 필요 없고 무료 계정으로도 충분해요.",
+        desktopLinkOtherDevices:
+            "다른 기기(휴대폰, 웹 플레이어, 스피커)에서 듣는 음악도 공유하려면 Spotify 계정을 연결하세요.",
         desktopAppHint: "WorkAdventure 데스크톱 앱이면 계정 연결도 Premium도 필요 없어요. Mac의 Spotify 앱에서 읽어요.",
         desktopAppLink: "데스크톱 앱 받기",
         serverAppNotice:
