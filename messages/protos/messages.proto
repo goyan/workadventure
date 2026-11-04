@@ -2116,6 +2116,8 @@ message SpotifyListening {
   // its name: others can open it. Both empty otherwise.
   string contextUri = 11;
   string contextName = 12;
+  // Host of the Jam room joined in the jamAreaId zone (one room per host): rooms count their own participants.
+  string jamHostUuid = 13;
 }
 
 /*message PartialSpaceUser{

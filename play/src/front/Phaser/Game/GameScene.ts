@@ -208,7 +208,7 @@ import {
 } from "../../Spotify/SpotifyListeningDirectory";
 import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
 import { currentListeningZoneStore, joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
-import { currentJamStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
+import { currentJamsStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
 import { HOME_JAM_QUEUE_EVENT, startHomeJam } from "../../Spotify/HomeJam";
 import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
@@ -1898,7 +1898,7 @@ export class GameScene extends DirtyScene {
         }
         return startHomeJam({
             zone: currentListeningZoneStore,
-            jam: currentJamStore,
+            jams: currentJamsStore,
             joined: joinedJamStore,
             listeningByUserUuid: listeningByUserUuidStore,
             localUuid: () => localUserStore.getLocalUser()?.uuid,

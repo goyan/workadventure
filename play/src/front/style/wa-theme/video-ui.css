@@ -10,7 +10,6 @@
     @apply w-56 sm:w-80 md:w-48 lg:w-44 xl:w-64 2xl:w-96;
 }
 
-
 .report-ban-container-cam-off {
     @apply items-center absolute justify-end;
 }
@@ -29,7 +28,6 @@
 .video-on-responsive-height {
     @apply h-32 sm:h-48 md:h-28 lg:h-24 xl:h-36 2xl:h-48;
 }
-
 
 /* VOICE METER */
 
@@ -63,7 +61,7 @@
 
 .mozaic-full-size {
     @apply md:h-[60vh] md:w-[75vw];
-    &.media-box-camera-off-size{
+    &.media-box-camera-off-size {
         @apply md:h-[4vh];
     }
 }
@@ -75,8 +73,6 @@
 .mozaic-grid {
     @apply gap-1 lg:gap-4 grid-cols-1 lg:grid-cols-2;
 }
-
-
 
 /* Loading.svelte */
 #loading {
@@ -90,8 +86,6 @@
         }
     }
 }
-
-
 
 /* UserTag.svelte */
 #tag {
@@ -110,10 +104,8 @@
     }
 }
 
-
-
 /* JitsiMediaBox.svelte */
-.jitsi-video{
+.jitsi-video {
     @apply flex w-full border-warning border-2 border-solid relative rounded;
     transition: all 0.2s ease;
 

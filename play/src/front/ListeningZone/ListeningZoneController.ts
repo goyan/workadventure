@@ -3,7 +3,8 @@ import {
     LISTENING_ZONE_JAM_VARIABLE,
     listeningZoneJamKey,
     type ListeningZoneJam,
-    parseListeningZoneJam,
+    MAX_LISTENING_ZONE_JAMS,
+    parseListeningZoneJams,
 } from "@workadventure/map-editor";
 import { derived, get, type Readable, readable, type Unsubscriber } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
@@ -12,8 +13,8 @@ import { followedUserUuidStore } from "../Spotify/ListeningFollower";
 import { listeningByUserUuidStore } from "../Spotify/SpotifyListeningDirectory";
 import { currentListeningZoneStore, joinedJamStore, type ListeningZone } from "./ListeningZoneStore";
 
-/** The Jam shared in the listening zone the local player stands in. */
-export const currentJamStore: Readable<ListeningZoneJam | null> = readable<ListeningZoneJam | null>(null, (set) => {
+/** The Jam rooms of the listening zone the local player stands in: one per host, Spotify or home Jam. */
+export const currentJamsStore: Readable<ListeningZoneJam[]> = readable<ListeningZoneJam[]>([], (set) => {
     let unsubscribeChanges: Unsubscriber | undefined;
     const unsubscribe = derived(
         [currentListeningZoneStore, areaPropertyVariablesManagerStore],
@@ -22,12 +23,12 @@ export const currentJamStore: Readable<ListeningZoneJam | null> = readable<Liste
         unsubscribeChanges?.();
         unsubscribeChanges = undefined;
         if (!zone || !manager) {
-            set(null);
+            set([]);
             return;
         }
         // variableChanges emits right away, then on every change of any area variable.
         unsubscribeChanges = manager.variableChanges.subscribe(() => {
-            set(parseListeningZoneJam(manager.getVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE)));
+            set(parseListeningZoneJams(manager.getVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE)));
         });
     });
     return () => {
@@ -36,11 +37,29 @@ export const currentJamStore: Readable<ListeningZoneJam | null> = readable<Liste
     };
 });
 
-/** How many people took part in the Jam of the current zone, its host included. */
-export const currentJamParticipantsCountStore: Readable<number> = derived(
+/** The room the local user hosts in the current zone, if any: a user opens one room at a time. */
+export const ownJamStore: Readable<ListeningZoneJam | undefined> = derived(currentJamsStore, (jams) =>
+    jams.find((jam) => isLocalUser(jam.hostUuid)),
+);
+
+/** Whether the zone still has room for another Jam room. */
+export const canOpenJamStore: Readable<boolean> = derived(
+    currentJamsStore,
+    (jams) => jams.length < MAX_LISTENING_ZONE_JAMS,
+);
+
+/** How many people take part in each room of the current zone, its host included, by host uuid. */
+export const jamParticipantsCountStore: Readable<Map<string, number>> = derived(
     [currentListeningZoneStore, listeningByUserUuidStore],
-    ([zone, listeningByUuid]) =>
-        zone ? [...listeningByUuid.values()].filter((listening) => listening.jamAreaId === zone.areaId).length : 0,
+    ([zone, listeningByUuid]) => {
+        const counts = new Map<string, number>();
+        for (const listening of listeningByUuid.values()) {
+            if (zone && listening.jamAreaId === zone.areaId && listening.jamHostUuid !== "") {
+                counts.set(listening.jamHostUuid, (counts.get(listening.jamHostUuid) ?? 0) + 1);
+            }
+        }
+        return counts;
+    },
 );
 
 export function isLocalUser(uuid: string): boolean {
@@ -52,120 +71,138 @@ export function enterListeningZone(zone: ListeningZone): void {
 }
 
 /**
- * Leaving the zone ends our part in its Jam. The back also removes the Jam if we were its host, but doing it here
- * spares everyone else a Jam whose host already left.
+ * Leaving the zone ends our part in its rooms. The back also closes our room once we are out, but doing it here
+ * spares everyone else a room whose host already left.
  */
 export function leaveListeningZone(propertyId: string): void {
     const zone = get(currentListeningZoneStore);
     if (zone?.propertyId !== propertyId) {
         return;
     }
-    const jam = get(currentJamStore);
-    if (jam && isLocalUser(jam.hostUuid)) {
-        setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, null);
+    if (get(ownJamStore)) {
+        writeOthersRooms(zone);
     }
-    stopFollowingHomeJamHost(jam);
-    joinedJamStore.set(undefined);
+    leaveJam();
     currentListeningZoneStore.set(undefined);
 }
 
+/** Opens (or replaces) our room with a Spotify Jam: its invite link is offered to the zone. */
 export function shareJam(url: string): void {
-    const zone = get(currentListeningZoneStore);
-    const uuid = localUserStore.getLocalUser()?.uuid;
-    if (!zone || !uuid) {
-        return;
-    }
-    const jam: ListeningZoneJam = { url, hostUuid: uuid, hostName: localUserStore.getName() ?? "" };
-    // The back may refuse it (someone shared a Jam just before): syncJoinedJam() marks us in it once accepted.
-    setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, jam);
+    openRoom((uuid, hostName) => ({ url, hostUuid: uuid, hostName }));
 }
 
-/** Hosts a home Jam: guests with the desktop app and Spicetify play this user's tracks and add to their queue. */
+/** Opens (or replaces) our room with a home Jam: guests with the desktop app and Spicetify follow our tracks. */
 export function startHomeJam(): void {
-    const zone = get(currentListeningZoneStore);
-    const uuid = localUserStore.getLocalUser()?.uuid;
-    if (!zone || !uuid) {
-        return;
-    }
-    const jam: ListeningZoneJam = { home: true, hostUuid: uuid, hostName: localUserStore.getName() ?? "" };
-    setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, jam);
+    openRoom((uuid, hostName) => ({ home: true, hostUuid: uuid, hostName }));
 }
 
-/** Joining a home Jam is listening along with its host, as long as we stay in it. */
-export function joinHomeJam(): void {
-    const zone = get(currentListeningZoneStore);
-    const jam = get(currentJamStore);
-    if (!zone || !isHomeJam(jam)) {
-        return;
-    }
-    followedUserUuidStore.set(jam.hostUuid);
-    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: listeningZoneJamKey(jam) });
-}
-
-export function leaveHomeJam(): void {
-    stopFollowingHomeJamHost(get(currentJamStore));
-    joinedJamStore.set(undefined);
-}
-
-function stopFollowingHomeJamHost(jam: ListeningZoneJam | null): void {
-    if (isHomeJam(jam) && get(followedUserUuidStore) === jam.hostUuid) {
-        followedUserUuidStore.set(undefined);
-    }
-}
-
+/** Closes our room; the other rooms of the zone stay. */
 export function stopSharingJam(): void {
     const zone = get(currentListeningZoneStore);
     if (!zone) {
         return;
     }
-    setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, null);
+    writeOthersRooms(zone);
+    leaveJam();
+}
+
+/** Joins a Spotify Jam room: its invite link opens in Spotify. Joining a room leaves the previous one. */
+export function joinJam(jam: ListeningZoneJam): void {
+    const zone = get(currentListeningZoneStore);
+    if (!zone || isHomeJam(jam)) {
+        return;
+    }
+    leaveJam();
+    window.open(jam.url, "_blank", "noopener,noreferrer");
+    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: jam.url, hostUuid: jam.hostUuid });
+}
+
+/** Joining a home Jam room is listening along with its host, as long as we stay in it. */
+export function joinHomeJam(jam: ListeningZoneJam): void {
+    const zone = get(currentListeningZoneStore);
+    if (!zone || !isHomeJam(jam)) {
+        return;
+    }
+    leaveJam();
+    followedUserUuidStore.set(jam.hostUuid);
+    joinedJamStore.set({
+        areaId: zone.areaId,
+        areaName: zone.areaName,
+        url: listeningZoneJamKey(jam),
+        hostUuid: jam.hostUuid,
+    });
+}
+
+/** Leaves the joined room; a home Jam also stops listening along with its host. */
+export function leaveJam(): void {
+    const joined = get(joinedJamStore);
+    if (joined && isHomeJamKey(joined.url) && get(followedUserUuidStore) === joined.hostUuid) {
+        followedUserUuidStore.set(undefined);
+    }
     joinedJamStore.set(undefined);
 }
 
-export function joinJam(): void {
-    const zone = get(currentListeningZoneStore);
-    const jam = get(currentJamStore);
-    if (!zone || !jam || isHomeJam(jam)) {
-        return;
-    }
-    window.open(jam.url, "_blank", "noopener,noreferrer");
-    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: jam.url });
-}
-
 /**
- * Keeps the joined Jam in line with the one shared in the zone: its host takes part in it as soon as the server
- * accepted it, and it is forgotten once removed or replaced by another one. A home Jam ends for a guest who stops
- * listening along with its host, and the follow ends with the home Jam.
+ * Keeps the joined room in line with the rooms of the zone: a host takes part in their own room as soon as the server
+ * accepted it, and a room is forgotten once closed or replaced. A home Jam ends for a guest who stops listening along
+ * with its host, and the follow ends with the home Jam.
  */
 export function syncJoinedJam(): Unsubscriber {
-    let previous: ListeningZoneJam | null = null;
-    const unsubscribeJam = currentJamStore.subscribe((jam) => {
+    const unsubscribeJams = currentJamsStore.subscribe((jams) => {
         const zone = get(currentListeningZoneStore);
         const joined = get(joinedJamStore);
-        const key = jam ? listeningZoneJamKey(jam) : undefined;
-        if (jam && zone && isLocalUser(jam.hostUuid)) {
-            if (joined?.url !== key) {
-                joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: listeningZoneJamKey(jam) });
+        const own = jams.find((jam) => isLocalUser(jam.hostUuid));
+        if (own && zone) {
+            if (joined?.url !== listeningZoneJamKey(own)) {
+                joinedJamStore.set({
+                    areaId: zone.areaId,
+                    areaName: zone.areaName,
+                    url: listeningZoneJamKey(own),
+                    hostUuid: own.hostUuid,
+                });
             }
-        } else if (joined && joined.url !== key) {
-            if (previous && joined.url === listeningZoneJamKey(previous)) {
-                stopFollowingHomeJamHost(previous);
-            }
-            joinedJamStore.set(undefined);
+        } else if (joined && !jams.some((jam) => listeningZoneJamKey(jam) === joined.url)) {
+            leaveJam();
         }
-        previous = jam;
     });
     const unsubscribeFollow = followedUserUuidStore.subscribe((followed) => {
-        const jam = get(currentJamStore);
         const joined = get(joinedJamStore);
-        if (isHomeJam(jam) && !isLocalUser(jam.hostUuid) && joined?.url === listeningZoneJamKey(jam)) {
-            if (followed !== jam.hostUuid) {
-                joinedJamStore.set(undefined);
-            }
+        if (joined && isHomeJamKey(joined.url) && !isLocalUser(joined.hostUuid) && followed !== joined.hostUuid) {
+            joinedJamStore.set(undefined);
         }
     });
     return () => {
-        unsubscribeJam();
+        unsubscribeJams();
         unsubscribeFollow();
     };
+}
+
+function isHomeJamKey(key: string): boolean {
+    return key.startsWith("home:");
+}
+
+/** Our room replaces any previous one of ours; the back refuses it when the zone is full. */
+function openRoom(build: (uuid: string, hostName: string) => ListeningZoneJam): void {
+    const zone = get(currentListeningZoneStore);
+    const uuid = localUserStore.getLocalUser()?.uuid;
+    if (!zone || !uuid) {
+        return;
+    }
+    leaveJam();
+    const others = get(currentJamsStore).filter((jam) => jam.hostUuid !== uuid);
+    // syncJoinedJam() puts us in our room once the server accepted it.
+    setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, [
+        ...others,
+        build(uuid, localUserStore.getName() ?? ""),
+    ]);
+}
+
+function writeOthersRooms(zone: ListeningZone): void {
+    const others = get(currentJamsStore).filter((jam) => !isLocalUser(jam.hostUuid));
+    setAreaPropertyVariable(
+        zone.areaId,
+        zone.propertyId,
+        LISTENING_ZONE_JAM_VARIABLE,
+        others.length > 0 ? others : null,
+    );
 }

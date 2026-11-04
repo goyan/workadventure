@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * Name of the area property variable that holds the Spotify Jam shared in a listening zone
- * (see `ListeningZonePropertyData`). Its value is a `ListeningZoneJam`, or null when no Jam is shared.
+ * Name of the area property variable that holds the Jam rooms of a listening zone (see `ListeningZonePropertyData`):
+ * a list of `ListeningZoneJam`, each opened by its host. Older values (one Jam, or null) still read.
  */
 export const LISTENING_ZONE_JAM_VARIABLE = "jam";
 
@@ -56,34 +56,69 @@ export function listeningZoneJamKey(jam: ListeningZoneJam): string {
     return isHomeJam(jam) ? `home:${jam.hostUuid}` : jam.url;
 }
 
+/** Rooms a zone holds at most: each user opens one, and the list travels with every change. */
+export const MAX_LISTENING_ZONE_JAMS = 6;
+
 /**
- * Reads the value of the Jam variable, as stored in JSON by the back. Anything that is not a valid Jam reads as
- * "no Jam".
+ * Reads the value of the Jam variable, as stored in JSON by the back: the valid rooms, at most one per host. A single
+ * Jam (older value) reads as a list of one; anything else as no room.
  */
-export function parseListeningZoneJam(value: unknown): ListeningZoneJam | null {
+export function parseListeningZoneJams(value: unknown): ListeningZoneJam[] {
     let json = value;
     if (typeof value === "string") {
         try {
             json = JSON.parse(value);
         } catch {
-            return null;
+            return [];
         }
     }
-    const result = ListeningZoneJam.safeParse(json);
-    return result.success ? result.data : null;
+    const entries: unknown[] = Array.isArray(json) ? json : json === null || json === undefined ? [] : [json];
+    const jams: ListeningZoneJam[] = [];
+    for (const entry of entries.slice(0, MAX_LISTENING_ZONE_JAMS)) {
+        const result = ListeningZoneJam.safeParse(entry);
+        if (result.success && !jams.some((jam) => jam.hostUuid === result.data.hostUuid)) {
+            jams.push(result.data);
+        }
+    }
+    return jams;
 }
 
 /**
- * Only one Jam is shared at a time in a zone, and only its host can replace or remove it. Nobody else needs to:
- * the back removes it as soon as the host leaves the zone.
+ * What a client asks to store, read strictly: a list (or null for none) of valid rooms, at most one per host and
+ * within the limit. Anything else is refused, not trimmed. Null when refused.
  */
-export function canUpdateListeningZoneJam(
-    current: ListeningZoneJam | null,
-    next: ListeningZoneJam | null,
+export function parseListeningZoneJamsUpdate(value: string): ListeningZoneJam[] | null {
+    let json: unknown;
+    try {
+        json = JSON.parse(value);
+    } catch {
+        return null;
+    }
+    if (json === null) {
+        return [];
+    }
+    const result = z.array(ListeningZoneJam).max(MAX_LISTENING_ZONE_JAMS).safeParse(json);
+    if (!result.success) {
+        return null;
+    }
+    const hosts = new Set(result.data.map((jam) => jam.hostUuid));
+    return hosts.size === result.data.length ? result.data : null;
+}
+
+/**
+ * Each user opens, replaces or closes their own room only, one at a time, within the zone's limit. Nobody closes
+ * someone else's room: the back does it when its host leaves the zone.
+ */
+export function canUpdateListeningZoneJams(
+    current: readonly ListeningZoneJam[],
+    next: readonly ListeningZoneJam[],
     userUuid: string,
 ): boolean {
-    if (current !== null && current.hostUuid !== userUuid) {
-        return false;
-    }
-    return next === null || next.hostUuid === userUuid;
+    const others = (jams: readonly ListeningZoneJam[]) =>
+        JSON.stringify(jams.filter((jam) => jam.hostUuid !== userUuid));
+    return (
+        next.length <= MAX_LISTENING_ZONE_JAMS &&
+        next.filter((jam) => jam.hostUuid === userUuid).length <= 1 &&
+        others(next) === others(current)
+    );
 }

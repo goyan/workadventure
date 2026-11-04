@@ -75,6 +75,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "Huis-Jam verlaten",
         homeQueueHint: "In Spotify, rechtsklik op een nummer: ‘Toevoegen aan de huis-Jam’.",
         homeDesktopOnly: "Huis-Jam: alleen met de desktop-app en Spicetify.",
+        rooms: "{count} ruimte(s)",
+        leave: "Verlaten",
+        createRoom: "Ruimte openen",
+        chooseKind: "Welk soort ruimte?",
+        kindSpotify: "Spotify",
+        kindHome: "Huis",
+        kindSpotifyTitle: "Spotify-Jam",
+        kindSpotifyDescription: "Met de uitnodigingslink van je Jam. Geluid bij iedereen vraagt Premium.",
+        kindHomeTitle: "Huis-Jam",
+        kindHomeDescription: "Ieders eigen Spotify speelt jouw nummers, ook Free. Desktop-app en Spicetify.",
+        zoneFull: "Deze zone is vol: maximaal 6 ruimtes.",
     },
 };
 

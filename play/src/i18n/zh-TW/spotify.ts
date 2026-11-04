@@ -71,6 +71,17 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "離開家庭 Jam",
         homeQueueHint: "在 Spotify 中右鍵點擊歌曲：「新增到家庭 Jam」。",
         homeDesktopOnly: "家庭 Jam：僅限桌面應用程式和 Spicetify。",
+        rooms: "{count} 個房間",
+        leave: "離開",
+        createRoom: "開房間",
+        chooseKind: "房間類型?",
+        kindSpotify: "Spotify",
+        kindHome: "家庭",
+        kindSpotifyTitle: "Spotify Jam",
+        kindSpotifyDescription: "使用 Jam 邀請連結。每個人的裝置出聲需要 Premium。",
+        kindHomeTitle: "家庭 Jam",
+        kindHomeDescription: "每個人的 Spotify 播放你的歌曲,免費版也可。桌面應用程式和 Spicetify。",
+        zoneFull: "此區域已滿:最多 6 個房間。",
     },
 };
 

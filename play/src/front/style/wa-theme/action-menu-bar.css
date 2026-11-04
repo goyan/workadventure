@@ -1,8 +1,6 @@
 @layer components {
     .bottom-action-bar {
-
         .bottom-action-section {
-
             #invite-btn {
                 @apply min-h-[2rem] h-8 sm:h-10 outline-none;
             }
@@ -11,7 +9,7 @@
             }
 
             button.large {
-              @apply w-max;
+                @apply w-max;
             }
 
             .border-top-light {

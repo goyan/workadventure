@@ -129,6 +129,7 @@ export class SpotifyListeningSharer {
             trackUrl: track?.url ?? "",
             jamAreaId: this.jam?.areaId ?? "",
             jamAreaName: this.jam?.areaName ?? "",
+            jamHostUuid: this.jam?.hostUuid ?? "",
             albumName: track?.album ?? "",
             artworkUrl: track?.artworkUrl ?? "",
             source: track?.source ?? "",
@@ -147,8 +148,10 @@ export class SpotifyListeningSharer {
 
 /** Same track, Jam and source, at a position others would deduce from the previous one. */
 function sameListening(next: SpotifyListening, previous: SpotifyListening): boolean {
-    const withoutPosition = (listening: SpotifyListening) => ({ ...listening, positionMs: 0, positionAt: 0 });
-    if (JSON.stringify(withoutPosition(next)) !== JSON.stringify(withoutPosition(previous))) {
+    // Keys sorted: the same listening may be built with its fields in another order.
+    const withoutPosition = (listening: SpotifyListening) =>
+        JSON.stringify({ ...listening, positionMs: 0, positionAt: 0 }, Object.keys(listening).sort());
+    if (withoutPosition(next) !== withoutPosition(previous)) {
         return false;
     }
     if (next.positionAt === 0 || previous.positionAt === 0) {

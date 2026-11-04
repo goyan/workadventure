@@ -75,6 +75,18 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         leaveHome: "Quitter la Jam maison",
         homeQueueHint: "Dans Spotify, clic droit sur un morceau : « Ajouter à la Jam maison ».",
         homeDesktopOnly: "Jam maison : réservée au client desktop avec Spicetify.",
+        rooms: "{count} salon{{s}}",
+        leave: "Quitter",
+        createRoom: "Créer un salon",
+        chooseKind: "Quel type de salon ?",
+        kindSpotify: "Spotify",
+        kindHome: "Maison",
+        kindSpotifyTitle: "Jam Spotify",
+        kindSpotifyDescription: "Avec le lien d'invitation de votre Jam. Le son chez chacun demande Premium.",
+        kindHomeTitle: "Jam maison",
+        kindHomeDescription:
+            "Le Spotify de chacun joue vos morceaux, compte gratuit compris. Client desktop et Spicetify.",
+        zoneFull: "Cette zone est pleine : 6 salons au plus.",
     },
 };
 
