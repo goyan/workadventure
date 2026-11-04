@@ -13,6 +13,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         desktopDetected: "อ่านจากแอป Spotify ในคอมพิวเตอร์เครื่องนี้ ไม่ต้องเชื่อมบัญชี ใช้บัญชีฟรีได้",
         desktopLinkOtherDevices:
             "หากต้องการแชร์เพลงที่ฟังบนอุปกรณ์อื่นด้วย (โทรศัพท์ เว็บเพลเยอร์ ลำโพง) ให้เชื่อมต่อบัญชี Spotify ของคุณ",
+        otherDevices: "แชร์จากอุปกรณ์อื่นด้วย",
         desktopAppHint:
             "ใช้แอปเดสก์ท็อป WorkAdventure ไม่ต้องเชื่อมบัญชีหรือใช้ Premium: แอปจะอ่านจาก Spotify บน Mac ของคุณ",
         desktopAppLink: "ดาวน์โหลดแอปเดสก์ท็อป",
@@ -102,6 +103,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         like: "บันทึกในเพลงที่ชอบ",
         moveUp: "เลื่อนขึ้น",
         moveDown: "เลื่อนลง",
+        upNext: "ถัดไป",
+        upNextIn: "ถัดไปใน {name}",
     },
 };
 

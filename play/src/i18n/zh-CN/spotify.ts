@@ -13,6 +13,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         desktopDetected: "从本机的 Spotify 应用读取：无需关联账号，免费账号即可。",
         desktopLinkOtherDevices:
             "若要同时分享在其他设备（手机、网页播放器、音箱）上收听的音乐，请关联你的 Spotify 账号。",
+        otherDevices: "同时从其他设备分享",
         desktopAppHint: "使用 WorkAdventure 桌面应用，无需关联账号或 Premium：它直接读取你 Mac 上的 Spotify 应用。",
         desktopAppLink: "下载桌面应用",
         serverAppNotice:
@@ -99,6 +100,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         like: "保存到已点赞的歌曲",
         moveUp: "上移",
         moveDown: "下移",
+        upNext: "接下来",
+        upNextIn: "接下来:{name}",
     },
 };
 

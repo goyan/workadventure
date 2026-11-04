@@ -13,6 +13,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         desktopDetected: "이 컴퓨터의 Spotify 앱에서 읽어요. 계정 연결이 필요 없고 무료 계정으로도 충분해요.",
         desktopLinkOtherDevices:
             "다른 기기(휴대폰, 웹 플레이어, 스피커)에서 듣는 음악도 공유하려면 Spotify 계정을 연결하세요.",
+        otherDevices: "다른 기기에서도 공유",
         desktopAppHint: "WorkAdventure 데스크톱 앱이면 계정 연결도 Premium도 필요 없어요. Mac의 Spotify 앱에서 읽어요.",
         desktopAppLink: "데스크톱 앱 받기",
         serverAppNotice:
@@ -102,6 +103,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         like: "좋아요 표시한 곡에 저장",
         moveUp: "위로",
         moveDown: "아래로",
+        upNext: "다음 곡",
+        upNextIn: "{name}의 다음 곡",
     },
 };
 

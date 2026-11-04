@@ -1,7 +1,7 @@
 import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
 import { derived, get, type Readable, type Unsubscriber, writable } from "svelte/store";
 import { z } from "zod";
-import type { JukeboxTrack, WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
+import type { JukeboxQueue, JukeboxTrack, WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
 import type { JamRoom } from "../ListeningZone/ListeningZoneController";
 import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
 import type { ListeningByUserUuid } from "./SpotifyListeningDirectory";
@@ -21,6 +21,7 @@ const MAX_TRACKS_PER_REQUEST = 5;
 /** A guest cannot flood the host: requests beyond that, within a minute, are dropped. */
 const MAX_REQUESTS_PER_MINUTE = 10;
 const MAX_SHOWN_QUEUE = 30;
+const MAX_SHOWN_UPCOMING = 20;
 
 const trackUri = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/);
 const queueUid = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
@@ -28,6 +29,7 @@ const QueueRequest = z.object({ uris: z.array(trackUri).min(1).max(MAX_TRACKS_PE
 const RemoveRequest = z.object({ uri: trackUri, uid: queueUid });
 const MoveRequest = RemoveRequest.extend({ direction: z.enum(["up", "down"]) });
 export type MoveDirection = z.infer<typeof MoveRequest>["direction"];
+const artworkUrl = z.union([z.literal(""), z.string().startsWith("https://i.scdn.co/image/").max(200)]);
 const JukeboxState = z.object({
     tracks: z
         .array(
@@ -36,16 +38,22 @@ const JukeboxState = z.object({
                 uid: queueUid,
                 title: z.string().max(200),
                 artist: z.string().max(200),
-                artworkUrl: z.union([z.literal(""), z.string().startsWith("https://i.scdn.co/image/").max(200)]),
+                artworkUrl,
                 addedBy: z.string().max(100),
                 addedByUuid: z.string().max(256),
             }),
         )
         .max(MAX_SHOWN_QUEUE),
+    // Older hosts send the queue only.
+    upcoming: z
+        .array(z.object({ uri: trackUri, title: z.string().max(200), artist: z.string().max(200), artworkUrl }))
+        .max(MAX_SHOWN_UPCOMING)
+        .default([]),
+    contextName: z.string().max(200).default(""),
 });
 
-/** The queue of each Jukebox, by host uuid, as its host last sent it. */
-export const jukeboxQueuesStore = writable<ReadonlyMap<string, JukeboxTrack[]>>(new Map());
+/** What each Jukebox plays next, by host uuid, as its host last sent it. */
+export const jukeboxQueuesStore = writable<ReadonlyMap<string, JukeboxQueue>>(new Map());
 
 /** What the Jukebox views can do; set while the game runs. */
 let actions:
@@ -144,10 +152,12 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
         const user = context.userByUuid(uuid);
         if (user) context.send(name, data, [user.id]);
     };
-    const ownQueue = () => get(jukeboxQueuesStore).get(context.localUuid() ?? "") ?? [];
+    const ownState = (): JukeboxQueue =>
+        get(jukeboxQueuesStore).get(context.localUuid() ?? "") ?? { tracks: [], upcoming: [], contextName: "" };
+    const ownQueue = () => ownState().tracks;
     const addedByOf = (uid: string) => ownQueue().find((track) => track.uid === uid)?.addedByUuid ?? "";
-    const setQueue = (hostUuid: string, tracks: JukeboxTrack[]) =>
-        jukeboxQueuesStore.update((queues) => new Map(queues).set(hostUuid, tracks));
+    const setQueue = (hostUuid: string, queue: JukeboxQueue) =>
+        jukeboxQueuesStore.update((queues) => new Map(queues).set(hostUuid, queue));
 
     /** Where a queued track moves: just before the previous one, or just after the next one. */
     const moveTarget = (uid: string, direction: MoveDirection) => {
@@ -213,9 +223,9 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
             const sender = context.userById(senderId);
             const state = JukeboxState.safeParse(data);
             const isHost = get(context.rooms).some(({ jam }) => isHomeJam(jam) && jam.hostUuid === sender?.uuid);
-            if (sender && state.success && isHost) setQueue(sender.uuid, state.data.tracks);
+            if (sender && state.success && isHost) setQueue(sender.uuid, state.data);
         } else if (name === JUKEBOX_STATE_REQUEST_EVENT) {
-            if (get(ownJukebox)) context.send(JUKEBOX_STATE_EVENT, { tracks: ownQueue() }, [senderId]);
+            if (get(ownJukebox)) context.send(JUKEBOX_STATE_EVENT, ownState(), [senderId]);
         } else if (name === HOME_JAM_QUEUE_EVENT) {
             const request = QueueRequest.safeParse(data);
             const sender = request.success ? acceptFromParticipant(senderId) : undefined;
@@ -246,10 +256,11 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const unsubscribeOwn = ownJukebox.subscribe((own) => {
         const watchSpotifyQueue = desktop?.watchSpotifyQueue;
         if (own && !stopWatchingQueue && watchSpotifyQueue) {
-            stopWatchingQueue = watchSpotifyQueue((tracks) => {
-                const state = JukeboxState.safeParse({ tracks });
+            stopWatchingQueue = watchSpotifyQueue((queue) => {
+                // Older desktop apps send the queue only.
+                const state = JukeboxState.safeParse(Array.isArray(queue) ? { tracks: queue } : queue);
                 if (!state.success) return;
-                setQueue(context.localUuid() ?? "", state.data.tracks);
+                setQueue(context.localUuid() ?? "", state.data);
                 context.send(JUKEBOX_STATE_EVENT, state.data, []);
             });
         } else if (!own && stopWatchingQueue) {

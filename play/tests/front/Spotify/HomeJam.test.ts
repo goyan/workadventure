@@ -3,7 +3,11 @@ import type { SpotifyListening } from "@workadventure/messages";
 import { get, writable } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EMPTY_SPOTIFY_LISTENING } from "../../../src/common/SpotifyListening";
-import type { JukeboxTrack, WorkAdventureDesktopApi } from "../../../src/front/Interfaces/DesktopAppInterfaces";
+import type {
+    JukeboxQueue,
+    JukeboxTrack,
+    WorkAdventureDesktopApi,
+} from "../../../src/front/Interfaces/DesktopAppInterfaces";
 import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneController";
 import type { JoinedJam, ListeningZone } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import {
@@ -44,6 +48,8 @@ const queued: JukeboxTrack = {
     addedByUuid: "guest",
 };
 
+const stateOf = (tracks: JukeboxTrack[]): JukeboxQueue => ({ tracks, upcoming: [], contextName: "" });
+
 function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
     // Another room on the map, a Spotify Jam: it must not get in the way.
     const rooms = writable<JamRoom[]>([
@@ -53,7 +59,7 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
     const joined = writable<JoinedJam | undefined>(undefined);
     const listening = writable(new Map<string, SpotifyListening>());
     let onQueueRequest: ((uris: string[]) => void) | undefined;
-    let onSpotifyQueue: ((tracks: JukeboxTrack[]) => void) | undefined;
+    let onSpotifyQueue: ((queue: JukeboxQueue | JukeboxTrack[]) => void) | undefined;
     let eventListener: ((name: string, data: unknown, senderId: number | undefined) => void) | undefined;
     const desktop = {
         desktop: true,
@@ -62,7 +68,7 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
         enqueueOnSpotify: vi.fn(),
         dequeueOnSpotify: vi.fn(),
         moveInSpotifyQueue: vi.fn(),
-        watchSpotifyQueue: (callback: (tracks: JukeboxTrack[]) => void) => {
+        watchSpotifyQueue: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => {
             onSpotifyQueue = callback;
             return () => (onSpotifyQueue = undefined);
         },
@@ -92,7 +98,7 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
         send,
         stop,
         queueFromSpotify: (uris: string[]) => onQueueRequest?.(uris),
-        spotifyQueueChanges: (tracks: JukeboxTrack[]) => onSpotifyQueue?.(tracks),
+        spotifyQueueChanges: (queue: JukeboxQueue | JukeboxTrack[]) => onSpotifyQueue?.(queue),
         receive: (name: string, data: unknown, senderId: number) => eventListener?.(name, data, senderId),
         advance: (ms: number) => (now += ms),
     };
@@ -136,7 +142,7 @@ describe("Jukebox, as a guest", () => {
         guest.receive(JUKEBOX_STATE_EVENT, { tracks: [queued] }, 3);
         expect(get(jukeboxQueuesStore).get("stranger")).toBeUndefined();
         guest.receive(JUKEBOX_STATE_EVENT, { tracks: [queued] }, 1);
-        expect(get(jukeboxQueuesStore).get("host")).toEqual([queued]);
+        expect(get(jukeboxQueuesStore).get("host")).toEqual(stateOf([queued]));
 
         requestJukeboxQueue("host");
         expect(guest.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_REQUEST_EVENT, {}, [1]);
@@ -205,11 +211,11 @@ describe("Jukebox, as the host", () => {
         const host = createHarness("host");
 
         host.spotifyQueueChanges([queued]);
-        expect(host.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_EVENT, { tracks: [queued] }, []);
-        expect(get(jukeboxQueuesStore).get("host")).toEqual([queued]);
+        expect(host.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_EVENT, stateOf([queued]), []);
+        expect(get(jukeboxQueuesStore).get("host")).toEqual(stateOf([queued]));
 
         host.receive(JUKEBOX_STATE_REQUEST_EVENT, {}, 3);
-        expect(host.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_EVENT, { tracks: [queued] }, [3]);
+        expect(host.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_EVENT, stateOf([queued]), [3]);
         host.stop();
     });
 
@@ -226,6 +232,24 @@ describe("Jukebox, as the host", () => {
         host.rooms.set([{ zone: ZONE, jam: { ...homeJam, djMode: true } }]);
         host.receive(JUKEBOX_REMOVE_EVENT, removal, 2);
         expect(host.desktop.dequeueOnSpotify).toHaveBeenCalledTimes(1);
+        host.stop();
+    });
+});
+
+describe("Jukebox, the host's playlist", () => {
+    it("shares what plays after the queue, and still understands an older desktop app sending the queue only", () => {
+        const host = createHarness("host");
+        const upcoming = { uri: "spotify:track:next", title: "Next", artist: "Artist", artworkUrl: "" };
+
+        host.spotifyQueueChanges({ tracks: [queued], upcoming: [upcoming], contextName: "Focus" });
+        expect(host.send).toHaveBeenLastCalledWith(
+            JUKEBOX_STATE_EVENT,
+            { tracks: [queued], upcoming: [upcoming], contextName: "Focus" },
+            [],
+        );
+
+        host.spotifyQueueChanges([queued]);
+        expect(get(jukeboxQueuesStore).get("host")).toEqual(stateOf([queued]));
         host.stop();
     });
 });
@@ -324,7 +348,7 @@ describe("Jukebox without the desktop app", () => {
 
         eventListener?.(JUKEBOX_STATE_EVENT, { tracks: [queued] }, 1);
 
-        expect(get(jukeboxQueuesStore).get("host")).toEqual([queued]);
+        expect(get(jukeboxQueuesStore).get("host")).toEqual(stateOf([queued]));
         stop();
     });
 });

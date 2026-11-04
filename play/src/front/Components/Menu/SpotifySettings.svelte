@@ -28,6 +28,8 @@
     let sharing = $state($spotifySharingEnabledStore);
     let personalClientId = $state($spotifyPersonalClientIdStore);
     let showPersonalApp = $state($spotifyPersonalClientIdStore !== "");
+    // Under the desktop app, linking an account only adds other devices: kept out of the way until asked for.
+    let showOtherDevices = $state(!readsLocalPlayer || $spotifyPersonalClientIdStore !== "");
     let section: HTMLElement | undefined = $state(undefined);
     // The app of this server only accepts the accounts an admin registered in its Spotify dashboard.
     let usesServerApp = $derived($spotifyPersonalClientIdStore.trim() === "" && $spotifyClientIdStore !== undefined);
@@ -75,17 +77,12 @@
 
 <SettingsSection
     title={$LL.spotify.settings.title()}
-    description={$LL.spotify.settings.description()}
+    description={readsLocalPlayer ? $LL.spotify.settings.desktopDetected() : $LL.spotify.settings.description()}
     bind:element={section}
     dataTestId="spotify-settings"
 >
     {#snippet icon()}<IconBrandSpotify />{/snippet}
     <div class="flex flex-col gap-3">
-        {#if readsLocalPlayer}
-            <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-detected">
-                {$LL.spotify.settings.desktopDetected()}
-            </p>
-        {/if}
         {#if $linked}
             <div class="flex items-center gap-3">
                 <span class="grow text-sm">{$LL.spotify.settings.linked()}</span>
@@ -98,7 +95,7 @@
                     {$LL.spotify.settings.accessDenied()}
                 </p>
             {/if}
-        {:else}
+        {:else if showOtherDevices}
             {#if readsLocalPlayer}
                 <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-link-hint">
                     {$LL.spotify.settings.desktopLinkOtherDevices()}
@@ -124,6 +121,16 @@
                 {linking ? $LL.spotify.settings.linking() : $LL.spotify.settings.link()}
             </Button>
         {/if}
+        {#if readsLocalPlayer && !$linked && !showOtherDevices}
+            <button
+                type="button"
+                class="m-0 self-start bg-transparent p-0 text-sm text-white/60 underline hover:text-white"
+                onclick={() => (showOtherDevices = true)}
+                data-testid="spotify-other-devices"
+            >
+                {$LL.spotify.settings.otherDevices()}
+            </button>
+        {/if}
         {#if readsLocalPlayer || $linked}
             <InputSwitch
                 id="spotify-sharing-toggle"
@@ -137,7 +144,7 @@
             <p class="text-sm text-danger m-0">{errorMessage}</p>
         {/if}
 
-        {#if !$linked}
+        {#if !$linked && showOtherDevices}
             <InputSwitch
                 id="spotify-personal-app-toggle"
                 bind:value={showPersonalApp}

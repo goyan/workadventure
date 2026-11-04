@@ -13,6 +13,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         desktopDetected: "從本機的 Spotify 應用程式讀取：無需連結帳號，免費帳號即可。",
         desktopLinkOtherDevices:
             "若要同時分享在其他裝置（手機、網頁播放器、喇叭）上收聽的音樂，請連結你的 Spotify 帳號。",
+        otherDevices: "同時從其他裝置分享",
         desktopAppHint: "使用 WorkAdventure 桌面應用程式，無需連結帳號或 Premium：它直接讀取你 Mac 上的 Spotify。",
         desktopAppLink: "下載桌面應用程式",
         serverAppNotice:
@@ -101,6 +102,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         like: "儲存到已按讚的歌曲",
         moveUp: "上移",
         moveDown: "下移",
+        upNext: "接下來",
+        upNextIn: "接下來:{name}",
     },
 };
 
