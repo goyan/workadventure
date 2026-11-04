@@ -182,6 +182,25 @@ describe("WanderSchedule", () => {
         expect(earlier?.moving).toBe(true);
     });
 
+    it("counts the time since the arrival while paused", async () => {
+        const schedule = new WanderSchedule("duck", NEST, longPathMap);
+        const k = 4;
+        expect((await poseResolved(schedule, at(k, 1_000)))?.pausedMs).toBe(0);
+        // The long path is walked in exactly LEG_MS - MIN_PAUSE_MS.
+        const pose = await poseResolved(schedule, at(k, LEG_MS - 1_000));
+        expect(pose?.moving).toBe(false);
+        expect(pose?.pausedMs).toBeCloseTo(MIN_PAUSE_MS - 1_000, 0);
+    });
+
+    it("a leg spent at the same place continues the pause of the previous one", async () => {
+        const walls = new Set(["14,14", "15,14", "16,14", "14,15", "16,15", "14,16", "15,16", "16,16"]);
+        const schedule = new WanderSchedule("duck", NEST, makeMap(walls));
+        const pose = await poseResolved(schedule, at(3, 0));
+        expect(pose?.moving).toBe(false);
+        // Counted as paused for a whole leg already: a character that does not move stays in its longest rest pose.
+        expect(pose?.pausedMs).toBe(LEG_MS);
+    });
+
     it("mid-leg", async () => {
         const walls = new Set(["14,15", "16,15"]);
         const follower = new WanderSchedule("duck", NEST, makeMap(walls));

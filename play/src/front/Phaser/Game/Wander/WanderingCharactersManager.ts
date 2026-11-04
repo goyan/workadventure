@@ -11,15 +11,20 @@ import { blockRectangles, sameGrids } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { WanderSchedule } from "./WanderSchedule";
 import type { Point, WanderDirection, WanderMap } from "./WanderSchedule";
-import { WANDER_FRAME_SIZE, wanderIdleFrame, wanderWalkFrames } from "./WanderSheet";
+import {
+    WANDER_FRAME_SIZE,
+    WANDER_WALK_COLUMNS,
+    wanderIdleFrame,
+    wanderStillFrame,
+    wanderWalkFrames,
+} from "./WanderSheet";
 
 const RECONCILE_INTERVAL_MS = 500;
 const WALK_FRAME_RATE = 8;
 const DIRECTIONS: WanderDirection[] = ["down", "left", "right", "up"];
-// 4 rows (one per direction) of 3 frames.
-const SHEET_FRAME_COUNT = 12;
 
-type SheetState = "loading" | "loaded" | "failed";
+// A loaded sheet knows its number of columns: 3 for a walk cycle only, 5 with the rest poses (see WanderSheet).
+type SheetState = "loading" | { columns: number } | "failed";
 
 /** Where a character may stop: the free tiles, meeting rooms and desks included; not the exits. */
 const DESTINATION_TILE_TYPES: ReadonlySet<number> = new Set([
@@ -242,23 +247,29 @@ export class WanderingCharactersManager {
     }
 
     private onSheetLoaded(sheetPath: string): void {
+        // The frames are numbered row by row: the width of the image gives the number of columns.
+        const texture = this.scene.textures.get(sheetPath);
+        const columns = Math.floor(texture.getSourceImage().width / WANDER_FRAME_SIZE);
         // A sheet too small for the 4 rows of 3 frames (or an image already loaded under that key without frames) would
         // show the whole image: the entity stays visible as a still object instead. "__BASE" is not a frame of the sheet.
-        const frameCount = this.scene.textures.get(sheetPath).frameTotal - 1;
-        if (frameCount < SHEET_FRAME_COUNT) {
+        const frameCount = texture.frameTotal - 1;
+        const expected = DIRECTIONS.length * Math.max(columns, WANDER_WALK_COLUMNS);
+        if (frameCount < expected) {
             this.sheets.set(sheetPath, "failed");
             console.error(
-                `Invalid wandering sheet "${sheetPath}": ${frameCount} frames of ${WANDER_FRAME_SIZE}px, ${SHEET_FRAME_COUNT} expected`,
+                `Invalid wandering sheet "${sheetPath}": ${frameCount} frames of ${WANDER_FRAME_SIZE}px, ${expected} expected`,
             );
             return;
         }
-        this.sheets.set(sheetPath, "loaded");
+        this.sheets.set(sheetPath, { columns });
         for (const direction of DIRECTIONS) {
             const key = `${sheetPath}:${direction}`;
             if (!this.scene.anims.exists(key)) {
                 this.scene.anims.create({
                     key,
-                    frames: this.scene.anims.generateFrameNumbers(sheetPath, { frames: wanderWalkFrames(direction) }),
+                    frames: this.scene.anims.generateFrameNumbers(sheetPath, {
+                        frames: wanderWalkFrames(direction, columns),
+                    }),
                     frameRate: WALK_FRAME_RATE,
                     repeat: -1,
                 });
@@ -287,9 +298,11 @@ export class WanderingCharactersManager {
         const now = Date.now();
         let changed = false;
         for (const character of this.characters.values()) {
-            if (!character.sprite && this.sheets.get(character.sheetPath) === "loaded") {
+            const sheet = this.sheets.get(character.sheetPath);
+            const columns = typeof sheet === "object" ? sheet.columns : WANDER_WALK_COLUMNS;
+            if (!character.sprite && typeof sheet === "object") {
                 character.sprite = this.scene.add
-                    .sprite(character.nest.x, character.nest.y, character.sheetPath, wanderIdleFrame("down"))
+                    .sprite(character.nest.x, character.nest.y, character.sheetPath, wanderIdleFrame("down", columns))
                     // The position of a character is the position of its feet.
                     .setOrigin(0.5, 1)
                     // Like the characters, the depth follows the y coordinate to simulate a perspective.
@@ -316,11 +329,11 @@ export class WanderingCharactersManager {
                     if (pose.moving) {
                         sprite.play(`${character.sheetPath}:${pose.direction}`, true);
                     } else {
-                        const idleFrame = wanderIdleFrame(pose.direction);
+                        const stillFrame = wanderStillFrame(pose.direction, pose.pausedMs, columns);
                         // The frames of a sprite sheet are named by their index (a number at runtime).
-                        if (sprite.anims.isPlaying || String(sprite.frame.name) !== String(idleFrame)) {
+                        if (sprite.anims.isPlaying || String(sprite.frame.name) !== String(stillFrame)) {
                             sprite.stop();
-                            sprite.setFrame(idleFrame);
+                            sprite.setFrame(stillFrame);
                             changed = true;
                         }
                     }

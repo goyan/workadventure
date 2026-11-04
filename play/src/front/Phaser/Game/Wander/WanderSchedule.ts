@@ -8,6 +8,11 @@ export interface WanderPose {
     y: number;
     direction: WanderDirection;
     moving: boolean;
+    /**
+     * Time since the character stopped, 0 while moving. A leg spent at the same place counts as following a whole leg of
+     * pause: the true length of the previous pause would depend on whether that leg was computed on this client.
+     */
+    pausedMs: number;
 }
 
 export interface WanderMap {
@@ -201,7 +206,7 @@ export class WanderSchedule {
         }
 
         if (segment === -1) {
-            return { x: points[0].x, y: points[0].y, direction: "down", moving: false };
+            return { x: points[0].x, y: points[0].y, direction: "down", moving: false, pausedMs: LEG_MS + elapsedMs };
         }
         const from = points[segment];
         const to = points[segment + 1];
@@ -214,7 +219,8 @@ export class WanderSchedule {
         } else {
             direction = dy < 0 ? "up" : "down";
         }
-        return { x: from.x + dx * ratio, y: from.y + dy * ratio, direction, moving };
+        const pausedMs = moving ? 0 : Math.max(0, elapsedMs - (total / leg.speed) * 1000);
+        return { x: from.x + dx * ratio, y: from.y + dy * ratio, direction, moving, pausedMs };
     }
 
     private safeIsWalkable(tile: Point): boolean {
