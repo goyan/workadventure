@@ -81,6 +81,7 @@
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
+    import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
@@ -434,6 +435,7 @@
                 <!-- With a player's menu open, the bubble moves above it (see below) instead of covering it. -->
                 {#if !sidePanelOpen}
                     <ListeningZoneBubble />
+                    <JamRoomsLauncher />
                 {/if}
             </div>
 
@@ -489,6 +491,7 @@
                     class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-0 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
                     <ListeningZoneBubble />
+                    <JamRoomsLauncher />
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
                     {/if}

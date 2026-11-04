@@ -46,6 +46,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "Escolta-ho també",
         listenAlong: "Escoltar alhora",
         stopListeningAlong: "Deixar d'escoltar alhora",
+        listeningAlongCount: "{count} escoltant alhora",
         playlist: "Llista: {name}",
         album: "Àlbum: {name}",
     },
@@ -87,6 +88,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         kindHomeDescription:
             "L'Spotify de cadascú reprodueix les teves cançons, Free inclòs. App d'escriptori i Spicetify.",
         zoneFull: "Aquesta zona és plena: 6 sales com a màxim.",
+        titlePlaceholder: "Títol de la sala (opcional)",
+        hostedBy: "Presenta {name}",
+        jamsButton: "{count} Jam(s)",
+        roomsTitle: "Jams en curs",
+        createHint: "Crea la teva sala des d'una zona d'escolta.",
     },
 };
 

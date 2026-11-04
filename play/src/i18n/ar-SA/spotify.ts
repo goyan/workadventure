@@ -43,6 +43,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "استمع أيضًا",
         listenAlong: "استمع معه",
         stopListeningAlong: "توقف عن الاستماع معه",
+        listeningAlongCount: "{count} يستمعون معًا",
         playlist: "قائمة التشغيل: {name}",
         album: "الألبوم: {name}",
     },
@@ -83,6 +84,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         kindHomeTitle: "جلسة منزلية",
         kindHomeDescription: "يشغّل Spotify لدى كل شخص مقاطعك، حتى المجاني. تطبيق سطح المكتب وSpicetify.",
         zoneFull: "هذه المنطقة ممتلئة: 6 غرف على الأكثر.",
+        titlePlaceholder: "عنوان الغرفة (اختياري)",
+        hostedBy: "يستضيفها {name}",
+        jamsButton: "{count} جلسة",
+        roomsTitle: "الجلسات الجارية",
+        createHint: "افتح غرفتك من منطقة استماع.",
     },
 };
 

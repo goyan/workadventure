@@ -3,7 +3,7 @@ import * as Phaser from "phaser";
 import type { Subscription } from "rxjs";
 import { Queue } from "queue-typescript";
 import type { Readable, Unsubscriber } from "svelte/store";
-import { get } from "svelte/store";
+import { derived, get } from "svelte/store";
 import { throttle } from "throttle-debounce";
 import { ForwardableStore, MapStore } from "@workadventure/store-utils";
 import { MathUtils } from "@workadventure/math-utils";
@@ -199,7 +199,11 @@ import type { SpaceInterface } from "../../Space/SpaceInterface";
 import { spotifyAccount } from "../../Spotify/SpotifyAccount";
 import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
 import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
-import { followedUserUuidStore, startListeningFollower } from "../../Spotify/ListeningFollower";
+import {
+    followedUserUuidStore,
+    listenAlongAvailableStore,
+    startListeningFollower,
+} from "../../Spotify/ListeningFollower";
 import { desktopApi } from "../../Api/Desktop";
 import {
     bindListeningDirectory,
@@ -207,8 +211,8 @@ import {
     listeningByUserUuidStore,
 } from "../../Spotify/SpotifyListeningDirectory";
 import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
-import { currentListeningZoneStore, joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
-import { currentJamsStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
+import { joinedJamStore, listeningZoneNamesStore } from "../../ListeningZone/ListeningZoneStore";
+import { allJamRoomsStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
 import { HOME_JAM_QUEUE_EVENT, startHomeJam } from "../../Spotify/HomeJam";
 import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
@@ -1880,6 +1884,10 @@ export class GameScene extends DirtyScene {
             undefined,
             undefined,
             desktopSpotifyPlayer(),
+            // Only while the local Spotify app really plays along: a follow paused without the extension does not count.
+            derived([followedUserUuidStore, listenAlongAvailableStore], ([followed, available]) =>
+                available ? followed : undefined,
+            ),
         );
         return [
             bindListeningDirectory(worldSpace.usersStore),
@@ -1897,8 +1905,7 @@ export class GameScene extends DirtyScene {
             return () => undefined;
         }
         return startHomeJam({
-            zone: currentListeningZoneStore,
-            jams: currentJamsStore,
+            rooms: allJamRoomsStore,
             joined: joinedJamStore,
             listeningByUserUuid: listeningByUserUuidStore,
             localUuid: () => localUserStore.getLocalUser()?.uuid,
@@ -2764,6 +2771,13 @@ export class GameScene extends DirtyScene {
             room.areaPropertyVariables,
         );
         areaPropertyVariablesManagerStore.set(this.areaPropertyVariablesManager);
+        listeningZoneNamesStore.set(
+            new Map(
+                [...(this.getGameMap().getWamFile()?.getGameMapAreas().getAreas().values() ?? [])]
+                    .filter((area) => area.properties.some((property) => property.type === "listeningZonePropertyData"))
+                    .map((area) => [area.id, area.name]),
+            ),
+        );
 
         const playerVariables: Map<string, unknown> = room.playerVariables;
 

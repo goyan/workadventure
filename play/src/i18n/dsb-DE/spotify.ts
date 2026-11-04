@@ -44,6 +44,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "Listen too",
         listenAlong: "Listen along",
         stopListeningAlong: "Stop listening along",
+        listeningAlongCount: "{count} listening along",
         playlist: "Playlist: {name}",
         album: "Album: {name}",
     },
@@ -84,6 +85,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         kindHomeTitle: "Home Jam",
         kindHomeDescription: "Everyone's own Spotify plays your tracks, Free included. Desktop app and Spicetify.",
         zoneFull: "This zone is full: 6 rooms at most.",
+        titlePlaceholder: "Room title (optional)",
+        hostedBy: "Hosted by {name}",
+        jamsButton: "{count} Jam{{s}}",
+        roomsTitle: "Jams on the map",
+        createHint: "Open your own room from a listening zone.",
     },
 };
 

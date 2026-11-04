@@ -1,5 +1,5 @@
 import type { SpotifyListening } from "@workadventure/messages";
-import { derived, type Readable, type Unsubscriber } from "svelte/store";
+import { derived, readable, type Readable, type Unsubscriber } from "svelte/store";
 import { EMPTY_SPOTIFY_LISTENING } from "../../common/SpotifyListening";
 import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
 import type { SpotifyAccount } from "./SpotifyAccount";
@@ -24,6 +24,7 @@ export class SpotifyListeningSharer {
     private apiTrack: SpotifyTrack | undefined;
     private polling = false;
     private jam: JoinedJam | undefined;
+    private listeningAlongUuid: string | undefined;
     private published: SpotifyListening = EMPTY_SPOTIFY_LISTENING;
     // Incremented on every start and stop, so that a poll still in flight never schedules a second loop.
     private pollGeneration = 0;
@@ -42,16 +43,20 @@ export class SpotifyListeningSharer {
         private readonly fetchTrack: (accessToken: string) => Promise<CurrentlyPlayingResult> = fetchCurrentlyPlaying,
         private readonly pollIntervalMs = SPOTIFY_POLL_INTERVAL_MS,
         private readonly localPlayer: LocalSpotifyPlayer | undefined = undefined,
+        /** The user whose tracks this Spotify plays along with, published so that others can count listeners. */
+        listeningAlong: Readable<string | undefined> = readable(undefined),
     ) {
-        this.unsubscriber = derived([account.linked, sharingEnabled, joinedJam], (values) => values).subscribe(
-            ([linked, enabled, jam]) => {
-                this.jam = jam;
-                // The local player needs no account: sharing is enough.
-                this.readLocalPlayer(enabled && localPlayer !== undefined);
-                this.readWebApi(enabled && linked);
-                this.publishIfChanged();
-            },
-        );
+        this.unsubscriber = derived(
+            [account.linked, sharingEnabled, joinedJam, listeningAlong],
+            (values) => values,
+        ).subscribe(([linked, enabled, jam, along]) => {
+            this.jam = jam;
+            this.listeningAlongUuid = along;
+            // The local player needs no account: sharing is enough.
+            this.readLocalPlayer(enabled && localPlayer !== undefined);
+            this.readWebApi(enabled && linked);
+            this.publishIfChanged();
+        });
     }
 
     public destroy(): void {
@@ -130,6 +135,7 @@ export class SpotifyListeningSharer {
             jamAreaId: this.jam?.areaId ?? "",
             jamAreaName: this.jam?.areaName ?? "",
             jamHostUuid: this.jam?.hostUuid ?? "",
+            listeningAlongUuid: this.listeningAlongUuid ?? "",
             albumName: track?.album ?? "",
             artworkUrl: track?.artworkUrl ?? "",
             source: track?.source ?? "",

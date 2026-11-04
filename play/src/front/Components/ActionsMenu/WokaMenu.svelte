@@ -145,6 +145,7 @@
 
                 <ListeningCard
                     listening={$listeningByUserUuidStore.get(wokaMenuData.userUuid)}
+                    userUuid={wokaMenuData.userUuid}
                     followableUserUuid={wokaMenuData.userUuid === localUserStore.getLocalUser()?.uuid
                         ? undefined
                         : wokaMenuData.userUuid}

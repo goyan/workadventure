@@ -46,6 +46,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "Écouter aussi",
         listenAlong: "Écouter en même temps",
         stopListeningAlong: "Arrêter d'écouter en même temps",
+        listeningAlongCount: "{count} en même temps",
         playlist: "Playlist : {name}",
         album: "Album : {name}",
     },
@@ -87,6 +88,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         kindHomeDescription:
             "Le Spotify de chacun joue vos morceaux, compte gratuit compris. Client desktop et Spicetify.",
         zoneFull: "Cette zone est pleine : 6 salons au plus.",
+        titlePlaceholder: "Titre du salon (facultatif)",
+        hostedBy: "Animé par {name}",
+        jamsButton: "{count} Jam{{s}}",
+        roomsTitle: "Jams en cours",
+        createHint: "Créez votre salon depuis une zone d'écoute.",
     },
 };
 

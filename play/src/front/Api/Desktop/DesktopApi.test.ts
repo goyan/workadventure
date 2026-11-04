@@ -92,6 +92,7 @@ describe("DesktopApi listening", () => {
         contextUri: "",
         contextName: "",
         jamHostUuid: "",
+        listeningAlongUuid: "",
     };
 
     afterEach(() => {

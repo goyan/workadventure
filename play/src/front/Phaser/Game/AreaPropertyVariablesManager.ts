@@ -128,6 +128,18 @@ export class AreaPropertyVariablesManager {
         return returnValue;
     }
 
+    /** Every variable with this key, whatever its area and property (e.g. the Jam rooms of all listening zones). */
+    public getVariablesWithKey(key: string): { areaId: string; propertyId: string; value: unknown }[] {
+        const result: { areaId: string; propertyId: string; value: unknown }[] = [];
+        for (const [compositeKey, value] of get(this._variables)) {
+            const [areaId, propertyId, variableKey] = compositeKey.split(COMPOSITE_KEY_DELIMITER);
+            if (variableKey === key && areaId !== undefined && propertyId !== undefined) {
+                result.push({ areaId, propertyId, value });
+            }
+        }
+        return result;
+    }
+
     /**
      * Reactive store for variable changes.
      * Subscribe to this to react to specific variable changes.

@@ -10,15 +10,19 @@
         spotifyTrackUri,
     } from "../../../common/SpotifyListening";
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
+    import { listeningAlongCountStore } from "../../Spotify/SpotifyListeningDirectory";
     import ListeningSourceIcon from "./ListeningSourceIcon.svelte";
 
     interface Props {
         listening: SpotifyListening | undefined;
         /** The user who listens: set to offer listening along, undefined on one's own card. */
         followableUserUuid?: string;
+        /** The user whose card it is, to show how many listen along with them. */
+        userUuid?: string;
     }
 
-    let { listening, followableUserUuid = undefined }: Props = $props();
+    let { listening, followableUserUuid = undefined, userUuid = undefined }: Props = $props();
+    let listeningAlongCount = $derived(userUuid ? ($listeningAlongCountStore.get(userUuid) ?? 0) : 0);
 
     let playing = $derived(isPlayingTrack(listening) ? listening : undefined);
     let links = $derived(playing ? listenTooLinks(playing) : undefined);
@@ -47,6 +51,14 @@
         <div class="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[#1ed760]">
             <ListeningSourceIcon source={listeningSourceOf(playing)} size="14" />
             {$LL.spotify.card.listeningNow()}
+            {#if listeningAlongCount > 0}
+                <span
+                    class="ms-auto rounded-full bg-[#1ed760]/20 px-2 py-0.5 normal-case tracking-normal"
+                    data-testid="listening-along-count"
+                >
+                    🎧 {$LL.spotify.card.listeningAlongCount({ count: listeningAlongCount })}
+                </span>
+            {/if}
         </div>
         <div class="flex items-center gap-3">
             {#if playing.artworkUrl}
