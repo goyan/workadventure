@@ -36,6 +36,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "Ho entenc, continuar",
         dontRemindAgain: "No tornar a mostrar aquest missatge",
     },
+    sessionReplaced: {
+        title: "Sessió oberta en un altre lloc",
+        message:
+            "Has obert aquesta sala en una altra pestanya, un altre navegador o l'aplicació d'escriptori. Cada compte només conserva una sessió a la sala.",
+        takeBack: "Recuperar-la aquí",
+    },
     browserNotSupported: {
         title: "😢 Navegador no compatible",
         message: "El vostre navegador ({browserName}) ja no és compatible amb WorkAdventure.",

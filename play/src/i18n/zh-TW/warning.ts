@@ -33,6 +33,11 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "知道了，繼續",
         dontRemindAgain: "不再顯示此訊息",
     },
+    sessionReplaced: {
+        title: "工作階段已在別處開啟",
+        message: "你已在另一個分頁、另一個瀏覽器或桌面應用程式中開啟此房間。每個帳號在房間中只保留一個工作階段。",
+        takeBack: "在此處恢復",
+    },
     browserNotSupported: {
         title: "😢 不支援的瀏覽器",
         message: "您的瀏覽器（{browserName}）不再受 WorkAdventure 支援。",

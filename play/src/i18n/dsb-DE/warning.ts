@@ -34,6 +34,12 @@ const warning: DeepPartial<Translation["warning"]> = {
         confirmContinue: "Rozměju, pókšacowaś",
         dontRemindAgain: "Toś tu powěsć wěcej njepokazaś",
     },
+    sessionReplaced: {
+        title: "Session opened elsewhere",
+        message:
+            "You opened this room in another tab, browser or the desktop app. Only one session per account stays in the room.",
+        takeBack: "Take it back here",
+    },
     browserNotSupported: {
         title: "😢 Wobglědowak se njepódpěra",
         message: "Waš wobglědowak ({browserName}) se wěcej njepódpěra wót WorkAdventure.",
