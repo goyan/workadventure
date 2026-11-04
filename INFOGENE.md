@@ -246,9 +246,16 @@ Spotify : cocher **Web API** et déclarer les *Redirect URIs* `https://wa-beta.g
 liaison se teste en beta. Sans `SPOTIFY_CLIENT_ID`, seules les apps personnelles fonctionnent.
 
 **Depuis le client desktop** ([workadventure-desktop](https://github.com/aminekun90/workadventure-desktop)) : le
-morceau est lu dans l'app Spotify de l'ordinateur (`window.WAD.watchSpotifyTrack`, `Spotify/LocalSpotifyPlayer.ts`),
-sans liaison, sans app de développeur, sans Premium ni limite de cinq comptes. La section n'affiche alors que
-l'interrupteur de partage ; dans un navigateur, elle propose le client desktop en plus de la liaison.
+morceau est lu dans l'app Spotify ou Musique de l'ordinateur (`window.WAD.watchSpotifyTrack`,
+`Spotify/LocalSpotifyPlayer.ts`), sans liaison, sans app de développeur, sans Premium ni limite de cinq comptes. La
+liaison d'un compte reste proposée, en option, pour la musique écoutée sur un autre appareil (téléphone, lecteur web,
+enceinte) : `SpotifyListeningSharer` lit alors les deux sources, et l'app de l'ordinateur l'emporte tant qu'elle joue.
+Dans un navigateur, la section propose le client desktop en plus de la liaison. Le client desktop doit autoriser la
+fenêtre de liaison (`spotify-authorization`, workadventure-desktop 0.1.0-beta.13 ou plus récent).
+
+WorkAdventure envoie aussi au client desktop ce que l'utilisateur partage, quelle qu'en soit la source
+(`window.WAD.reportListening`, `Api/Desktop/index.ts`) : titre, artiste, album, lien, pochette, service et Jam
+rejointe. Le client l'affiche dans sa barre de menu.
 
 Affichage : une note ♫ animée dans l'étiquette du nom des wokas qui écoutent ou sont dans une Jam, et dans la liste des
 utilisateurs « ♫ Artiste — Titre » (lien vers le morceau), ou « 🎧 Artiste — Titre · Jam Salle détente ».
