@@ -3,7 +3,12 @@ import Debug from "debug";
 import * as Sentry from "@sentry/svelte";
 
 import type { AreaData, AtLeast, EntityDimensions, WAMEntityData } from "@workadventure/map-editor";
-import { Deferred, privateMessageEventName, privateMessageRequestSchema } from "@workadventure/shared-utils";
+import {
+    Deferred,
+    SESSION_REPLACED_ERROR_TYPE,
+    privateMessageEventName,
+    privateMessageRequestSchema,
+} from "@workadventure/shared-utils";
 import type {
     AddSpaceFilterMessage,
     AnswerMessage,
@@ -105,6 +110,7 @@ import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { asError } from "catch-unknown";
 import { abortAny } from "@workadventure/shared-utils/src/Abort/AbortAny";
 import { abortTimeout } from "@workadventure/shared-utils/src/Abort/AbortTimeout";
+import LL from "../../i18n/i18n-svelte";
 import { clearPrivateMessages, receivePrivateMessage } from "../Stores/PrivateMessageStore";
 import type { ReceiveEventEvent } from "../Api/Events/ReceiveEventEvent";
 import type { SetPlayerVariableEvent } from "../Api/Events/SetPlayerVariableEvent";
@@ -732,6 +738,14 @@ export class RoomConnection implements RoomConnection {
                     }
                     if (message.errorScreenMessage.type === "redirect" && message.errorScreenMessage.urlToRedirect) {
                         window.location.assign(message.errorScreenMessage.urlToRedirect);
+                    } else if (message.errorScreenMessage.type === SESSION_REPLACED_ERROR_TYPE) {
+                        // The back sends no text: it has no translations.
+                        errorScreenStore.setError({
+                            ...message.errorScreenMessage,
+                            title: get(LL).warning.sessionReplaced.title(),
+                            subtitle: get(LL).warning.sessionReplaced.message(),
+                            buttonTitle: get(LL).warning.sessionReplaced.takeBack(),
+                        });
                     } else {
                         errorScreenStore.setError(message.errorScreenMessage);
                     }

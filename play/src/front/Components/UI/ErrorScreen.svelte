@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { onDestroy } from "svelte";
+    import { SESSION_REPLACED_ERROR_TYPE } from "@workadventure/shared-utils";
     import { errorScreenStore } from "../../Stores/ErrorScreenStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { connectionManager } from "../../Connection/ConnectionManager";
@@ -87,7 +88,9 @@
             </div>
             {#if $errorScreenStore.type !== "retry"}<h2 class="mt-10">{$errorScreenStore.title}</h2>{/if}
             {#if $errorScreenStore.subtitle}<p>{$errorScreenStore.subtitle}</p>{/if}
-            {#if $errorScreenStore.type !== "retry" && $errorScreenStore.type !== "reconnecting"}<p class="code">
+            {#if $errorScreenStore.type !== "retry" && $errorScreenStore.type !== "reconnecting" && $errorScreenStore.type !== SESSION_REPLACED_ERROR_TYPE}<p
+                    class="code"
+                >
                     Code : {$errorScreenStore.code}
                 </p>{/if}
             <div class="details flex flex-row items-center justify-center content-center gap-2">
@@ -99,7 +102,7 @@
                 {/if}
             </div>
             <div class="flex gap-2">
-                {#if ($errorScreenStore.type === "retry" && $errorScreenStore.canRetryManual) || $errorScreenStore.type === "unauthorized"}
+                {#if ($errorScreenStore.type === "retry" && $errorScreenStore.canRetryManual) || $errorScreenStore.type === "unauthorized" || $errorScreenStore.type === SESSION_REPLACED_ERROR_TYPE}
                     <Button
                         type="button"
                         size="lg"
