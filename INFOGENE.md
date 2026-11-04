@@ -488,6 +488,43 @@ carte en cours d'édition, peuvent montrer brièvement des positions différente
 
 Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
 
+### Gobeur (propriété d'objet `gobeurPropertyData`)
+
+Un objet de la carte peut porter la propriété `gobeurPropertyData`, réglée depuis le menu de l'objet
+(`GobeurPropertyEditor.svelte`) : joueurs concernés, zone de prison (obligatoire), refuge de secours (facultatif,
+valable seulement pour un joueur sans zone personnelle), niveau et durée (180 s par défaut). Quelqu'un qui peut éditer la
+carte (`mapEditorActivated`, `Stores/MenuStore.ts`) lance la partie depuis ce menu. Un personnage, le Gobeur, poursuit les
+joueurs choisis ; un joueur gobé hors refuge est envoyé en prison jusqu'à la fin de la partie. À la fin, un classement
+s'affiche (`Components/Gobeur/*`).
+
+| Niveau | Vitesse (× marche) | Repérage | Recalcul du chemin |
+| --- | --- | --- | --- |
+| Débutant | 0,70 | 6 cases | 1 500 ms |
+| Intermédiaire | 0,95 | 10 cases | 800 ms |
+| Hard | 1,15 | toute la carte | 400 ms |
+
+La marche de référence est `WOKA_SPEED * 20` px/s (comme `Player.deduceSpeed`). Un joueur est gobé à moins de 16 px du
+Gobeur, s'il est hors refuge. Sans cible, le Gobeur erre vers une case marchable tirée à moins de 5 cases.
+
+Réseau : le navigateur du **maître de jeu** (celui qui a lancé la partie) calcule le Gobeur et diffuse des événements
+de script `infogene.gobeur.*` : `start`, `pos` (toutes les 200 ms), `state` (toutes les 5 s et à l'arrivée d'un joueur),
+`caught` et `end`. Aucun changement de protobuf, de back ni de pusher ; chaque joueur ne téléporte que lui-même.
+
+Fichiers : `play/src/front/Phaser/Game/Gobeur/*` (modules purs, sans Phaser), `Stores/GobeurStore.ts`,
+`Components/MapEditor/PropertyEditor/GobeurPropertyEditor.svelte`, `Components/Gobeur/*`, `Entity.replaceProperty`
+(le menu remplace la propriété au lieu de la fusionner) et `WanderingCharactersManager.setSuppressed` (un objet
+Gobeur ne se promène jamais).
+
+Sprite : la planche est le `wander.sheetPath` du prefab. Soit des images de 32 px (format woka), soit une grande planche
+4 × 4 découpée au chargement, dont le fond de bordure est rendu transparent.
+
+Limites :
+- Les événements se forgent depuis la console : n'importe qui peut en émettre (chacun ne téléporte que soi-même).
+- Un navigateur ne connaît que les joueurs proches : le Gobeur ne poursuit que ceux que voit le maître, et un joueur
+  qui quitte la partie reste « survivant ».
+- Si le maître ferme son onglet, la partie est interrompue après 5 s sans message.
+- Le `map-storage` officiel (prod) rejette la nouvelle propriété du WAM : prototype, **pas pour la prod**.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
