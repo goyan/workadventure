@@ -83,4 +83,10 @@ export type WorkAdventureDesktopApi = {
     followListening?: (target: DesktopFollowTarget | null) => void;
     /** Optional: tells, now and on every change, whether the WorkAdventure Spicetify extension is connected. */
     onListenAlongAvailable?: (callback: (available: boolean) => void) => void;
+    /** Optional: the home Jam the user takes part in as a guest (null: none); Spotify then offers to add tracks to it. */
+    setHomeJam?: (jam: { hostName: string } | null) => void;
+    /** Optional: the tracks (spotify:track:…) the user adds to the home Jam from Spotify's context menu. */
+    onQueueRequest?: (callback: (uris: string[]) => void) => void;
+    /** Optional: as a home Jam's host, adds a guest's tracks to the queue of this computer's Spotify. */
+    enqueueOnSpotify?: (request: { uris: string[]; from: string }) => void;
 };

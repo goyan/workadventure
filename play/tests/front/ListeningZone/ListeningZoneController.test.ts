@@ -2,9 +2,10 @@ import type { ListeningZoneJam } from "@workadventure/map-editor";
 import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localUserStore } from "../../../src/front/Connection/LocalUserStore";
-import { syncJoinedJam } from "../../../src/front/ListeningZone/ListeningZoneController";
+import { joinHomeJam, leaveHomeJam, syncJoinedJam } from "../../../src/front/ListeningZone/ListeningZoneController";
 import { currentListeningZoneStore, joinedJamStore } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import type { AreaPropertyVariablesManager } from "../../../src/front/Phaser/Game/AreaPropertyVariablesManager";
+import { followedUserUuidStore } from "../../../src/front/Spotify/ListeningFollower";
 import { areaPropertyVariablesManagerStore } from "../../../src/front/Stores/AreaPropertyVariablesStore";
 
 const zone = { areaId: "lounge", propertyId: "listening", areaName: "Lounge" };
@@ -27,6 +28,7 @@ describe("syncJoinedJam", () => {
         } as unknown as AreaPropertyVariablesManager);
         currentListeningZoneStore.set(zone);
         joinedJamStore.set(undefined);
+        followedUserUuidStore.set(undefined);
         jamVariable = null;
     });
 
@@ -56,5 +58,47 @@ describe("syncJoinedJam", () => {
         setJam({ url: "https://spotify.link/other", hostUuid: "dj2", hostName: "DJ 2" });
         expect(get(joinedJamStore)).toBeUndefined();
         unsubscribe();
+    });
+
+    describe("home Jam", () => {
+        const homeJam: ListeningZoneJam = { home: true, hostUuid: "dj", hostName: "DJ" };
+        const joinedHome = { areaId: "lounge", areaName: "Lounge", url: "home:dj" };
+
+        it("is joined by listening along with its host, and left by stopping", () => {
+            const unsubscribe = syncJoinedJam();
+            setJam(homeJam);
+
+            joinHomeJam();
+            expect(get(followedUserUuidStore)).toBe("dj");
+            expect(get(joinedJamStore)).toEqual(joinedHome);
+
+            leaveHomeJam();
+            expect(get(followedUserUuidStore)).toBeUndefined();
+            expect(get(joinedJamStore)).toBeUndefined();
+            unsubscribe();
+        });
+
+        it("ends for a guest who stops listening along from the host's card", () => {
+            const unsubscribe = syncJoinedJam();
+            setJam(homeJam);
+            joinHomeJam();
+
+            followedUserUuidStore.set(undefined);
+
+            expect(get(joinedJamStore)).toBeUndefined();
+            unsubscribe();
+        });
+
+        it("stops the follow when the host ends it", () => {
+            const unsubscribe = syncJoinedJam();
+            setJam(homeJam);
+            joinHomeJam();
+
+            setJam(null);
+
+            expect(get(joinedJamStore)).toBeUndefined();
+            expect(get(followedUserUuidStore)).toBeUndefined();
+            unsubscribe();
+        });
     });
 });

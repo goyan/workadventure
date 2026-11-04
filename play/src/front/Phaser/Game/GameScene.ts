@@ -207,8 +207,9 @@ import {
     listeningByUserUuidStore,
 } from "../../Spotify/SpotifyListeningDirectory";
 import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
-import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
-import { syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
+import { currentListeningZoneStore, joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
+import { currentJamStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
+import { HOME_JAM_QUEUE_EVENT, startHomeJam } from "../../Spotify/HomeJam";
 import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
 import { popupStore } from "../../Stores/PopupStore";
@@ -1885,8 +1886,43 @@ export class GameScene extends DirtyScene {
             () => sharer.destroy(),
             startListeningFollower(followedUserUuidStore, listeningByUserUuidStore),
             syncJoinedJam(),
+            this.startHomeJam(),
             listeningByUserUuidStore.subscribe((listeningByUuid) => this.updateListeningWokas(listeningByUuid)),
         ];
+    }
+
+    private startHomeJam(): Unsubscriber {
+        const connection = this.connection;
+        if (!connection) {
+            return () => undefined;
+        }
+        return startHomeJam({
+            zone: currentListeningZoneStore,
+            jam: currentJamStore,
+            joined: joinedJamStore,
+            listeningByUserUuid: listeningByUserUuidStore,
+            localUuid: () => localUserStore.getLocalUser()?.uuid,
+            userByUuid: (uuid) => {
+                const player = playersStore.getPlayerByUuid(uuid);
+                return player && { id: player.userId, name: player.name };
+            },
+            userById: (id) => {
+                const player = playersStore.getPlayerById(id);
+                return player && { uuid: player.userUuid, name: player.name };
+            },
+            sendToUser: (userId, data) => {
+                connection.emitScriptableEvent(HOME_JAM_QUEUE_EVENT, data, [userId]).catch((error) => {
+                    console.warn("Could not send tracks to the home Jam", error);
+                });
+            },
+            onEvent: (listener) => {
+                const subscription = connection.receivedEventMessageStream.subscribe(({ name, data, senderId }) =>
+                    listener(name, data, senderId),
+                );
+                return () => subscription.unsubscribe();
+            },
+            desktop: window.WAD,
+        });
     }
 
     private updateListeningWokas(listeningByUuid: ListeningByUserUuid): void {

@@ -67,6 +67,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "Dừng chia sẻ",
         noJam: "Chưa có Jam nào được chia sẻ ở đây.",
         linkInvite: "Liên kết Spotify để chia sẻ những gì bạn đang nghe",
+        homeJamOf: "Jam tại nhà của {name}",
+        startHome: "Bắt đầu Jam tại nhà",
+        stopHome: "Kết thúc Jam tại nhà",
+        joinHome: "Tham gia Jam tại nhà",
+        leaveHome: "Rời Jam tại nhà",
+        homeQueueHint: 'Trong Spotify, nhấp chuột phải vào bài hát: "Thêm vào Jam tại nhà".',
+        homeDesktopOnly: "Jam tại nhà: chỉ với ứng dụng desktop và Spicetify.",
     },
 };
 

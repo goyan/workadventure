@@ -65,6 +65,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "إيقاف المشاركة",
         noJam: "لم تتم مشاركة أي Jam هنا بعد.",
         linkInvite: "اربط Spotify لمشاركة ما تستمع إليه",
+        homeJamOf: "جلسة {name} المنزلية",
+        startHome: "بدء جلسة منزلية",
+        stopHome: "إنهاء الجلسة المنزلية",
+        joinHome: "الانضمام إلى الجلسة المنزلية",
+        leaveHome: "مغادرة الجلسة المنزلية",
+        homeQueueHint: "في Spotify، انقر بزر الماوس الأيمن على مقطع: «إضافة إلى الجلسة المنزلية».",
+        homeDesktopOnly: "الجلسة المنزلية: مع تطبيق سطح المكتب وSpicetify فقط.",
     },
 };
 

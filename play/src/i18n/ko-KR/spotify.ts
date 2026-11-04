@@ -65,6 +65,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "공유 중지",
         noJam: "아직 이곳에서 공유된 Jam이 없습니다.",
         linkInvite: "Spotify를 연결해 듣고 있는 음악을 공유하세요",
+        homeJamOf: "{name}의 홈 Jam",
+        startHome: "홈 Jam 시작",
+        stopHome: "홈 Jam 종료",
+        joinHome: "홈 Jam 참여",
+        leaveHome: "홈 Jam 나가기",
+        homeQueueHint: 'Spotify에서 곡을 오른쪽 클릭: "홈 Jam에 추가".',
+        homeDesktopOnly: "홈 Jam: 데스크톱 앱과 Spicetify에서만.",
     },
 };
 

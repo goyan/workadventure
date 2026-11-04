@@ -1,7 +1,14 @@
-import { LISTENING_ZONE_JAM_VARIABLE, type ListeningZoneJam, parseListeningZoneJam } from "@workadventure/map-editor";
+import {
+    isHomeJam,
+    LISTENING_ZONE_JAM_VARIABLE,
+    listeningZoneJamKey,
+    type ListeningZoneJam,
+    parseListeningZoneJam,
+} from "@workadventure/map-editor";
 import { derived, get, type Readable, readable, type Unsubscriber } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { areaPropertyVariablesManagerStore, setAreaPropertyVariable } from "../Stores/AreaPropertyVariablesStore";
+import { followedUserUuidStore } from "../Spotify/ListeningFollower";
 import { listeningByUserUuidStore } from "../Spotify/SpotifyListeningDirectory";
 import { currentListeningZoneStore, joinedJamStore, type ListeningZone } from "./ListeningZoneStore";
 
@@ -57,6 +64,7 @@ export function leaveListeningZone(propertyId: string): void {
     if (jam && isLocalUser(jam.hostUuid)) {
         setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, null);
     }
+    stopFollowingHomeJamHost(jam);
     joinedJamStore.set(undefined);
     currentListeningZoneStore.set(undefined);
 }
@@ -72,6 +80,39 @@ export function shareJam(url: string): void {
     setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, jam);
 }
 
+/** Hosts a home Jam: guests with the desktop app and Spicetify play this user's tracks and add to their queue. */
+export function startHomeJam(): void {
+    const zone = get(currentListeningZoneStore);
+    const uuid = localUserStore.getLocalUser()?.uuid;
+    if (!zone || !uuid) {
+        return;
+    }
+    const jam: ListeningZoneJam = { home: true, hostUuid: uuid, hostName: localUserStore.getName() ?? "" };
+    setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, jam);
+}
+
+/** Joining a home Jam is listening along with its host, as long as we stay in it. */
+export function joinHomeJam(): void {
+    const zone = get(currentListeningZoneStore);
+    const jam = get(currentJamStore);
+    if (!zone || !isHomeJam(jam)) {
+        return;
+    }
+    followedUserUuidStore.set(jam.hostUuid);
+    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: listeningZoneJamKey(jam) });
+}
+
+export function leaveHomeJam(): void {
+    stopFollowingHomeJamHost(get(currentJamStore));
+    joinedJamStore.set(undefined);
+}
+
+function stopFollowingHomeJamHost(jam: ListeningZoneJam | null): void {
+    if (isHomeJam(jam) && get(followedUserUuidStore) === jam.hostUuid) {
+        followedUserUuidStore.set(undefined);
+    }
+}
+
 export function stopSharingJam(): void {
     const zone = get(currentListeningZoneStore);
     if (!zone) {
@@ -84,7 +125,7 @@ export function stopSharingJam(): void {
 export function joinJam(): void {
     const zone = get(currentListeningZoneStore);
     const jam = get(currentJamStore);
-    if (!zone || !jam) {
+    if (!zone || !jam || isHomeJam(jam)) {
         return;
     }
     window.open(jam.url, "_blank", "noopener,noreferrer");
@@ -93,18 +134,38 @@ export function joinJam(): void {
 
 /**
  * Keeps the joined Jam in line with the one shared in the zone: its host takes part in it as soon as the server
- * accepted it, and it is forgotten once removed or replaced by another one.
+ * accepted it, and it is forgotten once removed or replaced by another one. A home Jam ends for a guest who stops
+ * listening along with its host, and the follow ends with the home Jam.
  */
 export function syncJoinedJam(): Unsubscriber {
-    return currentJamStore.subscribe((jam) => {
+    let previous: ListeningZoneJam | null = null;
+    const unsubscribeJam = currentJamStore.subscribe((jam) => {
         const zone = get(currentListeningZoneStore);
         const joined = get(joinedJamStore);
+        const key = jam ? listeningZoneJamKey(jam) : undefined;
         if (jam && zone && isLocalUser(jam.hostUuid)) {
-            if (joined?.url !== jam.url) {
-                joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: jam.url });
+            if (joined?.url !== key) {
+                joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: listeningZoneJamKey(jam) });
             }
-        } else if (joined && joined.url !== jam?.url) {
+        } else if (joined && joined.url !== key) {
+            if (previous && joined.url === listeningZoneJamKey(previous)) {
+                stopFollowingHomeJamHost(previous);
+            }
             joinedJamStore.set(undefined);
         }
+        previous = jam;
     });
+    const unsubscribeFollow = followedUserUuidStore.subscribe((followed) => {
+        const jam = get(currentJamStore);
+        const joined = get(joinedJamStore);
+        if (isHomeJam(jam) && !isLocalUser(jam.hostUuid) && joined?.url === listeningZoneJamKey(jam)) {
+            if (followed !== jam.hostUuid) {
+                joinedJamStore.set(undefined);
+            }
+        }
+    });
+    return () => {
+        unsubscribeJam();
+        unsubscribeFollow();
+    };
 }
