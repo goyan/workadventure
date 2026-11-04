@@ -5,6 +5,7 @@ import type { SpaceUserExtended } from "./SpaceInterface";
 import { localSpaceUser } from "./localSpaceUser";
 import { idleVideoBoxPriority, SCREEN_SHARE_STARTING_PRIORITY } from "./VideoBoxPriorities";
 import type { Streamable } from "./Streamable";
+import { isTextOnlyNpc } from "./isTextOnlyNpc";
 
 const CONNECTING_TIMEOUT_MS = 10000;
 
@@ -101,6 +102,9 @@ export class VideoBox {
                 this.closeStreamableEntry(previousPendingStreamableEntry);
             }
             this.refreshStreamables();
+            if (isTextOnlyNpc(this.spaceUser)) {
+                this.handleStatusChange("connected");
+            }
             return;
         }
 

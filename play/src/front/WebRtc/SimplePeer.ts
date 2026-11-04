@@ -13,6 +13,7 @@ import type {
     StreamableSubjects,
 } from "../Space/SpacePeerManager/SpacePeerManager";
 import type { SpaceInterface, SpaceUserExtended } from "../Space/SpaceInterface";
+import { isTextOnlyNpc } from "../Space/isTextOnlyNpc";
 import { localStreamStoreForPublishing, type LocalStreamStoreValue } from "../Stores/MediaStore";
 import { RetryWithBackoff } from "../Utils/RetryWithBackoff";
 import { warningMessageStore } from "../Stores/ErrorStore";
@@ -216,6 +217,10 @@ export class SimplePeer implements SimplePeerConnectionInterface {
     ): Promise<RemotePeer | null> {
         // The back answered our restart request
         this.cancelRestartAnswerTimeout(user.userId);
+        if (isTextOnlyNpc(spaceUser)) {
+            this.closeConnection(user.userId, true);
+            return null;
+        }
         // An aborted entry is removed from the map right away, so an entry found here is live.
         const peerConnection = this.videoPeers.get(user.userId);
         if (peerConnection) {
@@ -684,6 +689,9 @@ export class SimplePeer implements SimplePeerConnectionInterface {
     }
 
     private receiveWebrtcSignal(signalData: SignalData, spaceUser: SpaceUserExtended, connectionId: string) {
+        if (isTextOnlyNpc(spaceUser)) {
+            return;
+        }
         (async () => {
             const peerObj = this.videoPeers.get(spaceUser.spaceUserId);
 
@@ -727,6 +735,9 @@ export class SimplePeer implements SimplePeerConnectionInterface {
         spaceUser: SpaceUserExtended,
         connectionId: string,
     ) {
+        if (isTextOnlyNpc(spaceUser)) {
+            return;
+        }
         const streamResult = get(this._screenSharingLocalStreamStore);
         let stream: MediaStream | undefined = undefined;
         if (streamResult && streamResult.type === "success" && streamResult.stream !== undefined) {
@@ -915,6 +926,9 @@ export class SimplePeer implements SimplePeerConnectionInterface {
         const spaceUser = this._space.getSpaceUserBySpaceUserId(userId);
         if (!spaceUser) {
             console.warn(`Cannot retry connection for user ${userId}: user not found in space`);
+            return;
+        }
+        if (isTextOnlyNpc(spaceUser)) {
             return;
         }
 
