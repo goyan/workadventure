@@ -111,7 +111,7 @@ describe("GobeurPropertyEditor", () => {
         alice.click();
         flushSync();
 
-        expect(onchange).toHaveBeenCalled();
+        expect(onchange).toHaveBeenCalledTimes(1);
         expect(launchButton(target).disabled).toBe(false);
         launchButton(target).click();
         await Promise.resolve();

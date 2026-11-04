@@ -7,11 +7,17 @@
     import { gobeurGamesStore } from "../../../Stores/GobeurStore";
     import Input from "../../Input/Input.svelte";
     import { IconClock } from "../../Icons";
-    import { formatGobeurRemaining, gobeurPlayerName, presentGobeurPlayers } from "../../Gobeur/GobeurPlayers";
+    import {
+        formatGobeurRemaining,
+        gobeurPlayerName,
+        presentGobeurPlayers,
+        uniqueGobeurPlayers,
+    } from "../../Gobeur/GobeurPlayers";
     import type { GobeurPlayer } from "../../Gobeur/GobeurPlayers";
     import PropertyEditorBase from "./PropertyEditorBase.svelte";
 
-    type GobeurLaunchFailure = Extract<GobeurLaunchResult, { ok: false }>["reason"];
+    // "unavailable": the scene has no Gobeur manager (yet).
+    type GobeurLaunchFailure = Extract<GobeurLaunchResult, { ok: false }>["reason"] | "unavailable";
 
     interface Props {
         property: GobeurPropertyData;
@@ -41,7 +47,8 @@
 
     // Recomputed when a remote player comes or goes.
     let present: GobeurPlayer[] = $derived(presentGobeurPlayers($mapPlayers.values()));
-    let absent = $derived(property.players.filter((chosen) => !present.some((player) => player.uuid === chosen.uuid)));
+    let players = $derived(uniqueGobeurPlayers(property.players));
+    let absent = $derived(players.filter((chosen) => !present.some((player) => player.uuid === chosen.uuid)));
     let game = $derived($gobeurGamesStore.get(entityId));
     let running = $derived(game?.running === true);
     let blockingReason: GobeurLaunchFailure | undefined = $derived.by(() => {
@@ -49,13 +56,13 @@
         if (property.prisonAreaId === "" || !areas.some((area) => area.id === property.prisonAreaId)) {
             return "noPrison";
         }
-        if (!property.players.some((chosen) => present.some((player) => player.uuid === chosen.uuid))) {
+        if (!players.some((chosen) => present.some((player) => player.uuid === chosen.uuid))) {
             return "noPlayer";
         }
         return undefined;
     });
     let shownReason = $derived(blockingReason ?? launchFailure);
-    let knownPlayers = $derived([...present, ...property.players]);
+    let knownPlayers = $derived([...present, ...players]);
 
     function onValueChange() {
         launchFailure = undefined;
@@ -64,20 +71,25 @@
 
     // Replaced, not mutated: the parent binds it, and a plain object given without binding stays reactive.
     function update(changes: Partial<Omit<GobeurPropertyData, "id" | "type">>) {
-        property = { ...property, ...changes };
+        const next = { ...property, ...changes };
+        // No fallback: no key at all, rather than a key holding undefined.
+        if (next.fallbackSafeAreaId === undefined) {
+            delete next.fallbackSafeAreaId;
+        }
+        property = next;
         onValueChange();
     }
 
     function isChosen(uuid: string): boolean {
-        return property.players.some((player) => player.uuid === uuid);
+        return players.some((player) => player.uuid === uuid);
     }
 
     function togglePlayer(player: GobeurPlayer) {
-        const players = isChosen(player.uuid)
-            ? property.players.filter((chosen) => chosen.uuid !== player.uuid)
-            : [...property.players, { uuid: player.uuid, name: player.name }];
-        update({ players });
-        onValueChange();
+        update({
+            players: isChosen(player.uuid)
+                ? players.filter((chosen) => chosen.uuid !== player.uuid)
+                : [...players, { uuid: player.uuid, name: player.name }],
+        });
     }
 
     function onPrisonChange(event: Event) {
@@ -106,7 +118,10 @@
 
     function launch() {
         const manager = scene.gobeurManager;
-        if (!manager) return;
+        if (!manager) {
+            launchFailure = "unavailable";
+            return;
+        }
         manager
             .launch(entityId)
             .then((result) => {
@@ -233,14 +248,14 @@
             {#if running && game}
                 <div class="flex flex-col gap-1 text-sm" data-testid="gobeurRunning">
                     <span>
-                        {$LL.mapEditor.properties.gobeur.remaining()} : {formatGobeurRemaining(game.endsAt - now)}
+                        {$LL.mapEditor.properties.gobeur.remaining({ time: formatGobeurRemaining(game.endsAt - now) })}
                     </span>
-                    <span>
-                        {$LL.mapEditor.properties.gobeur.survivors()} ({game.survivors.length}) :
+                    <span>{$LL.mapEditor.properties.gobeur.survivors({ count: game.survivors.length })}</span>
+                    <span class="opacity-70">
                         {game.survivors.map((uuid) => gobeurPlayerName(uuid, knownPlayers)).join(", ")}
                     </span>
-                    <span>
-                        {$LL.mapEditor.properties.gobeur.caught()} ({game.caught.length}) :
+                    <span>{$LL.mapEditor.properties.gobeur.caught({ count: game.caught.length })}</span>
+                    <span class="opacity-70">
                         {game.caught.map((uuid) => gobeurPlayerName(uuid, knownPlayers)).join(", ")}
                     </span>
                     {#if game.isMaster}

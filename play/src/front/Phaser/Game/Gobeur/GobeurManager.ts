@@ -127,9 +127,10 @@ export class GobeurManager {
                 other.game.caughtOrder.forEach((uuid) => busy.add(uuid));
             }
         }
-        const players = property.players
-            .map((player) => player.uuid)
-            .filter((uuid) => present.includes(uuid) && !busy.has(uuid));
+        // Once per uuid: older stored data may hold duplicates.
+        const players = [...new Set(property.players.map((player) => player.uuid))].filter(
+            (uuid) => present.includes(uuid) && !busy.has(uuid),
+        );
         if (players.length === 0) {
             return { ok: false, reason: "noPlayer" };
         }

@@ -22,7 +22,7 @@
     >
         <div class="flex items-center justify-between gap-3">
             <strong>{$LL.mapEditor.properties.gobeur.ranking.title()}</strong>
-            <ButtonClose onclick={() => gobeurRankingStore.set(undefined)} />
+            <ButtonClose dataTestId="gobeurRankingClose" onclick={() => gobeurRankingStore.set(undefined)} />
         </div>
         <p class="m-0 my-2 text-sm">{$LL.mapEditor.properties.gobeur.ranking.reasons[result.reason]()}</p>
         <ol class="m-0 p-0 list-none flex flex-col gap-1">

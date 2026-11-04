@@ -28,6 +28,18 @@ export function presentGobeurPlayers(
     return players;
 }
 
+/** The players once per uuid, the first occurrence kept: older stored data may hold duplicates. */
+export function uniqueGobeurPlayers(players: GobeurPlayer[]): GobeurPlayer[] {
+    const seen = new Set<string>();
+    return players.filter((player) => {
+        if (seen.has(player.uuid)) {
+            return false;
+        }
+        seen.add(player.uuid);
+        return true;
+    });
+}
+
 /** The players chosen in the Gobeur property of the entity, if any. */
 export function chosenGobeurPlayers(scene: GameScene, entityId: string): GobeurPlayer[] {
     const property = scene
@@ -37,7 +49,7 @@ export function chosenGobeurPlayers(scene: GameScene, entityId: string): GobeurP
         .get(entityId)
         ?.getProperties()
         .find((candidate): candidate is GobeurPropertyData => candidate.type === "gobeurPropertyData");
-    return property?.players ?? [];
+    return uniqueGobeurPlayers(property?.players ?? []);
 }
 
 /** A name to show for a uuid: from the given players, else the start of the uuid. */

@@ -47,11 +47,11 @@
         {#each games as [entityId, game] (entityId)}
             <div class="flex flex-col gap-1 text-sm">
                 <span>
-                    {$LL.mapEditor.properties.gobeur.remaining()} : {formatGobeurRemaining(game.endsAt - now)}
+                    {$LL.mapEditor.properties.gobeur.remaining({ time: formatGobeurRemaining(game.endsAt - now) })}
                 </span>
                 <span>
-                    {$LL.mapEditor.properties.gobeur.survivors()} : {game.survivors.length} ·
-                    {$LL.mapEditor.properties.gobeur.caught()} : {game.caught.length}
+                    {$LL.mapEditor.properties.gobeur.survivors({ count: game.survivors.length })} ·
+                    {$LL.mapEditor.properties.gobeur.caught({ count: game.caught.length })}
                 </span>
                 {#if game.isMaster}
                     <button

@@ -127,7 +127,12 @@
 
     function onUpdateProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
-            $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+            if (property.type === "gobeurPropertyData") {
+                // Replaced, not merged: a deep merge would concatenate the players and keep a removed fallback.
+                $mapEditorSelectedEntityStore.replaceProperty($state.snapshot(property));
+            } else {
+                $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+            }
         }
     }
 
