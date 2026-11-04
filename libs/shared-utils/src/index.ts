@@ -33,3 +33,4 @@ export * from "./AnalyticsEventsQueue";
 export * from "./LockByKey";
 export * from "./Movable";
 export * from "./SpatialMap";
+export * from "./SessionReplaced";

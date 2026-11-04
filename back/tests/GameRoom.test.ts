@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
     AvailabilityStatus,
+    ErrorScreenMessage,
     JoinRoomMessage,
     LockGroupPromptMessage,
     PositionMessage_Direction,
@@ -54,6 +55,10 @@ function createJoinRoomMessage(uuid: string, x: number, y: number, tabId?: strin
         },
         tabId,
     } as const);
+}
+
+function createLoggedJoinRoomMessage(uuid: string, tabId: string): JoinRoomMessage {
+    return { ...createJoinRoomMessage(uuid, 100, 100, tabId), isLogged: true };
 }
 
 function flushPendingMessages(user: User): void {
@@ -512,6 +517,45 @@ describe("GameRoom", () => {
         flushPendingMessages(secondUser);
 
         expect(getWrittenMessageCases(secondSocket)).toContain("duplicateUserConnectedMessage");
+    });
+
+    it("should replace the previous session of a logged user connecting from another tab", async () => {
+        const world = await createWorld();
+
+        const firstSocket = createMockUserSocket();
+        Object.assign(firstSocket.socket, { writable: true });
+        await world.join(firstSocket.socket, createLoggedJoinRoomMessage("logged-user", "tab-1"));
+
+        const secondSocket = createMockUserSocket();
+        const secondUser = await world.join(secondSocket.socket, createLoggedJoinRoomMessage("logged-user", "tab-2"));
+
+        expect(firstSocket.end).toHaveBeenCalledTimes(1);
+        expect(firstSocket.write).toHaveBeenCalledWith({
+            message: {
+                $case: "errorScreenMessage",
+                errorScreenMessage: ErrorScreenMessage.fromPartial({
+                    type: "sessionReplaced",
+                    code: "sessionReplaced",
+                }),
+            },
+        });
+        expect([...world.getUsersByUuid("logged-user")]).toEqual([secondUser]);
+
+        flushPendingMessages(secondUser);
+
+        expect(getWrittenMessageCases(secondSocket)).not.toContain("duplicateUserConnectedMessage");
+    });
+
+    it("should keep the sessions of other users when a logged user connects again", async () => {
+        const world = await createWorld();
+
+        const otherSocket = createMockUserSocket();
+        await world.join(otherSocket.socket, createLoggedJoinRoomMessage("other-user", "tab-1"));
+        await world.join(createMockUserSocket().socket, createLoggedJoinRoomMessage("logged-user", "tab-1"));
+        await world.join(createMockUserSocket().socket, createLoggedJoinRoomMessage("logged-user", "tab-2"));
+
+        expect(otherSocket.end).not.toHaveBeenCalled();
+        expect(world.getUsersByUuid("other-user").size).toBe(1);
     });
 
     describe("variable listeners", () => {
