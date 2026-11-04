@@ -5,6 +5,7 @@ import {
     isSpotifyJamUrl,
     listeningZoneJamKey,
     type ListeningZoneJam,
+    MAX_LISTENING_ZONE_JAM_TITLE_LENGTH,
     MAX_LISTENING_ZONE_JAMS,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
@@ -90,5 +91,19 @@ describe("canUpdateListeningZoneJams", () => {
         expect(canUpdateListeningZoneJams([jamOf("bob")], [{ ...jamOf("bob"), hostName: "Mallory" }], "alice")).toBe(
             false,
         );
+    });
+});
+
+describe("room title", () => {
+    it("keeps a short title, and refuses an empty or too long one", () => {
+        expect(parseListeningZoneJamsUpdate(JSON.stringify([{ ...jamOf("alice"), title: "Vendredi rock" }]))).toEqual([
+            { ...jamOf("alice"), title: "Vendredi rock" },
+        ]);
+        expect(parseListeningZoneJamsUpdate(JSON.stringify([{ ...jamOf("alice"), title: "" }]))).toBeNull();
+        expect(
+            parseListeningZoneJamsUpdate(
+                JSON.stringify([{ ...jamOf("alice"), title: "x".repeat(MAX_LISTENING_ZONE_JAM_TITLE_LENGTH + 1) }]),
+            ),
+        ).toBeNull();
     });
 });

@@ -1,8 +1,9 @@
-import { isHomeJam, listeningZoneJamKey, type ListeningZoneJam } from "@workadventure/map-editor";
+import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
 import { derived, get, type Readable, type Unsubscriber } from "svelte/store";
 import { z } from "zod";
 import type { WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
-import type { JoinedJam, ListeningZone } from "../ListeningZone/ListeningZoneStore";
+import type { JamRoom } from "../ListeningZone/ListeningZoneController";
+import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
 import type { ListeningByUserUuid } from "./SpotifyListeningDirectory";
 
 /** Event a home Jam guest sends to its host, through the room server (which sets the sender): tracks to queue. */
@@ -20,8 +21,8 @@ const QueueRequest = z.object({
 });
 
 export interface HomeJamContext {
-    zone: Readable<ListeningZone | undefined>;
-    jams: Readable<ListeningZoneJam[]>;
+    /** Every Jam room of the map, with the zone it was opened in. */
+    rooms: Readable<JamRoom[]>;
     joined: Readable<JoinedJam | undefined>;
     listeningByUserUuid: Readable<ListeningByUserUuid>;
     localUuid: () => string | undefined;
@@ -50,12 +51,12 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
 
     /** The home Jam room this user takes part in as a guest. */
     const guestOf = derived(
-        [context.jams, context.joined],
-        ([jams, joined]) =>
-            jams.find(
-                (jam) =>
+        [context.rooms, context.joined],
+        ([rooms, joined]) =>
+            rooms.find(
+                ({ jam }) =>
                     isHomeJam(jam) && jam.hostUuid !== context.localUuid() && joined?.url === listeningZoneJamKey(jam),
-            ) ?? null,
+            )?.jam ?? null,
     );
     // Only changes are told: the desktop app starts with no home Jam.
     let told: string | null = null;
@@ -78,14 +79,13 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const unsubscribeEvents = context.onEvent((name, data, senderId) => {
         if (name !== HOME_JAM_QUEUE_EVENT || senderId === undefined) return;
         const localUuid = context.localUuid();
-        const hostsHomeJam = get(context.jams).some((jam) => isHomeJam(jam) && jam.hostUuid === localUuid);
-        const zone = get(context.zone);
+        const ownHomeJam = get(context.rooms).find(({ jam }) => isHomeJam(jam) && jam.hostUuid === localUuid);
         const sender = context.userById(senderId);
         const request = QueueRequest.safeParse(data);
-        if (!request.success || !sender || !zone || !hostsHomeJam) return;
+        if (!request.success || !sender || !ownHomeJam) return;
         // Only participants of our room: they publish its zone and host in their listening.
         const listening = get(context.listeningByUserUuid).get(sender.uuid);
-        if (listening?.jamAreaId !== zone.areaId || listening.jamHostUuid !== localUuid) return;
+        if (listening?.jamAreaId !== ownHomeJam.zone.areaId || listening.jamHostUuid !== localUuid) return;
         const recent = (requestsBySender.get(senderId) ?? []).filter((at) => now() - at < 60_000);
         if (recent.length >= MAX_REQUESTS_PER_MINUTE) return;
         requestsBySender.set(senderId, [...recent, now()]);

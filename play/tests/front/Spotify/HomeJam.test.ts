@@ -4,6 +4,7 @@ import { writable } from "svelte/store";
 import { describe, expect, it, vi } from "vitest";
 import { EMPTY_SPOTIFY_LISTENING } from "../../../src/common/SpotifyListening";
 import type { WorkAdventureDesktopApi } from "../../../src/front/Interfaces/DesktopAppInterfaces";
+import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneController";
 import type { JoinedJam, ListeningZone } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import { HOME_JAM_QUEUE_EVENT, startHomeJam } from "../../../src/front/Spotify/HomeJam";
 
@@ -23,9 +24,10 @@ const joinedHome = { areaId: ZONE.areaId, areaName: ZONE.areaName, url: "home:ho
 
 function createHarness(localUuid: string) {
     // Another room in the zone, a Spotify Jam: it must not get in the way.
-    const jams = writable<ListeningZoneJam[]>([
-        { url: "https://spotify.link/abc123", hostUuid: "stranger", hostName: "Bob" },
-        homeJam,
+    // Another room on the map, a Spotify Jam: it must not get in the way.
+    const rooms = writable<JamRoom[]>([
+        { zone: ZONE, jam: { url: "https://spotify.link/abc123", hostUuid: "stranger", hostName: "Bob" } },
+        { zone: ZONE, jam: homeJam },
     ]);
     const joined = writable<JoinedJam | undefined>(undefined);
     const listening = writable(new Map<string, SpotifyListening>());
@@ -40,8 +42,7 @@ function createHarness(localUuid: string) {
     const sendToUser = vi.fn();
     let now = 0;
     const stop = startHomeJam({
-        zone: writable(ZONE),
-        jams,
+        rooms,
         joined,
         listeningByUserUuid: listening,
         localUuid: () => localUuid,
@@ -56,7 +57,7 @@ function createHarness(localUuid: string) {
         now: () => now,
     });
     return {
-        jams,
+        rooms,
         joined,
         listening,
         desktop,
@@ -114,7 +115,7 @@ describe("home Jam, as the host", () => {
 
         host.receive({ uris: ["spotify:track:abc"] }, 3);
         host.receive({ uris: ["javascript:alert(1)"] }, 2);
-        host.jams.set([{ home: true, hostUuid: "guest", hostName: "Amine" }]);
+        host.rooms.set([{ zone: ZONE, jam: { home: true, hostUuid: "guest", hostName: "Amine" } }]);
         host.receive({ uris: ["spotify:track:abc"] }, 2);
 
         expect(host.desktop.enqueueOnSpotify).not.toHaveBeenCalled();
@@ -136,8 +137,7 @@ describe("home Jam, as the host", () => {
 describe("home Jam without the desktop app", () => {
     it("does nothing", () => {
         const stop = startHomeJam({
-            zone: writable(ZONE),
-            jams: writable([homeJam]),
+            rooms: writable([{ zone: ZONE, jam: homeJam }]),
             joined: writable(undefined),
             listeningByUserUuid: writable(new Map()),
             localUuid: () => "guest",

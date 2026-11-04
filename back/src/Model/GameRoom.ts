@@ -260,9 +260,9 @@ export class GameRoom implements BrothersFinder {
         // Let's instantiate the class that will track maxUsersInArea areas and keep the maxUsersReached variable updated.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
         new MaxUsersInAreaManager(gameRoom, areaZoneTracker);
-        // Keeps the Jam rooms of the listening zones: saved across restarts, closed once their host stays out.
+        // Keeps the Jam rooms of the listening zones: saved across restarts, closed once their host left the map.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
-        gameRoom.listeningZoneManager = new ListeningZoneManager(gameRoom, areaZoneTracker, {
+        gameRoom.listeningZoneManager = new ListeningZoneManager(gameRoom, {
             repository: await getVariablesRepository(),
             roomUrl,
         });

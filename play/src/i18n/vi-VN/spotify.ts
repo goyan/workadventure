@@ -45,6 +45,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "Nghe cùng",
         listenAlong: "Nghe cùng",
         stopListeningAlong: "Dừng nghe cùng",
+        listeningAlongCount: "{count} người nghe cùng",
         playlist: "Danh sách phát: {name}",
         album: "Album: {name}",
     },
@@ -85,6 +86,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         kindHomeTitle: "Jam tại nhà",
         kindHomeDescription: "Spotify của mỗi người phát bài của bạn, kể cả Free. Ứng dụng desktop và Spicetify.",
         zoneFull: "Khu vực này đã đầy: tối đa 6 phòng.",
+        titlePlaceholder: "Tên phòng (không bắt buộc)",
+        hostedBy: "Chủ phòng: {name}",
+        jamsButton: "{count} Jam",
+        roomsTitle: "Jam đang diễn ra",
+        createHint: "Mở phòng của bạn từ một khu vực nghe nhạc.",
     },
 };
 

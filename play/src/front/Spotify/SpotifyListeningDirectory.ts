@@ -1,5 +1,5 @@
 import type { SpotifyListening } from "@workadventure/messages";
-import { type Readable, readable, type Unsubscriber, writable } from "svelte/store";
+import { derived, type Readable, readable, type Unsubscriber, writable } from "svelte/store";
 import { isInJam, isPlayingTrack } from "../../common/SpotifyListening";
 import type { SpaceUserExtended } from "../Space/SpaceInterface";
 
@@ -78,6 +78,18 @@ export const listeningByUserUuidStore: Readable<ListeningByUserUuid> = readable<
         };
     },
 );
+
+/** How many users play along with each user ("Écouter en même temps", home Jams included), by the followed uuid. */
+export const listeningAlongCountStore: Readable<Map<string, number>> = derived(listeningByUserUuidStore, (byUuid) => {
+    const counts = new Map<string, number>();
+    for (const [uuid, listening] of byUuid) {
+        const followed = listening.listeningAlongUuid;
+        if (followed !== "" && followed !== uuid) {
+            counts.set(followed, (counts.get(followed) ?? 0) + 1);
+        }
+    }
+    return counts;
+});
 
 export function bindListeningDirectory(usersStore: Readable<Map<string, SpaceUserExtended>>): () => void {
     listeningSource.set(createListeningByUserUuidStore(usersStore));

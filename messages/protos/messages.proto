@@ -2118,6 +2118,9 @@ message SpotifyListening {
   string contextName = 12;
   // Host of the Jam room joined in the jamAreaId zone (one room per host): rooms count their own participants.
   string jamHostUuid = 13;
+  // The user whose tracks this user plays along with ("Écouter en même temps", a home Jam included), empty otherwise:
+  // everyone sees how many listen along with someone.
+  string listeningAlongUuid = 14;
 }
 
 /*message PartialSpaceUser{

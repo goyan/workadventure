@@ -14,6 +14,7 @@ export const EMPTY_SPOTIFY_LISTENING: SpotifyListening = {
     contextUri: "",
     contextName: "",
     jamHostUuid: "",
+    listeningAlongUuid: "",
 };
 
 /** The players a track can come from; any other value is dropped. */
@@ -104,6 +105,7 @@ export function sanitizeSpotifyListening(value: SpotifyListening | undefined): S
         positionAt: Number.isFinite(value.positionAt) && value.positionAt > 0 ? value.positionAt : 0,
         ...sanitizeContext(value.contextUri, value.contextName),
         jamHostUuid: value.jamAreaId === "" ? "" : value.jamHostUuid.slice(0, MAX_TEXT_LENGTH),
+        listeningAlongUuid: value.listeningAlongUuid.slice(0, MAX_TEXT_LENGTH),
     };
 }
 

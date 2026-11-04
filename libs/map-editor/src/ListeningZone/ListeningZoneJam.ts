@@ -26,10 +26,15 @@ export function isSpotifyJamUrl(value: string): boolean {
     return url.hostname === "open.spotify.com" && url.pathname.startsWith("/socialsession/");
 }
 
+/** The title its host gives a room; without one, the room is named after its host. */
+export const MAX_LISTENING_ZONE_JAM_TITLE_LENGTH = 60;
+const title = z.string().trim().min(1).max(MAX_LISTENING_ZONE_JAM_TITLE_LENGTH).optional();
+
 const SpotifyJam = z.object({
     url: z.string().max(512).refine(isSpotifyJamUrl),
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
+    title,
 });
 
 /**
@@ -40,6 +45,7 @@ const HomeJam = z.object({
     home: z.literal(true),
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
+    title,
 });
 
 export const ListeningZoneJam = z.union([HomeJam, SpotifyJam]);

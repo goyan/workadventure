@@ -21,20 +21,18 @@ const area: AreaData = {
 };
 
 const jam: ListeningZoneJam = { url: "https://spotify.link/abc123", hostUuid: "host", hostName: "Host" };
-// Another room, whose host stays in the zone: it must survive the other host leaving.
+// Another room, whose host stays on the map: it must survive the other host leaving.
 const otherJam: ListeningZoneJam = { home: true, hostUuid: "other", hostName: "Other" };
 
-const INSIDE = { x: 50, y: 50 };
-const OUTSIDE = { x: 500, y: 500 };
-
-function createHarness({ saved = {}, stored = [jam, otherJam] as ListeningZoneJam[] } = {}) {
-    const leaveSubject = new Subject<AreaData>();
+function createHarness({ saved = {}, stored = [jam, otherJam] } = {}) {
+    const leave = new Subject<User>();
     const destroy = new Subject<void>();
     const variables = new Map<string, string>();
     if (stored.length > 0) variables.set("lounge:listening:jam", JSON.stringify(stored));
-    const positions = new Map<string, { x: number; y: number }[]>([
-        ["host", [OUTSIDE]],
-        ["other", [INSIDE]],
+    // How many connections (tabs) each user has on the map.
+    const connections = new Map<string, number>([
+        ["host", 0],
+        ["other", 1],
     ]);
     const setAreaPropertyVariable = vi.fn((areaId: string, propertyId: string, key: string, value: string) => {
         variables.set(`${areaId}:${propertyId}:${key}`, value);
@@ -51,17 +49,16 @@ function createHarness({ saved = {}, stored = [jam, otherJam] as ListeningZoneJa
                 variables.get(`${areaId}:${propertyId}:${key}`),
             setAreaPropertyVariable,
             getUsersByUuid: (uuid: string) =>
-                new Set(
-                    (positions.get(uuid) ?? []).map((position) => ({ getPosition: () => position }) as unknown as User),
-                ),
+                new Set(Array.from({ length: connections.get(uuid) ?? 0 }, () => ({}) as unknown as User)),
             destroyRoomStream: destroy.asObservable(),
             getWam: () => ({ areas: [area] }) as unknown as WAMFileFormat,
+            userLeaveStream: leave.asObservable(),
         },
-        { registerEventListener: () => leaveSubject.asObservable() },
         { repository, roomUrl: "https://play/room" },
     );
+    const userLeaves = (uuid: string) => leave.next({ uuid } as unknown as User);
 
-    return { manager, leaveSubject, destroy, positions, setAreaPropertyVariable, repository, variables };
+    return { manager, userLeaves, destroy, connections, setAreaPropertyVariable, repository };
 }
 
 describe("ListeningZoneManager", () => {
@@ -73,31 +70,32 @@ describe("ListeningZoneManager", () => {
         vi.useRealTimers();
     });
 
-    it("closes the room of a host who stays out of the zone, and only theirs", () => {
-        const { leaveSubject, setAreaPropertyVariable } = createHarness();
+    it("closes the room of a host who left the map for good, and only theirs", () => {
+        const { userLeaves, setAreaPropertyVariable } = createHarness();
 
-        leaveSubject.next(area);
-        vi.advanceTimersByTime(HOST_GRACE_MS);
+        userLeaves("host");
+        vi.advanceTimersByTime(HOST_GRACE_MS - 1);
+        expect(setAreaPropertyVariable).not.toHaveBeenCalled();
+        vi.advanceTimersByTime(1);
 
         expect(setAreaPropertyVariable).toHaveBeenCalledWith("lounge", "listening", "jam", JSON.stringify([otherJam]));
     });
 
-    it("keeps the room of a host who reloads the page and comes back in time", () => {
-        const { leaveSubject, positions, setAreaPropertyVariable } = createHarness();
+    it("keeps the room of a host who reloads the page and is back in time, or still has another tab", () => {
+        const { userLeaves, connections, setAreaPropertyVariable } = createHarness();
 
-        leaveSubject.next(area);
+        userLeaves("host");
         vi.advanceTimersByTime(HOST_GRACE_MS / 2);
-        positions.set("host", [INSIDE]);
+        connections.set("host", 1);
         vi.advanceTimersByTime(HOST_GRACE_MS);
 
         expect(setAreaPropertyVariable).not.toHaveBeenCalled();
     });
 
-    it("keeps a room while its host is still in the zone, in any tab", () => {
-        const { leaveSubject, positions, setAreaPropertyVariable } = createHarness();
-        positions.set("host", [OUTSIDE, INSIDE]);
+    it("ignores users who host no room", () => {
+        const { userLeaves, setAreaPropertyVariable } = createHarness();
 
-        leaveSubject.next(area);
+        userLeaves("guest");
         vi.advanceTimersByTime(HOST_GRACE_MS);
 
         expect(setAreaPropertyVariable).not.toHaveBeenCalled();
@@ -139,9 +137,9 @@ describe("ListeningZoneManager", () => {
     });
 
     it("stops checking once the room is destroyed", () => {
-        const { leaveSubject, destroy, setAreaPropertyVariable } = createHarness();
+        const { userLeaves, destroy, setAreaPropertyVariable } = createHarness();
 
-        leaveSubject.next(area);
+        userLeaves("host");
         destroy.next();
         vi.advanceTimersByTime(HOST_GRACE_MS);
 

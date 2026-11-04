@@ -23,3 +23,9 @@ export const currentListeningZoneStore = writable<ListeningZone | undefined>(und
  * this is what "listening through a Jam" means for us.
  */
 export const joinedJamStore = writable<JoinedJam | undefined>(undefined);
+
+/** The names of the listening zones of the map, by area id: a room is shown with the zone it was opened in. */
+export const listeningZoneNamesStore = writable<ReadonlyMap<string, string>>(new Map());
+
+/** The list of every Jam room, opened from anywhere on the map with the Jams button. */
+export const jamRoomsPanelOpenStore = writable(false);

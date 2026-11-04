@@ -16,6 +16,7 @@ function createHarness(options: { linked?: boolean; sharing?: boolean } = {}) {
     const linked = writable(options.linked ?? true);
     const sharing = writable(options.sharing ?? true);
     const joinedJam = writable<JoinedJam | undefined>(undefined);
+    const listeningAlong = writable<string | undefined>(undefined);
     const published: SpotifyListening[] = [];
     const expireAccessToken = vi.fn();
     const reportAccessDenied = vi.fn();
@@ -28,9 +29,21 @@ function createHarness(options: { linked?: boolean; sharing?: boolean } = {}) {
         joinedJam,
         fetchTrack,
         POLL_MS,
+        undefined,
+        listeningAlong,
     );
 
-    return { sharer, linked, sharing, joinedJam, published, fetchTrack, expireAccessToken, reportAccessDenied };
+    return {
+        sharer,
+        linked,
+        sharing,
+        joinedJam,
+        listeningAlong,
+        published,
+        fetchTrack,
+        expireAccessToken,
+        reportAccessDenied,
+    };
 }
 
 describe("SpotifyListeningSharer", () => {
@@ -74,6 +87,18 @@ describe("SpotifyListeningSharer", () => {
 
         expect(published.at(-1)?.trackTitle).toBe("");
         expect(fetchTrack).toHaveBeenCalledTimes(1);
+        sharer.destroy();
+    });
+
+    it("publishes who this user listens along with, and stops when the follow ends", async () => {
+        const { sharer, listeningAlong, published } = createHarness();
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        listeningAlong.set("nat");
+        expect(published.at(-1)?.listeningAlongUuid).toBe("nat");
+
+        listeningAlong.set(undefined);
+        expect(published.at(-1)?.listeningAlongUuid).toBe("");
         sharer.destroy();
     });
 
