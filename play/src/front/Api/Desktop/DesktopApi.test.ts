@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { AvailabilityStatus } from "@workadventure/messages";
+import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopStatusRequest, WorkAdventureDesktopApi } from "../../Interfaces/DesktopAppInterfaces";
 
@@ -73,5 +73,54 @@ describe("DesktopApi status", () => {
         installDesktopApp({});
 
         expect(() => desktopApi.init()).not.toThrow();
+    });
+});
+
+describe("DesktopApi listening", () => {
+    const listening: SpotifyListening = {
+        trackTitle: "Song",
+        artistName: "Artist",
+        trackUrl: "https://open.spotify.com/track/abc",
+        jamAreaId: "",
+        jamAreaName: "",
+        albumName: "Album",
+        artworkUrl: "https://i.scdn.co/image/abc",
+        source: "",
+    };
+
+    afterEach(() => {
+        delete window.WAD;
+    });
+
+    it("reports the shared track and the joined Jam to the desktop app", () => {
+        const reportListening = vi.fn();
+        installDesktopApp({ reportListening });
+
+        desktopApi.reportListening({ ...listening, jamAreaId: "lounge", jamAreaName: "Lounge" });
+
+        expect(reportListening).toHaveBeenCalledWith({
+            title: "Song",
+            artist: "Artist",
+            album: "Album",
+            url: "https://open.spotify.com/track/abc",
+            artworkUrl: "https://i.scdn.co/image/abc",
+            source: "spotify",
+            jamAreaName: "Lounge",
+        });
+    });
+
+    it("reports no source when nothing plays", () => {
+        const reportListening = vi.fn();
+        installDesktopApp({ reportListening });
+
+        desktopApi.reportListening({ ...listening, trackTitle: "", artistName: "", trackUrl: "" });
+
+        expect(reportListening).toHaveBeenCalledWith(expect.objectContaining({ title: "", source: "" }));
+    });
+
+    it("does nothing in a browser or an older desktop app", () => {
+        expect(() => desktopApi.reportListening(listening)).not.toThrow();
+        installDesktopApp({});
+        expect(() => desktopApi.reportListening(listening)).not.toThrow();
     });
 });
