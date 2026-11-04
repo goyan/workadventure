@@ -196,6 +196,17 @@ export const PersonalAreaPropertyData = PropertyBase.extend({
     ownerId: z.string().nullable(), //Proto handle null here. If something goes wrong with personal area, this may be the issue
 });
 
+export const GobeurLevel = z.enum(["beginner", "intermediate", "hard"]);
+
+export const GobeurPropertyData = PropertyBase.extend({
+    type: z.literal("gobeurPropertyData"),
+    players: z.array(z.object({ uuid: z.string(), name: z.string() })).default([]),
+    prisonAreaId: z.string().default(""),
+    fallbackSafeAreaId: z.string().optional(),
+    level: GobeurLevel.default("beginner"),
+    durationSeconds: z.number().int().min(30).max(3600).default(180),
+});
+
 export const MatrixRoomPropertyData = PropertyBase.extend({
     type: z.literal("matrixRoomPropertyData"),
     shouldOpenAutomatically: z.boolean(),
@@ -295,6 +306,7 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     OpenFilePropertyData,
     EntityDescriptionPropertyData,
     LivekitRoomPropertyData,
+    GobeurPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -532,7 +544,8 @@ export type EntityDataPropertiesKeys =
     | "playAudio"
     | "openWebsite"
     | "openFile"
-    | "livekitRoomProperty";
+    | "livekitRoomProperty"
+    | "gobeurPropertyData";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;
@@ -562,6 +575,8 @@ export type AreaDescriptionPropertyData = z.infer<typeof AreaDescriptionProperty
 export type RestrictedRightsPropertyData = z.infer<typeof RestrictedRightsPropertyData>;
 export type PersonalAreaPropertyData = z.infer<typeof PersonalAreaPropertyData>;
 export type RecordingSettings = z.infer<typeof RecordingSettings>;
+export type GobeurLevel = z.infer<typeof GobeurLevel>;
+export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;
