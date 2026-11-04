@@ -140,7 +140,7 @@ describe("GobeurGame master", () => {
     });
 
     it("sends state on playerJoined", () => {
-        expect(kinds(master().playerJoined("c"))).toEqual(["send:state"]);
+        expect(kinds(master().playerJoined("c"))).toEqual(["send:start", "send:state"]);
     });
 
     it("ignores its own echoed messages", () => {
@@ -214,8 +214,9 @@ describe("GobeurGame follower", () => {
         expect(g.localStatus).toBe("caught");
     });
 
-    it("teleports on state listing local as caught after reload", () => {
+    it("teleports exactly once after reload: start then state listing local caught", () => {
         const g = new GobeurGame("a");
+        expect(kinds(g.receive(startMsg(), "m", 9000))).toEqual(["announceStart"]);
         const state: GobeurMessage = {
             kind: "state",
             gameId: "g1",
@@ -227,6 +228,43 @@ describe("GobeurGame follower", () => {
         expect(kinds(g.receive(state, "m", 9000))).toEqual(["teleportToPrison"]);
         expect(g.receive(state, "m", 9500)).toEqual([]);
         expect(g.isRunning).toBe(true);
+    });
+
+    it("idle instance ignores a lone state", () => {
+        const g = new GobeurGame("a");
+        const state: GobeurMessage = {
+            kind: "state",
+            gameId: "g1",
+            survivors: ["m", "b"],
+            caught: ["a"],
+            left: [],
+            endsAt: 61_000,
+        };
+        expect(g.receive(state, "m", 9000)).toEqual([]);
+        expect(g.isRunning).toBe(false);
+    });
+
+    it("ignores a repeated start of the followed game", () => {
+        const g = follower("a");
+        expect(g.receive(startMsg(), "m", 2000)).toEqual([]);
+    });
+
+    it("pos messages from the master refresh the timeout", () => {
+        const g = follower("x");
+        g.receive(
+            { kind: "state", gameId: "g1", survivors: ["m", "a", "b"], caught: [], left: [], endsAt: 61_000 },
+            "m",
+            5000,
+        );
+        const pos: GobeurMessage = { kind: "pos", gameId: "g1", x: 1, y: 2, direction: "down", at: 9000 };
+        expect(g.receive(pos, "m", 9000)).toEqual([]);
+        expect(g.tick(10_001, [])).toEqual([]);
+    });
+
+    it("ignores a start whose sender is not its masterUuid", () => {
+        const g = new GobeurGame("a");
+        expect(g.receive(startMsg(), "intruder", 1000)).toEqual([]);
+        expect(g.isRunning).toBe(false);
     });
 
     it("teleports when a follower's state lists local caught without prior caught message", () => {
@@ -315,5 +353,35 @@ describe("GobeurGame concurrent starts", () => {
         expect(g.receive({ kind: "caught", gameId: "g0", uuid: "a" }, "z", 2100)).toEqual([
             { kind: "teleportToPrison" },
         ]);
+    });
+
+    it("resolves a tied startedAt by gameId", () => {
+        const g = new GobeurGame("m");
+        g.startAsMaster(startMsg({ gameId: "g2", startedAt: 2000 }), ["m", "a", "b"]);
+        const tiedOlder = startMsg({ gameId: "g1", masterUuid: "z", startedAt: 2000 });
+        expect(kinds(g.receive(tiedOlder, "z", 2100))).toEqual(["ended", "announceStart"]);
+        const g2 = new GobeurGame("m");
+        g2.startAsMaster(startMsg({ gameId: "g1", startedAt: 2000 }), ["m", "a", "b"]);
+        const tiedNewer = startMsg({ gameId: "g2", masterUuid: "z", startedAt: 2000 });
+        expect(g2.receive(tiedNewer, "z", 2100)).toEqual([]);
+        expect(g2.isMaster).toBe(true);
+    });
+});
+
+describe("GobeurGame guards and late joiners", () => {
+    it("startAsMaster is a no-op while running", () => {
+        const g = master();
+        expect(g.startAsMaster(startMsg({ gameId: "other" }), ["m"])).toEqual([]);
+        expect(g.survivors).toEqual(["m", "a", "b"]);
+        const f = follower("a");
+        expect(f.startAsMaster(startMsg({ gameId: "other" }), ["a"])).toEqual([]);
+        expect(f.isMaster).toBe(false);
+    });
+
+    it("playerJoined sends the current start then state", () => {
+        const g = master();
+        const effects = g.playerJoined("c");
+        expect(kinds(effects)).toEqual(["send:start", "send:state"]);
+        expect(sent(effects)[0]).toMatchObject({ gameId: "g1", players: ["m", "a", "b"] });
     });
 });

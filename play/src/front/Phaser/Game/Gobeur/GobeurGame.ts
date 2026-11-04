@@ -71,6 +71,9 @@ export class GobeurGame {
     }
 
     startAsMaster(start: GobeurStartMessage, presentUuids: string[]): GobeurEffect[] {
+        if (this.running) {
+            return [];
+        }
         const players = start.players.filter((uuid) => presentUuids.includes(uuid));
         const message: GobeurStartMessage = { ...start, players };
         this.adopt(message, true, start.startedAt);
@@ -91,6 +94,9 @@ export class GobeurGame {
         }
         switch (message.kind) {
             case "pos":
+                if (this.isFromCurrentMaster(message.gameId, senderUuid)) {
+                    this.lastMasterMessageAt = now;
+                }
                 return [];
             case "start":
                 return this.receiveStart(message, senderUuid, now);
@@ -155,10 +161,13 @@ export class GobeurGame {
     }
 
     playerJoined(_uuid: string): GobeurEffect[] {
-        if (!this.running || !this.master) {
+        if (!this.running || !this.master || !this.startMessage) {
             return [];
         }
-        return [{ kind: "send", message: this.stateMessage() }];
+        return [
+            { kind: "send", message: this.startMessage },
+            { kind: "send", message: this.stateMessage() },
+        ];
     }
 
     stop(reason: "stopped" | "interrupted"): GobeurEffect[] {
@@ -256,21 +265,7 @@ export class GobeurGame {
     }
 
     private receiveState(state: GobeurStateMessage, senderUuid: string, now: number): GobeurEffect[] {
-        if (!this.running) {
-            // Page reload: the start was missed, rejoin the game if we are one of its players.
-            const isPlayer = state.survivors.includes(this.localUuid) || state.caught.includes(this.localUuid);
-            if (!isPlayer || this.endedGameIds.has(state.gameId)) {
-                return [];
-            }
-            this.running = true;
-            this.master = false;
-            this.gameId = state.gameId;
-            this.masterUuid = senderUuid;
-            this.startMessage = undefined;
-            this._survivors = [];
-            this._caught = [];
-            this.left = [];
-        } else if (!this.isFromCurrentMaster(state.gameId, senderUuid)) {
+        if (!this.isFromCurrentMaster(state.gameId, senderUuid)) {
             return [];
         }
         const before = this.localStatus;
