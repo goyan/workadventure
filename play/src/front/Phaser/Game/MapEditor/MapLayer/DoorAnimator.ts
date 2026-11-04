@@ -43,6 +43,8 @@ export interface DoorCharacter {
     path?: readonly { x: number; y: number }[];
     /** Whether the character faces left / right (it walks along a horizontal wall) rather than up / down. */
     facingSideways?: boolean;
+    /** The doors this character opens make no sound (the animals): only the players' doors are heard. */
+    silent?: boolean;
 }
 
 interface DoorRect {
@@ -96,6 +98,8 @@ interface DoorState {
     nextFrameAt: number;
     /** Whether the local player opened the door: they always hear the doors they go through. */
     openedByListener: boolean;
+    /** Whether only silent characters went through the door since it started opening: it opens and closes quietly. */
+    silent: boolean;
 }
 
 /**
@@ -144,6 +148,10 @@ export class DoorAnimator {
                 if (door.frame === DOOR_CLOSED_FRAME) {
                     door.reverse = this.isPushedTowardsViewer(state, pusher);
                     door.openedByListener = pusher === listener;
+                    door.silent = pusher.silent === true;
+                } else if (!pusher.silent) {
+                    // A player going through a door an animal opened: it is heard when it closes.
+                    door.silent = false;
                 }
                 door.openUntil = time + CLOSE_DELAY_MS;
             }
@@ -171,6 +179,7 @@ export class DoorAnimator {
                 reverse: false,
                 nextFrameAt: time,
                 openedByListener: false,
+                silent: false,
             };
             this.states.set(key, door);
         }
@@ -205,6 +214,9 @@ export class DoorAnimator {
         door: DoorState,
         listener: DoorCharacter,
     ): void {
+        if (door.silent) {
+            return;
+        }
         const centerX = (state.rect.left + state.rect.right) / 2;
         const centerY = (state.rect.top + state.rect.bottom) / 2;
         const distance = Math.hypot(centerX - listener.x, centerY - listener.y);

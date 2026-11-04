@@ -452,6 +452,9 @@ chaque ligne. Le front compte les colonnes d'après la largeur de l'image : à 3
 pause vient de l'horaire, donc il est le même sur tous les clients ; une étape passée sur place compte comme une étape
 entière de pause (personnage couché).
 
+Les animaux (promeneurs et canards de la ruée) ouvrent les portes **sans bruit** : `DoorCharacter.silent`. Une porte
+ouverte par un animal reste muette, sauf si un joueur la traverse pendant qu'elle est ouverte : sa fermeture s'entend.
+
 Synchro **déterministe, sans réseau** (`Phaser/Game/Wander/`) : le temps est découpé en étapes de 20 s ; la destination
 de chaque étape est tirée d'un hash de l'identifiant de l'entité (FNV-1a puis mulberry32), dans un rayon de 10 cases,
 praticable et atteignable depuis le nid. Tous les clients calculent donc la même position, à l'écart d'horloge près. La
