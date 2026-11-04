@@ -29,6 +29,21 @@ export interface DesktopSpotifyTrack {
     contextName?: string;
 }
 
+/** A track added to the queue of a Jukebox's host, as its desktop app reports it. */
+export interface JukeboxTrack {
+    /** spotify:track:… */
+    uri: string;
+    /** Identifies this entry of the queue (the same track can be queued twice). */
+    uid: string;
+    title: string;
+    artist: string;
+    /** https://i.scdn.co/image/…, or empty. */
+    artworkUrl: string;
+    /** Who added it from WorkAdventure, name and uuid; empty for the host. */
+    addedBy: string;
+    addedByUuid: string;
+}
+
 /** A track to play on the Spotify app of this computer, at a position: listening along with another user. */
 export interface DesktopFollowTarget {
     /** spotify:track:… */
@@ -88,5 +103,16 @@ export type WorkAdventureDesktopApi = {
     /** Optional: the tracks (spotify:track:…) the user adds to the home Jam from Spotify's context menu. */
     onQueueRequest?: (callback: (uris: string[]) => void) => void;
     /** Optional: as a home Jam's host, adds a guest's tracks to the queue of this computer's Spotify. */
-    enqueueOnSpotify?: (request: { uris: string[]; from: string }) => void;
+    enqueueOnSpotify?: (request: { uris: string[]; from: string; fromUuid?: string }) => void;
+    /** Optional: as a Jukebox's host, the queue of this computer's Spotify, until the returned function is called. */
+    watchSpotifyQueue?: (callback: (tracks: JukeboxTrack[]) => void) => () => void;
+    /** Optional: as a Jukebox's host, removes a track from the queue of this computer's Spotify. */
+    dequeueOnSpotify?: (track: Pick<JukeboxTrack, "uri" | "uid">) => void;
+    /** Optional: as a Jukebox's host, moves a queued track just before or just after another one. */
+    moveInSpotifyQueue?: (
+        move: Pick<JukeboxTrack, "uri" | "uid"> &
+            ({ before: Pick<JukeboxTrack, "uri" | "uid"> } | { after: Pick<JukeboxTrack, "uri" | "uid"> }),
+    ) => void;
+    /** Optional: saves a track to the Liked Songs of this computer's Spotify. */
+    likeOnSpotify?: (track: { uri: string }) => void;
 };

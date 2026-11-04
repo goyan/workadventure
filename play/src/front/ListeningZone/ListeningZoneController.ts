@@ -120,6 +120,24 @@ export function startHomeJam(title = ""): void {
     openRoom((uuid, hostName) => ({ home: true, hostUuid: uuid, hostName, ...titled(title) }));
 }
 
+/** Renames our room (an empty title names it after us again) or switches the DJ mode of our Jukebox. */
+export function updateOwnRoom(change: { title?: string; djMode?: boolean }): void {
+    const own = get(ownJamRoomStore);
+    if (!own) {
+        return;
+    }
+    // An undefined title is left out of the stored JSON.
+    const jam: ListeningZoneJam = {
+        ...own.jam,
+        ...(change.title !== undefined && { title: titled(change.title).title }),
+        ...(change.djMode !== undefined && isHomeJam(own.jam) && { djMode: change.djMode }),
+    };
+    const rooms = roomsInZone(get(allJamRoomsStore), own.zone).map((room) =>
+        room.jam.hostUuid === own.jam.hostUuid ? jam : room.jam,
+    );
+    setAreaPropertyVariable(own.zone.areaId, own.zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, rooms);
+}
+
 /** A room without a title is named after its host. */
 function titled(title: string): { title?: string } {
     const trimmed = title.trim().slice(0, MAX_LISTENING_ZONE_JAM_TITLE_LENGTH);
