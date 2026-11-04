@@ -455,6 +455,10 @@ entière de pause (personnage couché).
 Les animaux (promeneurs et canards de la ruée) ouvrent les portes **sans bruit** : `DoorCharacter.silent`. Une porte
 ouverte par un animal reste muette, sauf si un joueur la traverse pendant qu'elle est ouverte : sa fermeture s'entend.
 
+Compagnons : une planche de compagnon de 5 colonnes suit le même format (`Phaser/Companion/CompanionSheet.ts`). Quand
+le joueur s'arrête, le compagnon s'assoit, puis se couche après 5 s sans mouvement ; une planche de 3 colonnes (chats et
+chiens officiels, canard) ne change pas. Le compagnon suit à 40 px le long du trajet du joueur (56 en amont).
+
 Synchro **déterministe, sans réseau** (`Phaser/Game/Wander/`) : le temps est découpé en étapes de 20 s ; la destination
 de chaque étape est tirée d'un hash de l'identifiant de l'entité (FNV-1a puis mulberry32), dans un rayon de 10 cases,
 praticable et atteignable depuis le nid. Tous les clients calculent donc la même position, à l'écart d'horloge près. La

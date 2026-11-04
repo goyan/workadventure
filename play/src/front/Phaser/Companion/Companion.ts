@@ -8,6 +8,8 @@ import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { PlayerAnimationTypes } from "../Player/Animation";
 import { ProtobufClientUtils } from "../../Network/ProtobufClientUtils";
 import { debugRepo } from "../../Utils/Debuggers";
+import { wanderIdleFrame } from "../Game/Wander/WanderSheet";
+import { companionColumns, companionStillFrame, companionWalkFrames } from "./CompanionSheet";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Container = Phaser.GameObjects.Container;
@@ -25,7 +27,7 @@ export interface CompanionStatus {
 const TRAIL_SPACING = 6;
 const MAX_TRAIL_LENGTH = 400;
 // The companion stays idle when it is closer than this (path distance) to the player.
-const FOLLOW_DISTANCE = 56;
+const FOLLOW_DISTANCE = 40;
 // Delay (ms) without movement before the companion switches to its idle animation.
 const IDLE_DELAY = 150;
 // The walking axis (horizontal / vertical) only changes when the other one is this much larger.
@@ -52,6 +54,8 @@ export class Companion extends Container {
     private animationType: PlayerAnimationTypes;
     private readonly _pictureStore: Writable<string | undefined>;
     private texturePromise: CancelablePromise<string | void> | undefined;
+    // Number of columns of each sheet (see CompanionSheet): 5 when it has sitting and lying poses.
+    private readonly columns = new Map<string, number>();
 
     constructor(
         scene: Phaser.Scene,
@@ -91,6 +95,9 @@ export class Companion extends Container {
         this.getBody().setOffset(0, 8);
 
         this.setDepth(-1);
+
+        // The companion arrives standing: it sits, then lies down, from now on.
+        this.lastMoveTime = scene.time.now;
 
         this.updateListener = this.step.bind(this);
         // After the update of the player (which sets the target), so that the companion never is a frame behind it.
@@ -212,7 +219,7 @@ export class Companion extends Container {
         }
 
         this.setDepth(this.exactY);
-        this.playAnimation(this.direction, this.animationType);
+        this.playAnimation(this.direction, this.animationType, time);
     }
 
     /**
@@ -246,11 +253,24 @@ export class Companion extends Container {
         });
     }
 
-    private playAnimation(direction: PositionMessage_Direction, type: PlayerAnimationTypes): void {
+    private playAnimation(direction: PositionMessage_Direction, type: PlayerAnimationTypes, time: number): void {
         if (this.invisible) return;
 
         const directionStr = ProtobufClientUtils.toDirectionString(direction);
         for (const [resource, sprite] of this.sprites.entries()) {
+            const columns = this.columns.get(resource) ?? 3;
+            if (type === PlayerAnimationTypes.Idle && columns >= 5) {
+                // Sitting as soon as the player stops, then lying: still frames, not animations.
+                const frame = companionStillFrame(directionStr, time - this.lastMoveTime, columns);
+                if (sprite.anims.isPlaying) {
+                    sprite.stop();
+                }
+                // The frames of a sprite sheet are named by their index (a number at runtime).
+                if (String(sprite.frame.name) !== String(frame)) {
+                    sprite.setFrame(frame);
+                }
+                continue;
+            }
             sprite.play(`${resource}-${directionStr}-${type}`, true);
         }
     }
@@ -259,6 +279,7 @@ export class Companion extends Container {
         const sprite = new Sprite(this.scene, 0, 0, resource, frame);
 
         this.add(sprite);
+        this.columns.set(resource, companionColumns(this.scene.textures.get(resource).getSourceImage().width));
 
         this.getAnimations(resource).forEach((animation) => {
             if (!animation.key || !this.scene.anims.exists(animation.key)) {
@@ -271,55 +292,25 @@ export class Companion extends Container {
     }
 
     private getAnimations(resource: string): Phaser.Types.Animations.Animation[] {
+        const columns = this.columns.get(resource) ?? 3;
+        const directions = ["down", "left", "right", "up"] as const;
         return [
-            {
-                key: `${resource}-down-${PlayerAnimationTypes.Idle}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [1] }),
+            ...directions.map((direction) => ({
+                key: `${resource}-${direction}-${PlayerAnimationTypes.Idle}`,
+                frames: this.scene.anims.generateFrameNumbers(resource, {
+                    frames: [wanderIdleFrame(direction, columns)],
+                }),
                 frameRate: 10,
                 repeat: 1,
-            },
-            {
-                key: `${resource}-left-${PlayerAnimationTypes.Idle}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [4] }),
-                frameRate: 10,
-                repeat: 1,
-            },
-            {
-                key: `${resource}-right-${PlayerAnimationTypes.Idle}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [7] }),
-                frameRate: 10,
-                repeat: 1,
-            },
-            {
-                key: `${resource}-up-${PlayerAnimationTypes.Idle}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [10] }),
-                frameRate: 10,
-                repeat: 1,
-            },
-            {
-                key: `${resource}-down-${PlayerAnimationTypes.Walk}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [0, 1, 2] }),
+            })),
+            ...directions.map((direction) => ({
+                key: `${resource}-${direction}-${PlayerAnimationTypes.Walk}`,
+                frames: this.scene.anims.generateFrameNumbers(resource, {
+                    frames: companionWalkFrames(direction, columns),
+                }),
                 frameRate: 15,
                 repeat: -1,
-            },
-            {
-                key: `${resource}-left-${PlayerAnimationTypes.Walk}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [3, 4, 5] }),
-                frameRate: 15,
-                repeat: -1,
-            },
-            {
-                key: `${resource}-right-${PlayerAnimationTypes.Walk}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [6, 7, 8] }),
-                frameRate: 15,
-                repeat: -1,
-            },
-            {
-                key: `${resource}-up-${PlayerAnimationTypes.Walk}`,
-                frames: this.scene.anims.generateFrameNumbers(resource, { frames: [9, 10, 11] }),
-                frameRate: 15,
-                repeat: -1,
-            },
+            })),
         ];
     }
 
