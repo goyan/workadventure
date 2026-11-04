@@ -14,6 +14,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             "Leído desde la app de Spotify de este ordenador: sin cuenta que vincular, basta con una cuenta gratuita.",
         desktopLinkOtherDevices:
             "Para compartir también la música que escuchas en otro dispositivo (móvil, reproductor web, altavoz), vincula tu cuenta de Spotify.",
+        otherDevices: "Compartir también desde otro dispositivo",
         desktopAppHint:
             "Con la app de escritorio de WorkAdventure no hace falta vincular cuenta ni Premium: lee la app de Spotify de tu Mac.",
         desktopAppLink: "Descargar la app de escritorio",
@@ -105,6 +106,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         like: "Guardar en Tus me gusta",
         moveUp: "Subir",
         moveDown: "Bajar",
+        upNext: "A continuación",
+        upNextIn: "A continuación en {name}",
     },
 };
 

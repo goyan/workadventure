@@ -86,7 +86,11 @@
                 onclick={() => toggleQueue(jam.hostUuid)}
                 data-testid="jukebox-queue-toggle"
             >
-                {$LL.spotify.listeningZone.queue({ count: $jukeboxQueuesStore.get(jam.hostUuid)?.length ?? 0 })}
+                {$LL.spotify.listeningZone.queue({
+                    count:
+                        ($jukeboxQueuesStore.get(jam.hostUuid)?.tracks.length ?? 0) +
+                        ($jukeboxQueuesStore.get(jam.hostUuid)?.upcoming.length ?? 0),
+                })}
             </button>
             {#if openQueues.has(jam.hostUuid)}
                 <JukeboxQueue {room} />

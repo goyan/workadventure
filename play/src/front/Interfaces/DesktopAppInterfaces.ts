@@ -44,6 +44,17 @@ export interface JukeboxTrack {
     addedByUuid: string;
 }
 
+/** A track still to come from the host's playing playlist or album (or Spotify's autoplay): shown, never edited. */
+export type UpcomingTrack = Pick<JukeboxTrack, "uri" | "title" | "artist" | "artworkUrl">;
+
+/** What a Jukebox's host plays next: the tracks added to the queue, then the rest of the playlist. */
+export interface JukeboxQueue {
+    tracks: JukeboxTrack[];
+    upcoming: UpcomingTrack[];
+    /** The playing playlist or album, empty when it is neither. */
+    contextName: string;
+}
+
 /** A track to play on the Spotify app of this computer, at a position: listening along with another user. */
 export interface DesktopFollowTarget {
     /** spotify:track:… */
@@ -105,7 +116,7 @@ export type WorkAdventureDesktopApi = {
     /** Optional: as a home Jam's host, adds a guest's tracks to the queue of this computer's Spotify. */
     enqueueOnSpotify?: (request: { uris: string[]; from: string; fromUuid?: string }) => void;
     /** Optional: as a Jukebox's host, the queue of this computer's Spotify, until the returned function is called. */
-    watchSpotifyQueue?: (callback: (tracks: JukeboxTrack[]) => void) => () => void;
+    watchSpotifyQueue?: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => () => void;
     /** Optional: as a Jukebox's host, removes a track from the queue of this computer's Spotify. */
     dequeueOnSpotify?: (track: Pick<JukeboxTrack, "uri" | "uid">) => void;
     /** Optional: as a Jukebox's host, moves a queued track just before or just after another one. */

@@ -26,7 +26,10 @@
 
     let { room }: Props = $props();
 
-    let tracks = $derived($jukeboxQueuesStore.get(room.jam.hostUuid) ?? []);
+    let queue = $derived($jukeboxQueuesStore.get(room.jam.hostUuid));
+    let tracks = $derived(queue?.tracks ?? []);
+    // What the host's playlist plays next: shown, never edited (Spotify only edits the tracks added to the queue).
+    let upcoming = $derived(queue?.upcoming ?? []);
     let mine = $derived(isLocalUser(room.jam.hostUuid));
     let joined = $derived($joinedJamStore?.url === listeningZoneJamKey(room.jam));
     let djMode = $derived(isHomeJam(room.jam) && room.jam.djMode === true);
@@ -74,7 +77,7 @@
 </script>
 
 <div class="flex flex-col gap-2 rounded-md bg-black/20 p-2" data-testid="jukebox-queue">
-    {#if tracks.length === 0}
+    {#if tracks.length === 0 && upcoming.length === 0}
         <p class="m-0 text-xs text-white/50">{$LL.spotify.listeningZone.queueEmpty()}</p>
     {/if}
     {#each tracks as track, index (track.uid)}
@@ -147,6 +150,47 @@
             {/if}
         </div>
     {/each}
+
+    {#if upcoming.length > 0}
+        <p class="m-0 mt-1 truncate text-[11px] font-bold uppercase tracking-wide text-white/50">
+            {queue?.contextName
+                ? $LL.spotify.listeningZone.upNextIn({ name: queue.contextName })
+                : $LL.spotify.listeningZone.upNext()}
+        </p>
+        {#each upcoming as track, index (`${index}:${track.uri}`)}
+            <div class="flex min-w-0 items-center gap-2 opacity-80" data-testid="jukebox-upcoming">
+                {#if track.artworkUrl}
+                    <img
+                        src={track.artworkUrl}
+                        alt=""
+                        class="h-8 w-8 shrink-0 rounded object-cover"
+                        referrerpolicy="no-referrer"
+                    />
+                {:else}
+                    <div class="h-8 w-8 shrink-0 rounded bg-white/10"></div>
+                {/if}
+                <div class="min-w-0 flex-1">
+                    <p class="m-0 truncate text-xs font-bold text-white">{track.title}</p>
+                    <p class="m-0 truncate text-[11px] text-white/60">{track.artist}</p>
+                </div>
+                {#if canLike}
+                    <button
+                        type="button"
+                        class="shrink-0 rounded px-1 py-0.5 {liked.has(track.uri)
+                            ? 'text-[#1ed760]'
+                            : 'text-white/60 hover:bg-white/10 hover:text-white'}"
+                        title={$LL.spotify.listeningZone.like()}
+                        aria-label={$LL.spotify.listeningZone.like()}
+                        onclick={() => {
+                            if (likeTrack(track.uri)) liked.add(track.uri);
+                        }}
+                    >
+                        {liked.has(track.uri) ? "♥" : "♡"}
+                    </button>
+                {/if}
+            </div>
+        {/each}
+    {/if}
 
     {#if canAdd}
         <form
