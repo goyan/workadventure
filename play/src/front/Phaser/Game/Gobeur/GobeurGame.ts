@@ -60,6 +60,11 @@ export class GobeurGame {
         return this._endsAt;
     }
 
+    /** The start message of the running game (players already filtered for a master), undefined when not running. */
+    get currentStart(): GobeurStartMessage | undefined {
+        return this.running ? this.startMessage : undefined;
+    }
+
     get localStatus(): GobeurLocalStatus {
         if (this._survivors.includes(this.localUuid)) {
             return "survivor";

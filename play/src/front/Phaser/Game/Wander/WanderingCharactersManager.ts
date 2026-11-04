@@ -54,6 +54,8 @@ interface WanderingCharacter {
  */
 export class WanderingCharactersManager {
     private characters = new Map<string, WanderingCharacter>();
+    // Characters taken over by someone else (a Gobeur game): hidden, no door opening, the entity left alone.
+    private readonly suppressed = new Set<string>();
     private sheets = new Map<string, SheetState>();
     private sheetCompleteListeners = new Map<string, () => void>();
     // The collisions shared by every client (see GameMapFrontWrapper.getSharedCollisionGrid) and the collision
@@ -98,10 +100,27 @@ export class WanderingCharactersManager {
      * Calls the callback with the position of each visible character: like the players, they open the doors.
      */
     public forEachDoorOpener(callback: (position: Point) => void): void {
-        for (const character of this.characters.values()) {
-            if (character.sprite?.visible) {
+        for (const [entityId, character] of this.characters) {
+            if (character.sprite?.visible && !this.suppressed.has(entityId)) {
                 callback(character.opener);
             }
+        }
+    }
+
+    /**
+     * While suppressed, the character is hidden and does not open doors; its entity is left as it is, for the caller to
+     * show or hide. Restored, the character walks again (the entity is hidden again by the next update).
+     */
+    public setSuppressed(entityId: string, suppressed: boolean): void {
+        if (suppressed) {
+            this.suppressed.add(entityId);
+            const sprite = this.characters.get(entityId)?.sprite;
+            if (sprite?.visible) {
+                sprite.setVisible(false);
+                this.scene.markDirty();
+            }
+        } else {
+            this.suppressed.delete(entityId);
         }
     }
 
@@ -118,6 +137,7 @@ export class WanderingCharactersManager {
             character.sprite?.destroy();
         }
         this.characters.clear();
+        this.suppressed.clear();
     }
 
     /**
@@ -204,8 +224,13 @@ export class WanderingCharactersManager {
      * left out, like for the paths of the players: they are already walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
+        return WanderingCharactersManager.collisionRectanglesOf(this.scene);
+    }
+
+    /** The thin collisions of the objects of the scene, as the characters see them (see collisionRectangles). */
+    public static collisionRectanglesOf(scene: GameScene): WanderRectangle[] {
         const rectangles: WanderRectangle[] = [];
-        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+        for (const entity of scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
             if (!prefab.collisionRectangles?.length || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
                 continue;
@@ -218,8 +243,8 @@ export class WanderingCharactersManager {
     private forget(entityId: string, character: WanderingCharacter): void {
         character.sprite?.destroy();
         this.characters.delete(entityId);
-        // The entity is still there but does not wander anymore: show it again.
-        if (character.entity.active) {
+        // The entity is still there but does not wander anymore: show it again, unless someone else owns it.
+        if (character.entity.active && !this.suppressed.has(entityId)) {
             this.showEntity(character.entity, true);
         }
     }
@@ -297,7 +322,7 @@ export class WanderingCharactersManager {
         }
         const now = Date.now();
         let changed = false;
-        for (const character of this.characters.values()) {
+        for (const [entityId, character] of this.characters) {
             const sheet = this.sheets.get(character.sheetPath);
             const columns = typeof sheet === "object" ? sheet.columns : WANDER_WALK_COLUMNS;
             if (!character.sprite && typeof sheet === "object") {
@@ -310,6 +335,13 @@ export class WanderingCharactersManager {
                     .setVisible(false);
             }
             const sprite = character.sprite;
+            if (this.suppressed.has(entityId)) {
+                if (sprite?.visible) {
+                    sprite.setVisible(false);
+                    changed = true;
+                }
+                continue;
+            }
             if (sprite && !this.isEditorMode) {
                 const pose = character.schedule.poseAt(now);
                 if (pose) {

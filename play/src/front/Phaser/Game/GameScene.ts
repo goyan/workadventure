@@ -281,6 +281,7 @@ import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
+import { GobeurManager } from "./Gobeur/GobeurManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
@@ -427,6 +428,7 @@ export class GameScene extends DirtyScene {
     private locateManager!: LocateManager;
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
+    private _gobeurManager: GobeurManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
@@ -1422,6 +1424,8 @@ export class GameScene extends DirtyScene {
         this.locateManager?.destroy();
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
+        this._gobeurManager?.destroy();
+        this._gobeurManager = undefined;
         this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
@@ -1555,6 +1559,7 @@ export class GameScene extends DirtyScene {
         this.wanderingCharactersManager?.forEachDoorOpener((position) =>
             characters.push({ ...position, silent: true }),
         );
+        this._gobeurManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
         this.doorAnimator.update(time, characters, listener);
     }
 
@@ -2090,6 +2095,14 @@ export class GameScene extends DirtyScene {
         return this.gameMapFrontWrapper.getGameMap();
     }
 
+    public get gobeurManager(): GobeurManager | undefined {
+        return this._gobeurManager;
+    }
+
+    public getWanderingCharactersManager(): WanderingCharactersManager | undefined {
+        return this.wanderingCharactersManager;
+    }
+
     public getGameMapFrontWrapper(): GameMapFrontWrapper {
         return this.gameMapFrontWrapper;
     }
@@ -2621,8 +2634,10 @@ export class GameScene extends DirtyScene {
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
                 // Its listeners are on the scene: never two of them at once.
+                this._gobeurManager?.destroy();
                 this.wanderingCharactersManager?.destroy();
                 this.wanderingCharactersManager = new WanderingCharactersManager(this);
+                this._gobeurManager = new GobeurManager(this);
                 const connection = this.connection;
                 this.konamiCodeDetector = new KonamiCodeDetector(() => {
                     this.duckRushManager?.start(connection.getUserId(), () => ({
