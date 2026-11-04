@@ -297,6 +297,26 @@ Recette en beta : lier Spotify, lancer un morceau, vérifier la note et la liste
 partage. Créer une zone d'écoute, y partager une Jam, la rejoindre depuis le second compte (compteur à 2, badge Jam),
 faire sortir le DJ (bulle revenue à « Partager ma Jam »). Vérifier si Spotify exige Premium pour rejoindre à distance.
 
+### Écouter en même temps (sans Premium)
+
+Une Jam Spotify ne fait jouer, avec un compte gratuit, que l'enceinte de l'hôte (« Continuer sur cet ordinateur » est
+réservé à Premium). « Écouter en même temps », sur la carte « En écoute » d'un autre joueur, fait jouer à **son propre**
+Spotify le morceau du joueur suivi, à sa position, et le suit à chaque changement de morceau ou saut.
+
+Réservé à ceux qui ont le client desktop (0.1.0-beta.14 ou plus récent), Spicetify et l'extension
+[workadventure-spicetify](https://github.com/aminekun90/workadventure-spicetify) : le bouton n'apparaît que tant que le
+client signale l'extension connectée (`window.WAD.onListenAlongAvailable`). Sans eux, rien ne change, et la Jam reste
+le moyen d'écouter ensemble.
+
+`SpotifyListening` porte la position (`positionMs`, mesurée à `positionAt`, horloge de l'émetteur) : les autres en
+déduisent la position actuelle sans republication continue (`SpotifyListeningSharer` ne republie qu'au-delà de 3 s
+d'écart). `ListeningFollower` envoie le morceau à jouer au client (`window.WAD.followListening`), qui le transmet à
+l'extension. **Le protobuf change : déployer play et back ensemble.**
+
+Recette en beta : deux postes avec le client desktop, Spicetify et l'extension ; sur l'un, « Écouter en même temps »
+sur l'autre ; changer de morceau et sauter dans le morceau chez celui qui est suivi ; « Arrêter d'écouter en même
+temps ». Sans l'extension : pas de bouton.
+
 ### Sélection et édition en masse
 
 L'outil « Sélection » permet de tracer un rectangle bleu translucide dans l'éditeur.
