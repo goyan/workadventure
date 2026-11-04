@@ -44,6 +44,8 @@
     import Select from "../Input/Select.svelte";
     import Chip from "../UI/Chip.svelte";
     import SpotifySettings from "./SpotifySettings.svelte";
+    import SegmentedControl from "./SegmentedControl.svelte";
+    import SettingsSection from "./SettingsSection.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -323,189 +325,82 @@
     }
 </script>
 
-<div class="divide-y divide-white/20" transition:fly={{ x: -700, duration: 250 }}>
-    <section class=" p-0 first:pt-0 pt-8 m-0">
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconCameraUp /></div>
-            {$LL.menu.settings.videoBandwidth.title()}
+<div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
+    <SettingsSection title={$LL.menu.settings.videoBandwidth.title()}>
+        {#snippet icon()}<IconCameraUp />{/snippet}
+        <div>
+            <SegmentedControl
+                ariaLabel={$LL.menu.settings.videoBandwidth.title()}
+                bind:value={valueVideoQuality}
+                onchange={updateVideoQuality}
+                dataTestId="video-quality-control"
+                options={[
+                    { value: 1, label: $LL.menu.settings.videoBandwidth.low(), icon: IconAntennaBarsLow },
+                    { value: 2, label: $LL.menu.settings.videoBandwidth.recommended(), icon: IconAntennaBarsMid },
+                    { value: 3, label: $LL.menu.settings.videoBandwidth.high(), icon: IconAntennaBarsHigh },
+                ]}
+            />
         </div>
-        <div class="flex w-full mb-6 mt-2 ps-6 justify-center">
-            <div class="flex flex-col w-10/12 lg:w-6/12">
-                <ul class="flex justify-between w-full px-[10px] mb-8">
-                    <li
-                        class="flex justify-center relative {valueVideoQuality === 1
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsLow />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueVideoQuality = 1;
-                            }}>{$LL.menu.settings.videoBandwidth.low()}</span
-                        >
-                    </li>
-                    <li
-                        class="flex justify-center relative {valueVideoQuality === 2
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsMid />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueVideoQuality = 2;
-                            }}>{$LL.menu.settings.videoBandwidth.recommended()}</span
-                        >
-                    </li>
-                    <li
-                        class="flex justify-center relative {valueVideoQuality === 3
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsHigh />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueVideoQuality = 3;
-                            }}>{$LL.menu.settings.videoBandwidth.high()}</span
-                        >
-                    </li>
-                </ul>
-                <RangeSlider
-                    buttonShape="square"
-                    min={1}
-                    max={3}
-                    step={1}
-                    bind:value={valueVideoQuality}
-                    onchange={updateVideoQuality}
-                />
-            </div>
-        </div>
-    </section>
-    <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconScreenShare /></div>
+    </SettingsSection>
 
-            {$LL.menu.settings.shareScreenBandwidth.title()}
+    <SettingsSection title={$LL.menu.settings.shareScreenBandwidth.title()}>
+        {#snippet icon()}<IconScreenShare />{/snippet}
+        <div>
+            <SegmentedControl
+                ariaLabel={$LL.menu.settings.shareScreenBandwidth.title()}
+                bind:value={valueScreenShareQuality}
+                onchange={updateScreenShareQuality}
+                dataTestId="screen-share-quality-control"
+                options={[
+                    { value: 1, label: $LL.menu.settings.shareScreenBandwidth.low(), icon: IconAntennaBarsLow },
+                    { value: 2, label: $LL.menu.settings.shareScreenBandwidth.recommended(), icon: IconAntennaBarsMid },
+                    { value: 3, label: $LL.menu.settings.shareScreenBandwidth.high(), icon: IconAntennaBarsHigh },
+                ]}
+            />
         </div>
-        <div class="flex w-full mb-6 mt-2 ps-6 justify-center">
-            <div class="flex flex-col w-10/12 lg:w-6/12">
-                <ul class="flex justify-between w-full px-[10px] mb-8">
-                    <li
-                        class="flex relative {valueScreenShareQuality === 1
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsLow />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueScreenShareQuality = 1;
-                            }}>{$LL.menu.settings.shareScreenBandwidth.low()}</span
-                        >
-                    </li>
-                    <li
-                        class="flex justify-center relative {valueScreenShareQuality === 2
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsMid />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueScreenShareQuality = 2;
-                            }}>{$LL.menu.settings.shareScreenBandwidth.recommended()}</span
-                        >
-                    </li>
-                    <li
-                        class="flex justify-center relative {valueScreenShareQuality === 3
-                            ? 'opacity-100 font-bold'
-                            : 'opacity-50 hover:opacity-80'}"
-                    >
-                        <IconAntennaBarsHigh />
-                        <!-- svelte-ignore a11y_click_events_have_key_events -->
-                        <!-- svelte-ignore a11y_no_static_element_interactions -->
-                        <span
-                            class="absolute -bottom-4 cursor-pointer"
-                            onclick={(event) => {
-                                event.preventDefault();
-                                valueScreenShareQuality = 3;
-                            }}>{$LL.menu.settings.shareScreenBandwidth.high()}</span
-                        >
-                    </li>
-                </ul>
-                <RangeSlider
-                    min={1}
-                    max={3}
-                    step={1}
-                    bind:value={valueScreenShareQuality}
-                    onchange={updateScreenShareQuality}
-                    buttonShape="square"
-                />
-            </div>
-        </div>
-        <div class="input-label">
-            <div class="grow font-light text-center font-semibold">
+        <div class="flex flex-col gap-3">
+            <p class="m-0 text-sm font-bold text-white/90">
                 {$LL.menu.settings.bandwidthConstrainedPreference.title()}
+            </p>
+            <div class="grid grid-cols-1 items-stretch gap-3 @lg/main-layout:grid-cols-3">
+                <InputRadioBox
+                    value="maintain-resolution"
+                    label={$LL.menu.settings.bandwidthConstrainedPreference.maintainResolutionTitle()}
+                    bind:group={bandwidthConstrainedPreference}
+                    onchange={updateBandwidthConstrainedPreference}
+                    outerClass="flex-1"
+                >
+                    {$LL.menu.settings.bandwidthConstrainedPreference.maintainResolutionDescription()}
+                </InputRadioBox>
+                <InputRadioBox
+                    value="maintain-framerate"
+                    label={$LL.menu.settings.bandwidthConstrainedPreference.maintainFramerateTitle()}
+                    bind:group={bandwidthConstrainedPreference}
+                    onchange={updateBandwidthConstrainedPreference}
+                    outerClass="flex-1"
+                >
+                    {$LL.menu.settings.bandwidthConstrainedPreference.maintainFramerateDescription()}
+                </InputRadioBox>
+                <InputRadioBox
+                    value="balanced"
+                    label={$LL.menu.settings.bandwidthConstrainedPreference.balancedTitle()}
+                    bind:group={bandwidthConstrainedPreference}
+                    onchange={updateBandwidthConstrainedPreference}
+                    outerClass="flex-1"
+                >
+                    {$LL.menu.settings.bandwidthConstrainedPreference.balancedDescription()}
+                </InputRadioBox>
             </div>
         </div>
-        <div class="mt-2 p-2 grid grid-cols-1 @lg/main-layout:grid-cols-3 gap-4 justify-center items-stretch">
-            <InputRadioBox
-                value="maintain-resolution"
-                label={$LL.menu.settings.bandwidthConstrainedPreference.maintainResolutionTitle()}
-                bind:group={bandwidthConstrainedPreference}
-                onchange={updateBandwidthConstrainedPreference}
-                outerClass="flex-1"
-            >
-                <em>{$LL.menu.settings.bandwidthConstrainedPreference.maintainResolutionDescription()}</em>
-            </InputRadioBox>
-            <InputRadioBox
-                value="maintain-framerate"
-                label={$LL.menu.settings.bandwidthConstrainedPreference.maintainFramerateTitle()}
-                bind:group={bandwidthConstrainedPreference}
-                onchange={updateBandwidthConstrainedPreference}
-                outerClass="flex-1"
-            >
-                <em>{$LL.menu.settings.bandwidthConstrainedPreference.maintainFramerateDescription()}</em>
-            </InputRadioBox>
-            <InputRadioBox
-                value="balanced"
-                label={$LL.menu.settings.bandwidthConstrainedPreference.balancedTitle()}
-                bind:group={bandwidthConstrainedPreference}
-                onchange={updateBandwidthConstrainedPreference}
-                outerClass="flex-1"
-            >
-                <em>{$LL.menu.settings.bandwidthConstrainedPreference.balancedDescription()}</em>
-            </InputRadioBox>
-        </div>
-    </section>
-    <section
-        class="flex flex-col p-0 first:pt-0 pt-8 m-0"
-        bind:this={microphoneSettingsSection}
-        data-testid="microphone-settings-section"
-    >
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconMicrophoneOn /></div>
-            {$LL.menu.settings.microphone.title()}
-        </div>
+    </SettingsSection>
 
-        <div class="flex cursor-pointer items-center relative m-4">
+    <SettingsSection
+        title={$LL.menu.settings.microphone.title()}
+        bind:element={microphoneSettingsSection}
+        dataTestId="microphone-settings-section"
+    >
+        {#snippet icon()}<IconMicrophoneOn />{/snippet}
+        <div>
             <InputSwitch
                 id="noise-suppression-settings-toggle"
                 value={$noiseSuppressionEnabledStore}
@@ -515,47 +410,50 @@
         </div>
 
         {#if $noiseSuppressionEnabledStore}
-            <div class="input-label text-center mt-4">{$LL.menu.settings.microphone.noiseSuppressionMode()}</div>
-            <div class="mt-2 p-2 grid grid-cols-1 @lg/main-layout:grid-cols-2 gap-4 justify-center items-stretch">
-                <InputRadioBox
-                    id="noise-suppression-provider-workadventure"
-                    value="workadventure"
-                    label={$LL.menu.settings.microphone.workAdventureNoiseSuppression()}
-                    bind:group={selectedNoiseSuppressionProvider}
-                    onchange={updateNoiseSuppressionProvider}
-                >
-                    <Chip class="mb-1">{$LL.menu.settings.microphone.recommended()}</Chip>
-                    <em>{$LL.menu.settings.microphone.workAdventureNoiseSuppressionDescription()}</em>
-                    {#if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "initializing"}
-                        <div data-testid="noise-suppression-loading" class="text-xs text-white/50 mt-1">
-                            {$LL.actionbar.microphone.noiseSuppressionInitializing()}
-                        </div>
-                    {:else if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "unsupported"}
-                        <div data-testid="noise-suppression-error" class="text-xs text-pop-red mt-1">
-                            {$noiseSuppressionStateStore.message ??
-                                $LL.actionbar.microphone.noiseSuppressionUnsupported()}
-                        </div>
-                    {:else if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "error"}
-                        <div data-testid="noise-suppression-error" class="text-xs text-pop-red mt-1">
-                            {$noiseSuppressionStateStore.message ?? $LL.actionbar.microphone.noiseSuppressionError()}
-                        </div>
-                    {/if}
-                </InputRadioBox>
-
-                {#if $voiceIsolationSupportedStore}
+            <div class="flex flex-col gap-3">
+                <p class="m-0 text-sm font-bold text-white/90">
+                    {$LL.menu.settings.microphone.noiseSuppressionMode()}
+                </p>
+                <div class="grid grid-cols-1 items-stretch gap-3 @lg/main-layout:grid-cols-2">
                     <InputRadioBox
-                        id="noise-suppression-provider-voice-isolation"
-                        value="voiceIsolation"
-                        label={$LL.menu.settings.microphone.voiceIsolation()}
+                        id="noise-suppression-provider-workadventure"
+                        value="workadventure"
+                        label={$LL.menu.settings.microphone.workAdventureNoiseSuppression()}
                         bind:group={selectedNoiseSuppressionProvider}
                         onchange={updateNoiseSuppressionProvider}
                     >
-                        <em>{$LL.menu.settings.microphone.voiceIsolationDescription()}</em>
+                        <Chip class="mb-1">{$LL.menu.settings.microphone.recommended()}</Chip>
+                        <span>{$LL.menu.settings.microphone.workAdventureNoiseSuppressionDescription()}</span>
+                        {#if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "initializing"}
+                            <div data-testid="noise-suppression-loading" class="text-xs text-white/50 mt-1">
+                                {$LL.actionbar.microphone.noiseSuppressionInitializing()}
+                            </div>
+                        {:else if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "unsupported"}
+                            <div data-testid="noise-suppression-error" class="text-xs text-pop-red mt-1">
+                                {$noiseSuppressionStateStore.message ??
+                                    $LL.actionbar.microphone.noiseSuppressionUnsupported()}
+                            </div>
+                        {:else if selectedNoiseSuppressionProvider === "workadventure" && $noiseSuppressionStateStore.status === "error"}
+                            <div data-testid="noise-suppression-error" class="text-xs text-pop-red mt-1">
+                                {$noiseSuppressionStateStore.message ??
+                                    $LL.actionbar.microphone.noiseSuppressionError()}
+                            </div>
+                        {/if}
                     </InputRadioBox>
-                {/if}
-            </div>
-            {#if selectedNoiseSuppressionProvider === "workadventure"}
-                <div class="px-4">
+
+                    {#if $voiceIsolationSupportedStore}
+                        <InputRadioBox
+                            id="noise-suppression-provider-voice-isolation"
+                            value="voiceIsolation"
+                            label={$LL.menu.settings.microphone.voiceIsolation()}
+                            bind:group={selectedNoiseSuppressionProvider}
+                            onchange={updateNoiseSuppressionProvider}
+                        >
+                            {$LL.menu.settings.microphone.voiceIsolationDescription()}
+                        </InputRadioBox>
+                    {/if}
+                </div>
+                {#if selectedNoiseSuppressionProvider === "workadventure"}
                     <Select
                         id="noise-suppression-engine"
                         dataTestId="noise-suppression-engine"
@@ -564,21 +462,19 @@
                         value={$noiseSuppressionEngineStore}
                         onchange={updateNoiseSuppressionEngine}
                     />
-                </div>
-            {/if}
+                {/if}
+            </div>
         {/if}
 
-        <div class="flex flex-col cursor-pointer relative m-4 gap-2">
+        <div>
             <InputSwitch
                 id="microphone-auto-gain-control-toggle"
                 value={$microphoneAutoGainControlStore}
                 onchange={toggleMicrophoneAutoGainControl}
             >
                 <span class="flex flex-wrap items-center gap-2">
-                    <span
-                        >{$LL.menu.settings.microphone.autoGainControl()}
-                        <Chip size="xs" class="ml-2">{$LL.menu.settings.microphone.recommended()}</Chip></span
-                    >
+                    {$LL.menu.settings.microphone.autoGainControl()}
+                    <Chip size="xs">{$LL.menu.settings.microphone.recommended()}</Chip>
                 </span>
 
                 {#snippet description()}
@@ -587,29 +483,29 @@
             </InputSwitch>
         </div>
 
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="microphone-echo-cancellation-toggle"
                 value={$microphoneEchoCancellationStore}
                 onchange={toggleMicrophoneEchoCancellation}
             >
-                <span
-                    >{$LL.menu.settings.microphone.echoCancellation()}
-                    <Chip size="xs" class="ml-2">{$LL.menu.settings.microphone.recommended()}</Chip></span
-                >
+                <span class="flex flex-wrap items-center gap-2">
+                    {$LL.menu.settings.microphone.echoCancellation()}
+                    <Chip size="xs">{$LL.menu.settings.microphone.recommended()}</Chip>
+                </span>
             </InputSwitch>
         </div>
         {#if $browserNoiseSuppressionSupportedStore}
-            <div class="flex flex-col cursor-pointer relative m-4 gap-2">
+            <div>
                 <InputSwitch
                     id="microphone-browser-noise-suppression-toggle"
                     value={$microphoneBrowserNoiseSuppressionStore}
                     onchange={toggleMicrophoneBrowserNoiseSuppression}
                 >
-                    <span
-                        >{$LL.menu.settings.microphone.browserNoiseSuppression()}
-                        <Chip size="xs" class="ml-2">{$LL.menu.settings.microphone.recommended()}</Chip></span
-                    >
+                    <span class="flex flex-wrap items-center gap-2">
+                        {$LL.menu.settings.microphone.browserNoiseSuppression()}
+                        <Chip size="xs">{$LL.menu.settings.microphone.recommended()}</Chip>
+                    </span>
 
                     {#snippet description()}
                         <span>{$LL.menu.settings.microphone.browserNoiseSuppressionDescription()}</span>
@@ -617,51 +513,13 @@
                 </InputSwitch>
             </div>
         {/if}
-    </section>
-    <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconAdjustements /></div>
+    </SettingsSection>
 
-            {$LL.menu.settings.proximityDiscussionVolume()}
-        </div>
-
-        <div class="flex w-full justify-center">
-            <div class="flex flex-col w-10/12 lg:w-6/12">
-                <ul class="flex justify-between w-full px-[10px] mb-5">
-                    <li class="flex justify-center relative">
-                        <span class="absolute">0</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">1</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">2</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">3</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">4</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">5</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">6</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">7</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">8</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">9</span>
-                    </li>
-                    <li class="flex justify-center relative">
-                        <span class="absolute">10</span>
-                    </li>
-                </ul>
+    <SettingsSection title={$LL.menu.settings.proximityDiscussionVolume()}>
+        {#snippet icon()}<IconAdjustements />{/snippet}
+        <div class="flex items-center gap-4">
+            <span class="w-8 shrink-0 text-xs text-white/50">0 %</span>
+            <div class="grow">
                 <RangeSlider
                     min={0}
                     max={1}
@@ -670,16 +528,17 @@
                     onchange={updateVolumeProximityDiscussion}
                 />
             </div>
+            <span class="w-12 shrink-0 text-end text-sm font-bold text-white tabular-nums">
+                {Math.round(volumeProximityDiscussion * 100)} %
+            </span>
         </div>
-    </section>
-    <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconLanguage /></div>
-            {$LL.menu.settings.language.title()}
-        </div>
-        <div class="mt-2 p-2">
+    </SettingsSection>
+
+    <SettingsSection title={$LL.menu.settings.language.title()}>
+        {#snippet icon()}<IconLanguage />{/snippet}
+        <div>
             <select
-                class="w-full languages-switcher bg-contrast rounded border border-solid border-white/20 mb-0"
+                class="languages-switcher m-0 w-full rounded-lg border border-solid border-white/15 bg-black/30 px-3 py-2 text-sm text-white hover:border-white/30 focus:border-secondary focus:outline-none"
                 bind:value={valueLocale}
                 onchange={updateLocale}
             >
@@ -692,19 +551,14 @@
                 {/each}
             </select>
         </div>
-    </section>
-    <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
-        <div class="tooltip">
-            <div class="group bg-contrast font-bold text-lg p-4 flex items-center relative">
-                <div class="me-4 opacity-50"><IconDoorExit /></div>
-                <div class="grow">
-                    <div>{$LL.menu.settings.privacySettings.title()}</div>
-                    <div class="text-sm italic text-white/50">{$LL.menu.settings.privacySettings.explanation()}</div>
-                </div>
-            </div>
-        </div>
+    </SettingsSection>
 
-        <div class="flex cursor-pointer items-center relative m-4">
+    <SettingsSection
+        title={$LL.menu.settings.privacySettings.title()}
+        description={$LL.menu.settings.privacySettings.explanation()}
+    >
+        {#snippet icon()}<IconDoorExit />{/snippet}
+        <div>
             <InputSwitch
                 id="cam-toggle"
                 bind:value={valueCameraPrivacySettings}
@@ -712,8 +566,7 @@
                 label={$LL.menu.settings.privacySettings.cameraToggle()}
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="mic-toggle"
                 bind:value={valueMicrophonePrivacySettings}
@@ -721,15 +574,13 @@
                 label={$LL.menu.settings.privacySettings.microphoneToggle()}
             />
         </div>
-    </section>
-    <SpotifySettings />
-    <section class="flex flex-col p-0 first:pt-0 pt-8 m-0">
-        <div class="bg-contrast font-bold text-lg p-4 flex items-center">
-            <div class="me-4 opacity-50"><IconAdjustements /></div>
-            {$LL.menu.settings.otherSettings()}
-        </div>
+    </SettingsSection>
 
-        <div class="mt-2 p-2">
+    <SpotifySettings />
+
+    <SettingsSection title={$LL.menu.settings.otherSettings()}>
+        {#snippet icon()}<IconAdjustements />{/snippet}
+        <div>
             <SoundSelect
                 id="bubble-sound"
                 bind:value={valueBubbleSound}
@@ -743,8 +594,7 @@
                 playLabel="▶"
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="fullscreen-toggle"
                 bind:value={fullscreen}
@@ -752,7 +602,7 @@
                 label={$LL.menu.settings.fullscreen()}
             />
         </div>
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="notification-toggle"
                 bind:value={notification}
@@ -760,7 +610,7 @@
                 label={$LL.menu.settings.notifications()}
             />
         </div>
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="picture-in-picture-toggle"
                 bind:value={allowPictureInPicture}
@@ -768,7 +618,7 @@
                 label={$LL.menu.settings.enablePictureInPicture()}
             />
         </div>
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="cowebsiteTrigger-toggle"
                 bind:value={forceCowebsiteTrigger}
@@ -776,16 +626,15 @@
                 label={$LL.menu.settings.cowebsiteTrigger()}
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
-                id="cowebsiteTrigger-toggle"
+                id="ignoreFollowRequests-toggle"
                 bind:value={ignoreFollowRequests}
                 onchange={changeIgnoreFollowRequests}
                 label={$LL.menu.settings.ignoreFollowRequest()}
             />
         </div>
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="decreaseAudioPlayerVolumeWhileTalking-toggle"
                 bind:value={decreaseAudioPlayerVolumeWhileTalking}
@@ -793,8 +642,7 @@
                 label={$LL.audio.manager.reduce()}
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="changeBlockAudio"
                 bind:value={blockAudio}
@@ -802,8 +650,7 @@
                 label={$LL.menu.settings.blockAudio()}
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="changeDisableAnimations"
                 bind:value={disableAnimations}
@@ -811,8 +658,7 @@
                 label={$LL.menu.settings.disableAnimations()}
             />
         </div>
-
-        <div class="flex cursor-pointer items-center relative m-4">
+        <div>
             <InputSwitch
                 id="changeVideoQualityStats"
                 bind:value={videoQualityStats}
@@ -820,7 +666,7 @@
                 label={$LL.menu.settings.displayVideoQualityStats()}
             />
         </div>
-    </section>
+    </SettingsSection>
 </div>
 
 <style>

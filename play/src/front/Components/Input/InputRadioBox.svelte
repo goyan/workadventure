@@ -32,11 +32,11 @@
     <label
         for={uniqueId}
         data-testid={dataTestId}
-        class="inline-flex items-center justify-between w-full h-full p-5 text-white bg-transparent border border-solid border-white rounded-lg cursor-pointer opacity-50 peer-checked:bg-white/10 peer-checked:opacity-100 hover:bg-white/10 bg-no-repeat bg-[center_left_1rem] pl-14 min-w-[170px]"
+        class="inline-flex items-start w-full h-full p-4 ps-12 text-start text-white bg-white/[0.03] border border-solid border-white/15 rounded-lg cursor-pointer transition-colors hover:border-white/30 hover:bg-white/5 peer-checked:border-secondary peer-checked:bg-secondary/10 bg-no-repeat bg-[top_1.05rem_left_1rem] min-w-[170px]"
     >
-        <div class="flex flex-col">
-            <div class="w-full text-lg font-semibold">{label}</div>
-            <div>
+        <div class="flex flex-col gap-1">
+            <div class="w-full text-sm font-bold">{label}</div>
+            <div class="text-sm font-normal text-white/60">
                 {@render children?.()}
             </div>
         </div>

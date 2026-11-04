@@ -12,6 +12,7 @@
     import InputSwitch from "../Input/InputSwitch.svelte";
     import Input from "../Input/Input.svelte";
     import Button from "../UI/Button.svelte";
+    import SettingsSection from "./SettingsSection.svelte";
     import { IconBrandSpotify } from "@wa-icons";
 
     const linked = spotifyAccount.linked;
@@ -72,16 +73,14 @@
     }
 </script>
 
-<section bind:this={section} class="flex flex-col p-0 first:pt-0 pt-8 m-0" data-testid="spotify-settings">
-    <div class="group bg-contrast font-bold text-lg p-4 flex items-center relative">
-        <div class="me-4 opacity-50"><IconBrandSpotify /></div>
-        <div class="grow">
-            <div>{$LL.spotify.settings.title()}</div>
-            <div class="text-sm italic text-white/50">{$LL.spotify.settings.description()}</div>
-        </div>
-    </div>
-
-    <div class="flex flex-col gap-3 m-4">
+<SettingsSection
+    title={$LL.spotify.settings.title()}
+    description={$LL.spotify.settings.description()}
+    bind:element={section}
+    dataTestId="spotify-settings"
+>
+    {#snippet icon()}<IconBrandSpotify />{/snippet}
+    <div class="flex flex-col gap-3">
         {#if readsLocalPlayer}
             <p class="text-sm text-white/75 m-0" data-testid="spotify-desktop-detected">
                 {$LL.spotify.settings.desktopDetected()}
@@ -163,4 +162,4 @@
             {/if}
         {/if}
     </div>
-</section>
+</SettingsSection>
