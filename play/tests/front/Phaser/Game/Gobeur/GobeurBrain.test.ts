@@ -144,6 +144,7 @@ describe("GobeurBrain", () => {
             let last = before;
             for (let i = 1; i <= 25; i++) {
                 last = brain.update(i * 40, 40, t);
+                await flush();
             }
             const moved = Math.hypot(last.x - before.x, last.y - before.y);
             expect(Math.abs(moved - SPEED * GOBEUR_LEVELS[level].speedFactor)).toBeLessThanOrEqual(2);
@@ -165,6 +166,39 @@ describe("GobeurBrain", () => {
         };
         expect(await run("hard")).toBe("a");
         expect(await run("intermediate")).toBe("b");
+    });
+
+    it("stops walking the chase path when its target becomes safe", async () => {
+        const brain = makeBrain("intermediate");
+        const a = target("a", { x: 18, y: 10 });
+        await settle(brain, 0, [a]);
+        let pose = brain.update(0, 0, [a]);
+        for (let now = 40; now < 800; now += 40) {
+            pose = brain.update(now, 40, [a]);
+        }
+        const safeA = { ...a, safe: true };
+        const atRepath = brain.update(800, 40, [safeA]);
+        expect(brain.targetUuid).toBeUndefined();
+        for (let now = 840; now < 2000; now += 40) {
+            pose = brain.update(now, 40, [safeA]);
+        }
+        expect(pose.x).toBe(atRepath.x);
+        expect(pose.y).toBe(atRepath.y);
+    });
+
+    it("does not step back when a repath result is applied", async () => {
+        const brain = makeBrain("intermediate");
+        const a = target("a", { x: 18, y: 10 });
+        await settle(brain, 0, [a]);
+        for (let now = 40; now <= 120; now += 40) {
+            brain.update(now, 40, [a]);
+        }
+        brain.update(800, 0, [a]); // starts a repath from here
+        const moved = brain.update(840, 40, [a]); // moves while the search is pending
+        await flush();
+        const applied = brain.update(840, 0, [a]);
+        expect(applied.x).toBeGreaterThanOrEqual(moved.x);
+        expect(applied.direction).toBe("right");
     });
 
     it("stays within 5 tiles of its start for 30 s without target", async () => {

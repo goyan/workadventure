@@ -89,7 +89,7 @@ export class GobeurBrain {
         this.pending = undefined;
         if (request.uuid === undefined) {
             if (this.currentTarget === undefined) {
-                this.path = request.result;
+                this.path = this.dropWaypointsBehind(request.result);
             }
             return;
         }
@@ -103,7 +103,25 @@ export class GobeurBrain {
             this.path = [];
             return;
         }
-        this.path = request.result;
+        this.path = this.dropWaypointsBehind(request.result);
+    }
+
+    /**
+     * The path starts where the Gobeur was when it was requested; it has moved since. Drop the leading waypoints it
+     * has already passed so it does not step back.
+     */
+    private dropWaypointsBehind(path: Point[]): Point[] {
+        let first = 0;
+        while (first < path.length - 1) {
+            const a = path[first];
+            const b = path[first + 1];
+            if ((b.x - a.x) * (this.x - a.x) + (b.y - a.y) * (this.y - a.y) > 0) {
+                first++;
+            } else {
+                break;
+            }
+        }
+        return path.slice(first);
     }
 
     private maybeRepath(now: number, targets: GobeurTarget[]): void {
@@ -117,6 +135,10 @@ export class GobeurBrain {
             this.lastRepathAt = now;
             this.request(chosen.uuid, { x: chosen.x, y: chosen.y });
             return;
+        }
+        if (this.currentTarget !== undefined) {
+            // The target is lost (safe, out of range, gone): stop walking the chase path.
+            this.path = [];
         }
         this.currentTarget = undefined;
         // Wandering: only pick a new destination once the previous one is reached.
