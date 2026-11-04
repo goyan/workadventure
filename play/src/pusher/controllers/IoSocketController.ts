@@ -438,6 +438,7 @@ export class IoSocketController {
                         userUuid: userData.userUuid,
                         isLogged,
                         ipAddress,
+                        userAgent: request.userAgent,
                         characterTextures,
                         companionTexture,
                         lastCommandId,

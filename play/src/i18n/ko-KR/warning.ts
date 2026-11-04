@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "이 방을 다른 탭, 다른 브라우저 또는 데스크톱 앱에서 열었습니다. 계정당 방에는 하나의 세션만 유지됩니다.",
         takeBack: "여기서 다시 가져오기",
+        details:
+            "{time}에 가져감\nIP 주소: {ipAddress}\n브라우저: {userAgent}\n탭: {newTabId} (이 탭: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 지원되지 않는 브라우저",

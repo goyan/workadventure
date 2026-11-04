@@ -11,7 +11,7 @@ import {
 } from "@workadventure/messages";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
-import { privateMessageEventName } from "@workadventure/shared-utils";
+import { parseSessionReplacedDetails, privateMessageEventName } from "@workadventure/shared-utils";
 import { mock } from "vitest-mock-extended";
 import type { ConnectCallback, DisconnectCallback } from "../src/Model/GameRoom";
 import { GameRoom } from "../src/Model/GameRoom";
@@ -58,7 +58,7 @@ function createJoinRoomMessage(uuid: string, x: number, y: number, tabId?: strin
 }
 
 function createLoggedJoinRoomMessage(uuid: string, tabId: string): JoinRoomMessage {
-    return { ...createJoinRoomMessage(uuid, 100, 100, tabId), isLogged: true };
+    return { ...createJoinRoomMessage(uuid, 100, 100, tabId), isLogged: true, userAgent: `agent-${tabId}` };
 }
 
 function flushPendingMessages(user: User): void {
@@ -530,14 +530,24 @@ describe("GameRoom", () => {
         const secondUser = await world.join(secondSocket.socket, createLoggedJoinRoomMessage("logged-user", "tab-2"));
 
         expect(firstSocket.end).toHaveBeenCalledTimes(1);
-        expect(firstSocket.write).toHaveBeenCalledWith({
-            message: {
-                $case: "errorScreenMessage",
-                errorScreenMessage: ErrorScreenMessage.fromPartial({
-                    type: "sessionReplaced",
-                    code: "sessionReplaced",
-                }),
-            },
+        const replacedMessage = vi
+            .mocked(firstSocket.write)
+            .mock.calls.map(
+                ([written]) => written as { message?: { $case: string; errorScreenMessage?: ErrorScreenMessage } },
+            )
+            .find((written) => written.message?.$case === "errorScreenMessage");
+        const { details, ...errorScreen } = replacedMessage?.message?.errorScreenMessage ?? {};
+        expect(errorScreen).toEqual(
+            ErrorScreenMessage.fromPartial({ type: "sessionReplaced", code: "sessionReplaced", details: undefined }),
+        );
+        // Who took the place: the new session, as seen by the pusher.
+        const parsedDetails = parseSessionReplacedDetails(details);
+        expect(parsedDetails?.replacedAt).toBeGreaterThan(0);
+        expect(parsedDetails).toMatchObject({
+            ipAddress: "10.0.0.2",
+            userAgent: "agent-tab-2",
+            replacedTabId: "tab-1",
+            newTabId: "tab-2",
         });
         expect([...world.getUsersByUuid("logged-user")]).toEqual([secondUser]);
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseSpotifyContextUri } from "../../common/SpotifyListening";
 import type { SpotifyTrack } from "./SpotifyPlayerApi";
 
 /**
@@ -26,7 +27,13 @@ const DesktopSpotifyTrack = z
         source: z.enum(["spotify", "apple-music"]).optional(),
         positionMs: z.number().int().nonnegative().optional(),
         positionAt: z.number().positive().optional(),
+        contextUri: z.string().optional(),
+        contextName: z.string().optional(),
     })
+    // An artist, a radio or the liked songs are contexts too: the track stays, only a playlist or an album is shared.
+    .transform(({ contextUri, contextName, ...track }) =>
+        contextUri !== undefined && parseSpotifyContextUri(contextUri) ? { ...track, contextUri, contextName } : track,
+    )
     .nullable();
 
 /** The Spotify app of this computer, through the desktop app; undefined in a browser or an older desktop app. */

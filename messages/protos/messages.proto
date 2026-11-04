@@ -1755,6 +1755,8 @@ message JoinRoomMessage {
   // and kill stale connections immediately instead of waiting for ping timeout
   //TODO : remove the optional when the tabId is always present in the query string (next version of the app )
   optional string tabId = 19;
+  // User-Agent of the WebSocket upgrade, shown to a session this join replaces (who took the place).
+  string userAgent = 20;
 }
 
 message UserJoinedZoneMessage {
@@ -2110,6 +2112,10 @@ message SpotifyListening {
   // deduce where the track is now, to listen along. Both 0 when unknown (older clients).
   uint32 positionMs = 9;
   double positionAt = 10;
+  // What the track plays from, when it is a playlist or an album (spotify:playlist:<id> or spotify:album:<id>), and
+  // its name: others can open it. Both empty otherwise.
+  string contextUri = 11;
+  string contextName = 12;
 }
 
 /*message PartialSpaceUser{

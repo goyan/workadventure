@@ -23,6 +23,7 @@ type UpgradeContext<TQuery> = {
         url: string;
         ipAddress: string;
         locale: string;
+        userAgent: string;
         token: string;
     };
     isAborted: () => boolean;
@@ -226,6 +227,7 @@ export class PusherRoomSocketController {
                             url: req.getUrl(),
                             ipAddress,
                             locale: req.getHeader("accept-language"),
+                            userAgent: req.getHeader("user-agent"),
                             token: websocketProtocol,
                         },
                         isAborted: () => upgradeAborted.aborted,

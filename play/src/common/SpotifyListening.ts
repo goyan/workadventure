@@ -11,6 +11,8 @@ export const EMPTY_SPOTIFY_LISTENING: SpotifyListening = {
     source: "",
     positionMs: 0,
     positionAt: 0,
+    contextUri: "",
+    contextName: "",
 };
 
 /** The players a track can come from; any other value is dropped. */
@@ -58,6 +60,21 @@ export function spotifyTrackUri(trackUrl: string): string | undefined {
     return id && /^[A-Za-z0-9]+$/.test(id) ? `spotify:track:${id}` : undefined;
 }
 
+/** The kinds of context others can open: a playlist or an album (not an artist, a radio or the liked songs). */
+export type SpotifyContextType = "playlist" | "album";
+
+/** The playlist or album a track plays from, from `spotify:playlist:<id>` / `spotify:album:<id>`; undefined otherwise. */
+export function parseSpotifyContextUri(uri: string): { type: SpotifyContextType; id: string } | undefined {
+    const match = /^spotify:(playlist|album):([A-Za-z0-9]+)$/.exec(uri);
+    return match ? { type: match[1] as SpotifyContextType, id: match[2] } : undefined;
+}
+
+/** The page of the playlist or album, to open it; undefined for any other context. */
+export function spotifyContextUrl(uri: string): string | undefined {
+    const context = parseSpotifyContextUri(uri);
+    return context ? `https://open.spotify.com/${context.type}/${context.id}` : undefined;
+}
+
 /** Where the shared track is at `now`, deduced from the last reported position; undefined when unknown. */
 export function currentPositionMs(listening: SpotifyListening, now: number): number | undefined {
     if (listening.positionAt === 0) {
@@ -84,7 +101,19 @@ export function sanitizeSpotifyListening(value: SpotifyListening | undefined): S
         source: isListeningSource(value.source) ? value.source : "",
         positionMs: Math.min(Math.max(Math.round(value.positionMs), 0), MAX_POSITION_MS),
         positionAt: Number.isFinite(value.positionAt) && value.positionAt > 0 ? value.positionAt : 0,
+        ...sanitizeContext(value.contextUri, value.contextName),
     };
+}
+
+/** A name without a context to open is dropped too: the card shows them together. */
+function sanitizeContext(
+    contextUri: string,
+    contextName: string,
+): Pick<SpotifyListening, "contextUri" | "contextName"> {
+    if (!parseSpotifyContextUri(contextUri)) {
+        return { contextUri: "", contextName: "" };
+    }
+    return { contextUri, contextName: contextName.slice(0, MAX_TEXT_LENGTH) };
 }
 
 export function isPlayingTrack(listening: SpotifyListening | undefined): listening is SpotifyListening {

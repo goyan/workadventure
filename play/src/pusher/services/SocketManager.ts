@@ -411,6 +411,7 @@ export class SocketManager implements ZoneEventListener {
             const joinRoomMessage: JoinRoomMessage = {
                 userUuid: socketData.userUuid,
                 IPAddress: socketData.ipAddress,
+                userAgent: socketData.userAgent,
                 name: socketData.name,
                 availabilityStatus: socketData.availabilityStatus,
                 positionMessage: message.positionMessage,

@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Je hebt deze ruimte geopend in een ander tabblad, een andere browser of de desktop-app. Per account blijft er maar één sessie in de ruimte.",
         takeBack: "Hier terugnemen",
+        details:
+            "Overgenomen op {time}\nIP-adres: {ipAddress}\nBrowser: {userAgent}\nTabblad: {newTabId} (dit: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Browser niet ondersteund",

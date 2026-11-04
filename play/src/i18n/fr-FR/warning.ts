@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Vous avez ouvert cette salle dans un autre onglet, un autre navigateur ou l'app desktop. Un compte ne garde qu'une session dans la salle.",
         takeBack: "Reprendre ici",
+        details:
+            "Prise le {time}\nAdresse IP : {ipAddress}\nNavigateur : {userAgent}\nOnglet : {newTabId} (celui-ci : {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Navigateur non supporté",

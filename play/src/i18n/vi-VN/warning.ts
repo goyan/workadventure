@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Bạn đã mở phòng này trong một tab khác, trình duyệt khác hoặc ứng dụng máy tính. Mỗi tài khoản chỉ giữ một phiên trong phòng.",
         takeBack: "Lấy lại tại đây",
+        details:
+            "Bị lấy lúc {time}\nĐịa chỉ IP: {ipAddress}\nTrình duyệt: {userAgent}\nTab: {newTabId} (tab này: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Trình duyệt không được hỗ trợ",

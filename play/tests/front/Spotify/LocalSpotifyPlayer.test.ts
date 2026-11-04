@@ -38,4 +38,23 @@ describe("desktopSpotifyPlayer", () => {
         ]);
         expect(stop).toHaveBeenCalledOnce();
     });
+
+    it("passes the playlist a track plays from, and only the track for another kind of context", () => {
+        let send: ((track: DesktopSpotifyTrack | null) => void) | undefined;
+        withDesktopApp((callback) => {
+            send = callback;
+            return vi.fn();
+        });
+        const onTrack = vi.fn();
+        const track = { title: "Song", artist: "Artist", url: "https://open.spotify.com/track/abc" };
+
+        desktopSpotifyPlayer()?.watch(onTrack);
+        send?.({ ...track, contextUri: "spotify:playlist:abc", contextName: "Focus" });
+        send?.({ ...track, contextUri: "spotify:artist:abc", contextName: "Artist radio" });
+
+        expect(onTrack.mock.calls).toEqual([
+            [{ ...track, contextUri: "spotify:playlist:abc", contextName: "Focus" }],
+            [track],
+        ]);
+    });
 });

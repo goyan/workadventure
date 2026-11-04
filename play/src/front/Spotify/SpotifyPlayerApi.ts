@@ -14,6 +14,9 @@ export interface SpotifyTrack {
     /** Position in the track (ms) at `positionAt` (ms since the epoch), to listen along; absent when unknown. */
     positionMs?: number;
     positionAt?: number;
+    /** The playlist or album it plays from (`spotify:playlist:<id>` / `spotify:album:<id>`) and its name. */
+    contextUri?: string;
+    contextName?: string;
 }
 
 /**

@@ -24,6 +24,9 @@ export interface DesktopSpotifyTrack {
     /** Position in the track (ms) at `positionAt` (ms since the epoch); absent when the player does not tell. */
     positionMs?: number;
     positionAt?: number;
+    /** The playlist or album it plays from (spotify:playlist:… or spotify:album:…) and its name; absent otherwise. */
+    contextUri?: string;
+    contextName?: string;
 }
 
 /** A track to play on the Spotify app of this computer, at a position: listening along with another user. */

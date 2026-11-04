@@ -5,6 +5,7 @@ import {
     currentPositionMs,
     EMPTY_SPOTIFY_LISTENING,
     sanitizeSpotifyListening,
+    spotifyContextUrl,
     spotifyTrackUri,
 } from "../../../src/common/SpotifyListening";
 import type { DesktopFollowTarget } from "../../../src/front/Interfaces/DesktopAppInterfaces";
@@ -126,5 +127,31 @@ describe("listening position", () => {
         const sanitized = sanitizeSpotifyListening({ ...listening("abc", -5, Number.NaN) });
         expect(sanitized).toMatchObject({ positionMs: 0, positionAt: 0 });
         expect(sanitizeSpotifyListening(listening("abc", 1e12, 5)).positionMs).toBe(24 * 60 * 60 * 1000);
+    });
+});
+
+describe("listening context", () => {
+    it("keeps a playlist or an album others can open, and drops any other context with its name", () => {
+        const withContext = (contextUri: string) =>
+            sanitizeSpotifyListening({ ...listening("abc", 0, 0), contextUri, contextName: "Focus" });
+
+        expect(withContext("spotify:playlist:37i9dQZF1DX8Uebhn9wzrS")).toMatchObject({
+            contextUri: "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+            contextName: "Focus",
+        });
+        expect(withContext("spotify:album:4aawyAB9vmqN3uQ7FjRGTy").contextUri).toBe(
+            "spotify:album:4aawyAB9vmqN3uQ7FjRGTy",
+        );
+        for (const uri of ["spotify:artist:abc", "spotify:user:me:collection", "https://evil.example", ""]) {
+            expect(withContext(uri)).toMatchObject({ contextUri: "", contextName: "" });
+        }
+    });
+
+    it("links to the page of the playlist or album", () => {
+        expect(spotifyContextUrl("spotify:playlist:37i9dQZF1DX8Uebhn9wzrS")).toBe(
+            "https://open.spotify.com/playlist/37i9dQZF1DX8Uebhn9wzrS",
+        );
+        expect(spotifyContextUrl("spotify:album:abc")).toBe("https://open.spotify.com/album/abc");
+        expect(spotifyContextUrl("spotify:artist:abc")).toBeUndefined();
     });
 });

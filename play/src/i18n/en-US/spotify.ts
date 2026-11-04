@@ -43,6 +43,8 @@ const spotify: BaseTranslation = {
         listenToo: "Listen too",
         listenAlong: "Listen along",
         stopListeningAlong: "Stop listening along",
+        playlist: "Playlist: {name}",
+        album: "Album: {name}",
     },
     userList: {
         jam: "Jam · {area}",

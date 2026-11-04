@@ -6,6 +6,7 @@ import type { AreaData, AtLeast, EntityDimensions, WAMEntityData } from "@workad
 import {
     Deferred,
     SESSION_REPLACED_ERROR_TYPE,
+    parseSessionReplacedDetails,
     privateMessageEventName,
     privateMessageRequestSchema,
 } from "@workadventure/shared-utils";
@@ -740,11 +741,21 @@ export class RoomConnection implements RoomConnection {
                         window.location.assign(message.errorScreenMessage.urlToRedirect);
                     } else if (message.errorScreenMessage.type === SESSION_REPLACED_ERROR_TYPE) {
                         // The back sends no text: it has no translations.
+                        const details = parseSessionReplacedDetails(message.errorScreenMessage.details);
                         errorScreenStore.setError({
                             ...message.errorScreenMessage,
                             title: get(LL).warning.sessionReplaced.title(),
                             subtitle: get(LL).warning.sessionReplaced.message(),
                             buttonTitle: get(LL).warning.sessionReplaced.takeBack(),
+                            details: details
+                                ? get(LL).warning.sessionReplaced.details({
+                                      time: new Date(details.replacedAt).toLocaleString(),
+                                      ipAddress: details.ipAddress || "?",
+                                      userAgent: details.userAgent || "?",
+                                      newTabId: details.newTabId || "?",
+                                      replacedTabId: details.replacedTabId || "?",
+                                  })
+                                : undefined,
                         });
                     } else {
                         errorScreenStore.setError(message.errorScreenMessage);

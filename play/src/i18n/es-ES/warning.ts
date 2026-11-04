@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Has abierto esta sala en otra pestaña, otro navegador o la aplicación de escritorio. Cada cuenta conserva una sola sesión en la sala.",
         takeBack: "Recuperarla aquí",
+        details:
+            "Tomada el {time}\nDirección IP: {ipAddress}\nNavegador: {userAgent}\nPestaña: {newTabId} (esta: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Navegador no compatible",

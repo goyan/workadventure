@@ -38,6 +38,8 @@ const warning: BaseTranslation = {
         message:
             "Você abriu esta sala em outra aba, outro navegador ou no aplicativo desktop. Cada conta mantém apenas uma sessão na sala.",
         takeBack: "Retomar aqui",
+        details:
+            "Assumida em {time}\nEndereço IP: {ipAddress}\nNavegador: {userAgent}\nAba: {newTabId} (esta: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Navegador não suportado",

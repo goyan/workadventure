@@ -483,6 +483,7 @@ function createSocket(overrides: Partial<SocketData> = {}): RawSocket {
         userUuid: "user-uuid",
         isLogged: true,
         ipAddress: "127.0.0.1",
+        userAgent: "test-agent",
         characterTextures: [],
         companionTexture: undefined,
         lastCommandId: undefined,
