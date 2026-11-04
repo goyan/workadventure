@@ -37,6 +37,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         title: "工作階段已在別處開啟",
         message: "你已在另一個分頁、另一個瀏覽器或桌面應用程式中開啟此房間。每個帳號在房間中只保留一個工作階段。",
         takeBack: "在此處恢復",
+        details:
+            "接管時間：{time}\nIP 位址：{ipAddress}\n瀏覽器：{userAgent}\n分頁：{newTabId}（目前：{replacedTabId}）",
     },
     browserNotSupported: {
         title: "😢 不支援的瀏覽器",

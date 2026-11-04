@@ -37,6 +37,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         title: "会话已在别处打开",
         message: "你已在另一个标签页、另一个浏览器或桌面应用中打开了此房间。每个账号在房间中只保留一个会话。",
         takeBack: "在此处恢复",
+        details:
+            "接管时间：{time}\nIP 地址：{ipAddress}\n浏览器：{userAgent}\n标签页：{newTabId}（当前：{replacedTabId}）",
     },
     browserNotSupported: {
         title: "😢 不支持的浏览器",

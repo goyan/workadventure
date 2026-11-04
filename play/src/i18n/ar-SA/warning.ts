@@ -39,6 +39,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "لقد فتحت هذه الغرفة في علامة تبويب أخرى أو متصفح آخر أو تطبيق سطح المكتب. يحتفظ كل حساب بجلسة واحدة فقط في الغرفة.",
         takeBack: "استعادتها هنا",
+        details:
+            "تم الاستيلاء عليها في {time}\nعنوان IP: {ipAddress}\nالمتصفح: {userAgent}\nعلامة التبويب: {newTabId} (هذه: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 المتصفح غير مدعوم",

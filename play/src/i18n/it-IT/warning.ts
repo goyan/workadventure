@@ -40,6 +40,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Hai aperto questa stanza in un'altra scheda, un altro browser o nell'app desktop. Ogni account mantiene una sola sessione nella stanza.",
         takeBack: "Riprendila qui",
+        details:
+            "Presa il {time}\nIndirizzo IP: {ipAddress}\nBrowser: {userAgent}\nScheda: {newTabId} (questa: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Browser non supportato",

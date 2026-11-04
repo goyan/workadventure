@@ -40,6 +40,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "このルームを別のタブ、別のブラウザ、またはデスクトップアプリで開きました。1つのアカウントにつきルーム内のセッションは1つだけです。",
         takeBack: "ここで再開する",
+        details:
+            "{time} に引き継がれました\nIP アドレス: {ipAddress}\nブラウザ: {userAgent}\nタブ: {newTabId}（このタブ: {replacedTabId}）",
     },
     browserNotSupported: {
         title: "😢 サポートされていないブラウザ",

@@ -34,6 +34,7 @@ import {
     Jitsi,
     type Movable,
     SESSION_REPLACED_ERROR_TYPE,
+    type SessionReplacedDetails,
     SpatialMap,
     privateMessageEventName,
 } from "@workadventure/shared-utils";
@@ -345,7 +346,7 @@ export class GameRoom implements BrothersFinder {
         // A logged user keeps one avatar per room: the latest session replaces the others (other tab,
         // browser or desktop app). Anonymous uuids come from localStorage, so they keep the warning below.
         if (joinRoomMessage.isLogged) {
-            this.replaceOtherSessions(joinRoomMessage.userUuid);
+            this.replaceOtherSessions(joinRoomMessage);
         }
 
         // Same-tab reconnections should not be reported as duplicate sessions.
@@ -416,16 +417,27 @@ export class GameRoom implements BrothersFinder {
      * reconnection), so two open tabs cannot take the place from each other in a loop: only a click on
      * "take back here" does.
      */
-    private replaceOtherSessions(userUuid: string): void {
+    private replaceOtherSessions(joinRoomMessage: JoinRoomMessage): void {
+        const userUuid = joinRoomMessage.userUuid;
         for (const existingUser of [...this.getUsersByUuid(userUuid)]) {
-            console.info(`New session for user ${userUuid}. Replacing the previous one.`);
+            console.info(
+                `New session for user ${userUuid}. Replacing the previous one (tab ${existingUser.tabId ?? "?"} replaced by tab ${joinRoomMessage.tabId ?? "?"}, IP ${joinRoomMessage.IPAddress}, User-Agent ${joinRoomMessage.userAgent}).`,
+            );
             if (existingUser.socket.writable) {
+                const details: SessionReplacedDetails = {
+                    replacedAt: Date.now(),
+                    ipAddress: joinRoomMessage.IPAddress,
+                    userAgent: joinRoomMessage.userAgent,
+                    replacedTabId: existingUser.tabId ?? "",
+                    newTabId: joinRoomMessage.tabId ?? "",
+                };
                 existingUser.socket.write({
                     message: {
                         $case: "errorScreenMessage",
                         errorScreenMessage: ErrorScreenMessage.fromPartial({
                             type: SESSION_REPLACED_ERROR_TYPE,
                             code: SESSION_REPLACED_ERROR_TYPE,
+                            details: JSON.stringify(details),
                         }),
                     },
                 });

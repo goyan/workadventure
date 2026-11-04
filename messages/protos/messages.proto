@@ -1755,6 +1755,8 @@ message JoinRoomMessage {
   // and kill stale connections immediately instead of waiting for ping timeout
   //TODO : remove the optional when the tabId is always present in the query string (next version of the app )
   optional string tabId = 19;
+  // User-Agent of the WebSocket upgrade, shown to a session this join replaces (who took the place).
+  string userAgent = 20;
 }
 
 message UserJoinedZoneMessage {

@@ -33,6 +33,7 @@ export type ConnectingSocketData = {
     userUuid: string; // Admin UUID
     isLogged: boolean;
     ipAddress: string;
+    userAgent: string;
     characterTextures: CharacterTextureMessage[];
     companionTexture?: CompanionTextureMessage;
     lastCommandId?: string;

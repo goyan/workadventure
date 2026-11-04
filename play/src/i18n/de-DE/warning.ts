@@ -40,6 +40,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         message:
             "Du hast diesen Raum in einem anderen Tab, Browser oder in der Desktop-App geöffnet. Pro Konto bleibt nur eine Sitzung im Raum.",
         takeBack: "Hier zurückholen",
+        details:
+            "Übernommen am {time}\nIP-Adresse: {ipAddress}\nBrowser: {userAgent}\nTab: {newTabId} (dieser: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Browser wird nicht unterstützt",

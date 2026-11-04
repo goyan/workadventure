@@ -38,6 +38,8 @@ const warning: DeepPartial<Translation["warning"]> = {
         title: "เปิดเซสชันที่อื่นแล้ว",
         message: "คุณเปิดห้องนี้ในแท็บอื่น เบราว์เซอร์อื่น หรือแอปเดสก์ท็อป แต่ละบัญชีจะมีได้เพียงหนึ่งเซสชันในห้อง",
         takeBack: "นำกลับมาที่นี่",
+        details:
+            "ถูกนำไปเมื่อ {time}\nที่อยู่ IP: {ipAddress}\nเบราว์เซอร์: {userAgent}\nแท็บ: {newTabId} (แท็บนี้: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 เบราว์เซอร์ไม่รองรับ",

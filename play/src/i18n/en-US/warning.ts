@@ -38,6 +38,8 @@ const warning: BaseTranslation = {
         message:
             "You opened this room in another tab, browser or the desktop app. Only one session per account stays in the room.",
         takeBack: "Take it back here",
+        details:
+            "Taken on {time}\nIP address: {ipAddress}\nBrowser: {userAgent}\nTab: {newTabId} (this one: {replacedTabId})",
     },
     browserNotSupported: {
         title: "😢 Browser Not Supported",
