@@ -110,8 +110,8 @@ describe("SpotifyListeningSharer", () => {
     });
 
     describe("with the Spotify app of this computer (desktop app)", () => {
-        function createLocalHarness() {
-            const linked = writable(false);
+        function createLocalHarness(options: { linked?: boolean } = {}) {
+            const linked = writable(options.linked ?? false);
             const sharing = writable(true);
             const published: SpotifyListening[] = [];
             const fetchTrack = vi
@@ -138,7 +138,7 @@ describe("SpotifyListeningSharer", () => {
                 { watch },
             );
             const play = (track: SpotifyTrack | undefined) => onTrack?.(track);
-            return { sharer, sharing, published, fetchTrack, watch, stopWatching, play };
+            return { sharer, linked, sharing, published, fetchTrack, watch, stopWatching, play };
         }
 
         it("shares without a linked account, and never calls the Web API", async () => {
@@ -162,6 +162,37 @@ describe("SpotifyListeningSharer", () => {
             expect(stopWatching).toHaveBeenCalledOnce();
             sharing.set(true);
             expect(watch).toHaveBeenCalledTimes(2);
+            sharer.destroy();
+        });
+
+        it("also reads a linked account, for music played on another device", async () => {
+            const { sharer, published, fetchTrack, play } = createLocalHarness({ linked: true });
+
+            await vi.advanceTimersByTimeAsync(0);
+            expect(published.at(-1)).toMatchObject({ trackTitle: "Song", artistName: "Artist" });
+
+            play({ title: "Local song", artist: "Band", url: "https://open.spotify.com/track/xyz" });
+            expect(published.at(-1)).toMatchObject({ trackTitle: "Local song", artistName: "Band" });
+
+            play(undefined);
+            expect(published.at(-1)).toMatchObject({ trackTitle: "Song", artistName: "Artist" });
+            expect(fetchTrack).toHaveBeenCalled();
+            sharer.destroy();
+        });
+
+        it("starts reading the account linked while sharing, and stops when it is unlinked", async () => {
+            const { sharer, linked, published, fetchTrack } = createLocalHarness();
+            await vi.advanceTimersByTimeAsync(POLL_MS);
+            expect(fetchTrack).not.toHaveBeenCalled();
+
+            linked.set(true);
+            await vi.advanceTimersByTimeAsync(0);
+            expect(published.at(-1)?.trackTitle).toBe("Song");
+
+            linked.set(false);
+            await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+            expect(published.at(-1)?.trackTitle).toBe("");
+            expect(fetchTrack).toHaveBeenCalledTimes(1);
             sharer.destroy();
         });
     });

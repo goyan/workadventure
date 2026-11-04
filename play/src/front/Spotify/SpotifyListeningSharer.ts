@@ -13,11 +13,14 @@ const ACCESS_DENIED_POLL_INTERVAL_MS = 5 * 60_000;
 
 /**
  * Publishes what the local user listens to (when sharing) and the Jam they joined, as their `spotifyListening` in
- * the world space. The track comes from the Spotify app of this computer when the desktop app can read it
- * (`localPlayer`), otherwise from the Web API of a linked account.
+ * the world space. Both sources are read when available: the Spotify or Music app of this computer, through the
+ * desktop app (`localPlayer`), and the Web API of a linked account, which also sees a phone, the web player or a
+ * speaker. The local player wins while it plays: it is read more often.
  */
 export class SpotifyListeningSharer {
-    private track: SpotifyTrack | undefined;
+    private localTrack: SpotifyTrack | undefined;
+    private apiTrack: SpotifyTrack | undefined;
+    private polling = false;
     private jam: JoinedJam | undefined;
     private published: SpotifyListening = EMPTY_SPOTIFY_LISTENING;
     // Incremented on every start and stop, so that a poll still in flight never schedules a second loop.
@@ -38,18 +41,12 @@ export class SpotifyListeningSharer {
         private readonly pollIntervalMs = SPOTIFY_POLL_INTERVAL_MS,
         private readonly localPlayer: LocalSpotifyPlayer | undefined = undefined,
     ) {
-        let sharing = false;
         this.unsubscriber = derived([account.linked, sharingEnabled, joinedJam], (values) => values).subscribe(
             ([linked, enabled, jam]) => {
                 this.jam = jam;
                 // The local player needs no account: sharing is enough.
-                const shouldShare = (linked || localPlayer !== undefined) && enabled;
-                if (shouldShare && !sharing) {
-                    this.startReading();
-                } else if (!shouldShare && sharing) {
-                    this.stopReading();
-                }
-                sharing = shouldShare;
+                this.readLocalPlayer(enabled && localPlayer !== undefined);
+                this.readWebApi(enabled && linked);
                 this.publishIfChanged();
             },
         );
@@ -57,36 +54,35 @@ export class SpotifyListeningSharer {
 
     public destroy(): void {
         this.unsubscriber();
-        this.stopReading();
+        this.readLocalPlayer(false);
+        this.readWebApi(false);
     }
 
-    private startReading(): void {
-        if (!this.localPlayer) {
-            this.startPolling();
-            return;
+    private readLocalPlayer(read: boolean): void {
+        if (read && !this.stopWatchingLocalPlayer && this.localPlayer) {
+            this.stopWatchingLocalPlayer = this.localPlayer.watch((track) => {
+                this.localTrack = track;
+                this.publishIfChanged();
+            });
+        } else if (!read && this.stopWatchingLocalPlayer) {
+            this.stopWatchingLocalPlayer();
+            this.stopWatchingLocalPlayer = undefined;
+            this.localTrack = undefined;
         }
-        this.stopWatchingLocalPlayer = this.localPlayer.watch((track) => {
-            this.track = track;
-            this.publishIfChanged();
-        });
     }
 
-    private stopReading(): void {
-        this.stopWatchingLocalPlayer?.();
-        this.stopWatchingLocalPlayer = undefined;
-        this.stopPolling();
-    }
-
-    private startPolling(): void {
-        const generation = ++this.pollGeneration;
-        this.poll(generation).catch((error) => console.error("Spotify polling stopped", error));
-    }
-
-    private stopPolling(): void {
-        this.pollGeneration++;
-        clearTimeout(this.pollTimeout);
-        this.pollTimeout = undefined;
-        this.track = undefined;
+    private readWebApi(read: boolean): void {
+        if (read && !this.polling) {
+            this.polling = true;
+            const generation = ++this.pollGeneration;
+            this.poll(generation).catch((error) => console.error("Spotify polling stopped", error));
+        } else if (!read && this.polling) {
+            this.polling = false;
+            this.pollGeneration++;
+            clearTimeout(this.pollTimeout);
+            this.pollTimeout = undefined;
+            this.apiTrack = undefined;
+        }
     }
 
     private async poll(generation: number): Promise<void> {
@@ -98,13 +94,13 @@ export class SpotifyListeningSharer {
                 return;
             }
             if (result === undefined) {
-                this.track = undefined;
+                this.apiTrack = undefined;
             } else if (result.status === "ok") {
-                this.track = result.track;
+                this.apiTrack = result.track;
             } else if (result.status === "unauthorized") {
                 this.account.expireAccessToken();
             } else if (result.status === "forbidden") {
-                this.track = undefined;
+                this.apiTrack = undefined;
                 this.account.reportAccessDenied();
                 delay = Math.max(delay, ACCESS_DENIED_POLL_INTERVAL_MS);
             } else {
@@ -124,15 +120,16 @@ export class SpotifyListeningSharer {
     }
 
     private publishIfChanged(): void {
+        const track = this.localTrack ?? this.apiTrack;
         const listening: SpotifyListening = {
-            trackTitle: this.track?.title ?? "",
-            artistName: this.track?.artist ?? "",
-            trackUrl: this.track?.url ?? "",
+            trackTitle: track?.title ?? "",
+            artistName: track?.artist ?? "",
+            trackUrl: track?.url ?? "",
             jamAreaId: this.jam?.areaId ?? "",
             jamAreaName: this.jam?.areaName ?? "",
-            albumName: this.track?.album ?? "",
-            artworkUrl: this.track?.artworkUrl ?? "",
-            source: this.track?.source ?? "",
+            albumName: track?.album ?? "",
+            artworkUrl: track?.artworkUrl ?? "",
+            source: track?.source ?? "",
         };
         if (JSON.stringify(listening) === JSON.stringify(this.published)) {
             return;
