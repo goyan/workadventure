@@ -11,6 +11,7 @@
     } from "../../../common/SpotifyListening";
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningAlongCountStore } from "../../Spotify/SpotifyListeningDirectory";
+    import { likeTrack } from "../../Spotify/HomeJam";
     import ListeningSourceIcon from "./ListeningSourceIcon.svelte";
 
     interface Props {
@@ -25,6 +26,13 @@
     let listeningAlongCount = $derived(userUuid ? ($listeningAlongCountStore.get(userUuid) ?? 0) : 0);
 
     let playing = $derived(isPlayingTrack(listening) ? listening : undefined);
+    // Saved to the Liked Songs of this computer's Spotify: the desktop app with the extension, a Spotify track.
+    let likedUri = $state<string | undefined>(undefined);
+    let likeableUri = $derived(
+        $listenAlongAvailableStore && window.WAD?.likeOnSpotify && playing
+            ? spotifyTrackUri(playing.trackUrl)
+            : undefined,
+    );
     let links = $derived(playing ? listenTooLinks(playing) : undefined);
     let context = $derived(playing ? parseSpotifyContextUri(playing.contextUri) : undefined);
     let contextUrl = $derived(playing ? spotifyContextUrl(playing.contextUri) : undefined);
@@ -74,7 +82,25 @@
                 </div>
             {/if}
             <div class="min-w-0 flex-1">
-                <div class="truncate font-bold text-white">{playing.trackTitle}</div>
+                <div class="flex items-center gap-1">
+                    <div class="min-w-0 flex-1 truncate font-bold text-white">{playing.trackTitle}</div>
+                    {#if likeableUri}
+                        <button
+                            type="button"
+                            class="shrink-0 rounded px-1 {likedUri === likeableUri
+                                ? 'text-[#1ed760]'
+                                : 'text-white/60 hover:bg-white/10 hover:text-white'}"
+                            title={$LL.spotify.listeningZone.like()}
+                            aria-label={$LL.spotify.listeningZone.like()}
+                            onclick={() => {
+                                if (likeableUri && likeTrack(likeableUri)) likedUri = likeableUri;
+                            }}
+                            data-testid="listening-like"
+                        >
+                            {likedUri === likeableUri ? "♥" : "♡"}
+                        </button>
+                    {/if}
+                </div>
                 <div class="truncate text-sm text-white/70">
                     {playing.artistName}{playing.albumName ? ` — ${playing.albumName}` : ""}
                 </div>

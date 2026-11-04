@@ -13,6 +13,7 @@ import {
     startHomeJam,
     stopSharingJam,
     syncJoinedJam,
+    updateOwnRoom,
 } from "../../../src/front/ListeningZone/ListeningZoneController";
 import {
     currentListeningZoneStore,
@@ -118,6 +119,32 @@ describe("Jam rooms", () => {
 
         stopSharingJam();
         expect(roomsOf(lounge)).toEqual([]);
+        unsubscribe();
+    });
+
+    it("lets the host rename the room and switch the DJ mode of a Jukebox", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(lounge, [spotifyJam]);
+        startHomeJam("Old school");
+
+        updateOwnRoom({ title: "Vendredi rock" });
+        updateOwnRoom({ djMode: true });
+        expect(roomsOf(lounge)[1]).toEqual({
+            home: true,
+            hostUuid: "me",
+            hostName: "Me",
+            title: "Vendredi rock",
+            djMode: true,
+        });
+
+        updateOwnRoom({ title: "  " });
+        expect(JSON.parse(JSON.stringify(roomsOf(lounge)[1]))).toEqual({
+            home: true,
+            hostUuid: "me",
+            hostName: "Me",
+            djMode: true,
+        });
+        expect(roomsOf(lounge)[0]).toEqual(spotifyJam);
         unsubscribe();
     });
 

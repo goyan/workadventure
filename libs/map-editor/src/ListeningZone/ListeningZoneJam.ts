@@ -46,6 +46,8 @@ const HomeJam = z.object({
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
     title,
+    // DJ mode: only the host removes tracks from the queue.
+    djMode: z.boolean().optional(),
 });
 
 export const ListeningZoneJam = z.union([HomeJam, SpotifyJam]);

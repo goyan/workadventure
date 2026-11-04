@@ -1,24 +1,103 @@
 import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
-import { derived, get, type Readable, type Unsubscriber } from "svelte/store";
+import { derived, get, type Readable, type Unsubscriber, writable } from "svelte/store";
 import { z } from "zod";
-import type { WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
+import type { JukeboxTrack, WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
 import type { JamRoom } from "../ListeningZone/ListeningZoneController";
 import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
 import type { ListeningByUserUuid } from "./SpotifyListeningDirectory";
 
-/** Event a home Jam guest sends to its host, through the room server (which sets the sender): tracks to queue. */
+/** A Jukebox guest asks its host, through the room server (which sets the sender), to queue tracks. */
 export const HOME_JAM_QUEUE_EVENT = "workadventure.home-jam-queue";
+/** A participant asks the host to remove a track from the queue. */
+export const JUKEBOX_REMOVE_EVENT = "workadventure.jukebox-remove";
+/** The host's queue, sent to everyone on every change and to whoever asks for it. */
+export const JUKEBOX_STATE_EVENT = "workadventure.jukebox-state";
+/** The one who added a track (or the host) moves it up or down the queue. */
+export const JUKEBOX_MOVE_EVENT = "workadventure.jukebox-move";
+/** Someone opening a Jukebox's queue asks its host for it. */
+export const JUKEBOX_STATE_REQUEST_EVENT = "workadventure.jukebox-state-request";
 /** Same limit as the desktop app and the extension. */
 const MAX_TRACKS_PER_REQUEST = 5;
-/** A guest cannot flood the host's queue: requests beyond that, within a minute, are dropped. */
+/** A guest cannot flood the host: requests beyond that, within a minute, are dropped. */
 const MAX_REQUESTS_PER_MINUTE = 10;
+const MAX_SHOWN_QUEUE = 30;
 
-const QueueRequest = z.object({
-    uris: z
-        .array(z.string().regex(/^spotify:track:[A-Za-z0-9]+$/))
-        .min(1)
-        .max(MAX_TRACKS_PER_REQUEST),
+const trackUri = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/);
+const queueUid = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const QueueRequest = z.object({ uris: z.array(trackUri).min(1).max(MAX_TRACKS_PER_REQUEST) });
+const RemoveRequest = z.object({ uri: trackUri, uid: queueUid });
+const MoveRequest = RemoveRequest.extend({ direction: z.enum(["up", "down"]) });
+export type MoveDirection = z.infer<typeof MoveRequest>["direction"];
+const JukeboxState = z.object({
+    tracks: z
+        .array(
+            z.object({
+                uri: trackUri,
+                uid: queueUid,
+                title: z.string().max(200),
+                artist: z.string().max(200),
+                artworkUrl: z.union([z.literal(""), z.string().startsWith("https://i.scdn.co/image/").max(200)]),
+                addedBy: z.string().max(100),
+                addedByUuid: z.string().max(256),
+            }),
+        )
+        .max(MAX_SHOWN_QUEUE),
 });
+
+/** The queue of each Jukebox, by host uuid, as its host last sent it. */
+export const jukeboxQueuesStore = writable<ReadonlyMap<string, JukeboxTrack[]>>(new Map());
+
+/** What the Jukebox views can do; set while the game runs. */
+let actions:
+    | {
+          request: (hostUuid: string) => void;
+          add: (room: JamRoom, uri: string) => void;
+          remove: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">) => void;
+          move: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, direction: MoveDirection) => void;
+      }
+    | undefined;
+
+/** Asks the host of a Jukebox for its queue, to show it. */
+export function requestJukeboxQueue(hostUuid: string): void {
+    actions?.request(hostUuid);
+}
+
+/** Adds a track to a Jukebox: directly for its host, through the host for a participant. */
+export function addToJukebox(room: JamRoom, uri: string): void {
+    actions?.add(room, uri);
+}
+
+/** Removes a track from a Jukebox: directly for its host, through the host (who checks the DJ mode) otherwise. */
+export function removeFromJukebox(room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">): void {
+    actions?.remove(room, track);
+}
+
+/** Moves a track up or down a Jukebox's queue: directly for its host, through the host for the one who added it. */
+export function moveInJukebox(room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, direction: MoveDirection): void {
+    actions?.move(room, track, direction);
+}
+
+/** Saves a track to the Liked Songs of this computer's Spotify; false without the desktop app and the extension. */
+export function likeTrack(uri: string, desktop: WorkAdventureDesktopApi | undefined = window.WAD): boolean {
+    if (!trackUri.safeParse(uri).success || !desktop?.likeOnSpotify) return false;
+    desktop.likeOnSpotify({ uri });
+    return true;
+}
+
+/** `spotify:track:<id>` from a track link or URI pasted by the user; undefined for anything else. */
+export function trackUriOf(input: string): string | undefined {
+    const value = input.trim();
+    if (trackUri.safeParse(value).success) return value;
+    try {
+        const url = new URL(value);
+        const [, kind, id] = url.pathname.split("/");
+        return url.hostname === "open.spotify.com" && kind === "track" && id && /^[A-Za-z0-9]+$/.test(id)
+            ? `spotify:track:${id}`
+            : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 export interface HomeJamContext {
     /** Every Jam room of the map, with the zone it was opened in. */
@@ -29,7 +108,8 @@ export interface HomeJamContext {
     /** The connected user with this uuid (id and name), undefined when they are not in the room. */
     userByUuid: (uuid: string) => { id: number; name: string } | undefined;
     userById: (id: number) => { uuid: string; name: string } | undefined;
-    sendToUser: (userId: number, data: unknown) => void;
+    /** Sends an event through the room server: to these users, or to everyone for an empty list. */
+    send: (name: string, data: unknown, userIds: number[]) => void;
     /** Events received from other users: name, data and the sender's id as set by the room server. */
     onEvent: (listener: (name: string, data: unknown, senderId: number | undefined) => void) => Unsubscriber;
     desktop: WorkAdventureDesktopApi | undefined;
@@ -37,64 +117,168 @@ export interface HomeJamContext {
 }
 
 /**
- * Wires the home Jam to the desktop app. A guest's Spotify offers "add to the home Jam" (right click on tracks): the
- * tracks go to the host through the room server. The host's desktop app adds them to its Spotify queue, only from
- * users taking part in its home Jam (they publish it in their listening). Without the desktop app, nothing happens.
+ * Wires the Jukebox (a home Jam: guests' Spotify apps play the host's tracks). Everyone keeps the queues hosts send,
+ * to show them. With the desktop app: a guest's Spotify offers "add to the Jukebox" (right click), and the host's
+ * desktop app shares its queue, adds the participants' tracks and removes tracks. The host only obeys users taking
+ * part in its Jukebox (they publish it in their listening); the DJ mode keeps removals to the host.
  */
 export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const { desktop } = context;
-    if (!desktop?.setHomeJam || !desktop.onQueueRequest || !desktop.enqueueOnSpotify) {
-        return () => undefined;
-    }
-    const { setHomeJam, enqueueOnSpotify } = desktop;
     const now = context.now ?? Date.now;
+    const requestsBySender = new Map<number, number[]>();
 
-    /** The home Jam room this user takes part in as a guest. */
+    const ownJukebox = derived(context.rooms, (rooms) =>
+        rooms.find(({ jam }) => isHomeJam(jam) && jam.hostUuid === context.localUuid()),
+    );
+    /** The Jukebox room this user takes part in as a guest. */
     const guestOf = derived(
         [context.rooms, context.joined],
         ([rooms, joined]) =>
             rooms.find(
                 ({ jam }) =>
                     isHomeJam(jam) && jam.hostUuid !== context.localUuid() && joined?.url === listeningZoneJamKey(jam),
-            )?.jam ?? null,
+            ) ?? null,
     );
-    // Only changes are told: the desktop app starts with no home Jam.
+
+    const sendTo = (uuid: string, name: string, data: unknown) => {
+        const user = context.userByUuid(uuid);
+        if (user) context.send(name, data, [user.id]);
+    };
+    const ownQueue = () => get(jukeboxQueuesStore).get(context.localUuid() ?? "") ?? [];
+    const addedByOf = (uid: string) => ownQueue().find((track) => track.uid === uid)?.addedByUuid ?? "";
+    const setQueue = (hostUuid: string, tracks: JukeboxTrack[]) =>
+        jukeboxQueuesStore.update((queues) => new Map(queues).set(hostUuid, tracks));
+
+    /** Where a queued track moves: just before the previous one, or just after the next one. */
+    const moveTarget = (uid: string, direction: MoveDirection) => {
+        const queue = ownQueue();
+        const index = queue.findIndex((track) => track.uid === uid);
+        const neighbour = index < 0 ? undefined : queue[direction === "up" ? index - 1 : index + 1];
+        if (!neighbour) return undefined;
+        const entry = { uri: neighbour.uri, uid: neighbour.uid };
+        return direction === "up" ? { before: entry } : { after: entry };
+    };
+
+    /** A participant of our Jukebox, within the rate limit: the only users a host obeys. */
+    const acceptFromParticipant = (senderId: number): { uuid: string; name: string } | undefined => {
+        const own = get(ownJukebox);
+        const sender = context.userById(senderId);
+        if (!own || !sender) return undefined;
+        const listening = get(context.listeningByUserUuid).get(sender.uuid);
+        if (listening?.jamAreaId !== own.zone.areaId || listening.jamHostUuid !== context.localUuid()) return undefined;
+        const recent = (requestsBySender.get(senderId) ?? []).filter((at) => now() - at < 60_000);
+        if (recent.length >= MAX_REQUESTS_PER_MINUTE) return undefined;
+        requestsBySender.set(senderId, [...recent, now()]);
+        return sender;
+    };
+
+    actions = {
+        request: (hostUuid) => {
+            if (hostUuid !== context.localUuid()) sendTo(hostUuid, JUKEBOX_STATE_REQUEST_EVENT, {});
+        },
+        add: (room, uri) => {
+            const request = QueueRequest.safeParse({ uris: [uri] });
+            if (!request.success) return;
+            if (room.jam.hostUuid === context.localUuid()) {
+                desktop?.enqueueOnSpotify?.({ uris: request.data.uris, from: "" });
+            } else {
+                sendTo(room.jam.hostUuid, HOME_JAM_QUEUE_EVENT, request.data);
+            }
+        },
+        remove: (room, track) => {
+            const request = RemoveRequest.safeParse(track);
+            if (!request.success) return;
+            if (room.jam.hostUuid === context.localUuid()) {
+                desktop?.dequeueOnSpotify?.(request.data);
+            } else {
+                sendTo(room.jam.hostUuid, JUKEBOX_REMOVE_EVENT, request.data);
+            }
+        },
+        move: (room, track, direction) => {
+            const request = MoveRequest.safeParse({ uri: track.uri, uid: track.uid, direction });
+            if (!request.success) return;
+            if (room.jam.hostUuid === context.localUuid()) {
+                const target = moveTarget(request.data.uid, direction);
+                if (target) desktop?.moveInSpotifyQueue?.({ uri: request.data.uri, uid: request.data.uid, ...target });
+            } else {
+                sendTo(room.jam.hostUuid, JUKEBOX_MOVE_EVENT, request.data);
+            }
+        },
+    };
+
+    const unsubscribeEvents = context.onEvent((name, data, senderId) => {
+        if (senderId === undefined) return;
+        if (name === JUKEBOX_STATE_EVENT) {
+            // Only the host of a Jukebox speaks for its queue.
+            const sender = context.userById(senderId);
+            const state = JukeboxState.safeParse(data);
+            const isHost = get(context.rooms).some(({ jam }) => isHomeJam(jam) && jam.hostUuid === sender?.uuid);
+            if (sender && state.success && isHost) setQueue(sender.uuid, state.data.tracks);
+        } else if (name === JUKEBOX_STATE_REQUEST_EVENT) {
+            if (get(ownJukebox)) context.send(JUKEBOX_STATE_EVENT, { tracks: ownQueue() }, [senderId]);
+        } else if (name === HOME_JAM_QUEUE_EVENT) {
+            const request = QueueRequest.safeParse(data);
+            const sender = request.success ? acceptFromParticipant(senderId) : undefined;
+            if (request.success && sender) {
+                desktop?.enqueueOnSpotify?.({ uris: request.data.uris, from: sender.name, fromUuid: sender.uuid });
+            }
+        } else if (name === JUKEBOX_REMOVE_EVENT) {
+            const request = RemoveRequest.safeParse(data);
+            const own = get(ownJukebox);
+            const djMode = own !== undefined && isHomeJam(own.jam) && own.jam.djMode === true;
+            const sender = request.success ? acceptFromParticipant(senderId) : undefined;
+            // The one who added a track may always remove it; the DJ mode only stops the others.
+            if (request.success && sender && (!djMode || addedByOf(request.data.uid) === sender.uuid)) {
+                desktop?.dequeueOnSpotify?.(request.data);
+            }
+        } else if (name === JUKEBOX_MOVE_EVENT) {
+            const request = MoveRequest.safeParse(data);
+            const sender = request.success ? acceptFromParticipant(senderId) : undefined;
+            const target = request.success ? moveTarget(request.data.uid, request.data.direction) : undefined;
+            if (request.success && sender && target && addedByOf(request.data.uid) === sender.uuid) {
+                desktop?.moveInSpotifyQueue?.({ uri: request.data.uri, uid: request.data.uid, ...target });
+            }
+        }
+    });
+
+    // The host shares its Spotify queue while hosting a Jukebox.
+    let stopWatchingQueue: (() => void) | undefined;
+    const unsubscribeOwn = ownJukebox.subscribe((own) => {
+        const watchSpotifyQueue = desktop?.watchSpotifyQueue;
+        if (own && !stopWatchingQueue && watchSpotifyQueue) {
+            stopWatchingQueue = watchSpotifyQueue((tracks) => {
+                const state = JukeboxState.safeParse({ tracks });
+                if (!state.success) return;
+                setQueue(context.localUuid() ?? "", state.data.tracks);
+                context.send(JUKEBOX_STATE_EVENT, state.data, []);
+            });
+        } else if (!own && stopWatchingQueue) {
+            stopWatchingQueue();
+            stopWatchingQueue = undefined;
+        }
+    });
+
+    // A guest's Spotify offers "add to the Jukebox", and sends the tracks to the host.
+    // Only changes are told: the desktop app starts with no Jukebox.
     let told: string | null = null;
-    const unsubscribeGuest = guestOf.subscribe((jam) => {
-        const hostName = jam ? jam.hostName : null;
+    const unsubscribeGuest = guestOf.subscribe((room) => {
+        const hostName = room ? room.jam.hostName : null;
         if (hostName === told) return;
         told = hostName;
-        setHomeJam(jam ? { hostName: jam.hostName } : null);
+        desktop?.setHomeJam?.(room ? { hostName: room.jam.hostName } : null);
     });
-
-    desktop.onQueueRequest((uris) => {
-        const jam = get(guestOf);
+    desktop?.onQueueRequest?.((uris) => {
+        const room = get(guestOf);
         const request = QueueRequest.safeParse({ uris });
-        const host = jam ? context.userByUuid(jam.hostUuid) : undefined;
-        if (!request.success || !host) return;
-        context.sendToUser(host.id, request.data);
-    });
-
-    const requestsBySender = new Map<number, number[]>();
-    const unsubscribeEvents = context.onEvent((name, data, senderId) => {
-        if (name !== HOME_JAM_QUEUE_EVENT || senderId === undefined) return;
-        const localUuid = context.localUuid();
-        const ownHomeJam = get(context.rooms).find(({ jam }) => isHomeJam(jam) && jam.hostUuid === localUuid);
-        const sender = context.userById(senderId);
-        const request = QueueRequest.safeParse(data);
-        if (!request.success || !sender || !ownHomeJam) return;
-        // Only participants of our room: they publish its zone and host in their listening.
-        const listening = get(context.listeningByUserUuid).get(sender.uuid);
-        if (listening?.jamAreaId !== ownHomeJam.zone.areaId || listening.jamHostUuid !== localUuid) return;
-        const recent = (requestsBySender.get(senderId) ?? []).filter((at) => now() - at < 60_000);
-        if (recent.length >= MAX_REQUESTS_PER_MINUTE) return;
-        requestsBySender.set(senderId, [...recent, now()]);
-        enqueueOnSpotify({ uris: request.data.uris, from: sender.name });
+        if (room && request.success) sendTo(room.jam.hostUuid, HOME_JAM_QUEUE_EVENT, request.data);
     });
 
     return () => {
-        unsubscribeGuest();
+        actions = undefined;
         unsubscribeEvents();
-        if (told) setHomeJam(null);
+        unsubscribeOwn();
+        stopWatchingQueue?.();
+        unsubscribeGuest();
+        if (told) desktop?.setHomeJam?.(null);
     };
 }

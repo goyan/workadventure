@@ -213,7 +213,7 @@ import {
 import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
 import { joinedJamStore, listeningZoneNamesStore } from "../../ListeningZone/ListeningZoneStore";
 import { allJamRoomsStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
-import { HOME_JAM_QUEUE_EVENT, startHomeJam } from "../../Spotify/HomeJam";
+import { startHomeJam } from "../../Spotify/HomeJam";
 import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
 import { popupStore } from "../../Stores/PopupStore";
@@ -1917,9 +1917,9 @@ export class GameScene extends DirtyScene {
                 const player = playersStore.getPlayerById(id);
                 return player && { uuid: player.userUuid, name: player.name };
             },
-            sendToUser: (userId, data) => {
-                connection.emitScriptableEvent(HOME_JAM_QUEUE_EVENT, data, [userId]).catch((error) => {
-                    console.warn("Could not send tracks to the home Jam", error);
+            send: (name, data, userIds) => {
+                connection.emitScriptableEvent(name, data, userIds).catch((error) => {
+                    console.warn("Could not send a Jukebox event", error);
                 });
             },
             onEvent: (listener) => {

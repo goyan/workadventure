@@ -432,12 +432,15 @@
                     <CalendarReminders />
                 {/if}
                 <RaisedHandsDock />
-                <!-- With a player's menu open, the bubble moves above it (see below) instead of covering it. -->
-                {#if !sidePanelOpen}
+            </div>
+            <!-- The Jam rooms stay under the action bar's menus (z-[301]), unlike the notifications above. With a
+                 player's menu open, they move above it (see below) instead of covering it. -->
+            {#if !sidePanelOpen}
+                <div class="absolute top-0 right-2 z-[300] flex flex-col gap-2 items-end">
                     <ListeningZoneBubble />
                     <JamRoomsLauncher />
-                {/if}
-            </div>
+                </div>
+            {/if}
 
             {#if $showRecordingList}
                 <RecordingsListModal />
