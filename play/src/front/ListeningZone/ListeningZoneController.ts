@@ -66,23 +66,26 @@ export function isLocalUser(uuid: string): boolean {
     return uuid === localUserStore.getLocalUser()?.uuid;
 }
 
+/** The name others see: an OpenID login only sets the session name, the stored one may stay empty. */
+export function localPlayerName(): string {
+    return localUserStore.getDisplayNameForMatrixProfile() ?? localUserStore.getName() ?? "";
+}
+
 export function enterListeningZone(zone: ListeningZone): void {
     currentListeningZoneStore.set(zone);
 }
 
 /**
- * Leaving the zone ends our part in its rooms. The back also closes our room once we are out, but doing it here
- * spares everyone else a room whose host already left.
+ * Leaving the zone ends our part in its rooms for now. Our own room stays: the back closes it once we have been out
+ * for a while, so that a reload or a quick step out does not close it.
  */
 export function leaveListeningZone(propertyId: string): void {
     const zone = get(currentListeningZoneStore);
     if (zone?.propertyId !== propertyId) {
         return;
     }
-    if (get(ownJamStore)) {
-        writeOthersRooms(zone);
-    }
-    leaveJam();
+    noteSteppedOut();
+    clearJoinedRoom();
     currentListeningZoneStore.set(undefined);
 }
 
@@ -114,7 +117,7 @@ export function joinJam(jam: ListeningZoneJam): void {
     }
     leaveJam();
     window.open(jam.url, "_blank", "noopener,noreferrer");
-    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: jam.url, hostUuid: jam.hostUuid });
+    enterRoom(zone, jam);
 }
 
 /** Joining a home Jam room is listening along with its host, as long as we stay in it. */
@@ -125,21 +128,13 @@ export function joinHomeJam(jam: ListeningZoneJam): void {
     }
     leaveJam();
     followedUserUuidStore.set(jam.hostUuid);
-    joinedJamStore.set({
-        areaId: zone.areaId,
-        areaName: zone.areaName,
-        url: listeningZoneJamKey(jam),
-        hostUuid: jam.hostUuid,
-    });
+    enterRoom(zone, jam);
 }
 
-/** Leaves the joined room; a home Jam also stops listening along with its host. */
+/** Leaves the joined room, which is no longer joined again after a reload; a home Jam also stops the follow. */
 export function leaveJam(): void {
-    const joined = get(joinedJamStore);
-    if (joined && isHomeJamKey(joined.url) && get(followedUserUuidStore) === joined.hostUuid) {
-        followedUserUuidStore.set(undefined);
-    }
-    joinedJamStore.set(undefined);
+    forgetJoinedRoom();
+    clearJoinedRoom();
 }
 
 /**
@@ -163,11 +158,14 @@ export function syncJoinedJam(): Unsubscriber {
             }
         } else if (joined && !jams.some((jam) => listeningZoneJamKey(jam) === joined.url)) {
             leaveJam();
+        } else if (!joined && zone) {
+            rejoinRememberedRoom(zone, jams);
         }
     });
     const unsubscribeFollow = followedUserUuidStore.subscribe((followed) => {
         const joined = get(joinedJamStore);
         if (joined && isHomeJamKey(joined.url) && !isLocalUser(joined.hostUuid) && followed !== joined.hostUuid) {
+            forgetJoinedRoom();
             joinedJamStore.set(undefined);
         }
     });
@@ -179,6 +177,99 @@ export function syncJoinedJam(): Unsubscriber {
 
 function isHomeJamKey(key: string): boolean {
     return key.startsWith("home:");
+}
+
+function enterRoom(zone: ListeningZone, jam: ListeningZoneJam): void {
+    const key = listeningZoneJamKey(jam);
+    joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: key, hostUuid: jam.hostUuid });
+    rememberJoinedRoom({ areaId: zone.areaId, url: key, hostUuid: jam.hostUuid });
+}
+
+/** Ends our part in the joined room, without forgetting it: a reload or a quick step out joins it again. */
+function clearJoinedRoom(): void {
+    const joined = get(joinedJamStore);
+    // The room first: stopping the follow while still in it would read as "stopped listening along" and forget it.
+    joinedJamStore.set(undefined);
+    if (joined && isHomeJamKey(joined.url) && get(followedUserUuidStore) === joined.hostUuid) {
+        followedUserUuidStore.set(undefined);
+    }
+}
+
+/** A room joined before a reload, or before stepping out of the zone for a moment, is joined again. */
+const JOINED_ROOM_KEY = "listeningZoneJoinedRoom";
+/** Longer than a reload; walking out of the zone for longer means leaving the room. */
+export const REJOIN_WITHIN_MS = 2 * 60 * 1000;
+
+interface RememberedRoom {
+    areaId: string;
+    url: string;
+    hostUuid: string;
+    /** When we stepped out of the zone; absent while inside. */
+    leftAt?: number;
+}
+
+function rejoinRememberedRoom(zone: ListeningZone, jams: ListeningZoneJam[]): void {
+    const remembered = recallJoinedRoom();
+    if (!remembered || remembered.areaId !== zone.areaId) {
+        return;
+    }
+    if (remembered.leftAt !== undefined && Date.now() - remembered.leftAt > REJOIN_WITHIN_MS) {
+        return;
+    }
+    const jam = jams.find((candidate) => listeningZoneJamKey(candidate) === remembered.url);
+    if (!jam || isLocalUser(jam.hostUuid)) {
+        return;
+    }
+    // A Spotify Jam is not opened again: Spotify keeps us in it, we only show it.
+    if (isHomeJam(jam)) {
+        followedUserUuidStore.set(jam.hostUuid);
+    }
+    enterRoom(zone, jam);
+}
+
+function rememberJoinedRoom(room: RememberedRoom): void {
+    try {
+        localStorage.setItem(JOINED_ROOM_KEY, JSON.stringify(room));
+    } catch {
+        // Storage refused (private window): the room is simply not joined again after a reload.
+    }
+}
+
+function recallJoinedRoom(): RememberedRoom | undefined {
+    try {
+        const value: unknown = JSON.parse(localStorage.getItem(JOINED_ROOM_KEY) ?? "null");
+        if (
+            typeof value === "object" &&
+            value !== null &&
+            "areaId" in value &&
+            "url" in value &&
+            "hostUuid" in value &&
+            typeof value.areaId === "string" &&
+            typeof value.url === "string" &&
+            typeof value.hostUuid === "string"
+        ) {
+            const leftAt = "leftAt" in value && typeof value.leftAt === "number" ? value.leftAt : undefined;
+            return { areaId: value.areaId, url: value.url, hostUuid: value.hostUuid, leftAt };
+        }
+    } catch {
+        // Unreadable: nothing to join again.
+    }
+    return undefined;
+}
+
+function forgetJoinedRoom(): void {
+    try {
+        localStorage.removeItem(JOINED_ROOM_KEY);
+    } catch {
+        // Nothing stored.
+    }
+}
+
+function noteSteppedOut(): void {
+    const remembered = recallJoinedRoom();
+    if (remembered && remembered.leftAt === undefined) {
+        rememberJoinedRoom({ ...remembered, leftAt: Date.now() });
+    }
 }
 
 /** Our room replaces any previous one of ours; the back refuses it when the zone is full. */
@@ -193,7 +284,7 @@ function openRoom(build: (uuid: string, hostName: string) => ListeningZoneJam): 
     // syncJoinedJam() puts us in our room once the server accepted it.
     setAreaPropertyVariable(zone.areaId, zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, [
         ...others,
-        build(uuid, localUserStore.getName() ?? ""),
+        build(uuid, localPlayerName()),
     ]);
 }
 

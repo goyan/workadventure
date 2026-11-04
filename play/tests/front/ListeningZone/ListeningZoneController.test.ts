@@ -6,6 +6,8 @@ import {
     joinHomeJam,
     joinJam,
     leaveJam,
+    leaveListeningZone,
+    REJOIN_WITHIN_MS,
     shareJam,
     startHomeJam,
     syncJoinedJam,
@@ -34,7 +36,9 @@ describe("Jam rooms of a listening zone", () => {
         vi.spyOn(localUserStore, "getLocalUser").mockReturnValue({ uuid: "me" } as ReturnType<
             typeof localUserStore.getLocalUser
         >);
-        vi.spyOn(localUserStore, "getName").mockReturnValue("Me");
+        // An OpenID login: the session name is known, the stored one is empty.
+        vi.spyOn(localUserStore, "getDisplayNameForMatrixProfile").mockReturnValue("Me");
+        vi.spyOn(localUserStore, "getName").mockReturnValue(null);
         vi.spyOn(window, "open").mockReturnValue(null);
         areaPropertyVariablesManagerStore.set({
             variableChanges,
@@ -46,6 +50,7 @@ describe("Jam rooms of a listening zone", () => {
         followedUserUuidStore.set(undefined);
         rooms = [];
         setVariable.mockClear();
+        localStorage.clear();
     });
 
     afterEach(() => {
@@ -123,5 +128,68 @@ describe("Jam rooms of a listening zone", () => {
         expect(get(joinedJamStore)).toBeUndefined();
         expect(get(followedUserUuidStore)).toBeUndefined();
         unsubscribe();
+    });
+
+    describe("after a reload", () => {
+        /** A reload: the page forgets everything but what the browser stored, then enters the zone again. */
+        function reload(nextRooms: ListeningZoneJam[]) {
+            joinedJamStore.set(undefined);
+            followedUserUuidStore.set(undefined);
+            currentListeningZoneStore.set(undefined);
+            currentListeningZoneStore.set(zone);
+            setRooms(nextRooms);
+        }
+
+        it("joins the home Jam again, and follows its host again", () => {
+            const unsubscribe = syncJoinedJam();
+            setRooms([homeRoom]);
+            joinHomeJam(homeRoom);
+            leaveListeningZone(zone.propertyId);
+
+            reload([homeRoom]);
+
+            expect(get(joinedJamStore)).toMatchObject({ url: "home:nat" });
+            expect(get(followedUserUuidStore)).toBe("nat");
+            unsubscribe();
+        });
+
+        it("shows the Spotify Jam joined again, without opening its link again", () => {
+            const unsubscribe = syncJoinedJam();
+            setRooms([spotifyRoom]);
+            joinJam(spotifyRoom);
+            vi.mocked(window.open).mockClear();
+
+            reload([spotifyRoom]);
+
+            expect(get(joinedJamStore)).toMatchObject({ url: spotifyRoom.url });
+            expect(window.open).not.toHaveBeenCalled();
+            unsubscribe();
+        });
+
+        it("does not join again a room left on purpose, or after a long time out of the zone", () => {
+            const unsubscribe = syncJoinedJam();
+            setRooms([homeRoom]);
+            joinHomeJam(homeRoom);
+            leaveJam();
+            reload([homeRoom]);
+            expect(get(joinedJamStore)).toBeUndefined();
+
+            joinHomeJam(homeRoom);
+            leaveListeningZone(zone.propertyId);
+            vi.spyOn(Date, "now").mockReturnValue(Date.now() + REJOIN_WITHIN_MS + 1000);
+            reload([homeRoom]);
+            expect(get(joinedJamStore)).toBeUndefined();
+            unsubscribe();
+        });
+
+        it("keeps our own room when we step out: the back closes it only after a while", () => {
+            const unsubscribe = syncJoinedJam();
+            shareJam("https://spotify.link/mine");
+
+            leaveListeningZone(zone.propertyId);
+
+            expect(rooms).toEqual([{ url: "https://spotify.link/mine", hostUuid: "me", hostName: "Me" }]);
+            unsubscribe();
+        });
     });
 });

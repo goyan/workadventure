@@ -80,6 +80,7 @@ import { VariableError } from "../Services/VariableError";
 import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
+import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { BrothersFinder } from "./BrothersFinder";
@@ -121,6 +122,7 @@ export class GameRoom implements BrothersFinder {
 
     // Ephemeral variables attached to area properties (not persisted)
     private readonly areaPropertyVariablesManager = new AreaPropertyVariablesManager();
+    private listeningZoneManager: ListeningZoneManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
     private nextUserId = 1;
@@ -258,9 +260,16 @@ export class GameRoom implements BrothersFinder {
         // Let's instantiate the class that will track maxUsersInArea areas and keep the maxUsersReached variable updated.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
         new MaxUsersInAreaManager(gameRoom, areaZoneTracker);
-        // Let's instantiate the class that will remove the Jam of a listening zone when its host leaves the zone.
+        // Keeps the Jam rooms of the listening zones: saved across restarts, closed once their host stays out.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
-        new ListeningZoneManager(gameRoom, areaZoneTracker);
+        gameRoom.listeningZoneManager = new ListeningZoneManager(gameRoom, areaZoneTracker, {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        // A store that does not answer must not keep the room closed: the rooms are only a convenience.
+        await gameRoom.listeningZoneManager
+            .restore()
+            .catch((error) => console.error("Could not restore the Jam rooms of the listening zones", error));
 
         return gameRoom;
     }
@@ -935,6 +944,10 @@ export class GameRoom implements BrothersFinder {
 
         if (!changed) {
             return false;
+        }
+
+        if (key === LISTENING_ZONE_JAM_VARIABLE) {
+            this.listeningZoneManager?.persist(areaId, propertyId, value);
         }
 
         // Broadcast the change to all room listeners

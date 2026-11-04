@@ -10,6 +10,7 @@
         joinHomeJam,
         joinJam,
         leaveJam,
+        localPlayerName,
         ownJamStore,
         shareJam,
         startHomeJam,
@@ -20,6 +21,7 @@
     import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
     import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
+    import { playersStore } from "../../Stores/PlayersStore";
     import { handleOpenMenuEvent, settingsSubMenuTargetStore, SubMenusInterface } from "../../Stores/MenuStore";
     import Input from "../Input/Input.svelte";
     import Button from "../UI/Button.svelte";
@@ -38,6 +40,13 @@
     let jams = $derived($currentJamsStore);
     // A home Jam plays on the Spotify app of this computer, through the desktop app and the Spicetify extension.
     let canHomeJam = $derived($listenAlongAvailableStore);
+
+    /** Rooms opened before the session name was known have no name: the host's current name is shown instead. */
+    function hostNameOf(hostUuid: string, savedName: string): string {
+        if (savedName) return savedName;
+        if (isLocalUser(hostUuid)) return localPlayerName() || "?";
+        return [...$playersStore.values()].find((player) => player.userUuid === hostUuid)?.name || "?";
+    }
 
     function startCreating(): void {
         creating = canHomeJam ? "choose" : "spotify";
@@ -117,8 +126,8 @@
                         </span>
                         <p class="m-0 truncate text-sm font-bold text-white/95">
                             {home
-                                ? $LL.spotify.listeningZone.homeJamOf({ name: jam.hostName })
-                                : $LL.spotify.listeningZone.jamOf({ name: jam.hostName })}
+                                ? $LL.spotify.listeningZone.homeJamOf({ name: hostNameOf(jam.hostUuid, jam.hostName) })
+                                : $LL.spotify.listeningZone.jamOf({ name: hostNameOf(jam.hostUuid, jam.hostName) })}
                         </p>
                     </div>
                     {#if hostTrack}
