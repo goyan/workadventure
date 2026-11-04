@@ -199,6 +199,7 @@ import type { SpaceInterface } from "../../Space/SpaceInterface";
 import { spotifyAccount } from "../../Spotify/SpotifyAccount";
 import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
 import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
+import { followedUserUuidStore, startListeningFollower } from "../../Spotify/ListeningFollower";
 import { desktopApi } from "../../Api/Desktop";
 import {
     bindListeningDirectory,
@@ -1879,6 +1880,7 @@ export class GameScene extends DirtyScene {
         return [
             bindListeningDirectory(worldSpace.usersStore),
             () => sharer.destroy(),
+            startListeningFollower(followedUserUuidStore, listeningByUserUuidStore),
             syncJoinedJam(),
             listeningByUserUuidStore.subscribe((listeningByUuid) => this.updateListeningWokas(listeningByUuid)),
         ];
