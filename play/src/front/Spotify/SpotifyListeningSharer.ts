@@ -134,6 +134,8 @@ export class SpotifyListeningSharer {
             source: track?.source ?? "",
             positionMs: track?.positionMs ?? 0,
             positionAt: track?.positionAt ?? 0,
+            contextUri: track?.contextUri ?? "",
+            contextName: track?.contextName ?? "",
         };
         if (sameListening(listening, this.published)) {
             return;

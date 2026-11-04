@@ -5,6 +5,8 @@
         isPlayingTrack,
         listeningSourceOf,
         listenTooLinks,
+        parseSpotifyContextUri,
+        spotifyContextUrl,
         spotifyTrackUri,
     } from "../../../common/SpotifyListening";
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
@@ -20,6 +22,8 @@
 
     let playing = $derived(isPlayingTrack(listening) ? listening : undefined);
     let links = $derived(playing ? listenTooLinks(playing) : undefined);
+    let context = $derived(playing ? parseSpotifyContextUri(playing.contextUri) : undefined);
+    let contextUrl = $derived(playing ? spotifyContextUrl(playing.contextUri) : undefined);
     // The desktop app plays a Spotify track on the Spotify app of this computer: Apple Music tracks have no link.
     let followable = $derived(
         followableUserUuid !== undefined &&
@@ -35,7 +39,12 @@
 </script>
 
 {#if playing && links}
-    <div class="mx-4 mb-3 flex gap-3 items-center rounded-lg bg-white/10 p-2 text-start" data-testid="listening-card">
+    <!-- Fixed width: the menu sizes to its content, so a long title would widen it and every track change resize it.
+         At a fixed width, the texts truncate instead. -->
+    <div
+        class="mx-auto mb-3 flex w-80 max-w-full gap-3 items-center rounded-lg bg-white/10 p-2 text-start"
+        data-testid="listening-card"
+    >
         {#if playing.artworkUrl}
             <img
                 src={playing.artworkUrl}
@@ -57,6 +66,19 @@
             <div class="truncate text-sm text-white/75">
                 {playing.artistName}{playing.albumName ? ` — ${playing.albumName}` : ""}
             </div>
+            {#if context && contextUrl}
+                <a
+                    href={contextUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="block truncate text-xs text-white/75 hover:underline"
+                    data-testid="listening-context"
+                >
+                    {context.type === "album"
+                        ? $LL.spotify.card.album({ name: playing.contextName || "?" })
+                        : $LL.spotify.card.playlist({ name: playing.contextName || "?" })}
+                </a>
+            {/if}
             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span class="text-white/60">{$LL.spotify.card.listenToo()}</span>
                 <a

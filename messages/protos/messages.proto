@@ -2112,6 +2112,10 @@ message SpotifyListening {
   // deduce where the track is now, to listen along. Both 0 when unknown (older clients).
   uint32 positionMs = 9;
   double positionAt = 10;
+  // What the track plays from, when it is a playlist or an album (spotify:playlist:<id> or spotify:album:<id>), and
+  // its name: others can open it. Both empty otherwise.
+  string contextUri = 11;
+  string contextName = 12;
 }
 
 /*message PartialSpaceUser{

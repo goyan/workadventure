@@ -45,6 +45,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenToo: "Ascolta anche tu",
         listenAlong: "Ascolta insieme",
         stopListeningAlong: "Smetti di ascoltare insieme",
+        playlist: "Playlist: {name}",
+        album: "Album: {name}",
     },
     userList: {
         jam: "Jam · {area}",

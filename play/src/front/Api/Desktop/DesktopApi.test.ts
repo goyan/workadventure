@@ -89,6 +89,8 @@ describe("DesktopApi listening", () => {
         source: "",
         positionMs: 0,
         positionAt: 0,
+        contextUri: "",
+        contextName: "",
     };
 
     afterEach(() => {
