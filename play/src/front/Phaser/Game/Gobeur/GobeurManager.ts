@@ -79,10 +79,14 @@ export class GobeurManager {
             if (!message || senderId === undefined) {
                 return;
             }
+            // Remote players are only known near the viewport: a sender we cannot resolve is taken as the master of
+            // the game the message belongs to (events are forgeable anyway, the spec accepts it).
             const senderUuid =
                 senderId === connection.getUserId()
                     ? this.localUuid
-                    : (scene.MapPlayersByKey.get(senderId)?.userUuid ?? playersStore.getPlayerById(senderId)?.userUuid);
+                    : (scene.MapPlayersByKey.get(senderId)?.userUuid ??
+                      playersStore.getPlayerById(senderId)?.userUuid ??
+                      this.masterOf(message));
             if (senderUuid !== undefined) {
                 this.receive(message, senderUuid);
             }
@@ -102,7 +106,8 @@ export class GobeurManager {
     }
 
     private tryLaunch(entityId: string): GobeurLaunchResult {
-        if (!get(mapEditorActivated)) {
+        // Without a uuid of our own, a start would carry an empty masterUuid.
+        if (!get(mapEditorActivated) || this.localUuid === "") {
             return { ok: false, reason: "noRight" };
         }
         if (this.instances.get(entityId)?.game.isRunning) {
@@ -156,9 +161,10 @@ export class GobeurManager {
         return { ok: true };
     }
 
+    /** Only the master stops a game: for the others, a no-op. */
     public stop(entityId: string): void {
         const instance = this.instances.get(entityId);
-        if (instance) {
+        if (instance?.game.isRunning && instance.game.isMaster) {
             this.apply(instance, instance.game.stop("stopped"));
         }
     }
@@ -184,6 +190,8 @@ export class GobeurManager {
         this.instances.clear();
         this.sheetLoader.destroy();
         gobeurGamesStore.set(new Map());
+        gobeurRankingStore.set(undefined);
+        gobeurAnnounceStore.set(undefined);
     }
 
     private static propertyOf(entity: Entity): GobeurPropertyData | undefined {
@@ -195,9 +203,15 @@ export class GobeurManager {
         return undefined;
     }
 
-    /** Where the Gobeur starts: the feet of a character standing on the entity, like a wandering character nest. */
+    /**
+     * Where the Gobeur starts: the centre of the entity as drawn (whatever its origin), taken as its feet like a
+     * wandering character nest. GobeurSprite draws the still image centred there, over the entity.
+     */
     private static startOf(entity: Entity): Point {
-        return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight / 2 };
+        return {
+            x: entity.x + (0.5 - entity.originX) * entity.displayWidth,
+            y: entity.y + (0.5 - entity.originY) * entity.displayHeight,
+        };
     }
 
     private entity(entityId: string): Entity | undefined {
@@ -221,6 +235,19 @@ export class GobeurManager {
             this.instances.set(entityId, instance);
         }
         return instance;
+    }
+
+    private masterOf(message: GobeurMessage): string | undefined {
+        if (message.kind === "start") {
+            return message.masterUuid;
+        }
+        for (const instance of this.instances.values()) {
+            const start = instance.game.currentStart;
+            if (start?.gameId === message.gameId) {
+                return start.masterUuid;
+            }
+        }
+        return undefined;
     }
 
     private presentUuids(): string[] {
@@ -308,12 +335,8 @@ export class GobeurManager {
         instance.sprite = undefined;
         this.scene.getWanderingCharactersManager()?.setSuppressed(instance.entityId, false);
         const entity = this.entity(instance.entityId);
-        // A wandering entity is shown again by the WanderingCharactersManager; an image not loaded yet shows itself.
-        if (
-            entity?.active &&
-            entity.getPrefab().wander === undefined &&
-            entity.texture.key === entity.getPrefab().imagePath
-        ) {
+        // A Gobeur entity never wanders (see WanderingCharactersManager): it is ours to show again.
+        if (entity?.active) {
             entity.setVisible(true);
         }
         this.scene.markDirty();
@@ -359,7 +382,7 @@ export class GobeurManager {
                 continue;
             }
             const result = instance.brain.update(now, delta, this.targets(instance.game.survivors, start));
-            instance.sprite.setPose(result.x, result.y, result.direction);
+            instance.sprite.setPose(result.x, result.y, result.direction, now);
             if (now - instance.lastPosSentAt >= GOBEUR_POS_INTERVAL_MS) {
                 instance.lastPosSentAt = now;
                 const pos = { x: result.x, y: result.y, direction: result.direction, at: now };
@@ -409,7 +432,9 @@ export class GobeurManager {
                 this.apply(instance, instance.game.stop("interrupted"));
                 continue;
             }
-            this.apply(instance, instance.game.tick(now, present));
+            // The survivors count as present: losing sight of a far away player must not mark them as "left". The brain
+            // only chases those whose position is known (see targets).
+            this.apply(instance, instance.game.tick(now, [...present, ...instance.game.survivors]));
             if (!instance.game.isRunning) {
                 continue;
             }

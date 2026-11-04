@@ -149,17 +149,26 @@ export class WanderingCharactersManager {
         return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight / 2 };
     }
 
+    private static isGobeur(entity: Entity): boolean {
+        return entity.getEntityData().properties.some((property) => property.type === "gobeurPropertyData");
+    }
+
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
         for (const [entityId, character] of this.characters) {
             const entity = entities.get(entityId);
-            if (entity !== character.entity || entity.getPrefab().wander?.sheetPath !== character.sheetPath) {
+            if (
+                entity !== character.entity ||
+                entity.getPrefab().wander?.sheetPath !== character.sheetPath ||
+                WanderingCharactersManager.isGobeur(entity)
+            ) {
                 this.forget(entityId, character);
             }
         }
         for (const [entityId, entity] of entities) {
             const sheetPath = entity.getPrefab().wander?.sheetPath;
-            if (sheetPath === undefined) {
+            // A Gobeur never wanders: idle, it is the object as placed; in game, the GobeurManager owns it.
+            if (sheetPath === undefined || WanderingCharactersManager.isGobeur(entity)) {
                 continue;
             }
             const nest = WanderingCharactersManager.nestOf(entity);

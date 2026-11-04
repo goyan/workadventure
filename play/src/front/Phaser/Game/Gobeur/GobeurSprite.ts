@@ -12,6 +12,8 @@ const WALK_FRAME_RATE = 8;
 const DIRECTIONS: GobeurDirection[] = ["down", "left", "right", "up"];
 // Farther than that between two positions (a first position, a lost frame burst): jump instead of sliding.
 const SNAP_DISTANCE_PX = 5 * FRAME;
+// Still moving if it moved that recently: the jitter of the positions does not stop and restart the walk.
+const MOVING_GRACE_MS = 250;
 
 export interface GobeurSheet {
     key: string;
@@ -148,7 +150,8 @@ export class GobeurSheetLoader {
 /**
  * The Gobeur on screen. The master sets its position every frame (setPose); the other browsers slide it towards the
  * last received position (setTarget). Its position is the position of its feet, like the wandering characters.
- * Until the sheet is loaded (or without a sheet) it shows the image of the entity, still.
+ * Until the sheet is loaded (or without a sheet) it shows the image of the entity, still, centred on that position:
+ * at the start (the centre of the entity, see GobeurManager.startOf) it is drawn exactly over the entity.
  */
 export class GobeurSprite {
     private readonly sprite: Phaser.GameObjects.Sprite;
@@ -158,7 +161,7 @@ export class GobeurSprite {
     private to: Point;
     private targetAt = 0;
     private direction: GobeurDirection = "down";
-    private moving = false;
+    private lastMovedAt = Number.NEGATIVE_INFINITY;
 
     constructor(
         private readonly scene: GameScene,
@@ -170,7 +173,8 @@ export class GobeurSprite {
         this.to = { ...start };
         this.sprite = scene.add
             .sprite(start.x, start.y, entity.texture.key, entity.frame.name)
-            .setOrigin(0.5, 1)
+            .setOrigin(0.5, 0.5)
+            .setScale(entity.scaleX, entity.scaleY)
             // Like the characters, the depth follows the y coordinate of the feet.
             .setDepth(start.y);
         const sheetPath = entity.getPrefab().wander?.sheetPath;
@@ -180,7 +184,8 @@ export class GobeurSprite {
                 .then((sheet) => {
                     if (sheet && !this.destroyed) {
                         this.sheet = sheet;
-                        this.sprite.setTexture(sheet.key, this.stillFrame());
+                        // A walking character: 32 px frames standing on their feet.
+                        this.sprite.setTexture(sheet.key, this.stillFrame()).setOrigin(0.5, 1).setScale(1);
                         this.scene.markDirty();
                     }
                 })
@@ -193,12 +198,11 @@ export class GobeurSprite {
     }
 
     /** Master: the position computed by the brain, shown as it is. */
-    public setPose(x: number, y: number, direction: GobeurDirection): void {
-        this.moving = x !== this.sprite.x || y !== this.sprite.y;
+    public setPose(x: number, y: number, direction: GobeurDirection, now: number): void {
         this.direction = direction;
         this.from = { x, y };
         this.to = { x, y };
-        this.place(x, y);
+        this.place(x, y, now);
     }
 
     /** Followers: slide to that position over the interval between two positions. */
@@ -215,8 +219,7 @@ export class GobeurSprite {
         const k = Math.min(1, Math.max(0, (now - this.targetAt) / GOBEUR_POS_INTERVAL_MS));
         const x = this.from.x + (this.to.x - this.from.x) * k;
         const y = this.from.y + (this.to.y - this.from.y) * k;
-        this.moving = x !== this.sprite.x || y !== this.sprite.y;
-        this.place(x, y);
+        this.place(x, y, now);
     }
 
     public destroy(): void {
@@ -225,9 +228,10 @@ export class GobeurSprite {
         this.scene.markDirty();
     }
 
-    private place(x: number, y: number): void {
+    private place(x: number, y: number, now: number): void {
         if (x !== this.sprite.x || y !== this.sprite.y) {
             this.sprite.setPosition(x, y);
+            this.lastMovedAt = now;
             this.scene.markDirty();
         }
         // Only on change: setting the depth sorts the display list again.
@@ -237,7 +241,7 @@ export class GobeurSprite {
         if (!this.sheet) {
             return;
         }
-        if (this.moving) {
+        if (now - this.lastMovedAt < MOVING_GRACE_MS) {
             this.sprite.play(`${this.sheet.key}:${this.direction}`, true);
             // The animation changes the frame on its own: the scene must be drawn.
             this.scene.markDirty();

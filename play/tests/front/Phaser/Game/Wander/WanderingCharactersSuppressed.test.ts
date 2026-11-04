@@ -75,7 +75,7 @@ function makeSprite() {
     return sprite;
 }
 
-function makeScene() {
+function makeScene(properties: { type: string }[] = []) {
     const entity = {
         entityId: "duck",
         x: 64,
@@ -86,12 +86,14 @@ function makeScene() {
         active: true,
         texture: { key: "duck-entity.png" },
         getPrefab: () => ({ imagePath: "duck-entity.png", wander: { sheetPath: SHEET } }),
+        getEntityData: () => ({ properties }),
         setVisible: (visible: boolean) => {
             entity.visible = visible;
             return entity;
         },
     };
     const sprite = makeSprite();
+    const addSprite = vi.fn(() => sprite);
     let reconcile: () => void = () => {};
     let update: () => void = () => {};
     const scene = {
@@ -119,13 +121,14 @@ function makeScene() {
             get: () => ({ frameTotal: 13, getSourceImage: () => ({ width: 96 }) }),
         },
         anims: { exists: () => true, create: () => {}, generateFrameNumbers: () => [] },
-        add: { sprite: () => sprite },
+        add: { sprite: addSprite },
         markDirty: () => {},
     } as unknown as GameScene;
     const manager = new WanderingCharactersManager(scene);
     return {
         manager,
         sprite,
+        addSprite,
         entity: entity as unknown as Entity & { visible: boolean },
         reconcile: () => reconcile(),
         update: () => update(),
@@ -176,5 +179,16 @@ describe("WanderingCharactersManager.setSuppressed", () => {
         scene.update();
         expect(scene.sprite.visible).toBe(false);
         expect(openers(manager)).toEqual([]);
+    });
+
+    it("never makes a wandering character of a Gobeur, even with a wander sheet", () => {
+        const scene = makeScene([{ type: "gobeurPropertyData" }]);
+        manager = scene.manager;
+        scene.reconcile();
+        scene.update();
+        expect(scene.addSprite).not.toHaveBeenCalled();
+        expect(openers(manager)).toEqual([]);
+        // Idle, the Gobeur is the object as placed.
+        expect(scene.entity.visible).toBe(true);
     });
 });
