@@ -11,4 +11,7 @@ COPY uploader uploader
 
 WORKDIR /usr/src/uploader
 USER node
+# No curl in the slim image: Node's fetch answers the healthcheck (deploy.sh waits for "healthy").
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=10 \
+  CMD ["node", "-e", "fetch('http://localhost:8080/ping').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
 CMD ["npm", "run", "start"]

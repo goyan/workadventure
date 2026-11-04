@@ -1,6 +1,7 @@
-# Build des images `play`, `back` et `map-storage` du fork Infogène et publication sur GHCR.
-# Les trois images sont construites sur le MÊME commit (protobuf commun) : le VPS ne les déploie qu'ensemble, et
+# Build des images `play`, `back`, `map-storage` et `uploader` du fork Infogène et publication sur GHCR.
+# Les images sont construites sur le MÊME commit (protobuf commun) : le VPS ne déploie play/back/map-storage qu'ensemble, et
 # seulement si leurs labels org.opencontainers.image.revision sont identiques (deploy/deploy.sh du repo d'infra).
+# `uploader` (sans protobuf) suit le même commit quand il est publié ; sinon la beta garde son uploader.
 #
 # SÉCURITÉ : ce repo est public, donc ce workflow ne contient AUCUN secret de déploiement.
 #  - il n'écrit que sur ghcr.io/goyan/* via le GITHUB_TOKEN éphémère du job ;
@@ -11,7 +12,7 @@
 # Tags produits :
 #  - push sur `infogene`            -> :beta et :sha-<7 car.>   (la beta les déploie automatiquement)
 #  - tag git `vX.Y.Z-infogene.N`    -> :vX.Y.Z-infogene.N       (release, promue en prod par prod.tag)
-# pour chaque image ghcr.io/goyan/workadventure-{play,back,map-storage}.
+# pour chaque image ghcr.io/goyan/workadventure-{play,back,map-storage,uploader}.
 name: build-play
 
 on:
@@ -33,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [play, back, map-storage]
+        service: [play, back, map-storage, uploader]
     permissions:
       contents: read
       packages: write
