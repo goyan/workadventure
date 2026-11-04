@@ -2106,6 +2106,10 @@ message SpotifyListening {
   string artworkUrl = 7;
   // Where the track plays: "spotify" or "apple-music" (empty for older clients: Spotify).
   string source = 8;
+  // Position in the track, in milliseconds, at positionAt (milliseconds since the epoch, sender's clock): others
+  // deduce where the track is now, to listen along. Both 0 when unknown (older clients).
+  uint32 positionMs = 9;
+  double positionAt = 10;
 }
 
 /*message PartialSpaceUser{

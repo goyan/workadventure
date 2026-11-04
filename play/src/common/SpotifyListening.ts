@@ -9,6 +9,8 @@ export const EMPTY_SPOTIFY_LISTENING: SpotifyListening = {
     albumName: "",
     artworkUrl: "",
     source: "",
+    positionMs: 0,
+    positionAt: 0,
 };
 
 /** The players a track can come from; any other value is dropped. */
@@ -20,6 +22,8 @@ export function isListeningSource(value: string): value is ListeningSource {
 }
 
 const MAX_TEXT_LENGTH = 200;
+/** Longer than any track: a position past it is a client bug, not a track. */
+const MAX_POSITION_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The track link is rendered as a clickable link in other users' lists: only a Spotify track page is accepted.
@@ -45,6 +49,23 @@ export function isSpotifyArtworkUrl(value: string): boolean {
     return url.protocol === "https:" && url.hostname === "i.scdn.co" && url.pathname.startsWith("/image/");
 }
 
+/** `spotify:track:<id>`, what a Spotify player plays, from a track page; undefined for any other link. */
+export function spotifyTrackUri(trackUrl: string): string | undefined {
+    if (!isSpotifyTrackUrl(trackUrl)) {
+        return undefined;
+    }
+    const id = new URL(trackUrl).pathname.split("/")[2];
+    return id && /^[A-Za-z0-9]+$/.test(id) ? `spotify:track:${id}` : undefined;
+}
+
+/** Where the shared track is at `now`, deduced from the last reported position; undefined when unknown. */
+export function currentPositionMs(listening: SpotifyListening, now: number): number | undefined {
+    if (listening.positionAt === 0) {
+        return undefined;
+    }
+    return listening.positionMs + Math.max(0, now - listening.positionAt);
+}
+
 /**
  * Brings a client-provided value back to what we accept to forward to other users.
  */
@@ -61,6 +82,8 @@ export function sanitizeSpotifyListening(value: SpotifyListening | undefined): S
         albumName: value.albumName.slice(0, MAX_TEXT_LENGTH),
         artworkUrl: isSpotifyArtworkUrl(value.artworkUrl) ? value.artworkUrl : "",
         source: isListeningSource(value.source) ? value.source : "",
+        positionMs: Math.min(Math.max(Math.round(value.positionMs), 0), MAX_POSITION_MS),
+        positionAt: Number.isFinite(value.positionAt) && value.positionAt > 0 ? value.positionAt : 0,
     };
 }
 
