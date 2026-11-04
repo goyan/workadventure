@@ -220,6 +220,9 @@ Recette beta : garder un NPC sans audio dans une réunion/Jam pendant au moins
 30 secondes ; son avatar reste visible sans « Reconnexion en cours ». Vérifier
 le chat, un humain sans caméra/micro et, si disponible, un NPC avec audio.
 Tests de régression sur les pairs et les vignettes, y compris leurs délais.
+`VideoMediaBox` affiche aussi le nom, l'avatar et le menu du NPC lorsqu'aucun
+flux média n'existe : ces éléments ne dépendent plus de la boucle des flux.
+Un test d'interface vérifie leur présence sans vidéo ni spinner après 30 secondes.
 
 ### Réunion de zone seulement à plusieurs
 

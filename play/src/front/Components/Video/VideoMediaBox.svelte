@@ -22,6 +22,7 @@
     import { blocker } from "../../Utils/screenBlocker";
     import { findHandPosition, raisedHandsOrderStore } from "../../Stores/RaisedHandsStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
+    import { isTextOnlyNpc } from "../../Space/isTextOnlyNpc";
     import ActionMediaBox from "./ActionMediaBox.svelte";
     import RaisedHandBadge from "./RaisedHandBadge.svelte";
     import UserName from "./UserName.svelte";
@@ -400,6 +401,23 @@
         {/if}
 
         {#if showAfterDelay}
+            {#if streamableEntries.length === 0 && activeUserName && isTextOnlyNpc(extendedSpaceUser)}
+                <UserName
+                    name={name ?? "unknown"}
+                    picture={pictureStore}
+                    isPlayingAudio={false}
+                    {isHandRaised}
+                    isCameraDisabled={true}
+                    isBlocked={isCurrentUserBlackListed}
+                    position="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
+                    grayscale={false}
+                >
+                    <RaisedHandBadge spaceUserId={raisedHandSpaceUserId} spaceName={raisedHandSpaceName} />
+                    <div class="flex items-center justify-center picture-in-picture:hidden" bind:this={userMenuButton}>
+                        <UpDownChevron enabled={showUserSubMenu} onclick={toggleUserMenu} />
+                    </div>
+                </UserName>
+            {/if}
             {#each streamableEntries as streamableEntry (streamableEntry.id)}
                 <div
                     class="absolute inset-0"
