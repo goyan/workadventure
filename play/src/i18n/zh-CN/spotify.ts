@@ -63,6 +63,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "停止分享",
         noJam: "这里还没有分享 Jam。",
         linkInvite: "关联 Spotify 以分享你正在听的音乐",
+        homeJamOf: "{name} 的家庭 Jam",
+        startHome: "开始家庭 Jam",
+        stopHome: "结束家庭 Jam",
+        joinHome: "加入家庭 Jam",
+        leaveHome: "离开家庭 Jam",
+        homeQueueHint: "在 Spotify 中右键点击歌曲：“添加到家庭 Jam”。",
+        homeDesktopOnly: "家庭 Jam：仅限桌面应用和 Spicetify。",
     },
 };
 

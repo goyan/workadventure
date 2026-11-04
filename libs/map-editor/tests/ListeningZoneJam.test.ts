@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canUpdateListeningZoneJam, isSpotifyJamUrl, type ListeningZoneJam, parseListeningZoneJam } from "../src";
+import {
+    canUpdateListeningZoneJam,
+    isHomeJam,
+    isSpotifyJamUrl,
+    listeningZoneJamKey,
+    type ListeningZoneJam,
+    parseListeningZoneJam,
+} from "../src";
 
 const jamOf = (hostUuid: string): ListeningZoneJam => ({
     url: "https://spotify.link/abc123",
@@ -33,6 +40,20 @@ describe("parseListeningZoneJam", () => {
         expect(parseListeningZoneJam("null")).toBeNull();
         expect(parseListeningZoneJam("{not json")).toBeNull();
         expect(parseListeningZoneJam({ ...jamOf("alice"), url: "https://example.com" })).toBeNull();
+    });
+
+    it("reads a home Jam, which has a host and no invite link", () => {
+        const home = { home: true, hostUuid: "alice", hostName: "Alice" };
+        const parsed = parseListeningZoneJam(JSON.stringify(home));
+        expect(parsed).toEqual(home);
+        expect(isHomeJam(parsed)).toBe(true);
+        expect(isHomeJam(jamOf("alice"))).toBe(false);
+        expect(parseListeningZoneJam({ home: false, hostUuid: "alice", hostName: "Alice" })).toBeNull();
+    });
+
+    it("tells Jams apart by their link, or by their host for a home Jam", () => {
+        expect(listeningZoneJamKey(jamOf("alice"))).toBe("https://spotify.link/abc123");
+        expect(listeningZoneJamKey({ home: true, hostUuid: "alice", hostName: "Alice" })).toBe("home:alice");
     });
 });
 

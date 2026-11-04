@@ -68,6 +68,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "Arrêter le partage",
         noJam: "Aucune Jam n'est partagée ici pour l'instant.",
         linkInvite: "Liez Spotify pour partager ce que vous écoutez",
+        homeJamOf: "Jam maison de {name}",
+        startHome: "Lancer une Jam maison",
+        stopHome: "Arrêter la Jam maison",
+        joinHome: "Rejoindre la Jam maison",
+        leaveHome: "Quitter la Jam maison",
+        homeQueueHint: "Dans Spotify, clic droit sur un morceau : « Ajouter à la Jam maison ».",
+        homeDesktopOnly: "Jam maison : réservée au client desktop avec Spicetify.",
     },
 };
 

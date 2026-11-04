@@ -26,13 +26,35 @@ export function isSpotifyJamUrl(value: string): boolean {
     return url.hostname === "open.spotify.com" && url.pathname.startsWith("/socialsession/");
 }
 
-export const ListeningZoneJam = z.object({
+const SpotifyJam = z.object({
     url: z.string().max(512).refine(isSpotifyJamUrl),
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
 });
 
+/**
+ * A home Jam: no Spotify Jam, the guests' Spotify apps play the host's tracks (desktop app with the WorkAdventure
+ * Spicetify extension, Spotify Free included), and they add tracks to the host's queue.
+ */
+const HomeJam = z.object({
+    home: z.literal(true),
+    hostUuid: z.string().min(1).max(256),
+    hostName: z.string().max(256),
+});
+
+export const ListeningZoneJam = z.union([HomeJam, SpotifyJam]);
+
 export type ListeningZoneJam = z.infer<typeof ListeningZoneJam>;
+export type HomeJam = z.infer<typeof HomeJam>;
+
+export function isHomeJam(jam: ListeningZoneJam | null | undefined): jam is HomeJam {
+    return jam !== null && jam !== undefined && "home" in jam;
+}
+
+/** Tells one Jam from another: its invite link, or its host for a home Jam. */
+export function listeningZoneJamKey(jam: ListeningZoneJam): string {
+    return isHomeJam(jam) ? `home:${jam.hostUuid}` : jam.url;
+}
 
 /**
  * Reads the value of the Jam variable, as stored in JSON by the back. Anything that is not a valid Jam reads as

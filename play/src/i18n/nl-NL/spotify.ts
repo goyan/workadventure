@@ -68,6 +68,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "Stoppen met delen",
         noJam: "Hier wordt nog geen Jam gedeeld.",
         linkInvite: "Koppel Spotify om te delen waar je naar luistert",
+        homeJamOf: "Huis-Jam van {name}",
+        startHome: "Huis-Jam starten",
+        stopHome: "Huis-Jam beëindigen",
+        joinHome: "Meedoen met de huis-Jam",
+        leaveHome: "Huis-Jam verlaten",
+        homeQueueHint: "In Spotify, rechtsklik op een nummer: ‘Toevoegen aan de huis-Jam’.",
+        homeDesktopOnly: "Huis-Jam: alleen met de desktop-app en Spicetify.",
     },
 };
 

@@ -68,6 +68,13 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stop: "Deixa de compartir",
         noJam: "Encara no es comparteix cap Jam aquí.",
         linkInvite: "Vincula Spotify per compartir el que escoltes",
+        homeJamOf: "Jam casolana de {name}",
+        startHome: "Iniciar una Jam casolana",
+        stopHome: "Acabar la Jam casolana",
+        joinHome: "Unir-se a la Jam casolana",
+        leaveHome: "Sortir de la Jam casolana",
+        homeQueueHint: "A Spotify, clic dret en una cançó: «Afegeix a la Jam casolana».",
+        homeDesktopOnly: "Jam casolana: només amb l'app d'escriptori i Spicetify.",
     },
 };
 

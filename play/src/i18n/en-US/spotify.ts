@@ -65,6 +65,13 @@ const spotify: BaseTranslation = {
         stop: "Stop sharing",
         noJam: "No Jam is shared here yet.",
         linkInvite: "Link Spotify to share what you listen to",
+        homeJamOf: "{name}'s home Jam",
+        startHome: "Start a home Jam",
+        stopHome: "End the home Jam",
+        joinHome: "Join the home Jam",
+        leaveHome: "Leave the home Jam",
+        homeQueueHint: 'In Spotify, right-click a track: "Add to the home Jam".',
+        homeDesktopOnly: "Home Jam: with the desktop app and Spicetify only.",
     },
 };
 

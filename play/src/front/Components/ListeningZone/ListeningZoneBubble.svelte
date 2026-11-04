@@ -1,18 +1,22 @@
 <script lang="ts">
-    import { isSpotifyJamUrl } from "@workadventure/map-editor";
+    import { isHomeJam, isSpotifyJamUrl, listeningZoneJamKey } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { isPlayingTrack } from "../../../common/SpotifyListening";
     import {
         currentJamParticipantsCountStore,
         currentJamStore,
         isLocalUser,
+        joinHomeJam,
         joinJam,
+        leaveHomeJam,
         shareJam,
+        startHomeJam,
         stopSharingJam,
     } from "../../ListeningZone/ListeningZoneController";
     import { currentListeningZoneStore, joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
     import { spotifyAccount } from "../../Spotify/SpotifyAccount";
     import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
+    import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { handleOpenMenuEvent, settingsSubMenuTargetStore, SubMenusInterface } from "../../Stores/MenuStore";
     import Input from "../Input/Input.svelte";
@@ -30,7 +34,10 @@
     let zone = $derived($currentListeningZoneStore);
     let jam = $derived($currentJamStore);
     let isHost = $derived(jam !== null && isLocalUser(jam.hostUuid));
-    let joined = $derived(jam !== null && $joinedJamStore?.url === jam.url);
+    let joined = $derived(jam !== null && $joinedJamStore?.url === listeningZoneJamKey(jam));
+    let homeJam = $derived(isHomeJam(jam));
+    // A home Jam plays on the Spotify app of this computer, through the desktop app and the Spicetify extension.
+    let canHomeJam = $derived($listenAlongAvailableStore);
     let hostListening = $derived(jam ? $listeningByUserUuidStore.get(jam.hostUuid) : undefined);
     let hostTrack = $derived(isPlayingTrack(hostListening) ? hostListening : undefined);
 
@@ -68,7 +75,9 @@
                 <div class="flex-1 min-w-0">
                     <p class="m-0 text-sm font-bold text-white/95 truncate">
                         {jam
-                            ? $LL.spotify.listeningZone.jamOf({ name: jam.hostName })
+                            ? homeJam
+                                ? $LL.spotify.listeningZone.homeJamOf({ name: jam.hostName })
+                                : $LL.spotify.listeningZone.jamOf({ name: jam.hostName })
                             : zone.areaName || $LL.spotify.listeningZone.defaultName()}
                     </p>
                     {#if jam}
@@ -123,8 +132,25 @@
                 </form>
             {:else if jam && isHost}
                 <Button variant="light" appearance="border" size="sm" onclick={stopSharingJam}>
-                    {$LL.spotify.listeningZone.stop()}
+                    {homeJam ? $LL.spotify.listeningZone.stopHome() : $LL.spotify.listeningZone.stop()}
                 </Button>
+            {:else if jam && homeJam}
+                {#if canHomeJam}
+                    <Button
+                        variant="success"
+                        size="sm"
+                        appearance={joined ? "border" : "filled"}
+                        onclick={joined ? leaveHomeJam : joinHomeJam}
+                        dataTestId="listening-zone-join-home"
+                    >
+                        {joined ? $LL.spotify.listeningZone.leaveHome() : $LL.spotify.listeningZone.joinHome()}
+                    </Button>
+                    {#if joined}
+                        <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeQueueHint()}</p>
+                    {/if}
+                {:else}
+                    <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeDesktopOnly()}</p>
+                {/if}
             {:else if jam}
                 <Button
                     variant="success"
@@ -136,9 +162,22 @@
                     {joined ? $LL.spotify.listeningZone.joined() : $LL.spotify.listeningZone.join()}
                 </Button>
             {:else}
-                <Button variant="success" size="sm" onclick={() => (sharing = true)}>
-                    {$LL.spotify.listeningZone.share()}
-                </Button>
+                <div class="flex flex-col gap-2">
+                    <Button variant="success" size="sm" onclick={() => (sharing = true)}>
+                        {$LL.spotify.listeningZone.share()}
+                    </Button>
+                    {#if canHomeJam}
+                        <Button
+                            variant="success"
+                            appearance="border"
+                            size="sm"
+                            onclick={startHomeJam}
+                            dataTestId="listening-zone-start-home"
+                        >
+                            {$LL.spotify.listeningZone.startHome()}
+                        </Button>
+                    {/if}
+                </div>
             {/if}
 
             {#if !$linked && !readsLocalPlayer}
