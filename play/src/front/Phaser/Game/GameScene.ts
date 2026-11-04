@@ -1545,8 +1545,11 @@ export class GameScene extends DirtyScene {
             characters.push(asDoorCharacter(player));
             if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
-        this.duckRushManager?.forEachDoorOpener((position) => characters.push(position));
-        this.wanderingCharactersManager?.forEachDoorOpener((position) => characters.push(position));
+        // The animals open the doors without a sound.
+        this.duckRushManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
+        this.wanderingCharactersManager?.forEachDoorOpener((position) =>
+            characters.push({ ...position, silent: true }),
+        );
         this.doorAnimator.update(time, characters, listener);
     }
 
