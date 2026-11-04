@@ -24,6 +24,8 @@ const DesktopSpotifyTrack = z
             .refine((url) => url.startsWith("https://i.scdn.co/image/"), { message: "Not a Spotify cover" })
             .optional(),
         source: z.enum(["spotify", "apple-music"]).optional(),
+        positionMs: z.number().int().nonnegative().optional(),
+        positionAt: z.number().positive().optional(),
     })
     .nullable();
 

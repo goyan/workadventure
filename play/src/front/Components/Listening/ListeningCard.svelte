@@ -1,17 +1,37 @@
 <script lang="ts">
     import type { SpotifyListening } from "@workadventure/messages";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { isPlayingTrack, listeningSourceOf, listenTooLinks } from "../../../common/SpotifyListening";
+    import {
+        isPlayingTrack,
+        listeningSourceOf,
+        listenTooLinks,
+        spotifyTrackUri,
+    } from "../../../common/SpotifyListening";
+    import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import ListeningSourceIcon from "./ListeningSourceIcon.svelte";
 
     interface Props {
         listening: SpotifyListening | undefined;
+        /** The user who listens: set to offer listening along, undefined on one's own card. */
+        followableUserUuid?: string;
     }
 
-    let { listening }: Props = $props();
+    let { listening, followableUserUuid = undefined }: Props = $props();
 
     let playing = $derived(isPlayingTrack(listening) ? listening : undefined);
     let links = $derived(playing ? listenTooLinks(playing) : undefined);
+    // The desktop app plays a Spotify track on the Spotify app of this computer: Apple Music tracks have no link.
+    let followable = $derived(
+        followableUserUuid !== undefined &&
+            $listenAlongAvailableStore &&
+            playing !== undefined &&
+            spotifyTrackUri(playing.trackUrl) !== undefined,
+    );
+    let following = $derived(followableUserUuid !== undefined && $followedUserUuidStore === followableUserUuid);
+
+    function toggleFollow(): void {
+        followedUserUuidStore.set(following ? undefined : followableUserUuid);
+    }
 </script>
 
 {#if playing && links}
@@ -58,6 +78,16 @@
                     <ListeningSourceIcon source="apple-music" size="14" />Apple Music
                 </a>
             </div>
+            {#if followable || following}
+                <button
+                    type="button"
+                    class="mt-2 rounded-md border border-[#1ed760] px-2 py-1 text-xs font-bold text-[#1ed760] hover:bg-[#1ed760]/10"
+                    onclick={toggleFollow}
+                    data-testid="listen-along"
+                >
+                    {following ? $LL.spotify.card.stopListeningAlong() : $LL.spotify.card.listenAlong()}
+                </button>
+            {/if}
         </div>
     </div>
 {/if}

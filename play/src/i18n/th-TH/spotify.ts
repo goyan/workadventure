@@ -41,6 +41,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
     card: {
         listeningNow: "กำลังฟัง",
         listenToo: "ฟังด้วย",
+        listenAlong: "ฟังไปพร้อมกัน",
+        stopListeningAlong: "หยุดฟังไปพร้อมกัน",
     },
     userList: {
         jam: "Jam · {area}",

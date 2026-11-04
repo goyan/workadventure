@@ -11,6 +11,9 @@ export interface SpotifyTrack {
     artworkUrl?: string;
     /** Where it plays; Spotify when absent. */
     source?: "spotify" | "apple-music";
+    /** Position in the track (ms) at `positionAt` (ms since the epoch), to listen along; absent when unknown. */
+    positionMs?: number;
+    positionAt?: number;
 }
 
 /**
@@ -19,6 +22,7 @@ export interface SpotifyTrack {
  */
 const CurrentlyPlayingResponse = z.object({
     is_playing: z.boolean(),
+    progress_ms: z.number().nullable().optional(),
     currently_playing_type: z.string(),
     item: z
         .object({
@@ -41,12 +45,12 @@ export type CurrentlyPlayingResult =
     | { status: "forbidden" }
     | { status: "rateLimited"; retryAfterMs: number };
 
-export function parseCurrentlyPlaying(json: unknown): SpotifyTrack | undefined {
+export function parseCurrentlyPlaying(json: unknown, now = Date.now()): SpotifyTrack | undefined {
     const result = CurrentlyPlayingResponse.safeParse(json);
     if (!result.success) {
         return undefined;
     }
-    const { is_playing, currently_playing_type, item } = result.data;
+    const { is_playing, progress_ms, currently_playing_type, item } = result.data;
     if (!is_playing || currently_playing_type !== "track" || !item) {
         return undefined;
     }
@@ -58,6 +62,7 @@ export function parseCurrentlyPlaying(json: unknown): SpotifyTrack | undefined {
         // Spotify lists the covers from the largest (640 px) down: the medium one (300 px) is enough for a card.
         artworkUrl: (item.album?.images[1] ?? item.album?.images[0])?.url,
         source: "spotify",
+        ...(typeof progress_ms === "number" && { positionMs: progress_ms, positionAt: now }),
     };
 }
 

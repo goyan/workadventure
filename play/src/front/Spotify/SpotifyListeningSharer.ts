@@ -8,6 +8,8 @@ import { type CurrentlyPlayingResult, fetchCurrentlyPlaying, type SpotifyTrack }
 
 /** Spotify has no push API for the player: we poll, at a pace that stays far below its rate limit. */
 export const SPOTIFY_POLL_INTERVAL_MS = 15_000;
+/** A position closer than that to the one others deduce is not published again: positions move every second. */
+export const POSITION_DRIFT_MS = 3000;
 /** An account refused by the Spotify app stays refused until an admin registers it: no need to ask often. */
 const ACCESS_DENIED_POLL_INTERVAL_MS = 5 * 60_000;
 
@@ -130,11 +132,26 @@ export class SpotifyListeningSharer {
             albumName: track?.album ?? "",
             artworkUrl: track?.artworkUrl ?? "",
             source: track?.source ?? "",
+            positionMs: track?.positionMs ?? 0,
+            positionAt: track?.positionAt ?? 0,
         };
-        if (JSON.stringify(listening) === JSON.stringify(this.published)) {
+        if (sameListening(listening, this.published)) {
             return;
         }
         this.published = listening;
         this.publish(listening);
     }
+}
+
+/** Same track, Jam and source, at a position others would deduce from the previous one. */
+function sameListening(next: SpotifyListening, previous: SpotifyListening): boolean {
+    const withoutPosition = (listening: SpotifyListening) => ({ ...listening, positionMs: 0, positionAt: 0 });
+    if (JSON.stringify(withoutPosition(next)) !== JSON.stringify(withoutPosition(previous))) {
+        return false;
+    }
+    if (next.positionAt === 0 || previous.positionAt === 0) {
+        return next.positionAt === previous.positionAt;
+    }
+    const deduced = previous.positionMs + (next.positionAt - previous.positionAt);
+    return Math.abs(deduced - next.positionMs) < POSITION_DRIFT_MS;
 }

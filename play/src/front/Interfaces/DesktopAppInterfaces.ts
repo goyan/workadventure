@@ -21,6 +21,16 @@ export interface DesktopSpotifyTrack {
     artworkUrl?: string;
     /** Spotify when absent. */
     source?: "spotify" | "apple-music";
+    /** Position in the track (ms) at `positionAt` (ms since the epoch); absent when the player does not tell. */
+    positionMs?: number;
+    positionAt?: number;
+}
+
+/** A track to play on the Spotify app of this computer, at a position: listening along with another user. */
+export interface DesktopFollowTarget {
+    /** spotify:track:… */
+    uri: string;
+    positionMs: number;
 }
 
 /**
@@ -63,4 +73,11 @@ export type WorkAdventureDesktopApi = {
     watchSpotifyTrack?: (callback: (track: DesktopSpotifyTrack | null) => void) => () => void;
     /** Optional: WorkAdventure reports what the local user shares about their listening, on every change. */
     reportListening?: (listening: DesktopListening) => void;
+    /**
+     * Optional: plays `target` on the Spotify app of this computer (null: stop following), through the WorkAdventure
+     * Spicetify extension. Called again whenever the followed user changes track or drifts away.
+     */
+    followListening?: (target: DesktopFollowTarget | null) => void;
+    /** Optional: tells, now and on every change, whether the WorkAdventure Spicetify extension is connected. */
+    onListenAlongAvailable?: (callback: (available: boolean) => void) => void;
 };

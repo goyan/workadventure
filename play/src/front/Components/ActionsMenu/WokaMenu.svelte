@@ -16,6 +16,7 @@
     import { availabilityStatusStore } from "../../Stores/MediaStore";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import ListeningCard from "../Listening/ListeningCard.svelte";
+    import { localUserStore } from "../../Connection/LocalUserStore";
 
     let wokaMenuData: WokaMenuData | undefined = $state();
     let sortedActions: WokaMenuAction[] | undefined = $state();
@@ -142,7 +143,12 @@
                     </div>
                 </div>
 
-                <ListeningCard listening={$listeningByUserUuidStore.get(wokaMenuData.userUuid)} />
+                <ListeningCard
+                    listening={$listeningByUserUuidStore.get(wokaMenuData.userUuid)}
+                    followableUserUuid={wokaMenuData.userUuid === localUserStore.getLocalUser()?.uuid
+                        ? undefined
+                        : wokaMenuData.userUuid}
+                />
 
                 {#if wokaMenuData.visitCardUrl}
                     <VisitCard

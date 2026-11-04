@@ -22,6 +22,14 @@ const playingTrack = {
 const respondWith = (response: Response) => vi.fn<typeof fetch>().mockResolvedValue(response);
 
 describe("parseCurrentlyPlaying", () => {
+    it("keeps the position in the track, timed at the reading", () => {
+        expect(parseCurrentlyPlaying({ ...playingTrack, progress_ms: 61_000 }, 1_000_000)).toMatchObject({
+            positionMs: 61_000,
+            positionAt: 1_000_000,
+        });
+        expect(parseCurrentlyPlaying(playingTrack)).not.toHaveProperty("positionMs");
+    });
+
     it("reads the playing track", () => {
         expect(parseCurrentlyPlaying(playingTrack)).toEqual({
             title: "Harder, Better, Faster, Stronger",

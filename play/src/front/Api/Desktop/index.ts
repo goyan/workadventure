@@ -15,6 +15,7 @@ import { resetAllStatusStoreExcept } from "../../Rules/StatusRules/statusChanger
 import type { RequestedStatus } from "../../Rules/StatusRules/statusRules";
 import { getStatusLabel } from "../../Utils/AvailabilityStatus";
 import { isPlayingTrack, listeningSourceOf } from "../../../common/SpotifyListening";
+import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
 
 declare global {
     interface Window {
@@ -65,6 +66,7 @@ class DesktopApi {
         });
 
         this.initStatus(window.WAD);
+        window.WAD.onListenAlongAvailable?.((available) => listenAlongAvailableStore.set(available === true));
     }
 
     /** What the local user shares, for the desktop app (e.g. its menu bar). Optional: older apps ignore it. */

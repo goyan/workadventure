@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopStatusRequest, WorkAdventureDesktopApi } from "../../Interfaces/DesktopAppInterfaces";
@@ -18,6 +18,7 @@ vi.mock("../../Utils/AvailabilityStatus", () => ({
 }));
 
 const { desktopApi } = await import("./index");
+const { listenAlongAvailableStore } = await import("../../Spotify/ListeningFollower");
 
 function installDesktopApp(extra: Partial<WorkAdventureDesktopApi>): void {
     window.WAD = {
@@ -86,6 +87,8 @@ describe("DesktopApi listening", () => {
         albumName: "Album",
         artworkUrl: "https://i.scdn.co/image/abc",
         source: "",
+        positionMs: 0,
+        positionAt: 0,
     };
 
     afterEach(() => {
@@ -122,5 +125,24 @@ describe("DesktopApi listening", () => {
         expect(() => desktopApi.reportListening(listening)).not.toThrow();
         installDesktopApp({});
         expect(() => desktopApi.reportListening(listening)).not.toThrow();
+    });
+});
+
+describe("DesktopApi listening along", () => {
+    afterEach(() => {
+        delete window.WAD;
+        listenAlongAvailableStore.set(false);
+    });
+
+    it("offers listening along only while the desktop app reports the Spicetify extension connected", () => {
+        let report: ((available: boolean) => void) | undefined;
+        installDesktopApp({ onListenAlongAvailable: (callback) => (report = callback) });
+
+        desktopApi.init();
+        expect(get(listenAlongAvailableStore)).toBe(false);
+        report?.(true);
+        expect(get(listenAlongAvailableStore)).toBe(true);
+        report?.(false);
+        expect(get(listenAlongAvailableStore)).toBe(false);
     });
 });

@@ -197,3 +197,45 @@ describe("SpotifyListeningSharer", () => {
         });
     });
 });
+
+describe("SpotifyListeningSharer positions", () => {
+    function createPositionHarness() {
+        const published: SpotifyListening[] = [];
+        let onTrack: ((track: SpotifyTrack | undefined) => void) | undefined;
+        const sharer = new SpotifyListeningSharer(
+            (listening) => published.push(listening),
+            {
+                linked: writable(false),
+                getAccessToken: () => Promise.resolve("token"),
+                expireAccessToken: vi.fn(),
+                reportAccessDenied: vi.fn(),
+            },
+            writable(true),
+            writable<JoinedJam | undefined>(undefined),
+            vi.fn(),
+            POLL_MS,
+            {
+                watch: (callback) => {
+                    onTrack = callback;
+                    return () => undefined;
+                },
+            },
+        );
+        const play = (positionMs: number, positionAt: number) =>
+            onTrack?.({ title: "Song", artist: "Artist", url: "", positionMs, positionAt });
+        return { sharer, published, play };
+    }
+
+    it("publishes the position, then again only when it moves away from the deduced one", () => {
+        const { sharer, published, play } = createPositionHarness();
+
+        play(10_000, 1_000);
+        play(15_000, 6_000);
+        expect(published).toHaveLength(1);
+        expect(published[0]).toMatchObject({ positionMs: 10_000, positionAt: 1_000 });
+
+        play(90_000, 7_000);
+        expect(published).toHaveLength(2);
+        sharer.destroy();
+    });
+});
