@@ -1,15 +1,20 @@
 import { get } from "svelte/store";
-import { AvailabilityStatus } from "@workadventure/messages";
+import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import {
     availabilityStatusStore,
     requestedCameraState,
     requestedMicrophoneState,
     silentStore,
 } from "../../Stores/MediaStore";
-import type { DesktopStatusRequest, WorkAdventureDesktopApi } from "../../Interfaces/DesktopAppInterfaces";
+import type {
+    DesktopListening,
+    DesktopStatusRequest,
+    WorkAdventureDesktopApi,
+} from "../../Interfaces/DesktopAppInterfaces";
 import { resetAllStatusStoreExcept } from "../../Rules/StatusRules/statusChangerFunctions";
 import type { RequestedStatus } from "../../Rules/StatusRules/statusRules";
 import { getStatusLabel } from "../../Utils/AvailabilityStatus";
+import { isPlayingTrack, listeningSourceOf } from "../../../common/SpotifyListening";
 
 declare global {
     interface Window {
@@ -60,6 +65,20 @@ class DesktopApi {
         });
 
         this.initStatus(window.WAD);
+    }
+
+    /** What the local user shares, for the desktop app (e.g. its menu bar). Optional: older apps ignore it. */
+    reportListening(listening: SpotifyListening) {
+        const desktopListening: DesktopListening = {
+            title: listening.trackTitle,
+            artist: listening.artistName,
+            album: listening.albumName,
+            url: listening.trackUrl,
+            artworkUrl: listening.artworkUrl,
+            source: isPlayingTrack(listening) ? listeningSourceOf(listening) : "",
+            jamAreaName: listening.jamAreaId === "" ? "" : listening.jamAreaName,
+        };
+        window.WAD?.reportListening?.(desktopListening);
     }
 
     /** Optional: older desktop apps provide neither member, and nothing changes for them. */

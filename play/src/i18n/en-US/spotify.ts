@@ -11,6 +11,8 @@ const spotify: BaseTranslation = {
         share: "Share what I listen to",
         desktopDetected:
             "Read from the Spotify app of this computer: no account to link, a free Spotify account is enough.",
+        desktopLinkOtherDevices:
+            "To also share the music played on another device (phone, web player, speaker), link your Spotify account.",
         desktopAppHint:
             "No account to link or Premium needed with the WorkAdventure desktop app: it reads the Spotify app of your Mac.",
         desktopAppLink: "Get the desktop app",

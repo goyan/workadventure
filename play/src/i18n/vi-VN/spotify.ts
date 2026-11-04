@@ -12,6 +12,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         share: "Chia sẻ những gì tôi đang nghe",
         desktopDetected:
             "Đọc từ ứng dụng Spotify trên máy này: không cần liên kết tài khoản, tài khoản miễn phí là đủ.",
+        desktopLinkOtherDevices:
+            "Để chia sẻ cả nhạc nghe trên thiết bị khác (điện thoại, trình phát web, loa), hãy liên kết tài khoản Spotify của bạn.",
         desktopAppHint:
             "Với ứng dụng desktop WorkAdventure, không cần liên kết tài khoản hay Premium: ứng dụng đọc Spotify trên máy Mac của bạn.",
         desktopAppLink: "Tải ứng dụng desktop",

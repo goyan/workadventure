@@ -12,6 +12,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         share: "Condividi cosa ascolto",
         desktopDetected:
             "Letto dall'app Spotify di questo computer: nessun account da collegare, basta un account gratuito.",
+        desktopLinkOtherDevices:
+            "Per condividere anche la musica ascoltata su un altro dispositivo (telefono, web player, altoparlante), collega il tuo account Spotify.",
         desktopAppHint:
             "Con l'app desktop di WorkAdventure nessun account da collegare né Premium: legge l'app Spotify del tuo Mac.",
         desktopAppLink: "Scarica l'app desktop",

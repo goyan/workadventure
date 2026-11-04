@@ -23,6 +23,24 @@ export interface DesktopSpotifyTrack {
     source?: "spotify" | "apple-music";
 }
 
+/**
+ * What the local user shares about their listening, whatever its source (Spotify or Music app of this computer, or
+ * the Web API of a linked account). Every field is empty when nothing is shared.
+ */
+export interface DesktopListening {
+    title: string;
+    artist: string;
+    album: string;
+    /** https://open.spotify.com/track/…, or empty when the player gives no public link (Apple Music). */
+    url: string;
+    /** https://i.scdn.co/image/… (Spotify only). */
+    artworkUrl: string;
+    /** Empty when nothing plays. */
+    source: "spotify" | "apple-music" | "";
+    /** The listening zone whose Spotify Jam the user joined, empty otherwise. */
+    jamAreaName: string;
+}
+
 /** Statuses a desktop app may request (see DESKTOP_STATUS_REQUESTS in Api/Desktop/index.ts). */
 export type DesktopStatusRequest = "online" | "busy" | "do-not-disturb" | "back-in-a-moment";
 
@@ -43,4 +61,6 @@ export type WorkAdventureDesktopApi = {
      * change (null: nothing plays, or Spotify is closed). Never launches Spotify.
      */
     watchSpotifyTrack?: (callback: (track: DesktopSpotifyTrack | null) => void) => () => void;
+    /** Optional: WorkAdventure reports what the local user shares about their listening, on every change. */
+    reportListening?: (listening: DesktopListening) => void;
 };

@@ -199,6 +199,7 @@ import type { SpaceInterface } from "../../Space/SpaceInterface";
 import { spotifyAccount } from "../../Spotify/SpotifyAccount";
 import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
 import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
+import { desktopApi } from "../../Api/Desktop";
 import {
     bindListeningDirectory,
     type ListeningByUserUuid,
@@ -1864,7 +1865,10 @@ export class GameScene extends DirtyScene {
      */
     private startSpotifyListening(worldSpace: SpaceInterface): Unsubscriber[] {
         const sharer = new SpotifyListeningSharer(
-            (spotifyListening) => worldSpace.emitUpdateUser({ spotifyListening }),
+            (spotifyListening) => {
+                worldSpace.emitUpdateUser({ spotifyListening });
+                desktopApi.reportListening(spotifyListening);
+            },
             spotifyAccount,
             spotifySharingEnabledStore,
             joinedJamStore,
