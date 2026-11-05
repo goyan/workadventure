@@ -19,20 +19,100 @@
     font-display: swap;
 }
 
+/*
+ * Palettes: they redefine the HSL variables of the WorkAdventure design system on <html>, so the whole interface
+ * (menus, action bar, settings, buttons) follows, not only the editor. "night" is the default design of WorkAdventure
+ * moved toward the desktop client; the others change the hue of its surfaces and of its accent.
+ */
+:root[data-retro-palette="night"] {
+    --contrast-100: 223 30% 88%;
+    --contrast-200: 223 28% 76%;
+    --contrast-300: 223 26% 62%;
+    --contrast-400: 223 24% 42%;
+    --contrast-500: 223 26% 34%;
+    --contrast-600: 223 29% 26%;
+    --contrast: 223 30% 16%;
+    --contrast-800: 223 30% 16%;
+    --contrast-900: 223 34% 12%;
+    --contrast-1000: 224 38% 9%;
+    --contrast-1100: 224 40% 6%;
+}
+
+:root[data-retro-palette="forest"] {
+    --contrast-100: 140 22% 88%;
+    --contrast-200: 140 20% 76%;
+    --contrast-300: 140 16% 60%;
+    --contrast-400: 140 18% 38%;
+    --contrast-500: 140 20% 30%;
+    --contrast-600: 140 22% 22%;
+    --contrast: 140 24% 14%;
+    --contrast-800: 140 24% 14%;
+    --contrast-900: 140 26% 10%;
+    --contrast-1000: 140 28% 7%;
+    --contrast-1100: 140 30% 5%;
+    --secondary-500: 145 45% 55%;
+    --secondary-600: 145 48% 52%;
+    --secondary: 145 45% 45%;
+    --secondary-800: 145 48% 40%;
+    --secondary-900: 145 50% 35%;
+    --secondary-1000: 145 52% 30%;
+}
+
+:root[data-retro-palette="ember"] {
+    --contrast-100: 18 30% 88%;
+    --contrast-200: 18 26% 76%;
+    --contrast-300: 18 22% 62%;
+    --contrast-400: 16 22% 40%;
+    --contrast-500: 15 22% 32%;
+    --contrast-600: 14 22% 24%;
+    --contrast: 12 22% 16%;
+    --contrast-800: 12 22% 16%;
+    --contrast-900: 12 24% 11%;
+    --contrast-1000: 12 26% 8%;
+    --contrast-1100: 12 28% 6%;
+    --secondary-500: 24 80% 65%;
+    --secondary-600: 24 82% 60%;
+    --secondary: 24 74% 55%;
+    --secondary-800: 22 72% 48%;
+    --secondary-900: 20 72% 42%;
+    --secondary-1000: 18 74% 36%;
+}
+
+:root[data-retro-palette="gameboy"] {
+    --contrast-100: 90 40% 88%;
+    --contrast-200: 88 34% 74%;
+    --contrast-300: 86 28% 60%;
+    --contrast-400: 100 22% 38%;
+    --contrast-500: 105 22% 30%;
+    --contrast-600: 108 24% 22%;
+    --contrast: 110 26% 14%;
+    --contrast-800: 110 26% 14%;
+    --contrast-900: 112 28% 10%;
+    --contrast-1000: 114 30% 7%;
+    --contrast-1100: 116 32% 5%;
+    --secondary-500: 75 70% 52%;
+    --secondary-600: 75 75% 46%;
+    --secondary: 74 83% 37%;
+    --secondary-800: 74 85% 32%;
+    --secondary-900: 74 88% 28%;
+    --secondary-1000: 74 90% 24%;
+}
+
+/* The tokens of the menus are aliases of the design system: one source of colors for the whole interface. */
 .retro-theme {
-    --rt-bg: #141a29;
-    --rt-bg-deep: #0e1320;
-    --rt-surface: #1e2638;
-    --rt-surface-raised: #262f45;
-    --rt-line: #2f3a55;
-    --rt-line-strong: #46527a;
-    --rt-text: #e9edf7;
-    --rt-muted: #94a0bd;
-    --rt-accent: #4f5ff0;
-    --rt-accent-hover: #6170ff;
-    --rt-accent-soft: rgb(79 95 240 / 0.16);
+    --rt-bg: hsl(var(--contrast-900));
+    --rt-bg-deep: hsl(var(--contrast-1000));
+    --rt-surface: hsl(var(--contrast));
+    --rt-surface-raised: hsl(var(--contrast-600));
+    --rt-line: hsl(var(--contrast-600));
+    --rt-line-strong: hsl(var(--contrast-500));
+    --rt-text: hsl(var(--contrast-100));
+    --rt-muted: hsl(var(--contrast-300));
+    --rt-accent: hsl(var(--secondary));
+    --rt-accent-hover: hsl(var(--secondary-600));
+    --rt-accent-soft: hsl(var(--secondary) / 0.16);
     --rt-highlight: #ffd36b;
-    --rt-primary: #4f5ff0;
+    --rt-primary: hsl(var(--secondary));
     --rt-danger: #ec7c62;
     --rt-hitbox: #ec7c62;
     --rt-water: #5ec4f5;
@@ -42,41 +122,9 @@
     --rt-font-pixel: "Pixelify Sans", system-ui, sans-serif;
 
     color: var(--rt-text);
-    background: color-mix(in srgb, var(--rt-bg) 94%, transparent);
+    background: hsl(var(--contrast-900) / 0.94);
     backdrop-filter: blur(12px);
     scrollbar-color: var(--rt-line-strong) transparent;
-}
-
-.retro-theme[data-retro-palette="forest"],
-[data-retro-palette="forest"] .retro-theme {
-    --rt-accent: #3fa76a;
-    --rt-accent-hover: #4cbf7b;
-    --rt-accent-soft: rgb(63 167 106 / 0.16);
-    --rt-primary: #3fa76a;
-}
-
-.retro-theme[data-retro-palette="ember"],
-[data-retro-palette="ember"] .retro-theme {
-    --rt-accent: #e07b3c;
-    --rt-accent-hover: #f08f4f;
-    --rt-accent-soft: rgb(224 123 60 / 0.16);
-    --rt-primary: #e07b3c;
-}
-
-.retro-theme[data-retro-palette="gameboy"],
-[data-retro-palette="gameboy"] .retro-theme {
-    --rt-bg: #172117;
-    --rt-bg-deep: #101810;
-    --rt-surface: #1f2c1f;
-    --rt-surface-raised: #283828;
-    --rt-line: #344a33;
-    --rt-line-strong: #4d6b49;
-    --rt-text: #e3f0d6;
-    --rt-muted: #9fb592;
-    --rt-accent: #8bac0f;
-    --rt-accent-hover: #9fc21a;
-    --rt-accent-soft: rgb(139 172 15 / 0.18);
-    --rt-primary: #6f8f12;
 }
 
 .retro-theme .retro-panel {
