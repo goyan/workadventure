@@ -470,6 +470,49 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
     entityEditor: {
         eraser: "ยางลบ",
         eraserHint: "คลิกหรือลากผ่านวัตถุเพื่อลบ",
@@ -538,6 +581,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "หมุน",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "ด้านหลัง",
+                inFront: "ด้านหน้า",
+                hint: "ลากเส้นสีเหลือง: เท้าอยู่เหนือเส้น = อยู่หลังวัตถุ ใต้เส้น = อยู่หน้า",
+            },
             sittable: {
                 label: "นั่งได้",
                 description: "เมื่อแตะวัตถุ ผู้เล่นจะนั่งตรงกลางพื้นที่ชน (โซฟามีที่นั่งต่อช่อง)",

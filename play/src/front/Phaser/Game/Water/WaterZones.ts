@@ -1,5 +1,7 @@
 import type * as Phaser from "phaser";
+import type { InteractionTrigger } from "@workadventure/map-editor";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
+import { getObjectInteraction } from "../../../Utils/ObjectCategories";
 import type { GameScene } from "../GameScene";
 
 /** A rectangle of water in world pixels. */
@@ -8,6 +10,8 @@ export interface WaterRectangle {
     y: number;
     width: number;
     height: number;
+    /** `auto`: players dive on touching it; `key` (default): with the interaction key at its edge. */
+    trigger?: InteractionTrigger;
 }
 
 interface Point {
@@ -38,12 +42,20 @@ export function getWaterRectangles(scene: Phaser.Scene): WaterRectangle[] {
         return cache.rectangles;
     }
     // The map may not be loaded yet when the first characters are created.
-    const entities = (scene as Partial<GameScene>).getGameMapFrontWrapper?.()?.getEntitiesManager?.()?.getEntities();
+    const gameScene = scene as Partial<GameScene>;
+    const entities = gameScene.getGameMapFrontWrapper?.()?.getEntitiesManager?.()?.getEntities();
+    const categories = gameScene.wamFile?.settings?.categories;
     const rectangles: WaterRectangle[] = [];
     for (const entity of entities?.values() ?? []) {
-        const water = entity.getPrefab().water;
-        if (water?.length) {
-            rectangles.push(...getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, water));
+        const prefab = entity.getPrefab();
+        if (prefab.water?.length) {
+            const { trigger } = getObjectInteraction(prefab, categories);
+            rectangles.push(
+                ...getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, prefab.water).map((rectangle) => ({
+                    ...rectangle,
+                    trigger,
+                })),
+            );
         }
     }
     cache = { scene, frame, rectangles };
@@ -66,8 +78,11 @@ export function intersectsWater(rectangles: WaterRectangle[], box: WaterRectangl
  * Where a player standing at `point` lands when diving: the nearest water within DIVE_DISTANCE, DIVE_DEPTH inside
  * its edge (or its middle, for a pool narrower than that). Undefined when no water is close enough.
  */
-export function findDiveTarget(rectangles: WaterRectangle[], point: Point): Point | undefined {
-    let best: { target: Point; distance: number } | undefined;
+export function findDiveTarget(
+    rectangles: WaterRectangle[],
+    point: Point,
+): (Point & { distance: number; trigger: InteractionTrigger }) | undefined {
+    let best: { target: Point; distance: number; trigger: InteractionTrigger } | undefined;
     for (const r of rectangles) {
         const nearestX = clamp(point.x, r.x, r.x + r.width);
         const nearestY = clamp(point.y, r.y, r.y + r.height);
@@ -77,13 +92,14 @@ export function findDiveTarget(rectangles: WaterRectangle[], point: Point): Poin
         }
         best = {
             distance,
+            trigger: r.trigger ?? "key",
             target: {
                 x: clampInside(point.x, r.x, r.width),
                 y: clampInside(point.y, r.y, r.height),
             },
         };
     }
-    return best?.target;
+    return best ? { ...best.target, distance: best.distance, trigger: best.trigger } : undefined;
 }
 
 /** Whether walking straight from `from` to `to` goes through water (sampled every 4 pixels). */

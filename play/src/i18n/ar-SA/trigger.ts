@@ -8,6 +8,7 @@ const trigger: DeepPartial<Translation["trigger"]> = {
     object: `[SPACE] للتفاعل 👀`, // [SPACEBAR] to interact 👀
     spaceKeyboard: `[SPACE]`, // [SPACEBAR]
     escapeKeyboard: `[ESC]`,
+    sit: "[مسافة] للجلوس 🪑",
     swim: "[مسافة] للسباحة 🏊",
     mobile: {
         cowebsite: "👆 لفتح الموقع الإلكتروني 👀", // 👆 to open the website 👀

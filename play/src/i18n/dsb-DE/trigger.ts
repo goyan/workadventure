@@ -8,6 +8,7 @@ const trigger: DeepPartial<Translation["trigger"]> = {
     object: "Tłoc PROZNU TASTU abo pótusni how, aby z nim interagował 👀",
     spaceKeyboard: "[PROZNA TASTA]",
     escapeKeyboard: "[ESC]",
+    sit: "[PRAZNY TASTER] za sedanje 🪑",
     swim: "[PRAZNY TASTER] za płuwanje 🏊",
     mobile: {
         cowebsite: "👆 aby se wótcynił webbok 👀",

@@ -19,8 +19,8 @@ describe("WaterZones", () => {
     });
 
     it("dives from the edge to a spot inside the water, in front of the player", () => {
-        expect(findDiveTarget([pool], { x: 150, y: 90 })).toEqual({ x: 150, y: 100 + DIVE_DEPTH });
-        expect(findDiveTarget([pool], { x: 310, y: 120 })).toEqual({ x: 300 - DIVE_DEPTH, y: 120 });
+        expect(findDiveTarget([pool], { x: 150, y: 90 })).toMatchObject({ x: 150, y: 100 + DIVE_DEPTH, distance: 10 });
+        expect(findDiveTarget([pool], { x: 310, y: 120 })).toMatchObject({ x: 300 - DIVE_DEPTH, y: 120 });
     });
 
     it("offers no dive far from the water", () => {
@@ -30,7 +30,12 @@ describe("WaterZones", () => {
 
     it("dives into the middle of a narrow pool", () => {
         const channel = { x: 0, y: 0, width: 20, height: 100 };
-        expect(findDiveTarget([channel], { x: -5, y: 50 })).toEqual({ x: 10, y: 50 });
+        expect(findDiveTarget([channel], { x: -5, y: 50 })).toMatchObject({ x: 10, y: 50 });
+    });
+
+    it("dives on contact into water set to it, with the key otherwise", () => {
+        expect(findDiveTarget([{ ...pool, trigger: "auto" }], { x: 150, y: 95 })?.trigger).toBe("auto");
+        expect(findDiveTarget([pool], { x: 150, y: 95 })?.trigger).toBe("key");
     });
 
     it("detects a walk across the water", () => {

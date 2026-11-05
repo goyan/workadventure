@@ -19,12 +19,15 @@ import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
 import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Water/WaterZones";
-import { DivePrompt } from "../Game/Water/DivePrompt";
+import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
+import LL from "../../../i18n/i18n-svelte";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatUnderFeet, isSeatTaken } from "./Seat";
 
+/** Water set to dive on contact: the body center this close to it makes the player dive. */
+const AUTO_DIVE_DISTANCE = 10;
 /** Swimming is slower than walking. */
 const SWIM_SPEED_FACTOR = 0.6;
 
@@ -44,8 +47,9 @@ export class Player extends Character {
     private ignoredSeatId: string | undefined;
     private seatEntityId: string | undefined;
     private swimming = false;
-    private diveTarget: { x: number; y: number } | undefined;
-    private readonly divePrompt: DivePrompt;
+    private diveTarget: ReturnType<typeof findDiveTarget>;
+    private readonly divePrompt: InteractionPrompt;
+    private readonly sitPrompt: InteractionPrompt;
 
     constructor(
         Scene: GameScene,
@@ -62,7 +66,8 @@ export class Player extends Character {
         this.getBody().setImmovable(false);
         this.destinationMarker = new WalkDestinationMarker(Scene);
         this.runSmokeTrail = new RunSmokeTrail(Scene);
-        this.divePrompt = new DivePrompt(Scene);
+        this.divePrompt = new InteractionPrompt(Scene, "water-dive", () => get(LL).trigger.swim());
+        this.sitPrompt = new InteractionPrompt(Scene, "seat-sit", () => get(LL).trigger.sit());
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -133,6 +138,15 @@ export class Player extends Character {
             this.ignoredSeatId = undefined;
         }
         if (!seat || seat.id === this.ignoredSeatId || isSeatTaken(this.scene, seat)) {
+            this.sitPrompt.hide();
+            return;
+        }
+        if (seat.trigger === "key") {
+            // A seat set to the interaction key: offer it, sit only when asked.
+            this.sitPrompt.show(() => {
+                this.sitPrompt.hide();
+                this.slideToSeat(seat);
+            });
             return;
         }
         this.slideToSeat(seat);
@@ -246,10 +260,13 @@ export class Player extends Character {
             water.length > 0 && !this.isSeated() && !this.isSlidingToSeat
                 ? findDiveTarget(water, { x: body.center.x, y: body.center.y })
                 : undefined;
-        if (this.diveTarget) {
-            this.divePrompt.show(this.dive);
-        } else {
+        if (!this.diveTarget) {
             this.divePrompt.hide();
+        } else if (this.diveTarget.trigger === "auto" && this.diveTarget.distance <= AUTO_DIVE_DISTANCE) {
+            // Water set to dive on contact: touching its edge is enough.
+            this.dive();
+        } else {
+            this.divePrompt.show(this.dive);
         }
     }
 
@@ -511,6 +528,7 @@ export class Player extends Character {
     destroy(): void {
         this.unsubscribeVisibilityStore();
         this.divePrompt.hide();
+        this.sitPrompt.hide();
         this.destinationMarker.destroy();
         super.destroy();
     }

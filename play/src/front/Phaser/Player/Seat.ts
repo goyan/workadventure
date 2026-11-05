@@ -1,10 +1,10 @@
 import { PositionMessage_Direction } from "@workadventure/messages";
-import type { EntityPrefab } from "@workadventure/map-editor";
+import type { EntityPrefab, InteractionTrigger } from "@workadventure/map-editor";
 import type { GameScene } from "../Game/GameScene";
 import type { Character } from "../Entity/Character";
 import type { GameMapFrontWrapper } from "../Game/GameMap/GameMapFrontWrapper";
 import type { EntitiesManager } from "../Game/GameMap/EntitiesManager";
-import { isSeatObject } from "../../Utils/EntityCategory";
+import { getObjectInteraction } from "../../Utils/ObjectCategories";
 
 // Below this distance (in pixels), a character is considered to be exactly on its seat.
 const SEAT_POSITION_TOLERANCE = 1.5;
@@ -19,6 +19,8 @@ export interface Seat {
      * the hitbox and a little margin, since the hitbox keeps the player from standing on the seat itself.
      */
     reach?: { x: number; y: number; width: number; height: number };
+    /** `auto`: the player sits on walking onto it; `key`: the interaction key makes it sit (category settings). */
+    trigger: InteractionTrigger;
     direction: PositionMessage_Direction;
     /** Depth of the seated character: above the seat, except when it turns its back (the backrest hides it). */
     depth: number;
@@ -47,11 +49,13 @@ function getSeats(scene: GameScene): Seat[] {
         return [];
     }
     const { width, height } = gameMapFrontWrapper.getTileDimensions();
+    const categories = scene.wamFile?.settings?.categories;
     const seats: Seat[] = [];
     for (const [entityId, entity] of entitiesManager.getEntities()) {
         const prefab = entity.getPrefab();
         const direction = toPositionDirection(prefab.direction);
         const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -1 : 1);
+        const { interaction, trigger } = getObjectInteraction(prefab, categories);
         if (prefab.seat) {
             prefab.seat.forEach((tile, index) => {
                 seats.push({
@@ -59,11 +63,12 @@ function getSeats(scene: GameScene): Seat[] {
                     entityId,
                     direction,
                     depth,
+                    trigger: interaction === "sit" ? trigger : "auto",
                     feet: { x: entity.x + tile.x * width, y: entity.y + tile.y * height },
                 });
             });
-        } else if (prefab.sittable ?? isSeatObject(prefab)) {
-            seats.push(...deduceSeats(entityId, entity, direction, depth, width));
+        } else if (interaction === "sit") {
+            seats.push(...deduceSeats(entityId, entity, direction, depth, width, trigger));
         }
     }
     return seats;
@@ -82,6 +87,7 @@ function deduceSeats(
     direction: PositionMessage_Direction,
     depth: number,
     tileWidth: number,
+    trigger: InteractionTrigger,
 ): Seat[] {
     const hitbox = entity.getPrefab().collisionRectangles?.[0];
     const zone = hitbox
@@ -105,6 +111,7 @@ function deduceSeats(
         direction,
         depth,
         reach,
+        trigger,
         feet: { x: zone.x + ((index + 0.5) * zone.width) / places, y: zone.y + zone.height / 2 },
     }));
 }

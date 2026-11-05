@@ -471,6 +471,49 @@ const mapEditor: BaseTranslation = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
     entityEditor: {
         resize: {
             title: "Image size",
@@ -539,6 +582,11 @@ const mapEditor: BaseTranslation = {
             turn: "Turn",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "Behind",
+                inFront: "In front",
+                hint: "Drag the yellow line: a player whose feet are above it goes behind the object, below it in front of it.",
+            },
             sittable: {
                 label: "Players can sit on it",
                 description:

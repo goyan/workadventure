@@ -1,6 +1,6 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { MegaphoneSettings, PrefabOverride, RecordingSettings } from "../../types";
+import { CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings } from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {
@@ -47,6 +47,18 @@ export class UpdateWAMSettingCommand extends Command {
                     override === undefined || override === null
                         ? others
                         : { ...others, [prefabId]: PrefabOverride.parse(override) };
+                break;
+            }
+            case "updateCategorySettingMessage": {
+                const category = message.updateCategorySettingMessage.category.trim().toLocaleLowerCase();
+                const settings: unknown = message.updateCategorySettingMessage.settings;
+                const others = Object.fromEntries(
+                    Object.entries(this.wam.settings.categories ?? {}).filter(([name]) => name !== category),
+                );
+                this.wam.settings.categories =
+                    settings === undefined || settings === null
+                        ? others
+                        : { ...others, [category]: CategorySettings.parse(settings) };
                 break;
             }
             default: {

@@ -479,6 +479,50 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Sièges",
+            pools: "Piscines",
+            rugs: "Tapis et sols",
+            lights: "Luminaires",
+            plants: "Plantes",
+            tables: "Tables",
+            storage: "Rangements",
+            decoration: "Décoration",
+            electronics: "Électronique",
+            misc: "Divers",
+        },
+        interactions: {
+            none: "Aucune",
+            sit: "S’asseoir",
+            swim: "Nager",
+        },
+        triggers: {
+            auto: "Au contact",
+            key: "Touche Espace",
+        },
+        layers: {
+            free: "Libre",
+            floor: "Au sol",
+            standing: "Debout",
+            overhead: "Au-dessus des avatars",
+        },
+        manager: {
+            title: "Catégories",
+            description:
+                "Ce que les avatars font avec les objets de chaque catégorie, et leur niveau par défaut, sur cette carte.",
+            close: "Fermer",
+            base: "Base",
+            delete: "Supprimer",
+            interaction: "Interaction",
+            trigger: "Déclenchement",
+            layer: "Niveau par défaut",
+            add: "Nouvelle catégorie",
+            newName: "Nom de la catégorie",
+            addButton: "Ajouter",
+            open: "Catégories et interactions",
+        },
+    },
     entityEditor: {
         resize: {
             title: "Taille de l’image",
@@ -548,6 +592,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Pivoter",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "Avatar derrière",
+                inFront: "Avatar devant",
+                hint: "Glissez la ligne jaune : un avatar dont les pieds sont au-dessus passe derrière l’objet, en dessous devant.",
+            },
             sittable: {
                 label: "On peut s’asseoir dessus",
                 description:

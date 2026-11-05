@@ -477,6 +477,49 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Sitzplätze",
+            pools: "Pools",
+            rugs: "Teppiche & Böden",
+            lights: "Leuchten",
+            plants: "Pflanzen",
+            tables: "Tische",
+            storage: "Aufbewahrung",
+            decoration: "Dekoration",
+            electronics: "Elektronik",
+            misc: "Sonstiges",
+        },
+        interactions: {
+            none: "Keine",
+            sit: "Sitzen",
+            swim: "Schwimmen",
+        },
+        triggers: {
+            auto: "Bei Berührung",
+            key: "Leertaste",
+        },
+        layers: {
+            free: "Frei",
+            floor: "Am Boden",
+            standing: "Stehend",
+            overhead: "Über den Spielern",
+        },
+        manager: {
+            title: "Kategorien",
+            description: "Was Spieler mit den Objekten jeder Kategorie tun, und ihre Standardebene, auf dieser Karte.",
+            close: "Schließen",
+            base: "Basis",
+            delete: "Löschen",
+            interaction: "Interaktion",
+            trigger: "Auslöser",
+            layer: "Standardebene",
+            add: "Neue Kategorie",
+            newName: "Name der Kategorie",
+            addButton: "Hinzufügen",
+            open: "Kategorien und Interaktionen",
+        },
+    },
     entityEditor: {
         eraser: "Radierer",
         eraserHint: "Klicke oder ziehe über Objekte, um sie zu löschen.",
@@ -545,6 +588,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Drehen",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "Dahinter",
+                inFront: "Davor",
+                hint: "Gelbe Linie ziehen: Füße darüber = hinter dem Objekt, darunter = davor.",
+            },
             sittable: {
                 label: "Man kann sich draufsetzen",
                 description:

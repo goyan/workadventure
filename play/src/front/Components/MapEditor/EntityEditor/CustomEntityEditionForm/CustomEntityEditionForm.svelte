@@ -20,7 +20,10 @@
         getDefaultWaterMargin,
     } from "../../../../Utils/EntityFootprint";
     import { gameManager } from "../../../../Phaser/Game/GameManager";
+    import { categoryLabel } from "../../../../Utils/CategoryLabel";
+    import { getCategorySettings, listMapCategories } from "../../../../Utils/ObjectCategories";
     import {
+        formatCategory,
         getEntityCategory,
         isSeatObject,
         isStructureObject,
@@ -103,22 +106,47 @@
     const showShapeEditor = $derived(
         frameWidth > 0 &&
             frameHeight > 0 &&
-            ((needsHitbox && hitbox.length > 0) || (layer === "floor" && hasWater && water.length > 0)),
+            ((needsHitbox && hitbox.length > 0) ||
+                (layer === "floor" && hasWater && water.length > 0) ||
+                displayDepthCustomSelector),
     );
+
+    /** Category names once each, whatever their case, in order. */
+    function listCategoryNames(...lists: string[][]): string[] {
+        const names = lists.flat();
+        return names.filter(
+            (name, index) =>
+                names.findIndex((other) => other.toLocaleLowerCase() === name.toLocaleLowerCase()) === index,
+        );
+    }
 
     // Every object of the library belongs to a category: chosen among the existing ones, or created here.
     const NEW_CATEGORY = "__new__";
-    const knownCategories = listCategories(
-        get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
-            .map((variant) => variant.defaultPrefab)
-            .filter((prefab) => !isStructureObject(prefab)),
+    const mapCategories = gameManager.getCurrentGameScene().wamFile?.settings?.categories;
+    const knownCategories = listCategoryNames(
+        listMapCategories(mapCategories).map((category) => formatCategory(category.id)),
+        listCategories(
+            get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
+                .map((variant) => variant.defaultPrefab)
+                .filter((prefab) => !isStructureObject(prefab)),
+        ),
     );
     let category: string = $state((() => getEntityCategory(customEntity) ?? "")());
+    // A category may set the display level of its objects (rugs on the floor, lights above): picking it applies it.
+    let previousCategory = (() => getEntityCategory(customEntity) ?? "")();
+    $effect(() => {
+        if (category === previousCategory) return;
+        previousCategory = category;
+        const level = getCategorySettings(category, mapCategories)?.layer;
+        if (level === "floor") selectedDepthOption = depthOptions.GROUND_LEVEL;
+        else if (level === "overhead") selectedDepthOption = depthOptions.OVERHEAD;
+        else if (level === "standing") selectedDepthOption = depthOptions.STANDING;
+    });
     let newCategory = $state("");
     const effectiveCategory = $derived(category === NEW_CATEGORY ? newCategory.trim() : category);
     const categoryOptions = $derived([
         { value: "", label: $LL.mapEditor.entityEditor.customEntityEditorForm.category.choose() },
-        ...knownCategories.map((known) => ({ value: known, label: known })),
+        ...knownCategories.map((known) => ({ value: known, label: categoryLabel(known) })),
         ...(category !== "" && category !== NEW_CATEGORY && !knownCategories.includes(category)
             ? [{ value: category, label: category }]
             : []),
@@ -393,6 +421,10 @@
                         active={needsHitbox ? "hitbox" : "water"}
                         onHitboxChange={(rectangle) => (hitbox = [rectangle])}
                         onWaterChange={(rectangle) => (water = [rectangle])}
+                        depthLine={displayDepthCustomSelector ? frameHeight - depthOffset : undefined}
+                        onDepthLineChange={(row) => (depthOffset = frameHeight - row)}
+                        labelBehind={TT.depthLine.behind()}
+                        labelInFront={TT.depthLine.inFront()}
                     />
                     <span class="retro-hint text-center">{TT.shapeEditorHint()}</span>
                 </div>
@@ -421,21 +453,6 @@
                     water={layer === "floor" && hasWater ? water : []}
                 />
             </div>
-            {#if displayDepthCustomSelector}
-                <div>
-                    <p class="m-0 p-0 text-xs">{TT.wokaAbove()}</p>
-                    <div class="rotate-[270deg]" style="width: 30px;margin-top: {entityImageHeight - 30}px">
-                        <input
-                            class="!cursor-grab active:!cursor-grabbing slider"
-                            style="width: {entityImageHeight}px"
-                            bind:value={depthOffset}
-                            type="range"
-                            max={entityImageRef?.naturalHeight}
-                        />
-                    </div>
-                    <p class="m-0 p-0 text-xs">{TT.wokaBelow()}</p>
-                </div>
-            {/if}
         </div>
 
         {#if profileOnly}
@@ -476,6 +493,9 @@
         <section class="retro-card">
             <h4 class="retro-title">{TT.depth()}</h4>
             <p class="retro-hint">{TT.sections.displayDescription()}</p>
+            {#if displayDepthCustomSelector}
+                <p class="retro-hint" data-testid="depthLineHint">{TT.depthLine.hint()}</p>
+            {/if}
             <div class="retro-choices" role="radiogroup" data-testid="entityDepth">
                 {#each Object.values(depthOptions) as option (option)}
                     <button
@@ -700,19 +720,5 @@
             0 6px,
             6px -6px,
             -6px 0;
-    }
-
-    .slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 5px;
-        height: 40px;
-        margin-top: -32px;
-    }
-
-    .slider::-moz-range-thumb {
-        width: 5px;
-        height: 40px;
-        margin-top: -32px;
     }
 </style>

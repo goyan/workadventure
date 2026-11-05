@@ -475,6 +475,49 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
     entityEditor: {
         eraser: "Gomma",
         eraserHint: "Fai clic o trascina sugli oggetti per eliminarli.",
@@ -544,6 +587,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Ruota",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "Dietro",
+                inFront: "Davanti",
+                hint: "Trascina la linea gialla: piedi sopra = dietro l’oggetto, sotto = davanti.",
+            },
             sittable: {
                 label: "Ci si può sedere",
                 description:

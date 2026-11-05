@@ -527,11 +527,28 @@ export const PrefabOverride = z.object({
 });
 export type PrefabOverride = z.infer<typeof PrefabOverride>;
 
+/** What players do with the objects of a category: nothing, sit on them, swim in their water. */
+export const ObjectInteraction = z.enum(["none", "sit", "swim"]);
+export type ObjectInteraction = z.infer<typeof ObjectInteraction>;
+/** `auto`: on touching the object; `key`: the interaction key (space) when next to it. */
+export const InteractionTrigger = z.enum(["auto", "key"]);
+export type InteractionTrigger = z.infer<typeof InteractionTrigger>;
+
+/** Settings of a category of objects on a map: its interaction and the default display level of its objects. */
+export const CategorySettings = z.object({
+    interaction: ObjectInteraction,
+    trigger: InteractionTrigger,
+    layer: EntityLayer.optional(),
+});
+export type CategorySettings = z.infer<typeof CategorySettings>;
+
 export const WAMSettings = z.object({
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
     /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */
     prefabOverrides: z.record(z.string(), PrefabOverride).optional().catch(undefined),
+    /** Per category, by its name in lower case. Fail open like `prefabOverrides`. */
+    categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

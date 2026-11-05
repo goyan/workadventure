@@ -473,6 +473,49 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
     entityEditor: {
         eraser: "지우개",
         eraserHint: "오브젝트를 클릭하거나 드래그하여 삭제합니다.",
@@ -541,6 +584,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "회전",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "뒤",
+                inFront: "앞",
+                hint: "노란 선을 끄세요: 발이 위면 오브젝트 뒤, 아래면 앞.",
+            },
             sittable: {
                 label: "앉을 수 있음",
                 description: "오브젝트에 닿으면 충돌 영역 중앙에 앉습니다 (소파는 칸마다 한 자리).",

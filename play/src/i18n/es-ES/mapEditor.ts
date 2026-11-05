@@ -477,6 +477,50 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             gameboy: "Game Boy",
         },
     },
+    categories: {
+        base: {
+            seats: "Asientos",
+            pools: "Piscinas",
+            rugs: "Alfombras y suelos",
+            lights: "Luces",
+            plants: "Plantas",
+            tables: "Mesas",
+            storage: "Almacenaje",
+            decoration: "Decoración",
+            electronics: "Electrónica",
+            misc: "Varios",
+        },
+        interactions: {
+            none: "Ninguna",
+            sit: "Sentarse",
+            swim: "Nadar",
+        },
+        triggers: {
+            auto: "Al contacto",
+            key: "Tecla Espacio",
+        },
+        layers: {
+            free: "Libre",
+            floor: "En el suelo",
+            standing: "De pie",
+            overhead: "Encima de los jugadores",
+        },
+        manager: {
+            title: "Categorías",
+            description:
+                "Qué hacen los jugadores con los objetos de cada categoría y su nivel por defecto en este mapa.",
+            close: "Cerrar",
+            base: "Base",
+            delete: "Eliminar",
+            interaction: "Interacción",
+            trigger: "Activación",
+            layer: "Nivel por defecto",
+            add: "Nueva categoría",
+            newName: "Nombre de la categoría",
+            addButton: "Añadir",
+            open: "Categorías e interacciones",
+        },
+    },
     entityEditor: {
         eraser: "Borrador",
         eraserHint: "Haz clic o arrastra sobre los objetos para eliminarlos.",
@@ -546,6 +590,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Girar",
         },
         customEntityEditorForm: {
+            depthLine: {
+                behind: "Detrás",
+                inFront: "Delante",
+                hint: "Arrastra la línea amarilla: con los pies por encima el jugador pasa detrás del objeto; por debajo, delante.",
+            },
             sittable: {
                 label: "Se puede sentar",
                 description:

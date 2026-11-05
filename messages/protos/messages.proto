@@ -358,7 +358,15 @@ message UpdateWAMSettingsMessage {
     UpdateMegaphoneSettingMessage updateMegaphoneSettingMessage = 1;
     UpdateRecordingSettingMessage updateRecordingSettingMessage = 2;
     UpdatePrefabOverrideSettingMessage updatePrefabOverrideSettingMessage = 3;
+    UpdateCategorySettingMessage updateCategorySettingMessage = 4;
   }
+}
+
+// Sets the interaction and default level of a category of objects on this map (CategorySettings in
+// libs/map-editor), or removes them when `settings` is unset. Parsed by UpdateWAMSettingCommand.
+message UpdateCategorySettingMessage {
+  string category = 1;
+  optional google.protobuf.Value settings = 2;
 }
 
 // Adjusts one object of the library for this map (PrefabOverride in libs/map-editor), or removes the adjustment when

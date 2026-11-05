@@ -23,6 +23,7 @@
     import ButtonClose from "../../Input/ButtonClose.svelte";
     import Button from "../../UI/Button.svelte";
     import { getEntityCategory, isSameCategory, isStructureObject } from "../../../Utils/EntityCategory";
+    import { categoryLabel } from "../../../Utils/CategoryLabel";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import EntitiesGrid from "./EntitiesGrid.svelte";
     import EntityImage from "./EntityItem/EntityImage.svelte";
@@ -30,6 +31,7 @@
     import EntityVariantPositionPicker from "./EntityItem/EntityVariantPositionPicker.svelte";
     import EntityUpload from "./EntityUpload/EntityUpload.svelte";
     import CategoryTile from "./CategoryTile.svelte";
+    import CategoryManager from "./CategoryManager.svelte";
     import { IconChevronLeft, IconEraser, IconPencil } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
@@ -126,6 +128,7 @@
     }
 
     let isEditingCustomEntity = $state(false);
+    let showCategoryManager = $state(false);
     function setIsEditingCustomEntity(isEditing: boolean) {
         isEditingCustomEntity = isEditing;
     }
@@ -234,7 +237,7 @@
                     return get(LL).mapEditor.entityEditor.specialTags.structureLabel();
             }
         }
-        return category.tag;
+        return categoryLabel(category.tag);
     }
 
     function getEntitiesPrefabsVariantsFilteredByTag(
@@ -274,6 +277,11 @@
     });
 </script>
 
+{#if showCategoryManager}
+    <div class="absolute inset-0 z-30 flex p-2">
+        <CategoryManager close={() => (showCategoryManager = false)} />
+    </div>
+{/if}
 <div class="flex flex-col flex-1 overflow-auto gap-2">
     <div class="flex flex-col gap-2">
         <div class="flex flex-row items-start justify-between gap-2">
@@ -301,6 +309,16 @@
                 alignLabel="center"
             />
         </div>
+        {#if userCanEditMap}
+            <button
+                type="button"
+                class="retro-btn"
+                data-testid="openCategoryManager"
+                onclick={() => (showCategoryManager = true)}
+            >
+                {$LL.mapEditor.categories.manager.open()}
+            </button>
+        {/if}
         <button
             type="button"
             class="flex flex-row items-center gap-2 p-2 rounded text-sm {$mapEditorEntityEraserStore

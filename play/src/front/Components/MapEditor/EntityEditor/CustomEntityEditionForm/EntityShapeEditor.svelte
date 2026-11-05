@@ -16,6 +16,14 @@
         active: "hitbox" | "water";
         onHitboxChange: (rectangle: CollisionRectangle) => void;
         onWaterChange: (rectangle: CollisionRectangle) => void;
+        /**
+         * Custom depth: the row of the image where players switch from behind the object (feet above) to in front
+         * of it (feet below). Shown and draggable when set.
+         */
+        depthLine?: number;
+        onDepthLineChange?: (row: number) => void;
+        labelBehind?: string;
+        labelInFront?: string;
     }
 
     let {
@@ -28,6 +36,10 @@
         active,
         onHitboxChange,
         onWaterChange,
+        depthLine = undefined,
+        onDepthLineChange = () => {},
+        labelBehind = "",
+        labelInFront = "",
     }: Props = $props();
 
     const MAX_DISPLAY = 288;
@@ -44,7 +56,8 @@
               startX: number;
               startY: number;
               start: CollisionRectangle;
-              handle: ResizeHandle | "move";
+              handle: ResizeHandle | "move" | "depth";
+              startLine?: number;
           }
         | undefined;
 
@@ -66,8 +79,28 @@
         drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, start, handle };
     }
 
+    function startDepthDrag(event: PointerEvent) {
+        if (depthLine === undefined || event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+        drag = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            start: { x: 0, y: 0, width: 1, height: 1 },
+            handle: "depth",
+            startLine: depthLine,
+        };
+    }
+
     function onPointerMove(event: PointerEvent) {
         if (!drag || event.pointerId !== drag.pointerId) return;
+        if (drag.handle === "depth") {
+            const dy = Math.round((event.clientY - drag.startY) / zoom);
+            onDepthLineChange(Math.min(Math.max((drag.startLine ?? 0) + dy, 0), frameHeight));
+            return;
+        }
         const dx = Math.round((event.clientX - drag.startX) / zoom);
         const dy = Math.round((event.clientY - drag.startY) / zoom);
         const bounds = { width: frameWidth, height: frameHeight };
@@ -121,6 +154,13 @@
         style:background-image="url('{imageSource}')"
         style:background-size="{frameWidth * frameCount * zoom}px {frameHeight * zoom}px"
     ></div>
+    {#if depthLine !== undefined}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="depth-line" style:top="{depthLine * zoom}px" data-testid="depthLine" onpointerdown={startDepthDrag}>
+            <span class="depth-label behind">▲ {labelBehind}</span>
+            <span class="depth-label front">▼ {labelInFront}</span>
+        </div>
+    {/if}
     {#each [{ kind: "water", shape: water }, { kind: "hitbox", shape: hitbox }] as const as { kind, shape } (kind)}
         {#if shape}
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -191,6 +231,46 @@
     .shape.water {
         border-color: #6cc8ff;
         background: rgb(80 180 255 / 0.3);
+    }
+
+    .depth-line {
+        position: absolute;
+        left: -8px;
+        right: -8px;
+        height: 0;
+        border-top: 2px dashed #ffd36b;
+        cursor: ns-resize;
+        z-index: 2;
+    }
+
+    .depth-line::before {
+        /* A wider invisible grip, easier to catch than the 2px line. */
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: -8px;
+        height: 16px;
+    }
+
+    .depth-label {
+        position: absolute;
+        right: 0;
+        padding: 1px 6px;
+        font-size: 11px;
+        white-space: nowrap;
+        color: #2b2108;
+        background: #ffd36b;
+        border-radius: 4px;
+        pointer-events: none;
+    }
+
+    .depth-label.behind {
+        bottom: 4px;
+    }
+
+    .depth-label.front {
+        top: 4px;
     }
 
     .handle {
