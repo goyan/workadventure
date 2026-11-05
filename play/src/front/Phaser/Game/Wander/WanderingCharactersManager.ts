@@ -283,15 +283,19 @@ export class WanderingCharactersManager {
     private onSheetLoaded(sheetPath: string): void {
         // The frames are numbered row by row: the width of the image gives the number of columns.
         const texture = this.scene.textures.get(sheetPath);
-        const columns = Math.floor(texture.getSourceImage().width / WANDER_FRAME_SIZE);
+        const image = texture.getSourceImage();
+        const columns = Math.floor(image.width / WANDER_FRAME_SIZE);
+        const rows = Math.floor(image.height / WANDER_FRAME_SIZE);
         // A sheet too small for the 4 rows of 3 frames (or an image already loaded under that key without frames) would
-        // show the whole image: the entity stays visible as a still object instead. "__BASE" is not a frame of the sheet.
+        // show the whole image, and a sheet that is not 4 rows of 32 px frames (a big drawing, like the sheet of a
+        // Gobeur before its property is set) would show pieces of it: the entity stays visible as a still object
+        // instead. "__BASE" is not a frame of the sheet.
         const frameCount = texture.frameTotal - 1;
         const expected = DIRECTIONS.length * Math.max(columns, WANDER_WALK_COLUMNS);
-        if (frameCount < expected) {
+        if (rows !== DIRECTIONS.length || frameCount < expected) {
             this.sheets.set(sheetPath, "failed");
             console.error(
-                `Invalid wandering sheet "${sheetPath}": ${frameCount} frames of ${WANDER_FRAME_SIZE}px, ${expected} expected`,
+                `Invalid wandering sheet "${sheetPath}": ${image.width}x${image.height}, ${DIRECTIONS.length} rows of ${WANDER_FRAME_SIZE}px frames expected`,
             );
             return;
         }

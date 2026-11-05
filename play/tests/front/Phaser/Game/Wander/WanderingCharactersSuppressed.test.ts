@@ -75,7 +75,10 @@ function makeSprite() {
     return sprite;
 }
 
-function makeScene(properties: { type: string }[] = []) {
+function makeScene(
+    properties: { type: string }[] = [],
+    image: { width: number; height: number; frameTotal: number } = { width: 96, height: 128, frameTotal: 13 },
+) {
     const entity = {
         entityId: "duck",
         x: 64,
@@ -118,7 +121,10 @@ function makeScene(properties: { type: string }[] = []) {
         },
         textures: {
             exists: () => true,
-            get: () => ({ frameTotal: 13, getSourceImage: () => ({ width: 96 }) }),
+            get: () => ({
+                frameTotal: image.frameTotal,
+                getSourceImage: () => ({ width: image.width, height: image.height }),
+            }),
         },
         anims: { exists: () => true, create: () => {}, generateFrameNumbers: () => [] },
         add: { sprite: addSprite },
@@ -189,6 +195,17 @@ describe("WanderingCharactersManager.setSuppressed", () => {
         expect(scene.addSprite).not.toHaveBeenCalled();
         expect(openers(manager)).toEqual([]);
         // Idle, the Gobeur is the object as placed.
+        expect(scene.entity.visible).toBe(true);
+    });
+
+    it("leaves a sheet that is not 4 rows of 32 px frames as a still object", () => {
+        // A big sheet, like the drawing of a Gobeur before its property is set: cut in 32 px frames, it is garbage.
+        const scene = makeScene([], { width: 1536, height: 1024, frameTotal: 48 * 32 + 1 });
+        manager = scene.manager;
+        scene.reconcile();
+        scene.update();
+        expect(scene.addSprite).not.toHaveBeenCalled();
+        expect(openers(manager)).toEqual([]);
         expect(scene.entity.visible).toBe(true);
     });
 });

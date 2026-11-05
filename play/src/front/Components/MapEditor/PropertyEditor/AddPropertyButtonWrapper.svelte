@@ -35,7 +35,7 @@
         IconLockHash,
         IconLock,
         IconHeadphones,
-        IconClock,
+        IconGhost,
     } from "@wa-icons";
 
     interface Props {
@@ -422,7 +422,7 @@
         onclick={(event) => {
             onclick?.(event);
         }}
-        img={IconClock}
+        img={IconGhost}
     />
 {/if}
 {#if property === "openFile"}
