@@ -542,6 +542,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "回転",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "座ることができる",
+                description: "オブジェクトに触れると当たり判定の中央に座ります（ソファは1マスに1席）。",
+            },
             shapeEditorHint: "ゾーンをドラッグで移動、ハンドルでサイズ変更。矢印: 1px、Shift + 矢印: サイズ。",
             titles: {
                 upload: "新しいオブジェクト",
@@ -549,6 +553,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "このマップで調整",
             },
             sections: {
+                interaction: "インタラクション",
                 identity: "基本情報",
                 displayDescription: "プレイヤーに対してオブジェクトを描く位置。",
                 options: "オプション",

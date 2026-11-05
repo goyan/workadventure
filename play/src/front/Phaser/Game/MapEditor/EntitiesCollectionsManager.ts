@@ -19,7 +19,7 @@ const COLLECTION_FETCH_TIMEOUT_MS = 10_000;
 
 export type CustomEntityModification = Pick<
     EntityPrefab,
-    "name" | "tags" | "depthOffset" | "collisionGrid" | "collisionRectangles" | "layer" | "water"
+    "name" | "tags" | "depthOffset" | "collisionGrid" | "collisionRectangles" | "layer" | "water" | "sittable"
 >;
 
 export class EntitiesCollectionsManager {
@@ -119,6 +119,7 @@ export class EntitiesCollectionsManager {
                                 layer: entity.layer,
                                 water: entity.water,
                                 variantOf: entity.variantOf,
+                                sittable: entity.sittable,
                                 seat: entity.seat,
                                 animation: entity.animation,
                                 wander: entity.wander
@@ -193,6 +194,7 @@ export class EntitiesCollectionsManager {
             collisionGrid: adjusted.collisionGrid,
             collisionRectangles: adjusted.collisionRectangles,
             water: adjusted.water,
+            sittable: adjusted.sittable,
         };
         this.currentCollection.collection = this.currentCollection.collection.map((prefab) =>
             prefab.id === id ? adjusted : prefab,
@@ -214,6 +216,7 @@ export class EntitiesCollectionsManager {
             collisionRectangles: modification.collisionRectangles,
             layer: modification.layer,
             water: modification.water,
+            sittable: modification.sittable,
         };
         this.entitiesPrefabsStore.update((currentEntitiesPrefabs) => {
             const indexOfCustomEntity = currentEntitiesPrefabs.findIndex((entityPrefab) => entityPrefab.id === id);
@@ -308,6 +311,7 @@ export function applyPrefabOverride(prefab: EntityPrefab, override: PrefabOverri
         collisionGrid: override.collisionGrid,
         collisionRectangles: override.collisionRectangles,
         water: override.water,
+        sittable: override.sittable,
         tags: override.category ? withCategory(prefab.tags, override.category) : prefab.tags,
     };
 }

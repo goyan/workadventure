@@ -544,6 +544,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Gira",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "S’hi pot seure",
+                description:
+                    "En tocar l’objecte, el jugador s’hi asseu, al centre de la hitbox (un lloc per casella en un sofà).",
+            },
             shapeEditorHint:
                 "Arrossega la zona per moure-la i les nanses per redimensionar-la. Fletxes: 1 px, Maj + fletxes: mida.",
             titles: {
@@ -552,6 +557,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Ajusta en aquest mapa",
             },
             sections: {
+                interaction: "Interacció",
                 identity: "Identitat",
                 displayDescription: "On es dibuixa l’objecte respecte als jugadors.",
                 options: "Opcions",

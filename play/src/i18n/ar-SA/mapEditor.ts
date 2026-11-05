@@ -538,6 +538,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "تدوير",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "يمكن الجلوس عليه",
+                description: "عند لمس الكائن يجلس اللاعب في وسط منطقة التصادم (مكان لكل خانة في الأريكة).",
+            },
             shapeEditorHint: "اسحب المنطقة لتحريكها ومقابضها لتغيير حجمها. الأسهم: 1 بكسل، Shift + الأسهم: الحجم.",
             titles: {
                 upload: "كائن جديد",
@@ -545,6 +549,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "ضبط على هذه الخريطة",
             },
             sections: {
+                interaction: "التفاعل",
                 identity: "الهوية",
                 displayDescription: "مكان رسم الكائن بالنسبة إلى اللاعبين.",
                 options: "خيارات",

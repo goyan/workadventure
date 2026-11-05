@@ -493,6 +493,8 @@ message UploadEntityMessage {
   optional google.protobuf.Value water = 14;
   // Id of the object this image is another view of (EntityRawPrefab.variantOf).
   optional string variantOf = 15;
+  // Whether players sit on it by walking onto it (EntityRawPrefab.sittable); unset = deduced from its name.
+  optional bool sittable = 16;
 }
 
 message EntityAnimationMessage {
@@ -529,6 +531,7 @@ message ModifyCustomEntityMessage {
   optional google.protobuf.Value collisionRectangles = 6;
   optional string layer = 7;
   optional google.protobuf.Value water = 8;
+  optional bool sittable = 9;
 }
 
 message DeleteCustomEntityMessage {

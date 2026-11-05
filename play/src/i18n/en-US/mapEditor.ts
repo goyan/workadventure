@@ -539,6 +539,11 @@ const mapEditor: BaseTranslation = {
             turn: "Turn",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "Players can sit on it",
+                description:
+                    "Walking onto the object seats the player, at the center of its hitbox (one place per tile for a couch).",
+            },
             shapeEditorHint: "Drag the zone to move it, its handles to resize it. Arrows: 1 px, Shift + arrows: size.",
             titles: {
                 upload: "New object",
@@ -546,6 +551,7 @@ const mapEditor: BaseTranslation = {
                 adjust: "Adjust on this map",
             },
             sections: {
+                interaction: "Interaction",
                 identity: "Identity",
                 displayDescription: "Where the object is drawn relative to the players.",
                 options: "Options",

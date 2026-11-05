@@ -536,6 +536,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "旋转",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "可以坐上去",
+                description: "碰到物体时角色会坐在碰撞区域中央（沙发每格一个座位）。",
+            },
             shapeEditorHint: "拖动区域移动，拖动手柄调整大小。方向键：1 像素，Shift + 方向键：尺寸。",
             titles: {
                 upload: "新物体",
@@ -543,6 +547,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "在此地图上调整",
             },
             sections: {
+                interaction: "互动",
                 identity: "基本信息",
                 displayDescription: "物体相对于玩家的绘制位置。",
                 options: "选项",

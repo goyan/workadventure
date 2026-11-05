@@ -118,6 +118,7 @@
                 collisionRectangles: $state.snapshot(customEditedEntity.collisionRectangles),
                 layer: customEditedEntity.layer,
                 water: $state.snapshot(customEditedEntity.water),
+                sittable: customEditedEntity.sittable,
                 color: customEditedEntity.color ?? "",
                 // Lets us edit and delete our own upload without waiting for the round trip to
                 // map-storage, which overwrites this with the authenticated user UUID anyway.

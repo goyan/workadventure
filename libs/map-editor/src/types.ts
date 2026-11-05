@@ -357,6 +357,11 @@ export const EntityRawPrefab = z.object({
      * object. The views of an object are offered together and a placed copy can be turned from one to another.
      */
     variantOf: z.string().optional().catch(undefined),
+    /**
+     * Whether players sit on the object by walking onto it. Unset: deduced from its category or name (chair, couch…).
+     * Fail open like `collisionRectangles`.
+     */
+    sittable: z.boolean().optional().catch(undefined),
     // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
     animation: EntityAnimation.optional().catch(undefined),
     /**
@@ -516,6 +521,7 @@ export const PrefabOverride = z.object({
     collisionGrid: CollisionGrid.optional(),
     collisionRectangles: z.array(CollisionRectangle).optional(),
     water: z.array(CollisionRectangle).optional(),
+    sittable: z.boolean().optional(),
     /** Category of the object in the library of this map, put first in its tags. */
     category: z.string().trim().min(1).max(60).optional(),
 });

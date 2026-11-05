@@ -22,6 +22,7 @@
     import { gameManager } from "../../../../Phaser/Game/GameManager";
     import {
         getEntityCategory,
+        isSeatObject,
         isStructureObject,
         listCategories,
         withCategory,
@@ -123,6 +124,9 @@
             : []),
         { value: NEW_CATEGORY, label: $LL.mapEditor.entityEditor.customEntityEditorForm.category.new() },
     ]);
+    // Players sit on it by walking onto it: proposed for chairs, couches… (by name or category), always editable.
+    let sittable: boolean = $state((() => customEntity.sittable ?? isSeatObject(customEntity))());
+
     // Which side of the object the image shows: an object with several views can be turned once placed.
     let direction: string = $state((() => customEntity.direction)());
     const viewOptions = $derived([
@@ -168,6 +172,7 @@
             layer: layer === "standing" ? undefined : layer,
             collisionRectangles: needsHitbox && hitbox.length > 0 ? $state.snapshot(hitbox) : undefined,
             water: layer === "floor" && hasWater && water.length > 0 ? $state.snapshot(water) : undefined,
+            sittable,
         };
     }
 
@@ -498,6 +503,17 @@
                 <button type="button" class="retro-btn" onclick={regenerateHitbox}>{TT.hitbox.regenerate()}</button>
             </section>
         {/if}
+
+        <section class="retro-card" data-testid="entityInteraction">
+            <h4 class="retro-title">{TT.sections.interaction()}</h4>
+            <div class="flex items-start gap-2">
+                <InputCheckbox id="sittable" dataTestId="sittable" bind:value={sittable} />
+                <label class="m-0 flex cursor-pointer flex-col" for="sittable">
+                    <span>{TT.sittable.label()}</span>
+                    <span class="retro-hint">{TT.sittable.description()}</span>
+                </label>
+            </div>
+        </section>
 
         {#if layer === "floor"}
             <section class="retro-card" data-testid="entityWater">

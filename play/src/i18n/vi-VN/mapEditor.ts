@@ -541,6 +541,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Xoay",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "Có thể ngồi",
+                description: "Chạm vào vật thể thì nhân vật ngồi ở giữa vùng va chạm (ghế sofa: mỗi ô một chỗ).",
+            },
             shapeEditorHint:
                 "Kéo vùng để di chuyển, kéo tay nắm để đổi kích thước. Mũi tên: 1 px, Shift + mũi tên: kích thước.",
             titles: {
@@ -549,6 +553,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Chỉnh trên bản đồ này",
             },
             sections: {
+                interaction: "Tương tác",
                 identity: "Thông tin",
                 displayDescription: "Vị trí vẽ vật thể so với người chơi.",
                 options: "Tùy chọn",

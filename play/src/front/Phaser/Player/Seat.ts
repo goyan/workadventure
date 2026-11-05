@@ -62,7 +62,7 @@ function getSeats(scene: GameScene): Seat[] {
                     feet: { x: entity.x + tile.x * width, y: entity.y + tile.y * height },
                 });
             });
-        } else if (isSeatObject(prefab)) {
+        } else if (prefab.sittable ?? isSeatObject(prefab)) {
             seats.push(...deduceSeats(entityId, entity, direction, depth, width));
         }
     }

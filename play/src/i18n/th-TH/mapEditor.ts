@@ -538,6 +538,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "หมุน",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "นั่งได้",
+                description: "เมื่อแตะวัตถุ ผู้เล่นจะนั่งตรงกลางพื้นที่ชน (โซฟามีที่นั่งต่อช่อง)",
+            },
             shapeEditorHint: "ลากโซนเพื่อย้าย ลากจุดจับเพื่อปรับขนาด ลูกศร: 1 px, Shift + ลูกศร: ขนาด",
             titles: {
                 upload: "วัตถุใหม่",
@@ -545,6 +549,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "ปรับบนแผนที่นี้",
             },
             sections: {
+                interaction: "การโต้ตอบ",
                 identity: "ข้อมูล",
                 displayDescription: "ตำแหน่งที่วาดวัตถุเทียบกับผู้เล่น",
                 options: "ตัวเลือก",

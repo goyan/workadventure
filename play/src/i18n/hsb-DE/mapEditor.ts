@@ -542,6 +542,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Wobwjerćeć",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "Da so na to sydnyć",
+                description:
+                    "Hdyž so objekta dótkneš, sydnješ so do srjedźizny hitboxa (jedne městno na polo pola kanapy).",
+            },
             shapeEditorHint:
                 "Ćehń conu, zo by ju přesunył, jeje dźeržadła za wulkosć. Šipki: 1 px, Shift + šipki: wulkosć.",
             titles: {
@@ -550,6 +555,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Na tutej karće přiměrić",
             },
             sections: {
+                interaction: "Interakcija",
                 identity: "Identita",
                 displayDescription: "Hdźe so objekt w poměrje k hrajerjam rysuje.",
                 options: "Opcije",

@@ -545,6 +545,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Drehen",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "Man kann sich draufsetzen",
+                description:
+                    "Wer das Objekt berührt, setzt sich in die Mitte seiner Hitbox (ein Platz pro Feld bei einem Sofa).",
+            },
             shapeEditorHint:
                 "Zone ziehen zum Verschieben, Griffe zum Ändern der Größe. Pfeile: 1 px, Umschalt + Pfeile: Größe.",
             titles: {
@@ -553,6 +558,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Auf dieser Karte anpassen",
             },
             sections: {
+                interaction: "Interaktion",
                 identity: "Identität",
                 displayDescription: "Wo das Objekt im Verhältnis zu den Spielern gezeichnet wird.",
                 options: "Optionen",

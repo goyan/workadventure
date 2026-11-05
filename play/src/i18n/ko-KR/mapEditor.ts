@@ -541,6 +541,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "회전",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "앉을 수 있음",
+                description: "오브젝트에 닿으면 충돌 영역 중앙에 앉습니다 (소파는 칸마다 한 자리).",
+            },
             shapeEditorHint: "영역을 끌어 이동하고 핸들로 크기를 조절하세요. 화살표: 1px, Shift + 화살표: 크기.",
             titles: {
                 upload: "새 오브젝트",
@@ -548,6 +552,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "이 맵에서 조정",
             },
             sections: {
+                interaction: "상호작용",
                 identity: "기본 정보",
                 displayDescription: "플레이어 기준으로 오브젝트가 그려지는 위치.",
                 options: "옵션",

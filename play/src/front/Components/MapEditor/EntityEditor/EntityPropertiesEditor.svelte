@@ -367,6 +367,7 @@
                           ...member,
                           tags: withCategory(member.tags, getEntityCategory(model) ?? ""),
                           layer: model.layer,
+                          sittable: model.sittable,
                           ...(member.direction === model.direction ? shapeFields(model) : {}),
                       };
             if (adjusted.type === "Custom") {
@@ -376,6 +377,7 @@
                     layer: adjusted.layer,
                     depthOffset: adjusted.depthOffset,
                     category: getEntityCategory(adjusted),
+                    sittable: adjusted.sittable,
                     ...shapeFields(adjusted),
                 });
             }

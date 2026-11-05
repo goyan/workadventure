@@ -82,6 +82,7 @@ export class CustomEntityCollectionService {
                 collisionRectangles,
                 layer,
                 water,
+                sittable: modifyCustomEntityMessage.sittable,
             };
             await fileSystem.writeStringAsFile(
                 this.getEntityCollectionFileVirtualPath(),

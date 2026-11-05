@@ -546,6 +546,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Draaien",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "Je kunt erop zitten",
+                description:
+                    "Wie het object raakt, gaat in het midden van de hitbox zitten (één plek per vak bij een bank).",
+            },
             shapeEditorHint:
                 "Sleep de zone om te verplaatsen, de grepen om de grootte te wijzigen. Pijlen: 1 px, Shift + pijlen: grootte.",
             titles: {
@@ -554,6 +559,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Aanpassen op deze kaart",
             },
             sections: {
+                interaction: "Interactie",
                 identity: "Identiteit",
                 displayDescription: "Waar het object getekend wordt ten opzichte van de spelers.",
                 options: "Opties",

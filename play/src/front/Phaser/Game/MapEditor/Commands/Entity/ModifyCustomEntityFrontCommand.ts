@@ -31,6 +31,7 @@ export class ModifyCustomEntityFrontCommand extends ModifyCustomEntityCommand im
             collisionRectangles: parseRectangles(message.collisionRectangles),
             layer: message.layer ? EntityLayer.safeParse(message.layer).data : undefined,
             water: parseRectangles(message.water),
+            sittable: message.sittable,
         };
         this.entitiesCollectionManager.modifyCustomEntity(message.id, modification);
         // The placed copies keep their own prefab: give them the new one (depth, layer, collisions, water).

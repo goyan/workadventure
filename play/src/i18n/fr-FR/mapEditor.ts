@@ -548,6 +548,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Pivoter",
         },
         customEntityEditorForm: {
+            sittable: {
+                label: "On peut s’asseoir dessus",
+                description:
+                    "En touchant l’objet, l’avatar s’y assoit, au centre de sa hitbox (une place par case pour un canapé).",
+            },
             shapeEditorHint:
                 "Glissez la zone pour la déplacer, ses poignées pour la redimensionner. Flèches : 1 px, Maj + flèches : taille.",
             titles: {
@@ -556,6 +561,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 adjust: "Réglage sur la carte",
             },
             sections: {
+                interaction: "Interaction",
                 identity: "Identité",
                 displayDescription: "Où l’objet est dessiné par rapport aux avatars.",
                 options: "Options",
