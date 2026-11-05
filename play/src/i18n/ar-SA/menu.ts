@@ -37,6 +37,15 @@ const menu: DeepPartial<Translation["menu"]> = {
                 light: "فاتح",
             },
         },
+        font: {
+            label: "Font",
+            choices: {
+                pixel: "Pixel",
+                system: "System",
+                classic: "Classic",
+                arcade: "Arcade",
+            },
+        },
         videoBandwidth: {
             title: "جودة الفيديو", // Video quality
             low: "منخفض", // Low

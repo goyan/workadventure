@@ -33,7 +33,7 @@ describe("area snap", () => {
         });
     });
 
-    it("refuses a rectangle outside of the floors, and falls back to the grid without floors", () => {
+    it("keeps the grid outside of the floors, with or without floors on the map", () => {
         const model = new MapLayerModel();
         expect(snapRectToFloors(model, { x: 5, y: 5, width: 10, height: 10 })).toEqual({
             x: 0,
@@ -42,6 +42,12 @@ describe("area snap", () => {
             height: 32,
         });
         room(model, 5, 5, 2, 2);
-        expect(snapRectToFloors(model, { x: 0, y: 0, width: 40, height: 40 })).toBeUndefined();
+        // Outside of the rooms (grass), the area stays on the grid.
+        expect(snapRectToFloors(model, { x: 0, y: 0, width: 40, height: 40 })).toEqual({
+            x: 0,
+            y: 0,
+            width: 64,
+            height: 64,
+        });
     });
 });

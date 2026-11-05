@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import type { Player } from "../../Player/Player";
+import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 
 /**
  * True when the player body, moved along the path, never touches a static rectangle of the groups.
@@ -40,4 +41,15 @@ export function isPathClearOfStaticGroups(
         previous = next;
     }
     return true;
+}
+
+/** The rectangles of the static bodies of the groups, in world pixels. */
+export function staticGroupsRectangles(groups: ReadonlyArray<Phaser.Physics.Arcade.StaticGroup>): ObstacleRectangle[] {
+    return groups.flatMap((group) =>
+        group
+            .getChildren()
+            .map((object) => object.body)
+            .filter((body) => body instanceof Phaser.Physics.Arcade.StaticBody)
+            .map((body) => ({ x: body.x, y: body.y, width: body.width, height: body.height })),
+    );
 }

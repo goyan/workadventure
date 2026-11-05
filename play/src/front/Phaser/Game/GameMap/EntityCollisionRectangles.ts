@@ -3,7 +3,8 @@ import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRect
 import type { Entity } from "../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Player } from "../../Player/Player";
-import { isPathClearOfStaticGroups } from "./StaticGroupsPath";
+import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
+import { isPathClearOfStaticGroups, staticGroupsRectangles } from "./StaticGroupsPath";
 
 interface EntityCollisionState {
     entity: Entity;
@@ -110,20 +111,26 @@ export class EntityCollisionRectangles {
     }
 
     public isPathClear(player: Player, path: { x: number; y: number }[]): boolean {
+        return isPathClearOfStaticGroups(player, path, this.getPathGroups(player));
+    }
+
+    /** The rectangles a computed walk must go around, in world pixels (see RectangleObstacles). */
+    public getPathObstacles(player: Player): ObstacleRectangle[] {
+        return staticGroupsRectangles(this.getPathGroups(player));
+    }
+
+    /**
+     * The walls of the map layer are barriers for the pathfinder: no path goes through them, and one that runs along a
+     * wall, at the distance of a tile center, is not blocked by the thickness of its collision. The water does not block
+     * a swimmer.
+     */
+    private getPathGroups(player: Player): Phaser.Physics.Arcade.StaticGroup[] {
         if (this.kind === "water" && player.isSwimming()) {
-            return true;
+            return [];
         }
-        return isPathClearOfStaticGroups(
-            player,
-            path,
-            // The walls of the map layer are barriers for the pathfinder: no path goes through them, and one that runs
-            // along a wall, at the distance of a tile center, is not blocked by the thickness of its collision.
-            Array.from(this.states.values())
-                .filter(
-                    (state) => !isMapLayerPrefab(state.entity.getPrefab().collectionName, state.entity.getPrefab().id),
-                )
-                .map((state) => state.group),
-        );
+        return Array.from(this.states.values())
+            .filter((state) => !isMapLayerPrefab(state.entity.getPrefab().collectionName, state.entity.getPrefab().id))
+            .map((state) => state.group);
     }
 
     public destroy(): void {

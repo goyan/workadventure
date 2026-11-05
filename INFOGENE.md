@@ -476,9 +476,11 @@ Le catalogue est lu par le front seul (`EntitiesCollectionsManager`) : les image
 rectangles ; ils se déclarent dans le JSON du catalogue statique. Ne pas les écrire à la main dans le catalogue des
 entités personnalisées : `map-storage` l'ouvre et le réécrit avec son schéma, qui supprime le champ.
 Une liste de rectangles invalide est ignorée (l'entité reste, sans collision fine) sans faire rejeter le catalogue.
-Le pathfinding du double-clic ne **route** que les murs de la couche carte (barrières entre cases, voir « Déplacement au
-double-clic ») ; pour tout autre objet à rectangles, il **refuse** le trajet qui les traverse, sans contournement (la grille
-de navigation voit la case libre quand `collisionGrid` vaut `[[0]]`). Router ces objets est à faire plus tard. Ajouter un mur annule un trajet en cours du joueur
+Le pathfinding du double-clic **contourne** aussi ces rectangles (`Utils/RectangleObstacles.ts`) : une case dont le centre
+mettrait le corps de l'avatar dans un rectangle est occupée, un pas entre deux cases qui en frôle un est refusé, et le trajet
+n'est redressé en ligne droite que si cette ligne n'en touche aucun. Depuis que tous les objets ont une hitbox au pixel, sans
+ce contournement le trajet calculé traversait les objets puis était refusé : le double-clic ne faisait plus rien. L'eau compte
+comme obstacle, sauf pour un nageur ; les murs de la couche carte restent des barrières entre cases. Ajouter un mur annule un trajet en cours du joueur
 local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
 Phaser sans navigateur) : comportement validé en jeu uniquement.
 
@@ -702,8 +704,8 @@ sprites se chevauchent et une opacité de 0,4 par sprite dessinait un damier le 
 Le premier clic et la fin du glisser se calent sur le coin de tuile le plus proche (un point blanc, comme l'outil mur, montre
 ce coin avant le clic ; il disparaît au-dessus d'une zone existante, où le curseur devient une main : un clic l'ouvre).
 Le rectangle est ensuite réduit à la boîte englobante des sols qu'il touche (`MapLayerAreaSnap.ts`) : une zone tracée sur une
-pièce prend la taille de la pièce. Sans aucun sol sur la carte (carte TMJ classique), elle reste sur la grille de 32 px ; avec
-des sols mais aucun sous le rectangle, aucune zone n'est créée. Le déplacement et le redimensionnement d'une zone restent
+pièce prend la taille de la pièce. Hors des sols (herbe, jardin) ou sur une carte sans sol (carte TMJ classique), elle reste
+sur la grille de 32 px. Le déplacement et le redimensionnement d'une zone restent
 toujours sur la grille (plus besoin de Maj) ; ils ne sont pas contraints au sol. Le panneau de l'outil Zones explique
 créer, ouvrir/modifier et supprimer (bouton ou gomme).
 
@@ -838,6 +840,20 @@ Portes (mode « Porte » de l'outil Carte) :
 ## Confirmation avant de libérer son bureau
 
 L’action « Libérer mon bureau » ouvre un dialogue avec le nom du bureau. Annuler, fermer ou appuyer sur Échap conserve le bureau. La confirmation revérifie le compte, la salle et la propriété actuelle ; une confirmation devenue obsolète ne libère aucun bureau. Les doubles clics ne déclenchent pas deux libérations. Texte français et anglais, repli anglais explicite pour les autres langues. Recette interactive à confirmer en beta après fusion.
+
+## Nage
+
+Le plongeon (touche d'interaction au bord, ou contact pour une eau « auto ») mène les **pieds** de l'avatar
+`DIVE_DEPTH` px dans l'eau. Un corps qui se retrouve dans l'eau sans avoir plongé (piscine posée ou déplacée sur lui,
+téléportation) nage aussi : la collision Arcade ne sait pas sortir un corps déjà incrusté dans un rectangle, il traversait
+alors l'eau en restant « hors de l'eau ». On sort en marchant sur le bord ; de l'extérieur, l'eau bloque de nouveau.
+
+## Police et ciel de l'interface
+
+Paramètres → « Police » : Pixel (défaut), Système, Classique (Roboto), Arcade (`uiFontStore`, `data-ui-font` sur `<html>`,
+piles dans `retro-theme.css`). Le client desktop reçoit palette et police par `window.WAD.reportAppearance` et les applique à
+ses fenêtres. La ligne d'immeubles (`PixelSkyline.svelte`) passe en jour avec la palette claire (soleil, nuages qui dérivent,
+ciel bleu) ; la nuit, lune et étoiles qui scintillent. `prefers-reduced-motion` coupe les animations.
 
 ## Son des messages dans une bulle
 

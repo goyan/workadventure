@@ -2146,6 +2146,7 @@ export class GameScene extends DirtyScene {
             this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
         );
         this.pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
+        this.pathfindingManager.setObstacles(this.gameMapFrontWrapper.getPathObstacles(this.CurrentPlayer));
         return this.pathfindingManager;
     }
 
@@ -4419,6 +4420,7 @@ ${escapedMessage}
                 this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
             );
             pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
+            pathfindingManager.setObstacles(this.gameMapFrontWrapper.getPathObstacles(this.CurrentPlayer));
             // Each attempt must fully complete (walk, then maybe reroute) before the next one starts.
             // eslint-disable-next-line no-await-in-loop
             const path = await pathfindingManager.findPathFromGameCoordinates(

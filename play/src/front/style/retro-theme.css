@@ -19,9 +19,47 @@
     font-display: swap;
 }
 
+/* Fonts of the interface, chosen in the settings (Stores/RetroThemeStore.ts): `data-ui-font` on <html> picks one for
+   the whole page, `data-font-preview` shows one in the settings. Pixel is the default. */
+:root {
+    --ui-font-pixel: "Pixelify Sans", system-ui, sans-serif;
+    --ui-font-system: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --ui-font-classic: Roboto, "Pretendard Korean", system-ui, sans-serif;
+    --ui-font-arcade: "Press Start 2P", "Pixelify Sans", monospace;
+}
+
+:root[data-ui-font="system"] {
+    --ui-font: var(--ui-font-system);
+}
+
+:root[data-ui-font="classic"] {
+    --ui-font: var(--ui-font-classic);
+}
+
+:root[data-ui-font="arcade"] {
+    --ui-font: var(--ui-font-arcade);
+}
+
+[data-font-preview="pixel"] {
+    font-family: var(--ui-font-pixel);
+}
+
+[data-font-preview="system"] {
+    font-family: var(--ui-font-system);
+}
+
+[data-font-preview="classic"] {
+    font-family: var(--ui-font-classic);
+}
+
+[data-font-preview="arcade"] {
+    font-family: var(--ui-font-arcade);
+}
+
 /* Override the upstream design system once, including its inline font and radius utilities. */
 @theme inline {
-    --font-main: "Pixelify Sans", system-ui, sans-serif;
+    /* `--ui-font` comes from the font chosen in the settings (data-ui-font, below): utilities read it at runtime. */
+    --font-main: var(--ui-font, var(--ui-font-pixel));
     --font-title: var(--font-main);
     --font-content: var(--font-main);
     --font-sans: var(--font-main);

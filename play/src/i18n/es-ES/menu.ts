@@ -37,6 +37,15 @@ const menu: DeepPartial<Translation["menu"]> = {
                 light: "Claro",
             },
         },
+        font: {
+            label: "Font",
+            choices: {
+                pixel: "Pixel",
+                system: "System",
+                classic: "Classic",
+                arcade: "Arcade",
+            },
+        },
         videoBandwidth: {
             title: "Calidad de video",
             low: "Baja",

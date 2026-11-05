@@ -1,3 +1,4 @@
+import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
 // copy of Electron.SourcesOptions to avoid Electron dependency in front
 export interface SourcesOptions {
     types: string[];
@@ -86,6 +87,12 @@ export interface DesktopListening {
 /** Statuses a desktop app may request (see DESKTOP_STATUS_REQUESTS in Api/Desktop/index.ts). */
 export type DesktopStatusRequest = "online" | "busy" | "do-not-disturb" | "back-in-a-moment";
 
+/** The look chosen in the settings (Stores/RetroThemeStore.ts), for the desktop app to match its own windows. */
+export interface DesktopAppearance {
+    palette: RetroPalette;
+    font: UiFont;
+}
+
 export type WorkAdventureDesktopApi = {
     desktop: boolean;
     isDevelopment: () => Promise<boolean>;
@@ -103,6 +110,8 @@ export type WorkAdventureDesktopApi = {
      * change (null: nothing plays, or Spotify is closed). Never launches Spotify.
      */
     watchSpotifyTrack?: (callback: (track: DesktopSpotifyTrack | null) => void) => () => void;
+    /** Optional: WorkAdventure reports the palette and the font of its interface, now and on every change. */
+    reportAppearance?: (appearance: DesktopAppearance) => void;
     /** Optional: WorkAdventure reports what the local user shares about their listening, on every change. */
     reportListening?: (listening: DesktopListening) => void;
     /**

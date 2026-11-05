@@ -36,6 +36,15 @@ const menu: BaseTranslation = {
                 light: "Light",
             },
         },
+        font: {
+            label: "Font",
+            choices: {
+                pixel: "Pixel",
+                system: "System",
+                classic: "Classic",
+                arcade: "Arcade",
+            },
+        },
         videoBandwidth: {
             title: "Video quality",
             low: "Low",

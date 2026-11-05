@@ -22,34 +22,27 @@ export function snapRectToGrid(rect: AreaRect, size = MAP_LAYER_TILE_SIZE): Area
 /**
  * Snaps a drawn rectangle onto the floors of the map layer: the result is the bounding box of the floor tiles the
  * rectangle touches, so an area drawn over a room takes the size of the room's floor and never spills over the walls.
- * Returns the grid-snapped rectangle when the map has no floor at all (a map that does not use the map layer), and
- * undefined when the map has floors but the rectangle touches none of them.
+ * Returns the grid-snapped rectangle when it touches no floor: outside of the rooms (grass, a garden), or on a map
+ * that does not use the map layer.
  */
-export function snapRectToFloors(
-    model: MapLayerModel,
-    rect: AreaRect,
-    size = MAP_LAYER_TILE_SIZE,
-): AreaRect | undefined {
+export function snapRectToFloors(model: MapLayerModel, rect: AreaRect, size = MAP_LAYER_TILE_SIZE): AreaRect {
     const grid = snapRectToGrid(rect, size);
     const left = grid.x / size;
     const top = grid.y / size;
     const right = left + grid.width / size - 1;
     const bottom = top + grid.height / size - 1;
 
-    let hasFloor = false;
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const floor of model.getFloors()) {
-        hasFloor = true;
         if (floor.x < left || floor.x > right || floor.y < top || floor.y > bottom) continue;
         minX = Math.min(minX, floor.x);
         minY = Math.min(minY, floor.y);
         maxX = Math.max(maxX, floor.x);
         maxY = Math.max(maxY, floor.y);
     }
-    if (!hasFloor) return grid;
-    if (minX === Infinity) return undefined;
+    if (minX === Infinity) return grid;
     return { x: minX * size, y: minY * size, width: (maxX - minX + 1) * size, height: (maxY - minY + 1) * size };
 }

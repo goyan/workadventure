@@ -47,6 +47,7 @@
     import SegmentedControl from "./SegmentedControl.svelte";
     import SettingsSection from "./SettingsSection.svelte";
     import ThemeSettings from "./ThemeSettings.svelte";
+    import FontSettings from "./FontSettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -329,6 +330,9 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
+    </SettingsSection>
+    <SettingsSection title={$LL.menu.settings.font.label()} dataTestId="font-settings">
+        <FontSettings />
     </SettingsSection>
 
     <SettingsSection title={$LL.menu.settings.videoBandwidth.title()}>

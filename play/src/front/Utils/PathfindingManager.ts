@@ -2,6 +2,7 @@ import { MathUtils } from "@workadventure/math-utils";
 import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_X, CHARACTER_BODY_OFFSET_Y } from "../Phaser/Entity/Character";
 import { MinHeap } from "./MinHeap";
 import { TileBarriers } from "./TileBarriers";
+import { RectangleObstacles } from "./RectangleObstacles";
 
 export enum PathTileType {
     Walkable = 0,
@@ -38,6 +39,7 @@ type Tile = { x: number; y: number };
 export class PathfindingManager {
     private grid: number[][];
     private barriers: TileBarriers = TileBarriers.NONE;
+    private obstacles: RectangleObstacles = RectangleObstacles.NONE;
     private tileDimensions: { width: number; height: number };
 
     constructor(collisionsGrid: number[][], tileDimensions: { width: number; height: number }) {
@@ -52,6 +54,11 @@ export class PathfindingManager {
     /** The thin walls the avatar cannot cross, on top of the tiles of the collision grid. */
     public setBarriers(barriers: TileBarriers): void {
         this.barriers = barriers;
+    }
+
+    /** The pixel hitboxes of the objects, which the 32 px collision grid does not show. */
+    public setObstacles(obstacles: RectangleObstacles): void {
+        this.obstacles = obstacles;
     }
 
     public findPathFromGameCoordinates(
@@ -77,12 +84,16 @@ export class PathfindingManager {
                 // Indeed, we want the hitbox of the sprite to be completely inside the tile.
                 // Otherwise, the hitbox of the sprite could overflow a collide tile, so the player could use
                 // his keyboard to move the sprite inside the wall.
-                path[path.length - 1] = this.fitBodyWithinTile(
+                const exact = this.fitBodyWithinTile(
                     end.x,
                     end.y,
                     this.tileDimensions.width,
                     this.tileDimensions.height,
                 );
+                // An object in the tile may cover the exact point: the center of the tile is free, stop there.
+                if (!this.obstacles.blocksSegment(path[path.length - 1], exact)) {
+                    path[path.length - 1] = exact;
+                }
             }
         }
         return Promise.resolve(this.straightenPath(path));
@@ -115,6 +126,9 @@ export class PathfindingManager {
      * each side of it.
      */
     private canWalkStraight(from: { x: number; y: number }, to: { x: number; y: number }): boolean {
+        if (this.obstacles.blocksSegment(from, to)) {
+            return false;
+        }
         const length = Math.hypot(to.x - from.x, to.y - from.y);
         const clearance = CHARACTER_BODY_HEIGHT / 2 + this.barriers.halfThickness;
         const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
@@ -186,9 +200,9 @@ export class PathfindingManager {
         // a point on the other side of its walls. Only a point that cannot be stood on (an object, a wall of tiles) is
         // replaced by the free tile next to it that is the nearest to the avatar.
         let endTiles = [end];
-        if (tryFindingNearestAvailable && !this.isWalkable(end)) {
+        if (tryFindingNearestAvailable && !this.isFree(end)) {
             endTiles = this.getNeighbouringTiles(end)
-                .filter((tile) => this.isWalkable(tile) && !this.barriers.blocksMove(end, tile))
+                .filter((tile) => this.isFree(tile) && !this.barriers.blocksMove(end, tile))
                 .sort(
                     (a, b) => MathUtils.distanceBetween(a, start, false) - MathUtils.distanceBetween(b, start, false),
                 );
@@ -210,6 +224,11 @@ export class PathfindingManager {
         return type !== undefined && WALKABLE_TILE_TYPES.has(type);
     }
 
+    /** Walkable in the grid, and the avatar standing at its center touches no object. */
+    private isFree(tile: Tile): boolean {
+        return this.isWalkable(tile) && !this.obstacles.blocksPoint(this.mapTileUnitToPixels(tile));
+    }
+
     /**
      * A* on the tiles, in the 8 directions. A diagonal move needs the two tiles it passes between to be free, and no
      * barrier on the way. The start tile counts even if it is not walkable: the avatar can be standing in it.
@@ -218,7 +237,7 @@ export class PathfindingManager {
     private searchPath(start: Tile, end: Tile): Tile[] {
         const width = this.grid[0]?.length ?? 0;
         const height = this.grid.length;
-        if (!this.isWalkable(end) || (start.x === end.x && start.y === end.y)) {
+        if (!this.isFree(end) || (start.x === end.x && start.y === end.y)) {
             return [];
         }
         const index = (tile: Tile): number => tile.y * width + tile.x;
@@ -261,14 +280,17 @@ export class PathfindingManager {
     }
 
     private canMove(from: Tile, to: Tile): boolean {
-        if (!this.isWalkable(to) || this.barriers.blocksMove(from, to)) {
+        if (!this.isFree(to) || this.barriers.blocksMove(from, to)) {
+            return false;
+        }
+        if (this.obstacles.blocksSegment(this.mapTileUnitToPixels(from), this.mapTileUnitToPixels(to))) {
             return false;
         }
         if (from.x === to.x || from.y === to.y) {
             return true;
         }
         // No cutting a corner: the two tiles on both sides of the diagonal must be free too.
-        return this.isWalkable({ x: to.x, y: from.y }) && this.isWalkable({ x: from.x, y: to.y });
+        return this.isFree({ x: to.x, y: from.y }) && this.isFree({ x: from.x, y: to.y });
     }
 
     public mapTileUnitToPixels(tilePosition: { x: number; y: number }): { x: number; y: number } {
