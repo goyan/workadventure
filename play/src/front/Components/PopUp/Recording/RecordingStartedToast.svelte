@@ -57,7 +57,7 @@
     .recording-icon-container {
         position: relative;
         z-index: 2;
-        border-radius: 12px;
+        border-radius: var(--radius-lg);
         padding: 10px;
         display: flex;
         align-items: center;

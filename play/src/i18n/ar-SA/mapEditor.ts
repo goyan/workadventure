@@ -502,6 +502,56 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "طوب",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
+    placement: {
+        title: "Cannot place it here",
+        outOfMap: "Part of the object is outside the map.",
+        obstacle: "Its collision grid lands on a wall or another object.",
+        player: "A player stands where the object would block.",
+        permission: "You are not allowed to edit this part of the map.",
+    },
     entityEditor: {
         eraser: "ممحاة",
         eraserHint: "انقر أو اسحب فوق الكائنات لحذفها.",
@@ -539,6 +589,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "قابل للبحث في وضع الاستكشاف", // Searchable in exploration mode
         addDescriptionField: "إضافة وصف", // Add description
         uploadEntity: {
+            newViewOf: "عرض جديد لـ {name}: اختر صورته",
             title: "إضافة صورة", // Add image
             description: "اسحب وأفلت صورتك أو اخترها لإضافتها إلى الخريطة.", // Drag & drop your image or select it to add it to the map.
             dragDrop: "اسحب وأفلت أو", // Drag and drop or
@@ -551,10 +602,55 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "لا توجد صورة", // No image
         snapToGrid: "المحاذاة إلى الشبكة",
         specialTags: {
+            uncategorizedLabel: "للتصنيف",
+            structureLabel: "الأرضيات والجدران (قديم)",
             customLabel: "مخصص",
             mostUsedLabel: "الأكثر استخدامًا",
         },
+        editModel: "تعديل النموذج (كل النسخ)",
+        adjustModelForMap: "ضبط هذا الكائن على هذه الخريطة (كل النسخ)",
+        structureHint: "الأرضيات والجدران جزء من بنية الخريطة: استخدم أداة البنية بدلاً من ذلك.",
+        views: {
+            label: "العرض",
+            front: "أمامي",
+            back: "خلفي",
+            left: "يسار",
+            right: "يمين",
+            add: "إضافة عرض",
+            turn: "تدوير",
+        },
         customEntityEditorForm: {
+            saving: "جارٍ الحفظ…",
+            depthLine: {
+                behind: "خلف",
+                inFront: "أمام",
+                hint: "اسحب الخط الأصفر: إذا كانت القدمان فوقه يمر اللاعب خلف الكائن، وتحته أمامه.",
+            },
+            sittable: {
+                label: "يمكن الجلوس عليه",
+                description: "عند لمس الكائن يجلس اللاعب في وسط منطقة التصادم (مكان لكل خانة في الأريكة).",
+            },
+            shapeEditorHint: "اسحب المنطقة لتحريكها ومقابضها لتغيير حجمها. الأسهم: 1 بكسل، Shift + الأسهم: الحجم.",
+            titles: {
+                upload: "كائن جديد",
+                edit: "تعديل الكائن",
+                adjust: "ضبط على هذه الخريطة",
+            },
+            sections: {
+                interaction: "التفاعل",
+                identity: "الهوية",
+                displayDescription: "مكان رسم الكائن بالنسبة إلى اللاعبين.",
+                options: "خيارات",
+            },
+            category: {
+                label: "الفئة",
+                choose: "اختر فئة",
+                new: "فئة جديدة…",
+                newName: "اسم الفئة الجديدة",
+                required: "اختر فئة أو أنشئ واحدة.",
+            },
+            profileOnlyDescription: "كائن مضمّن: تنطبق هذه الإعدادات على كل نسخه في هذه الخريطة فقط.",
+            resetProfile: "العودة إلى إعدادات الكتالوج",
             imageName: "اسم الصورة", // Image name
             tags: "وسوم", // Tags
             writeTag: "اكتب وسمًا...",
@@ -572,6 +668,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "تصادم",
             wokaAbove: "وكا فوق",
             wokaBelow: "وكا تحت",
+            overhead: "فوق اللاعبين",
+            hitbox: {
+                title: "منطقة التصادم",
+                description:
+                    "المكان الذي يمنع فيه الكائن اللاعبين، بوحدات بكسل الصورة. تُنشأ من قاعدته: عدّلها عند الحاجة.",
+                regenerate: "إنشاء من الصورة",
+                required: "الكائن الواقف يحتاج إلى منطقة تصادم.",
+            },
+            water: {
+                enable: "يمكن السباحة فيه",
+                title: "ماء",
+                description: "يمكن للاعبين الغوص والسباحة؛ تبقى الرفقاء والحيوانات على الحافة.",
+                margin: "الحافة (بكسل)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "العرض",
+                height: "الارتفاع",
+            },
         },
         buttons: {
             editEntity: "تعديل الكائن", // Edit entity

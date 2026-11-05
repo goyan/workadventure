@@ -509,6 +509,56 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Baksteen",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
+    placement: {
+        title: "Cannot place it here",
+        outOfMap: "Part of the object is outside the map.",
+        obstacle: "Its collision grid lands on a wall or another object.",
+        player: "A player stands where the object would block.",
+        permission: "You are not allowed to edit this part of the map.",
+    },
     entityEditor: {
         eraser: "Gum",
         eraserHint: "Klik of sleep over objecten om ze te verwijderen.",
@@ -546,6 +596,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Zoekbaar in de verkenningsmodus",
         addDescriptionField: "Beschrijvingveld toevoegen",
         uploadEntity: {
+            newViewOf: "Nieuw aanzicht van {name}: kies de afbeelding",
             title: "Voeg je afbeelding toe",
             description: "Sleep je afbeelding of kies je afbeelding om deze aan de kaart toe te voegen",
             dragDrop: "Sleep en zet neer of",
@@ -558,10 +609,59 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Geen afbeelding",
         snapToGrid: "Uitlijnen op raster",
         specialTags: {
+            uncategorizedLabel: "Te sorteren",
+            structureLabel: "Vloeren & muren (oud)",
             customLabel: "Aangepast",
             mostUsedLabel: "Meest gebruikt",
         },
+        editModel: "Model bewerken (alle kopieën)",
+        adjustModelForMap: "Dit object op deze kaart aanpassen (alle kopieën)",
+        structureHint:
+            "Vloeren en muren horen bij de structuur van de kaart: gebruik liever het Structuur-gereedschap.",
+        views: {
+            label: "Aanzicht",
+            front: "Voorkant",
+            back: "Achterkant",
+            left: "Links",
+            right: "Rechts",
+            add: "Aanzicht toevoegen",
+            turn: "Draaien",
+        },
         customEntityEditorForm: {
+            saving: "Opslaan…",
+            depthLine: {
+                behind: "Achter",
+                inFront: "Voor",
+                hint: "Sleep de gele lijn: voeten erboven = achter het object, eronder = ervoor.",
+            },
+            sittable: {
+                label: "Je kunt erop zitten",
+                description:
+                    "Wie het object raakt, gaat in het midden van de hitbox zitten (één plek per vak bij een bank).",
+            },
+            shapeEditorHint:
+                "Sleep de zone om te verplaatsen, de grepen om de grootte te wijzigen. Pijlen: 1 px, Shift + pijlen: grootte.",
+            titles: {
+                upload: "Nieuw object",
+                edit: "Object bewerken",
+                adjust: "Aanpassen op deze kaart",
+            },
+            sections: {
+                interaction: "Interactie",
+                identity: "Identiteit",
+                displayDescription: "Waar het object getekend wordt ten opzichte van de spelers.",
+                options: "Opties",
+            },
+            category: {
+                label: "Categorie",
+                choose: "Kies een categorie",
+                new: "Nieuwe categorie…",
+                newName: "Naam van de nieuwe categorie",
+                required: "Kies of maak een categorie.",
+            },
+            profileOnlyDescription:
+                "Meegeleverd object: deze instellingen gelden voor alle kopieën, alleen op deze kaart.",
+            resetProfile: "Terug naar de catalogusinstellingen",
             imageName: "Afbeeldingsnaam",
             tags: "Tags",
             writeTag: "Tag schrijven...",
@@ -581,6 +681,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Botsing",
             wokaAbove: "Woka boven",
             wokaBelow: "Woka onder",
+            overhead: "Boven de spelers",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Waar het object spelers tegenhoudt, in pixels van de afbeelding. Gemaakt vanaf de voet: pas aan indien nodig.",
+                regenerate: "Maken vanuit de afbeelding",
+                required: "Een staand object heeft een hitbox nodig.",
+            },
+            water: {
+                enable: "Je kunt erin zwemmen",
+                title: "Water",
+                description: "Spelers kunnen erin duiken en zwemmen; huisdieren en dieren blijven aan de rand.",
+                margin: "Rand (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Breedte",
+                height: "Hoogte",
+            },
         },
         buttons: {
             editEntity: "Bewerken",

@@ -16,18 +16,22 @@
         mapEditorSelectedEntityPrefabStore,
         mapEditorSelectedEntityStore,
         selectCategoryStore,
+        entityUploadViewOfStore,
     } from "../../../Stores/MapEditorStore";
     import Input from "../../Input/Input.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
     import ButtonClose from "../../Input/ButtonClose.svelte";
     import Button from "../../UI/Button.svelte";
+    import { getEntityCategory, isSameCategory, isStructureObject } from "../../../Utils/EntityCategory";
+    import { categoryLabel } from "../../../Utils/CategoryLabel";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import EntitiesGrid from "./EntitiesGrid.svelte";
     import EntityImage from "./EntityItem/EntityImage.svelte";
     import EntityVariantColorPicker from "./EntityItem/EntityVariantColorPicker.svelte";
     import EntityVariantPositionPicker from "./EntityItem/EntityVariantPositionPicker.svelte";
     import EntityUpload from "./EntityUpload/EntityUpload.svelte";
-    import TagListItem from "./TagListItem.svelte";
+    import CategoryTile from "./CategoryTile.svelte";
+    import CategoryManager from "./CategoryManager.svelte";
     import { IconChevronLeft, IconEraser, IconPencil } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
@@ -124,55 +128,64 @@
     }
 
     let isEditingCustomEntity = $state(false);
+    let showCategoryManager = $state(false);
     function setIsEditingCustomEntity(isEditing: boolean) {
         isEditingCustomEntity = isEditing;
     }
 
+    /**
+     * The library by category: one category per object (its first meaningful tag, see EntityCategory), then the
+     * objects still to sort, the user's own uploads, and the old floor and wall objects, which belong to the structure
+     * of the map rather than to its objects.
+     */
     function getForEntitiesPrefabsVariantsWithCategories(
         entitiesPrefabsVariants: EntityVariant[],
     ): { category: CategoryTag; entitiesPrefabsVariants: EntityVariant[] }[] {
-        const entitiesPrefabsVariantsGroupedByTag = entitiesPrefabsVariants.reduce(
-            (groupByTag: { [tag: string]: EntityVariant[] }, entityPrefabVariant) => {
-                const { tags } = entityPrefabVariant.defaultPrefab;
-                tags.forEach((tag) => {
-                    groupByTag[tag] = groupByTag[tag] ?? [];
-                    groupByTag[tag].push(entityPrefabVariant);
-                });
-                return groupByTag;
-            },
-            {},
-        );
-        const customEntitiesPrefabsVariants = {
-            Custom: entitiesPrefabsVariants.filter(
-                (entityPrefabVariant) => entityPrefabVariant.defaultPrefab.type === "Custom",
-            ),
-        };
-        const mostUsedEntitiesPrefabsVariants = getMostUsedEntitiesPrefabsVariants(entitiesPrefabsVariants);
+        const byCategory: Record<string, { label: string; variants: EntityVariant[] }> = {};
+        const uncategorized: EntityVariant[] = [];
+        const structure: EntityVariant[] = [];
+        for (const variant of entitiesPrefabsVariants) {
+            if (isStructureObject(variant.defaultPrefab)) {
+                structure.push(variant);
+                continue;
+            }
+            const category = getEntityCategory(variant.defaultPrefab);
+            if (category === undefined) {
+                uncategorized.push(variant);
+                continue;
+            }
+            const key = category.toLocaleLowerCase();
+            byCategory[key] ??= { label: category, variants: [] };
+            byCategory[key].variants.push(variant);
+        }
 
         const groupedCategories: { category: CategoryTag; entitiesPrefabsVariants: EntityVariant[] }[] = [];
-
+        const mostUsedEntitiesPrefabsVariants = getMostUsedEntitiesPrefabsVariants(entitiesPrefabsVariants);
         if (mostUsedEntitiesPrefabsVariants.length > 0) {
             groupedCategories.push({
                 category: { kind: "special", tag: "most_used" },
                 entitiesPrefabsVariants: mostUsedEntitiesPrefabsVariants,
             });
         }
-
-        groupedCategories.push({
-            category: { kind: "special", tag: "custom" },
-            entitiesPrefabsVariants: customEntitiesPrefabsVariants.Custom,
-        });
-
         groupedCategories.push(
-            ...Object.entries(entitiesPrefabsVariantsGroupedByTag)
-                .sort()
-                .map(([tag, groupedPrefabsVariants]) => ({
-                    category: { kind: "tag", tag } as const,
-                    entitiesPrefabsVariants: groupedPrefabsVariants,
+            ...Object.values(byCategory)
+                .sort((a, b) => a.label.localeCompare(b.label))
+                .map(({ label, variants }) => ({
+                    category: { kind: "tag", tag: label } as const,
+                    entitiesPrefabsVariants: variants,
                 })),
         );
-
-        return groupedCategories;
+        groupedCategories.push(
+            { category: { kind: "special", tag: "uncategorized" }, entitiesPrefabsVariants: uncategorized },
+            {
+                category: { kind: "special", tag: "custom" },
+                entitiesPrefabsVariants: entitiesPrefabsVariants.filter(
+                    (variant) => variant.defaultPrefab.type === "Custom",
+                ),
+            },
+            { category: { kind: "special", tag: "structure" }, entitiesPrefabsVariants: structure },
+        );
+        return groupedCategories.filter((group) => group.entitiesPrefabsVariants.length > 0);
     }
 
     function getMostUsedEntitiesPrefabsVariants(entitiesPrefabsVariants: EntityVariant[]): EntityVariant[] {
@@ -218,9 +231,13 @@
                     return get(LL).mapEditor.entityEditor.specialTags.customLabel();
                 case "most_used":
                     return get(LL).mapEditor.entityEditor.specialTags.mostUsedLabel();
+                case "uncategorized":
+                    return get(LL).mapEditor.entityEditor.specialTags.uncategorizedLabel();
+                case "structure":
+                    return get(LL).mapEditor.entityEditor.specialTags.structureLabel();
             }
         }
-        return category.tag;
+        return categoryLabel(category.tag);
     }
 
     function getEntitiesPrefabsVariantsFilteredByTag(
@@ -228,32 +245,22 @@
         tag: SelectableTag,
         searchTerm: string,
     ) {
+        const matches = (variant: EntityVariant) => matchesSearch(variant.defaultPrefab, searchTerm);
         if (tag === undefined) {
-            return entitiesPrefabsVariants.filter(
-                (entityPrefabVariant) =>
-                    entityPrefabVariant.defaultPrefab.tags
-                        .join(",")
-                        .toLocaleLowerCase()
-                        .indexOf(searchTerm.toLocaleLowerCase()) != -1 ||
-                    entityPrefabVariant.defaultPrefab.name.toLowerCase().includes(searchTerm.toLowerCase()),
-            );
+            return entitiesPrefabsVariants.filter(matches);
         }
-        if (tag.kind === "special" && tag.tag === "custom") {
-            return entitiesPrefabsVariants.filter(
-                (entityPrefabVariant) =>
-                    entityPrefabVariant.defaultPrefab.type === "Custom" &&
-                    entityPrefabVariant.defaultPrefab.name.toLowerCase().includes(searchTerm.toLowerCase()),
-            );
-        }
-        if (tag.kind === "special" && tag.tag === "most_used") {
-            return getMostUsedEntitiesPrefabsVariants(entitiesPrefabsVariants).filter((entityPrefabVariant) =>
-                entityPrefabVariant.defaultPrefab.name.toLowerCase().includes(searchTerm.toLowerCase()),
-            );
-        }
-        return entitiesPrefabsVariants.filter(
-            (entityPrefabVariant) =>
-                entityPrefabVariant.defaultPrefab.tags.includes(tag.tag) &&
-                entityPrefabVariant.defaultPrefab.name.toLowerCase().includes(searchTerm.toLowerCase()),
+        const group = getForEntitiesPrefabsVariantsWithCategories(entitiesPrefabsVariants).find(
+            ({ category }) => category.kind === tag.kind && isSameCategory(category.tag, tag.tag),
+        );
+        return (group?.entitiesPrefabsVariants ?? []).filter(matches);
+    }
+
+    /** Search by name, category and tags, case-insensitive. */
+    function matchesSearch(prefab: EntityPrefab, searchTerm: string): boolean {
+        const term = searchTerm.trim().toLocaleLowerCase();
+        if (term === "") return true;
+        return [prefab.name, getEntityCategory(prefab) ?? "", ...prefab.tags].some((text) =>
+            text.toLocaleLowerCase().includes(term),
         );
     }
 
@@ -270,13 +277,18 @@
     });
 </script>
 
+{#if showCategoryManager}
+    <div class="absolute inset-0 z-30 flex p-2">
+        <CategoryManager close={() => (showCategoryManager = false)} />
+    </div>
+{/if}
 <div class="flex flex-col flex-1 overflow-auto gap-2">
     <div class="flex flex-col gap-2">
         <div class="flex flex-row items-start justify-between gap-2">
             <div>
                 {#if $selectCategoryStore === undefined}
-                    <p class="text-[22px] m-0">{$LL.mapEditor.entityEditor.header.title()}</p>
-                    <p class="m-0 opacity-50">{$LL.mapEditor.entityEditor.header.description()}</p>
+                    <p class="retro-heading">{$LL.mapEditor.entityEditor.header.title()}</p>
+                    <p class="retro-hint mt-2">{$LL.mapEditor.entityEditor.header.description()}</p>
                 {:else}
                     <div class="flex flex-row items-center gap-4">
                         <button
@@ -297,6 +309,16 @@
                 alignLabel="center"
             />
         </div>
+        {#if userCanEditMap}
+            <button
+                type="button"
+                class="retro-btn"
+                data-testid="openCategoryManager"
+                onclick={() => (showCategoryManager = true)}
+            >
+                {$LL.mapEditor.categories.manager.open()}
+            </button>
+        {/if}
         <button
             type="button"
             class="flex flex-row items-center gap-2 p-2 rounded text-sm {$mapEditorEntityEraserStore
@@ -328,14 +350,12 @@
     </div>
     <div class="flex-1 overflow-auto">
         {#if $selectCategoryStore === undefined && searchTerm === ""}
-            <ul class="list-none !p-0 min-w-full">
+            <ul class="list-none !p-0 m-0 min-w-full grid grid-cols-2 gap-2" data-testid="entityCategories">
                 {#each entitiesPrefabsVariantsWithCategories as { category, entitiesPrefabsVariants } (`${category.kind}-${category.tag}`)}
-                    <TagListItem
-                        selectedTag={(category) => {
-                            onSelectedTag(category);
-                        }}
-                        tag={category}
+                    <CategoryTile
+                        onSelect={() => onSelectedTag(category)}
                         label={getCategoryLabel(category)}
+                        special={category.kind === "special"}
                         {entitiesPrefabsVariants}
                     />
                 {/each}
@@ -343,7 +363,9 @@
         {:else}
             {#if pickedEntityVariant && pickedEntity}
                 <div
-                    class="fixed left-2 flex flex-row gap-2 items-center justify-center border-b-blue-50 p-4 mb-2 min-h-[200px] bg-white/20 backdrop-blur-xl rounded-2xl w-[calc(100%-16px)]"
+                    class={isEditingCustomEntity
+                        ? "fixed left-2 top-2 z-20 flex w-[calc(100%-16px)]"
+                        : "fixed left-2 flex flex-row gap-2 items-center justify-center border-b-blue-50 p-4 mb-2 min-h-[200px] bg-white/20 backdrop-blur-xl rounded-2xl w-[calc(100%-16px)]"}
                 >
                     {#if isEditingCustomEntity}
                         <CustomEntityEditionForm
@@ -388,6 +410,17 @@
                                 {/snippet}
                                 {$LL.mapEditor.entityEditor.buttons.editEntity()}
                             </Button>
+                            <Button
+                                variant="contrast"
+                                dataTestId="addEntityView"
+                                onclick={() => {
+                                    if (!pickedEntity) return;
+                                    entityUploadViewOfStore.set($state.snapshot(pickedEntity));
+                                    clearEntitySelection();
+                                }}
+                            >
+                                {$LL.mapEditor.entityEditor.views.add()}
+                            </Button>
                         {/if}
                         <div class="absolute top-1 right-1 p-1">
                             <ButtonClose
@@ -409,9 +442,12 @@
             {#if !isEditingCustomEntity}
                 <div class="flex flex-col gap-2" class:mt-52={pickedEntityVariant && pickedEntity}>
                     {#if $selectCategoryStore}
-                        <span class="font-bold text-lg">
+                        <span class="retro-title">
                             {getCategoryLabel($selectCategoryStore)}
                         </span>
+                        {#if $selectCategoryStore.kind === "special" && $selectCategoryStore.tag === "structure"}
+                            <p class="m-0 text-sm opacity-70">{$LL.mapEditor.entityEditor.structureHint()}</p>
+                        {/if}
                     {/if}
                     <EntitiesGrid
                         entityPrefabVariants={filteredEntityPrefabVariants}

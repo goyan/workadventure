@@ -160,7 +160,7 @@
             animation: ellipsis steps(4, end) 900ms infinite;
             content: "\2026";
             width: 0;
-            font-family: "Press Start 2P";
+            font-family: var(--font-main);
             font-size: 16px;
             position: absolute;
             left: 0;

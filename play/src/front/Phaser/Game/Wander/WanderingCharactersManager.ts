@@ -1,8 +1,10 @@
 import * as Phaser from "phaser";
 import type { Unsubscriber } from "svelte/store";
+import { getSeats } from "../../Player/Seat";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { PathfindingManager, PathTileType } from "../../../Utils/PathfindingManager";
 import type { TileBarriers } from "../../../Utils/TileBarriers";
+import { getWaterRectangles } from "../Water/WaterZones";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Entity } from "../../ECS/Entity";
@@ -83,6 +85,7 @@ export class WanderingCharactersManager {
         this.map = {
             isWalkable: (tile) => this.isWalkable(tile),
             findPath: (from, to) => this.findPath(from, to),
+            seats: () => getSeats(this.scene).map((seat) => seat.feet),
         };
         this.unsubscribeEditorMode = mapEditorModeStore.subscribe((isOn) => {
             this.isEditorMode = isOn;
@@ -229,16 +232,17 @@ export class WanderingCharactersManager {
     }
 
     /**
-     * The thin collisions of the objects, that stop the players through the physics. Those of the map layer are
-     * left out, like for the paths of the players: they are already walls between tiles (getWallBarriers).
+     * The thin collisions of the objects, that stop the players through the physics, and the water, which animals
+     * never enter. The collisions of the map layer are left out, like for the paths of the players: they are already
+     * walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
         return WanderingCharactersManager.collisionRectanglesOf(this.scene);
     }
 
-    /** The thin collisions of the objects of the scene, as the characters see them (see collisionRectangles). */
+    /** The thin collisions of objects and water, which animals never enter. */
     public static collisionRectanglesOf(scene: GameScene): WanderRectangle[] {
-        const rectangles: WanderRectangle[] = [];
+        const rectangles: WanderRectangle[] = [...getWaterRectangles(scene)];
         for (const entity of scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
             if (!prefab.collisionRectangles?.length || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
@@ -367,8 +371,16 @@ export class WanderingCharactersManager {
                     }
                     // Out of the position check: a character standing still where it was created needs it too. Only on
                     // change, as setting the depth sorts the display list again.
-                    if (sprite.depth !== pose.y) {
-                        sprite.setDepth(pose.y);
+                    // On a seat, drawn like a seated player: over the chair (behind it when it shows its back).
+                    const seat = pose.moving
+                        ? undefined
+                        : getSeats(this.scene).find(
+                              (candidate) =>
+                                  Math.abs(candidate.feet.x - pose.x) < 1 && Math.abs(candidate.feet.y - pose.y) < 1,
+                          );
+                    const depth = seat?.depth ?? pose.y;
+                    if (sprite.depth !== depth) {
+                        sprite.setDepth(depth);
                         changed = true;
                     }
                     if (pose.moving) {

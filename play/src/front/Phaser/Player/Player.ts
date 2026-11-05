@@ -18,10 +18,19 @@ import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctio
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
+import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Water/WaterZones";
+import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
+import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
+import LL from "../../../i18n/i18n-svelte";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatUnderFeet, isSeatTaken } from "./Seat";
+
+/** Water set to dive on contact: the body center this close to it makes the player dive. */
+const AUTO_DIVE_DISTANCE = 10;
+/** Swimming is slower than walking. */
+const SWIM_SPEED_FACTOR = 0.6;
 
 export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
@@ -37,6 +46,12 @@ export class Player extends Character {
     private mustReleaseKeysBeforeStandingUp = false;
     // Seat the player just left (or stopped sliding to): it is not sat on again until the player leaves its tile.
     private ignoredSeatId: string | undefined;
+    private seatEntityId: string | undefined;
+    private ignoredSeatEntityId: string | undefined;
+    private swimming = false;
+    private diveTarget: ReturnType<typeof findDiveTarget>;
+    private readonly divePrompt: InteractionPrompt;
+    private readonly sitPrompt: InteractionPrompt;
 
     constructor(
         Scene: GameScene,
@@ -53,6 +68,8 @@ export class Player extends Character {
         this.getBody().setImmovable(false);
         this.destinationMarker = new WalkDestinationMarker(Scene);
         this.runSmokeTrail = new RunSmokeTrail(Scene);
+        this.divePrompt = new InteractionPrompt(Scene, "water-dive", () => get(LL).trigger.swim());
+        this.sitPrompt = new InteractionPrompt(Scene, "seat-sit", () => get(LL).trigger.sit());
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -63,6 +80,7 @@ export class Player extends Character {
     }
 
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
+        this.updateSwimming();
         const state = get(followStateStore);
         const role = get(followRoleStore);
 
@@ -117,27 +135,79 @@ export class Player extends Character {
      */
     private trySitDown(): void {
         const body = this.getBody();
-        const seat = findSeatUnderFeet(this.scene, { x: this.x, y: this.y + body.height / 2 + body.offset.y });
+        this.releaseSeatObjectWhenOut();
+        const seat = findSeatUnderFeet(
+            this.scene,
+            { x: this.x, y: this.y + body.height / 2 + body.offset.y },
+            { x: body.x, y: body.y, width: body.width, height: body.height },
+        );
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
         }
-        if (!seat || seat.id === this.ignoredSeatId || isSeatTaken(this.scene, seat)) {
+        // The other places of the couch just left are ignored too, until the player walks away from it.
+        if (seat?.entityId !== this.ignoredSeatEntityId) {
+            this.ignoredSeatEntityId = undefined;
+        }
+        if (
+            !seat ||
+            seat.id === this.ignoredSeatId ||
+            seat.entityId === this.ignoredSeatEntityId ||
+            isSeatTaken(this.scene, seat)
+        ) {
+            this.sitPrompt.hide();
+            return;
+        }
+        if (seat.trigger === "key") {
+            // A seat set to the interaction key: offer it, sit only when asked.
+            this.sitPrompt.show(() => {
+                this.sitPrompt.hide();
+                this.slideToSeat(seat);
+            });
             return;
         }
         this.slideToSeat(seat);
     }
 
+    /**
+     * Whether the hitbox of this object must let the player through: it sits on it, slides to it, or just stood up
+     * and has not walked out of it yet (otherwise the hitbox would throw it out).
+     */
+    public isSittingOn(entityId: string): boolean {
+        return this.seatEntityId === entityId;
+    }
+
+    /** Once standing and out of the hitbox of the object it sat on, the object blocks the player again. */
+    private releaseSeatObjectWhenOut(): void {
+        if (this.seatEntityId === undefined || this.isSeated() || this.isSlidingToSeat) return;
+        const entity = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().get(this.seatEntityId);
+        const body = this.getBody();
+        const stillInside = getPrefabCollisionRectangles(
+            { x: entity?.x ?? 0, y: entity?.y ?? 0 },
+            entity?.getPrefab().collisionRectangles,
+        ).some(
+            (r) =>
+                body.x < r.x + r.width &&
+                r.x < body.x + body.width &&
+                body.y < r.y + r.height &&
+                r.y < body.y + body.height,
+        );
+        if (!stillInside) this.seatEntityId = undefined;
+    }
+
     private slideToSeat(seat: Seat): void {
         this.isSlidingToSeat = true;
+        this.seatEntityId = seat.entityId;
         this.stop();
         userMovingStore.set(false);
         this.setPathToFollow([seat.feet], WOKA_SPEED)
             .then((result) => {
                 if (result.cancelled) {
                     this.ignoredSeatId = seat.id;
+                    this.ignoredSeatEntityId = seat.entityId;
                     return;
                 }
                 this.ignoredSeatId = seat.id;
+                this.ignoredSeatEntityId = seat.entityId;
                 this.sit(seat.direction);
                 this.mustReleaseKeysBeforeStandingUp = true;
                 this.emit(hasMovedEventName, { moving: false, direction: seat.direction, x: this.x, y: this.y });
@@ -199,8 +269,61 @@ export class Player extends Character {
     }
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
-        return this.pathWalkingSpeed ? this.pathWalkingSpeed : speedUp && !followMode ? 2.5 * WOKA_SPEED : WOKA_SPEED;
+        const speed = this.pathWalkingSpeed
+            ? this.pathWalkingSpeed
+            : speedUp && !followMode
+              ? 2.5 * WOKA_SPEED
+              : WOKA_SPEED;
+        return this.swimming ? speed * SWIM_SPEED_FACTOR : speed;
     }
+
+    /** The local player knows it swims: near an edge its body center may be out of the water while it still swims. */
+    protected override isSwimmingHere(): boolean {
+        return this.swimming || super.isSwimmingHere();
+    }
+
+    /** Whether the player dove in and is still in the water: the water does not block it then. */
+    public isSwimming(): boolean {
+        return this.swimming;
+    }
+
+    /**
+     * Out of the water, offers to dive when the player stands at its edge. In the water, the player gets out by
+     * walking onto the edge: it stops swimming once no part of its body touches the water any more.
+     */
+    private updateSwimming(): void {
+        const water = getWaterRectangles(this.scene);
+        const body = this.getBody();
+        if (this.swimming) {
+            if (!intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height })) {
+                this.swimming = false;
+            }
+            return;
+        }
+        this.diveTarget =
+            water.length > 0 && !this.isSeated() && !this.isSlidingToSeat
+                ? findDiveTarget(water, { x: body.center.x, y: body.center.y })
+                : undefined;
+        if (!this.diveTarget) {
+            this.divePrompt.hide();
+        } else if (this.diveTarget.trigger === "auto" && this.diveTarget.distance <= AUTO_DIVE_DISTANCE) {
+            // Water set to dive on contact: touching its edge is enough.
+            this.dive();
+        } else {
+            this.divePrompt.show(this.dive);
+        }
+    }
+
+    private readonly dive = (): void => {
+        const target = this.diveTarget;
+        if (!target || this.swimming) return;
+        this.divePrompt.hide();
+        this.swimming = true;
+        const body = this.getBody();
+        // Path positions are those of the character: its body center is offset from it.
+        const offsetY = body.center.y - this.y;
+        this.setPathToFollow([{ x: target.x, y: target.y - offsetY }], WOKA_SPEED).catch((e) => console.warn(e));
+    };
 
     private inputStep(activeEvents: ActiveEventList, x: number, y: number) {
         // Process input events
@@ -448,6 +571,8 @@ export class Player extends Character {
 
     destroy(): void {
         this.unsubscribeVisibilityStore();
+        this.divePrompt.hide();
+        this.sitPrompt.hide();
         this.destinationMarker.destroy();
         super.destroy();
     }

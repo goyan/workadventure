@@ -72,6 +72,8 @@ export const mapEditorEntityEraserStore = writable<boolean>(false);
 export const mapEditorAreaEraserStore = writable<boolean>(false);
 
 export const mapEditorEntityUploadEventStore = writable<UploadEntityMessage | undefined>(undefined);
+/** The object of the library the next uploaded image is another view of (back, left, right…), if any. */
+export const entityUploadViewOfStore = writable<EntityPrefab | undefined>(undefined);
 export const mapEditorModifyCustomEntityEventStore = writable<ModifyCustomEntityMessage | undefined>(undefined);
 export const mapEditorDeleteCustomEntityEventStore = writable<DeleteCustomEntityMessage | undefined>(undefined);
 
@@ -101,7 +103,12 @@ export type CategoryTag =
       }
     | {
           kind: "special";
-          tag: "most_used" | "custom";
+          tag: "most_used" | "custom" | "uncategorized" | "structure";
       };
 export type SelectableTag = CategoryTag | undefined;
 export const selectCategoryStore = writable<SelectableTag>(undefined);
+
+/** Why the object being placed or moved is drawn in red; undefined when it can go there. */
+export const entityPlacementBlockerStore = writable<"outOfMap" | "obstacle" | "player" | "permission" | undefined>(
+    undefined,
+);

@@ -6,6 +6,7 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import { asError } from "catch-unknown";
+import { entityPlacementBlockerStore } from "../../../../Stores/MapEditorStore";
 import {
     mapEditorCopiedEntityDataPropertiesStore,
     mapEditorDeleteCustomEntityEventStore,
@@ -98,6 +99,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     public clear(): void {
+        entityPlacementBlockerStore.set(undefined);
         this.stopFloorStroke();
         super.clear();
         this.unbindEventHandlers();
@@ -497,9 +499,11 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         prefab: EntityPrefab,
         ignoreCollisionGrid: boolean = this.isFreePlacement(),
     ): boolean {
-        return this.scene
+        const blocker = this.scene
             .getGameMapFrontWrapper()
-            .canEntityBePlacedOnMap(topLeftPos, width, height, prefab.collisionGrid, undefined, ignoreCollisionGrid);
+            .getPlacementBlocker(topLeftPos, width, height, prefab.collisionGrid, undefined, ignoreCollisionGrid);
+        entityPlacementBlockerStore.set(blocker);
+        return blocker === undefined;
     }
 
     private isSnappingToGrid(): boolean {

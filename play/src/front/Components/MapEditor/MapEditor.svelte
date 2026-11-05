@@ -1,6 +1,8 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { onMount } from "svelte";
+    import LL from "../../../i18n/i18n-svelte";
+    import { entityPlacementBlockerStore } from "../../Stores/MapEditorStore";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { mapEditorSelectedToolStore, mapEditorVisibilityStore } from "../../Stores/MapEditorStore";
     import Explorer from "../Exploration/Explorer.svelte";
@@ -8,6 +10,7 @@
     import { windowSize } from "../../Stores/CoWebsiteStore";
 
     import { blocker } from "../../Utils/screenBlocker";
+    import PixelSkyline from "../UI/PixelSkyline.svelte";
     import AreaEditor from "./AreaEditor/AreaEditor.svelte";
     import EntityEditor from "./EntityEditor/EntityEditor.svelte";
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
@@ -70,7 +73,7 @@
                 />
             </div>
             <div
-                class="sidebar h-dvh bg-contrast/80 backdrop-blur-md p-2 md:p-4"
+                class="sidebar retro-theme relative h-dvh p-2 md:p-4"
                 in:fly={{ x: 100, duration: 200, delay: 200 }}
                 out:fly={{ x: 100, duration: 200 }}
             >
@@ -89,6 +92,16 @@
                 {#if $mapEditorSelectedToolStore === EditorToolName.SelectionEditor}
                     <SelectionEditor />
                 {/if}
+                {#if $entityPlacementBlockerStore && $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
+                    <!-- Why the object is red: shown while it is being placed or moved. -->
+                    <div class="retro-card shrink-0" role="status" data-testid="placementBlocker">
+                        <span class="retro-title retro-title-red">{$LL.mapEditor.placement.title()}</span>
+                        <p class="retro-hint">{$LL.mapEditor.placement[$entityPlacementBlockerStore]()}</p>
+                    </div>
+                {/if}
+                <div class="mt-auto -mx-2 -mb-2 md:-mx-4 md:-mb-4 opacity-80 shrink-0">
+                    <PixelSkyline />
+                </div>
             </div>
         {/if}
     </div>

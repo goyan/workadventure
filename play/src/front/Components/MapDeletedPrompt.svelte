@@ -43,7 +43,7 @@
     main.mapDeletedScreen {
         min-width: 300px;
         z-index: 700;
-        font-family: "Roboto", sans-serif;
+        font-family: var(--font-main);
 
         .logo {
             margin: 0 auto 50px auto;

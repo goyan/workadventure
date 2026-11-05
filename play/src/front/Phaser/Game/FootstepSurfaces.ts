@@ -5,7 +5,8 @@ import { modelFromPlacedPrefabs } from "./MapEditor/MapLayer/MapLayerOperations"
 import type { PlacedPrefabLike } from "./MapEditor/MapLayer/MapLayerOperations";
 
 export const FOOTSTEP_SURFACES = ["grass", "wood", "carpet", "stone"] as const;
-export type FootstepSurface = (typeof FOOTSTEP_SURFACES)[number];
+/** What a character moves on: a floor, or water while it swims. */
+export type FootstepSurface = (typeof FOOTSTEP_SURFACES)[number] | "water";
 
 /** The floors are read again at this rhythm: they are painted and erased in the map editor. */
 const RESCAN_PERIOD_MS = 2000;
@@ -14,7 +15,7 @@ const RESCAN_PERIOD_MS = 2000;
 export interface FloorEntity extends PlacedPrefabLike {
     width: number;
     height: number;
-    footstepSound?: FootstepSurface;
+    footstepSound?: (typeof FOOTSTEP_SURFACES)[number];
 }
 
 /** The sound of a step on a floor of the map layer whose catalog sets no `footstepSound`. */

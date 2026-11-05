@@ -46,6 +46,7 @@
     import SpotifySettings from "./SpotifySettings.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import SettingsSection from "./SettingsSection.svelte";
+    import ThemeSettings from "./ThemeSettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -326,6 +327,10 @@
 </script>
 
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
+    <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
+        <ThemeSettings />
+    </SettingsSection>
+
     <SettingsSection title={$LL.menu.settings.videoBandwidth.title()}>
         {#snippet icon()}<IconCameraUp />{/snippet}
         <div>

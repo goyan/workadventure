@@ -507,6 +507,56 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Mattone",
         },
     },
+    categories: {
+        base: {
+            seats: "Seats",
+            pools: "Pools",
+            rugs: "Rugs & floors",
+            lights: "Lights",
+            plants: "Plants",
+            tables: "Tables",
+            storage: "Storage",
+            decoration: "Decoration",
+            electronics: "Electronics",
+            misc: "Miscellaneous",
+        },
+        interactions: {
+            none: "None",
+            sit: "Sit",
+            swim: "Swim",
+        },
+        triggers: {
+            auto: "On contact",
+            key: "Space key",
+        },
+        layers: {
+            free: "Free",
+            floor: "On the floor",
+            standing: "Standing",
+            overhead: "Above the players",
+        },
+        manager: {
+            title: "Categories",
+            description: "What players do with the objects of each category, and their default level, on this map.",
+            close: "Close",
+            base: "Base",
+            delete: "Delete",
+            interaction: "Interaction",
+            trigger: "Starts",
+            layer: "Default level",
+            add: "New category",
+            newName: "Name of the category",
+            addButton: "Add",
+            open: "Categories and interactions",
+        },
+    },
+    placement: {
+        title: "Cannot place it here",
+        outOfMap: "Part of the object is outside the map.",
+        obstacle: "Its collision grid lands on a wall or another object.",
+        player: "A player stands where the object would block.",
+        permission: "You are not allowed to edit this part of the map.",
+    },
     entityEditor: {
         eraser: "Gomma",
         eraserHint: "Fai clic o trascina sugli oggetti per eliminarli.",
@@ -544,6 +594,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Ricercabile in modalità esplorazione",
         addDescriptionField: "Aggiungi campo descrizione",
         uploadEntity: {
+            newViewOf: "Nuova vista di {name}: scegli l’immagine",
             title: "Aggiungi la tua immagine",
             description: "Trascina e rilascia o scegli la tua immagine per aggiungerla alla mappa",
             dragDrop: "Trascina e Rilascia o",
@@ -556,10 +607,59 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Nessuna immagine",
         snapToGrid: "Aggancia alla griglia",
         specialTags: {
+            uncategorizedLabel: "Da classificare",
+            structureLabel: "Pavimenti e muri (vecchio)",
             customLabel: "Personalizzato",
             mostUsedLabel: "Più usati",
         },
+        editModel: "Modifica il modello (tutte le copie)",
+        adjustModelForMap: "Regola questo oggetto su questa mappa (tutte le copie)",
+        structureHint:
+            "Pavimenti e muri fanno parte della struttura della mappa: usa piuttosto lo strumento Struttura.",
+        views: {
+            label: "Vista",
+            front: "Fronte",
+            back: "Retro",
+            left: "Sinistra",
+            right: "Destra",
+            add: "Aggiungi una vista",
+            turn: "Ruota",
+        },
         customEntityEditorForm: {
+            saving: "Salvataggio…",
+            depthLine: {
+                behind: "Dietro",
+                inFront: "Davanti",
+                hint: "Trascina la linea gialla: piedi sopra = dietro l’oggetto, sotto = davanti.",
+            },
+            sittable: {
+                label: "Ci si può sedere",
+                description:
+                    "Toccando l’oggetto, il giocatore si siede al centro della sua hitbox (un posto per casella per un divano).",
+            },
+            shapeEditorHint:
+                "Trascina la zona per spostarla, le maniglie per ridimensionarla. Frecce: 1 px, Maiusc + frecce: dimensione.",
+            titles: {
+                upload: "Nuovo oggetto",
+                edit: "Modifica oggetto",
+                adjust: "Regola su questa mappa",
+            },
+            sections: {
+                interaction: "Interazione",
+                identity: "Identità",
+                displayDescription: "Dove l’oggetto viene disegnato rispetto ai giocatori.",
+                options: "Opzioni",
+            },
+            category: {
+                label: "Categoria",
+                choose: "Scegli una categoria",
+                new: "Nuova categoria…",
+                newName: "Nome della nuova categoria",
+                required: "Scegli o crea una categoria.",
+            },
+            profileOnlyDescription:
+                "Oggetto incluso: queste impostazioni valgono per tutte le sue copie, solo su questa mappa.",
+            resetProfile: "Torna alle impostazioni del catalogo",
             imageName: "Nome immagine",
             tags: "Tag",
             writeTag: "Scrivi tag...",
@@ -579,6 +679,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Collisione",
             wokaAbove: "Woka sopra",
             wokaBelow: "Woka sotto",
+            overhead: "Sopra i giocatori",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Dove l’oggetto blocca i giocatori, in pixel dell’immagine. Generata dalla sua base: regolala se serve.",
+                regenerate: "Genera dall’immagine",
+                required: "Un oggetto in piedi ha bisogno di una hitbox.",
+            },
+            water: {
+                enable: "Ci si può nuotare",
+                title: "Acqua",
+                description: "I giocatori possono tuffarsi e nuotare; compagni e animali restano sul bordo.",
+                margin: "Bordo (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Larghezza",
+                height: "Altezza",
+            },
         },
         buttons: {
             editEntity: "Modifica",

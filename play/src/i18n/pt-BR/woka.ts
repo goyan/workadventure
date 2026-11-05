@@ -18,6 +18,10 @@ const woka: BaseTranslation = {
     menu: {
         businessCard: "Cartão de visitas",
     },
+    picker: {
+        title: "Quem você quer selecionar?",
+        self: "{name} (você)",
+    },
 };
 
 export default woka;

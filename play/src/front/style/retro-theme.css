@@ -1,0 +1,518 @@
+/*
+ * Theme engine of the interface: modern, with a pixel touch, like the WorkAdventure desktop client.
+ *
+ * - Tokens: the colors of the desktop client (night navy, slate panels, WorkAdventure blue, warm window light) live
+ *   on `.retro-theme`; `data-retro-palette` swaps the palette. Components only
+ *   read tokens, so a palette is just a block of variables.
+ * - Pixel touch: the selected choice marked by a small square "pixel", crisp previews. Typography and radii
+ *   share the same tokens as the rest of the interface.
+ * - Components: .retro-panel, .retro-card, .retro-heading, .retro-title, .retro-choice(s), .retro-btn (+ -primary,
+ *   -danger), .retro-label, .retro-hint, .retro-error, .retro-pixel; native inputs, selects, checkboxes and scrollbars
+ *   inside `.retro-theme` follow the same look.
+ */
+
+@font-face {
+    /* SIL Open Font License, see ./fonts/pixelify/OFL.txt. */
+    font-family: "Pixelify Sans";
+    src: url("./fonts/pixelify/PixelifySans.ttf") format("truetype");
+    font-weight: 400 700;
+    font-display: swap;
+}
+
+/* Override the upstream design system once, including its inline font and radius utilities. */
+@theme inline {
+    --font-main: "Pixelify Sans", system-ui, sans-serif;
+    --font-title: var(--font-main);
+    --font-content: var(--font-main);
+    --font-sans: var(--font-main);
+    --color-white: var(--ui-foreground);
+    --color-black: var(--ui-overlay);
+    --color-neutral-100: var(--ui-foreground);
+
+    --radius: 4px;
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 8px;
+    --radius-2xl: 8px;
+    --radius-3xl: 8px;
+    --radius-4xl: 8px;
+}
+
+:root {
+    --ui-foreground: #fff;
+    --ui-overlay: #000;
+}
+
+/*
+ * Palettes: they redefine the HSL variables of the WorkAdventure design system on <html>, so the whole interface
+ * (menus, action bar, settings, buttons) follows, not only the editor. "night" is the default design of WorkAdventure
+ * moved toward the desktop client; the others change the hue of its surfaces and of its accent.
+ */
+:root[data-retro-palette="night"] {
+    --contrast-100: 223 30% 88%;
+    --contrast-200: 223 28% 76%;
+    --contrast-300: 223 26% 62%;
+    --contrast-400: 223 24% 42%;
+    --contrast-500: 223 26% 34%;
+    --contrast-600: 223 29% 26%;
+    --contrast: 223 30% 16%;
+    --contrast-800: 223 30% 16%;
+    --contrast-900: 223 34% 12%;
+    --contrast-1000: 224 38% 9%;
+    --contrast-1100: 224 40% 6%;
+}
+
+:root[data-retro-palette="forest"] {
+    --contrast-100: 140 22% 88%;
+    --contrast-200: 140 20% 76%;
+    --contrast-300: 140 16% 60%;
+    --contrast-400: 140 18% 38%;
+    --contrast-500: 140 20% 30%;
+    --contrast-600: 140 22% 22%;
+    --contrast: 140 24% 14%;
+    --contrast-800: 140 24% 14%;
+    --contrast-900: 140 26% 10%;
+    --contrast-1000: 140 28% 7%;
+    --contrast-1100: 140 30% 5%;
+    --secondary-500: 145 45% 55%;
+    --secondary-600: 145 48% 52%;
+    --secondary: 145 45% 45%;
+    --secondary-800: 145 48% 40%;
+    --secondary-900: 145 50% 35%;
+    --secondary-1000: 145 52% 30%;
+}
+
+:root[data-retro-palette="ember"] {
+    --contrast-100: 18 30% 88%;
+    --contrast-200: 18 26% 76%;
+    --contrast-300: 18 22% 62%;
+    --contrast-400: 16 22% 40%;
+    --contrast-500: 15 22% 32%;
+    --contrast-600: 14 22% 24%;
+    --contrast: 12 22% 16%;
+    --contrast-800: 12 22% 16%;
+    --contrast-900: 12 24% 11%;
+    --contrast-1000: 12 26% 8%;
+    --contrast-1100: 12 28% 6%;
+    --secondary-500: 24 80% 65%;
+    --secondary-600: 24 82% 60%;
+    --secondary: 24 74% 55%;
+    --secondary-800: 22 72% 48%;
+    --secondary-900: 20 72% 42%;
+    --secondary-1000: 18 74% 36%;
+}
+
+:root[data-retro-palette="gameboy"] {
+    --contrast-100: 90 40% 88%;
+    --contrast-200: 88 34% 74%;
+    --contrast-300: 86 28% 60%;
+    --contrast-400: 100 22% 38%;
+    --contrast-500: 105 22% 30%;
+    --contrast-600: 108 24% 22%;
+    --contrast: 110 26% 14%;
+    --contrast-800: 110 26% 14%;
+    --contrast-900: 112 28% 10%;
+    --contrast-1000: 114 30% 7%;
+    --contrast-1100: 116 32% 5%;
+    --secondary-500: 75 70% 52%;
+    --secondary-600: 75 75% 46%;
+    --secondary: 74 83% 37%;
+    --secondary-800: 74 85% 32%;
+    --secondary-900: 74 88% 28%;
+    --secondary-1000: 74 90% 24%;
+}
+
+:root[data-retro-palette="light"] {
+    color-scheme: light;
+    --ui-foreground: #263044;
+    --ui-overlay: #fff;
+    --contrast-100: 220 28% 21%;
+    --contrast-200: 220 22% 29%;
+    --contrast-300: 220 18% 38%;
+    --contrast-400: 220 18% 55%;
+    --contrast-500: 220 24% 74%;
+    --contrast-600: 220 28% 85%;
+    --contrast: 220 35% 94%;
+    --contrast-800: 220 35% 94%;
+    --contrast-900: 220 45% 98%;
+    --contrast-1000: 220 45% 100%;
+    --contrast-1100: 220 45% 100%;
+    --secondary-500: 233 76% 55%;
+    --secondary-600: 233 76% 48%;
+    --secondary: 233 76% 48%;
+    --secondary-800: 233 76% 42%;
+    --secondary-900: 233 76% 36%;
+    --secondary-1000: 233 76% 30%;
+    --danger: 11 70% 38%;
+    --success: 140 55% 30%;
+    --warning: 35 85% 30%;
+    --color-dark-purple: hsl(var(--contrast-900));
+    --color-medium-purple: hsl(var(--contrast-600));
+    --color-light-purple: hsl(var(--contrast-500));
+    --color-lighter-purple: hsl(var(--contrast-300));
+    --color-light-purple-alt: hsl(var(--contrast-400));
+    --color-dark-blue: hsl(var(--contrast-900));
+    --color-dark: hsl(var(--contrast-1000));
+}
+
+/* Foreground utilities adapt to light surfaces, but stay white on filled accent buttons and dark alerts. */
+:root[data-retro-palette="light"]
+    :is(
+        .bg-primary,
+        .bg-secondary,
+        .bg-secondary-600,
+        .bg-danger,
+        .bg-success,
+        .bg-warning,
+        .bg-danger-1000\/70,
+        .retro-btn-primary,
+        .btn-primary:not(.btn-border):not(.btn-ghost),
+        .btn-secondary:not(.btn-border):not(.btn-ghost),
+        .btn-danger:not(.btn-border):not(.btn-ghost),
+        .btn-neutral:not(.btn-border):not(.btn-ghost),
+        .btn-success:not(.btn-border):not(.btn-ghost),
+        .btn-warning:not(.btn-border):not(.btn-ghost)
+    ) {
+    --ui-foreground: #fff;
+    color: #fff;
+}
+
+:root[data-retro-palette="light"] .input-switch::after {
+    background-color: #fff;
+}
+
+:root[data-retro-palette="light"]
+    .btn:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-neutral):not(.btn-success):not(
+        .btn-warning
+    ):not(.btn-light) {
+    color: hsl(var(--contrast-100));
+}
+
+/* The tokens of the menus are aliases of the design system: one source of colors for the whole interface. */
+.retro-theme {
+    --rt-bg: hsl(var(--contrast-900));
+    --rt-bg-deep: hsl(var(--contrast-1000));
+    --rt-surface: hsl(var(--contrast));
+    --rt-surface-raised: hsl(var(--contrast-600));
+    --rt-line: hsl(var(--contrast-600));
+    --rt-line-strong: hsl(var(--contrast-500));
+    --rt-text: hsl(var(--contrast-100));
+    --rt-muted: hsl(var(--contrast-300));
+    --rt-accent: hsl(var(--secondary));
+    --rt-accent-hover: hsl(var(--secondary-600));
+    --rt-accent-soft: hsl(var(--secondary) / 0.16);
+    --rt-highlight: #ffd36b;
+    --rt-primary: hsl(var(--secondary));
+    --rt-danger: hsl(var(--danger));
+    --rt-hitbox: #ec7c62;
+    --rt-water: #5ec4f5;
+    --rt-radius-s: var(--radius-sm);
+    --rt-radius-m: var(--radius-lg);
+    --rt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    color: var(--rt-text);
+    background: hsl(var(--contrast-900) / 0.94);
+    backdrop-filter: blur(12px);
+    scrollbar-color: var(--rt-line-strong) transparent;
+}
+
+.retro-theme .retro-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--rt-bg);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-m);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+}
+
+.retro-theme .retro-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0.875rem;
+    background: var(--rt-surface);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-m);
+}
+
+.retro-theme .retro-heading,
+.retro-theme .retro-title,
+.retro-theme .retro-pixel {
+    font-family: var(--font-main);
+    letter-spacing: 0.01em;
+}
+
+.retro-theme .retro-heading {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--rt-text);
+}
+
+.retro-theme .retro-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--rt-text);
+}
+
+/* The pixel touch of a section title: a little lit window, like the skyline of the desktop client. */
+.retro-theme .retro-title::before {
+    content: "";
+    width: 0.375rem;
+    height: 0.375rem;
+    flex-shrink: 0;
+    background: var(--rt-highlight);
+    box-shadow: 0.375rem 0 0 var(--rt-accent);
+    margin-inline-end: 0.375rem;
+}
+
+.retro-theme .retro-title-red::before {
+    background: var(--rt-hitbox);
+}
+
+.retro-theme .retro-title-blue::before {
+    background: var(--rt-water);
+}
+
+.retro-theme .retro-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--rt-muted);
+}
+
+.retro-theme .retro-hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--rt-muted);
+}
+
+.retro-theme .retro-error {
+    font-size: 0.8125rem;
+    color: var(--rt-danger);
+}
+
+.retro-theme .retro-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+}
+
+.retro-theme .retro-choice {
+    position: relative;
+    padding: 0.5rem 0.75rem 0.5rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: start;
+    color: var(--rt-text);
+    background: var(--rt-bg-deep);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-s);
+    cursor: pointer;
+    transition:
+        background 0.15s var(--rt-ease),
+        border-color 0.15s var(--rt-ease);
+}
+
+/* A pixel square marks the choice: empty when off, lit when on. */
+.retro-theme .retro-choice::before {
+    content: "";
+    position: absolute;
+    left: 0.6rem;
+    top: 50%;
+    width: 0.375rem;
+    height: 0.375rem;
+    transform: translateY(-50%);
+    background: var(--rt-line-strong);
+}
+
+.retro-theme .retro-choice:hover {
+    border-color: var(--rt-line-strong);
+    background: var(--rt-surface-raised);
+}
+
+.retro-theme .retro-choice.selected {
+    border-color: var(--rt-accent);
+    background: var(--rt-accent-soft);
+}
+
+.retro-theme .retro-choice.selected::before {
+    background: var(--rt-highlight);
+}
+
+.retro-theme .retro-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--rt-text);
+    background: var(--rt-surface);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-s);
+    cursor: pointer;
+    transition:
+        background 0.15s var(--rt-ease),
+        border-color 0.15s var(--rt-ease);
+}
+
+.retro-theme .retro-btn:hover:not(:disabled) {
+    border-color: var(--rt-muted);
+    background: var(--rt-surface-raised);
+}
+
+.retro-theme .retro-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.retro-theme .retro-btn-primary {
+    font-weight: 600;
+    color: #fff;
+    background: var(--rt-primary);
+    border-color: transparent;
+}
+
+.retro-theme .retro-btn-primary:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--rt-accent-hover);
+}
+
+.retro-theme .retro-btn-danger {
+    color: var(--rt-danger);
+    background: transparent;
+    border-color: color-mix(in srgb, var(--rt-danger) 45%, transparent);
+}
+
+.retro-theme .retro-btn-danger:hover:not(:disabled) {
+    color: #fff;
+    background: var(--rt-danger);
+    border-color: transparent;
+}
+
+.retro-theme :focus-visible {
+    outline: 2px solid var(--rt-accent-hover);
+    outline-offset: 2px;
+}
+
+/* Native controls inside the theme. */
+.retro-theme input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.retro-theme select,
+.retro-theme textarea {
+    color: var(--rt-text) !important;
+    background-color: var(--rt-bg-deep) !important;
+    border: 1px solid var(--rt-line) !important;
+    border-radius: var(--rt-radius-s) !important;
+    box-shadow: none !important;
+}
+
+.retro-theme input:not([type="checkbox"]):not([type="radio"]):focus,
+.retro-theme select:focus,
+.retro-theme textarea:focus {
+    outline: none !important;
+    border-color: var(--rt-accent) !important;
+}
+
+.retro-theme input[type="checkbox"],
+.retro-theme input[type="radio"],
+.retro-theme input[type="range"] {
+    accent-color: var(--rt-accent);
+}
+
+.retro-theme ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.retro-theme ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.retro-theme ::-webkit-scrollbar-thumb {
+    background: var(--rt-line-strong);
+    border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-theme .retro-choice,
+    .retro-theme .retro-btn {
+        transition: none;
+    }
+}
+
+/* Key / value rows separated by hairlines, like the About window of the desktop client. */
+.retro-theme .retro-rows {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--rt-line);
+}
+
+.retro-theme .retro-rows > * {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0.25rem;
+    border-bottom: 1px solid var(--rt-line);
+}
+
+/* A small warm badge ("Beta", counts, states). */
+.retro-theme .retro-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.45rem;
+    font-family: var(--font-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2b2108;
+    background: var(--rt-highlight);
+    border-radius: var(--rt-radius-s);
+}
+
+/* Text-only actions ("Notes de version", "Copier les infos"). */
+.retro-theme .retro-btn-quiet {
+    color: var(--rt-muted);
+    background: transparent;
+    border-color: transparent;
+}
+
+.retro-theme .retro-btn-quiet:hover:not(:disabled) {
+    color: var(--rt-text);
+    background: var(--rt-surface-raised);
+    border-color: transparent;
+}
+
+/* A small square spinner, in the pixel spirit: shown on buttons while something is being saved. */
+.retro-theme .retro-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-inline-end: 0.5rem;
+    background: currentcolor;
+    animation: retro-spin 0.8s steps(4) infinite;
+}
+
+@keyframes retro-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-theme .retro-spinner {
+        animation: none;
+        opacity: 0.6;
+    }
+}

@@ -1508,10 +1508,21 @@ export class GameScene extends DirtyScene {
             );
         }
         // The feet, not the middle of the sprite, tell which floor tile is walked on.
-        const listener = { id: "local", x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y };
+        // A swimmer makes the sound of water, whatever the floor under the pool.
+        const listener = {
+            id: "local",
+            x: this.CurrentPlayer.x,
+            y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
+            swimming: this.CurrentPlayer.isSwimming() || this.CurrentPlayer.isInWater(),
+        };
         const characters = [listener];
         for (const player of this.MapPlayersByKey.values()) {
-            characters.push({ id: String(player.userId), x: player.x, y: player.y + CHARACTER_BODY_OFFSET_Y });
+            characters.push({
+                id: String(player.userId),
+                x: player.x,
+                y: player.y + CHARACTER_BODY_OFFSET_Y,
+                swimming: player.isInWater(),
+            });
         }
         this.footstepSounds.update(characters, listener);
     }
@@ -2179,7 +2190,7 @@ export class GameScene extends DirtyScene {
         }));
         collectionDescriptors.push({ url: customEntityCollectionUrl, type: "Custom" });
 
-        this.entitiesCollectionsManager.loadCollections(collectionDescriptors);
+        this.entitiesCollectionsManager.loadCollections(collectionDescriptors, this.wamFile.settings?.prefabOverrides);
     }
 
     private doLoadTMJFile(mapUrlFile: string): void {

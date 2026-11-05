@@ -153,7 +153,7 @@ describe("EntityEditorTool floor painting", () => {
             x: Math.floor(x / 32),
             y: Math.floor(y / 32),
         }));
-        gameMapFrontWrapper.canEntityBePlacedOnMap.mockReturnValue(true);
+        gameMapFrontWrapper.getPlacementBlocker.mockReturnValue(undefined);
 
         const scene = mock<GameScene>();
         scene.game = mock<Phaser.Game>();
@@ -514,9 +514,9 @@ describe("EntityEditorTool floor painting", () => {
     it("checks bounds and placement permission for every interpolated tile", async () => {
         await selectPrefab(floorPrefab);
         const checkedPositions: { x: number; y: number }[] = [];
-        gameMapFrontWrapper.canEntityBePlacedOnMap.mockImplementation((position) => {
+        gameMapFrontWrapper.getPlacementBlocker.mockImplementation((position) => {
             checkedPositions.push(position);
-            return position.x <= 160 && position.x !== 128 && position.y >= 0;
+            return position.x <= 160 && position.x !== 128 && position.y >= 0 ? undefined : "obstacle";
         });
         const start = tileCenter(2, 3);
         const end = tileCenter(7, 3);

@@ -1,12 +1,14 @@
 import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import { AreaDataProperties, EntityDataProperties, EntityDimensions, EntityPrefabRef } from "@workadventure/map-editor";
+import type { EntityPrefab } from "@workadventure/map-editor";
 import type { Observable } from "rxjs";
 import { Subject } from "rxjs";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
+import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
     mapEditorEntityEraserStore,
@@ -237,15 +239,15 @@ export class EntitiesManager extends EventEmitter {
         }
     }
 
-    public updateEntitiesDepth(modifiedEntityPrefabId: string, depthOffset: number) {
-        const entities = this.getEntities();
-        for (const entity of entities.values()) {
-            const entityPrefab = entity.getPrefab();
-            if (entityPrefab.id === modifiedEntityPrefabId) {
-                if (entityPrefab.depthOffset !== depthOffset) {
-                    entity.updateDepth(depthOffset);
-                }
-            }
+    /**
+     * A custom image was edited: its placed copies take the new prefab, then their depth and their collision
+     * rectangles are rebuilt from it (the 32px grid is recomputed by the caller for the whole map).
+     */
+    public updateEntitiesPrefab(modifiedEntityPrefabId: string, modification: Partial<EntityPrefab>) {
+        for (const entity of this.getEntities().values()) {
+            if (entity.getPrefab().id !== modifiedEntityPrefabId) continue;
+            entity.setPrefab({ ...entity.getPrefab(), ...modification });
+            this.gameMapFrontWrapper.addEntityCollisionRectangles(entity);
         }
     }
 
@@ -381,6 +383,7 @@ export class EntitiesManager extends EventEmitter {
             }
         });
         entity.on(Phaser.Input.Events.DRAG_END, (pointer: Pointer, dragX: number, dragY: number) => {
+            entityPlacementBlockerStore.set(undefined);
             if (
                 get(mapEditorModeStore) &&
                 this.isEntityEditorToolActive() &&
@@ -521,18 +524,18 @@ export class EntitiesManager extends EventEmitter {
     }
 
     private changeEntityTint(entity: Entity): void {
-        if (
-            !this.scene
-                .getGameMapFrontWrapper()
-                .canEntityBePlacedOnMap(
-                    entity.getTopLeft(),
-                    entity.displayWidth,
-                    entity.displayHeight,
-                    entity.getCollisionGrid(),
-                    entity.getOldPosition(),
-                    this.isFreePlacement(),
-                )
-        ) {
+        const blocker = this.scene
+            .getGameMapFrontWrapper()
+            .getPlacementBlocker(
+                entity.getTopLeft(),
+                entity.displayWidth,
+                entity.displayHeight,
+                entity.getCollisionGrid(),
+                entity.getOldPosition(),
+                this.isFreePlacement(),
+            );
+        entityPlacementBlockerStore.set(blocker);
+        if (blocker !== undefined) {
             entity.setTint(0xff0000);
         } else {
             if (this.isFreePlacement()) {

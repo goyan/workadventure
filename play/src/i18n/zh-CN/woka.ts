@@ -19,6 +19,10 @@ const woka: DeepPartial<Translation["woka"]> = {
     menu: {
         businessCard: "名片",
     },
+    picker: {
+        title: "你想选择谁？",
+        self: "{name}（你）",
+    },
 };
 
 export default woka;

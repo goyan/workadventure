@@ -108,7 +108,7 @@
     <!--put a section to avoid lower div to be affected by some css-->
     <div class="flex flex-col items-center gap-4 pt-24 side-bar">
         <div class="flex flex-col gap-1">
-            <div class="close-window p-2 bg-contrast/80 rounded-2xl backdrop-blur-md">
+            <div class="close-window p-2 retro-theme rounded-2xl">
                 <button
                     class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
                     data-testid="closeMapEditorButton"
@@ -120,7 +120,7 @@
                     <IconX font-size="20" />
                 </button>
             </div>
-            <div class="close-window p-2 bg-contrast/80 rounded-2xl backdrop-blur-md">
+            <div class="close-window p-2 retro-theme rounded-2xl">
                 <button
                     class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
                     data-testid="hideMapEditorButton"
@@ -141,7 +141,7 @@
                 </button>
             </div>
         </div>
-        <div class="p-2 bg-contrast/80 rounded-2xl flex flex-col gap-2 backdrop-blur-md">
+        <div class="p-2 retro-theme rounded-2xl flex flex-col gap-2">
             {#each availableTools as tool (tool.toolName)}
                 {@const ToolIcon = tool.iconComponent}
                 <div class="tool-button relative">

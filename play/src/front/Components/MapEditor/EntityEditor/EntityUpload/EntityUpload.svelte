@@ -2,12 +2,18 @@
     import type { UploadEntityMessage } from "@workadventure/messages";
     import { CustomEntityDirection } from "@workadventure/messages";
     import { onDestroy } from "svelte";
+    import { get } from "svelte/store";
     import { v4 as uuidv4 } from "uuid";
     import type { EntityPrefab } from "@workadventure/map-editor";
     import { Direction, ENTITY_UPLOAD_SUPPORTED_FORMATS_FRONT } from "@workadventure/map-editor";
     import LL from "../../../../../i18n/i18n-svelte";
     import { localUserStore } from "../../../../Connection/LocalUserStore";
-    import { mapEditorEntityUploadEventStore, selectCategoryStore } from "../../../../Stores/MapEditorStore";
+    import {
+        entityUploadViewOfStore,
+        mapEditorEntityUploadEventStore,
+        selectCategoryStore,
+    } from "../../../../Stores/MapEditorStore";
+    import { gameManager } from "../../../../Phaser/Game/GameManager";
     import CustomEntityEditionForm from "../CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import { IconCloudUpload } from "@wa-icons";
 
@@ -23,15 +29,18 @@
         if (files) {
             const file = files.item(0);
             if (file && isASupportedFormat(file.type)) {
+                const viewOf = $entityUploadViewOfStore;
                 customEntityToUpload = {
                     collectionName: "custom entities",
-                    name: file.name,
+                    name: viewOf?.name ?? file.name,
                     imagePath: URL.createObjectURL(file),
                     id: uuidv4(),
-                    direction: Direction.Down,
-                    tags: [],
-                    color: "",
+                    direction: viewOf ? getMissingView(viewOf) : Direction.Down,
+                    tags: viewOf ? [...viewOf.tags] : [],
+                    color: viewOf?.color ?? "",
                     type: BASIC_TYPE,
+                    variantOf: viewOf ? (viewOf.variantOf ?? viewOf.id) : undefined,
+                    layer: viewOf?.layer,
                 };
             } else {
                 console.error("File format not supported");
@@ -45,6 +54,34 @@
             completeAndResetUpload(uploadEntityMessage);
         },
     );
+
+    /** The first view the object does not have yet: back, then left, then right. */
+    function getMissingView(viewOf: EntityPrefab): Direction {
+        const groupId = viewOf.variantOf ?? viewOf.id;
+        const existing = new Set(
+            get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
+                .find((variant) => variant.prefabIds.includes(groupId))
+                ?.getEntityPrefabsPositions(viewOf.color)
+                .map((prefab) => prefab.direction) ?? [viewOf.direction],
+        );
+        return (
+            [Direction.Up, Direction.Left, Direction.Right, Direction.Down].find((d) => !existing.has(d)) ??
+            Direction.Up
+        );
+    }
+
+    function toCustomEntityDirection(direction: string): CustomEntityDirection {
+        switch (direction) {
+            case Direction.Up:
+                return CustomEntityDirection.Up;
+            case Direction.Left:
+                return CustomEntityDirection.Left;
+            case Direction.Right:
+                return CustomEntityDirection.Right;
+            default:
+                return CustomEntityDirection.Down;
+        }
+    }
 
     function isASupportedFormat(format: string): boolean {
         return format.trim().length > 0 && ENTITY_UPLOAD_SUPPORTED_FORMATS_FRONT.includes(format);
@@ -70,14 +107,19 @@
             mapEditorEntityUploadEventStore.set({
                 id: generatedId,
                 file: fileAsUint8Array,
-                direction: CustomEntityDirection.Down,
+                direction: toCustomEntityDirection(customEditedEntity.direction),
+                variantOf: customEditedEntity.variantOf,
                 name: customEditedEntity.name,
                 tags: $state.snapshot(customEditedEntity.tags),
                 imagePath: `${generatedId}-${fileToUpload.name}`,
                 collisionGrid: customEditedEntity.collisionGrid,
                 depthOffset: customEditedEntity.depthOffset,
                 animation: $state.snapshot(customEditedEntity.animation),
-                color: "",
+                collisionRectangles: $state.snapshot(customEditedEntity.collisionRectangles),
+                layer: customEditedEntity.layer,
+                water: $state.snapshot(customEditedEntity.water),
+                sittable: customEditedEntity.sittable,
+                color: customEditedEntity.color ?? "",
                 // Lets us edit and delete our own upload without waiting for the round trip to
                 // map-storage, which overwrites this with the authenticated user UUID anyway.
                 ownerId: localUserStore.getLocalUser()?.uuid,
@@ -86,6 +128,7 @@
     }
 
     function initFileUpload() {
+        entityUploadViewOfStore.set(undefined);
         files = undefined;
         customEntityToUpload = undefined;
         mapEditorEntityUploadEventStore.set(undefined);
@@ -116,7 +159,7 @@
 </script>
 
 {#if customEntityToUpload}
-    <div class="absolute top-0 left-0 w-full bg-contrast/80 backdrop-blur p-8 h-full overflow-auto">
+    <div class="absolute top-0 left-0 z-20 w-full h-full p-2 bg-contrast/90">
         <CustomEntityEditionForm
             isUploadForm
             customEntity={customEntityToUpload}
@@ -127,6 +170,19 @@
     </div>
 {:else}
     <div class="no-padding">
+        {#if $entityUploadViewOfStore}
+            <div
+                class="flex items-center justify-between gap-2 p-2 mb-2 rounded bg-secondary/30"
+                data-testid="uploadViewOf"
+            >
+                <span class="text-sm">
+                    {$LL.mapEditor.entityEditor.uploadEntity.newViewOf({ name: $entityUploadViewOfStore.name })}
+                </span>
+                <button type="button" class="text-xs underline" onclick={() => entityUploadViewOfStore.set(undefined)}>
+                    {$LL.mapEditor.entityEditor.buttons.cancel()}
+                </button>
+            </div>
+        {/if}
         <p class="m-0">{$LL.mapEditor.entityEditor.uploadEntity.title()}</p>
         <p class="opacity-50">{$LL.mapEditor.entityEditor.uploadEntity.description()}</p>
         <!-- svelte-ignore a11y_no_static_element_interactions -->

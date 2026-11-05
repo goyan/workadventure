@@ -19,12 +19,19 @@ const TELEPORT_DISTANCE = 64;
 
 /** Recordings per surface (CC0, see `resources/objects/footsteps/CREDITS.txt`), picked at random so steps do not sound looped. */
 const VARIANTS_PER_SURFACE = 5;
-export const FOOTSTEP_SOUNDS = FOOTSTEP_SURFACES.flatMap((surface) =>
-    Array.from({ length: VARIANTS_PER_SURFACE }, (_, index) => ({
-        key: footstepSoundKey(surface, index),
-        url: `/resources/objects/footsteps/${surface}-${index}.ogg`,
+export const FOOTSTEP_SOUNDS = [
+    ...FOOTSTEP_SURFACES.flatMap((surface) =>
+        Array.from({ length: VARIANTS_PER_SURFACE }, (_, index) => ({
+            key: footstepSoundKey(surface, index),
+            url: `/resources/objects/footsteps/${surface}-${index}.ogg`,
+        })),
+    ),
+    // Strokes of a swimmer, generated for WorkAdventure (see CREDITS.txt).
+    ...Array.from({ length: VARIANTS_PER_SURFACE }, (_, index) => ({
+        key: footstepSoundKey("water", index),
+        url: `/resources/objects/footsteps/water-${index}.wav`,
     })),
-);
+];
 
 function footstepSoundKey(surface: FootstepSurface, variant: number): string {
     return `audio-footstep-${surface}-${variant}`;
@@ -35,6 +42,8 @@ export interface WalkingCharacter {
     id: string;
     x: number;
     y: number;
+    /** Swimming: its strokes sound like water, whatever the floor under the pool. */
+    swimming?: boolean;
 }
 
 export interface FootstepPlayback {
@@ -110,7 +119,8 @@ export class FootstepSounds {
         if (distance >= FOOTSTEP_HEARING_DISTANCE || !this.isHeard(character, listener)) return;
         const closeness = 1 - distance / FOOTSTEP_HEARING_DISTANCE;
         const loudness = MIN_VOLUME_RATIO + (1 - MIN_VOLUME_RATIO) * this.random();
-        this.playSound(footstepSoundKey(this.getSurfaceAt(character.x, character.y), this.nextVariant()), {
+        const surface = character.swimming ? "water" : this.getSurfaceAt(character.x, character.y);
+        this.playSound(footstepSoundKey(surface, this.nextVariant()), {
             volume: FOOTSTEP_MAX_VOLUME * closeness * closeness * loudness,
             detune: (this.random() * 2 - 1) * MAX_DETUNE,
             pan: Math.max(-1, Math.min(1, (character.x - listener.x) / FOOTSTEP_HEARING_DISTANCE)) * MAX_PAN,

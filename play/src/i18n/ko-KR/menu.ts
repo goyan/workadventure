@@ -27,6 +27,16 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "도움말 및 팁",
     },
     settings: {
+        theme: {
+            label: "테마",
+            palettes: {
+                night: "밤",
+                forest: "숲",
+                ember: "잉걸불",
+                gameboy: "Game Boy",
+                light: "밝게",
+            },
+        },
         videoBandwidth: {
             title: "비디오 품질",
             low: "낮음",

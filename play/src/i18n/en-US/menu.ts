@@ -26,6 +26,16 @@ const menu: BaseTranslation = {
         helpAndTips: "Help & Tips",
     },
     settings: {
+        theme: {
+            label: "Theme",
+            palettes: {
+                night: "Night",
+                forest: "Forest",
+                ember: "Ember",
+                gameboy: "Game Boy",
+                light: "Light",
+            },
+        },
         videoBandwidth: {
             title: "Video quality",
             low: "Low",

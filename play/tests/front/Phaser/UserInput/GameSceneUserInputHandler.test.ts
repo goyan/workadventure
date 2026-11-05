@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { get, readable } from "svelte/store";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
@@ -9,6 +10,9 @@ import type { ActivatablesManager } from "../../../../src/front/Phaser/Game/Acti
 import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInput/GameSceneUserInputHandler";
 import { isActivatable } from "../../../../src/front/Phaser/Game/ActivatableInterface";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
+import { characterPickerStore } from "../../../../src/front/Stores/CharacterPickerStore";
+import { RemotePlayer } from "../../../../src/front/Phaser/Entity/RemotePlayer";
+import { Player } from "../../../../src/front/Phaser/Player/Player";
 import { WOKA_SPEED } from "../../../../src/front/Enum/EnvironmentVariable";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
@@ -200,6 +204,72 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([[object]]);
         expect(scene.moveTo.mock.calls).toEqual([]);
+    });
+
+    describe("overlapping characters", () => {
+        function remote(name: string, userUuid: string): RemotePlayer {
+            return Object.assign(Object.create(RemotePlayer.prototype) as RemotePlayer, {
+                playerName: name,
+                userUuid,
+                userId: 1,
+                pictureStore: readable(undefined),
+                scene: {},
+                isActivatable: () => true,
+            });
+        }
+
+        beforeEach(() => {
+            characterPickerStore.set(undefined);
+            vi.mocked(isActivatable).mockImplementation((object) => object instanceof RemotePlayer);
+        });
+
+        it("offers a choice, front-most first, when one click hits several wokas", () => {
+            const front = remote("Alice", "uuid-a");
+            const hidden = remote("Bob", "uuid-b");
+            handler.handlePointerUpEvent(pointer(0, 1), [front, hidden]);
+
+            expect(get(characterPickerStore)?.map((candidate) => candidate.name)).toEqual(["Alice", "Bob"]);
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("opens the woka hidden behind another one once chosen", () => {
+            const hidden = remote("Bob", "uuid-b");
+            handler.handlePointerUpEvent(pointer(0, 1), [remote("Alice", "uuid-a"), hidden]);
+            get(characterPickerStore)?.[1].select();
+
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([[hidden]]);
+        });
+
+        it("lists one's own woka among the choices", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                pictureStore: readable(undefined),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self, remote("Alice", "uuid-a")]);
+
+            expect(get(characterPickerStore)?.map(({ name, isSelf }) => ({ name, isSelf }))).toEqual([
+                { name: "Me", isSelf: true },
+                { name: "Alice", isSelf: false },
+            ]);
+        });
+
+        it("opens a lone woka directly, without a choice", () => {
+            const alone = remote("Alice", "uuid-a");
+            handler.handlePointerUpEvent(pointer(0, 1), [alone]);
+
+            expect(get(characterPickerStore)).toBeUndefined();
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([[alone]]);
+        });
+
+        it("ignores a woka that has left the map while the choice was open", () => {
+            const leaving = remote("Bob", "uuid-b");
+            handler.handlePointerUpEvent(pointer(0, 1), [remote("Alice", "uuid-a"), leaving]);
+            Object.assign(leaving, { scene: undefined });
+            get(characterPickerStore)?.[1].select();
+
+            expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([]);
+        });
     });
 
     it("does not turn a long press into running", () => {

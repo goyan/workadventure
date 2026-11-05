@@ -80,6 +80,9 @@ export type PropertyChangeCallback = (
     allProps: Map<string, string | boolean | number>,
 ) => void;
 
+/** Why an object cannot be placed somewhere (see getPlacementBlocker). */
+export type PlacementBlocker = "outOfMap" | "obstacle" | "player" | "permission";
+
 export class GameMapFrontWrapper {
     private scene: GameScene;
     private gameMap: GameMap;
@@ -121,6 +124,7 @@ export class GameMapFrontWrapper {
     private areasCollisionLayer: TilemapLayer;
     private readonly tiledTileCollisions: TiledTileCollisions | undefined;
     private readonly entityCollisionRectangles: EntityCollisionRectangles;
+    private readonly entityWaterRectangles: EntityCollisionRectangles;
 
     private collisionGridDirty = true;
     private sharedCollisionGrid: number[][] = [];
@@ -173,6 +177,7 @@ export class GameMapFrontWrapper {
         }
 
         this.entityCollisionRectangles = new EntityCollisionRectangles(scene);
+        this.entityWaterRectangles = new EntityCollisionRectangles(scene, "water");
 
         this.existingTileIndex = terrains.length > 0 ? terrains[0].firstgid : -1;
 
@@ -372,6 +377,21 @@ export class GameMapFrontWrapper {
             this.invalidateCollisionGrid({ modifiedLayer: this.entitiesCollisionLayer });
             this.initializedPromise.resolve();
         });
+    }
+
+    private entitiesCollisionGridRecomputeScheduled = false;
+
+    /**
+     * Recomputes the collision grid once, after the current batch of edits: editing a model updates every view and
+     * color of it, one command each, and a full recompute per command froze big maps for seconds.
+     */
+    public scheduleEntitiesCollisionGridRecompute(): void {
+        if (this.entitiesCollisionGridRecomputeScheduled) return;
+        this.entitiesCollisionGridRecomputeScheduled = true;
+        setTimeout(() => {
+            this.entitiesCollisionGridRecomputeScheduled = false;
+            this.recomputeEntitiesCollisionGrid();
+        }, 0);
     }
 
     public recomputeEntitiesCollisionGrid() {
@@ -585,6 +605,7 @@ export class GameMapFrontWrapper {
         }
         this.collisionGridDirty = true;
         this.sharedCollisionGridDirty = true;
+        this.placementCollisionGrid = undefined;
     }
 
     private rebuildAreasCollisionLayer(): void {
@@ -968,6 +989,22 @@ export class GameMapFrontWrapper {
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
     ): boolean {
+        return (
+            this.getPlacementBlocker(topLeftPos, width, height, collisionGrid, oldTopLeftPos, ignoreCollisionGrid) ===
+            undefined
+        );
+    }
+
+    /** Why an object cannot go there, or undefined when it can: shown next to an object drawn in red. */
+    public getPlacementBlocker(
+        topLeftPos: { x: number; y: number },
+        width: number,
+        height: number,
+        collisionGrid?: number[][],
+        oldTopLeftPos?: { x: number; y: number },
+        ignoreCollisionGrid?: boolean,
+    ): PlacementBlocker | undefined {
+        this.lastPlacementBlocker = undefined;
         const canEntityBePlaced = this.canEntityBePlaced(
             topLeftPos,
             width,
@@ -976,17 +1013,21 @@ export class GameMapFrontWrapper {
             oldTopLeftPos,
             ignoreCollisionGrid,
         );
-
+        if (!canEntityBePlaced) {
+            return this.lastPlacementBlocker ?? "obstacle";
+        }
         const entityCenterCoordinates = {
             x: Math.ceil(topLeftPos.x + width / 2),
             y: Math.ceil(topLeftPos.y + height / 2),
         };
-
-        return (
-            canEntityBePlaced &&
-            this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)
-        );
+        if (!this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)) {
+            return "permission";
+        }
+        return undefined;
     }
+
+    /** Set by the placement checks below, read by getPlacementBlocker. */
+    private lastPlacementBlocker: PlacementBlocker | undefined;
 
     private canEntityBePlaced(
         topLeftPos: { x: number; y: number },
@@ -1000,6 +1041,7 @@ export class GameMapFrontWrapper {
             .getGameMapFrontWrapper()
             .isOutOfMapBounds(topLeftPos.x, topLeftPos.y, width, height);
         if (isOutOfBounds) {
+            this.lastPlacementBlocker = "outOfMap";
             return false;
         }
 
@@ -1079,6 +1121,7 @@ export class GameMapFrontWrapper {
                     height: this.getTileDimensions().height,
                 })
             ) {
+                this.lastPlacementBlocker = "player";
                 return false;
             }
         }
@@ -1087,18 +1130,30 @@ export class GameMapFrontWrapper {
             return true;
         }
 
-        // Check if position is not colliding
-        const height = this.collisionGrid.length;
-        const width = this.collisionGrid[0].length;
+        // Areas only block players (restricted access, full...): an object may be placed on them, so they are left
+        // out of the grid used to place objects.
+        const placementGrid = this.getPlacementCollisionGrid();
+        const height = placementGrid.length;
+        const width = placementGrid[0]?.length ?? 0;
         const xIndex = Math.floor(topLeftX / this.getTileDimensions().width);
         const yIndex = Math.floor(topLeftY / this.getTileDimensions().height);
         if (yIndex >= height || yIndex < 0 || xIndex >= width || xIndex < 0) {
             return false;
         }
-        if (this.collisionGrid[yIndex][xIndex] !== 0) {
+        if (placementGrid[yIndex][xIndex] !== 0) {
+            this.lastPlacementBlocker = "obstacle";
             return false;
         }
         return true;
+    }
+
+    private placementCollisionGrid: number[][] | undefined;
+
+    /** The collision grid without the areas: what objects may not be placed on. Rebuilt with the collision grid. */
+    private getPlacementCollisionGrid(): number[][] {
+        this.ensureCollisionGridUpToDate(false);
+        this.placementCollisionGrid ??= this.composeCollisionGrid(false);
+        return this.placementCollisionGrid;
     }
 
     public isOutOfMapBounds(topLeftX: number, topLeftY: number, width = 0, height = 0): boolean {
@@ -1835,12 +1890,14 @@ export class GameMapFrontWrapper {
     public setTileCollisionPlayer(player: Player): void {
         this.tiledTileCollisions?.setPlayer(player);
         this.entityCollisionRectangles.setPlayer(player);
+        this.entityWaterRectangles.setPlayer(player);
     }
 
     public isTileCollisionPathClear(player: Player, path: { x: number; y: number }[]): boolean {
         return (
             (this.tiledTileCollisions?.isPathClear(player, path) ?? true) &&
-            this.entityCollisionRectangles.isPathClear(player, path)
+            this.entityCollisionRectangles.isPathClear(player, path) &&
+            this.entityWaterRectangles.isPathClear(player, path)
         );
     }
 
@@ -1859,15 +1916,18 @@ export class GameMapFrontWrapper {
 
     public addEntityCollisionRectangles(entity: Entity): void {
         this.entityCollisionRectangles.add(entity);
+        this.entityWaterRectangles.add(entity);
     }
 
     public removeEntityCollisionRectangles(entityId: string): void {
         this.entityCollisionRectangles.remove(entityId);
+        this.entityWaterRectangles.remove(entityId);
     }
 
     public close(): void {
         this.tiledTileCollisions?.destroy();
         this.entityCollisionRectangles.destroy();
+        this.entityWaterRectangles.destroy();
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }

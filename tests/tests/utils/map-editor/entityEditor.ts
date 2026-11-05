@@ -122,6 +122,7 @@ class EntityEditor {
             .getByTestId("uploadCustomAsset")
             .setInputFiles(fileURLToPath(new URL(`../../assets/${this.getTestAssetFile()}`, import.meta.url)));
         await page.getByTestId("floatingObject").click();
+        await this.chooseNewCategory(page);
         await this.applyEntityModifications(page);
     }
 
@@ -132,7 +133,14 @@ class EntityEditor {
                 fileURLToPath(new URL(`../../assets/${this.getTestAssetFileWithOddSize()}`, import.meta.url)),
             );
         await page.getByTestId("floatingObject").click();
+        await this.chooseNewCategory(page);
         await this.applyEntityModifications(page);
+    }
+
+    /** Every uploaded image needs a category: the tests create their own. */
+    async chooseNewCategory(page: Page, category = "E2E") {
+        await page.getByTestId("entityCategory").selectOption("__new__");
+        await page.getByTestId("newCategory").fill(category);
     }
 
     async openEditEntityForm(page: Page) {

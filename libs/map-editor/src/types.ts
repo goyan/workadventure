@@ -324,6 +324,9 @@ export const CollisionRectangle = z.object({
     height: z.number().positive(),
 });
 
+export const EntityLayer = z.enum(["floor", "standing", "overhead"]);
+export type EntityLayer = z.infer<typeof EntityLayer>;
+
 export const MAX_ENTITY_ANIMATION_FRAME_COUNT = 64;
 export const MAX_ENTITY_ANIMATION_FRAME_RATE = 60;
 
@@ -348,6 +351,29 @@ export const EntityRawPrefab = z.object({
     // which would make every placed entity of the catalog lose its prefab.
     collisionRectangles: z.array(CollisionRectangle).optional().catch(undefined),
     depthOffset: z.number().optional(),
+    /**
+     * Where the object is drawn relative to the players: `floor` always under them (a rug, a pool), `standing`
+     * sorted with them by the foot of the image (the default, also when absent), `overhead` always over them (a
+     * lamp hanging from the ceiling, a tree top). Fail open like `collisionRectangles`.
+     */
+    layer: EntityLayer.optional().catch(undefined),
+    /**
+     * Water of the object (a pool), as rectangles in pixels relative to the top-left corner like
+     * `collisionRectangles`. Players cannot walk into it: they dive in with the interaction key, swim, and get out
+     * by walking onto the edge. Companions and wandering animals never enter it. Fail open like
+     * `collisionRectangles`.
+     */
+    water: z.array(CollisionRectangle).optional().catch(undefined),
+    /**
+     * For an uploaded image that is another view (back, left, right) of an object of the library: the id of that
+     * object. The views of an object are offered together and a placed copy can be turned from one to another.
+     */
+    variantOf: z.string().optional().catch(undefined),
+    /**
+     * Whether players sit on the object by walking onto it. Unset: deduced from its category or name (chair, couch…).
+     * Fail open like `collisionRectangles`.
+     */
+    sittable: z.boolean().optional().catch(undefined),
     // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
     animation: EntityAnimation.optional().catch(undefined),
     /**
@@ -496,9 +522,45 @@ export const RecordingSettings = z.object({
     enableSounds: z.boolean().optional(),
 });
 
+/**
+ * How a map adjusts an object of the library for itself: display level, collisions and water. It replaces these
+ * fields of the prefab for every copy placed on this map, so that objects of the built-in collections (read-only
+ * catalog files) can be fixed too.
+ */
+export const PrefabOverride = z.object({
+    layer: EntityLayer.optional(),
+    depthOffset: z.number().optional(),
+    collisionGrid: CollisionGrid.optional(),
+    collisionRectangles: z.array(CollisionRectangle).optional(),
+    water: z.array(CollisionRectangle).optional(),
+    sittable: z.boolean().optional(),
+    /** Category of the object in the library of this map, put first in its tags. */
+    category: z.string().trim().min(1).max(60).optional(),
+});
+export type PrefabOverride = z.infer<typeof PrefabOverride>;
+
+/** What players do with the objects of a category: nothing, sit on them, swim in their water. */
+export const ObjectInteraction = z.enum(["none", "sit", "swim"]);
+export type ObjectInteraction = z.infer<typeof ObjectInteraction>;
+/** `auto`: on touching the object; `key`: the interaction key (space) when next to it. */
+export const InteractionTrigger = z.enum(["auto", "key"]);
+export type InteractionTrigger = z.infer<typeof InteractionTrigger>;
+
+/** Settings of a category of objects on a map: its interaction and the default display level of its objects. */
+export const CategorySettings = z.object({
+    interaction: ObjectInteraction,
+    trigger: InteractionTrigger,
+    layer: EntityLayer.optional(),
+});
+export type CategorySettings = z.infer<typeof CategorySettings>;
+
 export const WAMSettings = z.object({
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
+    /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */
+    prefabOverrides: z.record(z.string(), PrefabOverride).optional().catch(undefined),
+    /** Per category, by its name in lower case. Fail open like `prefabOverrides`. */
+    categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

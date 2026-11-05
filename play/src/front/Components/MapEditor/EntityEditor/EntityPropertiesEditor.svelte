@@ -1,12 +1,16 @@
 <script lang="ts">
     import type { EntityDataProperties, EntityDataPropertiesKeys, EntityDataProperty } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
+    import { get } from "svelte/store";
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
+    import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
         mapEditorSelectedEntityStore,
+        mapEditorModifyCustomEntityEventStore,
+        mapEditorDeleteCustomEntityEventStore,
     } from "../../../Stores/MapEditorStore";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import LL from "../../../../i18n/i18n-svelte";
@@ -23,7 +27,13 @@
     import { mapEditorActivated } from "../../../Stores/MenuStore";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
+    import Button from "../../UI/Button.svelte";
+    import { localUserStore } from "../../../Connection/LocalUserStore";
+    import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
+    import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+    import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
+    import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -300,9 +310,159 @@
     function toggleDescriptionField() {
         showDescriptionField = !showDescriptionField;
     }
+
+    // A placed image takes its display level, hitbox and water from its model in the library: editing the model from
+    // here updates every copy of it on the map. A custom image is edited in the library itself; an object of a
+    // built-in collection (read-only catalog file) is adjusted for this map only (PrefabOverride in the WAM file).
+    let editedModel: EntityPrefab | undefined = $state(undefined);
+    // Selecting another object on the map closes the form of the previous one.
+    let editedEntityId: string | undefined;
+    $effect(() => {
+        const selectedId = $mapEditorSelectedEntityStore?.entityId;
+        if (selectedId !== editedEntityId) {
+            editedEntityId = selectedId;
+            editedModel = undefined;
+        }
+    });
+    const userCanEditMap = gameManager.getCurrentGameScene().connection?.userCanEdit ?? false;
+
+    function canEditModel(prefab: EntityPrefab): boolean {
+        if (prefab.type === "Custom") {
+            return (
+                userCanEditMap ||
+                (prefab.ownerId !== undefined && prefab.ownerId === localUserStore.getLocalUser()?.uuid)
+            );
+        }
+        return userCanEditMap && !isMapLayerPrefab(prefab.collectionName, prefab.id);
+    }
+
+    function hasMapOverride(prefab: EntityPrefab): boolean {
+        return gameManager.getCurrentGameScene().wamFile?.settings?.prefabOverrides?.[prefab.id] !== undefined;
+    }
+
+    /**
+     * Saves the model and carries the change over to the whole family of the object, so that its copies need not be
+     * fixed one by one: the display level and the category go to every view and color of it, the hitbox and the water
+     * to the other colors of the same view (same drawing, same shape).
+     */
+    function saveModel(model: EntityPrefab) {
+        const shapeFields = (source: EntityPrefab) => ({
+            collisionGrid: source.collisionGrid,
+            collisionRectangles: source.collisionRectangles,
+            water: source.water,
+        });
+        const family = getFamily(model);
+        const category = getEntityCategory(model);
+        // Same name, other model (the same image uploaded twice, another catalog): it takes the category too.
+        const lookalikes = getLookalikes(model).filter((prefab) => !family.some((member) => member.id === prefab.id));
+        for (const lookalike of lookalikes) {
+            if (category === undefined || getEntityCategory(lookalike) === category) continue;
+            if (lookalike.type === "Custom") {
+                mapEditorModifyCustomEntityEventStore.set(
+                    $state.snapshot({ ...lookalike, tags: withCategory(lookalike.tags, category) }),
+                );
+            } else {
+                const current = gameManager.getCurrentGameScene().wamFile?.settings?.prefabOverrides?.[lookalike.id];
+                saveMapOverride(lookalike.id, {
+                    ...(current ?? {
+                        layer: lookalike.layer,
+                        depthOffset: lookalike.depthOffset,
+                        collisionGrid: lookalike.collisionGrid,
+                        collisionRectangles: lookalike.collisionRectangles,
+                        water: lookalike.water,
+                    }),
+                    category,
+                });
+            }
+        }
+        for (const member of family) {
+            const adjusted: EntityPrefab =
+                member.id === model.id
+                    ? model
+                    : {
+                          ...member,
+                          tags: withCategory(member.tags, getEntityCategory(model) ?? ""),
+                          layer: model.layer,
+                          sittable: model.sittable,
+                          ...(member.direction === model.direction ? shapeFields(model) : {}),
+                      };
+            // A view or color left as it was sends nothing: each command costs a round of updates on the map.
+            if (member.id !== model.id && sameModel(member, adjusted)) continue;
+            if (adjusted.type === "Custom") {
+                mapEditorModifyCustomEntityEventStore.set($state.snapshot(adjusted));
+            } else {
+                saveMapOverride(adjusted.id, {
+                    layer: adjusted.layer,
+                    depthOffset: adjusted.depthOffset,
+                    category: getEntityCategory(adjusted),
+                    sittable: adjusted.sittable,
+                    ...shapeFields(adjusted),
+                });
+            }
+        }
+        editedModel = undefined;
+    }
+
+    /** Whether two versions of a model have the same settings (those the form edits). */
+    function sameModel(a: EntityPrefab, b: EntityPrefab): boolean {
+        const settings = (prefab: EntityPrefab) =>
+            JSON.stringify([
+                prefab.tags,
+                prefab.layer ?? null,
+                prefab.depthOffset ?? 0,
+                prefab.sittable ?? null,
+                prefab.collisionGrid ?? null,
+                prefab.collisionRectangles ?? null,
+                prefab.water ?? null,
+            ]);
+        return settings(a) === settings(b);
+    }
+
+    /** Objects of the library with the same name, whatever their catalog. */
+    function getLookalikes(prefab: EntityPrefab): EntityPrefab[] {
+        const name = prefab.name.trim().toLocaleLowerCase();
+        return get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
+            .flatMap((variant) => variant.colors.flatMap((color) => variant.getEntityPrefabsPositions(color)))
+            .filter((candidate) => candidate.name.trim().toLocaleLowerCase() === name);
+    }
+
+    /** Every view and color of the object the prefab belongs to (itself when it has none). */
+    function getFamily(prefab: EntityPrefab): EntityPrefab[] {
+        const variant = get(
+            gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore(),
+        ).find((candidate) => candidate.prefabIds.includes(prefab.id));
+        if (!variant) return [prefab];
+        return variant.colors.flatMap((color) => variant.getEntityPrefabsPositions(color));
+    }
+
+    function saveMapOverride(prefabId: string, override: PrefabOverride | undefined) {
+        executeUpdateWAMSettings({
+            $case: "updatePrefabOverrideSettingMessage",
+            updatePrefabOverrideSettingMessage: { prefabId, override: $state.snapshot(override) },
+        }).catch((e) => console.error(e));
+    }
 </script>
 
-{#if $mapEditorSelectedEntityStore === undefined}
+{#if editedModel}
+    <div class="flex flex-col gap-2 p-1" data-testid="entityModelForm">
+        <CustomEntityEditionForm
+            customEntity={editedModel}
+            closeForm={() => (editedModel = undefined)}
+            applyEntityModifications={saveModel}
+            profileOnly={editedModel.type !== "Custom"}
+            resetProfile={editedModel.type !== "Custom" && hasMapOverride(editedModel)
+                ? () => {
+                      if (editedModel) saveMapOverride(editedModel.id, undefined);
+                      editedModel = undefined;
+                  }
+                : undefined}
+            removeEntity={({ entityId }) => {
+                mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
+                editedModel = undefined;
+            }}
+        />
+    </div>
+{:else if $mapEditorSelectedEntityStore === undefined}
     {$LL.mapEditor.entityEditor.editInstructions()}
 {:else}
     <div class="overflow-x-hidden overflow-y-auto">
@@ -449,6 +609,20 @@
             {#key `${$mapEditorSelectedEntityStore.entityId}:${$mapEditorSelectedEntityStore.getPrefab().id}`}
                 <PlacedImageSizeEditor entity={$mapEditorSelectedEntityStore} />
             {/key}
+        {/if}
+        {#if $mapEditorSelectedEntityStore.visible}
+            {#if canEditModel($mapEditorSelectedEntityStore.getPrefab())}
+                <Button
+                    size="sm"
+                    variant="contrast"
+                    dataTestId="editEntityModel"
+                    onclick={() => (editedModel = $state.snapshot($mapEditorSelectedEntityStore.getPrefab()))}
+                >
+                    {$mapEditorSelectedEntityStore.getPrefab().type === "Custom"
+                        ? $LL.mapEditor.entityEditor.editModel()
+                        : $LL.mapEditor.entityEditor.adjustModelForMap()}
+                </Button>
+            {/if}
         {/if}
         <div class="entity-name-container">
             {#if !showDescriptionField}

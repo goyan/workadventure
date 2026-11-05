@@ -38,7 +38,8 @@ import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
-import { makesEntityActivatable, replaceEntityProperty } from "./EntityProperties";
+import { getLayerDepth } from "./EntityLayerDepth";
+import { replaceEntityProperty } from "./EntityProperties";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
@@ -244,6 +245,9 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             actionsMenuStore.clear();
             return;
         }
+        if (!this.hasAnyPropertiesSet()) {
+            return;
+        }
         this.toggleActionsMenu();
     }
 
@@ -323,6 +327,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         return this.prefab;
     }
 
+    /** The custom image was edited in the catalog: draw this copy with the new settings. */
+    public setPrefab(prefab: EntityPrefab): void {
+        this.prefab = prefab;
+        this.updateDepth();
+    }
+
     /**
      * Floors and walls of the map layer belong to the Map tool: no editor tool or player may click, select or drag them.
      * `prefab` is not set yet when Phaser builds the object, hence the optional access.
@@ -349,6 +359,13 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public updateDepth(depthOffset: number = this.prefab.depthOffset ?? 0): void {
         if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
+            return;
+        }
+        if (this.prefab.layer === "floor" || this.prefab.layer === "overhead") {
+            // Fixed levels, whatever the position of the players: under all of them (a pool, a rug) or over all of
+            // them (a ceiling lamp). Among themselves, the manual stacking of the editor still applies.
+            this.automaticDepth = getLayerDepth(this.prefab.layer, this.y + this.displayHeight);
+            this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
             return;
         }
         const naturalDepth = this.y + this.displayHeight + depthOffset;
@@ -489,10 +506,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (!this.canEdit && !this.canRead) {
             return false;
         }
-        if (!this.entityData.properties) {
-            return false;
-        }
-        return Object.values(this.entityData.properties).some((value) => makesEntityActivatable(value));
+        return Boolean(this.description?.trim()) || this.getDefaultActionsMenuActions().length > 0;
     }
 
     private toggleActionsMenu(): void {

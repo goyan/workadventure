@@ -511,6 +511,57 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Brique",
         },
     },
+    categories: {
+        base: {
+            seats: "Sièges",
+            pools: "Piscines",
+            rugs: "Tapis et sols",
+            lights: "Luminaires",
+            plants: "Plantes",
+            tables: "Tables",
+            storage: "Rangements",
+            decoration: "Décoration",
+            electronics: "Électronique",
+            misc: "Divers",
+        },
+        interactions: {
+            none: "Aucune",
+            sit: "S’asseoir",
+            swim: "Nager",
+        },
+        triggers: {
+            auto: "Au contact",
+            key: "Touche Espace",
+        },
+        layers: {
+            free: "Libre",
+            floor: "Au sol",
+            standing: "Debout",
+            overhead: "Au-dessus des avatars",
+        },
+        manager: {
+            title: "Catégories",
+            description:
+                "Ce que les avatars font avec les objets de chaque catégorie, et leur niveau par défaut, sur cette carte.",
+            close: "Fermer",
+            base: "Base",
+            delete: "Supprimer",
+            interaction: "Interaction",
+            trigger: "Déclenchement",
+            layer: "Niveau par défaut",
+            add: "Nouvelle catégorie",
+            newName: "Nom de la catégorie",
+            addButton: "Ajouter",
+            open: "Catégories et interactions",
+        },
+    },
+    placement: {
+        title: "Impossible de le poser ici",
+        outOfMap: "Une partie de l’objet sort de la carte.",
+        obstacle: "Sa grille de collision tombe sur un mur ou un autre objet.",
+        player: "Un avatar se trouve là où l’objet bloquerait.",
+        permission: "Vous n’avez pas le droit d’éditer cette partie de la carte.",
+    },
     entityEditor: {
         resize: {
             title: "Taille de l’image",
@@ -548,6 +599,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Recherchable dans le mode exploration",
         addDescriptionField: "Ajouter une description",
         uploadEntity: {
+            newViewOf: "Nouvelle vue de {name} : choisissez son image",
             title: "Ajouter votre image",
             description: "Glissez-déposer ou choisissez votre image afin de l'ajouter sur la carte",
             dragDrop: "Glissez-déposer ou",
@@ -560,10 +612,59 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Aucune image",
         snapToGrid: "Magnétisme",
         specialTags: {
+            uncategorizedLabel: "À classer",
+            structureLabel: "Sols et murs (ancien)",
             customLabel: "Personnalisé",
             mostUsedLabel: "Plus utilisés",
         },
+        editModel: "Modifier le modèle (toutes les copies)",
+        adjustModelForMap: "Régler cet objet sur cette carte (toutes les copies)",
+        structureHint:
+            "Les sols et les murs font partie de la structure de la carte : préférez l’outil Structure de l’éditeur.",
+        views: {
+            label: "Vue",
+            front: "Face",
+            back: "Arrière",
+            left: "Gauche",
+            right: "Droite",
+            add: "Ajouter une vue",
+            turn: "Pivoter",
+        },
         customEntityEditorForm: {
+            saving: "Enregistrement…",
+            depthLine: {
+                behind: "Avatar derrière",
+                inFront: "Avatar devant",
+                hint: "Glissez la ligne jaune : un avatar dont les pieds sont au-dessus passe derrière l’objet, en dessous devant.",
+            },
+            sittable: {
+                label: "On peut s’asseoir dessus",
+                description:
+                    "En touchant l’objet, l’avatar s’y assoit, au centre de sa hitbox (une place par case pour un canapé).",
+            },
+            shapeEditorHint:
+                "Glissez la zone pour la déplacer, ses poignées pour la redimensionner. Flèches : 1 px, Maj + flèches : taille.",
+            titles: {
+                upload: "Nouvel objet",
+                edit: "Modifier l’objet",
+                adjust: "Réglage sur la carte",
+            },
+            sections: {
+                interaction: "Interaction",
+                identity: "Identité",
+                displayDescription: "Où l’objet est dessiné par rapport aux avatars.",
+                options: "Options",
+            },
+            category: {
+                label: "Catégorie",
+                choose: "Choisir une catégorie",
+                new: "Nouvelle catégorie…",
+                newName: "Nom de la nouvelle catégorie",
+                required: "Choisissez ou créez une catégorie.",
+            },
+            profileOnlyDescription:
+                "Objet fourni : ces réglages s’appliquent à toutes ses copies, sur cette carte seulement.",
+            resetProfile: "Revenir au réglage du catalogue",
             imageName: "Nom de l'image",
             tags: "Tags",
             writeTag: "Écrire un tag...",
@@ -582,6 +683,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Collision",
             wokaAbove: "Woka devant",
             wokaBelow: "Woka derrière",
+            overhead: "Au-dessus des avatars",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Là où l’objet bloque les avatars, en pixels de l’image. Générée à partir de son pied : ajustez-la si besoin.",
+                regenerate: "Générer depuis l’image",
+                required: "Un objet debout a besoin d’une hitbox.",
+            },
+            water: {
+                enable: "On peut y nager",
+                title: "Eau",
+                description: "Les avatars peuvent plonger et nager ; les compagnons et les animaux restent au bord.",
+                margin: "Rebord (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Largeur",
+                height: "Hauteur",
+            },
         },
         buttons: {
             editEntity: "Éditer",

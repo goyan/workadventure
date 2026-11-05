@@ -6,6 +6,7 @@ import type { AvailabilityStatus as AvailabilityStatusType } from "@workadventur
 import { SayMessageType, AvailabilityStatus, PositionMessage_Direction } from "@workadventure/messages";
 import { defaultWoka, Deferred, type Movable, type PositionInterface } from "@workadventure/shared-utils";
 import { Subject } from "rxjs";
+import { hasMessageContent } from "../../Utils/MessageContent";
 import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import { createColorStore } from "../../Stores/OutlineColorStore";
@@ -20,21 +21,30 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 
 import { UsernameDisplay } from "../Components/UsernameDisplay";
 import { findSeatUnderFeet } from "../Player/Seat";
+import { BODY_CENTER_OFFSET_Y, getWaterRectangles, isPointInWater } from "../Game/Water/WaterZones";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
 import { ThinkingCloud } from "./ThinkingCloud";
+import { SwimEffect } from "./SwimEffect";
 
 import Container = Phaser.GameObjects.Container;
 import RenderTexture = Phaser.GameObjects.RenderTexture;
 import DOMElement = Phaser.GameObjects.DOMElement;
 import Sprite = Phaser.GameObjects.Sprite;
 import Tween = Phaser.Tweens.Tween;
-import Circle = Phaser.Geom.Circle;
+import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
-const interactiveRadius = 25;
+/**
+ * Clickable area of a woka: its drawn body (a 32x32 frame centered on the character), slightly narrowed to the
+ * visible silhouette. Hit coordinates are relative to the container's top-left corner, i.e. shifted by its display
+ * origin (half of CHARACTER_BODY_WIDTH/HEIGHT). The former 25px circle overlapped neighbours and hid characters
+ * standing behind another one.
+ */
+const CLICK_AREA_HALF_WIDTH = 12;
+const CLICK_AREA_HALF_HEIGHT = 16;
 
 export const CHARACTER_BODY_WIDTH = 16;
 export const CHARACTER_BODY_HEIGHT = 16;
@@ -93,7 +103,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     private readonly syncDisplayPositionWithPhysics = (): void => {
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
+        this.updateSwimEffect();
     };
+    private swimEffect: SwimEffect | undefined;
 
     /**
      * A deferred promise that resolves when the texture of the character is actually displayed.
@@ -215,11 +227,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         }, 0);
 
         if (isClickable) {
-            this.setInteractive({
-                hitArea: new Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
-                useHandCursor: true,
-            });
+            this.enableClickArea();
         }
 
         this.setClickable(isClickable);
@@ -267,6 +275,32 @@ export abstract class Character extends Container implements OutlineableInterfac
         });
     }
 
+    /**
+     * A character whose body is in the water swims, for everyone: only the local player can get into the water (by
+     * diving), so the position is enough and nothing more is sent over the network.
+     */
+    private updateSwimEffect(): void {
+        if (!this.scene) return;
+        this.swimEffect ??= new SwimEffect(this.scene, this);
+        const inWater = this.isSwimmingHere();
+        if (inWater && !this.swimEffect.isActive) {
+            this.swimEffect.start();
+        } else if (!inWater && this.swimEffect.isActive) {
+            this.swimEffect.stop(this.sprites.values());
+        }
+        this.swimEffect.update(this.scene.time.now, this.sprites.values());
+    }
+
+    /** Whether the body of the character is in the water: what the other players see of a swimmer. */
+    protected isSwimmingHere(): boolean {
+        return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+    }
+
+    /** Whether the character is drawn swimming (its body in the water), for everyone. */
+    public isInWater(): boolean {
+        return this.swimEffect?.isActive ?? false;
+    }
+
     private setDepthIfNeeded(depth: number): void {
         if (this.depth !== depth) {
             this.setDepth(depth);
@@ -280,14 +314,25 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.clickable = clickable;
         if (clickable) {
-            this.setInteractive({
-                hitArea: new Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
-                useHandCursor: true,
-            });
+            this.enableClickArea();
             return;
         }
         this.disableInteractive();
+    }
+
+    private enableClickArea(): void {
+        const originX = CHARACTER_BODY_WIDTH / 2;
+        const originY = CHARACTER_BODY_HEIGHT / 2;
+        this.setInteractive({
+            hitArea: new Rectangle(
+                originX - CLICK_AREA_HALF_WIDTH,
+                originY - CLICK_AREA_HALF_HEIGHT,
+                CLICK_AREA_HALF_WIDTH * 2,
+                CLICK_AREA_HALF_HEIGHT * 2,
+            ),
+            hitAreaCallback: Rectangle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
+            useHandCursor: true,
+        });
     }
 
     public isClickable() {
@@ -667,6 +712,7 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     destroy(): void {
         this.usernameDisplay?.destroy();
+        this.swimEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {
@@ -703,6 +749,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     ) {
         if (this.texts.has(id)) {
             this.destroyText(id);
+        }
+        if (!hasMessageContent(text)) {
+            this.textsToBuild.delete(id);
+            return;
         }
         this.textsToBuild.set(id, { text, duration, callback, type, escapeCallback });
 

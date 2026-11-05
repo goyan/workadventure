@@ -8,6 +8,8 @@ const trigger: DeepPartial<Translation["trigger"]> = {
     object: "按空白鍵或點選這裡進行互動 👀",
     spaceKeyboard: "[空白鍵]",
     escapeKeyboard: "[Esc]",
+    sit: "[空白鍵] 坐下 🪑",
+    swim: "[空白鍵] 游泳 🏊",
     mobile: {
         cowebsite: "👆 開啟網頁 👀",
         jitsiRoom: "👆 進入 Jitsi 👀",

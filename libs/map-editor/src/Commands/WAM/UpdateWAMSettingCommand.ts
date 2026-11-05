@@ -1,6 +1,6 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { MegaphoneSettings, RecordingSettings } from "../../types";
+import { CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings } from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {
@@ -35,6 +35,30 @@ export class UpdateWAMSettingCommand extends Command {
                 this.wam.settings.recording = RecordingSettings.optional().parse(
                     message.updateRecordingSettingMessage.settings,
                 );
+                break;
+            }
+            case "updatePrefabOverrideSettingMessage": {
+                const prefabId = message.updatePrefabOverrideSettingMessage.prefabId;
+                const override: unknown = message.updatePrefabOverrideSettingMessage.override;
+                const others = Object.fromEntries(
+                    Object.entries(this.wam.settings.prefabOverrides ?? {}).filter(([id]) => id !== prefabId),
+                );
+                this.wam.settings.prefabOverrides =
+                    override === undefined || override === null
+                        ? others
+                        : { ...others, [prefabId]: PrefabOverride.parse(override) };
+                break;
+            }
+            case "updateCategorySettingMessage": {
+                const category = message.updateCategorySettingMessage.category.trim().toLocaleLowerCase();
+                const settings: unknown = message.updateCategorySettingMessage.settings;
+                const others = Object.fromEntries(
+                    Object.entries(this.wam.settings.categories ?? {}).filter(([name]) => name !== category),
+                );
+                this.wam.settings.categories =
+                    settings === undefined || settings === null
+                        ? others
+                        : { ...others, [category]: CategorySettings.parse(settings) };
                 break;
             }
             default: {
