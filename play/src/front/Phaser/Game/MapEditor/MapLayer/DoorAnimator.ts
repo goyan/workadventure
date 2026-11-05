@@ -54,6 +54,15 @@ interface DoorRect {
     bottom: number;
 }
 
+/**
+ * Whether a point is inside a door, its borders excluded. The animals walk from tile centre to tile centre and open the
+ * doors with the middle of their body, half a tile above their feet: walking along a wall, that point runs exactly on
+ * the border of the door (under a horizontal door, or half a tile beside the line of a vertical one) without crossing it.
+ */
+function isInsideDoor(rect: DoorRect, point: { x: number; y: number }): boolean {
+    return point.x > rect.left && point.x < rect.right && point.y > rect.top && point.y < rect.bottom;
+}
+
 /** Rectangle of an area of the map, as the map editor stores it. */
 export interface HearingZone {
     x: number;
@@ -245,12 +254,7 @@ export class DoorAnimator {
         if (orientation === "h" && character.facingSideways) {
             return false;
         }
-        return (
-            character.x >= rect.left &&
-            character.x <= rect.right &&
-            character.y >= rect.top &&
-            character.y <= rect.bottom
-        );
+        return isInsideDoor(rect, character);
     }
 
     private pathCrosses(rect: DoorRect, character: DoorCharacter, path: readonly { x: number; y: number }[]): boolean {
@@ -266,7 +270,7 @@ export class DoorAnimator {
                 }
                 const x = from.x + ((to.x - from.x) * i) / steps;
                 const y = from.y + ((to.y - from.y) * i) / steps;
-                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                if (isInsideDoor(rect, { x, y })) {
                     return true;
                 }
             }
