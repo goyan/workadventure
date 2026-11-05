@@ -502,6 +502,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Pytajobny w modusu wužiwanja",
         addDescriptionField: "Předstajenske polo přidać",
         uploadEntity: {
+            newViewOf: "Nowy napohlad za {name}: wubjer wobraz",
             title: "Wašu wobraz přidać",
             description: "Ćahnyć a pušćić abo wašu wobraz wubrać, zo byšće jón k karće přidał",
             dragDrop: "Ćahnyć a pušćić abo",
@@ -522,7 +523,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "Model wobdźěłać (wšě kopije)",
         adjustModelForMap: "Tutón objekt na tutej karće přiměrić (wšě kopije)",
         structureHint: "Dna a sćěny słušeja k strukturje karty: wužij lěpje nastroj Struktura.",
+        views: {
+            label: "Napohlad",
+            front: "Prědk",
+            back: "Zady",
+            left: "Nalěwo",
+            right: "Naprawo",
+            add: "Napohlad přidać",
+            turn: "Wobwjerćeć",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identita",
+                displayDescription: "Hdźe so objekt w poměrje k hrajerjam rysuje.",
+                options: "Opcije",
+            },
             category: {
                 label: "Kategorija",
                 choose: "Kategoriju wubrać",
@@ -560,6 +575,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Stejacy objekt trjeba hitbox.",
             },
             water: {
+                enable: "Da so w tym płuwać",
                 title: "Woda",
                 description: "Hrajerjo móža skočić a płuwać; přewodźerjo a zwěrjata wostanu na kromje.",
                 margin: "Kroma (px)",

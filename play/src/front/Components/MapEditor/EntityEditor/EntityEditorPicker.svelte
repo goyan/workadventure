@@ -16,6 +16,7 @@
         mapEditorSelectedEntityPrefabStore,
         mapEditorSelectedEntityStore,
         selectCategoryStore,
+        entityUploadViewOfStore,
     } from "../../../Stores/MapEditorStore";
     import Input from "../../Input/Input.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
@@ -388,6 +389,17 @@
                                     <IconPencil font-size={16} />
                                 {/snippet}
                                 {$LL.mapEditor.entityEditor.buttons.editEntity()}
+                            </Button>
+                            <Button
+                                variant="contrast"
+                                dataTestId="addEntityView"
+                                onclick={() => {
+                                    if (!pickedEntity) return;
+                                    entityUploadViewOfStore.set($state.snapshot(pickedEntity));
+                                    clearEntitySelection();
+                                }}
+                            >
+                                {$LL.mapEditor.entityEditor.views.add()}
                             </Button>
                         {/if}
                         <div class="absolute top-1 right-1 p-1">

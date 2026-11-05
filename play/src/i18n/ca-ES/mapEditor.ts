@@ -504,6 +504,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Cercable en el mode d'exploració",
         addDescriptionField: "Afegir camp de descripció",
         uploadEntity: {
+            newViewOf: "Nova vista de {name}: tria’n la imatge",
             title: "Afegir la vostra imatge",
             description: "Arrossegar i deixar anar o triar la vostra imatge per afegir-la al mapa",
             dragDrop: "Arrossegar i deixar anar o",
@@ -524,7 +525,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "Edita el model (totes les còpies)",
         adjustModelForMap: "Ajusta aquest objecte en aquest mapa (totes les còpies)",
         structureHint: "Els terres i murs formen part de l’estructura del mapa: millor fes servir l’eina Estructura.",
+        views: {
+            label: "Vista",
+            front: "Davant",
+            back: "Darrere",
+            left: "Esquerra",
+            right: "Dreta",
+            add: "Afegeix una vista",
+            turn: "Gira",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identitat",
+                displayDescription: "On es dibuixa l’objecte respecte als jugadors.",
+                options: "Opcions",
+            },
             category: {
                 label: "Categoria",
                 choose: "Tria una categoria",
@@ -563,6 +578,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Un objecte dret necessita una hitbox.",
             },
             water: {
+                enable: "S’hi pot nedar",
                 title: "Aigua",
                 description: "Els jugadors poden capbussar-se i nedar; les mascotes i els animals es queden a la vora.",
                 margin: "Vora (px)",

@@ -505,6 +505,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Zoekbaar in de verkenningsmodus",
         addDescriptionField: "Beschrijvingveld toevoegen",
         uploadEntity: {
+            newViewOf: "Nieuw aanzicht van {name}: kies de afbeelding",
             title: "Voeg je afbeelding toe",
             description: "Sleep je afbeelding of kies je afbeelding om deze aan de kaart toe te voegen",
             dragDrop: "Sleep en zet neer of",
@@ -526,7 +527,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         adjustModelForMap: "Dit object op deze kaart aanpassen (alle kopieën)",
         structureHint:
             "Vloeren en muren horen bij de structuur van de kaart: gebruik liever het Structuur-gereedschap.",
+        views: {
+            label: "Aanzicht",
+            front: "Voorkant",
+            back: "Achterkant",
+            left: "Links",
+            right: "Rechts",
+            add: "Aanzicht toevoegen",
+            turn: "Draaien",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identiteit",
+                displayDescription: "Waar het object getekend wordt ten opzichte van de spelers.",
+                options: "Opties",
+            },
             category: {
                 label: "Categorie",
                 choose: "Kies een categorie",
@@ -565,6 +580,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Een staand object heeft een hitbox nodig.",
             },
             water: {
+                enable: "Je kunt erin zwemmen",
                 title: "Water",
                 description: "Spelers kunnen erin duiken en zwemmen; huisdieren en dieren blijven aan de rand.",
                 margin: "Rand (px)",

@@ -28,6 +28,7 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
     import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+    import { getEntityCategory } from "../../../Utils/EntityCategory";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
 
@@ -323,6 +324,7 @@
                 collisionGrid: model.collisionGrid,
                 collisionRectangles: model.collisionRectangles,
                 water: model.water,
+                category: getEntityCategory(model),
             });
         }
         editedModel = undefined;
@@ -336,7 +338,26 @@
     }
 </script>
 
-{#if $mapEditorSelectedEntityStore === undefined}
+{#if editedModel}
+    <div class="flex flex-col gap-2 p-1" data-testid="entityModelForm">
+        <CustomEntityEditionForm
+            customEntity={editedModel}
+            closeForm={() => (editedModel = undefined)}
+            applyEntityModifications={saveModel}
+            profileOnly={editedModel.type !== "Custom"}
+            resetProfile={editedModel.type !== "Custom" && hasMapOverride(editedModel)
+                ? () => {
+                      if (editedModel) saveMapOverride(editedModel.id, undefined);
+                      editedModel = undefined;
+                  }
+                : undefined}
+            removeEntity={({ entityId }) => {
+                mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
+                editedModel = undefined;
+            }}
+        />
+    </div>
+{:else if $mapEditorSelectedEntityStore === undefined}
     {$LL.mapEditor.entityEditor.editInstructions()}
 {:else}
     <div class="overflow-x-hidden overflow-y-auto">
@@ -557,27 +578,6 @@
                 {/if}
             {/each}
         </div>
-    </div>
-{/if}
-
-{#if editedModel}
-    <div class="absolute top-0 left-0 w-full bg-contrast/80 backdrop-blur p-8 h-full overflow-auto z-10">
-        <CustomEntityEditionForm
-            customEntity={editedModel}
-            closeForm={() => (editedModel = undefined)}
-            applyEntityModifications={saveModel}
-            profileOnly={editedModel.type !== "Custom"}
-            resetProfile={editedModel.type !== "Custom" && hasMapOverride(editedModel)
-                ? () => {
-                      if (editedModel) saveMapOverride(editedModel.id, undefined);
-                      editedModel = undefined;
-                  }
-                : undefined}
-            removeEntity={({ entityId }) => {
-                mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
-                editedModel = undefined;
-            }}
-        />
     </div>
 {/if}
 

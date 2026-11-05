@@ -503,6 +503,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Pytajobny w modusu wužiwanja",
         addDescriptionField: "Wopisanjowe pólo pśidaś",
         uploadEntity: {
+            newViewOf: "Nowy naglěd za {name}: wubjeŕ wobraz",
             title: "Wašu wobraz pśidaś",
             description: "Śěgnuś a pušćiś abo wašu wobraz wubraś, aby jen k kórśeju pśidał",
             dragDrop: "Śěgnuś a pušćiś abo",
@@ -523,7 +524,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "Model wobźěłaś (wšykne kopije)",
         adjustModelForMap: "Toś ten objekt na toś tej kórśe pśiměriś (wšykne kopije)",
         structureHint: "Dna a sćěny słušaju k strukturje kórty: wužyj lěpjej rěd Struktura.",
+        views: {
+            label: "Naglěd",
+            front: "Pśedk",
+            back: "Slězk",
+            left: "Nalěwo",
+            right: "Napšawo",
+            add: "Naglěd pśidaś",
+            turn: "Wobwjertnuś",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identita",
+                displayDescription: "Źo se objekt w póměrje k grajarjam kresli.",
+                options: "Opcije",
+            },
             category: {
                 label: "Kategorija",
                 choose: "Kategoriju wubraś",
@@ -561,6 +576,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Stojecy objekt trjeba hitbox.",
             },
             water: {
+                enable: "Dajo se w tom płuwaś",
                 title: "Wóda",
                 description: "Grajarje mógu skócyś a płuwaś; pśewóźowarje a zwěrjeta wóstanu na kšomje.",
                 margin: "Kšom (px)",

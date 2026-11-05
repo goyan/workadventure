@@ -2,21 +2,26 @@ import type { CollisionRectangle } from "@workadventure/map-editor";
 
 /** A pixel with less opacity than this is see-through: it does not count as part of the object. */
 const OPAQUE_ALPHA = 32;
-/** Share of the visible height of an object taken by its foot, seen from above at an angle. */
-const FOOTPRINT_SHARE = 0.35;
+/**
+ * The hitbox covers the object but its top: a band of up to TOP_CLEARANCE pixels (a quarter of a small object) where
+ * the head of a player standing behind it may overlap, so that walking behind a wardrobe or a couch looks natural.
+ */
+const TOP_CLEARANCE = 16;
+const TOP_CLEARANCE_SHARE = 0.25;
 const MIN_FOOTPRINT_HEIGHT = 4;
 /** Default rim of a pool, as a share of its smallest side. */
 export const DEFAULT_WATER_MARGIN_SHARE = 0.15;
 
 /**
- * The hitbox of a standing object: the part of it touching the ground, i.e. the bottom band of its opaque pixels,
- * as wide as the opaque pixels of that band. Only the first frame of an animated strip (`frameWidth` wide) counts.
+ * The hitbox of a standing object: its opaque pixels without a top band (see TOP_CLEARANCE), as wide as the opaque
+ * pixels below that band. Only the first frame of an animated strip (`frameWidth` wide) counts.
  * Undefined for a fully transparent image.
  */
 export function computeFootprint(image: ImageData, frameWidth = image.width): CollisionRectangle | undefined {
     const bounds = computeOpaqueBounds(image, frameWidth);
     if (!bounds) return undefined;
-    const height = Math.min(bounds.height, Math.max(MIN_FOOTPRINT_HEIGHT, Math.round(bounds.height * FOOTPRINT_SHARE)));
+    const clearance = Math.min(TOP_CLEARANCE, Math.round(bounds.height * TOP_CLEARANCE_SHARE));
+    const height = Math.min(bounds.height, Math.max(MIN_FOOTPRINT_HEIGHT, bounds.height - clearance));
     const top = bounds.y + bounds.height - height;
     const band = computeOpaqueBounds(image, frameWidth, top);
     if (!band) return undefined;

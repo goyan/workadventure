@@ -491,6 +491,8 @@ message UploadEntityMessage {
   optional string layer = 13;
   // Water rectangles, same format as collisionRectangles.
   optional google.protobuf.Value water = 14;
+  // Id of the object this image is another view of (EntityRawPrefab.variantOf).
+  optional string variantOf = 15;
 }
 
 message EntityAnimationMessage {

@@ -23,23 +23,13 @@ describe("EntityFootprint", () => {
         });
     });
 
-    it("puts the hitbox of a standing object at its foot, as wide as the foot", () => {
-        // A tree: wide crown, narrow trunk at the bottom.
-        const tree = image([
-            "..........",
-            ".########.",
-            ".########.",
-            ".########.",
-            ".########.",
-            ".########.",
-            ".########.",
-            "....##....",
-            "....##....",
-            "....##....",
-            "....##....",
-            "..........",
-        ]);
-        expect(computeFootprint(tree)).toEqual({ x: 4, y: 7, width: 2, height: 4 });
+    it("covers a standing object but a band at its top, where a head may pass behind", () => {
+        // A wardrobe 6 px wide, 12 px high, on a transparent background.
+        const wardrobe = image(["........", ...Array.from({ length: 12 }, () => ".######."), "........"]);
+        expect(computeFootprint(wardrobe)).toEqual({ x: 1, y: 4, width: 6, height: 9 });
+        // A tall one keeps a 16 px band only.
+        const tall = image(Array.from({ length: 100 }, () => "####"));
+        expect(computeFootprint(tall)).toEqual({ x: 0, y: 16, width: 4, height: 84 });
     });
 
     it("only reads the first frame of an animated strip", () => {

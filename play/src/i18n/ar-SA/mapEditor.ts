@@ -498,6 +498,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "قابل للبحث في وضع الاستكشاف", // Searchable in exploration mode
         addDescriptionField: "إضافة وصف", // Add description
         uploadEntity: {
+            newViewOf: "عرض جديد لـ {name}: اختر صورته",
             title: "إضافة صورة", // Add image
             description: "اسحب وأفلت صورتك أو اخترها لإضافتها إلى الخريطة.", // Drag & drop your image or select it to add it to the map.
             dragDrop: "اسحب وأفلت أو", // Drag and drop or
@@ -518,7 +519,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "تعديل النموذج (كل النسخ)",
         adjustModelForMap: "ضبط هذا الكائن على هذه الخريطة (كل النسخ)",
         structureHint: "الأرضيات والجدران جزء من بنية الخريطة: استخدم أداة البنية بدلاً من ذلك.",
+        views: {
+            label: "العرض",
+            front: "أمامي",
+            back: "خلفي",
+            left: "يسار",
+            right: "يمين",
+            add: "إضافة عرض",
+            turn: "تدوير",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "الهوية",
+                displayDescription: "مكان رسم الكائن بالنسبة إلى اللاعبين.",
+                options: "خيارات",
+            },
             category: {
                 label: "الفئة",
                 choose: "اختر فئة",
@@ -554,6 +569,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "الكائن الواقف يحتاج إلى منطقة تصادم.",
             },
             water: {
+                enable: "يمكن السباحة فيه",
                 title: "ماء",
                 description: "يمكن للاعبين الغوص والسباحة؛ تبقى الرفقاء والحيوانات على الحافة.",
                 margin: "الحافة (بكسل)",

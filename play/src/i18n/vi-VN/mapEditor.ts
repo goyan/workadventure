@@ -501,6 +501,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Tìm được trong chế độ khám phá",
         addDescriptionField: "Thêm trường mô tả",
         uploadEntity: {
+            newViewOf: "Góc nhìn mới của {name}: chọn ảnh",
             title: "Thêm hình ảnh của bạn",
             description: "Kéo thả hoặc chọn hình ảnh để thêm vào bản đồ",
             dragDrop: "Kéo thả hoặc",
@@ -521,7 +522,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "Sửa mẫu (mọi bản sao)",
         adjustModelForMap: "Chỉnh vật thể này trên bản đồ này (mọi bản sao)",
         structureHint: "Sàn và tường thuộc cấu trúc bản đồ: hãy dùng công cụ Cấu trúc.",
+        views: {
+            label: "Góc nhìn",
+            front: "Trước",
+            back: "Sau",
+            left: "Trái",
+            right: "Phải",
+            add: "Thêm góc nhìn",
+            turn: "Xoay",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Thông tin",
+                displayDescription: "Vị trí vẽ vật thể so với người chơi.",
+                options: "Tùy chọn",
+            },
             category: {
                 label: "Danh mục",
                 choose: "Chọn danh mục",
@@ -559,6 +574,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Vật thể đứng cần có vùng va chạm.",
             },
             water: {
+                enable: "Có thể bơi trong đó",
                 title: "Nước",
                 description: "Người chơi có thể nhảy xuống và bơi; thú cưng và động vật ở lại trên bờ.",
                 margin: "Mép (px)",

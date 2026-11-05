@@ -10,6 +10,7 @@ import type { Readable, Writable } from "svelte/store";
 import { derived, writable } from "svelte/store";
 import { entitiesFileMigration } from "@workadventure/map-editor/src/Migrations/EntitiesFileMigration";
 import { asError } from "catch-unknown";
+import { withCategory } from "../../../Utils/EntityCategory";
 import { EntityVariant } from "./Entities/EntityVariant";
 import { takeUnseenEntities } from "./EntityCollectionUrls";
 
@@ -37,7 +38,7 @@ export class EntitiesCollectionsManager {
             for (const entityPrefab of $entitiesPrefabsStore) {
                 const idOrGeneratedName =
                     entityPrefab.type === "Custom"
-                        ? entityPrefab.id
+                        ? (entityPrefab.variantOf ?? entityPrefab.id)
                         : entityPrefab.collectionName + "__" + entityPrefab.name;
                 let variant = entityVariants.get(idOrGeneratedName);
                 if (variant === undefined) {
@@ -117,6 +118,7 @@ export class EntitiesCollectionsManager {
                                 collisionRectangles: entity.collisionRectangles,
                                 layer: entity.layer,
                                 water: entity.water,
+                                variantOf: entity.variantOf,
                                 seat: entity.seat,
                                 animation: entity.animation,
                                 wander: entity.wander
@@ -306,5 +308,6 @@ export function applyPrefabOverride(prefab: EntityPrefab, override: PrefabOverri
         collisionGrid: override.collisionGrid,
         collisionRectangles: override.collisionRectangles,
         water: override.water,
+        tags: override.category ? withCategory(prefab.tags, override.category) : prefab.tags,
     };
 }

@@ -501,6 +501,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "탐색 모드에서 검색 가능",
         addDescriptionField: "설명 필드 추가",
         uploadEntity: {
+            newViewOf: "{name}의 새 방향: 이미지를 선택하세요",
             title: "이미지 추가",
             description: "지도에 추가할 이미지를 드래그 앤 드롭하거나 선택하세요",
             dragDrop: "드래그 앤 드롭 또는",
@@ -521,7 +522,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "모델 편집 (모든 사본)",
         adjustModelForMap: "이 맵에서 이 오브젝트 조정 (모든 사본)",
         structureHint: "바닥과 벽은 맵 구조의 일부입니다. 구조 도구를 사용하세요.",
+        views: {
+            label: "방향",
+            front: "앞",
+            back: "뒤",
+            left: "왼쪽",
+            right: "오른쪽",
+            add: "방향 추가",
+            turn: "회전",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "기본 정보",
+                displayDescription: "플레이어 기준으로 오브젝트가 그려지는 위치.",
+                options: "옵션",
+            },
             category: {
                 label: "카테고리",
                 choose: "카테고리 선택",
@@ -557,6 +572,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "서 있는 오브젝트에는 충돌 영역이 필요합니다.",
             },
             water: {
+                enable: "수영할 수 있음",
                 title: "물",
                 description: "플레이어는 뛰어들어 수영할 수 있고, 동반자와 동물은 가장자리에 남습니다.",
                 margin: "가장자리(px)",

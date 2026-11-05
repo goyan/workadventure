@@ -498,6 +498,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "ค้นหาได้ในโหมดสำรวจ",
         addDescriptionField: "เพิ่มช่องคำอธิบาย",
         uploadEntity: {
+            newViewOf: "มุมมองใหม่ของ {name}: เลือกภาพ",
             title: "เพิ่มรูปภาพของคุณ",
             description: "ลากแล้ววาง หรือเลือกรูปภาพเพื่อเพิ่มลงในแผนที่",
             dragDrop: "ลากแล้ววาง หรือ",
@@ -518,7 +519,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "แก้ไขต้นแบบ (ทุกสำเนา)",
         adjustModelForMap: "ปรับวัตถุนี้บนแผนที่นี้ (ทุกสำเนา)",
         structureHint: "พื้นและผนังเป็นโครงสร้างของแผนที่ ควรใช้เครื่องมือโครงสร้าง",
+        views: {
+            label: "มุมมอง",
+            front: "ด้านหน้า",
+            back: "ด้านหลัง",
+            left: "ซ้าย",
+            right: "ขวา",
+            add: "เพิ่มมุมมอง",
+            turn: "หมุน",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "ข้อมูล",
+                displayDescription: "ตำแหน่งที่วาดวัตถุเทียบกับผู้เล่น",
+                options: "ตัวเลือก",
+            },
             category: {
                 label: "หมวดหมู่",
                 choose: "เลือกหมวดหมู่",
@@ -553,6 +568,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "วัตถุที่ตั้งอยู่ต้องมีพื้นที่ชน",
             },
             water: {
+                enable: "ว่ายน้ำได้",
                 title: "น้ำ",
                 description: "ผู้เล่นกระโดดลงไปว่ายน้ำได้ สัตว์เลี้ยงและสัตว์จะอยู่ที่ขอบ",
                 margin: "ขอบ (px)",

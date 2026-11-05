@@ -502,6 +502,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "探索モードで検索可能",
         addDescriptionField: "説明フィールドの追加",
         uploadEntity: {
+            newViewOf: "{name} の新しい向き：画像を選択",
             title: "画像の追加",
             description: "画像をドラッグ&ドロップ、または選択してマップに追加する。",
             dragDrop: "ドラッグ&ドロップまたは",
@@ -522,7 +523,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "モデルを編集（すべてのコピー）",
         adjustModelForMap: "このマップでこのオブジェクトを調整（すべてのコピー）",
         structureHint: "床と壁はマップの構造の一部です。構造ツールを使ってください。",
+        views: {
+            label: "向き",
+            front: "正面",
+            back: "背面",
+            left: "左",
+            right: "右",
+            add: "向きを追加",
+            turn: "回転",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "基本情報",
+                displayDescription: "プレイヤーに対してオブジェクトを描く位置。",
+                options: "オプション",
+            },
             category: {
                 label: "カテゴリ",
                 choose: "カテゴリを選択",
@@ -559,6 +574,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "立っているオブジェクトには当たり判定が必要です。",
             },
             water: {
+                enable: "泳ぐことができる",
                 title: "水",
                 description: "プレイヤーは飛び込んで泳げます。コンパニオンや動物は縁に残ります。",
                 margin: "縁（px）",

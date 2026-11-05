@@ -14,6 +14,8 @@
     import Input from "../../../Input/Input.svelte";
     import InputCheckbox from "../../../Input/InputCheckbox.svelte";
     import Button from "../../../UI/Button.svelte";
+    import SettingsSection from "../../../Menu/SettingsSection.svelte";
+    import SegmentedControl from "../../../Menu/SegmentedControl.svelte";
     import {
         computeFootprint,
         computeOpaqueBounds,
@@ -27,7 +29,6 @@
         listCategories,
         withCategory,
     } from "../../../../Utils/EntityCategory";
-    import LogoCollisionGrid from "./LogoCollisionGrid.svg";
     import EntityEditionCollisionGrid from "./EntityEditionCollisionGrid.svelte";
     import EntityShapesOverlay from "./EntityShapesOverlay.svelte";
     import EntityRectangleInputs from "./EntityRectangleInputs.svelte";
@@ -98,6 +99,8 @@
     const hasHitbox = $derived(
         hitbox.length > 0 || (!floatingObject && collisionGrid.some((row) => row.some((cell) => cell === 1))),
     );
+    const TT = $derived($LL.mapEditor.entityEditor.customEntityEditorForm);
+
     // Every object of the library belongs to a category: chosen among the existing ones, or created here.
     const NEW_CATEGORY = "__new__";
     const knownCategories = listCategories(
@@ -115,6 +118,14 @@
             ? [{ value: category, label: category }]
             : []),
         { value: NEW_CATEGORY, label: $LL.mapEditor.entityEditor.customEntityEditorForm.category.new() },
+    ]);
+    // Which side of the object the image shows: an object with several views can be turned once placed.
+    let direction: string = $state((() => customEntity.direction)());
+    const viewOptions = $derived([
+        { value: "Down", label: $LL.mapEditor.entityEditor.views.front() },
+        { value: "Up", label: $LL.mapEditor.entityEditor.views.back() },
+        { value: "Left", label: $LL.mapEditor.entityEditor.views.left() },
+        { value: "Right", label: $LL.mapEditor.entityEditor.views.right() },
     ]);
     const canApply = $derived((!needsHitbox || hasHitbox) && (profileOnly || effectiveCategory !== ""));
 
@@ -142,12 +153,11 @@
         return {
             ...customEntity,
             name: name,
-            tags: profileOnly
-                ? customEntity.tags
-                : withCategory(
-                      inputTagOptions !== undefined ? inputTagOptions.map((tagOption) => tagOption.value) : [],
-                      effectiveCategory,
-                  ),
+            tags: withCategory(
+                inputTagOptions !== undefined ? inputTagOptions.map((tagOption) => tagOption.value) : [],
+                effectiveCategory,
+            ),
+            direction: isUploadForm ? (direction as EntityPrefab["direction"]) : customEntity.direction,
             collisionGrid: floatingObject ? undefined : collisionGrid,
             depthOffset: depthOffset !== 0 ? -depthOffset : 0,
             animation,
@@ -324,29 +334,63 @@
     });
 </script>
 
-<div class="flex flex-col flex-1 gap-2">
-    <div class="self-center relative flex items-center">
-        {#if !floatingObject}
-            <EntityEditionCollisionGrid {collisionGrid} {updateCollisionGrid} collisionGridHeight={entityImageHeight} />
+{#snippet categoryField()}
+    <div class="flex flex-col gap-1">
+        <Select
+            id="category"
+            dataTestId="entityCategory"
+            label={$LL.mapEditor.entityEditor.customEntityEditorForm.category.label()}
+            options={categoryOptions}
+            bind:value={category}
+        />
+        {#if category === NEW_CATEGORY}
+            <Input
+                id="newCategory"
+                dataTestId="newCategory"
+                placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.category.newName()}
+                bind:value={newCategory}
+            />
         {/if}
-        <EntityImage
-            classNames="w-32 max-h-32 object-contain"
-            imageLoad={(image) => onImageLoad(image)}
-            imageSource={customEntity.imagePath}
-            imageAlt={customEntity.name}
-            {animation}
-            bind:displayedHeight={entityImageHeight}
-        />
-        <EntityShapesOverlay
-            {frameWidth}
-            {frameHeight}
-            displayedHeight={entityImageHeight}
-            hitbox={needsHitbox ? hitbox : []}
-            water={layer === "floor" && hasWater ? water : []}
-        />
+        {#if effectiveCategory === ""}
+            <span class="text-xs text-red-400" data-testid="categoryRequired"
+                >{$LL.mapEditor.entityEditor.customEntityEditorForm.category.required()}</span
+            >
+        {/if}
+    </div>
+{/snippet}
+
+<div class="flex flex-col flex-1 gap-3 text-white" data-testid="entityForm">
+    <!-- Preview: the image with its hitbox (red) and water (blue), on a checkerboard so that transparency shows. -->
+    <div
+        class="flex items-center justify-center gap-3 rounded-xl border border-solid border-white/10 bg-white/[0.03] p-4"
+    >
+        <div class="relative flex items-center rounded-lg p-2 checkerboard">
+            {#if !floatingObject}
+                <EntityEditionCollisionGrid
+                    {collisionGrid}
+                    {updateCollisionGrid}
+                    collisionGridHeight={entityImageHeight}
+                />
+            {/if}
+            <EntityImage
+                classNames="w-32 max-h-32 object-contain"
+                imageLoad={(image) => onImageLoad(image)}
+                imageSource={customEntity.imagePath}
+                imageAlt={customEntity.name}
+                {animation}
+                bind:displayedHeight={entityImageHeight}
+            />
+            <EntityShapesOverlay
+                {frameWidth}
+                {frameHeight}
+                displayedHeight={entityImageHeight}
+                hitbox={needsHitbox ? hitbox : []}
+                water={layer === "floor" && hasWater ? water : []}
+            />
+        </div>
         {#if displayDepthCustomSelector}
             <div>
-                <p class="m-0 p-0 text-xs">{$LL.mapEditor.entityEditor.customEntityEditorForm.wokaAbove()}</p>
+                <p class="m-0 p-0 text-xs">{TT.wokaAbove()}</p>
                 <div class="rotate-[270deg]" style="width: 30px;margin-top: {entityImageHeight - 30}px">
                     <input
                         class="!cursor-grab active:!cursor-grabbing slider"
@@ -356,97 +400,70 @@
                         max={entityImageRef?.naturalHeight}
                     />
                 </div>
-                <p class="m-0 p-0 text-xs">{$LL.mapEditor.entityEditor.customEntityEditorForm.wokaBelow()}</p>
+                <p class="m-0 p-0 text-xs">{TT.wokaBelow()}</p>
             </div>
         {/if}
     </div>
-    {#if !floatingObject}
-        <div>
-            <img draggable="false" src={LogoCollisionGrid} alt="Logo collision grid" width="28px" />
-            <p class="text-xs m-0 p-0">{$LL.mapEditor.entityEditor.customEntityEditorForm.collision()}</p>
-        </div>
-    {/if}
+
     {#if profileOnly}
-        <p class="m-0 text-xs opacity-70">
-            {$LL.mapEditor.entityEditor.customEntityEditorForm.profileOnlyDescription()}
-        </p>
-    {:else}
-        <div>
-            <label class="mb-2 block" for="id"
-                ><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.imageName()}</b></label
-            >
-            <Input
-                class="px-2 py-2.5 text-[16px] rounded-md bg-contrast border-solid border border-contrast-400 text-white min-w-full"
-                bind:value={name}
-                id="name"
-                data-testid="name"
-            />
-        </div>
-        <div class="flex flex-col gap-1">
-            <Select
-                id="category"
-                dataTestId="entityCategory"
-                label={$LL.mapEditor.entityEditor.customEntityEditorForm.category.label()}
-                options={categoryOptions}
-                bind:value={category}
-            />
-            {#if category === NEW_CATEGORY}
-                <Input
-                    id="newCategory"
-                    dataTestId="newCategory"
-                    placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.category.newName()}
-                    bind:value={newCategory}
-                />
-            {/if}
-            {#if effectiveCategory === ""}
-                <span class="text-xs text-red-400" data-testid="categoryRequired"
-                    >{$LL.mapEditor.entityEditor.customEntityEditorForm.category.required()}</span
-                >
-            {/if}
-        </div>
-        <div>
-            <label class="mb-2 block" for="tags"
-                ><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.tags()}</b></label
-            >
-            <InputTags
-                bind:value={inputTagOptions}
-                placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.writeTag()}
-            />
-        </div>
+        <p class="m-0 text-sm text-white/60">{TT.profileOnlyDescription()}</p>
     {/if}
-    <div>
-        <Select
-            id="type"
-            label={$LL.mapEditor.entityEditor.customEntityEditorForm.depth()}
+
+    <SettingsSection title={TT.sections.identity()}>
+        {#if !profileOnly}
+            <Input bind:value={name} id="name" data-testid="name" label={TT.imageName()} />
+        {/if}
+        {@render categoryField()}
+        {#if !profileOnly}
+            <div class="flex flex-col gap-1">
+                <label class="text-sm text-white/80" for="tags">{TT.tags()}</label>
+                <InputTags bind:value={inputTagOptions} placeholder={TT.writeTag()} />
+            </div>
+        {/if}
+        {#if isUploadForm}
+            <div class="flex flex-col gap-1">
+                <span class="text-sm text-white/80">{$LL.mapEditor.entityEditor.views.label()}</span>
+                <SegmentedControl
+                    bind:value={direction}
+                    options={viewOptions}
+                    ariaLabel={$LL.mapEditor.entityEditor.views.label()}
+                    dataTestId="entityView"
+                />
+            </div>
+        {/if}
+    </SettingsSection>
+
+    <SettingsSection title={TT.depth()} description={TT.sections.displayDescription()}>
+        <SegmentedControl
             bind:value={selectedDepthOption}
-        >
-            {#each Object.values(depthOptions) as depthOption (depthOption)}
-                <option value={depthOption}>{getTranslationForDepthOption(depthOption)}</option>
-            {/each}
-        </Select>
-    </div>
+            options={Object.values(depthOptions).map((option) => ({
+                value: option,
+                label: getTranslationForDepthOption(option),
+            }))}
+            ariaLabel={TT.depth()}
+            dataTestId="entityDepth"
+        />
+    </SettingsSection>
+
     {#if needsHitbox}
-        <div class="flex flex-col gap-1" data-testid="entityHitbox">
-            <b>{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.title()}</b>
-            <span class="text-xs opacity-70"
-                >{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.description()}</span
-            >
+        <SettingsSection title={TT.hitbox.title()} description={TT.hitbox.description()} dataTestId="entityHitbox">
             {#if hitbox[0]}
                 <EntityRectangleInputs bind:rectangle={hitbox[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
             {/if}
-            <Button size="sm" variant="contrast" onclick={regenerateHitbox}>
-                {$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.regenerate()}
-            </Button>
-            {#if !hasHitbox}
-                <span class="text-xs text-red-400" data-testid="hitboxRequired"
-                    >{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.required()}</span
-                >
-            {/if}
-        </div>
+            <div class="flex items-center justify-between gap-2">
+                {#if !hasHitbox}
+                    <span class="text-xs text-red-400" data-testid="hitboxRequired">{TT.hitbox.required()}</span>
+                {:else}
+                    <span></span>
+                {/if}
+                <Button size="sm" variant="contrast" onclick={regenerateHitbox}>{TT.hitbox.regenerate()}</Button>
+            </div>
+        </SettingsSection>
     {/if}
+
     {#if layer === "floor"}
-        <div class="flex flex-col gap-1" data-testid="entityWater">
-            <div class="flex gap-2 hover:cursor-pointer">
+        <SettingsSection title={TT.water.title()} description={TT.water.description()} dataTestId="entityWater">
+            <div class="flex items-center gap-2">
                 <InputCheckbox
                     id="hasWater"
                     dataTestId="hasWater"
@@ -455,17 +472,13 @@
                         if (hasWater && water.length === 0) regenerateWater();
                     }}
                 />
-                <label class="my-[4px]" for="hasWater"
-                    ><b class="-mb-2 block">{$LL.mapEditor.entityEditor.customEntityEditorForm.water.title()}</b>
-                    <br />
-                    {$LL.mapEditor.entityEditor.customEntityEditorForm.water.description()}
-                </label>
+                <label class="m-0 cursor-pointer" for="hasWater">{TT.water.enable()}</label>
             </div>
             {#if hasWater}
                 <Input
                     id="waterMargin"
                     dataTestId="waterMargin"
-                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.water.margin()}
+                    label={TT.water.margin()}
                     type="number"
                     min={0}
                     step={1}
@@ -476,72 +489,59 @@
                     <EntityRectangleInputs bind:rectangle={water[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
                 {/if}
             {/if}
-        </div>
+        </SettingsSection>
     {/if}
-    {#if isUploadForm}
-        <div class="flex gap-2 mt-2 hover:cursor-pointer">
-            <InputCheckbox id="floatingObject" dataTestId="floatingObject" bind:value={floatingObject} />
-            <label class="my-[4px]" for="floatingObject"
-                ><b class="-mb-2 block">{$LL.mapEditor.entityEditor.customEntityEditorForm.floatingObject()}</b>
-                <br />
-                {$LL.mapEditor.entityEditor.customEntityEditorForm.floatingObjectDescription()}
-            </label>
-        </div>
-        <div class="flex gap-2 mt-2 hover:cursor-pointer">
-            <InputCheckbox id="animatedObject" dataTestId="animatedObject" bind:value={animated} />
-            <label class="my-[4px]" for="animatedObject"
-                ><b class="-mb-2 block">{$LL.mapEditor.entityEditor.customEntityEditorForm.animatedObject()}</b>
-                <br />
-                {$LL.mapEditor.entityEditor.customEntityEditorForm.animatedObjectDescription()}
-            </label>
-        </div>
-        {#if animated}
-            <div class="flex gap-2">
-                <Input
-                    id="frameCount"
-                    dataTestId="frameCount"
-                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.frameCount()}
-                    type="number"
-                    min={2}
-                    max={MAX_ENTITY_ANIMATION_FRAME_COUNT}
-                    step={1}
-                    bind:value={frameCount}
-                />
-                <Input
-                    id="frameRate"
-                    dataTestId="frameRate"
-                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.frameRate()}
-                    type="number"
-                    min={1}
-                    max={MAX_ENTITY_ANIMATION_FRAME_RATE}
-                    bind:value={frameRate}
-                />
-            </div>
-        {/if}
-    {/if}
-    <div class="flex gap-2 flex-wrap justify-center w-full text-sm">
-        {#if profileOnly && resetProfile}
-            <Button size="lg" variant="contrast" class="w-full" dataTestId="resetEntityProfile" onclick={resetProfile}>
-                {$LL.mapEditor.entityEditor.customEntityEditorForm.resetProfile()}
-            </Button>
-        {/if}
-        {#if !isUploadForm && !profileOnly}
-            <Button
-                size="lg"
-                variant="danger"
-                class="w-full"
-                dataTestId="removeEntity"
-                onclick={() => removeEntity({ entityId: customEntity.id })}
-            >
-                {$LL.mapEditor.entityEditor.buttons.delete()}
-            </Button>
-        {/if}
 
-        <div class="flex gap-2 w-full mt-2">
+    {#if isUploadForm}
+        <SettingsSection title={TT.sections.options()}>
+            <div class="flex items-start gap-2">
+                <InputCheckbox id="floatingObject" dataTestId="floatingObject" bind:value={floatingObject} />
+                <label class="m-0 flex cursor-pointer flex-col" for="floatingObject">
+                    <span>{TT.floatingObject()}</span>
+                    <span class="text-xs text-white/60">{TT.floatingObjectDescription()}</span>
+                </label>
+            </div>
+            <div class="flex items-start gap-2">
+                <InputCheckbox id="animatedObject" dataTestId="animatedObject" bind:value={animated} />
+                <label class="m-0 flex cursor-pointer flex-col" for="animatedObject">
+                    <span>{TT.animatedObject()}</span>
+                    <span class="text-xs text-white/60">{TT.animatedObjectDescription()}</span>
+                </label>
+            </div>
+            {#if animated}
+                <div class="flex gap-2">
+                    <Input
+                        id="frameCount"
+                        dataTestId="frameCount"
+                        label={TT.frameCount()}
+                        type="number"
+                        min={2}
+                        max={MAX_ENTITY_ANIMATION_FRAME_COUNT}
+                        step={1}
+                        bind:value={frameCount}
+                    />
+                    <Input
+                        id="frameRate"
+                        dataTestId="frameRate"
+                        label={TT.frameRate()}
+                        type="number"
+                        min={1}
+                        max={MAX_ENTITY_ANIMATION_FRAME_RATE}
+                        bind:value={frameRate}
+                    />
+                </div>
+            {/if}
+        </SettingsSection>
+    {/if}
+
+    <!-- Actions stay in view at the bottom of the panel. -->
+    <div
+        class="sticky bottom-0 flex flex-col gap-2 border-0 border-t border-solid border-white/10 bg-contrast/95 pt-3 pb-1"
+    >
+        <div class="flex gap-2 w-full">
             <Button size="lg" variant="contrast" class="w-full" onclick={closeForm}>
                 {$LL.mapEditor.entityEditor.buttons.cancel()}
             </Button>
-
             <Button
                 size="lg"
                 variant="secondary"
@@ -553,10 +553,41 @@
                 {isUploadForm ? $LL.mapEditor.entityEditor.buttons.upload() : $LL.mapEditor.entityEditor.buttons.save()}
             </Button>
         </div>
+        {#if profileOnly && resetProfile}
+            <Button size="sm" variant="contrast" class="w-full" dataTestId="resetEntityProfile" onclick={resetProfile}>
+                {TT.resetProfile()}
+            </Button>
+        {/if}
+        {#if !isUploadForm && !profileOnly}
+            <Button
+                size="sm"
+                variant="danger"
+                class="w-full"
+                dataTestId="removeEntity"
+                onclick={() => removeEntity({ entityId: customEntity.id })}
+            >
+                {$LL.mapEditor.entityEditor.buttons.delete()}
+            </Button>
+        {/if}
     </div>
 </div>
 
 <style>
+    .checkerboard {
+        background-color: rgb(255 255 255 / 0.06);
+        background-image:
+            linear-gradient(45deg, rgb(255 255 255 / 0.08) 25%, transparent 25%),
+            linear-gradient(-45deg, rgb(255 255 255 / 0.08) 25%, transparent 25%),
+            linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 0.08) 75%),
+            linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 0.08) 75%);
+        background-size: 12px 12px;
+        background-position:
+            0 0,
+            0 6px,
+            6px -6px,
+            -6px 0;
+    }
+
     .slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;

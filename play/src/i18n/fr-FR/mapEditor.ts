@@ -507,6 +507,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "Recherchable dans le mode exploration",
         addDescriptionField: "Ajouter une description",
         uploadEntity: {
+            newViewOf: "Nouvelle vue de {name} : choisissez son image",
             title: "Ajouter votre image",
             description: "Glissez-déposer ou choisissez votre image afin de l'ajouter sur la carte",
             dragDrop: "Glissez-déposer ou",
@@ -528,7 +529,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         adjustModelForMap: "Régler cet objet sur cette carte (toutes les copies)",
         structureHint:
             "Les sols et les murs font partie de la structure de la carte : préférez l’outil Structure de l’éditeur.",
+        views: {
+            label: "Vue",
+            front: "Face",
+            back: "Arrière",
+            left: "Gauche",
+            right: "Droite",
+            add: "Ajouter une vue",
+            turn: "Pivoter",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identité",
+                displayDescription: "Où l’objet est dessiné par rapport aux avatars.",
+                options: "Options",
+            },
             category: {
                 label: "Catégorie",
                 choose: "Choisir une catégorie",
@@ -566,6 +581,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "Un objet debout a besoin d’une hitbox.",
             },
             water: {
+                enable: "On peut y nager",
                 title: "Eau",
                 description: "Les avatars peuvent plonger et nager ; les compagnons et les animaux restent au bord.",
                 margin: "Rebord (px)",

@@ -499,6 +499,7 @@ const mapEditor: BaseTranslation = {
         objectSearchable: "Searchable in the exploration mode",
         addDescriptionField: "Add description field",
         uploadEntity: {
+            newViewOf: "New view of {name}: choose its image",
             title: "Add your image",
             description: "Drag and drop or choose your image to add it in the map",
             dragDrop: "Drag and Drop or",
@@ -519,7 +520,21 @@ const mapEditor: BaseTranslation = {
         editModel: "Edit the model (all copies)",
         adjustModelForMap: "Adjust this object on this map (all copies)",
         structureHint: "Floors and walls are part of the map structure: prefer the Structure tool of the map editor.",
+        views: {
+            label: "View",
+            front: "Front",
+            back: "Back",
+            left: "Left",
+            right: "Right",
+            add: "Add a view",
+            turn: "Turn",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "Identity",
+                displayDescription: "Where the object is drawn relative to the players.",
+                options: "Options",
+            },
             category: {
                 label: "Category",
                 choose: "Choose a category",
@@ -556,6 +571,7 @@ const mapEditor: BaseTranslation = {
                 required: "A standing object needs a hitbox.",
             },
             water: {
+                enable: "Players can swim in it",
                 title: "Water",
                 description: "Players can dive in and swim; companions and animals stay on the edge.",
                 margin: "Edge (px)",

@@ -496,6 +496,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         objectSearchable: "在探索模式下可搜尋",
         addDescriptionField: "新增描述欄位",
         uploadEntity: {
+            newViewOf: "{name} 的新視角：選擇圖片",
             title: "新增您的圖像",
             description: "拖放或選擇您的圖像，將它加入地圖中",
             dragDrop: "拖放或",
@@ -516,7 +517,21 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editModel: "編輯模型（所有副本）",
         adjustModelForMap: "在此地圖上調整此物件（所有副本）",
         structureHint: "地板和牆屬於地圖結構：請使用結構工具。",
+        views: {
+            label: "視角",
+            front: "正面",
+            back: "背面",
+            left: "左側",
+            right: "右側",
+            add: "新增視角",
+            turn: "旋轉",
+        },
         customEntityEditorForm: {
+            sections: {
+                identity: "基本資訊",
+                displayDescription: "物件相對於玩家的繪製位置。",
+                options: "選項",
+            },
             category: {
                 label: "類別",
                 choose: "選擇類別",
@@ -551,6 +566,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 required: "站立的物件需要碰撞區域。",
             },
             water: {
+                enable: "可以在其中游泳",
                 title: "水",
                 description: "玩家可以跳入游泳；夥伴和動物留在岸邊。",
                 margin: "邊緣（像素）",

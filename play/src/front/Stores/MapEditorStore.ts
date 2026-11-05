@@ -72,6 +72,8 @@ export const mapEditorEntityEraserStore = writable<boolean>(false);
 export const mapEditorAreaEraserStore = writable<boolean>(false);
 
 export const mapEditorEntityUploadEventStore = writable<UploadEntityMessage | undefined>(undefined);
+/** The object of the library the next uploaded image is another view of (back, left, right…), if any. */
+export const entityUploadViewOfStore = writable<EntityPrefab | undefined>(undefined);
 export const mapEditorModifyCustomEntityEventStore = writable<ModifyCustomEntityMessage | undefined>(undefined);
 export const mapEditorDeleteCustomEntityEventStore = writable<DeleteCustomEntityMessage | undefined>(undefined);
 

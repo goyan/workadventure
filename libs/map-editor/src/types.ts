@@ -352,6 +352,11 @@ export const EntityRawPrefab = z.object({
      * `collisionRectangles`.
      */
     water: z.array(CollisionRectangle).optional().catch(undefined),
+    /**
+     * For an uploaded image that is another view (back, left, right) of an object of the library: the id of that
+     * object. The views of an object are offered together and a placed copy can be turned from one to another.
+     */
+    variantOf: z.string().optional().catch(undefined),
     // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
     animation: EntityAnimation.optional().catch(undefined),
     /**
@@ -511,6 +516,8 @@ export const PrefabOverride = z.object({
     collisionGrid: CollisionGrid.optional(),
     collisionRectangles: z.array(CollisionRectangle).optional(),
     water: z.array(CollisionRectangle).optional(),
+    /** Category of the object in the library of this map, put first in its tags. */
+    category: z.string().trim().min(1).max(60).optional(),
 });
 export type PrefabOverride = z.infer<typeof PrefabOverride>;
 
