@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { BaseTranslation } from "../i18n-types";
 
 const actionbar: BaseTranslation = {
@@ -214,6 +215,7 @@ const actionbar: BaseTranslation = {
     personalDesk: {
         label: "Ir para minha mesa",
         unclaim: "Liberar minha mesa",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "Não foi possível encontrar suas informações de usuário",
         errorNotFound: "Você ainda não tem uma mesa pessoal",
         errorMoving: "Não foi possível chegar à sua mesa pessoal",

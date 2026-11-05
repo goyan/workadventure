@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
@@ -208,6 +209,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "الذهاب إلى مكتبي",
         unclaim: "تحرير مكتبي",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "تعذر العثور على معلومات المستخدم",
         errorNotFound: "ليس لديك مكتب شخصي بعد",
         errorMoving: "تعذر الوصول إلى مكتبك الشخصي",

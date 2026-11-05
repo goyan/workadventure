@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { localUserStore } from "../../../Connection/LocalUserStore";
     import { warningMessageStore } from "../../../Stores/ErrorStore";
     import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
     import {
@@ -22,6 +23,7 @@
     import ActionBarButton from "../ActionBarButton.svelte";
     import { EditorToolName } from "../../../Phaser/Game/MapEditor/MapEditorModeManager";
     import ReleaseNotesModal from "../../Modal/ReleaseNotesModal.svelte";
+    import UnclaimPersonalDeskModal from "./UnclaimPersonalDeskModal.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
     import { modals } from "@wa-modals";
     import { IconMapSearch, IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor, IconHistory } from "@wa-icons";
@@ -97,31 +99,76 @@
         }
     }
 
-    async function unclaimPersonalDesk() {
-        if (!$personalAreaDataStore) {
+    const unclaimState = { inProgress: false };
+
+    function unclaimPersonalDesk(): void {
+        if (unclaimState.inProgress || modals.stack.some((modal) => modal.id === "unclaim-personal-desk")) return;
+        const desk = $personalAreaDataStore;
+        if (!desk) {
             warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorNotFound(), { closable: true });
             return;
         }
-
-        try {
-            const gameScene = gameManager.getCurrentGameScene();
-            const mapEditorModeManager = gameScene.getMapEditorModeManager();
-            if (!mapEditorModeManager) {
-                warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorUnclaiming(), { closable: true });
-                return;
-            }
-            // Use unclaim personal area method of the map editor mode manager
-            await mapEditorModeManager.unclaimPersonalArea($personalAreaDataStore);
-
-            // Send analytics event
-            analyticsClient.trackAdminEvent("personal_desk.unclaimed");
-
-            // Close the menu
-            openedMenuStore.close("profileMenu");
-        } catch (error) {
-            console.error("Error while unclaiming personal desk", error);
+        const gameScene = gameManager.getCurrentGameScene();
+        const userUUID = localUserStore.getLocalUser()?.uuid;
+        const deskId = desk.id;
+        if (
+            !userUUID ||
+            desk.properties.find((property) => property.type === "personalAreaPropertyData")?.ownerId !== userUUID
+        ) {
             warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorUnclaiming(), { closable: true });
+            return;
         }
+
+        modals.open(
+            UnclaimPersonalDeskModal,
+            {
+                deskName: desk.name,
+                onConfirm: async (): Promise<void> => {
+                    if (unclaimState.inProgress) return;
+                    unclaimState.inProgress = true;
+                    try {
+                        const currentDesk = gameScene
+                            .getGameMapFrontWrapper()
+                            .areasManager?.getAreasByPropertyType("personalAreaPropertyData")
+                            .find((area) => area.areaData.id === deskId)?.areaData;
+                        const property = currentDesk?.properties.find(
+                            (property) => property.type === "personalAreaPropertyData",
+                        );
+                        if (
+                            gameManager.getCurrentGameScene() !== gameScene ||
+                            !userUUID ||
+                            localUserStore.getLocalUser()?.uuid !== userUUID ||
+                            $personalAreaDataStore?.id !== deskId ||
+                            !currentDesk ||
+                            property?.ownerId !== userUUID
+                        ) {
+                            warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorUnclaiming(), {
+                                closable: true,
+                            });
+                            return;
+                        }
+                        const mapEditorModeManager = gameScene.getMapEditorModeManager();
+                        if (!mapEditorModeManager) {
+                            warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorUnclaiming(), {
+                                closable: true,
+                            });
+                            return;
+                        }
+                        await mapEditorModeManager.unclaimPersonalArea(currentDesk);
+                        analyticsClient.trackAdminEvent("personal_desk.unclaimed");
+                        openedMenuStore.close("profileMenu");
+                    } catch (error) {
+                        console.error("Error while unclaiming personal desk", error);
+                        warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorUnclaiming(), {
+                            closable: true,
+                        });
+                    } finally {
+                        Object.assign(unclaimState, { inProgress: false });
+                    }
+                },
+            },
+            { id: "unclaim-personal-desk" },
+        );
     }
 </script>
 
@@ -170,6 +217,7 @@
         <IconDesk font-size="20" />
     </ActionBarButton>
     <ActionBarButton
+        dataTestId="unclaim-personal-desk-button"
         label={$LL.actionbar.personalDesk.unclaim()}
         onclick={unclaimPersonalDesk}
         classList="group/btn-personal-desk"
