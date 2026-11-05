@@ -507,8 +507,12 @@ La marche de référence est `WOKA_SPEED * 20` px/s (comme `Player.deduceSpeed`)
 Gobeur, s'il est hors refuge. Sans cible, le Gobeur erre vers une case marchable tirée à moins de 5 cases.
 
 Réseau : le navigateur du **maître de jeu** (celui qui a lancé la partie) calcule le Gobeur et diffuse des événements
-de script `infogene.gobeur.*` : `start`, `pos` (toutes les 200 ms), `state` (toutes les 5 s et à l'arrivée d'un joueur),
-`caught` et `end`. Aucun changement de protobuf, de back ni de pusher ; chaque joueur ne téléporte que lui-même.
+de script `infogene.gobeur.*` : `start`, `pos` (toutes les 200 ms), `state` (toutes les 5 s, précédé à chaque fois d'un nouvel envoi du `start` pour
+les joueurs arrivés tard ou rechargés, et à l'arrivée d'un joueur), `caught` et `end`. Aucun changement de protobuf, de back ni de pusher ; chaque joueur ne téléporte que lui-même.
+Un suiveur n'adopte un `start` que s'il correspond à l'objet de sa carte (`GobeurStartCheck.ts` : même prison, joueurs
+choisis dans l'objet, durée au plus celle de l'objet + 10 s), et ne se téléporte pas dans une prison située dans une
+zone qui lui est interdite (`GameScene.isPositionAllowedForCurrentUser`). Un objet qui ne porte que le Gobeur n'est pas
+activable (pas d'invite « espace »).
 
 Fichiers : `play/src/front/Phaser/Game/Gobeur/*` (modules purs, sans Phaser), `Stores/GobeurStore.ts`,
 `Components/MapEditor/PropertyEditor/GobeurPropertyEditor.svelte`, `Components/Gobeur/*`, `Entity.replaceProperty`
@@ -523,6 +527,9 @@ Limites :
 - Un navigateur ne connaît que les joueurs proches : le Gobeur ne poursuit que ceux que voit le maître, et un joueur
   qui quitte la partie reste « survivant ».
 - Si le maître ferme son onglet, la partie est interrompue après 5 s sans message.
+- **Le maître doit garder l'onglet visible** : la boucle Phaser s'arrête dans un onglet caché. Le maître interrompt donc
+  ses parties dès que l'onglet passe en arrière-plan (`visibilitychange`), ou au retour si sa vérification périodique
+  n'a pas tourné depuis plus de 5 s.
 - Le `map-storage` officiel (prod) rejette la nouvelle propriété du WAM : prototype, **pas pour la prod**.
 
 ### Uploader : fichiers binaires dans Redis et image du fork
