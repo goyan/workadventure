@@ -214,6 +214,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "Aller à mon bureau",
         unclaim: "Libérer mon bureau",
+        unclaimConfirmation: "Libérer le bureau « {name} » ? Il deviendra disponible pour les autres.",
         errorNoUser: "Impossible de trouver vos informations utilisateur",
         errorNotFound: "Vous n'avez pas encore de bureau personnel",
         errorMoving: "Impossible d'atteindre votre bureau personnel",

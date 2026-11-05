@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
@@ -210,6 +211,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "K swojemu pisaćemu blidkej",
         unclaim: "Mój pisaće blidko wotwołać",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "Wužiwarske informacije njejsu so namakali",
         errorNotFound: "Nimaće hišće wosobinske pisaće blidko",
         errorMoving: "Wosobinske pisaće blidko njeje so docpěło",

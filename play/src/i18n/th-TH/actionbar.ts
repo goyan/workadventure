@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
@@ -209,6 +210,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "เดินไปยังโต๊ะของฉัน",
         unclaim: "ยกเลิกการจองโต๊ะของฉัน",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "ไม่พบข้อมูลผู้ใช้ของคุณ",
         errorNotFound: "คุณยังไม่มีโต๊ะส่วนตัว",
         errorMoving: "ไม่สามารถไปยังโต๊ะส่วนตัวของคุณได้",
