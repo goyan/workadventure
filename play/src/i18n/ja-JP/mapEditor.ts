@@ -585,6 +585,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "回転",
         },
         customEntityEditorForm: {
+            saving: "保存中…",
             depthLine: {
                 behind: "後ろ",
                 inFront: "前",

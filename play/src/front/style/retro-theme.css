@@ -402,3 +402,26 @@
     background: var(--rt-surface-raised);
     border-color: transparent;
 }
+
+/* A small square spinner, in the pixel spirit: shown on buttons while something is being saved. */
+.retro-theme .retro-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin-inline-end: 0.5rem;
+    background: currentcolor;
+    animation: retro-spin 0.8s steps(4) infinite;
+}
+
+@keyframes retro-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-theme .retro-spinner {
+        animation: none;
+        opacity: 0.6;
+    }
+}

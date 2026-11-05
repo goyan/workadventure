@@ -582,6 +582,7 @@ const mapEditor: BaseTranslation = {
             turn: "Turn",
         },
         customEntityEditorForm: {
+            saving: "Saving…",
             depthLine: {
                 behind: "Behind",
                 inFront: "In front",

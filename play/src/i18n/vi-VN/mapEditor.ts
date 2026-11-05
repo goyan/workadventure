@@ -584,6 +584,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Xoay",
         },
         customEntityEditorForm: {
+            saving: "Đang lưu…",
             depthLine: {
                 behind: "Phía sau",
                 inFront: "Phía trước",

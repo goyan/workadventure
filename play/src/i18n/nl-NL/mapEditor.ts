@@ -589,6 +589,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Draaien",
         },
         customEntityEditorForm: {
+            saving: "Opslaan…",
             depthLine: {
                 behind: "Achter",
                 inFront: "Voor",

@@ -102,6 +102,29 @@
         hitbox.length > 0 || (!floatingObject && collisionGrid.some((row) => row.some((cell) => cell === 1))),
     );
     const TT = $derived($LL.mapEditor.entityEditor.customEntityEditorForm);
+
+    // Saving rebuilds the collisions of the map, which freezes the page for a moment: the button shows it is working
+    // and cannot be clicked again, and the work only starts once that state is on screen.
+    let saving = $state(false);
+
+    function save() {
+        runSaving(() => applyEntityModifications(getModifiedCustomEntity()));
+    }
+
+    function runSaving(action: () => void) {
+        if (saving) return;
+        saving = true;
+        requestAnimationFrame(() =>
+            setTimeout(() => {
+                try {
+                    action();
+                } finally {
+                    // The form usually closes right after; when it stays (an upload in progress), allow a new try.
+                    setTimeout(() => (saving = false), 1500);
+                }
+            }, 0),
+        );
+    }
     // The enlarged editor replaces the small preview as soon as there is a hitbox or water to adjust.
     const showShapeEditor = $derived(
         frameWidth > 0 &&
@@ -625,14 +648,28 @@
                 type="button"
                 class="retro-btn retro-btn-primary grow"
                 data-testid="applyEntityModifications"
-                disabled={!canApply}
-                onclick={() => applyEntityModifications(getModifiedCustomEntity())}
+                disabled={!canApply || saving}
+                aria-busy={saving}
+                onclick={save}
             >
-                {isUploadForm ? $LL.mapEditor.entityEditor.buttons.upload() : $LL.mapEditor.entityEditor.buttons.save()}
+                {#if saving}
+                    <span class="retro-spinner" aria-hidden="true"></span>
+                    {TT.saving()}
+                {:else}
+                    {isUploadForm
+                        ? $LL.mapEditor.entityEditor.buttons.upload()
+                        : $LL.mapEditor.entityEditor.buttons.save()}
+                {/if}
             </button>
         </div>
         {#if profileOnly && resetProfile}
-            <button type="button" class="retro-btn w-full" data-testid="resetEntityProfile" onclick={resetProfile}>
+            <button
+                type="button"
+                class="retro-btn w-full"
+                data-testid="resetEntityProfile"
+                disabled={saving}
+                onclick={() => runSaving(resetProfile)}
+            >
                 {TT.resetProfile()}
             </button>
         {/if}

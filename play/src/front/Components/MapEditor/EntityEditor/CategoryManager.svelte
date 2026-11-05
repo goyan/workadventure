@@ -28,13 +28,18 @@
         return listMapCategories(gameManager.getCurrentGameScene().wamFile?.settings?.categories);
     }
 
+    // Each change is a command sent to the map: changes wait for the previous one, so quick clicks do not pile up.
+    let saving = $state(false);
+
     function save(id: string, settings: CategorySettings | undefined) {
+        saving = true;
         executeUpdateWAMSettings({
             $case: "updateCategorySettingMessage",
             updateCategorySettingMessage: { category: id, settings: settings ? { ...settings } : undefined },
         })
             .then(() => (categories = readCategories()))
-            .catch((e) => console.error(e));
+            .catch((e) => console.error(e))
+            .finally(() => (saving = false));
     }
 
     function update(id: string, settings: CategorySettings, change: Partial<CategorySettings>) {
@@ -61,10 +66,13 @@
     const layers: (EntityLayer | "")[] = ["", "floor", "standing", "overhead"];
 </script>
 
-<div class="retro-panel" data-testid="categoryManager">
+<div class="retro-panel" data-testid="categoryManager" aria-busy={saving}>
     <header class="flex items-start justify-between gap-2 p-4 pb-2">
         <div class="flex flex-col gap-1">
-            <span class="retro-heading">{TC.manager.title()}</span>
+            <span class="retro-heading flex items-center gap-2">
+                {TC.manager.title()}
+                {#if saving}<span class="retro-spinner" aria-hidden="true"></span>{/if}
+            </span>
             <p class="retro-hint">{TC.manager.description()}</p>
         </div>
         <button type="button" class="retro-btn retro-btn-quiet" onclick={close}>{TC.manager.close()}</button>
@@ -89,6 +97,7 @@
                     <label class="flex flex-col gap-1">
                         <span class="retro-label">{TC.manager.interaction()}</span>
                         <select
+                            disabled={saving}
                             value={category.settings.interaction}
                             onchange={(event) =>
                                 update(category.id, category.settings, {
@@ -104,7 +113,7 @@
                         <span class="retro-label">{TC.manager.trigger()}</span>
                         <select
                             value={category.settings.trigger}
-                            disabled={category.settings.interaction === "none"}
+                            disabled={saving || category.settings.interaction === "none"}
                             onchange={(event) =>
                                 update(category.id, category.settings, {
                                     trigger: event.currentTarget.value as InteractionTrigger,
@@ -118,6 +127,7 @@
                     <label class="flex flex-col gap-1">
                         <span class="retro-label">{TC.manager.layer()}</span>
                         <select
+                            disabled={saving}
                             value={category.settings.layer ?? ""}
                             onchange={(event) =>
                                 update(category.id, category.settings, {

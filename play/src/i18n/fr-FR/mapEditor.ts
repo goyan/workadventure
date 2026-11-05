@@ -592,6 +592,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Pivoter",
         },
         customEntityEditorForm: {
+            saving: "Enregistrement…",
             depthLine: {
                 behind: "Avatar derrière",
                 inFront: "Avatar devant",
