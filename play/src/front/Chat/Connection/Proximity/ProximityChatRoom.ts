@@ -286,8 +286,11 @@ export class ProximityChatRoom implements ChatRoom {
             const canPlaySound = localUserStore.getChatSounds();
             const isRoomIsDisplayed = get(selectedRoomStore)?.id === this.id && get(chatVisibilityStore);
             const isNotificationIsMuted = get(this.areNotificationsMuted);
+            const roomKind = get(this.kind);
+            const isBubbleTextMessage =
+                message.type === "proximity" && (roomKind === "default" || roomKind === "proximity");
 
-            if (canPlaySound && !isRoomIsDisplayed && !isNotificationIsMuted) {
+            if (canPlaySound && (!isRoomIsDisplayed || isBubbleTextMessage) && !isNotificationIsMuted) {
                 gameManager.getCurrentGameScene().playSound("new-message");
             }
 
