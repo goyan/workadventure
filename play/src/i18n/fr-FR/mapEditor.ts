@@ -522,6 +522,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             customLabel: "Personnalisé",
             mostUsedLabel: "Plus utilisés",
         },
+        editModel: "Modifier le modèle (toutes les copies)",
         customEntityEditorForm: {
             imageName: "Nom de l'image",
             tags: "Tags",

@@ -511,6 +511,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             customLabel: "自定义",
             mostUsedLabel: "最常用",
         },
+        editModel: "编辑模型（所有副本）",
         customEntityEditorForm: {
             imageName: "图像名称",
             tags: "标签",

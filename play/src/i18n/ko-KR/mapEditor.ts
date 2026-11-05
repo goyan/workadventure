@@ -516,6 +516,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             customLabel: "사용자 정의",
             mostUsedLabel: "자주 사용됨",
         },
+        editModel: "모델 편집 (모든 사본)",
         customEntityEditorForm: {
             imageName: "이미지 이름",
             tags: "태그",

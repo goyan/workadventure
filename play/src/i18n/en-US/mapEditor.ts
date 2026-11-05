@@ -514,6 +514,7 @@ const mapEditor: BaseTranslation = {
             customLabel: "Custom",
             mostUsedLabel: "Most used",
         },
+        editModel: "Edit the model (all copies)",
         customEntityEditorForm: {
             imageName: "Image name",
             tags: "Tags",

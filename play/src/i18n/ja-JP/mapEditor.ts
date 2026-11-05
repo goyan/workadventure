@@ -517,6 +517,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             customLabel: "カスタム",
             mostUsedLabel: "よく使うもの",
         },
+        editModel: "モデルを編集（すべてのコピー）",
         customEntityEditorForm: {
             imageName: "画像名",
             tags: "タグ",

@@ -3,10 +3,13 @@
     import { onDestroy } from "svelte";
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
+    import type { EntityPrefab } from "@workadventure/map-editor";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
         mapEditorSelectedEntityStore,
+        mapEditorModifyCustomEntityEventStore,
+        mapEditorDeleteCustomEntityEventStore,
     } from "../../../Stores/MapEditorStore";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import LL from "../../../../i18n/i18n-svelte";
@@ -21,7 +24,10 @@
     import OpenFilePropertyEditor from "../PropertyEditor/OpenFilePropertyEditor.svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
+    import Button from "../../UI/Button.svelte";
+    import { localUserStore } from "../../../Connection/LocalUserStore";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
+    import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -284,6 +290,21 @@
     function toggleDescriptionField() {
         showDescriptionField = !showDescriptionField;
     }
+
+    // A placed image takes its display level, hitbox and water from its model in the library: editing the model from
+    // here updates every copy of it on the map.
+    let editedModel: EntityPrefab | undefined = $state(undefined);
+
+    function canEditModel(prefab: EntityPrefab): boolean {
+        if (prefab.type !== "Custom") return false;
+        if (gameManager.getCurrentGameScene().connection?.userCanEdit) return true;
+        return prefab.ownerId !== undefined && prefab.ownerId === localUserStore.getLocalUser()?.uuid;
+    }
+
+    function saveModel(model: EntityPrefab) {
+        mapEditorModifyCustomEntityEventStore.set($state.snapshot(model));
+        editedModel = undefined;
+    }
 </script>
 
 {#if $mapEditorSelectedEntityStore === undefined}
@@ -424,6 +445,16 @@
             {#key `${$mapEditorSelectedEntityStore.entityId}:${$mapEditorSelectedEntityStore.getPrefab().id}`}
                 <PlacedImageSizeEditor entity={$mapEditorSelectedEntityStore} />
             {/key}
+            {#if canEditModel($mapEditorSelectedEntityStore.getPrefab())}
+                <Button
+                    size="sm"
+                    variant="contrast"
+                    dataTestId="editEntityModel"
+                    onclick={() => (editedModel = $state.snapshot($mapEditorSelectedEntityStore.getPrefab()))}
+                >
+                    {$LL.mapEditor.entityEditor.editModel()}
+                </Button>
+            {/if}
         {/if}
         <div class="entity-name-container">
             {#if !showDescriptionField}
@@ -493,6 +524,20 @@
                 {/if}
             {/each}
         </div>
+    </div>
+{/if}
+
+{#if editedModel}
+    <div class="absolute top-0 left-0 w-full bg-contrast/80 backdrop-blur p-8 h-full overflow-auto z-10">
+        <CustomEntityEditionForm
+            customEntity={editedModel}
+            closeForm={() => (editedModel = undefined)}
+            applyEntityModifications={saveModel}
+            removeEntity={({ entityId }) => {
+                mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
+                editedModel = undefined;
+            }}
+        />
     </div>
 {/if}
 

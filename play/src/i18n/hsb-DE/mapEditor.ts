@@ -517,6 +517,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             customLabel: "Swójski",
             mostUsedLabel: "Najhusćišo wužiwane",
         },
+        editModel: "Model wobdźěłać (wšě kopije)",
         customEntityEditorForm: {
             imageName: "mjeno wobrazka",
             tags: "Toflicki",
