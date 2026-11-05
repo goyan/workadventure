@@ -170,6 +170,22 @@ avant d'ajouter un message sortant ; cet accusé confirme l'acceptation par le s
 En cas d'erreur, le brouillon reste disponible. Un résultat tardif après fermeture du formulaire ne modifie plus l'interface.
 Un accusé tardif d'une connexion précédente ne rejoint pas l'historique de la nouvelle salle ou du nouveau compte.
 
+Une croix sur chaque message supprime uniquement cette entrée de l'historique de ce navigateur.
+« Effacer l’historique avec cette personne » demande confirmation et ne supprime que les échanges avec
+le correspondant affiché, pour le compte et la salle actuels. Les autres correspondants, salles et comptes
+sont conservés. Ces actions effacent aussi la notification concernée ; elles ne retirent aucun message chez
+le destinataire et ne transmettent aucune demande de suppression au serveur. Le brouillon est conservé.
+Annuler, Échap ou fermer la confirmation ne supprime rien. Une confirmation ouverte avant un changement de
+session ou la fermeture de la conversation ne peut pas effacer l'historique de la nouvelle session.
+Si le navigateur refuse l'écriture, la suppression fonctionne en mémoire mais la copie sauvegardée peut
+réapparaître après rechargement. Plusieurs onglets ne coordonnent pas leurs écritures d'historique.
+
+Recette de suppression beta : supprimer un message reçu puis envoyé, recharger et vérifier leur absence.
+Effacer une conversation après avoir vérifié le nom dans la confirmation ; annuler une première fois,
+puis confirmer. Vérifier le brouillon et l'historique d'un autre correspondant, d'une autre salle et d'un autre
+compte. Ouvrir une confirmation puis reconnecter la session : l'ancienne confirmation ne doit rien supprimer.
+Le rendu et l'interaction restent à valider par un joueur.
+
 Recette de sauvegarde beta : envoyer et recevoir des privés, fermer/réouvrir le formulaire puis recharger la page ;
 vérifier les textes, auteurs et l'ordre, sans notification ancienne. Changer de salle ou de compte et vérifier
 l'isolation, puis revenir à la salle initiale. Refuser un envoi et vérifier qu'il n'apparaît pas après rechargement.

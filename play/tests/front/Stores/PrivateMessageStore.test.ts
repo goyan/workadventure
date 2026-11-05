@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
     clearPrivateMessages,
     getPrivateMessageRecorder,
+    getPrivateMessageDeleter,
     privateMessageHistoryStore,
     privateMessageNotificationStore,
     receivePrivateMessage,
@@ -96,6 +97,73 @@ describe("private message history", () => {
         expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Other account"]);
         restorePrivateMessages("human", "room-two");
         expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Other room"]);
+    });
+
+    it("deletes only the selected peer message, its notification and its saved copy", () => {
+        restorePrivateMessages("human", "room-one");
+        receivePrivateMessage(message);
+        recordPrivateMessage({ peerUuid: "peer-bob", peerName: "Bob", text: "Keep Bob", incoming: false });
+        const ada = get(privateMessageHistoryStore)[0];
+        getPrivateMessageDeleter("peer-bob")(ada.id);
+        getPrivateMessageDeleter("npc:ada")(ada.id + 1000);
+        expect(get(privateMessageHistoryStore)).toHaveLength(2);
+        getPrivateMessageDeleter("npc:ada")(ada.id);
+        expect(get(privateMessageNotificationStore)).toBeUndefined();
+        restorePrivateMessages("human", "room-one");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Keep Bob"]);
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "New", incoming: false });
+        expect(get(privateMessageHistoryStore).at(-1)?.id).toBeGreaterThan(ada.id);
+    });
+
+    it("clears one conversation without deleting other peers, rooms or accounts", () => {
+        restorePrivateMessages("other-user", "room-one");
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "Other account", incoming: false });
+        restorePrivateMessages("human", "room-two");
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "Other room", incoming: false });
+        restorePrivateMessages("human", "room-one");
+        receivePrivateMessage(message);
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "Reply", incoming: false });
+        recordPrivateMessage({ peerUuid: "peer-bob", peerName: "Bob", text: "Keep Bob", incoming: false });
+
+        getPrivateMessageDeleter("npc:ada")();
+        restorePrivateMessages("human", "room-one");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Keep Bob"]);
+        restorePrivateMessages("human", "room-two");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Other room"]);
+        restorePrivateMessages("other-user", "room-one");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Other account"]);
+    });
+
+    it("ignores a stale deletion even after reconnecting as the same account in the same room", () => {
+        restorePrivateMessages("human", "room-one");
+        receivePrivateMessage(message);
+        const remove = getPrivateMessageDeleter("npc:ada");
+        restorePrivateMessages("human", "room-one");
+        remove();
+        expect(get(privateMessageHistoryStore)).toHaveLength(1);
+        restorePrivateMessages("other-user", "room-two");
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "Keep", incoming: false });
+        remove();
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Keep"]);
+    });
+
+    it("deletes in memory without overwriting unreadable storage or throwing on a failed write", () => {
+        restorePrivateMessages("human", "room-one");
+        receivePrivateMessage(message);
+        const read = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+            throw new DOMException("denied", "SecurityError");
+        });
+        const write = vi.spyOn(Storage.prototype, "setItem");
+        expect(() => getPrivateMessageDeleter("npc:ada")()).not.toThrow();
+        expect(get(privateMessageHistoryStore)).toEqual([]);
+        expect(write).not.toHaveBeenCalled();
+        read.mockRestore();
+        restorePrivateMessages("human", "room-one");
+        write.mockImplementation(() => {
+            throw new DOMException("full", "QuotaExceededError");
+        });
+        expect(() => getPrivateMessageDeleter("npc:ada")()).not.toThrow();
+        expect(get(privateMessageHistoryStore)).toEqual([]);
     });
 
     it("bounds saved history across rooms and accounts as well as the active history", () => {

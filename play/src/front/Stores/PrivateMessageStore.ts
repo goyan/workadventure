@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { privateMessageSchema } from "@workadventure/shared-utils";
@@ -25,9 +25,10 @@ type PrivateMessageSession = { userUuid: string | undefined; roomUrl: string };
 export const privateMessageHistoryStore = writable<PrivateMessageEntry[]>([]);
 export const privateMessageNotificationStore = writable<PrivateMessageEntry | undefined>();
 let sequence = 0;
+let deletionGeneration = 0;
 let session: PrivateMessageSession | undefined;
 
-function readSavedHistory(): z.infer<typeof savedHistorySchema> {
+function readSavedHistory(): z.infer<typeof savedHistorySchema> | undefined {
     try {
         const saved = localStorage.getItem(historyStorageKey);
         if (!saved) return [];
@@ -40,7 +41,7 @@ function readSavedHistory(): z.infer<typeof savedHistorySchema> {
             level: "warning",
             message: "Storage read unavailable",
         });
-        return [];
+        return undefined;
     }
 }
 
@@ -49,7 +50,7 @@ export function restorePrivateMessages(userUuid: string | undefined, roomUrl: st
     clearPrivateMessages();
     const currentSession = { userUuid, roomUrl };
     session = currentSession;
-    const saved = userUuid ? readSavedHistory() : [];
+    const saved = userUuid ? (readSavedHistory() ?? []) : [];
     sequence = Math.max(sequence, ...saved.map((entry) => entry.id));
     privateMessageHistoryStore.set(
         saved
@@ -69,7 +70,7 @@ export function restorePrivateMessages(userUuid: string | undefined, roomUrl: st
 }
 
 export function recordPrivateMessage(message: PrivateMessageInput): void {
-    const saved = session?.userUuid ? readSavedHistory() : [];
+    const saved = session?.userUuid ? (readSavedHistory() ?? []) : [];
     sequence = Math.max(sequence, ...saved.map((entry) => entry.id));
     const entry = { ...message, id: ++sequence, timestamp: Date.now() };
     privateMessageHistoryStore.update((messages) => [...messages, entry].slice(-historyLimit));
@@ -100,6 +101,43 @@ export function getPrivateMessageRecorder(): (message: PrivateMessageInput) => v
     };
 }
 
+/** Capture the session so a delayed confirmation cannot erase another account's history. */
+export function getPrivateMessageDeleter(peerUuid: string): (id?: number) => void {
+    const currentSession = session;
+    const currentGeneration = deletionGeneration;
+    return (id) => {
+        if (session !== currentSession || deletionGeneration !== currentGeneration) return;
+        const matches = (entry: PrivateMessageEntry): boolean =>
+            entry.peerUuid === peerUuid && (id === undefined || entry.id === id);
+        if (!get(privateMessageHistoryStore).some(matches)) return;
+        privateMessageHistoryStore.update((messages) => messages.filter((entry) => !matches(entry)));
+        const notification = get(privateMessageNotificationStore);
+        if (notification && matches(notification)) privateMessageNotificationStore.set(undefined);
+        if (!currentSession?.userUuid) return;
+        const saved = readSavedHistory();
+        if (!saved) return;
+        try {
+            localStorage.setItem(
+                historyStorageKey,
+                JSON.stringify(
+                    saved.filter(
+                        (entry) =>
+                            entry.userUuid !== currentSession.userUuid ||
+                            entry.roomUrl !== currentSession.roomUrl ||
+                            !matches(entry),
+                    ),
+                ),
+            );
+        } catch {
+            Sentry.addBreadcrumb({
+                category: "private-message-history",
+                level: "warning",
+                message: "Storage write unavailable",
+            });
+        }
+    };
+}
+
 /** Private payloads are consumed before the general event stream reaches map scripts. */
 export function receivePrivateMessage(data: unknown, roomUrl?: string, userUuid?: string): void {
     if (roomUrl !== undefined && (session?.roomUrl !== roomUrl || session.userUuid !== userUuid)) return;
@@ -115,6 +153,7 @@ export function receivePrivateMessage(data: unknown, roomUrl?: string, userUuid?
 }
 
 export function clearPrivateMessages(): void {
+    deletionGeneration++;
     session = undefined;
     privateMessageHistoryStore.set([]);
     privateMessageNotificationStore.set(undefined);
