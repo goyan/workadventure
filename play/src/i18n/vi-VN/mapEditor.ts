@@ -464,6 +464,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Gạch đỏ",
         },
     },
+    retroTheme: {
+        label: "Giao diện",
+        palettes: {
+            night: "Đêm",
+            forest: "Rừng",
+            ember: "Than hồng",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         eraser: "Cục tẩy",
         eraserHint: "Nhấp hoặc kéo qua các đối tượng để xóa chúng.",

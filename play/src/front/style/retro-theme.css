@@ -1,0 +1,311 @@
+/*
+ * Theme engine of the editor menus: modern, with a pixel touch, like the WorkAdventure desktop client.
+ *
+ * - Tokens: the colors of the desktop client (night navy, slate panels, WorkAdventure blue, warm window light) live
+ *   on `.retro-theme`; `data-retro-palette` swaps the accent family (night, forest, ember, gameboy). Components only
+ *   read tokens, so a palette is just a block of variables.
+ * - Pixel touch: titles in Pixelify Sans (the font of the desktop client), the selected choice marked by a small
+ *   square "pixel", crisp previews. Everything else stays modern: 1px lines, soft radii, smooth transitions.
+ * - Components: .retro-panel, .retro-card, .retro-heading, .retro-title, .retro-choice(s), .retro-btn (+ -primary,
+ *   -danger), .retro-label, .retro-hint, .retro-error, .retro-pixel; native inputs, selects, checkboxes and scrollbars
+ *   inside `.retro-theme` follow the same look.
+ */
+
+@font-face {
+    /* SIL Open Font License, see ./fonts/pixelify/OFL.txt. Used for titles only. */
+    font-family: "Pixelify Sans";
+    src: url("./fonts/pixelify/PixelifySans.ttf") format("truetype");
+    font-weight: 400 700;
+    font-display: swap;
+}
+
+.retro-theme {
+    --rt-bg: #141a29;
+    --rt-bg-deep: #0e1320;
+    --rt-surface: #1e2638;
+    --rt-surface-raised: #262f45;
+    --rt-line: #2f3a55;
+    --rt-line-strong: #46527a;
+    --rt-text: #e9edf7;
+    --rt-muted: #94a0bd;
+    --rt-accent: #4f5ff0;
+    --rt-accent-hover: #6170ff;
+    --rt-accent-soft: rgb(79 95 240 / 0.16);
+    --rt-highlight: #ffd36b;
+    --rt-primary: #4f5ff0;
+    --rt-danger: #ec7c62;
+    --rt-hitbox: #ec7c62;
+    --rt-water: #5ec4f5;
+    --rt-radius-s: 0.375rem;
+    --rt-radius-m: 0.625rem;
+    --rt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --rt-font-pixel: "Pixelify Sans", system-ui, sans-serif;
+
+    color: var(--rt-text);
+    background: color-mix(in srgb, var(--rt-bg) 94%, transparent);
+    backdrop-filter: blur(12px);
+    scrollbar-color: var(--rt-line-strong) transparent;
+}
+
+.retro-theme[data-retro-palette="forest"] {
+    --rt-accent: #3fa76a;
+    --rt-accent-hover: #4cbf7b;
+    --rt-accent-soft: rgb(63 167 106 / 0.16);
+    --rt-primary: #3fa76a;
+}
+
+.retro-theme[data-retro-palette="ember"] {
+    --rt-accent: #e07b3c;
+    --rt-accent-hover: #f08f4f;
+    --rt-accent-soft: rgb(224 123 60 / 0.16);
+    --rt-primary: #e07b3c;
+}
+
+.retro-theme[data-retro-palette="gameboy"] {
+    --rt-bg: #172117;
+    --rt-bg-deep: #101810;
+    --rt-surface: #1f2c1f;
+    --rt-surface-raised: #283828;
+    --rt-line: #344a33;
+    --rt-line-strong: #4d6b49;
+    --rt-text: #e3f0d6;
+    --rt-muted: #9fb592;
+    --rt-accent: #8bac0f;
+    --rt-accent-hover: #9fc21a;
+    --rt-accent-soft: rgb(139 172 15 / 0.18);
+    --rt-primary: #6f8f12;
+}
+
+.retro-theme .retro-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--rt-bg);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-m);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+}
+
+.retro-theme .retro-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0.875rem;
+    background: var(--rt-surface);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-m);
+}
+
+.retro-theme .retro-heading,
+.retro-theme .retro-title,
+.retro-theme .retro-pixel {
+    font-family: var(--rt-font-pixel);
+    letter-spacing: 0.01em;
+}
+
+.retro-theme .retro-heading {
+    margin: 0;
+    font-size: 1.375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--rt-text);
+}
+
+.retro-theme .retro-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--rt-text);
+}
+
+/* The pixel touch of a section title: a little lit window, like the skyline of the desktop client. */
+.retro-theme .retro-title::before {
+    content: "";
+    width: 0.375rem;
+    height: 0.375rem;
+    flex-shrink: 0;
+    background: var(--rt-highlight);
+    box-shadow: 0.375rem 0 0 var(--rt-accent);
+    margin-inline-end: 0.375rem;
+}
+
+.retro-theme .retro-title-red::before {
+    background: var(--rt-hitbox);
+}
+
+.retro-theme .retro-title-blue::before {
+    background: var(--rt-water);
+}
+
+.retro-theme .retro-label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--rt-muted);
+}
+
+.retro-theme .retro-hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--rt-muted);
+}
+
+.retro-theme .retro-error {
+    font-size: 0.8125rem;
+    color: var(--rt-danger);
+}
+
+.retro-theme .retro-choices {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.375rem;
+}
+
+.retro-theme .retro-choice {
+    position: relative;
+    padding: 0.5rem 0.75rem 0.5rem 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: start;
+    color: var(--rt-text);
+    background: var(--rt-bg-deep);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-s);
+    cursor: pointer;
+    transition:
+        background 0.15s var(--rt-ease),
+        border-color 0.15s var(--rt-ease);
+}
+
+/* A pixel square marks the choice: empty when off, lit when on. */
+.retro-theme .retro-choice::before {
+    content: "";
+    position: absolute;
+    left: 0.6rem;
+    top: 50%;
+    width: 0.375rem;
+    height: 0.375rem;
+    transform: translateY(-50%);
+    background: var(--rt-line-strong);
+}
+
+.retro-theme .retro-choice:hover {
+    border-color: var(--rt-line-strong);
+    background: var(--rt-surface-raised);
+}
+
+.retro-theme .retro-choice.selected {
+    border-color: var(--rt-accent);
+    background: var(--rt-accent-soft);
+}
+
+.retro-theme .retro-choice.selected::before {
+    background: var(--rt-highlight);
+}
+
+.retro-theme .retro-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.9rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--rt-text);
+    background: var(--rt-surface);
+    border: 1px solid var(--rt-line);
+    border-radius: var(--rt-radius-s);
+    cursor: pointer;
+    transition:
+        background 0.15s var(--rt-ease),
+        border-color 0.15s var(--rt-ease);
+}
+
+.retro-theme .retro-btn:hover:not(:disabled) {
+    border-color: var(--rt-muted);
+    background: var(--rt-surface-raised);
+}
+
+.retro-theme .retro-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.retro-theme .retro-btn-primary {
+    font-weight: 600;
+    color: #fff;
+    background: var(--rt-primary);
+    border-color: transparent;
+}
+
+.retro-theme .retro-btn-primary:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--rt-accent-hover);
+}
+
+.retro-theme .retro-btn-danger {
+    color: var(--rt-danger);
+    background: transparent;
+    border-color: color-mix(in srgb, var(--rt-danger) 45%, transparent);
+}
+
+.retro-theme .retro-btn-danger:hover:not(:disabled) {
+    color: #fff;
+    background: var(--rt-danger);
+    border-color: transparent;
+}
+
+.retro-theme :focus-visible {
+    outline: 2px solid var(--rt-accent-hover);
+    outline-offset: 2px;
+}
+
+/* Native controls inside the theme. */
+.retro-theme input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+.retro-theme select,
+.retro-theme textarea {
+    color: var(--rt-text) !important;
+    background-color: var(--rt-bg-deep) !important;
+    border: 1px solid var(--rt-line) !important;
+    border-radius: var(--rt-radius-s) !important;
+    box-shadow: none !important;
+}
+
+.retro-theme input:not([type="checkbox"]):not([type="radio"]):focus,
+.retro-theme select:focus,
+.retro-theme textarea:focus {
+    outline: none !important;
+    border-color: var(--rt-accent) !important;
+}
+
+.retro-theme input[type="checkbox"],
+.retro-theme input[type="radio"],
+.retro-theme input[type="range"] {
+    accent-color: var(--rt-accent);
+}
+
+.retro-theme ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.retro-theme ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.retro-theme ::-webkit-scrollbar-thumb {
+    background: var(--rt-line-strong);
+    border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .retro-theme .retro-choice,
+    .retro-theme .retro-btn {
+        transition: none;
+    }
+}

@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { EntityDataProperties, EntityDataPropertiesKeys, EntityDataProperty } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
+    import { get } from "svelte/store";
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
     import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
@@ -28,7 +29,7 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
     import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
-    import { getEntityCategory } from "../../../Utils/EntityCategory";
+    import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
 
@@ -314,20 +315,48 @@
         return gameManager.getCurrentGameScene().wamFile?.settings?.prefabOverrides?.[prefab.id] !== undefined;
     }
 
+    /**
+     * Saves the model and carries the change over to the whole family of the object, so that its copies need not be
+     * fixed one by one: the display level and the category go to every view and color of it, the hitbox and the water
+     * to the other colors of the same view (same drawing, same shape).
+     */
     function saveModel(model: EntityPrefab) {
-        if (model.type === "Custom") {
-            mapEditorModifyCustomEntityEventStore.set($state.snapshot(model));
-        } else {
-            saveMapOverride(model.id, {
-                layer: model.layer,
-                depthOffset: model.depthOffset,
-                collisionGrid: model.collisionGrid,
-                collisionRectangles: model.collisionRectangles,
-                water: model.water,
-                category: getEntityCategory(model),
-            });
+        const shapeFields = (source: EntityPrefab) => ({
+            collisionGrid: source.collisionGrid,
+            collisionRectangles: source.collisionRectangles,
+            water: source.water,
+        });
+        for (const member of getFamily(model)) {
+            const adjusted: EntityPrefab =
+                member.id === model.id
+                    ? model
+                    : {
+                          ...member,
+                          tags: withCategory(member.tags, getEntityCategory(model) ?? ""),
+                          layer: model.layer,
+                          ...(member.direction === model.direction ? shapeFields(model) : {}),
+                      };
+            if (adjusted.type === "Custom") {
+                mapEditorModifyCustomEntityEventStore.set($state.snapshot(adjusted));
+            } else {
+                saveMapOverride(adjusted.id, {
+                    layer: adjusted.layer,
+                    depthOffset: adjusted.depthOffset,
+                    category: getEntityCategory(adjusted),
+                    ...shapeFields(adjusted),
+                });
+            }
         }
         editedModel = undefined;
+    }
+
+    /** Every view and color of the object the prefab belongs to (itself when it has none). */
+    function getFamily(prefab: EntityPrefab): EntityPrefab[] {
+        const variant = get(
+            gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore(),
+        ).find((candidate) => candidate.prefabIds.includes(prefab.id));
+        if (!variant) return [prefab];
+        return variant.colors.flatMap((color) => variant.getEntityPrefabsPositions(color));
     }
 
     function saveMapOverride(prefabId: string, override: PrefabOverride | undefined) {

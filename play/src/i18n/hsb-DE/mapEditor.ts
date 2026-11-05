@@ -465,6 +465,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Brick",
         },
     },
+    retroTheme: {
+        label: "Tema",
+        palettes: {
+            night: "Nóc",
+            forest: "Lěs",
+            ember: "Žar",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         eraser: "Gumij",
         eraserHint: "Klikń abo ćehń přez objekty, zo by je wotstronił.",

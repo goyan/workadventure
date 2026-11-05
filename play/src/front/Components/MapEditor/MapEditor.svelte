@@ -1,6 +1,7 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { onMount } from "svelte";
+    import { retroPaletteStore } from "../../Stores/RetroThemeStore";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { mapEditorSelectedToolStore, mapEditorVisibilityStore } from "../../Stores/MapEditorStore";
     import Explorer from "../Exploration/Explorer.svelte";
@@ -8,6 +9,7 @@
     import { windowSize } from "../../Stores/CoWebsiteStore";
 
     import { blocker } from "../../Utils/screenBlocker";
+    import RetroPaletteSwitcher from "./RetroPaletteSwitcher.svelte";
     import AreaEditor from "./AreaEditor/AreaEditor.svelte";
     import EntityEditor from "./EntityEditor/EntityEditor.svelte";
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
@@ -70,10 +72,12 @@
                 />
             </div>
             <div
-                class="sidebar h-dvh bg-contrast/80 backdrop-blur-md p-2 md:p-4"
+                class="sidebar retro-theme h-dvh p-2 md:p-4"
+                data-retro-palette={$retroPaletteStore}
                 in:fly={{ x: 100, duration: 200, delay: 200 }}
                 out:fly={{ x: 100, duration: 200 }}
             >
+                <RetroPaletteSwitcher />
                 {#if $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
                     <EntityEditor />
                 {/if}

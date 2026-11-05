@@ -461,6 +461,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "طوب",
         },
     },
+    retroTheme: {
+        label: "السمة",
+        palettes: {
+            night: "ليل",
+            forest: "غابة",
+            ember: "جمر",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         eraser: "ممحاة",
         eraserHint: "انقر أو اسحب فوق الكائنات لحذفها.",

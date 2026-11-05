@@ -470,6 +470,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Brique",
         },
     },
+    retroTheme: {
+        label: "Thème",
+        palettes: {
+            night: "Nuit",
+            forest: "Forêt",
+            ember: "Braise",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         resize: {
             title: "Taille de l’image",

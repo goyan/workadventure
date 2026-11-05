@@ -461,6 +461,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "อิฐ",
         },
     },
+    retroTheme: {
+        label: "ธีม",
+        palettes: {
+            night: "กลางคืน",
+            forest: "ป่า",
+            ember: "ถ่านไฟ",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         eraser: "ยางลบ",
         eraserHint: "คลิกหรือลากผ่านวัตถุเพื่อลบ",

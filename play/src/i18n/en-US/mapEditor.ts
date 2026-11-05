@@ -462,6 +462,15 @@ const mapEditor: BaseTranslation = {
             brique: "Brick",
         },
     },
+    retroTheme: {
+        label: "Theme",
+        palettes: {
+            night: "Night",
+            forest: "Forest",
+            ember: "Ember",
+            gameboy: "Game Boy",
+        },
+    },
     entityEditor: {
         resize: {
             title: "Image size",

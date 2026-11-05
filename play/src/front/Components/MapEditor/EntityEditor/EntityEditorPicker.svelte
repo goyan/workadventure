@@ -279,8 +279,8 @@
         <div class="flex flex-row items-start justify-between gap-2">
             <div>
                 {#if $selectCategoryStore === undefined}
-                    <p class="text-[22px] m-0">{$LL.mapEditor.entityEditor.header.title()}</p>
-                    <p class="m-0 opacity-50">{$LL.mapEditor.entityEditor.header.description()}</p>
+                    <p class="retro-heading">{$LL.mapEditor.entityEditor.header.title()}</p>
+                    <p class="retro-hint mt-2">{$LL.mapEditor.entityEditor.header.description()}</p>
                 {:else}
                     <div class="flex flex-row items-center gap-4">
                         <button
@@ -424,7 +424,7 @@
             {#if !isEditingCustomEntity}
                 <div class="flex flex-col gap-2" class:mt-52={pickedEntityVariant && pickedEntity}>
                     {#if $selectCategoryStore}
-                        <span class="font-bold text-lg">
+                        <span class="retro-title">
                             {getCategoryLabel($selectCategoryStore)}
                         </span>
                         {#if $selectCategoryStore.kind === "special" && $selectCategoryStore.tag === "structure"}

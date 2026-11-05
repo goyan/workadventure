@@ -364,7 +364,7 @@
 {/snippet}
 
 <!-- A 16-bit game menu: framed panel, pixel titles, a scrolling body and actions always in view at the bottom. -->
-<div class="retro-form" data-testid="entityForm">
+<div class="retro-form retro-panel" data-testid="entityForm">
     <header class="retro-header">
         <span class="retro-heading">
             {isUploadForm ? TT.titles.upload() : profileOnly ? TT.titles.adjust() : TT.titles.edit()}
@@ -614,54 +614,22 @@
 </div>
 
 <style>
-    /* 16-bit menu palette: night blue panel, cream double frame, gold titles, hard shadows, no blur. */
+    /* Layout of the form; colors, frames and controls come from the 16-bit theme (style/retro-theme.css). */
     .retro-form {
-        --retro-bg: #1d2350;
-        --retro-bg-deep: #12163a;
-        --retro-frame: #ece4c8;
-        --retro-line: #6f78b8;
-        --retro-gold: #ffd75e;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        max-height: calc(100dvh - 7rem);
         width: 100%;
-        color: #f4f1e6;
-        background: linear-gradient(180deg, var(--retro-bg) 0%, var(--retro-bg-deep) 100%);
-        border: 3px solid var(--retro-frame);
-        border-radius: 4px;
-        box-shadow:
-            inset 0 0 0 2px var(--retro-bg-deep),
-            inset 0 0 0 4px var(--retro-line),
-            0 4px 0 #070920;
+        max-height: calc(100dvh - 7rem);
     }
 
     .retro-header {
         display: flex;
         flex-direction: column;
         gap: 6px;
-        padding: 14px 14px 10px;
-        border-bottom: 3px solid var(--retro-line);
-    }
-
-    .retro-heading,
-    .retro-title,
-    .retro-btn,
-    .retro-choice {
-        font-family: "Press Start 2P", monospace;
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-    }
-
-    .retro-heading {
-        font-size: 12px;
-        color: var(--retro-gold);
-        text-shadow: 2px 2px 0 #000;
+        padding: 16px 16px 10px;
     }
 
     .retro-subtitle {
         font-size: 13px;
-        opacity: 0.8;
+        color: var(--rt-muted);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -674,8 +642,7 @@
         display: flex;
         flex-direction: column;
         gap: 12px;
-        padding: 12px;
-        scrollbar-color: var(--retro-frame) var(--retro-bg-deep);
+        padding: 4px 14px 12px;
     }
 
     .retro-preview {
@@ -684,153 +651,23 @@
         justify-content: center;
         gap: 12px;
         padding: 12px;
-        border: 2px solid var(--retro-line);
-        background: rgb(0 0 0 / 0.25);
+        background: var(--rt-bg-deep);
+        border: 1px solid var(--rt-line);
+        border-radius: var(--rt-radius-m);
     }
 
-    .retro-preview :global(.pixelated),
     .retro-preview :global(img),
     .retro-preview :global(canvas) {
         image-rendering: pixelated;
-    }
-
-    .retro-card {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        margin: 0;
-        padding: 12px;
-        background: rgb(0 0 0 / 0.22);
-        border: 2px solid var(--retro-line);
-        box-shadow: inset 0 0 0 2px var(--retro-bg-deep);
-    }
-
-    .retro-title {
-        margin: 0;
-        font-size: 10px;
-        color: var(--retro-gold);
-        text-shadow: 2px 2px 0 #000;
-    }
-
-    .retro-title::before {
-        content: "▶ ";
-    }
-
-    .retro-title-red {
-        color: #ff8a80;
-    }
-
-    .retro-title-blue {
-        color: #8fd3ff;
-    }
-
-    .retro-label {
-        font-size: 13px;
-        opacity: 0.85;
-    }
-
-    .retro-hint {
-        margin: 0;
-        font-size: 12px;
-        line-height: 1.4;
-        opacity: 0.7;
-    }
-
-    .retro-error {
-        font-size: 12px;
-        color: #ff8a80;
-    }
-
-    .retro-choices {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 6px;
-    }
-
-    .retro-choice {
-        position: relative;
-        padding: 10px 8px 10px 18px;
-        font-size: 8px;
-        line-height: 1.4;
-        text-align: start;
-        color: #f4f1e6;
-        background: var(--retro-bg-deep);
-        border: 2px solid var(--retro-line);
-        cursor: pointer;
-    }
-
-    .retro-choice:hover,
-    .retro-choice:focus-visible {
-        border-color: var(--retro-frame);
-        outline: none;
-    }
-
-    .retro-choice.selected {
-        color: var(--retro-gold);
-        border-color: var(--retro-gold);
-        background: #2a3270;
-    }
-
-    .retro-choice.selected::before {
-        content: "▶";
-        position: absolute;
-        left: 5px;
-        animation: retro-blink 1s steps(2, start) infinite;
     }
 
     .retro-footer {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        padding: 10px 12px 12px;
-        border-top: 3px solid var(--retro-line);
-        background: var(--retro-bg-deep);
-    }
-
-    .retro-btn {
-        padding: 10px 8px;
-        font-size: 9px;
-        color: #f4f1e6;
-        background: #3a4280;
-        border: 2px solid var(--retro-frame);
-        box-shadow: 0 3px 0 #070920;
-        cursor: pointer;
-    }
-
-    .retro-btn:hover:not(:disabled) {
-        filter: brightness(1.15);
-    }
-
-    .retro-btn:active:not(:disabled) {
-        transform: translateY(2px);
-        box-shadow: 0 1px 0 #070920;
-    }
-
-    .retro-btn:disabled {
-        opacity: 0.45;
-        cursor: not-allowed;
-    }
-
-    .retro-btn-primary {
-        background: #2f8f46;
-        color: #fff;
-    }
-
-    .retro-btn-danger {
-        background: #a93636;
-        color: #fff;
-    }
-
-    @keyframes retro-blink {
-        to {
-            visibility: hidden;
-        }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .retro-choice.selected::before {
-            animation: none;
-        }
+        padding: 12px 14px 16px;
+        border-top: 1px solid var(--rt-line);
+        background: var(--rt-bg-deep);
     }
 
     .checkerboard {
