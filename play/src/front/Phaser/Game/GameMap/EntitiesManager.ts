@@ -8,6 +8,7 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
+import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
     mapEditorEntityEraserStore,
@@ -382,6 +383,7 @@ export class EntitiesManager extends EventEmitter {
             }
         });
         entity.on(Phaser.Input.Events.DRAG_END, (pointer: Pointer, dragX: number, dragY: number) => {
+            entityPlacementBlockerStore.set(undefined);
             if (
                 get(mapEditorModeStore) &&
                 this.isEntityEditorToolActive() &&
@@ -522,18 +524,18 @@ export class EntitiesManager extends EventEmitter {
     }
 
     private changeEntityTint(entity: Entity): void {
-        if (
-            !this.scene
-                .getGameMapFrontWrapper()
-                .canEntityBePlacedOnMap(
-                    entity.getTopLeft(),
-                    entity.displayWidth,
-                    entity.displayHeight,
-                    entity.getCollisionGrid(),
-                    entity.getOldPosition(),
-                    this.isFreePlacement(),
-                )
-        ) {
+        const blocker = this.scene
+            .getGameMapFrontWrapper()
+            .getPlacementBlocker(
+                entity.getTopLeft(),
+                entity.displayWidth,
+                entity.displayHeight,
+                entity.getCollisionGrid(),
+                entity.getOldPosition(),
+                this.isFreePlacement(),
+            );
+        entityPlacementBlockerStore.set(blocker);
+        if (blocker !== undefined) {
             entity.setTint(0xff0000);
         } else {
             if (this.isFreePlacement()) {

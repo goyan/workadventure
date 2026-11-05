@@ -107,3 +107,8 @@ export type CategoryTag =
       };
 export type SelectableTag = CategoryTag | undefined;
 export const selectCategoryStore = writable<SelectableTag>(undefined);
+
+/** Why the object being placed or moved is drawn in red; undefined when it can go there. */
+export const entityPlacementBlockerStore = writable<"outOfMap" | "obstacle" | "player" | "permission" | undefined>(
+    undefined,
+);

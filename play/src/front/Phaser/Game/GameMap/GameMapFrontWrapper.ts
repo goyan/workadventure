@@ -80,6 +80,9 @@ export type PropertyChangeCallback = (
     allProps: Map<string, string | boolean | number>,
 ) => void;
 
+/** Why an object cannot be placed somewhere (see getPlacementBlocker). */
+export type PlacementBlocker = "outOfMap" | "obstacle" | "player" | "permission";
+
 export class GameMapFrontWrapper {
     private scene: GameScene;
     private gameMap: GameMap;
@@ -986,6 +989,22 @@ export class GameMapFrontWrapper {
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
     ): boolean {
+        return (
+            this.getPlacementBlocker(topLeftPos, width, height, collisionGrid, oldTopLeftPos, ignoreCollisionGrid) ===
+            undefined
+        );
+    }
+
+    /** Why an object cannot go there, or undefined when it can: shown next to an object drawn in red. */
+    public getPlacementBlocker(
+        topLeftPos: { x: number; y: number },
+        width: number,
+        height: number,
+        collisionGrid?: number[][],
+        oldTopLeftPos?: { x: number; y: number },
+        ignoreCollisionGrid?: boolean,
+    ): PlacementBlocker | undefined {
+        this.lastPlacementBlocker = undefined;
         const canEntityBePlaced = this.canEntityBePlaced(
             topLeftPos,
             width,
@@ -994,17 +1013,21 @@ export class GameMapFrontWrapper {
             oldTopLeftPos,
             ignoreCollisionGrid,
         );
-
+        if (!canEntityBePlaced) {
+            return this.lastPlacementBlocker ?? "obstacle";
+        }
         const entityCenterCoordinates = {
             x: Math.ceil(topLeftPos.x + width / 2),
             y: Math.ceil(topLeftPos.y + height / 2),
         };
-
-        return (
-            canEntityBePlaced &&
-            this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)
-        );
+        if (!this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)) {
+            return "permission";
+        }
+        return undefined;
     }
+
+    /** Set by the placement checks below, read by getPlacementBlocker. */
+    private lastPlacementBlocker: PlacementBlocker | undefined;
 
     private canEntityBePlaced(
         topLeftPos: { x: number; y: number },
@@ -1018,6 +1041,7 @@ export class GameMapFrontWrapper {
             .getGameMapFrontWrapper()
             .isOutOfMapBounds(topLeftPos.x, topLeftPos.y, width, height);
         if (isOutOfBounds) {
+            this.lastPlacementBlocker = "outOfMap";
             return false;
         }
 
@@ -1097,6 +1121,7 @@ export class GameMapFrontWrapper {
                     height: this.getTileDimensions().height,
                 })
             ) {
+                this.lastPlacementBlocker = "player";
                 return false;
             }
         }
@@ -1116,6 +1141,7 @@ export class GameMapFrontWrapper {
             return false;
         }
         if (placementGrid[yIndex][xIndex] !== 0) {
+            this.lastPlacementBlocker = "obstacle";
             return false;
         }
         return true;

@@ -520,6 +520,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             open: "Kategorien und Interaktionen",
         },
     },
+    placement: {
+        title: "Cannot place it here",
+        outOfMap: "Part of the object is outside the map.",
+        obstacle: "Its collision grid lands on a wall or another object.",
+        player: "A player stands where the object would block.",
+        permission: "You are not allowed to edit this part of the map.",
+    },
     entityEditor: {
         eraser: "Radierer",
         eraserHint: "Klicke oder ziehe über Objekte, um sie zu löschen.",

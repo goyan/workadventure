@@ -1,6 +1,8 @@
 <script lang="ts">
     import { fly } from "svelte/transition";
     import { onMount } from "svelte";
+    import LL from "../../../i18n/i18n-svelte";
+    import { entityPlacementBlockerStore } from "../../Stores/MapEditorStore";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { mapEditorSelectedToolStore, mapEditorVisibilityStore } from "../../Stores/MapEditorStore";
     import Explorer from "../Exploration/Explorer.svelte";
@@ -91,6 +93,13 @@
                 {/if}
                 {#if $mapEditorSelectedToolStore === EditorToolName.SelectionEditor}
                     <SelectionEditor />
+                {/if}
+                {#if $entityPlacementBlockerStore && $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
+                    <!-- Why the object is red: shown while it is being placed or moved. -->
+                    <div class="retro-card shrink-0" role="status" data-testid="placementBlocker">
+                        <span class="retro-title retro-title-red">{$LL.mapEditor.placement.title()}</span>
+                        <p class="retro-hint">{$LL.mapEditor.placement[$entityPlacementBlockerStore]()}</p>
+                    </div>
                 {/if}
                 <div class="mt-auto -mx-2 -mb-2 md:-mx-4 md:-mb-4 opacity-80 shrink-0">
                     <PixelSkyline />

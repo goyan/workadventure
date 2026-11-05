@@ -523,6 +523,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             open: "Catégories et interactions",
         },
     },
+    placement: {
+        title: "Impossible de le poser ici",
+        outOfMap: "Une partie de l’objet sort de la carte.",
+        obstacle: "Sa grille de collision tombe sur un mur ou un autre objet.",
+        player: "Un avatar se trouve là où l’objet bloquerait.",
+        permission: "Vous n’avez pas le droit d’éditer cette partie de la carte.",
+    },
     entityEditor: {
         resize: {
             title: "Taille de l’image",
