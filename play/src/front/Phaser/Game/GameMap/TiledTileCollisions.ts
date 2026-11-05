@@ -1,7 +1,8 @@
 import { GameMapProperties } from "@workadventure/map-editor";
 import { getTiledTileCollisionRectangles } from "../../../Utils/TiledTileCollisionRectangles";
 import type { Player } from "../../Player/Player";
-import { isPathClearOfStaticGroups } from "./StaticGroupsPath";
+import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
+import { isPathClearOfStaticGroups, staticGroupsRectangles } from "./StaticGroupsPath";
 
 /**
  * Opt-in Arcade rectangles. Tile properties are preserved for the existing navigation/editor grid.
@@ -85,6 +86,11 @@ export class TiledTileCollisions {
             path,
             Array.from(this.layers.values(), (state) => state.group),
         );
+    }
+
+    /** The rectangles a computed walk must go around, in world pixels (see RectangleObstacles). */
+    public getPathObstacles(): ObstacleRectangle[] {
+        return staticGroupsRectangles(Array.from(this.layers.values(), (state) => state.group));
     }
 
     public destroy(): void {

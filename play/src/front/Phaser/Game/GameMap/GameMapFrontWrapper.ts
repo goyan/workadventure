@@ -31,6 +31,7 @@ import { DEPTH_OVERLAY_INDEX } from "../DepthIndexes";
 import type { ITiledPlace } from "../GameMapPropertiesListener";
 import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
+import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
@@ -1898,6 +1899,27 @@ export class GameMapFrontWrapper {
             (this.tiledTileCollisions?.isPathClear(player, path) ?? true) &&
             this.entityCollisionRectangles.isPathClear(player, path) &&
             this.entityWaterRectangles.isPathClear(player, path)
+        );
+    }
+
+    /**
+     * The pixel hitboxes a computed walk of the player must go around: objects, water (unless it swims) and partial
+     * Tiled collisions. The walls of the map layer are left to the barriers (see getWallBarriers).
+     */
+    public getPathObstacles(player: Player): RectangleObstacles {
+        const body = player.body;
+        if (!(body instanceof Phaser.Physics.Arcade.Body)) {
+            return RectangleObstacles.NONE;
+        }
+        // The pathfinder moves the feet of the avatar (see Character.getPositionForFeet).
+        const feet = { x: player.x, y: player.y + body.height / 2 + body.offset.y };
+        return new RectangleObstacles(
+            [
+                ...(this.tiledTileCollisions?.getPathObstacles() ?? []),
+                ...this.entityCollisionRectangles.getPathObstacles(player),
+                ...this.entityWaterRectangles.getPathObstacles(player),
+            ],
+            { offsetX: body.x - feet.x, offsetY: body.y - feet.y, width: body.width, height: body.height },
         );
     }
 
