@@ -20,6 +20,7 @@ import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
 import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Water/WaterZones";
 import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
+import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
 import LL from "../../../i18n/i18n-svelte";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
@@ -46,6 +47,7 @@ export class Player extends Character {
     // Seat the player just left (or stopped sliding to): it is not sat on again until the player leaves its tile.
     private ignoredSeatId: string | undefined;
     private seatEntityId: string | undefined;
+    private ignoredSeatEntityId: string | undefined;
     private swimming = false;
     private diveTarget: ReturnType<typeof findDiveTarget>;
     private readonly divePrompt: InteractionPrompt;
@@ -133,11 +135,25 @@ export class Player extends Character {
      */
     private trySitDown(): void {
         const body = this.getBody();
-        const seat = findSeatUnderFeet(this.scene, { x: this.x, y: this.y + body.height / 2 + body.offset.y });
+        this.releaseSeatObjectWhenOut();
+        const seat = findSeatUnderFeet(
+            this.scene,
+            { x: this.x, y: this.y + body.height / 2 + body.offset.y },
+            { x: body.x, y: body.y, width: body.width, height: body.height },
+        );
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
         }
-        if (!seat || seat.id === this.ignoredSeatId || isSeatTaken(this.scene, seat)) {
+        // The other places of the couch just left are ignored too, until the player walks away from it.
+        if (seat?.entityId !== this.ignoredSeatEntityId) {
+            this.ignoredSeatEntityId = undefined;
+        }
+        if (
+            !seat ||
+            seat.id === this.ignoredSeatId ||
+            seat.entityId === this.ignoredSeatEntityId ||
+            isSeatTaken(this.scene, seat)
+        ) {
             this.sitPrompt.hide();
             return;
         }
@@ -152,9 +168,30 @@ export class Player extends Character {
         this.slideToSeat(seat);
     }
 
-    /** Whether the player sits (or is about to) on the given object: its hitbox must not push it out. */
+    /**
+     * Whether the hitbox of this object must let the player through: it sits on it, slides to it, or just stood up
+     * and has not walked out of it yet (otherwise the hitbox would throw it out).
+     */
     public isSittingOn(entityId: string): boolean {
-        return (this.isSeated() || this.isSlidingToSeat) && this.seatEntityId === entityId;
+        return this.seatEntityId === entityId;
+    }
+
+    /** Once standing and out of the hitbox of the object it sat on, the object blocks the player again. */
+    private releaseSeatObjectWhenOut(): void {
+        if (this.seatEntityId === undefined || this.isSeated() || this.isSlidingToSeat) return;
+        const entity = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().get(this.seatEntityId);
+        const body = this.getBody();
+        const stillInside = getPrefabCollisionRectangles(
+            { x: entity?.x ?? 0, y: entity?.y ?? 0 },
+            entity?.getPrefab().collisionRectangles,
+        ).some(
+            (r) =>
+                body.x < r.x + r.width &&
+                r.x < body.x + body.width &&
+                body.y < r.y + r.height &&
+                r.y < body.y + body.height,
+        );
+        if (!stillInside) this.seatEntityId = undefined;
     }
 
     private slideToSeat(seat: Seat): void {
@@ -166,9 +203,11 @@ export class Player extends Character {
             .then((result) => {
                 if (result.cancelled) {
                     this.ignoredSeatId = seat.id;
+                    this.ignoredSeatEntityId = seat.entityId;
                     return;
                 }
                 this.ignoredSeatId = seat.id;
+                this.ignoredSeatEntityId = seat.entityId;
                 this.sit(seat.direction);
                 this.mustReleaseKeysBeforeStandingUp = true;
                 this.emit(hasMovedEventName, { moving: false, direction: seat.direction, x: this.x, y: this.y });

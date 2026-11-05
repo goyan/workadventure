@@ -117,10 +117,15 @@ function deduceSeats(
 }
 
 /**
- * The seat whose tile contains the given feet position, if any; else the nearest deduced seat whose object the feet
- * touch.
+ * The seat whose tile contains the given feet position, if any; else the nearest deduced seat whose object the player
+ * touches: its body (when given) or its feet against the hitbox and its margin. The hitbox stops the body before the
+ * feet get in, so the body is what tells that the player came to sit.
  */
-export function findSeatUnderFeet(scene: GameScene, feet: { x: number; y: number }): Seat | undefined {
+export function findSeatUnderFeet(
+    scene: GameScene,
+    feet: { x: number; y: number },
+    body?: { x: number; y: number; width: number; height: number },
+): Seat | undefined {
     const { width, height } = scene.getGameMapFrontWrapper().getTileDimensions();
     const seats = getSeats(scene);
     const onTile = seats.find(
@@ -133,15 +138,17 @@ export function findSeatUnderFeet(scene: GameScene, feet: { x: number; y: number
     let nearest: { seat: Seat; distance: number } | undefined;
     for (const seat of seats) {
         const reach = seat.reach;
-        if (
-            !reach ||
-            feet.x < reach.x ||
-            feet.x > reach.x + reach.width ||
-            feet.y < reach.y ||
-            feet.y > reach.y + reach.height
-        ) {
-            continue;
-        }
+        if (!reach) continue;
+        const touches = body
+            ? body.x <= reach.x + reach.width &&
+              reach.x <= body.x + body.width &&
+              body.y <= reach.y + reach.height &&
+              reach.y <= body.y + body.height
+            : feet.x >= reach.x &&
+              feet.x <= reach.x + reach.width &&
+              feet.y >= reach.y &&
+              feet.y <= reach.y + reach.height;
+        if (!touches) continue;
         const distance = Math.hypot(seat.feet.x - feet.x, seat.feet.y - feet.y);
         if (!nearest || distance < nearest.distance) nearest = { seat, distance };
     }

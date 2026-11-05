@@ -370,6 +370,8 @@
                           sittable: model.sittable,
                           ...(member.direction === model.direction ? shapeFields(model) : {}),
                       };
+            // A view or color left as it was sends nothing: each command costs a round of updates on the map.
+            if (member.id !== model.id && sameModel(member, adjusted)) continue;
             if (adjusted.type === "Custom") {
                 mapEditorModifyCustomEntityEventStore.set($state.snapshot(adjusted));
             } else {
@@ -383,6 +385,21 @@
             }
         }
         editedModel = undefined;
+    }
+
+    /** Whether two versions of a model have the same settings (those the form edits). */
+    function sameModel(a: EntityPrefab, b: EntityPrefab): boolean {
+        const settings = (prefab: EntityPrefab) =>
+            JSON.stringify([
+                prefab.tags,
+                prefab.layer ?? null,
+                prefab.depthOffset ?? 0,
+                prefab.sittable ?? null,
+                prefab.collisionGrid ?? null,
+                prefab.collisionRectangles ?? null,
+                prefab.water ?? null,
+            ]);
+        return settings(a) === settings(b);
     }
 
     /** Objects of the library with the same name, whatever their catalog. */

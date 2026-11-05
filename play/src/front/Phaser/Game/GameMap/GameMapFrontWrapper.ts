@@ -376,6 +376,21 @@ export class GameMapFrontWrapper {
         });
     }
 
+    private entitiesCollisionGridRecomputeScheduled = false;
+
+    /**
+     * Recomputes the collision grid once, after the current batch of edits: editing a model updates every view and
+     * color of it, one command each, and a full recompute per command froze big maps for seconds.
+     */
+    public scheduleEntitiesCollisionGridRecompute(): void {
+        if (this.entitiesCollisionGridRecomputeScheduled) return;
+        this.entitiesCollisionGridRecomputeScheduled = true;
+        setTimeout(() => {
+            this.entitiesCollisionGridRecomputeScheduled = false;
+            this.recomputeEntitiesCollisionGrid();
+        }, 0);
+    }
+
     public recomputeEntitiesCollisionGrid() {
         const entities = this.entitiesManager.getEntities();
 

@@ -122,7 +122,7 @@ export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implem
             .setPrefabOverride(prefabId, this.wam.settings?.prefabOverrides?.[prefabId]);
         if (!modification) return;
         scene.getGameMapFrontWrapper().getEntitiesManager().updateEntitiesPrefab(prefabId, modification);
-        scene.getGameMapFrontWrapper().recomputeEntitiesCollisionGrid();
+        scene.getGameMapFrontWrapper().scheduleEntitiesCollisionGridRecompute();
     }
 
     public emitEvent(roomConnection: RoomConnection): void {

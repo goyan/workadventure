@@ -36,7 +36,7 @@ export class ModifyCustomEntityFrontCommand extends ModifyCustomEntityCommand im
         this.entitiesCollectionManager.modifyCustomEntity(message.id, modification);
         // The placed copies keep their own prefab: give them the new one (depth, layer, collisions, water).
         this.entitiesManager.updateEntitiesPrefab(message.id, modification);
-        this.gameFrontWrapper.recomputeEntitiesCollisionGrid();
+        this.gameFrontWrapper.scheduleEntitiesCollisionGridRecompute();
         return super.execute();
     }
 
