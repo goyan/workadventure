@@ -11,6 +11,7 @@ import type {
 import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneController";
 import type { JoinedJam, ListeningZone } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import {
+    addToJukebox,
     HOME_JAM_QUEUE_EVENT,
     jukeboxQueuesStore,
     JUKEBOX_MOVE_EVENT,
@@ -392,6 +393,26 @@ describe("likeTrack", () => {
 });
 
 describe("Jukebox without the desktop app", () => {
+    it("lets a guest joined without sound add a track by link: the request goes to the host", () => {
+        const send = vi.fn();
+        const stop = startHomeJam({
+            rooms: writable([{ zone: ZONE, jam: homeJam }]),
+            joined: writable(joinedHome),
+            listeningByUserUuid: writable(new Map()),
+            localUuid: () => "guest",
+            userByUuid: (uuid) => USERS.find((user) => user.uuid === uuid),
+            userById: (id) => USERS.find((user) => user.id === id),
+            send,
+            onEvent: () => () => undefined,
+            desktop: undefined,
+        });
+
+        addToJukebox({ zone: ZONE, jam: homeJam }, "spotify:track:abc");
+
+        expect(send).toHaveBeenCalledWith(HOME_JAM_QUEUE_EVENT, { uris: ["spotify:track:abc"] }, [1]);
+        stop();
+    });
+
     it("still shows the queues hosts send", () => {
         let eventListener: ((name: string, data: unknown, senderId: number | undefined) => void) | undefined;
         const stop = startHomeJam({

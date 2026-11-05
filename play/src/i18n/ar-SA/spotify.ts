@@ -73,7 +73,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         joinHome: "الانضمام إلى الجوكبوكس",
         leaveHome: "مغادرة الجوكبوكس",
         homeQueueHint: "في Spotify، انقر بزر الماوس الأيمن على مقطع: «إضافة إلى الجوكبوكس».",
-        homeDesktopOnly: "الجوكبوكس: مع تطبيق سطح المكتب وSpicetify فقط.",
         rooms: "{count} غرفة",
         leave: "مغادرة",
         createRoom: "فتح غرفة",
@@ -105,6 +104,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "تحريك لأسفل",
         upNext: "التالي",
         upNextIn: "التالي في {name}",
+        joinHomeSilent: "انضمام (بدون صوت)",
+        homeSilentNote: "لا صوت هنا: الاستماع لديك يتطلب تطبيق سطح المكتب مع Spicetify.",
     },
 };
 

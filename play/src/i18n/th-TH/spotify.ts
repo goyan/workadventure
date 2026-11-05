@@ -72,7 +72,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stopHome: "จบจู๊กบ็อกซ์",
         joinHome: "เข้าร่วมจู๊กบ็อกซ์",
         leaveHome: "ออกจากจู๊กบ็อกซ์",
-        homeDesktopOnly: "จู๊กบ็อกซ์: เฉพาะแอปเดสก์ท็อปกับ Spicetify",
         rooms: "{count} ห้อง",
         leave: "ออก",
         createRoom: "เปิดห้อง",
@@ -105,6 +104,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "เลื่อนลง",
         upNext: "ถัดไป",
         upNextIn: "ถัดไปใน {name}",
+        joinHomeSilent: "เข้าร่วม (ไม่มีเสียง)",
+        homeSilentNote: "ที่นี่ไม่มีเสียง: การฟังที่เครื่องของคุณต้องใช้แอปเดสก์ท็อปกับ Spicetify",
     },
 };
 

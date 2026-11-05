@@ -72,7 +72,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stopHome: "주크박스 종료",
         joinHome: "주크박스 참여",
         leaveHome: "주크박스 나가기",
-        homeDesktopOnly: "주크박스: 데스크톱 앱과 Spicetify에서만.",
         rooms: "방 {count}개",
         leave: "나가기",
         createRoom: "방 만들기",
@@ -105,6 +104,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "아래로",
         upNext: "다음 곡",
         upNextIn: "{name}의 다음 곡",
+        joinHomeSilent: "참여 (소리 없음)",
+        homeSilentNote: "여기서는 소리가 나지 않습니다. 직접 들으려면 데스크톱 앱과 Spicetify가 필요합니다.",
     },
 };
 
