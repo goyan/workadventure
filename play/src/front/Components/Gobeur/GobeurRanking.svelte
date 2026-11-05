@@ -26,7 +26,7 @@
         </div>
         <p class="m-0 my-2 text-sm">{$LL.mapEditor.properties.gobeur.ranking.reasons[result.reason]()}</p>
         <ol class="m-0 p-0 list-none flex flex-col gap-1">
-            {#each result.ranking as entry, index (entry.uuid)}
+            {#each result.ranking as entry, index (index)}
                 <li class="flex flex-row gap-3 text-sm">
                     <span class="w-6 text-right">{index + 1}.</span>
                     <span class="grow">{gobeurPlayerName(entry.uuid, known)}</span>
