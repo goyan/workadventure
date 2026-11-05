@@ -15,6 +15,11 @@ import { takeUnseenEntities } from "./EntityCollectionUrls";
 /** How long a collection of entities is waited for, in milliseconds. */
 const COLLECTION_FETCH_TIMEOUT_MS = 10_000;
 
+export type CustomEntityModification = Pick<
+    EntityPrefab,
+    "name" | "tags" | "depthOffset" | "collisionGrid" | "collisionRectangles" | "layer" | "water"
+>;
+
 export class EntitiesCollectionsManager {
     private entitiesPrefabsMapPromise!: Promise<Map<string, EntityPrefab>>;
     private tags: string[] = [];
@@ -101,6 +106,8 @@ export class EntitiesCollectionsManager {
                                 color: entity.color,
                                 collisionGrid: entity.collisionGrid,
                                 collisionRectangles: entity.collisionRectangles,
+                                layer: entity.layer,
+                                water: entity.water,
                                 seat: entity.seat,
                                 animation: entity.animation,
                                 wander: entity.wander
@@ -152,22 +159,23 @@ export class EntitiesCollectionsManager {
         });
     }
 
-    public modifyCustomEntity(
-        id: string,
-        name: string,
-        tags: string[],
-        depthOffset?: number,
-        collisionGrid?: number[][],
-    ): void {
+    /** Applies the edition of a custom image to the catalog. Unset optional fields are removed, as on map-storage. */
+    public modifyCustomEntity(id: string, modification: CustomEntityModification): void {
+        const patch: CustomEntityModification = {
+            name: modification.name,
+            tags: modification.tags,
+            depthOffset: modification.depthOffset,
+            collisionGrid: modification.collisionGrid,
+            collisionRectangles: modification.collisionRectangles,
+            layer: modification.layer,
+            water: modification.water,
+        };
         this.entitiesPrefabsStore.update((currentEntitiesPrefabs) => {
             const indexOfCustomEntity = currentEntitiesPrefabs.findIndex((entityPrefab) => entityPrefab.id === id);
             if (indexOfCustomEntity !== -1) {
                 currentEntitiesPrefabs[indexOfCustomEntity] = {
                     ...currentEntitiesPrefabs[indexOfCustomEntity],
-                    name,
-                    tags,
-                    depthOffset,
-                    collisionGrid,
+                    ...patch,
                 };
             }
             return currentEntitiesPrefabs;
@@ -177,13 +185,7 @@ export class EntitiesCollectionsManager {
                 .then((existingEntitiesPrefabsMap) => {
                     const entity = existingEntitiesPrefabsMap.get(id);
                     if (entity) {
-                        existingEntitiesPrefabsMap.set(id, {
-                            ...entity,
-                            name,
-                            tags,
-                            depthOffset,
-                            collisionGrid,
-                        });
+                        existingEntitiesPrefabsMap.set(id, { ...entity, ...patch });
                     }
                     resolve(existingEntitiesPrefabsMap);
                 })

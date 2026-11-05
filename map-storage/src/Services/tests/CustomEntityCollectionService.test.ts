@@ -87,6 +87,46 @@ describe("CustomEntityCollectionService", () => {
         expect((await readCollection(service))?.animation).toBeUndefined();
     });
 
+    it("persists the layer, the hitbox and the water of an uploaded pool, and their edition", async () => {
+        const service = new CustomEntityCollectionService("play.workadventure.localhost");
+        const water = [{ x: 4, y: 4, width: 56, height: 24 }];
+        await service.uploadEntity(uploadMessage({ layer: "floor", water }));
+
+        expect(await readCollection(service)).toMatchObject({ layer: "floor", water });
+
+        const hitbox = [{ x: 8, y: 20, width: 16, height: 12 }];
+        await service.modifyEntity({
+            id: "entity-1",
+            name: "Lamp",
+            tags: [],
+            collisionGrid: undefined,
+            depthOffset: undefined,
+            layer: "standing",
+            collisionRectangles: hitbox,
+            water: undefined,
+        });
+
+        const entity = await readCollection(service);
+        expect(entity).toMatchObject({ layer: "standing", collisionRectangles: hitbox });
+        expect(entity?.water).toBeUndefined();
+    });
+
+    it("rejects an unknown layer instead of storing it", async () => {
+        const service = new CustomEntityCollectionService("play.workadventure.localhost");
+        await service.uploadEntity(uploadMessage());
+
+        await expect(
+            service.modifyEntity({
+                id: "entity-1",
+                name: "Renamed",
+                tags: [],
+                collisionGrid: undefined,
+                depthOffset: undefined,
+                layer: "ceiling",
+            }),
+        ).rejects.toThrow();
+    });
+
     it("keeps the ownerId when the entity is modified", async () => {
         const service = new CustomEntityCollectionService("play.workadventure.localhost");
         await service.uploadEntity(uploadMessage());

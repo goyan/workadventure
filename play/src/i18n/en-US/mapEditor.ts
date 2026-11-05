@@ -533,6 +533,25 @@ const mapEditor: BaseTranslation = {
             collision: "Collision",
             wokaAbove: "Woka above",
             wokaBelow: "Woka below",
+            overhead: "Above the players",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Where the object blocks the players, in pixels of the image. Generated from its foot: adjust it if needed.",
+                regenerate: "Generate from the image",
+                required: "A standing object needs a hitbox.",
+            },
+            water: {
+                title: "Water",
+                description: "Players can dive in and swim; companions and animals stay on the edge.",
+                margin: "Edge (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Width",
+                height: "Height",
+            },
         },
         buttons: {
             editEntity: "Edit",

@@ -14,14 +14,23 @@ interface EntityCollisionState {
 }
 
 /**
- * Opt-in Arcade rectangles for entities whose prefab declares `collisionRectangles`.
+ * `solid`: the `collisionRectangles` of the prefab, always blocking.
+ * `water`: the `water` rectangles, blocking only a player who is not swimming (one dives in on purpose).
+ */
+export type EntityRectanglesKind = "solid" | "water";
+
+/**
+ * Arcade rectangles for entities whose prefab declares `collisionRectangles` (or `water`, for the water instance).
  * They complement the 32px `collisionGrid` and follow the entity when the map editor moves it.
  */
 export class EntityCollisionRectangles {
     private readonly states = new Map<string, EntityCollisionState>();
     private player: Player | undefined;
 
-    constructor(private readonly scene: Phaser.Scene) {
+    constructor(
+        private readonly scene: Phaser.Scene,
+        private readonly kind: EntityRectanglesKind = "solid",
+    ) {
         this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.followEntities);
     }
 
@@ -37,7 +46,7 @@ export class EntityCollisionRectangles {
         this.remove(entity.entityId);
         // Entities use the top-left corner as origin: x and y are enough, no vector to allocate.
         const topLeft = { x: entity.x, y: entity.y };
-        const rectangles = getPrefabCollisionRectangles(topLeft, entity.getPrefab().collisionRectangles);
+        const rectangles = getPrefabCollisionRectangles(topLeft, this.getRectangles(entity));
         if (rectangles.length === 0) {
             return;
         }
@@ -68,7 +77,15 @@ export class EntityCollisionRectangles {
         this.player?.finishFollowingPath(true);
     }
 
+    private getRectangles(entity: Entity) {
+        const prefab = entity.getPrefab();
+        return this.kind === "water" ? prefab.water : prefab.collisionRectangles;
+    }
+
     private createCollider(player: Player, state: EntityCollisionState): Phaser.Physics.Arcade.Collider {
+        if (this.kind === "water") {
+            return this.scene.physics.add.collider(player, state.group, undefined, () => !player.isSwimming());
+        }
         const prefab = state.entity.getPrefab();
         // The walls of the map layer are barriers for the pathfinder: a path never goes through them. While the avatar
         // walks one, the collision would only push it out of the wall it runs along, in jerks.
@@ -93,6 +110,9 @@ export class EntityCollisionRectangles {
     }
 
     public isPathClear(player: Player, path: { x: number; y: number }[]): boolean {
+        if (this.kind === "water" && player.isSwimming()) {
+            return true;
+        }
         return isPathClearOfStaticGroups(
             player,
             path,
@@ -123,7 +143,7 @@ export class EntityCollisionRectangles {
             if (topLeft.x === state.left && topLeft.y === state.top) {
                 continue;
             }
-            const rectangles = getPrefabCollisionRectangles(topLeft, state.entity.getPrefab().collisionRectangles);
+            const rectangles = getPrefabCollisionRectangles(topLeft, this.getRectangles(state.entity));
             state.group.getChildren().forEach((object, index) => {
                 const rectangle = rectangles[index];
                 if (!rectangle || !(object instanceof Phaser.GameObjects.Rectangle)) {

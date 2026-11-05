@@ -531,6 +531,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "تصادم",
             wokaAbove: "وكا فوق",
             wokaBelow: "وكا تحت",
+            overhead: "فوق اللاعبين",
+            hitbox: {
+                title: "منطقة التصادم",
+                description:
+                    "المكان الذي يمنع فيه الكائن اللاعبين، بوحدات بكسل الصورة. تُنشأ من قاعدته: عدّلها عند الحاجة.",
+                regenerate: "إنشاء من الصورة",
+                required: "الكائن الواقف يحتاج إلى منطقة تصادم.",
+            },
+            water: {
+                title: "ماء",
+                description: "يمكن للاعبين الغوص والسباحة؛ تبقى الرفقاء والحيوانات على الحافة.",
+                margin: "الحافة (بكسل)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "العرض",
+                height: "الارتفاع",
+            },
         },
         buttons: {
             editEntity: "تعديل الكائن", // Edit entity

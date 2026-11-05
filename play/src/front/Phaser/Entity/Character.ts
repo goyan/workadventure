@@ -20,10 +20,12 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 
 import { UsernameDisplay } from "../Components/UsernameDisplay";
 import { findSeatUnderFeet } from "../Player/Seat";
+import { BODY_CENTER_OFFSET_Y, getWaterRectangles, isPointInWater } from "../Game/Water/WaterZones";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
 import { ThinkingCloud } from "./ThinkingCloud";
+import { SwimEffect } from "./SwimEffect";
 
 import Container = Phaser.GameObjects.Container;
 import RenderTexture = Phaser.GameObjects.RenderTexture;
@@ -100,7 +102,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     private readonly syncDisplayPositionWithPhysics = (): void => {
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
+        this.updateSwimEffect();
     };
+    private swimEffect: SwimEffect | undefined;
 
     /**
      * A deferred promise that resolves when the texture of the character is actually displayed.
@@ -268,6 +272,25 @@ export abstract class Character extends Container implements OutlineableInterfac
                     resolve(defaultWoka);
                 });
         });
+    }
+
+    /**
+     * A character whose body is in the water swims, for everyone: only the local player can get into the water (by
+     * diving), so the position is enough and nothing more is sent over the network.
+     */
+    private updateSwimEffect(): void {
+        if (!this.scene) return;
+        this.swimEffect ??= new SwimEffect(this.scene, this);
+        const inWater = isPointInWater(getWaterRectangles(this.scene), {
+            x: this.x,
+            y: this.y + BODY_CENTER_OFFSET_Y,
+        });
+        if (inWater && !this.swimEffect.isActive) {
+            this.swimEffect.start();
+        } else if (!inWater && this.swimEffect.isActive) {
+            this.swimEffect.stop(this.sprites.values());
+        }
+        this.swimEffect.update(this.scene.time.now, this.sprites.values());
     }
 
     private setDepthIfNeeded(depth: number): void {
@@ -681,6 +704,7 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     destroy(): void {
         this.usernameDisplay?.destroy();
+        this.swimEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

@@ -18,10 +18,15 @@ import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctio
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
 import { RunSmokeTrail } from "../Components/RunSmokeTrail";
+import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Water/WaterZones";
+import { DivePrompt } from "../Game/Water/DivePrompt";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatUnderFeet, isSeatTaken } from "./Seat";
+
+/** Swimming is slower than walking. */
+const SWIM_SPEED_FACTOR = 0.6;
 
 export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
@@ -37,6 +42,9 @@ export class Player extends Character {
     private mustReleaseKeysBeforeStandingUp = false;
     // Seat the player just left (or stopped sliding to): it is not sat on again until the player leaves its tile.
     private ignoredSeatId: string | undefined;
+    private swimming = false;
+    private diveTarget: { x: number; y: number } | undefined;
+    private readonly divePrompt: DivePrompt;
 
     constructor(
         Scene: GameScene,
@@ -53,6 +61,7 @@ export class Player extends Character {
         this.getBody().setImmovable(false);
         this.destinationMarker = new WalkDestinationMarker(Scene);
         this.runSmokeTrail = new RunSmokeTrail(Scene);
+        this.divePrompt = new DivePrompt(Scene);
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -63,6 +72,7 @@ export class Player extends Character {
     }
 
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
+        this.updateSwimming();
         const state = get(followStateStore);
         const role = get(followRoleStore);
 
@@ -199,8 +209,53 @@ export class Player extends Character {
     }
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
-        return this.pathWalkingSpeed ? this.pathWalkingSpeed : speedUp && !followMode ? 2.5 * WOKA_SPEED : WOKA_SPEED;
+        const speed = this.pathWalkingSpeed
+            ? this.pathWalkingSpeed
+            : speedUp && !followMode
+              ? 2.5 * WOKA_SPEED
+              : WOKA_SPEED;
+        return this.swimming ? speed * SWIM_SPEED_FACTOR : speed;
     }
+
+    /** Whether the player dove in and is still in the water: the water does not block it then. */
+    public isSwimming(): boolean {
+        return this.swimming;
+    }
+
+    /**
+     * Out of the water, offers to dive when the player stands at its edge. In the water, the player gets out by
+     * walking onto the edge: it stops swimming once no part of its body touches the water any more.
+     */
+    private updateSwimming(): void {
+        const water = getWaterRectangles(this.scene);
+        const body = this.getBody();
+        if (this.swimming) {
+            if (!intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height })) {
+                this.swimming = false;
+            }
+            return;
+        }
+        this.diveTarget =
+            water.length > 0 && !this.isSeated() && !this.isSlidingToSeat
+                ? findDiveTarget(water, { x: body.center.x, y: body.center.y })
+                : undefined;
+        if (this.diveTarget) {
+            this.divePrompt.show(this.dive);
+        } else {
+            this.divePrompt.hide();
+        }
+    }
+
+    private readonly dive = (): void => {
+        const target = this.diveTarget;
+        if (!target || this.swimming) return;
+        this.divePrompt.hide();
+        this.swimming = true;
+        const body = this.getBody();
+        // Path positions are those of the character: its body center is offset from it.
+        const offsetY = body.center.y - this.y;
+        this.setPathToFollow([{ x: target.x, y: target.y - offsetY }], WOKA_SPEED).catch((e) => console.warn(e));
+    };
 
     private inputStep(activeEvents: ActiveEventList, x: number, y: number) {
         // Process input events
@@ -448,6 +503,7 @@ export class Player extends Character {
 
     destroy(): void {
         this.unsubscribeVisibilityStore();
+        this.divePrompt.hide();
         this.destinationMarker.destroy();
         super.destroy();
     }

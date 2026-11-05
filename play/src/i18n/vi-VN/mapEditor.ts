@@ -536,6 +536,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Va chạm",
             wokaAbove: "Woka ở trên",
             wokaBelow: "Woka ở dưới",
+            overhead: "Phía trên người chơi",
+            hitbox: {
+                title: "Vùng va chạm",
+                description:
+                    "Nơi vật thể chặn người chơi, tính bằng pixel của ảnh. Tạo từ chân vật thể: chỉnh lại nếu cần.",
+                regenerate: "Tạo từ ảnh",
+                required: "Vật thể đứng cần có vùng va chạm.",
+            },
+            water: {
+                title: "Nước",
+                description: "Người chơi có thể nhảy xuống và bơi; thú cưng và động vật ở lại trên bờ.",
+                margin: "Mép (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Rộng",
+                height: "Cao",
+            },
         },
         buttons: {
             editEntity: "Sửa",

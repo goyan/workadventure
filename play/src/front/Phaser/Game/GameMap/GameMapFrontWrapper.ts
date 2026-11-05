@@ -121,6 +121,7 @@ export class GameMapFrontWrapper {
     private areasCollisionLayer: TilemapLayer;
     private readonly tiledTileCollisions: TiledTileCollisions | undefined;
     private readonly entityCollisionRectangles: EntityCollisionRectangles;
+    private readonly entityWaterRectangles: EntityCollisionRectangles;
 
     private collisionGridDirty = true;
     private sharedCollisionGrid: number[][] = [];
@@ -173,6 +174,7 @@ export class GameMapFrontWrapper {
         }
 
         this.entityCollisionRectangles = new EntityCollisionRectangles(scene);
+        this.entityWaterRectangles = new EntityCollisionRectangles(scene, "water");
 
         this.existingTileIndex = terrains.length > 0 ? terrains[0].firstgid : -1;
 
@@ -1835,12 +1837,14 @@ export class GameMapFrontWrapper {
     public setTileCollisionPlayer(player: Player): void {
         this.tiledTileCollisions?.setPlayer(player);
         this.entityCollisionRectangles.setPlayer(player);
+        this.entityWaterRectangles.setPlayer(player);
     }
 
     public isTileCollisionPathClear(player: Player, path: { x: number; y: number }[]): boolean {
         return (
             (this.tiledTileCollisions?.isPathClear(player, path) ?? true) &&
-            this.entityCollisionRectangles.isPathClear(player, path)
+            this.entityCollisionRectangles.isPathClear(player, path) &&
+            this.entityWaterRectangles.isPathClear(player, path)
         );
     }
 
@@ -1859,15 +1863,18 @@ export class GameMapFrontWrapper {
 
     public addEntityCollisionRectangles(entity: Entity): void {
         this.entityCollisionRectangles.add(entity);
+        this.entityWaterRectangles.add(entity);
     }
 
     public removeEntityCollisionRectangles(entityId: string): void {
         this.entityCollisionRectangles.remove(entityId);
+        this.entityWaterRectangles.remove(entityId);
     }
 
     public close(): void {
         this.tiledTileCollisions?.destroy();
         this.entityCollisionRectangles.destroy();
+        this.entityWaterRectangles.destroy();
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }

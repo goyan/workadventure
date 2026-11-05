@@ -77,6 +77,9 @@
                 collisionGrid: customEditedEntity.collisionGrid,
                 depthOffset: customEditedEntity.depthOffset,
                 animation: $state.snapshot(customEditedEntity.animation),
+                collisionRectangles: $state.snapshot(customEditedEntity.collisionRectangles),
+                layer: customEditedEntity.layer,
+                water: $state.snapshot(customEditedEntity.water),
                 color: "",
                 // Lets us edit and delete our own upload without waiting for the round trip to
                 // map-storage, which overwrites this with the authenticated user UUID anyway.

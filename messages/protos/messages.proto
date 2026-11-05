@@ -476,6 +476,13 @@ message UploadEntityMessage {
   optional string ownerId = 10;
   // Set when the image is a horizontal strip of frames to play in a loop (EntityAnimation in libs/map-editor).
   optional EntityAnimationMessage animation = 11;
+  // Solid rectangles in pixels from the top-left corner (CollisionRectangle[] in libs/map-editor). A Value for the
+  // same reason as collisionGrid; map-storage parses it against the schema.
+  optional google.protobuf.Value collisionRectangles = 12;
+  // "floor", "standing" or "overhead" (EntityLayer in libs/map-editor).
+  optional string layer = 13;
+  // Water rectangles, same format as collisionRectangles.
+  optional google.protobuf.Value water = 14;
 }
 
 message EntityAnimationMessage {
@@ -508,6 +515,10 @@ message ModifyCustomEntityMessage {
   // See UploadEntityMessage.collisionGrid. Leave unset to keep the entity's current grid.
   optional google.protobuf.Value collisionGrid = 4;
   optional int32 depthOffset = 5;
+  // See UploadEntityMessage. Unset removes them from the entity, like collisionGrid.
+  optional google.protobuf.Value collisionRectangles = 6;
+  optional string layer = 7;
+  optional google.protobuf.Value water = 8;
 }
 
 message DeleteCustomEntityMessage {

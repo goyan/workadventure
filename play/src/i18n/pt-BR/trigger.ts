@@ -7,6 +7,7 @@ const trigger: BaseTranslation = {
     object: "[ESPAÇO] para interagir com ele 👀",
     spaceKeyboard: "[ESPAÇO]",
     escapeKeyboard: "[ESC]",
+    swim: "[ESPAÇO] para nadar 🏊",
     mobile: {
         cowebsite: "👆 para abrir site 👀",
         jitsiRoom: "👆 para entrar no Jitsi 👀",

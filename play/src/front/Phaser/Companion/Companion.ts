@@ -9,6 +9,13 @@ import { PlayerAnimationTypes } from "../Player/Animation";
 import { ProtobufClientUtils } from "../../Network/ProtobufClientUtils";
 import { debugRepo } from "../../Utils/Debuggers";
 import { wanderIdleFrame } from "../Game/Wander/WanderSheet";
+import type { WaterRectangle } from "../Game/Water/WaterZones";
+import {
+    BODY_CENTER_OFFSET_Y,
+    getWaterRectangles,
+    isPointInWater,
+    segmentCrossesWater,
+} from "../Game/Water/WaterZones";
 import { companionColumns, companionStillFrame, companionWalkFrames } from "./CompanionSheet";
 
 import Sprite = Phaser.GameObjects.Sprite;
@@ -38,6 +45,9 @@ const TELEPORT_DISTANCE = 300;
 const MAX_SPEED = 1500;
 // Below this lag (px), the companion is considered to be at its spot.
 const MIN_LAG_TO_WALK = 0.01;
+// The trail records the player's position shifted by COMPANION_Y_OFFSET: its body center is this much lower.
+const TRAIL_BODY_CENTER_OFFSET_Y = BODY_CENTER_OFFSET_Y - COMPANION_Y_OFFSET;
+const REAPPEAR_DURATION = 300;
 
 export class Companion extends Container {
     public sprites: Map<string, Sprite>;
@@ -46,6 +56,7 @@ export class Companion extends Container {
     private exactX: number;
     private exactY: number;
     private trail: { x: number; y: number }[] = [];
+    private water: WaterRectangle[] = [];
     private invisible: boolean;
     private updateListener: (time: number, delta: number) => void;
     private target: { x: number; y: number; direction: PositionMessage_Direction };
@@ -172,8 +183,10 @@ export class Companion extends Container {
         // given by setTarget is one frame old.
         this.setTarget(this.owner.x, this.owner.y, this.target.direction);
 
+        const waitingAtTheEdge = this.keepOutOfWater();
+
         // Distance the companion still has to walk along the trail to be at FOLLOW_DISTANCE from the player.
-        const lag = this.getRemainingPathLength() - FOLLOW_DISTANCE;
+        const lag = waitingAtTheEdge ? 0 : this.getRemainingPathLength() - FOLLOW_DISTANCE;
 
         if (lag > MIN_LAG_TO_WALK) {
             this.lastMoveTime = time;
@@ -191,6 +204,10 @@ export class Companion extends Container {
             // through walls the player went around.
             while (remaining > 0) {
                 const waypoint = this.trail[0] ?? this.target;
+                if (this.isInWater(waypoint)) {
+                    // Stop at the edge: the next frame decides whether to wait or to rejoin the player.
+                    break;
+                }
                 const xDist = waypoint.x - this.exactX;
                 const yDist = waypoint.y - this.exactY;
                 const distance = Math.hypot(xDist, yDist);
@@ -220,6 +237,44 @@ export class Companion extends Container {
 
         this.setDepth(this.exactY);
         this.playAnimation(this.direction, this.animationType, time);
+    }
+
+    /**
+     * Companions never go into the water. While the trail leads into it, the companion waits at the edge. Once the
+     * player is out, the wet part of the trail is dropped; when the way to the exit point crosses the water, the
+     * companion reappears there instead of swimming. Returns true while waiting.
+     */
+    private keepOutOfWater(): boolean {
+        this.water = getWaterRectangles(this.scene);
+        if (this.water.length === 0) {
+            return false;
+        }
+        const route = [...this.trail, this.target];
+        if (!this.isInWater(route[0])) {
+            return false;
+        }
+        const exitIndex = route.findIndex((point, index) => index > 0 && !this.isInWater(point));
+        if (exitIndex === -1) {
+            return true;
+        }
+        const exit = route[exitIndex];
+        this.trail = this.trail.slice(exitIndex);
+        if (
+            segmentCrossesWater(
+                this.water,
+                { x: this.exactX, y: this.exactY + TRAIL_BODY_CENTER_OFFSET_Y },
+                { x: exit.x, y: exit.y + TRAIL_BODY_CENTER_OFFSET_Y },
+            )
+        ) {
+            this.placeAt(exit.x, exit.y);
+            this.setAlpha(0);
+            this.scene.tweens.add({ targets: this, alpha: 1, duration: REAPPEAR_DURATION });
+        }
+        return false;
+    }
+
+    private isInWater(point: { x: number; y: number }): boolean {
+        return isPointInWater(this.water, { x: point.x, y: point.y + TRAIL_BODY_CENTER_OFFSET_Y });
     }
 
     /**

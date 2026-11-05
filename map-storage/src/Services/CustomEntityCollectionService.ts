@@ -1,6 +1,8 @@
 import path from "path";
 import {
     CollisionGrid,
+    CollisionRectangle,
+    EntityLayer,
     ENTITIES_FOLDER_PATH,
     ENTITY_COLLECTION_FILE,
     EntityCollectionRaw,
@@ -59,6 +61,14 @@ export class CustomEntityCollectionService {
         if (modifyCustomEntityMessage.collisionGrid) {
             collisionGrid = CollisionGrid.parse(modifyCustomEntityMessage.collisionGrid);
         }
+        // Parsed like collisionGrid: an invalid value is rejected here rather than stored.
+        const collisionRectangles = modifyCustomEntityMessage.collisionRectangles
+            ? CollisionRectangle.array().parse(modifyCustomEntityMessage.collisionRectangles)
+            : undefined;
+        const water = modifyCustomEntityMessage.water
+            ? CollisionRectangle.array().parse(modifyCustomEntityMessage.water)
+            : undefined;
+        const layer = modifyCustomEntityMessage.layer ? EntityLayer.parse(modifyCustomEntityMessage.layer) : undefined;
         const customEntityCollection = await this.getCollection();
         const indexOfEntityToModify = customEntityCollection.collection.findIndex((entity) => entity.id === id);
         if (indexOfEntityToModify !== -1) {
@@ -69,6 +79,9 @@ export class CustomEntityCollectionService {
                 tags,
                 depthOffset,
                 collisionGrid,
+                collisionRectangles,
+                layer,
+                water,
             };
             await fileSystem.writeStringAsFile(
                 this.getEntityCollectionFileVirtualPath(),

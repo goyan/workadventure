@@ -1,5 +1,5 @@
 <script lang="ts">
-    import type { EntityAnimation, EntityPrefab } from "@workadventure/map-editor";
+    import type { CollisionRectangle, EntityAnimation, EntityLayer, EntityPrefab } from "@workadventure/map-editor";
     import { MAX_ENTITY_ANIMATION_FRAME_COUNT, MAX_ENTITY_ANIMATION_FRAME_RATE } from "@workadventure/map-editor";
     import {
         DEFAULT_ENTITY_ANIMATION_FRAME_RATE,
@@ -13,8 +13,16 @@
     import Input from "../../../Input/Input.svelte";
     import InputCheckbox from "../../../Input/InputCheckbox.svelte";
     import Button from "../../../UI/Button.svelte";
+    import {
+        computeFootprint,
+        computeOpaqueBounds,
+        computeWaterArea,
+        getDefaultWaterMargin,
+    } from "../../../../Utils/EntityFootprint";
     import LogoCollisionGrid from "./LogoCollisionGrid.svg";
     import EntityEditionCollisionGrid from "./EntityEditionCollisionGrid.svelte";
+    import EntityShapesOverlay from "./EntityShapesOverlay.svelte";
+    import EntityRectangleInputs from "./EntityRectangleInputs.svelte";
 
     interface Props {
         customEntity: EntityPrefab;
@@ -59,16 +67,43 @@
     );
     let displayDepthCustomSelector = $state(false);
 
+    // Precise hitbox (pixels) and water, prefilled from the opaque pixels of the image.
+    let layer: EntityLayer | undefined = $state((() => customEntity.layer)());
+    let hitbox: CollisionRectangle[] = $state((() => customEntity.collisionRectangles?.map((r) => ({ ...r })) ?? [])());
+    let water: CollisionRectangle[] = $state((() => customEntity.water?.map((r) => ({ ...r })) ?? [])());
+    let hasWater = $state((() => (customEntity.water?.length ?? 0) > 0)());
+    let waterMargin: number | null = $state(null);
+    let imagePixels: ImageData | undefined;
+    const frameWidth = $derived(
+        entityImageRef ? Math.floor(entityImageRef.naturalWidth / (animation?.frameCount ?? 1)) : 0,
+    );
+    const frameHeight = $derived(entityImageRef?.naturalHeight ?? 0);
+    const isStanding = $derived(layer === undefined || layer === "standing");
+    // A floating object is only placed off the grid: standing, it still needs a hitbox, in pixels.
+    const needsHitbox = $derived(isStanding);
+    const hasHitbox = $derived(
+        hitbox.length > 0 || (!floatingObject && collisionGrid.some((row) => row.some((cell) => cell === 1))),
+    );
+    const canApply = $derived(!needsHitbox || hasHitbox);
+
     const depthOptions = {
         GROUND_LEVEL: "GroundLevel",
         STANDING: "Standing",
+        OVERHEAD: "Overhead",
         CUSTOM: "Custom",
     } as const;
 
     type DepthOption = (typeof depthOptions)[keyof typeof depthOptions];
 
     let selectedDepthOption: DepthOption = $state(
-        (() => (depthOffset === 0 ? depthOptions.STANDING : depthOptions.CUSTOM))(),
+        (() =>
+            customEntity.layer === "floor"
+                ? depthOptions.GROUND_LEVEL
+                : customEntity.layer === "overhead"
+                  ? depthOptions.OVERHEAD
+                  : depthOffset === 0
+                    ? depthOptions.STANDING
+                    : depthOptions.CUSTOM)(),
     );
 
     function getModifiedCustomEntity(): EntityPrefab {
@@ -79,6 +114,9 @@
             collisionGrid: floatingObject ? undefined : collisionGrid,
             depthOffset: depthOffset !== 0 ? -depthOffset : 0,
             animation,
+            layer: layer === "standing" ? undefined : layer,
+            collisionRectangles: needsHitbox && hitbox.length > 0 ? $state.snapshot(hitbox) : undefined,
+            water: layer === "floor" && hasWater && water.length > 0 ? $state.snapshot(water) : undefined,
         };
     }
 
@@ -119,6 +157,71 @@
             detectAnimation(imageRef);
         }
         generateCollisionGridIfNotExists(animation?.frameCount ?? 1);
+        if (firstLoad) {
+            imagePixels = readPixels(imageRef);
+            // Images uploaded before "Ground level" became a layer only had the depth offset of their height.
+            if (!customEntity.layer && depthOffset !== 0 && depthOffset === imageRef.naturalHeight) {
+                selectedDepthOption = depthOptions.GROUND_LEVEL;
+            }
+            // A standing object never goes without a hitbox: one is proposed, from the image, until it is saved.
+            if (hitbox.length === 0 && !hasHitbox) {
+                regenerateHitbox();
+            }
+            if (hasWater && water.length === 0) {
+                regenerateWater();
+            }
+        }
+    }
+
+    /**
+     * The pixels of the image, to find its opaque part. An image served from another origin without CORS headers
+     * cannot be read: the shapes then fall back to the whole frame.
+     */
+    function readPixels(imageRef: HTMLImageElement): ImageData | undefined {
+        try {
+            const canvas = document.createElement("canvas");
+            canvas.width = imageRef.naturalWidth;
+            canvas.height = imageRef.naturalHeight;
+            const context = canvas.getContext("2d", { willReadFrequently: true });
+            if (!context || canvas.width === 0 || canvas.height === 0) return undefined;
+            context.drawImage(imageRef, 0, 0);
+            return context.getImageData(0, 0, canvas.width, canvas.height);
+        } catch (e) {
+            console.warn("Cannot read the pixels of the entity image, using its whole frame", e);
+            return undefined;
+        }
+    }
+
+    function regenerateHitbox() {
+        const generated = imagePixels ? computeFootprint(imagePixels, frameWidth) : undefined;
+        hitbox = [
+            generated ?? {
+                x: 0,
+                y: Math.round(frameHeight * 0.65),
+                width: frameWidth,
+                height: Math.max(1, frameHeight - Math.round(frameHeight * 0.65)),
+            },
+        ];
+    }
+
+    function regenerateWater() {
+        const bounds = (imagePixels && computeOpaqueBounds(imagePixels, frameWidth)) ?? {
+            x: 0,
+            y: 0,
+            width: frameWidth,
+            height: frameHeight,
+        };
+        waterMargin ??= getDefaultWaterMargin(bounds);
+        const margin = Math.max(0, Number(waterMargin) || 0);
+        const generated = imagePixels
+            ? computeWaterArea(imagePixels, frameWidth, margin)
+            : {
+                  x: margin,
+                  y: margin,
+                  width: frameWidth - margin * 2,
+                  height: frameHeight - margin * 2,
+              };
+        water = generated && generated.width > 0 && generated.height > 0 ? [generated] : [];
     }
 
     /**
@@ -142,15 +245,20 @@
     }
 
     function updateDepthOffset(depthOption: DepthOption) {
-        if (depthOption === depthOptions.STANDING) {
+        displayDepthCustomSelector = depthOption === depthOptions.CUSTOM;
+        if (depthOption === depthOptions.STANDING || depthOption === depthOptions.OVERHEAD) {
             depthOffset = 0;
         }
-        if (depthOption === depthOptions.CUSTOM) {
-            displayDepthCustomSelector = true;
-        }
         if (depthOption === depthOptions.GROUND_LEVEL) {
+            // Kept with the layer, for the clients that do not know layers yet.
             depthOffset = entityImageRef?.naturalHeight ?? 0;
         }
+        layer =
+            depthOption === depthOptions.GROUND_LEVEL
+                ? "floor"
+                : depthOption === depthOptions.OVERHEAD
+                  ? "overhead"
+                  : undefined;
     }
 
     function getTranslationForDepthOption(depthOption: DepthOption) {
@@ -159,6 +267,9 @@
         }
         if (depthOption === depthOptions.CUSTOM) {
             return $LL.mapEditor.entityEditor.customEntityEditorForm.custom();
+        }
+        if (depthOption === depthOptions.OVERHEAD) {
+            return $LL.mapEditor.entityEditor.customEntityEditorForm.overhead();
         }
         return $LL.mapEditor.entityEditor.customEntityEditorForm.groundLevel();
     }
@@ -188,6 +299,13 @@
             imageAlt={customEntity.name}
             {animation}
             bind:displayedHeight={entityImageHeight}
+        />
+        <EntityShapesOverlay
+            {frameWidth}
+            {frameHeight}
+            displayedHeight={entityImageHeight}
+            hitbox={needsHitbox ? hitbox : []}
+            water={layer === "floor" && hasWater ? water : []}
         />
         {#if displayDepthCustomSelector}
             <div>
@@ -239,6 +357,59 @@
             {/each}
         </Select>
     </div>
+    {#if needsHitbox}
+        <div class="flex flex-col gap-1" data-testid="entityHitbox">
+            <b>{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.title()}</b>
+            <span class="text-xs opacity-70"
+                >{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.description()}</span
+            >
+            {#if hitbox[0]}
+                <EntityRectangleInputs bind:rectangle={hitbox[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
+            {/if}
+            <Button size="sm" variant="contrast" onclick={regenerateHitbox}>
+                {$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.regenerate()}
+            </Button>
+            {#if !hasHitbox}
+                <span class="text-xs text-red-400" data-testid="hitboxRequired"
+                    >{$LL.mapEditor.entityEditor.customEntityEditorForm.hitbox.required()}</span
+                >
+            {/if}
+        </div>
+    {/if}
+    {#if layer === "floor"}
+        <div class="flex flex-col gap-1" data-testid="entityWater">
+            <div class="flex gap-2 hover:cursor-pointer">
+                <InputCheckbox
+                    id="hasWater"
+                    dataTestId="hasWater"
+                    bind:value={hasWater}
+                    onchange={() => {
+                        if (hasWater && water.length === 0) regenerateWater();
+                    }}
+                />
+                <label class="my-[4px]" for="hasWater"
+                    ><b class="-mb-2 block">{$LL.mapEditor.entityEditor.customEntityEditorForm.water.title()}</b>
+                    <br />
+                    {$LL.mapEditor.entityEditor.customEntityEditorForm.water.description()}
+                </label>
+            </div>
+            {#if hasWater}
+                <Input
+                    id="waterMargin"
+                    dataTestId="waterMargin"
+                    label={$LL.mapEditor.entityEditor.customEntityEditorForm.water.margin()}
+                    type="number"
+                    min={0}
+                    step={1}
+                    bind:value={waterMargin}
+                    onchange={() => regenerateWater()}
+                />
+                {#if water[0]}
+                    <EntityRectangleInputs bind:rectangle={water[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
+                {/if}
+            {/if}
+        </div>
+    {/if}
     {#if isUploadForm}
         <div class="flex gap-2 mt-2 hover:cursor-pointer">
             <InputCheckbox id="floatingObject" dataTestId="floatingObject" bind:value={floatingObject} />
@@ -303,6 +474,7 @@
                 variant="secondary"
                 class="w-full"
                 dataTestId="applyEntityModifications"
+                disabled={!canApply}
                 onclick={() => applyEntityModifications(getModifiedCustomEntity())}
             >
                 {isUploadForm ? $LL.mapEditor.entityEditor.buttons.upload() : $LL.mapEditor.entityEditor.buttons.save()}

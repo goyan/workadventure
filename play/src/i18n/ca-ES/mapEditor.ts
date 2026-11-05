@@ -539,6 +539,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Col·lisió",
             wokaAbove: "Woka a sobre",
             wokaBelow: "Woka a sota",
+            overhead: "Per sobre dels jugadors",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "On l’objecte bloqueja els jugadors, en píxels de la imatge. Generada des de la base: ajusta-la si cal.",
+                regenerate: "Genera des de la imatge",
+                required: "Un objecte dret necessita una hitbox.",
+            },
+            water: {
+                title: "Aigua",
+                description: "Els jugadors poden capbussar-se i nedar; les mascotes i els animals es queden a la vora.",
+                margin: "Vora (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Amplada",
+                height: "Alçada",
+            },
         },
         buttons: {
             editEntity: "Editar",

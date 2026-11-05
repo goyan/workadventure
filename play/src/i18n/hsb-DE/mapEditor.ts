@@ -537,6 +537,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Kolizija",
             wokaAbove: "Woka horjejce",
             wokaBelow: "Woka delejce",
+            overhead: "Nad hrajerjemi",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Hdźež objekt hrajerjow zadźeržuje, w pikselach wobraza. Wutworjeny z jeho nohi: přiměrće, jeli trjeba.",
+                regenerate: "Z wobraza wutworić",
+                required: "Stejacy objekt trjeba hitbox.",
+            },
+            water: {
+                title: "Woda",
+                description: "Hrajerjo móža skočić a płuwać; přewodźerjo a zwěrjata wostanu na kromje.",
+                margin: "Kroma (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Šěrokosć",
+                height: "Wysokosć",
+            },
         },
         buttons: {
             editEntity: "Wobdźěłać",

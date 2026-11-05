@@ -540,6 +540,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "Colisión",
             wokaAbove: "Woka delante",
             wokaBelow: "Woka detrás",
+            overhead: "Por encima de los jugadores",
+            hitbox: {
+                title: "Hitbox",
+                description:
+                    "Dónde el objeto bloquea a los jugadores, en píxeles de la imagen. Generada desde su base: ajústala si hace falta.",
+                regenerate: "Generar desde la imagen",
+                required: "Un objeto de pie necesita una hitbox.",
+            },
+            water: {
+                title: "Agua",
+                description:
+                    "Los jugadores pueden zambullirse y nadar; las mascotas y los animales se quedan en el borde.",
+                margin: "Borde (px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "Ancho",
+                height: "Alto",
+            },
         },
         buttons: {
             editEntity: "Editar",

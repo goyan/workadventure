@@ -312,6 +312,9 @@ export const CollisionRectangle = z.object({
     height: z.number().positive(),
 });
 
+export const EntityLayer = z.enum(["floor", "standing", "overhead"]);
+export type EntityLayer = z.infer<typeof EntityLayer>;
+
 export const MAX_ENTITY_ANIMATION_FRAME_COUNT = 64;
 export const MAX_ENTITY_ANIMATION_FRAME_RATE = 60;
 
@@ -336,6 +339,19 @@ export const EntityRawPrefab = z.object({
     // which would make every placed entity of the catalog lose its prefab.
     collisionRectangles: z.array(CollisionRectangle).optional().catch(undefined),
     depthOffset: z.number().optional(),
+    /**
+     * Where the object is drawn relative to the players: `floor` always under them (a rug, a pool), `standing`
+     * sorted with them by the foot of the image (the default, also when absent), `overhead` always over them (a
+     * lamp hanging from the ceiling, a tree top). Fail open like `collisionRectangles`.
+     */
+    layer: EntityLayer.optional().catch(undefined),
+    /**
+     * Water of the object (a pool), as rectangles in pixels relative to the top-left corner like
+     * `collisionRectangles`. Players cannot walk into it: they dive in with the interaction key, swim, and get out
+     * by walking onto the edge. Companions and wandering animals never enter it. Fail open like
+     * `collisionRectangles`.
+     */
+    water: z.array(CollisionRectangle).optional().catch(undefined),
     // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
     animation: EntityAnimation.optional().catch(undefined),
     /**

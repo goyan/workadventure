@@ -536,6 +536,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "接触",
             wokaAbove: "Woka の上",
             wokaBelow: "Woka の下",
+            overhead: "プレイヤーの上",
+            hitbox: {
+                title: "当たり判定",
+                description:
+                    "オブジェクトがプレイヤーを止める範囲（画像のピクセル）。足元から生成されます。必要に応じて調整してください。",
+                regenerate: "画像から生成",
+                required: "立っているオブジェクトには当たり判定が必要です。",
+            },
+            water: {
+                title: "水",
+                description: "プレイヤーは飛び込んで泳げます。コンパニオンや動物は縁に残ります。",
+                margin: "縁（px）",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "幅",
+                height: "高さ",
+            },
         },
         buttons: {
             editEntity: "編集",

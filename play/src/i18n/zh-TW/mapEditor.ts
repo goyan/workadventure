@@ -529,6 +529,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "碰撞",
             wokaAbove: "Woka 上方",
             wokaBelow: "Woka 下方",
+            overhead: "在玩家上方",
+            hitbox: {
+                title: "碰撞區域",
+                description: "物件阻擋玩家的區域（圖片像素）。依底部產生，可視需要調整。",
+                regenerate: "從圖片產生",
+                required: "站立的物件需要碰撞區域。",
+            },
+            water: {
+                title: "水",
+                description: "玩家可以跳入游泳；夥伴和動物留在岸邊。",
+                margin: "邊緣（像素）",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "寬度",
+                height: "高度",
+            },
         },
         buttons: {
             editEntity: "編輯",

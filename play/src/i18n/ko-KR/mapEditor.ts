@@ -535,6 +535,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             collision: "충돌",
             wokaAbove: "캐릭터 위에 표시",
             wokaBelow: "캐릭터 아래에 표시",
+            overhead: "플레이어 위",
+            hitbox: {
+                title: "충돌 영역",
+                description: "오브젝트가 플레이어를 막는 영역(이미지 픽셀). 밑부분에서 생성되며 필요하면 조정하세요.",
+                regenerate: "이미지에서 생성",
+                required: "서 있는 오브젝트에는 충돌 영역이 필요합니다.",
+            },
+            water: {
+                title: "물",
+                description: "플레이어는 뛰어들어 수영할 수 있고, 동반자와 동물은 가장자리에 남습니다.",
+                margin: "가장자리(px)",
+            },
+            rectangle: {
+                x: "X",
+                y: "Y",
+                width: "너비",
+                height: "높이",
+            },
         },
         buttons: {
             editEntity: "편집",

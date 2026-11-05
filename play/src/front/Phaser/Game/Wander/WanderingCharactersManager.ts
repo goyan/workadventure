@@ -3,6 +3,7 @@ import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { PathfindingManager, PathTileType } from "../../../Utils/PathfindingManager";
 import type { TileBarriers } from "../../../Utils/TileBarriers";
+import { getWaterRectangles } from "../Water/WaterZones";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Entity } from "../../ECS/Entity";
@@ -200,11 +201,12 @@ export class WanderingCharactersManager {
     }
 
     /**
-     * The thin collisions of the objects, that stop the players through the physics. Those of the map layer are
-     * left out, like for the paths of the players: they are already walls between tiles (getWallBarriers).
+     * The thin collisions of the objects, that stop the players through the physics, and the water, which animals
+     * never enter. The collisions of the map layer are left out, like for the paths of the players: they are already
+     * walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
-        const rectangles: WanderRectangle[] = [];
+        const rectangles: WanderRectangle[] = [...getWaterRectangles(this.scene)];
         for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
             if (!prefab.collisionRectangles?.length || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
