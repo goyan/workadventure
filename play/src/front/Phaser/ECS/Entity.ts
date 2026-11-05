@@ -39,6 +39,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { getLayerDepth } from "./EntityLayerDepth";
+import { makesEntityActivatable, replaceEntityProperty } from "./EntityProperties";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
@@ -447,6 +448,19 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (property) {
             deepmergeInto(property, changes);
         }
+        this.onPropertiesUpdated();
+    }
+
+    /**
+     * Replaces the property of the same id wholesale, for a property whose arrays or optional fields must not be
+     * merged (updateProperty concatenates arrays and ignores undefined). Same notification as updateProperty.
+     */
+    public replaceProperty(property: EntityDataProperty): void {
+        replaceEntityProperty(this.entityData.properties, property);
+        this.onPropertiesUpdated();
+    }
+
+    private onPropertiesUpdated(): void {
         this.emit(EntityEvent.Updated, this.appendId({ properties: this.entityData.properties }));
 
         // Update activatable status
@@ -492,15 +506,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (!this.entityData.properties) {
             return false;
         }
-        const propValues = Object.values(this.entityData.properties);
-        for (const value of propValues) {
-            if (value !== undefined && value !== null) {
-                // If the entity has a description property and it's empty, we don't consider it as a property
-                if (value.type === "entityDescriptionProperties" && value.description === "") continue;
-                return true;
-            }
-        }
-        return false;
+        return Object.values(this.entityData.properties).some((value) => makesEntityActivatable(value));
     }
 
     private toggleActionsMenu(): void {

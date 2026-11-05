@@ -56,6 +56,8 @@ interface WanderingCharacter {
  */
 export class WanderingCharactersManager {
     private characters = new Map<string, WanderingCharacter>();
+    // Characters taken over by someone else (a Gobeur game): hidden, no door opening, the entity left alone.
+    private readonly suppressed = new Set<string>();
     private sheets = new Map<string, SheetState>();
     private sheetCompleteListeners = new Map<string, () => void>();
     // The collisions shared by every client (see GameMapFrontWrapper.getSharedCollisionGrid) and the collision
@@ -101,10 +103,27 @@ export class WanderingCharactersManager {
      * Calls the callback with the position of each visible character: like the players, they open the doors.
      */
     public forEachDoorOpener(callback: (position: Point) => void): void {
-        for (const character of this.characters.values()) {
-            if (character.sprite?.visible) {
+        for (const [entityId, character] of this.characters) {
+            if (character.sprite?.visible && !this.suppressed.has(entityId)) {
                 callback(character.opener);
             }
+        }
+    }
+
+    /**
+     * While suppressed, the character is hidden and does not open doors; its entity is left as it is, for the caller to
+     * show or hide. Restored, the character walks again (the entity is hidden again by the next update).
+     */
+    public setSuppressed(entityId: string, suppressed: boolean): void {
+        if (suppressed) {
+            this.suppressed.add(entityId);
+            const sprite = this.characters.get(entityId)?.sprite;
+            if (sprite?.visible) {
+                sprite.setVisible(false);
+                this.scene.markDirty();
+            }
+        } else {
+            this.suppressed.delete(entityId);
         }
     }
 
@@ -121,6 +140,7 @@ export class WanderingCharactersManager {
             character.sprite?.destroy();
         }
         this.characters.clear();
+        this.suppressed.clear();
     }
 
     /**
@@ -132,17 +152,26 @@ export class WanderingCharactersManager {
         return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight / 2 };
     }
 
+    private static isGobeur(entity: Entity): boolean {
+        return entity.getEntityData().properties.some((property) => property.type === "gobeurPropertyData");
+    }
+
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
         for (const [entityId, character] of this.characters) {
             const entity = entities.get(entityId);
-            if (entity !== character.entity || entity.getPrefab().wander?.sheetPath !== character.sheetPath) {
+            if (
+                entity !== character.entity ||
+                entity.getPrefab().wander?.sheetPath !== character.sheetPath ||
+                WanderingCharactersManager.isGobeur(entity)
+            ) {
                 this.forget(entityId, character);
             }
         }
         for (const [entityId, entity] of entities) {
             const sheetPath = entity.getPrefab().wander?.sheetPath;
-            if (sheetPath === undefined) {
+            // A Gobeur never wanders: idle, it is the object as placed; in game, the GobeurManager owns it.
+            if (sheetPath === undefined || WanderingCharactersManager.isGobeur(entity)) {
                 continue;
             }
             const nest = WanderingCharactersManager.nestOf(entity);
@@ -208,8 +237,13 @@ export class WanderingCharactersManager {
      * walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
-        const rectangles: WanderRectangle[] = [...getWaterRectangles(this.scene)];
-        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+        return WanderingCharactersManager.collisionRectanglesOf(this.scene);
+    }
+
+    /** The thin collisions of objects and water, which animals never enter. */
+    public static collisionRectanglesOf(scene: GameScene): WanderRectangle[] {
+        const rectangles: WanderRectangle[] = [...getWaterRectangles(scene)];
+        for (const entity of scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
             if (!prefab.collisionRectangles?.length || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
                 continue;
@@ -222,8 +256,8 @@ export class WanderingCharactersManager {
     private forget(entityId: string, character: WanderingCharacter): void {
         character.sprite?.destroy();
         this.characters.delete(entityId);
-        // The entity is still there but does not wander anymore: show it again.
-        if (character.entity.active) {
+        // The entity is still there but does not wander anymore: show it again, unless someone else owns it.
+        if (character.entity.active && !this.suppressed.has(entityId)) {
             this.showEntity(character.entity, true);
         }
     }
@@ -253,15 +287,19 @@ export class WanderingCharactersManager {
     private onSheetLoaded(sheetPath: string): void {
         // The frames are numbered row by row: the width of the image gives the number of columns.
         const texture = this.scene.textures.get(sheetPath);
-        const columns = Math.floor(texture.getSourceImage().width / WANDER_FRAME_SIZE);
+        const image = texture.getSourceImage();
+        const columns = Math.floor(image.width / WANDER_FRAME_SIZE);
+        const rows = Math.floor(image.height / WANDER_FRAME_SIZE);
         // A sheet too small for the 4 rows of 3 frames (or an image already loaded under that key without frames) would
-        // show the whole image: the entity stays visible as a still object instead. "__BASE" is not a frame of the sheet.
+        // show the whole image, and a sheet that is not 4 rows of 32 px frames (a big drawing, like the sheet of a
+        // Gobeur before its property is set) would show pieces of it: the entity stays visible as a still object
+        // instead. "__BASE" is not a frame of the sheet.
         const frameCount = texture.frameTotal - 1;
         const expected = DIRECTIONS.length * Math.max(columns, WANDER_WALK_COLUMNS);
-        if (frameCount < expected) {
+        if (rows !== DIRECTIONS.length || frameCount < expected) {
             this.sheets.set(sheetPath, "failed");
             console.error(
-                `Invalid wandering sheet "${sheetPath}": ${frameCount} frames of ${WANDER_FRAME_SIZE}px, ${expected} expected`,
+                `Invalid wandering sheet "${sheetPath}": ${image.width}x${image.height}, ${DIRECTIONS.length} rows of ${WANDER_FRAME_SIZE}px frames expected`,
             );
             return;
         }
@@ -301,7 +339,7 @@ export class WanderingCharactersManager {
         }
         const now = Date.now();
         let changed = false;
-        for (const character of this.characters.values()) {
+        for (const [entityId, character] of this.characters) {
             const sheet = this.sheets.get(character.sheetPath);
             const columns = typeof sheet === "object" ? sheet.columns : WANDER_WALK_COLUMNS;
             if (!character.sprite && typeof sheet === "object") {
@@ -314,6 +352,13 @@ export class WanderingCharactersManager {
                     .setVisible(false);
             }
             const sprite = character.sprite;
+            if (this.suppressed.has(entityId)) {
+                if (sprite?.visible) {
+                    sprite.setVisible(false);
+                    changed = true;
+                }
+                continue;
+            }
             if (sprite && !this.isEditorMode) {
                 const pose = character.schedule.poseAt(now);
                 if (pose) {

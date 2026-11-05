@@ -158,10 +158,37 @@ Il refuse l'usage de cet événement par les scripts et la Room API. Aucune diff
 Le texte est limité à 500 caractères, à trente messages par minute par connexion ; les destinataires absents
 et l'envoi à soi-même sont refusés. Le back et le front doivent prendre en charge cette nouvelle requête protobuf.
 
-La notification privée permet de répondre. L'historique de session conserve les cent derniers messages, est effacé
-à la fermeture de la connexion et respecte les utilisateurs bloqués. Le formulaire attend l'accusé du serveur
+La notification privée permet de répondre. Les cent derniers messages privés, toutes salles et tous comptes de ce
+navigateur confondus, sont sauvegardés localement avec leur date, auteur et sens. Une connexion restaurée ne montre
+que les messages de son identité et de sa salle ; le formulaire filtre ensuite le correspondant. La fermeture
+efface la mémoire et les notifications, mais garde cette sauvegarde pour un rechargement ou une visite ultérieure.
+Les anciens messages ne déclenchent pas de notification. Le stockage reste propre à ce navigateur et à cet
+ordinateur, sans synchronisation serveur ; vider les données du site efface aussi l'historique. Si le navigateur
+refuse le stockage, les échanges restent disponibles pendant la session. Les utilisateurs bloqués restent filtrés
+à la réception. Le formulaire attend l'accusé du serveur
 avant d'ajouter un message sortant ; cet accusé confirme l'acceptation par le serveur, pas la lecture par le destinataire.
 En cas d'erreur, le brouillon reste disponible. Un résultat tardif après fermeture du formulaire ne modifie plus l'interface.
+Un accusé tardif d'une connexion précédente ne rejoint pas l'historique de la nouvelle salle ou du nouveau compte.
+
+Une croix sur chaque message supprime uniquement cette entrée de l'historique de ce navigateur.
+« Effacer l’historique avec cette personne » demande confirmation et ne supprime que les échanges avec
+le correspondant affiché, pour le compte et la salle actuels. Les autres correspondants, salles et comptes
+sont conservés. Ces actions effacent aussi la notification concernée ; elles ne retirent aucun message chez
+le destinataire et ne transmettent aucune demande de suppression au serveur. Le brouillon est conservé.
+Annuler, Échap ou fermer la confirmation ne supprime rien. Une confirmation ouverte avant un changement de
+session ou la fermeture de la conversation ne peut pas effacer l'historique de la nouvelle session.
+Si le navigateur refuse l'écriture, la suppression fonctionne en mémoire mais la copie sauvegardée peut
+réapparaître après rechargement. Plusieurs onglets ne coordonnent pas leurs écritures d'historique.
+
+Recette de suppression beta : supprimer un message reçu puis envoyé, recharger et vérifier leur absence.
+Effacer une conversation après avoir vérifié le nom dans la confirmation ; annuler une première fois,
+puis confirmer. Vérifier le brouillon et l'historique d'un autre correspondant, d'une autre salle et d'un autre
+compte. Ouvrir une confirmation puis reconnecter la session : l'ancienne confirmation ne doit rien supprimer.
+Le rendu et l'interaction restent à valider par un joueur.
+
+Recette de sauvegarde beta : envoyer et recevoir des privés, fermer/réouvrir le formulaire puis recharger la page ;
+vérifier les textes, auteurs et l'ordre, sans notification ancienne. Changer de salle ou de compte et vérifier
+l'isolation, puis revenir à la salle initiale. Refuser un envoi et vérifier qu'il n'apparaît pas après rechargement.
 
 Recette beta : envoyer un texte privé à un humain puis à un NPC éloigné, vérifier la réponse privée et l'absence
 du message chez un troisième joueur et dans le chat public. Tester aussi un départ du destinataire et une annonce
@@ -488,6 +515,50 @@ carte en cours d'édition, peuvent montrer brièvement des positions différente
 
 Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
 
+### Gobeur (propriété d'objet `gobeurPropertyData`)
+
+Un objet de la carte peut porter la propriété `gobeurPropertyData`, réglée depuis le menu de l'objet
+(`GobeurPropertyEditor.svelte`) : joueurs concernés, zone de prison (obligatoire), refuge de secours (facultatif,
+valable seulement pour un joueur sans zone personnelle), niveau et durée (180 s par défaut). Quelqu'un qui peut éditer la
+carte (`mapEditorActivated`, `Stores/MenuStore.ts`) lance la partie depuis ce menu. Un personnage, le Gobeur, poursuit les
+joueurs choisis ; un joueur gobé hors refuge est envoyé en prison jusqu'à la fin de la partie. À la fin, un classement
+s'affiche (`Components/Gobeur/*`).
+
+| Niveau | Vitesse (× marche) | Repérage | Recalcul du chemin |
+| --- | --- | --- | --- |
+| Débutant | 0,70 | 6 cases | 1 500 ms |
+| Intermédiaire | 0,95 | 10 cases | 800 ms |
+| Hard | 2,5 (vitesse de course) | toute la carte | 400 ms |
+
+La marche de référence est `WOKA_SPEED * 20` px/s (comme `Player.deduceSpeed`). Un joueur est gobé à moins de 16 px du
+Gobeur, s'il est hors refuge. Sans cible, le Gobeur erre vers une case marchable tirée à moins de 5 cases.
+
+Réseau : le navigateur du **maître de jeu** (celui qui a lancé la partie) calcule le Gobeur et diffuse des événements
+de script `infogene.gobeur.*` : `start`, `pos` (toutes les 200 ms), `state` (toutes les 5 s, précédé à chaque fois d'un nouvel envoi du `start` pour
+les joueurs arrivés tard ou rechargés, et à l'arrivée d'un joueur), `caught` et `end`. Aucun changement de protobuf, de back ni de pusher ; chaque joueur ne téléporte que lui-même.
+Un suiveur n'adopte un `start` que s'il correspond à l'objet de sa carte (`GobeurStartCheck.ts` : même prison, joueurs
+choisis dans l'objet, durée au plus celle de l'objet + 10 s), et ne se téléporte pas dans une prison située dans une
+zone qui lui est interdite (`GameScene.isPositionAllowedForCurrentUser`). Un objet qui ne porte que le Gobeur n'est pas
+activable (pas d'invite « espace »).
+
+Fichiers : `play/src/front/Phaser/Game/Gobeur/*` (modules purs, sans Phaser), `Stores/GobeurStore.ts`,
+`Components/MapEditor/PropertyEditor/GobeurPropertyEditor.svelte`, `Components/Gobeur/*`, `Entity.replaceProperty`
+(le menu remplace la propriété au lieu de la fusionner) et `WanderingCharactersManager.setSuppressed` (un objet
+Gobeur ne se promène jamais).
+
+Sprite : la planche est le `wander.sheetPath` du prefab. Soit des images de 32 px (format woka), soit une grande planche
+4 × 4 découpée au chargement, dont le fond de bordure est rendu transparent.
+
+Limites :
+- Les événements se forgent depuis la console : n'importe qui peut en émettre (chacun ne téléporte que soi-même).
+- Un navigateur ne connaît que les joueurs proches : le Gobeur ne poursuit que ceux que voit le maître, et un joueur
+  qui quitte la partie reste « survivant ».
+- Si le maître ferme son onglet, la partie est interrompue après 5 s sans message.
+- **Le maître doit garder l'onglet visible** : la boucle Phaser s'arrête dans un onglet caché. Le maître interrompt donc
+  ses parties dès que l'onglet passe en arrière-plan (`visibilitychange`), ou au retour si sa vérification périodique
+  n'a pas tourné depuis plus de 5 s.
+- Le `map-storage` officiel (prod) rejette la nouvelle propriété du WAM : prototype, **pas pour la prod**.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
@@ -763,3 +834,13 @@ Portes (mode « Porte » de l'outil Carte) :
 - Ombre et coins : le sol devant une porte horizontale n'est jamais ombré (le passage est ouvert) ; le sol sous les murs voisins l'est toujours. Une porte verticale qui part sous un coin ou un T est dessinée par-dessus la face sud du mur horizontal du dessus (`DoorAnimator`, profondeur juste au-dessus de la façade) : on voit alors son montant de mur continuer le mur jusqu'à la porte, au lieu d'une porte qui flotte sous la face. **Non validé dans le jeu.**
 - Sprites à ajouter au dépôt privé : voir la maquette « Sprites de porte WorkAdventure » (horizontal 32 × 32 par panneau, vertical 64 × 32 par pièce, vertical
   haut qui commence sous le raccord du premier sommet, 8 frames, 4 teintes, depthOffset de `bas` à régler sous le raccord du sommet suivant). **Gomme : au survol, la porte (ou le mur, ou le sol) que la gomme enlèverait est surlignée en rouge ; gommer une porte la retire sans toucher aux sols autour d'elle (murs et sols restent). Les portes déjà posées avec une ancienne version de l'outil (bouts de mur et raccords à côté d'une porte) se redessinent à la prochaine modification de la couche carte.** **Non validé dans le jeu.**
+
+## Confirmation avant de libérer son bureau
+
+L’action « Libérer mon bureau » ouvre un dialogue avec le nom du bureau. Annuler, fermer ou appuyer sur Échap conserve le bureau. La confirmation revérifie le compte, la salle et la propriété actuelle ; une confirmation devenue obsolète ne libère aucun bureau. Les doubles clics ne déclenchent pas deux libérations. Texte français et anglais, repli anglais explicite pour les autres langues. Recette interactive à confirmer en beta après fusion.
+
+## Son des messages dans une bulle
+
+Un nouveau texte reçu d’un autre participant (humain ou NPC) dans la discussion de proximité joue le son court de message existant, même lorsque la conversation est affichée. Le réglage « Sons du chat », la mise en sourdine de la conversation et les règles de disponibilité restent respectés. Aucun son pour ses propres envois ou échos, les entrées/sorties ou la relecture de la liste. Les réunions et autres salons conservent leur comportement.
+
+Recette beta : dans une bulle ouverte, recevoir un texte humain puis un texte NPC ; vérifier un son par message. Envoyer un texte soi-même, quitter/rejoindre et rouvrir le panneau : aucun son de message supplémentaire. Désactiver « Sons du chat », puis mettre la conversation en sourdine : réception silencieuse. Vérifier une réunion affichée : comportement conservé. Interaction et écoute à confirmer par l’utilisateur après fusion.

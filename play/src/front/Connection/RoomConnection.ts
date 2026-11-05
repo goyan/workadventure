@@ -112,7 +112,7 @@ import { asError } from "catch-unknown";
 import { abortAny } from "@workadventure/shared-utils/src/Abort/AbortAny";
 import { abortTimeout } from "@workadventure/shared-utils/src/Abort/AbortTimeout";
 import LL from "../../i18n/i18n-svelte";
-import { clearPrivateMessages, receivePrivateMessage } from "../Stores/PrivateMessageStore";
+import { receivePrivateMessage, restorePrivateMessages } from "../Stores/PrivateMessageStore";
 import type { ReceiveEventEvent } from "../Api/Events/ReceiveEventEvent";
 import type { SetPlayerVariableEvent } from "../Api/Events/SetPlayerVariableEvent";
 import { iframeListener } from "../Api/IframeListener";
@@ -178,6 +178,7 @@ export class RoomConnection implements RoomConnection {
     public readonly roomConnectedPromise = this._roomConnectedPromise.promise;
     private readonly _roomJoinedPromise = new Deferred<RoomJoinedMessageInterface>();
     public readonly roomJoinedPromise = this._roomJoinedPromise.promise;
+    private clearPrivateMessageHistory: (() => void) | undefined;
     private readonly _teleportMessageMessageStream = new Subject<string>();
     public readonly teleportMessageMessageStream = this._teleportMessageMessageStream.asObservable();
     private readonly _worldFullMessageStream = new Subject<string | null>();
@@ -320,6 +321,7 @@ export class RoomConnection implements RoomConnection {
         characterTextureIds: string[],
         companionTextureId: string | null,
         lastCommandId?: string,
+        private readonly privateMessageUserUuid?: string,
     ) {
         const urlObj = new URL("ws/room", ABSOLUTE_PUSHER_URL);
         urlObj.protocol = urlObj.protocol.replace("http", "ws");
@@ -492,7 +494,11 @@ export class RoomConnection implements RoomConnection {
                                 }
                                 case "receivedEventMessage": {
                                     if (subMessage.receivedEventMessage.name === privateMessageEventName) {
-                                        receivePrivateMessage(subMessage.receivedEventMessage.data);
+                                        receivePrivateMessage(
+                                            subMessage.receivedEventMessage.data,
+                                            this.roomUrl,
+                                            this.privateMessageUserUuid,
+                                        );
                                         break;
                                     }
                                     this._receivedEventMessageStream.next({
@@ -615,6 +621,7 @@ export class RoomConnection implements RoomConnection {
                     }*/
 
                     this.userId = roomJoinedMessage.currentUserId;
+                    this.clearPrivateMessageHistory = restorePrivateMessages(this.privateMessageUserUuid, this.roomUrl);
                     this._userRoomToken = roomJoinedMessage.userRoomToken;
                     //define if there is invite user option activated
                     inviteUserActivated.set(
@@ -2306,7 +2313,7 @@ export class RoomConnection implements RoomConnection {
      * Sends a message to all observers: we are not going to send anything anymore on streams.
      */
     private completeStreams(): void {
-        clearPrivateMessages();
+        this.clearPrivateMessageHistory?.();
         this._errorMessageStream.complete();
         this._errorScreenMessageStream.complete();
         this._teleportMessageMessageStream.complete();

@@ -23,6 +23,8 @@
     import TextArea from "../../Input/TextArea.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
     import OpenFilePropertyEditor from "../PropertyEditor/OpenFilePropertyEditor.svelte";
+    import GobeurPropertyEditor from "../PropertyEditor/GobeurPropertyEditor.svelte";
+    import { mapEditorActivated } from "../../../Stores/MenuStore";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import Button from "../../UI/Button.svelte";
@@ -135,7 +137,12 @@
 
     function onUpdateProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
-            $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+            if (property.type === "gobeurPropertyData") {
+                // Replaced, not merged: a deep merge would concatenate the players and keep a removed fallback.
+                $mapEditorSelectedEntityStore.replaceProperty($state.snapshot(property));
+            } else {
+                $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+            }
         }
     }
 
@@ -252,6 +259,15 @@
                     audioLink: "",
                     volume: 1,
                     playForAllUsers: true,
+                };
+            case "gobeurPropertyData":
+                return {
+                    id,
+                    type,
+                    players: [],
+                    prisonAreaId: "",
+                    level: "beginner",
+                    durationSeconds: 180,
                 };
             default:
                 throw new Error(`Unknown property type ${type}`);
@@ -481,6 +497,15 @@
                     onAddProperty("playAudio");
                 }}
             />
+            <!-- One Gobeur per entity. -->
+            {#if $mapEditorActivated && !properties.some((property) => property.type === "gobeurPropertyData")}
+                <AddPropertyButtonWrapper
+                    property="gobeurPropertyData"
+                    onclick={() => {
+                        onAddProperty("gobeurPropertyData");
+                    }}
+                />
+            {/if}
         </div>
         <div class="properties-buttons flex flex-row flex-wrap m-2">
             <AddPropertyButtonWrapper
@@ -657,6 +682,15 @@
                         {:else if properties[i].type === "openFile"}
                             <OpenFilePropertyEditor
                                 bind:property={properties[i]}
+                                onclose={() => {
+                                    onDeleteProperty(property.id);
+                                }}
+                                onchange={() => onUpdateProperty(properties[i])}
+                            />
+                        {:else if properties[i].type === "gobeurPropertyData"}
+                            <GobeurPropertyEditor
+                                bind:property={properties[i]}
+                                entityId={$mapEditorSelectedEntityStore.entityId}
                                 onclose={() => {
                                     onDeleteProperty(property.id);
                                 }}

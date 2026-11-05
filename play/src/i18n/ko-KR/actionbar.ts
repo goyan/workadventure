@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
@@ -210,6 +211,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "내 책상으로 이동",
         unclaim: "내 책상 해제",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "사용자 정보를 찾을 수 없습니다",
         errorNotFound: "아직 개인 책상이 없습니다",
         errorMoving: "개인 책상에 도달할 수 없습니다",

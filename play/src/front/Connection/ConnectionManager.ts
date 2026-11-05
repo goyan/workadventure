@@ -394,6 +394,7 @@ class ConnectionManager {
                 characterTextureIds,
                 companionTextureId,
                 lastCommandId,
+                this.localUser?.uuid,
             );
 
             pendingConnection = connection;

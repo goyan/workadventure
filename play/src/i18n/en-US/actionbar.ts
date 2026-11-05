@@ -1,6 +1,6 @@
-import type { BaseTranslation } from "../i18n-types";
+import type { BaseTranslation, Translation } from "../i18n-types";
 
-const actionbar: BaseTranslation = {
+const actionbar = {
     understand: "Got it!",
     edit: "Edit",
     cancel: "Cancel",
@@ -209,10 +209,11 @@ const actionbar: BaseTranslation = {
     personalDesk: {
         label: "Walk to my desk",
         unclaim: "Unclaim my desk",
+        unclaimConfirmation: "Release the desk “{name}”? It will become available to others.",
         errorNoUser: "Unable to find your user information",
         errorNotFound: "You don't have a personal desk yet",
         errorMoving: "Unable to reach your personal desk",
         errorUnclaiming: "Unable to unclaim your personal desk",
     },
-};
+} satisfies BaseTranslation & Translation["actionbar"];
 export default actionbar;

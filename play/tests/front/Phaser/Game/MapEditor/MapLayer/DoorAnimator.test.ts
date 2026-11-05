@@ -9,20 +9,22 @@ vi.mock("../../../../../../src/front/Phaser/Helpers/TexturesHelper", () => ({
     TexturesHelper: { loadEntityImage: () => Promise.resolve() },
 }));
 
+type Point = { x: number; y: number };
+
 const FRAME_STEP_MS = 40;
 
 // Left piece of a horizontal door at (128, 160): the door covers 128..192 x 160..192. Its frames are not in the
 // catalog (getPrefab resolves to undefined): the door does not change its texture, but it still opens and closes.
 // The local player stands in the room under the door: they hear it, whoever opens it.
-function makeAnimator() {
-    const prefabId = mapLayerPrefabId("Carte Portes", "porte-h-gris-g");
+function makeAnimator(name = "porte-h-gris-g", x = 128, y = 160) {
+    const prefabId = mapLayerPrefabId("Carte Portes", name);
     const entity = {
         entityId: "door",
-        x: 128,
-        y: 160,
+        x,
+        y,
         depth: 0,
-        texture: { key: "porte-h-gris-g.png" },
-        getPrefab: () => ({ collectionName: "Carte Portes", id: prefabId, imagePath: "porte-h-gris-g.png" }),
+        texture: { key: `${name}.png` },
+        getPrefab: () => ({ collectionName: "Carte Portes", id: prefabId, imagePath: `${name}.png` }),
         setDepth: () => entity,
     } as unknown as Entity;
     const playSound = vi.fn();
@@ -84,5 +86,42 @@ describe("DoorAnimator sounds", () => {
         listener.y = AWAY.y;
         run(animator, 1_540, 3_000, () => [], listener);
         expect(soundsOf(playSound)).toEqual([DOOR_SOUND_KEYS.close]);
+    });
+});
+
+// The wandering animals walk from tile centre to tile centre, and open the doors with the middle of their body, half a
+// tile above their feet. Walking along a wall, that point runs exactly on the border of the door next to it.
+describe("DoorAnimator borders", () => {
+    // Walks a character from `from` to `to` in 4 s and reports whether the door made its opening sound.
+    function opensWhileWalking(animator: DoorAnimator, playSound: ReturnType<typeof vi.fn>, from: Point, to: Point) {
+        const walker = { ...from };
+        for (let time = 0; time <= 4_000; time += FRAME_STEP_MS) {
+            walker.x = from.x + ((to.x - from.x) * time) / 4_000;
+            walker.y = from.y + ((to.y - from.y) * time) / 4_000;
+            animator.update(time, [walker], walker);
+        }
+        return soundsOf(playSound).includes(DOOR_SOUND_KEYS.open);
+    }
+
+    it("an animal walking along the wall south of a horizontal door does not open it", () => {
+        // Door 128..192 x 160..192; feet on the centres of the row under it (y = 208), body half a tile higher.
+        const { animator, playSound } = makeAnimator();
+        expect(opensWhileWalking(animator, playSound, { x: 80, y: 192 }, { x: 240, y: 192 })).toBe(false);
+    });
+
+    it("an animal walking along a vertical wall does not open its door", () => {
+        // Door centred on the line x = 128, 112..144 x 160..224; the animal walks the column of tile centres x = 112.
+        const { animator, playSound } = makeAnimator("porte-v-gris-haut", 96, 160);
+        expect(opensWhileWalking(animator, playSound, { x: 112, y: 100 }, { x: 112, y: 280 })).toBe(false);
+    });
+
+    it("an animal going through a horizontal door opens it", () => {
+        const { animator, playSound } = makeAnimator();
+        expect(opensWhileWalking(animator, playSound, { x: 144, y: 128 }, { x: 144, y: 224 })).toBe(true);
+    });
+
+    it("an animal going through a vertical door opens it", () => {
+        const { animator, playSound } = makeAnimator("porte-v-gris-haut", 96, 160);
+        expect(opensWhileWalking(animator, playSound, { x: 80, y: 176 }, { x: 176, y: 176 })).toBe(true);
     });
 });

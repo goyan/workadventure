@@ -20,6 +20,12 @@ const chat: BaseTranslation = {
     users: "Users",
     chat: "Chat",
     privateMessage: {
+        deleteMessage: "Delete this message from this browser",
+        clearHistory: "Clear history with this person",
+        clearHistoryConfirmation:
+            "Delete the history with {userName} from this browser? This does not delete their copy or your draft.",
+        cancelDelete: "Cancel",
+        confirmDelete: "Delete history",
         label: "Private message",
         unavailable: "Sending could not be confirmed. The recipient may have left this map; try again later.",
         sending: "Sending…",

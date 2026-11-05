@@ -22,6 +22,12 @@ const chat: DeepPartial<Translation["chat"]> = {
     users: "Utilisateurs",
     chat: "Chat",
     privateMessage: {
+        deleteMessage: "Supprimer ce message de ce navigateur",
+        clearHistory: "Effacer l’historique avec cette personne",
+        clearHistoryConfirmation:
+            "Supprimer l’historique avec {userName} de ce navigateur ? Sa copie et votre brouillon sont conservés.",
+        cancelDelete: "Annuler",
+        confirmDelete: "Supprimer l’historique",
         label: "Message privé",
         unavailable: "Envoi non confirmé. Le destinataire a peut-être quitté cette carte ; réessayez plus tard.",
         sending: "Envoi…",

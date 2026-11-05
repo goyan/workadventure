@@ -1,3 +1,4 @@
+import enActionbar from "../en-US/actionbar";
 import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
@@ -211,6 +212,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     personalDesk: {
         label: "Zu meinem Schreibtisch gehen",
         unclaim: "Meinen Schreibtisch freigeben",
+        unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,
         errorNoUser: "Benutzerinformationen konnten nicht gefunden werden",
         errorNotFound: "Sie haben noch keinen persönlichen Schreibtisch",
         errorMoving: "Ihr persönlicher Schreibtisch konnte nicht erreicht werden",
