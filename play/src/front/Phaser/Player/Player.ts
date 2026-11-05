@@ -42,6 +42,7 @@ export class Player extends Character {
     private mustReleaseKeysBeforeStandingUp = false;
     // Seat the player just left (or stopped sliding to): it is not sat on again until the player leaves its tile.
     private ignoredSeatId: string | undefined;
+    private seatEntityId: string | undefined;
     private swimming = false;
     private diveTarget: { x: number; y: number } | undefined;
     private readonly divePrompt: DivePrompt;
@@ -137,8 +138,14 @@ export class Player extends Character {
         this.slideToSeat(seat);
     }
 
+    /** Whether the player sits (or is about to) on the given object: its hitbox must not push it out. */
+    public isSittingOn(entityId: string): boolean {
+        return (this.isSeated() || this.isSlidingToSeat) && this.seatEntityId === entityId;
+    }
+
     private slideToSeat(seat: Seat): void {
         this.isSlidingToSeat = true;
+        this.seatEntityId = seat.entityId;
         this.stop();
         userMovingStore.set(false);
         this.setPathToFollow([seat.feet], WOKA_SPEED)

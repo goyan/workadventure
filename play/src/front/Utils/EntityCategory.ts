@@ -51,3 +51,10 @@ export function listCategories(prefabs: Pick<EntityPrefab, "tags">[]): string[] 
     }
     return [...byKey.values()].sort((a, b) => a.localeCompare(b));
 }
+
+const SEAT_PATTERN = /chais|chair|canap|sofa|couch|fauteuil|armchair|banc|bench|tabouret|stool|si[eè]ge|seat|pouf/i;
+
+/** Objects players sit on by walking onto them (chairs, couches, benches…), recognized by category or name. */
+export function isSeatObject(prefab: Pick<EntityPrefab, "tags" | "name">): boolean {
+    return SEAT_PATTERN.test(getEntityCategory(prefab) ?? "") || SEAT_PATTERN.test(prefab.name);
+}

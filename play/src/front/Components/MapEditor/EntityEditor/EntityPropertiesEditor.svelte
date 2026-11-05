@@ -299,6 +299,15 @@
     // here updates every copy of it on the map. A custom image is edited in the library itself; an object of a
     // built-in collection (read-only catalog file) is adjusted for this map only (PrefabOverride in the WAM file).
     let editedModel: EntityPrefab | undefined = $state(undefined);
+    // Selecting another object on the map closes the form of the previous one.
+    let editedEntityId: string | undefined;
+    $effect(() => {
+        const selectedId = $mapEditorSelectedEntityStore?.entityId;
+        if (selectedId !== editedEntityId) {
+            editedEntityId = selectedId;
+            editedModel = undefined;
+        }
+    });
     const userCanEditMap = gameManager.getCurrentGameScene().connection?.userCanEdit ?? false;
 
     function canEditModel(prefab: EntityPrefab): boolean {
@@ -326,7 +335,31 @@
             collisionRectangles: source.collisionRectangles,
             water: source.water,
         });
-        for (const member of getFamily(model)) {
+        const family = getFamily(model);
+        const category = getEntityCategory(model);
+        // Same name, other model (the same image uploaded twice, another catalog): it takes the category too.
+        const lookalikes = getLookalikes(model).filter((prefab) => !family.some((member) => member.id === prefab.id));
+        for (const lookalike of lookalikes) {
+            if (category === undefined || getEntityCategory(lookalike) === category) continue;
+            if (lookalike.type === "Custom") {
+                mapEditorModifyCustomEntityEventStore.set(
+                    $state.snapshot({ ...lookalike, tags: withCategory(lookalike.tags, category) }),
+                );
+            } else {
+                const current = gameManager.getCurrentGameScene().wamFile?.settings?.prefabOverrides?.[lookalike.id];
+                saveMapOverride(lookalike.id, {
+                    ...(current ?? {
+                        layer: lookalike.layer,
+                        depthOffset: lookalike.depthOffset,
+                        collisionGrid: lookalike.collisionGrid,
+                        collisionRectangles: lookalike.collisionRectangles,
+                        water: lookalike.water,
+                    }),
+                    category,
+                });
+            }
+        }
+        for (const member of family) {
             const adjusted: EntityPrefab =
                 member.id === model.id
                     ? model
@@ -348,6 +381,14 @@
             }
         }
         editedModel = undefined;
+    }
+
+    /** Objects of the library with the same name, whatever their catalog. */
+    function getLookalikes(prefab: EntityPrefab): EntityPrefab[] {
+        const name = prefab.name.trim().toLocaleLowerCase();
+        return get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
+            .flatMap((variant) => variant.colors.flatMap((color) => variant.getEntityPrefabsPositions(color)))
+            .filter((candidate) => candidate.name.trim().toLocaleLowerCase() === name);
     }
 
     /** Every view and color of the object the prefab belongs to (itself when it has none). */

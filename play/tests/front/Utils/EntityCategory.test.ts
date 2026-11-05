@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     getEntityCategory,
+    isSeatObject,
     isStructureObject,
     listCategories,
     withCategory,
@@ -29,5 +30,12 @@ describe("EntityCategory", () => {
         expect(isStructureObject({ tags: [], collectionName: "Infogène Sols" })).toBe(true);
         expect(isStructureObject({ tags: ["furniture"], collectionName: "basic furniture" })).toBe(false);
         expect(isStructureObject({ tags: ["Plantes murales"], collectionName: "Déco" })).toBe(false);
+    });
+
+    it("recognizes the objects players sit on, by category or name", () => {
+        expect(isSeatObject({ tags: [], name: "Couch" })).toBe(true);
+        expect(isSeatObject({ tags: ["Canapés"], name: "x.png" })).toBe(true);
+        expect(isSeatObject({ tags: ["furniture"], name: "office chair" })).toBe(true);
+        expect(isSeatObject({ tags: ["furniture"], name: "Big Shelf" })).toBe(false);
     });
 });

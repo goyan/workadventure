@@ -94,7 +94,7 @@ export class EntityCollisionRectangles {
             player,
             state.group,
             undefined,
-            () => !(isWall && player.isWalkingPath()),
+            () => !(isWall && player.isWalkingPath()) && !player.isSittingOn(state.entity.entityId),
         );
     }
 
