@@ -29,6 +29,8 @@ import { findSeatUnderFeet, isSeatTaken } from "./Seat";
 
 /** Water set to dive on contact: the body center this close to it makes the player dive. */
 const AUTO_DIVE_DISTANCE = 10;
+/** How deep a body must be in the water to swim without diving (Arcade's overlap bias). */
+const EMBEDDED_MARGIN = 4;
 /** Swimming is slower than walking. */
 const SWIM_SPEED_FACTOR = 0.6;
 
@@ -294,10 +296,25 @@ export class Player extends Character {
     private updateSwimming(): void {
         const water = getWaterRectangles(this.scene);
         const body = this.getBody();
+        const inWater = intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height });
         if (this.swimming) {
-            if (!intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height })) {
+            if (!inWater) {
                 this.swimming = false;
             }
+            return;
+        }
+        // Deeper than the 4 px the collision lets a body overlap at an edge: touching the water is not being in it.
+        const embedded = intersectsWater(water, {
+            x: body.x + EMBEDDED_MARGIN,
+            y: body.y + EMBEDDED_MARGIN,
+            width: body.width - 2 * EMBEDDED_MARGIN,
+            height: body.height - 2 * EMBEDDED_MARGIN,
+        });
+        if (embedded && !this.isSeated() && !this.isSlidingToSeat) {
+            // The body got into the water without diving (a pool placed or moved onto the player, a teleport...): the
+            // collision cannot push a body out of a rectangle it is already in, so it swims until it gets out.
+            this.divePrompt.hide();
+            this.swimming = true;
             return;
         }
         this.diveTarget =
@@ -319,10 +336,11 @@ export class Player extends Character {
         if (!target || this.swimming) return;
         this.divePrompt.hide();
         this.swimming = true;
+        // The target is where the center of the body lands; a path goes to the feet: the bottom of the body.
         const body = this.getBody();
-        // Path positions are those of the character: its body center is offset from it.
-        const offsetY = body.center.y - this.y;
-        this.setPathToFollow([{ x: target.x, y: target.y - offsetY }], WOKA_SPEED).catch((e) => console.warn(e));
+        this.setPathToFollow([{ x: target.x, y: target.y + body.height / 2 }], WOKA_SPEED).catch((e) =>
+            console.warn(e),
+        );
     };
 
     private inputStep(activeEvents: ActiveEventList, x: number, y: number) {
