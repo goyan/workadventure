@@ -30,11 +30,18 @@ import RenderTexture = Phaser.GameObjects.RenderTexture;
 import DOMElement = Phaser.GameObjects.DOMElement;
 import Sprite = Phaser.GameObjects.Sprite;
 import Tween = Phaser.Tweens.Tween;
-import Circle = Phaser.Geom.Circle;
+import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
-const interactiveRadius = 25;
+/**
+ * Clickable area of a woka: its drawn body (a 32x32 frame centered on the character), slightly narrowed to the
+ * visible silhouette. Hit coordinates are relative to the container's top-left corner, i.e. shifted by its display
+ * origin (half of CHARACTER_BODY_WIDTH/HEIGHT). The former 25px circle overlapped neighbours and hid characters
+ * standing behind another one.
+ */
+const CLICK_AREA_HALF_WIDTH = 12;
+const CLICK_AREA_HALF_HEIGHT = 16;
 
 export const CHARACTER_BODY_WIDTH = 16;
 export const CHARACTER_BODY_HEIGHT = 16;
@@ -215,11 +222,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         }, 0);
 
         if (isClickable) {
-            this.setInteractive({
-                hitArea: new Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
-                useHandCursor: true,
-            });
+            this.enableClickArea();
         }
 
         this.setClickable(isClickable);
@@ -280,14 +283,25 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.clickable = clickable;
         if (clickable) {
-            this.setInteractive({
-                hitArea: new Circle(8, 8, interactiveRadius),
-                hitAreaCallback: Circle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
-                useHandCursor: true,
-            });
+            this.enableClickArea();
             return;
         }
         this.disableInteractive();
+    }
+
+    private enableClickArea(): void {
+        const originX = CHARACTER_BODY_WIDTH / 2;
+        const originY = CHARACTER_BODY_HEIGHT / 2;
+        this.setInteractive({
+            hitArea: new Rectangle(
+                originX - CLICK_AREA_HALF_WIDTH,
+                originY - CLICK_AREA_HALF_HEIGHT,
+                CLICK_AREA_HALF_WIDTH * 2,
+                CLICK_AREA_HALF_HEIGHT * 2,
+            ),
+            hitAreaCallback: Rectangle.Contains, //eslint-disable-line @typescript-eslint/unbound-method
+            useHandCursor: true,
+        });
     }
 
     public isClickable() {

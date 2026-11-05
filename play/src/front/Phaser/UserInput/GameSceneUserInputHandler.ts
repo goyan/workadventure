@@ -20,6 +20,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { wokaMenuStore } from "../../Stores/WokaMenuStore";
+import { characterPickerStore, type CharacterPickerCandidate } from "../../Stores/CharacterPickerStore";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { cameraDetachedStore } from "../../Stores/CameraStore";
 import { waScaleManager } from "../Services/WaScaleManager";
@@ -207,6 +208,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 return;
             }
             for (const object of gameObjects) {
+                const isCharacter = object instanceof Player || object instanceof RemotePlayer;
+                if (isCharacter && this.offerCharacterChoice(gameObjects)) {
+                    return;
+                }
                 if (isActivatable(object)) {
                     this.gameScene.getActivatablesManager().handlePointerDownEvent(object);
                     return;
@@ -284,6 +289,45 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private getTileCenterOf(x: number, y: number): { x: number; y: number } {
         const { width, height } = this.gameScene.getGameMapFrontWrapper().getTileDimensions();
         return getTileCenter(x, y, width, height);
+    }
+
+    /**
+     * Several wokas under one click (people standing on the same spot): let the user pick one instead of always
+     * opening the front-most one, which made a character hidden behind another unreachable.
+     * Returns false when only one character is clickable here, so the usual click handling applies.
+     */
+    private offerCharacterChoice(gameObjects: GameObject[]): boolean {
+        const candidates: CharacterPickerCandidate[] = [];
+        for (const object of gameObjects) {
+            if (object instanceof Player) {
+                candidates.push({
+                    key: "self",
+                    name: object.playerName,
+                    pictureStore: object.pictureStore,
+                    isSelf: true,
+                    select: () => this.toggleOwnCard(object),
+                });
+            } else if (object instanceof RemotePlayer && object.isActivatable()) {
+                candidates.push({
+                    key: object.userUuid || `user-${object.userId}`,
+                    name: object.playerName,
+                    pictureStore: object.pictureStore,
+                    isSelf: false,
+                    select: () => {
+                        // The woka may have left the map while the choice was open.
+                        if (!object.scene) return;
+                        this.gameScene.getActivatablesManager().handlePointerDownEvent(object);
+                    },
+                });
+            }
+        }
+        if (candidates.length < 2) {
+            characterPickerStore.set(undefined);
+            return false;
+        }
+        wokaMenuStore.clear();
+        characterPickerStore.set(candidates);
+        return true;
     }
 
     /** A click on one's own woka shows one's own card, as others see it, without the actions meant for others. */

@@ -11,6 +11,7 @@
     import { modalVisibilityStore, roomListVisibilityStore, showLimitRoomModalStore } from "../Stores/ModalStore";
     import { actionsMenuStore } from "../Stores/ActionsMenuStore";
     import { wokaMenuStore } from "../Stores/WokaMenuStore";
+    import { characterPickerStore } from "../Stores/CharacterPickerStore";
     import { showDesktopCapturerSourcePicker } from "../Stores/ScreenSharingStore";
     import { uiWebsitesStore } from "../Stores/UIWebsiteStore";
     import { coWebsites, windowSize } from "../Stores/CoWebsiteStore";
@@ -63,6 +64,7 @@
     import LimitRoomModal from "./Modal/LimitRoomModal.svelte";
     import ActionsMenu from "./ActionsMenu/ActionsMenu.svelte";
     import WokaMenu from "./ActionsMenu/WokaMenu.svelte";
+    import CharacterPicker from "./ActionsMenu/CharacterPicker.svelte";
     import Lazy from "./Lazy.svelte";
     import UiWebsiteContainer from "./UI/Website/UIWebsiteContainer.svelte";
     import Modal from "./Modal/Modal.svelte";
@@ -213,7 +215,13 @@
     let marginRight = $derived(mapEditorReservedSpace + $sidePanelWidthStore);
     // A player's menu, a visit card or an invitation opens on the right, where the toast stack is.
     let sidePanelOpen = $derived(
-        Boolean($requestVisitCardsStore || $wokaMenuStore || $actionsMenuStore || $meetingInvitationRequestStore),
+        Boolean(
+            $requestVisitCardsStore ||
+            $wokaMenuStore ||
+            $characterPickerStore ||
+            $actionsMenuStore ||
+            $meetingInvitationRequestStore,
+        ),
     );
 
     function onHighlightFullscreenSendMessage() {
@@ -497,6 +505,9 @@
                     <JamRoomsLauncher />
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
+                    {/if}
+                    {#if $characterPickerStore}
+                        <CharacterPicker />
                     {/if}
                     {#if $wokaMenuStore}
                         <WokaMenu />
