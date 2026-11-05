@@ -37,6 +37,15 @@ const menu: DeepPartial<Translation["menu"]> = {
                 light: "浅色",
             },
         },
+        font: {
+            label: "Font",
+            choices: {
+                pixel: "Pixel",
+                system: "System",
+                classic: "Classic",
+                arcade: "Arcade",
+            },
+        },
         videoBandwidth: {
             title: "视频质量",
             low: "低",
