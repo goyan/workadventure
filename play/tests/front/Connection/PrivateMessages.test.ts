@@ -84,7 +84,10 @@ function sendServerFrame(message: ServerToClientMessage, nonce: number): void {
     socketEvents.dispatchEvent(new MessageEvent("message", { data }));
 }
 
-function createJoinedConnection(): RoomConnection {
+function createJoinedConnection(
+    userUuid = "current-user",
+    roomUrl = "http://play.test/_/global/map.json",
+): RoomConnection {
     socketEvents = new EventTarget();
     socket = mock<WebSocket>({
         readyState: WebSocket.OPEN,
@@ -92,7 +95,7 @@ function createJoinedConnection(): RoomConnection {
         removeEventListener: socketEvents.removeEventListener.bind(socketEvents),
     });
     WorkAdventureWebSocket.setWebsocketFactory(() => socket);
-    connection = new RoomConnection(null, "http://play.test/_/global/map.json", [], null);
+    connection = new RoomConnection(null, roomUrl, [], null, undefined, userUuid);
     sendServerFrame(roomConnectedMessage, 1);
     sendServerFrame(roomJoinedMessage, 2);
     return connection;
@@ -104,6 +107,7 @@ afterEach(() => {
     socketEvents = undefined;
     WorkAdventureWebSocket.setWebsocketFactory(null);
     clearPrivateMessages();
+    localStorage.clear();
     vi.clearAllTimers();
     vi.useRealTimers();
 });
@@ -147,7 +151,7 @@ describe("RoomConnection private messages", () => {
         await expect(sent).resolves.toBe("resolved");
     });
 
-    it("keeps private events out of the script event stream and clears their history on disconnect", () => {
+    it("keeps private events out of scripts, clears memory on disconnect and restores history on rejoining", () => {
         const roomConnection = createJoinedConnection();
         const receivedEvents = vi.fn();
         const subscription = roomConnection.receivedEventMessageStream.subscribe(receivedEvents);
@@ -205,5 +209,17 @@ describe("RoomConnection private messages", () => {
         expect(get(privateMessageHistoryStore)).toEqual([]);
         expect(get(privateMessageNotificationStore)).toBeUndefined();
         subscription.unsubscribe();
+
+        createJoinedConnection("other-user");
+        expect(get(privateMessageHistoryStore)).toEqual([]);
+        connection?.closeConnection();
+        createJoinedConnection("current-user", "http://play.test/_/global/other.json");
+        expect(get(privateMessageHistoryStore)).toEqual([]);
+        connection?.closeConnection();
+        createJoinedConnection();
+        expect(get(privateMessageHistoryStore)).toMatchObject([
+            { peerUuid: "peer-ada", peerName: "Ada", text: "Only for Ada", incoming: true },
+        ]);
+        expect(get(privateMessageNotificationStore)).toBeUndefined();
     });
 });

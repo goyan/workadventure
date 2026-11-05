@@ -158,10 +158,21 @@ Il refuse l'usage de cet événement par les scripts et la Room API. Aucune diff
 Le texte est limité à 500 caractères, à trente messages par minute par connexion ; les destinataires absents
 et l'envoi à soi-même sont refusés. Le back et le front doivent prendre en charge cette nouvelle requête protobuf.
 
-La notification privée permet de répondre. L'historique de session conserve les cent derniers messages, est effacé
-à la fermeture de la connexion et respecte les utilisateurs bloqués. Le formulaire attend l'accusé du serveur
+La notification privée permet de répondre. Les cent derniers messages privés, toutes salles et tous comptes de ce
+navigateur confondus, sont sauvegardés localement avec leur date, auteur et sens. Une connexion restaurée ne montre
+que les messages de son identité et de sa salle ; le formulaire filtre ensuite le correspondant. La fermeture
+efface la mémoire et les notifications, mais garde cette sauvegarde pour un rechargement ou une visite ultérieure.
+Les anciens messages ne déclenchent pas de notification. Le stockage reste propre à ce navigateur et à cet
+ordinateur, sans synchronisation serveur ; vider les données du site efface aussi l'historique. Si le navigateur
+refuse le stockage, les échanges restent disponibles pendant la session. Les utilisateurs bloqués restent filtrés
+à la réception. Le formulaire attend l'accusé du serveur
 avant d'ajouter un message sortant ; cet accusé confirme l'acceptation par le serveur, pas la lecture par le destinataire.
 En cas d'erreur, le brouillon reste disponible. Un résultat tardif après fermeture du formulaire ne modifie plus l'interface.
+Un accusé tardif d'une connexion précédente ne rejoint pas l'historique de la nouvelle salle ou du nouveau compte.
+
+Recette de sauvegarde beta : envoyer et recevoir des privés, fermer/réouvrir le formulaire puis recharger la page ;
+vérifier les textes, auteurs et l'ordre, sans notification ancienne. Changer de salle ou de compte et vérifier
+l'isolation, puis revenir à la salle initiale. Refuser un envoi et vérifier qu'il n'apparaît pas après rechargement.
 
 Recette beta : envoyer un texte privé à un humain puis à un NPC éloigné, vérifier la réponse privée et l'absence
 du message chez un troisième joueur et dans le chat public. Tester aussi un départ du destinataire et une annonce
