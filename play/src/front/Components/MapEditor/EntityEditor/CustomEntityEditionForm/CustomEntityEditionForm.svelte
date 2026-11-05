@@ -217,7 +217,8 @@
                 effectiveCategory,
             ),
             direction: isUploadForm ? (direction as EntityPrefab["direction"]) : customEntity.direction,
-            collisionGrid: floatingObject ? undefined : collisionGrid,
+            // A hitbox in pixels replaces the old 32px grid: both would block the players.
+            collisionGrid: floatingObject || (needsHitbox && hitbox.length > 0) ? undefined : collisionGrid,
             depthOffset: depthOffset !== 0 ? -depthOffset : 0,
             animation,
             layer: layer === "standing" ? undefined : layer,
@@ -270,9 +271,12 @@
             if (!customEntity.layer && depthOffset !== 0 && depthOffset === imageRef.naturalHeight) {
                 selectedDepthOption = depthOptions.GROUND_LEVEL;
             }
-            // A standing object never goes without a hitbox: one is proposed, from the image, until it is saved.
-            if (hitbox.length === 0 && !hasHitbox) {
-                regenerateHitbox();
+            // A standing object never goes without a hitbox in pixels: the blocking cells of an old 32px grid give
+            // it, else the image does. It is then adjusted with the same editor for every object.
+            if (hitbox.length === 0) {
+                const fromGrid = hitboxFromGrid(collisionGrid);
+                if (fromGrid) hitbox = [fromGrid];
+                else regenerateHitbox();
             }
             if (hasWater && water.length === 0) {
                 regenerateWater();
@@ -297,6 +301,24 @@
             console.warn("Cannot read the pixels of the entity image, using its whole frame", e);
             return undefined;
         }
+    }
+
+    /** The rectangle around the blocking cells of an old 32px collision grid, if any. */
+    function hitboxFromGrid(grid: number[][]): CollisionRectangle | undefined {
+        const cells = grid.flatMap((row, y) => row.flatMap((cell, x) => (cell === 1 ? [{ x, y }] : [])));
+        if (cells.length === 0) return undefined;
+        const minX = Math.min(...cells.map((cell) => cell.x));
+        const maxX = Math.max(...cells.map((cell) => cell.x));
+        const minY = Math.min(...cells.map((cell) => cell.y));
+        const maxY = Math.max(...cells.map((cell) => cell.y));
+        const x = minX * COLLISION_GRID_SIZE;
+        const y = minY * COLLISION_GRID_SIZE;
+        return {
+            x,
+            y,
+            width: Math.max(1, Math.min(frameWidth, (maxX + 1) * COLLISION_GRID_SIZE) - x),
+            height: Math.max(1, Math.min(frameHeight, (maxY + 1) * COLLISION_GRID_SIZE) - y),
+        };
     }
 
     function regenerateHitbox() {
