@@ -533,6 +533,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Wobwjerćeć",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "Nowy objekt",
+                edit: "Objekt wobdźěłać",
+                adjust: "Na tutej karće přiměrić",
+            },
             sections: {
                 identity: "Identita",
                 displayDescription: "Hdźe so objekt w poměrje k hrajerjam rysuje.",

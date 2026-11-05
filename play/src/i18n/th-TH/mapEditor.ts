@@ -529,6 +529,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "หมุน",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "วัตถุใหม่",
+                edit: "แก้ไขวัตถุ",
+                adjust: "ปรับบนแผนที่นี้",
+            },
             sections: {
                 identity: "ข้อมูล",
                 displayDescription: "ตำแหน่งที่วาดวัตถุเทียบกับผู้เล่น",

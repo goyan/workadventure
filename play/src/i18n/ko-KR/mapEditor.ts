@@ -532,6 +532,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "회전",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "새 오브젝트",
+                edit: "오브젝트 편집",
+                adjust: "이 맵에서 조정",
+            },
             sections: {
                 identity: "기본 정보",
                 displayDescription: "플레이어 기준으로 오브젝트가 그려지는 위치.",

@@ -533,6 +533,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "回転",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "新しいオブジェクト",
+                edit: "オブジェクトを編集",
+                adjust: "このマップで調整",
+            },
             sections: {
                 identity: "基本情報",
                 displayDescription: "プレイヤーに対してオブジェクトを描く位置。",

@@ -530,6 +530,11 @@ const mapEditor: BaseTranslation = {
             turn: "Turn",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "New object",
+                edit: "Edit object",
+                adjust: "Adjust on this map",
+            },
             sections: {
                 identity: "Identity",
                 displayDescription: "Where the object is drawn relative to the players.",

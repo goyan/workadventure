@@ -539,6 +539,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Pivoter",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "Nouvel objet",
+                edit: "Modifier l’objet",
+                adjust: "Réglage sur la carte",
+            },
             sections: {
                 identity: "Identité",
                 displayDescription: "Où l’objet est dessiné par rapport aux avatars.",

@@ -537,6 +537,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Girar",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "Nuevo objeto",
+                edit: "Editar objeto",
+                adjust: "Ajustar en este mapa",
+            },
             sections: {
                 identity: "Identidad",
                 displayDescription: "Dónde se dibuja el objeto respecto a los jugadores.",

@@ -532,6 +532,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Xoay",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "Vật thể mới",
+                edit: "Sửa vật thể",
+                adjust: "Chỉnh trên bản đồ này",
+            },
             sections: {
                 identity: "Thông tin",
                 displayDescription: "Vị trí vẽ vật thể so với người chơi.",

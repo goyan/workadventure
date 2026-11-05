@@ -527,6 +527,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "旋转",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "新物体",
+                edit: "编辑物体",
+                adjust: "在此地图上调整",
+            },
             sections: {
                 identity: "基本信息",
                 displayDescription: "物体相对于玩家的绘制位置。",

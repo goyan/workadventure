@@ -527,6 +527,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "旋轉",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "新物件",
+                edit: "編輯物件",
+                adjust: "在此地圖上調整",
+            },
             sections: {
                 identity: "基本資訊",
                 displayDescription: "物件相對於玩家的繪製位置。",

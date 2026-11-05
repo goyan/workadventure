@@ -13,9 +13,6 @@
     import Select from "../../../Input/Select.svelte";
     import Input from "../../../Input/Input.svelte";
     import InputCheckbox from "../../../Input/InputCheckbox.svelte";
-    import Button from "../../../UI/Button.svelte";
-    import SettingsSection from "../../../Menu/SettingsSection.svelte";
-    import SegmentedControl from "../../../Menu/SegmentedControl.svelte";
     import {
         computeFootprint,
         computeOpaqueBounds,
@@ -359,221 +356,462 @@
     </div>
 {/snippet}
 
-<div class="flex flex-col flex-1 gap-3 text-white" data-testid="entityForm">
-    <!-- Preview: the image with its hitbox (red) and water (blue), on a checkerboard so that transparency shows. -->
-    <div
-        class="flex items-center justify-center gap-3 rounded-xl border border-solid border-white/10 bg-white/[0.03] p-4"
-    >
-        <div class="relative flex items-center rounded-lg p-2 checkerboard">
-            {#if !floatingObject}
-                <EntityEditionCollisionGrid
-                    {collisionGrid}
-                    {updateCollisionGrid}
-                    collisionGridHeight={entityImageHeight}
-                />
-            {/if}
-            <EntityImage
-                classNames="w-32 max-h-32 object-contain"
-                imageLoad={(image) => onImageLoad(image)}
-                imageSource={customEntity.imagePath}
-                imageAlt={customEntity.name}
-                {animation}
-                bind:displayedHeight={entityImageHeight}
-            />
-            <EntityShapesOverlay
-                {frameWidth}
-                {frameHeight}
-                displayedHeight={entityImageHeight}
-                hitbox={needsHitbox ? hitbox : []}
-                water={layer === "floor" && hasWater ? water : []}
-            />
-        </div>
-        {#if displayDepthCustomSelector}
-            <div>
-                <p class="m-0 p-0 text-xs">{TT.wokaAbove()}</p>
-                <div class="rotate-[270deg]" style="width: 30px;margin-top: {entityImageHeight - 30}px">
-                    <input
-                        class="!cursor-grab active:!cursor-grabbing slider"
-                        style="width: {entityImageHeight}px"
-                        bind:value={depthOffset}
-                        type="range"
-                        max={entityImageRef?.naturalHeight}
+<!-- A 16-bit game menu: framed panel, pixel titles, a scrolling body and actions always in view at the bottom. -->
+<div class="retro-form" data-testid="entityForm">
+    <header class="retro-header">
+        <span class="retro-heading">
+            {isUploadForm ? TT.titles.upload() : profileOnly ? TT.titles.adjust() : TT.titles.edit()}
+        </span>
+        {#if !isUploadForm}
+            <span class="retro-subtitle" title={customEntity.name}>{customEntity.name}</span>
+        {/if}
+    </header>
+
+    <div class="retro-body">
+        <div class="retro-preview">
+            <div class="relative flex items-center checkerboard">
+                {#if !floatingObject}
+                    <EntityEditionCollisionGrid
+                        {collisionGrid}
+                        {updateCollisionGrid}
+                        collisionGridHeight={entityImageHeight}
                     />
-                </div>
-                <p class="m-0 p-0 text-xs">{TT.wokaBelow()}</p>
+                {/if}
+                <EntityImage
+                    classNames="w-32 max-h-32 object-contain pixelated"
+                    imageLoad={(image) => onImageLoad(image)}
+                    imageSource={customEntity.imagePath}
+                    imageAlt={customEntity.name}
+                    {animation}
+                    bind:displayedHeight={entityImageHeight}
+                />
+                <EntityShapesOverlay
+                    {frameWidth}
+                    {frameHeight}
+                    displayedHeight={entityImageHeight}
+                    hitbox={needsHitbox ? hitbox : []}
+                    water={layer === "floor" && hasWater ? water : []}
+                />
             </div>
+            {#if displayDepthCustomSelector}
+                <div>
+                    <p class="m-0 p-0 text-xs">{TT.wokaAbove()}</p>
+                    <div class="rotate-[270deg]" style="width: 30px;margin-top: {entityImageHeight - 30}px">
+                        <input
+                            class="!cursor-grab active:!cursor-grabbing slider"
+                            style="width: {entityImageHeight}px"
+                            bind:value={depthOffset}
+                            type="range"
+                            max={entityImageRef?.naturalHeight}
+                        />
+                    </div>
+                    <p class="m-0 p-0 text-xs">{TT.wokaBelow()}</p>
+                </div>
+            {/if}
+        </div>
+
+        {#if profileOnly}
+            <p class="retro-hint">{TT.profileOnlyDescription()}</p>
+        {/if}
+
+        <section class="retro-card">
+            <h4 class="retro-title">{TT.sections.identity()}</h4>
+            {#if !profileOnly}
+                <Input bind:value={name} id="name" data-testid="name" label={TT.imageName()} />
+            {/if}
+            {@render categoryField()}
+            {#if !profileOnly}
+                <div class="flex flex-col gap-1">
+                    <label class="retro-label" for="tags">{TT.tags()}</label>
+                    <InputTags bind:value={inputTagOptions} placeholder={TT.writeTag()} />
+                </div>
+            {/if}
+            {#if isUploadForm}
+                <div class="flex flex-col gap-1">
+                    <span class="retro-label">{$LL.mapEditor.entityEditor.views.label()}</span>
+                    <div class="retro-choices" role="radiogroup" data-testid="entityView">
+                        {#each viewOptions as option (option.value)}
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={direction === option.value}
+                                class="retro-choice"
+                                class:selected={direction === option.value}
+                                onclick={() => (direction = option.value)}>{option.label}</button
+                            >
+                        {/each}
+                    </div>
+                </div>
+            {/if}
+        </section>
+
+        <section class="retro-card">
+            <h4 class="retro-title">{TT.depth()}</h4>
+            <p class="retro-hint">{TT.sections.displayDescription()}</p>
+            <div class="retro-choices" role="radiogroup" data-testid="entityDepth">
+                {#each Object.values(depthOptions) as option (option)}
+                    <button
+                        type="button"
+                        role="radio"
+                        aria-checked={selectedDepthOption === option}
+                        class="retro-choice"
+                        class:selected={selectedDepthOption === option}
+                        onclick={() => (selectedDepthOption = option)}>{getTranslationForDepthOption(option)}</button
+                    >
+                {/each}
+            </div>
+        </section>
+
+        {#if needsHitbox}
+            <section class="retro-card" data-testid="entityHitbox">
+                <h4 class="retro-title retro-title-red">{TT.hitbox.title()}</h4>
+                <p class="retro-hint">{TT.hitbox.description()}</p>
+                {#if hitbox[0]}
+                    <EntityRectangleInputs bind:rectangle={hitbox[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
+                {/if}
+                {#if !hasHitbox}
+                    <span class="retro-error" data-testid="hitboxRequired">{TT.hitbox.required()}</span>
+                {/if}
+                <button type="button" class="retro-btn" onclick={regenerateHitbox}>{TT.hitbox.regenerate()}</button>
+            </section>
+        {/if}
+
+        {#if layer === "floor"}
+            <section class="retro-card" data-testid="entityWater">
+                <h4 class="retro-title retro-title-blue">{TT.water.title()}</h4>
+                <p class="retro-hint">{TT.water.description()}</p>
+                <div class="flex items-center gap-2">
+                    <InputCheckbox
+                        id="hasWater"
+                        dataTestId="hasWater"
+                        bind:value={hasWater}
+                        onchange={() => {
+                            if (hasWater && water.length === 0) regenerateWater();
+                        }}
+                    />
+                    <label class="m-0 cursor-pointer" for="hasWater">{TT.water.enable()}</label>
+                </div>
+                {#if hasWater}
+                    <Input
+                        id="waterMargin"
+                        dataTestId="waterMargin"
+                        label={TT.water.margin()}
+                        type="number"
+                        min={0}
+                        step={1}
+                        bind:value={waterMargin}
+                        onchange={() => regenerateWater()}
+                    />
+                    {#if water[0]}
+                        <EntityRectangleInputs
+                            bind:rectangle={water[0]}
+                            maxWidth={frameWidth}
+                            maxHeight={frameHeight}
+                        />
+                    {/if}
+                {/if}
+            </section>
+        {/if}
+
+        {#if isUploadForm}
+            <section class="retro-card">
+                <h4 class="retro-title">{TT.sections.options()}</h4>
+                <div class="flex items-start gap-2">
+                    <InputCheckbox id="floatingObject" dataTestId="floatingObject" bind:value={floatingObject} />
+                    <label class="m-0 flex cursor-pointer flex-col" for="floatingObject">
+                        <span>{TT.floatingObject()}</span>
+                        <span class="retro-hint">{TT.floatingObjectDescription()}</span>
+                    </label>
+                </div>
+                <div class="flex items-start gap-2">
+                    <InputCheckbox id="animatedObject" dataTestId="animatedObject" bind:value={animated} />
+                    <label class="m-0 flex cursor-pointer flex-col" for="animatedObject">
+                        <span>{TT.animatedObject()}</span>
+                        <span class="retro-hint">{TT.animatedObjectDescription()}</span>
+                    </label>
+                </div>
+                {#if animated}
+                    <div class="flex gap-2">
+                        <Input
+                            id="frameCount"
+                            dataTestId="frameCount"
+                            label={TT.frameCount()}
+                            type="number"
+                            min={2}
+                            max={MAX_ENTITY_ANIMATION_FRAME_COUNT}
+                            step={1}
+                            bind:value={frameCount}
+                        />
+                        <Input
+                            id="frameRate"
+                            dataTestId="frameRate"
+                            label={TT.frameRate()}
+                            type="number"
+                            min={1}
+                            max={MAX_ENTITY_ANIMATION_FRAME_RATE}
+                            bind:value={frameRate}
+                        />
+                    </div>
+                {/if}
+            </section>
         {/if}
     </div>
 
-    {#if profileOnly}
-        <p class="m-0 text-sm text-white/60">{TT.profileOnlyDescription()}</p>
-    {/if}
-
-    <SettingsSection title={TT.sections.identity()}>
-        {#if !profileOnly}
-            <Input bind:value={name} id="name" data-testid="name" label={TT.imageName()} />
-        {/if}
-        {@render categoryField()}
-        {#if !profileOnly}
-            <div class="flex flex-col gap-1">
-                <label class="text-sm text-white/80" for="tags">{TT.tags()}</label>
-                <InputTags bind:value={inputTagOptions} placeholder={TT.writeTag()} />
-            </div>
-        {/if}
-        {#if isUploadForm}
-            <div class="flex flex-col gap-1">
-                <span class="text-sm text-white/80">{$LL.mapEditor.entityEditor.views.label()}</span>
-                <SegmentedControl
-                    bind:value={direction}
-                    options={viewOptions}
-                    ariaLabel={$LL.mapEditor.entityEditor.views.label()}
-                    dataTestId="entityView"
-                />
-            </div>
-        {/if}
-    </SettingsSection>
-
-    <SettingsSection title={TT.depth()} description={TT.sections.displayDescription()}>
-        <SegmentedControl
-            bind:value={selectedDepthOption}
-            options={Object.values(depthOptions).map((option) => ({
-                value: option,
-                label: getTranslationForDepthOption(option),
-            }))}
-            ariaLabel={TT.depth()}
-            dataTestId="entityDepth"
-        />
-    </SettingsSection>
-
-    {#if needsHitbox}
-        <SettingsSection title={TT.hitbox.title()} description={TT.hitbox.description()} dataTestId="entityHitbox">
-            {#if hitbox[0]}
-                <EntityRectangleInputs bind:rectangle={hitbox[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
-            {/if}
-            <div class="flex items-center justify-between gap-2">
-                {#if !hasHitbox}
-                    <span class="text-xs text-red-400" data-testid="hitboxRequired">{TT.hitbox.required()}</span>
-                {:else}
-                    <span></span>
-                {/if}
-                <Button size="sm" variant="contrast" onclick={regenerateHitbox}>{TT.hitbox.regenerate()}</Button>
-            </div>
-        </SettingsSection>
-    {/if}
-
-    {#if layer === "floor"}
-        <SettingsSection title={TT.water.title()} description={TT.water.description()} dataTestId="entityWater">
-            <div class="flex items-center gap-2">
-                <InputCheckbox
-                    id="hasWater"
-                    dataTestId="hasWater"
-                    bind:value={hasWater}
-                    onchange={() => {
-                        if (hasWater && water.length === 0) regenerateWater();
-                    }}
-                />
-                <label class="m-0 cursor-pointer" for="hasWater">{TT.water.enable()}</label>
-            </div>
-            {#if hasWater}
-                <Input
-                    id="waterMargin"
-                    dataTestId="waterMargin"
-                    label={TT.water.margin()}
-                    type="number"
-                    min={0}
-                    step={1}
-                    bind:value={waterMargin}
-                    onchange={() => regenerateWater()}
-                />
-                {#if water[0]}
-                    <EntityRectangleInputs bind:rectangle={water[0]} maxWidth={frameWidth} maxHeight={frameHeight} />
-                {/if}
-            {/if}
-        </SettingsSection>
-    {/if}
-
-    {#if isUploadForm}
-        <SettingsSection title={TT.sections.options()}>
-            <div class="flex items-start gap-2">
-                <InputCheckbox id="floatingObject" dataTestId="floatingObject" bind:value={floatingObject} />
-                <label class="m-0 flex cursor-pointer flex-col" for="floatingObject">
-                    <span>{TT.floatingObject()}</span>
-                    <span class="text-xs text-white/60">{TT.floatingObjectDescription()}</span>
-                </label>
-            </div>
-            <div class="flex items-start gap-2">
-                <InputCheckbox id="animatedObject" dataTestId="animatedObject" bind:value={animated} />
-                <label class="m-0 flex cursor-pointer flex-col" for="animatedObject">
-                    <span>{TT.animatedObject()}</span>
-                    <span class="text-xs text-white/60">{TT.animatedObjectDescription()}</span>
-                </label>
-            </div>
-            {#if animated}
-                <div class="flex gap-2">
-                    <Input
-                        id="frameCount"
-                        dataTestId="frameCount"
-                        label={TT.frameCount()}
-                        type="number"
-                        min={2}
-                        max={MAX_ENTITY_ANIMATION_FRAME_COUNT}
-                        step={1}
-                        bind:value={frameCount}
-                    />
-                    <Input
-                        id="frameRate"
-                        dataTestId="frameRate"
-                        label={TT.frameRate()}
-                        type="number"
-                        min={1}
-                        max={MAX_ENTITY_ANIMATION_FRAME_RATE}
-                        bind:value={frameRate}
-                    />
-                </div>
-            {/if}
-        </SettingsSection>
-    {/if}
-
-    <!-- Actions stay in view at the bottom of the panel. -->
-    <div
-        class="sticky bottom-0 flex flex-col gap-2 border-0 border-t border-solid border-white/10 bg-contrast/95 pt-3 pb-1"
-    >
+    <footer class="retro-footer">
         <div class="flex gap-2 w-full">
-            <Button size="lg" variant="contrast" class="w-full" onclick={closeForm}>
+            <button type="button" class="retro-btn grow" onclick={closeForm}>
                 {$LL.mapEditor.entityEditor.buttons.cancel()}
-            </Button>
-            <Button
-                size="lg"
-                variant="secondary"
-                class="w-full"
-                dataTestId="applyEntityModifications"
+            </button>
+            <button
+                type="button"
+                class="retro-btn retro-btn-primary grow"
+                data-testid="applyEntityModifications"
                 disabled={!canApply}
                 onclick={() => applyEntityModifications(getModifiedCustomEntity())}
             >
                 {isUploadForm ? $LL.mapEditor.entityEditor.buttons.upload() : $LL.mapEditor.entityEditor.buttons.save()}
-            </Button>
+            </button>
         </div>
         {#if profileOnly && resetProfile}
-            <Button size="sm" variant="contrast" class="w-full" dataTestId="resetEntityProfile" onclick={resetProfile}>
+            <button type="button" class="retro-btn w-full" data-testid="resetEntityProfile" onclick={resetProfile}>
                 {TT.resetProfile()}
-            </Button>
+            </button>
         {/if}
         {#if !isUploadForm && !profileOnly}
-            <Button
-                size="sm"
-                variant="danger"
-                class="w-full"
-                dataTestId="removeEntity"
+            <button
+                type="button"
+                class="retro-btn retro-btn-danger w-full"
+                data-testid="removeEntity"
                 onclick={() => removeEntity({ entityId: customEntity.id })}
             >
                 {$LL.mapEditor.entityEditor.buttons.delete()}
-            </Button>
+            </button>
         {/if}
-    </div>
+    </footer>
 </div>
 
 <style>
+    /* 16-bit menu palette: night blue panel, cream double frame, gold titles, hard shadows, no blur. */
+    .retro-form {
+        --retro-bg: #1d2350;
+        --retro-bg-deep: #12163a;
+        --retro-frame: #ece4c8;
+        --retro-line: #6f78b8;
+        --retro-gold: #ffd75e;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: calc(100dvh - 7rem);
+        width: 100%;
+        color: #f4f1e6;
+        background: linear-gradient(180deg, var(--retro-bg) 0%, var(--retro-bg-deep) 100%);
+        border: 3px solid var(--retro-frame);
+        border-radius: 4px;
+        box-shadow:
+            inset 0 0 0 2px var(--retro-bg-deep),
+            inset 0 0 0 4px var(--retro-line),
+            0 4px 0 #070920;
+    }
+
+    .retro-header {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px 14px 10px;
+        border-bottom: 3px solid var(--retro-line);
+    }
+
+    .retro-heading,
+    .retro-title,
+    .retro-btn,
+    .retro-choice {
+        font-family: "Press Start 2P", monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
+
+    .retro-heading {
+        font-size: 12px;
+        color: var(--retro-gold);
+        text-shadow: 2px 2px 0 #000;
+    }
+
+    .retro-subtitle {
+        font-size: 13px;
+        opacity: 0.8;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .retro-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px;
+        scrollbar-color: var(--retro-frame) var(--retro-bg-deep);
+    }
+
+    .retro-preview {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 12px;
+        border: 2px solid var(--retro-line);
+        background: rgb(0 0 0 / 0.25);
+    }
+
+    .retro-preview :global(.pixelated),
+    .retro-preview :global(img),
+    .retro-preview :global(canvas) {
+        image-rendering: pixelated;
+    }
+
+    .retro-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin: 0;
+        padding: 12px;
+        background: rgb(0 0 0 / 0.22);
+        border: 2px solid var(--retro-line);
+        box-shadow: inset 0 0 0 2px var(--retro-bg-deep);
+    }
+
+    .retro-title {
+        margin: 0;
+        font-size: 10px;
+        color: var(--retro-gold);
+        text-shadow: 2px 2px 0 #000;
+    }
+
+    .retro-title::before {
+        content: "▶ ";
+    }
+
+    .retro-title-red {
+        color: #ff8a80;
+    }
+
+    .retro-title-blue {
+        color: #8fd3ff;
+    }
+
+    .retro-label {
+        font-size: 13px;
+        opacity: 0.85;
+    }
+
+    .retro-hint {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        opacity: 0.7;
+    }
+
+    .retro-error {
+        font-size: 12px;
+        color: #ff8a80;
+    }
+
+    .retro-choices {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+    }
+
+    .retro-choice {
+        position: relative;
+        padding: 10px 8px 10px 18px;
+        font-size: 8px;
+        line-height: 1.4;
+        text-align: start;
+        color: #f4f1e6;
+        background: var(--retro-bg-deep);
+        border: 2px solid var(--retro-line);
+        cursor: pointer;
+    }
+
+    .retro-choice:hover,
+    .retro-choice:focus-visible {
+        border-color: var(--retro-frame);
+        outline: none;
+    }
+
+    .retro-choice.selected {
+        color: var(--retro-gold);
+        border-color: var(--retro-gold);
+        background: #2a3270;
+    }
+
+    .retro-choice.selected::before {
+        content: "▶";
+        position: absolute;
+        left: 5px;
+        animation: retro-blink 1s steps(2, start) infinite;
+    }
+
+    .retro-footer {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 12px 12px;
+        border-top: 3px solid var(--retro-line);
+        background: var(--retro-bg-deep);
+    }
+
+    .retro-btn {
+        padding: 10px 8px;
+        font-size: 9px;
+        color: #f4f1e6;
+        background: #3a4280;
+        border: 2px solid var(--retro-frame);
+        box-shadow: 0 3px 0 #070920;
+        cursor: pointer;
+    }
+
+    .retro-btn:hover:not(:disabled) {
+        filter: brightness(1.15);
+    }
+
+    .retro-btn:active:not(:disabled) {
+        transform: translateY(2px);
+        box-shadow: 0 1px 0 #070920;
+    }
+
+    .retro-btn:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+
+    .retro-btn-primary {
+        background: #2f8f46;
+        color: #fff;
+    }
+
+    .retro-btn-danger {
+        background: #a93636;
+        color: #fff;
+    }
+
+    @keyframes retro-blink {
+        to {
+            visibility: hidden;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .retro-choice.selected::before {
+            animation: none;
+        }
+    }
+
     .checkerboard {
+        padding: 6px;
         background-color: rgb(255 255 255 / 0.06);
         background-image:
             linear-gradient(45deg, rgb(255 255 255 / 0.08) 25%, transparent 25%),

@@ -529,6 +529,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "تدوير",
         },
         customEntityEditorForm: {
+            titles: {
+                upload: "كائن جديد",
+                edit: "تعديل الكائن",
+                adjust: "ضبط على هذه الخريطة",
+            },
             sections: {
                 identity: "الهوية",
                 displayDescription: "مكان رسم الكائن بالنسبة إلى اللاعبين.",
