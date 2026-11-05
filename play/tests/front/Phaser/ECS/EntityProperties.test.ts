@@ -4,12 +4,22 @@ import { makesEntityActivatable } from "../../../../src/front/Phaser/ECS/EntityP
 
 describe("makesEntityActivatable", () => {
     it("ignores an empty description", () => {
-        const property: EntityDataProperty = { id: "d", type: "entityDescriptionProperties", description: "", searchable: false };
+        const property: EntityDataProperty = {
+            id: "d",
+            type: "entityDescriptionProperties",
+            description: "",
+            searchable: false,
+        };
         expect(makesEntityActivatable(property)).toBe(false);
     });
 
     it("counts a non empty description", () => {
-        const property: EntityDataProperty = { id: "d", type: "entityDescriptionProperties", description: "Hi", searchable: false };
+        const property: EntityDataProperty = {
+            id: "d",
+            type: "entityDescriptionProperties",
+            description: "Hi",
+            searchable: false,
+        };
         expect(makesEntityActivatable(property)).toBe(true);
     });
 
@@ -26,7 +36,7 @@ describe("makesEntityActivatable", () => {
     });
 
     it("counts an action property", () => {
-        const property: EntityDataProperty = { id: "o", type: "focusable" };
+        const property: EntityDataProperty = { id: "o", type: "playAudio", audioLink: "https://example.com/a.mp3" };
         expect(makesEntityActivatable(property)).toBe(true);
     });
 });
