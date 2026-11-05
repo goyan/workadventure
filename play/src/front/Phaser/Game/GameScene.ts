@@ -2331,7 +2331,7 @@ export class GameScene extends DirtyScene {
      * Like AreaPermissions, users allowed to edit the map may go anywhere. Unlike the areas manager, this works as soon
      * as the pusher answered, which is when the start position is chosen.
      */
-    private isPositionAllowedForCurrentUser(position: PositionInterface): boolean {
+    public isPositionAllowedForCurrentUser(position: PositionInterface): boolean {
         const gameMapAreas = this.getGameMap().getWamFile()?.getGameMapAreas();
         if (!this.connection || this.connection.userCanEdit || !gameMapAreas) {
             return true;

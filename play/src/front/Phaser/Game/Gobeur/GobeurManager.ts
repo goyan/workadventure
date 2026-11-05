@@ -23,6 +23,7 @@ import type { GobeurMessage, GobeurStartMessage } from "./GobeurProtocol";
 import { areaCentre, isInsideArea, isSafe } from "./GobeurSafety";
 import type { Point } from "./GobeurSafety";
 import { GobeurSheetLoader, GobeurSprite } from "./GobeurSprite";
+import { isStartConsistentWithProperty } from "./GobeurStartCheck";
 
 /** Ticks of the games, checks of the map and of the prison: a few times per second, not every frame. */
 const CHECK_INTERVAL_MS = 250;
@@ -39,6 +40,8 @@ interface GobeurInstance {
     lastPosSentAt: number;
     // While the game runs, where this browser shows it.
     sprite: GobeurSprite | undefined;
+    // The game whose prison the local player may not enter: warned once.
+    prisonRefusedGameId: string | undefined;
 }
 
 /**
@@ -232,6 +235,7 @@ export class GobeurManager {
                 brain: undefined,
                 lastPosSentAt: Number.NEGATIVE_INFINITY,
                 sprite: undefined,
+                prisonRefusedGameId: undefined,
             };
             this.instances.set(entityId, instance);
         }
@@ -262,6 +266,11 @@ export class GobeurManager {
     private receive(message: GobeurMessage, senderUuid: string): void {
         const now = Date.now();
         if (message.kind === "start") {
+            // Events are forgeable: follow only a start that matches the Gobeur object it names, as stored in the map.
+            const entity = this.entity(message.entityId);
+            if (!isStartConsistentWithProperty(message, entity && GobeurManager.propertyOf(entity))) {
+                return;
+            }
             const instance = this.instanceOf(message.entityId);
             this.apply(instance, instance.game.receive(message, senderUuid, now));
             return;
@@ -346,10 +355,20 @@ export class GobeurManager {
     private sendToPrison(instance: GobeurInstance): void {
         const prisonAreaId = instance.game.currentStart?.prisonAreaId;
         const prison = prisonAreaId !== undefined ? this.area(prisonAreaId) : undefined;
-        if (prison) {
-            const centre = areaCentre(prison);
-            this.scene.CurrentPlayer.teleportTo(centre.x, centre.y);
+        if (!prison) {
+            return;
         }
+        const centre = areaCentre(prison);
+        // Teleporting skips the colliders: never into an area the local user has no access to.
+        if (!this.scene.isPositionAllowedForCurrentUser(centre)) {
+            const gameId = instance.game.currentStart?.gameId;
+            if (instance.prisonRefusedGameId !== gameId) {
+                instance.prisonRefusedGameId = gameId;
+                console.warn("Gobeur: the prison is inside an area the user has no access to, no teleport");
+            }
+            return;
+        }
+        this.scene.CurrentPlayer.teleportTo(centre.x, centre.y);
     }
 
     private onPlayersChanged(players: Map<number, { userUuid: string }>): void {
