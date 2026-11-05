@@ -844,3 +844,5 @@ L’action « Libérer mon bureau » ouvre un dialogue avec le nom du bureau. An
 Un nouveau texte reçu d’un autre participant (humain ou NPC) dans la discussion de proximité joue le son court de message existant, même lorsque la conversation est affichée. Le réglage « Sons du chat », la mise en sourdine de la conversation et les règles de disponibilité restent respectés. Aucun son pour ses propres envois ou échos, les entrées/sorties ou la relecture de la liste. Les réunions et autres salons conservent leur comportement.
 
 Recette beta : dans une bulle ouverte, recevoir un texte humain puis un texte NPC ; vérifier un son par message. Envoyer un texte soi-même, quitter/rejoindre et rouvrir le panneau : aucun son de message supplémentaire. Désactiver « Sons du chat », puis mettre la conversation en sourdine : réception silencieuse. Vérifier une réunion affichée : comportement conservé. Interaction et écoute à confirmer par l’utilisateur après fusion.
+
+Rafraîchir le jeu après le déploiement et faire le premier essai avec « Sons du chat » activé et le statut « En ligne ». Refaire ensuite le test en « Ne pas déranger » : le texte doit arriver sans son.
