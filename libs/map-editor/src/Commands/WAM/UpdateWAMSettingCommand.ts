@@ -1,6 +1,6 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { MegaphoneSettings, RecordingSettings } from "../../types";
+import { MegaphoneSettings, PrefabOverride, RecordingSettings } from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {
@@ -35,6 +35,18 @@ export class UpdateWAMSettingCommand extends Command {
                 this.wam.settings.recording = RecordingSettings.optional().parse(
                     message.updateRecordingSettingMessage.settings,
                 );
+                break;
+            }
+            case "updatePrefabOverrideSettingMessage": {
+                const prefabId = message.updatePrefabOverrideSettingMessage.prefabId;
+                const override: unknown = message.updatePrefabOverrideSettingMessage.override;
+                const others = Object.fromEntries(
+                    Object.entries(this.wam.settings.prefabOverrides ?? {}).filter(([id]) => id !== prefabId),
+                );
+                this.wam.settings.prefabOverrides =
+                    override === undefined || override === null
+                        ? others
+                        : { ...others, [prefabId]: PrefabOverride.parse(override) };
                 break;
             }
             default: {

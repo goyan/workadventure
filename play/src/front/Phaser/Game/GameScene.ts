@@ -2166,7 +2166,7 @@ export class GameScene extends DirtyScene {
         }));
         collectionDescriptors.push({ url: customEntityCollectionUrl, type: "Custom" });
 
-        this.entitiesCollectionsManager.loadCollections(collectionDescriptors);
+        this.entitiesCollectionsManager.loadCollections(collectionDescriptors, this.wamFile.settings?.prefabOverrides);
     }
 
     private doLoadTMJFile(mapUrlFile: string): void {

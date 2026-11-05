@@ -510,11 +510,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "لا توجد صورة", // No image
         snapToGrid: "المحاذاة إلى الشبكة",
         specialTags: {
+            uncategorizedLabel: "للتصنيف",
+            structureLabel: "الأرضيات والجدران (قديم)",
             customLabel: "مخصص",
             mostUsedLabel: "الأكثر استخدامًا",
         },
         editModel: "تعديل النموذج (كل النسخ)",
+        adjustModelForMap: "ضبط هذا الكائن على هذه الخريطة (كل النسخ)",
+        structureHint: "الأرضيات والجدران جزء من بنية الخريطة: استخدم أداة البنية بدلاً من ذلك.",
         customEntityEditorForm: {
+            category: {
+                label: "الفئة",
+                choose: "اختر فئة",
+                new: "فئة جديدة…",
+                newName: "اسم الفئة الجديدة",
+                required: "اختر فئة أو أنشئ واحدة.",
+            },
+            profileOnlyDescription: "كائن مضمّن: تنطبق هذه الإعدادات على كل نسخه في هذه الخريطة فقط.",
+            resetProfile: "العودة إلى إعدادات الكتالوج",
             imageName: "اسم الصورة", // Image name
             tags: "وسوم", // Tags
             writeTag: "اكتب وسمًا...",

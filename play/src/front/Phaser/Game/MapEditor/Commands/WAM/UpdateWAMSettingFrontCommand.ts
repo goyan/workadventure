@@ -9,6 +9,7 @@ import type { UpdateWAMSettingsMessage } from "@workadventure/messages/src/ts-pr
 import type { FrontCommandInterface } from "../FrontCommandInterface";
 import type { RoomConnection } from "../../../../../Connection/RoomConnection";
 import { localUserStore } from "../../../../../Connection/LocalUserStore";
+import { gameManager } from "../../../GameManager";
 import { megaphoneCanBeUsedStore, megaphoneSpaceSettingsStore } from "../../../../../Stores/MegaphoneStore";
 
 export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implements FrontCommandInterface {
@@ -56,11 +57,35 @@ export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implem
             );
         }
 
+        if (this.updateWAMSettingsMessage.message?.$case === "updatePrefabOverrideSettingMessage") {
+            const { prefabId } = this.updateWAMSettingsMessage.message.updatePrefabOverrideSettingMessage;
+            const previous = this.oldConfig?.prefabOverrides?.[prefabId];
+            return new UpdateWAMSettingFrontCommand(
+                this.wam,
+                {
+                    message: {
+                        $case: "updatePrefabOverrideSettingMessage",
+                        updatePrefabOverrideSettingMessage: {
+                            prefabId,
+                            override: previous ? structuredClone(previous) : undefined,
+                        },
+                    },
+                },
+                this.userTags,
+                this.roomUrl,
+            );
+        }
+
         return this;
     }
 
     public async execute(): Promise<void> {
         await super.execute();
+
+        if (this.updateWAMSettingsMessage.message?.$case === "updatePrefabOverrideSettingMessage") {
+            this.applyPrefabOverride(this.updateWAMSettingsMessage.message.updatePrefabOverrideSettingMessage.prefabId);
+            return;
+        }
 
         const message: UpdateWAMSettingsMessage["message"] = this.updateWAMSettingsMessage.message;
         if (message?.$case === "updateMegaphoneSettingMessage" || message?.$case === "updateRecordingSettingMessage") {
@@ -87,6 +112,17 @@ export class UpdateWAMSettingFrontCommand extends UpdateWAMSettingCommand implem
                 });
             }
         }
+    }
+
+    /** Every copy of the object on the map takes the adjustment now stored in the WAM file. */
+    private applyPrefabOverride(prefabId: string): void {
+        const scene = gameManager.getCurrentGameScene();
+        const modification = scene
+            .getEntitiesCollectionsManager()
+            .setPrefabOverride(prefabId, this.wam.settings?.prefabOverrides?.[prefabId]);
+        if (!modification) return;
+        scene.getGameMapFrontWrapper().getEntitiesManager().updateEntitiesPrefab(prefabId, modification);
+        scene.getGameMapFrontWrapper().recomputeEntitiesCollisionGrid();
     }
 
     public emitEvent(roomConnection: RoomConnection): void {

@@ -517,11 +517,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Kein Bild",
         snapToGrid: "Am Raster ausrichten",
         specialTags: {
+            uncategorizedLabel: "Zu sortieren",
+            structureLabel: "Böden & Wände (alt)",
             customLabel: "Benutzerdefiniert",
             mostUsedLabel: "Meistverwendet",
         },
         editModel: "Vorlage bearbeiten (alle Kopien)",
+        adjustModelForMap: "Dieses Objekt auf dieser Karte anpassen (alle Kopien)",
+        structureHint: "Böden und Wände gehören zur Struktur der Karte: nutze lieber das Struktur-Werkzeug.",
         customEntityEditorForm: {
+            category: {
+                label: "Kategorie",
+                choose: "Kategorie wählen",
+                new: "Neue Kategorie…",
+                newName: "Name der neuen Kategorie",
+                required: "Wähle oder erstelle eine Kategorie.",
+            },
+            profileOnlyDescription:
+                "Mitgeliefertes Objekt: Diese Einstellungen gelten für alle Kopien, nur auf dieser Karte.",
+            resetProfile: "Zurück zu den Katalogeinstellungen",
             imageName: "Bildname",
             tags: "Tags",
             writeTag: "Tag schreiben...",

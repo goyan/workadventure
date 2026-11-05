@@ -519,11 +519,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Aucune image",
         snapToGrid: "Magnétisme",
         specialTags: {
+            uncategorizedLabel: "À classer",
+            structureLabel: "Sols et murs (ancien)",
             customLabel: "Personnalisé",
             mostUsedLabel: "Plus utilisés",
         },
         editModel: "Modifier le modèle (toutes les copies)",
+        adjustModelForMap: "Régler cet objet sur cette carte (toutes les copies)",
+        structureHint:
+            "Les sols et les murs font partie de la structure de la carte : préférez l’outil Structure de l’éditeur.",
         customEntityEditorForm: {
+            category: {
+                label: "Catégorie",
+                choose: "Choisir une catégorie",
+                new: "Nouvelle catégorie…",
+                newName: "Nom de la nouvelle catégorie",
+                required: "Choisissez ou créez une catégorie.",
+            },
+            profileOnlyDescription:
+                "Objet fourni : ces réglages s’appliquent à toutes ses copies, sur cette carte seulement.",
+            resetProfile: "Revenir au réglage du catalogue",
             imageName: "Nom de l'image",
             tags: "Tags",
             writeTag: "Écrire un tag...",

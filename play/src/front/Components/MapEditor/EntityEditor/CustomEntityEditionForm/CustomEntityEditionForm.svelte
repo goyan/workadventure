@@ -1,6 +1,7 @@
 <script lang="ts">
     import type { CollisionRectangle, EntityAnimation, EntityLayer, EntityPrefab } from "@workadventure/map-editor";
     import { MAX_ENTITY_ANIMATION_FRAME_COUNT, MAX_ENTITY_ANIMATION_FRAME_RATE } from "@workadventure/map-editor";
+    import { get } from "svelte/store";
     import {
         DEFAULT_ENTITY_ANIMATION_FRAME_RATE,
         detectEntityAnimationFrameCount,
@@ -19,6 +20,13 @@
         computeWaterArea,
         getDefaultWaterMargin,
     } from "../../../../Utils/EntityFootprint";
+    import { gameManager } from "../../../../Phaser/Game/GameManager";
+    import {
+        getEntityCategory,
+        isStructureObject,
+        listCategories,
+        withCategory,
+    } from "../../../../Utils/EntityCategory";
     import LogoCollisionGrid from "./LogoCollisionGrid.svg";
     import EntityEditionCollisionGrid from "./EntityEditionCollisionGrid.svelte";
     import EntityShapesOverlay from "./EntityShapesOverlay.svelte";
@@ -30,6 +38,10 @@
         closeForm?: () => void;
         removeEntity?: (payload: { entityId: string }) => void;
         applyEntityModifications?: (entity: EntityPrefab) => void;
+        /** Only the display level, hitbox and water: an object of a built-in collection, adjusted for this map. */
+        profileOnly?: boolean;
+        /** Shown in profile-only mode when the map already adjusts the object: back to the catalog settings. */
+        resetProfile?: () => void;
     }
 
     let {
@@ -38,6 +50,8 @@
         closeForm = () => {},
         removeEntity = () => {},
         applyEntityModifications = () => {},
+        profileOnly = false,
+        resetProfile = undefined,
     }: Props = $props();
 
     let {
@@ -84,7 +98,25 @@
     const hasHitbox = $derived(
         hitbox.length > 0 || (!floatingObject && collisionGrid.some((row) => row.some((cell) => cell === 1))),
     );
-    const canApply = $derived(!needsHitbox || hasHitbox);
+    // Every object of the library belongs to a category: chosen among the existing ones, or created here.
+    const NEW_CATEGORY = "__new__";
+    const knownCategories = listCategories(
+        get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
+            .map((variant) => variant.defaultPrefab)
+            .filter((prefab) => !isStructureObject(prefab)),
+    );
+    let category: string = $state((() => getEntityCategory(customEntity) ?? "")());
+    let newCategory = $state("");
+    const effectiveCategory = $derived(category === NEW_CATEGORY ? newCategory.trim() : category);
+    const categoryOptions = $derived([
+        { value: "", label: $LL.mapEditor.entityEditor.customEntityEditorForm.category.choose() },
+        ...knownCategories.map((known) => ({ value: known, label: known })),
+        ...(category !== "" && category !== NEW_CATEGORY && !knownCategories.includes(category)
+            ? [{ value: category, label: category }]
+            : []),
+        { value: NEW_CATEGORY, label: $LL.mapEditor.entityEditor.customEntityEditorForm.category.new() },
+    ]);
+    const canApply = $derived((!needsHitbox || hasHitbox) && (profileOnly || effectiveCategory !== ""));
 
     const depthOptions = {
         GROUND_LEVEL: "GroundLevel",
@@ -110,7 +142,12 @@
         return {
             ...customEntity,
             name: name,
-            tags: inputTagOptions !== undefined ? inputTagOptions.map((tagOption) => tagOption.value) : [],
+            tags: profileOnly
+                ? customEntity.tags
+                : withCategory(
+                      inputTagOptions !== undefined ? inputTagOptions.map((tagOption) => tagOption.value) : [],
+                      effectiveCategory,
+                  ),
             collisionGrid: floatingObject ? undefined : collisionGrid,
             depthOffset: depthOffset !== 0 ? -depthOffset : 0,
             animation,
@@ -329,23 +366,54 @@
             <p class="text-xs m-0 p-0">{$LL.mapEditor.entityEditor.customEntityEditorForm.collision()}</p>
         </div>
     {/if}
-    <div>
-        <label class="mb-2 block" for="id"><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.imageName()}</b></label
-        >
-        <Input
-            class="px-2 py-2.5 text-[16px] rounded-md bg-contrast border-solid border border-contrast-400 text-white min-w-full"
-            bind:value={name}
-            id="name"
-            data-testid="name"
-        />
-    </div>
-    <div>
-        <label class="mb-2 block" for="tags"><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.tags()}</b></label>
-        <InputTags
-            bind:value={inputTagOptions}
-            placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.writeTag()}
-        />
-    </div>
+    {#if profileOnly}
+        <p class="m-0 text-xs opacity-70">
+            {$LL.mapEditor.entityEditor.customEntityEditorForm.profileOnlyDescription()}
+        </p>
+    {:else}
+        <div>
+            <label class="mb-2 block" for="id"
+                ><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.imageName()}</b></label
+            >
+            <Input
+                class="px-2 py-2.5 text-[16px] rounded-md bg-contrast border-solid border border-contrast-400 text-white min-w-full"
+                bind:value={name}
+                id="name"
+                data-testid="name"
+            />
+        </div>
+        <div class="flex flex-col gap-1">
+            <Select
+                id="category"
+                dataTestId="entityCategory"
+                label={$LL.mapEditor.entityEditor.customEntityEditorForm.category.label()}
+                options={categoryOptions}
+                bind:value={category}
+            />
+            {#if category === NEW_CATEGORY}
+                <Input
+                    id="newCategory"
+                    dataTestId="newCategory"
+                    placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.category.newName()}
+                    bind:value={newCategory}
+                />
+            {/if}
+            {#if effectiveCategory === ""}
+                <span class="text-xs text-red-400" data-testid="categoryRequired"
+                    >{$LL.mapEditor.entityEditor.customEntityEditorForm.category.required()}</span
+                >
+            {/if}
+        </div>
+        <div>
+            <label class="mb-2 block" for="tags"
+                ><b>{$LL.mapEditor.entityEditor.customEntityEditorForm.tags()}</b></label
+            >
+            <InputTags
+                bind:value={inputTagOptions}
+                placeholder={$LL.mapEditor.entityEditor.customEntityEditorForm.writeTag()}
+            />
+        </div>
+    {/if}
     <div>
         <Select
             id="type"
@@ -452,7 +520,12 @@
         {/if}
     {/if}
     <div class="flex gap-2 flex-wrap justify-center w-full text-sm">
-        {#if !isUploadForm}
+        {#if profileOnly && resetProfile}
+            <Button size="lg" variant="contrast" class="w-full" dataTestId="resetEntityProfile" onclick={resetProfile}>
+                {$LL.mapEditor.entityEditor.customEntityEditorForm.resetProfile()}
+            </Button>
+        {/if}
+        {#if !isUploadForm && !profileOnly}
             <Button
                 size="lg"
                 variant="danger"

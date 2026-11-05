@@ -517,11 +517,26 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Geen afbeelding",
         snapToGrid: "Uitlijnen op raster",
         specialTags: {
+            uncategorizedLabel: "Te sorteren",
+            structureLabel: "Vloeren & muren (oud)",
             customLabel: "Aangepast",
             mostUsedLabel: "Meest gebruikt",
         },
         editModel: "Model bewerken (alle kopieën)",
+        adjustModelForMap: "Dit object op deze kaart aanpassen (alle kopieën)",
+        structureHint:
+            "Vloeren en muren horen bij de structuur van de kaart: gebruik liever het Structuur-gereedschap.",
         customEntityEditorForm: {
+            category: {
+                label: "Categorie",
+                choose: "Kies een categorie",
+                new: "Nieuwe categorie…",
+                newName: "Naam van de nieuwe categorie",
+                required: "Kies of maak een categorie.",
+            },
+            profileOnlyDescription:
+                "Meegeleverd object: deze instellingen gelden voor alle kopieën, alleen op deze kaart.",
+            resetProfile: "Terug naar de catalogusinstellingen",
             imageName: "Afbeeldingsnaam",
             tags: "Tags",
             writeTag: "Tag schrijven...",

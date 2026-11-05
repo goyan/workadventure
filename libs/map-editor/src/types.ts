@@ -500,9 +500,25 @@ export const RecordingSettings = z.object({
     enableSounds: z.boolean().optional(),
 });
 
+/**
+ * How a map adjusts an object of the library for itself: display level, collisions and water. It replaces these
+ * fields of the prefab for every copy placed on this map, so that objects of the built-in collections (read-only
+ * catalog files) can be fixed too.
+ */
+export const PrefabOverride = z.object({
+    layer: EntityLayer.optional(),
+    depthOffset: z.number().optional(),
+    collisionGrid: CollisionGrid.optional(),
+    collisionRectangles: z.array(CollisionRectangle).optional(),
+    water: z.array(CollisionRectangle).optional(),
+});
+export type PrefabOverride = z.infer<typeof PrefabOverride>;
+
 export const WAMSettings = z.object({
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
+    /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */
+    prefabOverrides: z.record(z.string(), PrefabOverride).optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({

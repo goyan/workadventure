@@ -517,11 +517,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Sin imagen",
         snapToGrid: "Ajustar a la cuadrícula",
         specialTags: {
+            uncategorizedLabel: "Por clasificar",
+            structureLabel: "Suelos y muros (antiguo)",
             customLabel: "Personalizado",
             mostUsedLabel: "Más usados",
         },
         editModel: "Editar el modelo (todas las copias)",
+        adjustModelForMap: "Ajustar este objeto en este mapa (todas las copias)",
+        structureHint:
+            "Los suelos y muros forman parte de la estructura del mapa: usa mejor la herramienta Estructura.",
         customEntityEditorForm: {
+            category: {
+                label: "Categoría",
+                choose: "Elegir una categoría",
+                new: "Nueva categoría…",
+                newName: "Nombre de la nueva categoría",
+                required: "Elige o crea una categoría.",
+            },
+            profileOnlyDescription: "Objeto incluido: estos ajustes se aplican a todas sus copias, solo en este mapa.",
+            resetProfile: "Volver a los ajustes del catálogo",
             imageName: "Nombre de la imagen",
             tags: "Etiquetas",
             writeTag: "Escribir etiqueta...",

@@ -516,11 +516,25 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         noImage: "Sense imatge",
         snapToGrid: "Imant a la graella",
         specialTags: {
+            uncategorizedLabel: "Per classificar",
+            structureLabel: "Terres i murs (antic)",
             customLabel: "Personalitzat",
             mostUsedLabel: "Més utilitzats",
         },
         editModel: "Edita el model (totes les còpies)",
+        adjustModelForMap: "Ajusta aquest objecte en aquest mapa (totes les còpies)",
+        structureHint: "Els terres i murs formen part de l’estructura del mapa: millor fes servir l’eina Estructura.",
         customEntityEditorForm: {
+            category: {
+                label: "Categoria",
+                choose: "Tria una categoria",
+                new: "Nova categoria…",
+                newName: "Nom de la nova categoria",
+                required: "Tria o crea una categoria.",
+            },
+            profileOnlyDescription:
+                "Objecte inclòs: aquests ajustos s’apliquen a totes les còpies, només en aquest mapa.",
+            resetProfile: "Torna als ajustos del catàleg",
             imageName: "Nom de la imatge",
             tags: "Etiquetes",
             writeTag: "Escriure etiqueta...",

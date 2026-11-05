@@ -357,7 +357,15 @@ message UpdateWAMSettingsMessage {
   oneof message {
     UpdateMegaphoneSettingMessage updateMegaphoneSettingMessage = 1;
     UpdateRecordingSettingMessage updateRecordingSettingMessage = 2;
+    UpdatePrefabOverrideSettingMessage updatePrefabOverrideSettingMessage = 3;
   }
+}
+
+// Adjusts one object of the library for this map (PrefabOverride in libs/map-editor), or removes the adjustment when
+// `override` is unset. Schemaless here, parsed by UpdateWAMSettingCommand before it is written.
+message UpdatePrefabOverrideSettingMessage {
+  string prefabId = 1;
+  optional google.protobuf.Value override = 2;
 }
 
 message UpdateMegaphoneSettingMessage {

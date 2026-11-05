@@ -4,6 +4,7 @@ import type {
     EntityPrefab,
     EntityPrefabType,
     EntityRawPrefab,
+    PrefabOverride,
 } from "@workadventure/map-editor";
 import type { Readable, Writable } from "svelte/store";
 import { derived, writable } from "svelte/store";
@@ -59,7 +60,15 @@ export class EntitiesCollectionsManager {
         return prefabsMap.get(entityPrefabId);
     }
 
-    public loadCollections(collectionDescriptors: { url: string; type: EntityPrefabType }[]): void {
+    /** Library prefabs as their catalog declares them, before the adjustments of the map. */
+    private readonly basePrefabs = new Map<string, EntityPrefab>();
+    private prefabOverrides: Record<string, PrefabOverride> = {};
+
+    public loadCollections(
+        collectionDescriptors: { url: string; type: EntityPrefabType }[],
+        prefabOverrides: Record<string, PrefabOverride> = {},
+    ): void {
+        this.prefabOverrides = { ...prefabOverrides };
         this.entitiesPrefabsMapPromise = new Promise<Map<string, EntityPrefab>>((resolve, reject) => {
             const entityCollections: { collection: EntityCollection; url: string }[] = [];
             const fetchUrlPromises: Promise<EntityCollectionRaw>[] = [];
@@ -123,6 +132,13 @@ export class EntitiesCollectionsManager {
                         tags.sort();
                         this.tags = tags;
                     }
+                    // The map adjusts some objects of the library for itself (see PrefabOverride).
+                    this.basePrefabs.clear();
+                    this.currentCollection.collection = this.currentCollection.collection.map((prefab) => {
+                        this.basePrefabs.set(prefab.id, prefab);
+                        const override = this.prefabOverrides[prefab.id];
+                        return override ? applyPrefabOverride(prefab, override) : prefab;
+                    });
                     this.entitiesPrefabsStore.set(this.currentCollection.collection);
 
                     const prefabsMap = new Map<string, EntityPrefab>();
@@ -157,6 +173,33 @@ export class EntitiesCollectionsManager {
                     reject(asError(error));
                 });
         });
+    }
+
+    /**
+     * Adjusts (or, with undefined, restores) a library object for this map. Returns the fields the placed copies must
+     * take, or undefined when the object is unknown.
+     */
+    public setPrefabOverride(id: string, override: PrefabOverride | undefined): Partial<EntityPrefab> | undefined {
+        const base = this.basePrefabs.get(id);
+        if (!base) return undefined;
+        const others = Object.fromEntries(Object.entries(this.prefabOverrides).filter(([prefabId]) => prefabId !== id));
+        this.prefabOverrides = override ? { ...others, [id]: override } : others;
+        const adjusted = override ? applyPrefabOverride(base, override) : base;
+        const modification: Partial<EntityPrefab> = {
+            layer: adjusted.layer,
+            depthOffset: adjusted.depthOffset,
+            collisionGrid: adjusted.collisionGrid,
+            collisionRectangles: adjusted.collisionRectangles,
+            water: adjusted.water,
+        };
+        this.currentCollection.collection = this.currentCollection.collection.map((prefab) =>
+            prefab.id === id ? adjusted : prefab,
+        );
+        this.entitiesPrefabsStore.update((prefabs) => prefabs.map((prefab) => (prefab.id === id ? adjusted : prefab)));
+        this.entitiesPrefabsMapPromise = this.entitiesPrefabsMapPromise.then((prefabsMap) =>
+            prefabsMap.set(id, adjusted),
+        );
+        return modification;
     }
 
     /** Applies the edition of a custom image to the catalog. Unset optional fields are removed, as on map-storage. */
@@ -252,4 +295,16 @@ export class EntitiesCollectionsManager {
             type: entityPrefabType,
         };
     }
+}
+
+/** The display level, collisions and water of the map replace those of the catalog (PrefabOverride). */
+export function applyPrefabOverride(prefab: EntityPrefab, override: PrefabOverride): EntityPrefab {
+    return {
+        ...prefab,
+        layer: override.layer,
+        depthOffset: override.depthOffset,
+        collisionGrid: override.collisionGrid,
+        collisionRectangles: override.collisionRectangles,
+        water: override.water,
+    };
 }

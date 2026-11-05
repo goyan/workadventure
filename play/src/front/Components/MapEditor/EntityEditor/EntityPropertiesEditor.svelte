@@ -3,7 +3,7 @@
     import { onDestroy } from "svelte";
     import type { ApplicationDefinitionInterface } from "@workadventure/messages";
     import { v4 as uuid } from "uuid";
-    import type { EntityPrefab } from "@workadventure/map-editor";
+    import type { EntityPrefab, PrefabOverride } from "@workadventure/map-editor";
     import {
         mapEditorEntityModeStore,
         mapEditorSelectedEntityPrefabStore,
@@ -26,6 +26,8 @@
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import Button from "../../UI/Button.svelte";
     import { localUserStore } from "../../../Connection/LocalUserStore";
+    import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
+    import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
 
@@ -292,18 +294,45 @@
     }
 
     // A placed image takes its display level, hitbox and water from its model in the library: editing the model from
-    // here updates every copy of it on the map.
+    // here updates every copy of it on the map. A custom image is edited in the library itself; an object of a
+    // built-in collection (read-only catalog file) is adjusted for this map only (PrefabOverride in the WAM file).
     let editedModel: EntityPrefab | undefined = $state(undefined);
+    const userCanEditMap = gameManager.getCurrentGameScene().connection?.userCanEdit ?? false;
 
     function canEditModel(prefab: EntityPrefab): boolean {
-        if (prefab.type !== "Custom") return false;
-        if (gameManager.getCurrentGameScene().connection?.userCanEdit) return true;
-        return prefab.ownerId !== undefined && prefab.ownerId === localUserStore.getLocalUser()?.uuid;
+        if (prefab.type === "Custom") {
+            return (
+                userCanEditMap ||
+                (prefab.ownerId !== undefined && prefab.ownerId === localUserStore.getLocalUser()?.uuid)
+            );
+        }
+        return userCanEditMap && !isMapLayerPrefab(prefab.collectionName, prefab.id);
+    }
+
+    function hasMapOverride(prefab: EntityPrefab): boolean {
+        return gameManager.getCurrentGameScene().wamFile?.settings?.prefabOverrides?.[prefab.id] !== undefined;
     }
 
     function saveModel(model: EntityPrefab) {
-        mapEditorModifyCustomEntityEventStore.set($state.snapshot(model));
+        if (model.type === "Custom") {
+            mapEditorModifyCustomEntityEventStore.set($state.snapshot(model));
+        } else {
+            saveMapOverride(model.id, {
+                layer: model.layer,
+                depthOffset: model.depthOffset,
+                collisionGrid: model.collisionGrid,
+                collisionRectangles: model.collisionRectangles,
+                water: model.water,
+            });
+        }
         editedModel = undefined;
+    }
+
+    function saveMapOverride(prefabId: string, override: PrefabOverride | undefined) {
+        executeUpdateWAMSettings({
+            $case: "updatePrefabOverrideSettingMessage",
+            updatePrefabOverrideSettingMessage: { prefabId, override: $state.snapshot(override) },
+        }).catch((e) => console.error(e));
     }
 </script>
 
@@ -445,6 +474,8 @@
             {#key `${$mapEditorSelectedEntityStore.entityId}:${$mapEditorSelectedEntityStore.getPrefab().id}`}
                 <PlacedImageSizeEditor entity={$mapEditorSelectedEntityStore} />
             {/key}
+        {/if}
+        {#if $mapEditorSelectedEntityStore.visible}
             {#if canEditModel($mapEditorSelectedEntityStore.getPrefab())}
                 <Button
                     size="sm"
@@ -452,7 +483,9 @@
                     dataTestId="editEntityModel"
                     onclick={() => (editedModel = $state.snapshot($mapEditorSelectedEntityStore.getPrefab()))}
                 >
-                    {$LL.mapEditor.entityEditor.editModel()}
+                    {$mapEditorSelectedEntityStore.getPrefab().type === "Custom"
+                        ? $LL.mapEditor.entityEditor.editModel()
+                        : $LL.mapEditor.entityEditor.adjustModelForMap()}
                 </Button>
             {/if}
         {/if}
@@ -533,6 +566,13 @@
             customEntity={editedModel}
             closeForm={() => (editedModel = undefined)}
             applyEntityModifications={saveModel}
+            profileOnly={editedModel.type !== "Custom"}
+            resetProfile={editedModel.type !== "Custom" && hasMapOverride(editedModel)
+                ? () => {
+                      if (editedModel) saveMapOverride(editedModel.id, undefined);
+                      editedModel = undefined;
+                  }
+                : undefined}
             removeEntity={({ entityId }) => {
                 mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
                 editedModel = undefined;
