@@ -20,7 +20,15 @@ export interface WanderMap {
     isWalkable(tile: Point): boolean;
     /** Pixel coordinates. Resolves to [] when the destination is unreachable. */
     findPath(from: Point, to: Point): Promise<Point[]>;
+    /** Where the feet of a character sitting on each seat of the map are (pixels). The same on every client. */
+    seats?(): Point[];
 }
+
+/** A destination, and for a seat (inside the hitbox of its object) the walkable spot next to it, reached first. */
+type Destination = Point & { approach?: Point };
+
+/** Share of the legs an animal spends on a seat, when one is within reach. */
+export const SEAT_CHANCE = 0.35;
 
 export const LEG_MS = 20_000;
 export const MIN_PAUSE_MS = 3_000;
@@ -53,7 +61,7 @@ interface Leg {
 export class WanderSchedule {
     private generation = 0;
     private legs = new Map<number, Leg | "pending">();
-    private destinations = new Map<number, Promise<Point>>();
+    private destinations = new Map<number, Promise<Destination>>();
     private readonly legOffset: number;
 
     constructor(
@@ -129,7 +137,7 @@ export class WanderSchedule {
         }
     }
 
-    private destination(leg: number): Promise<Point> {
+    private destination(leg: number): Promise<Destination> {
         let promise = this.destinations.get(leg);
         if (!promise) {
             promise = this.computeDestination(leg);
@@ -138,8 +146,12 @@ export class WanderSchedule {
         return promise;
     }
 
-    private async computeDestination(leg: number): Promise<Point> {
+    private async computeDestination(leg: number): Promise<Destination> {
         const nest = this.nest;
+        const seat = await this.computeSeatDestination(leg);
+        if (seat) {
+            return seat;
+        }
         const nestTile = { x: Math.floor(nest.x / TILE_SIZE), y: Math.floor(nest.y / TILE_SIZE) };
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             const random = mulberry32(wanderSeed(this.entityId, leg, attempt));
@@ -163,9 +175,52 @@ export class WanderSchedule {
         return nest;
     }
 
+    /**
+     * Now and then, an animal goes to sit on a seat within its wandering radius: chosen from the leg number like the
+     * other destinations, so that every client sees it on the same seat. The seat sits inside the hitbox of its
+     * object: the path leads to a walkable spot next to it, then the animal hops on.
+     */
+    private async computeSeatDestination(leg: number): Promise<Destination | undefined> {
+        const random = mulberry32(wanderSeed(this.entityId, leg, 1000));
+        if (random() >= SEAT_CHANCE) return undefined;
+        const radius = RADIUS_TILES * TILE_SIZE;
+        const seats = (this.map.seats?.() ?? [])
+            .filter((seat) => Math.abs(seat.x - this.nest.x) <= radius && Math.abs(seat.y - this.nest.y) <= radius)
+            .sort((a, b) => a.x - b.x || a.y - b.y);
+        if (seats.length === 0) return undefined;
+        const seat = seats[Math.floor(random() * seats.length)];
+        for (const [dx, dy] of [
+            [0, 1],
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+        ]) {
+            const approach = { x: seat.x + dx * TILE_SIZE, y: seat.y + dy * TILE_SIZE };
+            if (
+                !this.safeIsWalkable({ x: Math.floor(approach.x / TILE_SIZE), y: Math.floor(approach.y / TILE_SIZE) })
+            ) {
+                continue;
+            }
+            // Attempts are sequential on purpose: the first valid one wins.
+            // eslint-disable-next-line no-await-in-loop
+            const path = await this.safeFindPath(this.nest, approach);
+            if (path.length > 0) {
+                return { x: seat.x, y: seat.y, approach };
+            }
+        }
+        return undefined;
+    }
+
     private async computeLeg(leg: number): Promise<Leg> {
-        const [start, end] = await Promise.all([this.destination(leg - 1), this.destination(leg)]);
-        const points: Point[] = [start];
+        const [startDestination, endDestination] = await Promise.all([
+            this.destination(leg - 1),
+            this.destination(leg),
+        ]);
+        // Off a seat first (to the spot next to it), and onto a seat last (from the spot next to it).
+        const start: Point = startDestination.approach ?? startDestination;
+        const end: Point = endDestination.approach ?? endDestination;
+        const points: Point[] = [{ x: startDestination.x, y: startDestination.y }];
+        if (startDestination.approach) points.push(startDestination.approach);
         if (start.x !== end.x || start.y !== end.y) {
             const path = await this.safeFindPath(start, end);
             if (path.length > 0) {
@@ -177,6 +232,7 @@ export class WanderSchedule {
                 }
             }
         }
+        if (endDestination.approach) points.push({ x: endDestination.x, y: endDestination.y });
         const distances = [0];
         for (let i = 1; i < points.length; i++) {
             distances.push(distances[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y));

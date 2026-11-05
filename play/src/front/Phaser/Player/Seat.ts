@@ -41,7 +41,23 @@ function toPositionDirection(direction: string): PositionMessage_Direction {
     }
 }
 
-function getSeats(scene: GameScene): Seat[] {
+let seatsCache: { scene: GameScene; frame: number; seats: Seat[] } | undefined;
+
+/**
+ * Every seat of the map. Asked every frame by every character (depth) and animal: computed once per frame, since the
+ * map editor may move, add or change seats at any time.
+ */
+export function getSeats(scene: GameScene): Seat[] {
+    const frame = scene.game?.loop?.frame ?? -1;
+    if (seatsCache && seatsCache.scene === scene && seatsCache.frame === frame) {
+        return seatsCache.seats;
+    }
+    const seats = computeSeats(scene);
+    seatsCache = { scene, frame, seats };
+    return seats;
+}
+
+function computeSeats(scene: GameScene): Seat[] {
     // The map may not be loaded yet when the first characters are created.
     const gameMapFrontWrapper: GameMapFrontWrapper | undefined = scene.getGameMapFrontWrapper();
     const entitiesManager: EntitiesManager | undefined = gameMapFrontWrapper?.getEntitiesManager();

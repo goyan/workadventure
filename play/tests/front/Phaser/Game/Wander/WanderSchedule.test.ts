@@ -271,4 +271,23 @@ describe("WanderSchedule", () => {
             );
         }
     });
+
+    it("now and then sits on a seat of the map, reached from the walkable spot next to it", async () => {
+        // A chair whose tile is blocked by its hitbox; the seat is in the middle of it.
+        const chairTile = { x: 17, y: 15 };
+        const seat = centreOf(chairTile);
+        const map = { ...makeMap(new Set([`${chairTile.x},${chairTile.y}`])), seats: () => [seat] };
+        const schedule = new WanderSchedule("cat", NEST, map);
+        let satDown = 0;
+        for (let leg = 1; leg <= 40; leg++) {
+            const pose = await poseResolved(schedule, at(leg, LEG_MS - 1, "cat"));
+            if (pose && pose.x === seat.x && pose.y === seat.y) {
+                satDown++;
+                expect(pose.moving).toBe(false);
+            }
+        }
+        // SEAT_CHANCE of the legs, give or take the draw: some, but not all.
+        expect(satDown).toBeGreaterThan(3);
+        expect(satDown).toBeLessThan(30);
+    });
 });

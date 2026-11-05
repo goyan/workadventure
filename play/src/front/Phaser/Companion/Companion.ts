@@ -3,6 +3,10 @@ import type { Writable } from "svelte/store";
 import { writable } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import { PositionMessage_Direction } from "@workadventure/messages";
+import type { GameScene } from "../Game/GameScene";
+import type { Character } from "../Entity/Character";
+import { findSeatOfCharacter, getSeats, isSeatTaken } from "../Player/Seat";
+import type { Seat } from "../Player/Seat";
 import type { PictureStore } from "../../Stores/PictureStore";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { PlayerAnimationTypes } from "../Player/Animation";
@@ -183,6 +187,10 @@ export class Companion extends Container {
         // given by setTarget is one frame old.
         this.setTarget(this.owner.x, this.owner.y, this.target.direction);
 
+        if (this.sitNextToOwner(time, delta)) {
+            return;
+        }
+
         const waitingAtTheEdge = this.keepOutOfWater();
 
         // Distance the companion still has to walk along the trail to be at FOLLOW_DISTANCE from the player.
@@ -271,6 +279,54 @@ export class Companion extends Container {
             this.scene.tweens.add({ targets: this, alpha: 1, duration: REAPPEAR_DURATION });
         }
         return false;
+    }
+
+    /**
+     * When its player sits on a couch with a free place, the companion takes the place next to it, drawn like a seated
+     * player. Returns true while it goes there or sits there.
+     */
+    private sitNextToOwner(time: number, delta: number): boolean {
+        const seat = this.findFreeSeatNextToOwner();
+        if (!seat) return false;
+        const spot = { x: seat.feet.x, y: seat.feet.y - TRAIL_BODY_CENTER_OFFSET_Y };
+        const distance = Math.hypot(spot.x - this.exactX, spot.y - this.exactY);
+        if (distance > MIN_LAG_TO_WALK) {
+            const step = Math.min(distance, (MAX_SPEED * delta) / 1000 / 8);
+            const startX = this.exactX;
+            const startY = this.exactY;
+            this.placeAt(
+                this.exactX + ((spot.x - this.exactX) / distance) * step,
+                this.exactY + ((spot.y - this.exactY) / distance) * step,
+            );
+            this.updateDirection(this.exactX - startX, this.exactY - startY);
+            this.lastMoveTime = time;
+            this.animationType = PlayerAnimationTypes.Walk;
+        } else if (time - this.lastMoveTime > IDLE_DELAY) {
+            this.animationType = PlayerAnimationTypes.Idle;
+            this.direction = seat.direction;
+        }
+        // Back on the trail of its player once it stands up.
+        this.trail = [];
+        this.setDepth(seat.depth);
+        this.playAnimation(this.direction, this.animationType, time);
+        return true;
+    }
+
+    private findFreeSeatNextToOwner(): Seat | undefined {
+        const owner = this.owner as Partial<Character> & { x: number; y: number };
+        if (typeof owner.isSeated !== "function" || !owner.isSeated()) return undefined;
+        const scene = this.scene as GameScene;
+        const ownerSeat = findSeatOfCharacter(scene, owner as Character);
+        if (!ownerSeat) return undefined;
+        return getSeats(scene)
+            .filter(
+                (seat) => seat.entityId === ownerSeat.entityId && seat.id !== ownerSeat.id && !isSeatTaken(scene, seat),
+            )
+            .sort(
+                (a, b) =>
+                    Math.hypot(a.feet.x - ownerSeat.feet.x, a.feet.y - ownerSeat.feet.y) -
+                    Math.hypot(b.feet.x - ownerSeat.feet.x, b.feet.y - ownerSeat.feet.y),
+            )[0];
     }
 
     private isInWater(point: { x: number; y: number }): boolean {
