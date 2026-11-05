@@ -100,9 +100,8 @@
             <Button variant="light" appearance="border" size="sm" onclick={stopSharingJam}>
                 {home ? $LL.spotify.listeningZone.stopHome() : $LL.spotify.listeningZone.stop()}
             </Button>
-        {:else if home && !canHomeJam}
-            <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeDesktopOnly()}</p>
         {:else}
+            <!-- Without the desktop app, a Jukebox is joined without sound: to add, remove and move tracks. -->
             <Button
                 variant="success"
                 size="sm"
@@ -113,10 +112,14 @@
                 {joined
                     ? $LL.spotify.listeningZone.leave()
                     : home
-                      ? $LL.spotify.listeningZone.joinHome()
+                      ? canHomeJam
+                          ? $LL.spotify.listeningZone.joinHome()
+                          : $LL.spotify.listeningZone.joinHomeSilent()
                       : $LL.spotify.listeningZone.join()}
             </Button>
-            {#if joined && home}
+            {#if home && !canHomeJam}
+                <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeSilentNote()}</p>
+            {:else if joined && home}
                 <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeQueueHint()}</p>
             {/if}
         {/if}

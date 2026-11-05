@@ -71,7 +71,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         joinHome: "加入点唱机",
         leaveHome: "离开点唱机",
         homeQueueHint: "在 Spotify 中右键点击歌曲:“添加到点唱机”。",
-        homeDesktopOnly: "点唱机:仅限桌面应用和 Spicetify。",
         rooms: "{count} 个房间",
         leave: "离开",
         createRoom: "开房间",
@@ -102,6 +101,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "下移",
         upNext: "接下来",
         upNextIn: "接下来:{name}",
+        joinHomeSilent: "加入(无声音)",
+        homeSilentNote: "这里没有声音:在本机收听需要桌面应用和 Spicetify。",
     },
 };
 

@@ -76,7 +76,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         joinHome: "ジュークボックスに参加",
         leaveHome: "ジュークボックスを退出",
         homeQueueHint: "Spotify で曲を右クリック:「ジュークボックスに追加」。",
-        homeDesktopOnly: "ジュークボックス: デスクトップアプリと Spicetify のみ。",
         rooms: "{count} ルーム",
         leave: "退出",
         createRoom: "ルームを開く",
@@ -108,6 +107,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "下へ",
         upNext: "次に再生",
         upNextIn: "{name} の次の曲",
+        joinHomeSilent: "参加(音なし)",
+        homeSilentNote: "ここでは音が出ません。手元で聴くにはデスクトップアプリと Spicetify が必要です。",
     },
 };
 

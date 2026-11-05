@@ -74,7 +74,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         stopHome: "Kết thúc Jukebox",
         joinHome: "Tham gia Jukebox",
         leaveHome: "Rời Jukebox",
-        homeDesktopOnly: "Jukebox: chỉ với ứng dụng desktop và Spicetify.",
         rooms: "{count} phòng",
         leave: "Rời",
         createRoom: "Mở phòng",
@@ -107,6 +106,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "Xuống",
         upNext: "Tiếp theo",
         upNextIn: "Tiếp theo trong {name}",
+        joinHomeSilent: "Tham gia (không có tiếng)",
+        homeSilentNote: "Không có tiếng ở đây: nghe trên máy cần ứng dụng desktop với Spicetify.",
     },
 };
 

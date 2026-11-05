@@ -72,7 +72,6 @@ const spotify: BaseTranslation = {
         stopHome: "End the Jukebox",
         joinHome: "Join the Jukebox",
         leaveHome: "Leave the Jukebox",
-        homeDesktopOnly: "Jukebox: with the desktop app and Spicetify only.",
         rooms: "{count} room{{s}}",
         leave: "Leave",
         createRoom: "Open a room",
@@ -105,6 +104,8 @@ const spotify: BaseTranslation = {
         moveDown: "Move down",
         upNext: "Up next",
         upNextIn: "Up next in {name}",
+        joinHomeSilent: "Join (no sound)",
+        homeSilentNote: "No sound here: listening at home takes the desktop app with Spicetify.",
     },
 };
 

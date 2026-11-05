@@ -75,7 +75,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         joinHome: "Unisciti al Jukebox",
         leaveHome: "Esci dal Jukebox",
         homeQueueHint: "In Spotify, clic destro su un brano: «Aggiungi al Jukebox».",
-        homeDesktopOnly: "Jukebox: solo con l'app desktop e Spicetify.",
         rooms: "{count} stanza/e",
         leave: "Esci",
         createRoom: "Apri una stanza",
@@ -107,6 +106,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         moveDown: "Sposta giù",
         upNext: "In arrivo",
         upNextIn: "In arrivo da {name}",
+        joinHomeSilent: "Unisciti (senza audio)",
+        homeSilentNote: "Niente audio qui: ascoltare da te richiede l'app desktop con Spicetify.",
     },
 };
 
