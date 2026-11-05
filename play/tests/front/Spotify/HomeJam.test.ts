@@ -318,6 +318,69 @@ describe("Jukebox, the one who added a track", () => {
     });
 });
 
+describe("Jukebox, moving tracks anywhere", () => {
+    const upcomingA = { uri: "spotify:track:a", uid: "ua", title: "A", artist: "", artworkUrl: "" };
+    const upcomingB = { uri: "spotify:track:b", uid: "ub", title: "B", artist: "", artworkUrl: "" };
+    const upcomingC = { uri: "spotify:track:c", uid: "uc", title: "C", artist: "", artworkUrl: "" };
+    const mine: JukeboxTrack = { ...queued, uid: "q1" };
+    const theirs: JukeboxTrack = { ...queued, uid: "q2", addedByUuid: "stranger" };
+
+    function hostWithPlaylist() {
+        const host = createHarness("host");
+        host.listening.set(new Map([["guest", inRoom(ZONE.areaId, "host")]]));
+        host.spotifyQueueChanges({
+            tracks: [mine, theirs],
+            upcoming: [upcomingA, upcomingB, upcomingC],
+            contextName: "Focus",
+        });
+        return host;
+    }
+
+    it("lets the host move the rest of the playlist, by step or to a given track", () => {
+        const host = hostWithPlaylist();
+        const room = { zone: ZONE, jam: homeJam };
+
+        moveInJukebox(room, upcomingB, "up");
+        expect(host.desktop.moveInSpotifyQueue).toHaveBeenLastCalledWith({
+            uri: upcomingB.uri,
+            uid: upcomingB.uid,
+            before: { uri: upcomingA.uri, uid: upcomingA.uid },
+        });
+
+        moveInJukebox(room, upcomingA, { after: "uc" });
+        expect(host.desktop.moveInSpotifyQueue).toHaveBeenLastCalledWith({
+            uri: upcomingA.uri,
+            uid: upcomingA.uid,
+            after: { uri: upcomingC.uri, uid: upcomingC.uid },
+        });
+        host.stop();
+    });
+
+    it("drops a guest's own track before another, but never across lists nor a playlist track", () => {
+        const host = hostWithPlaylist();
+
+        host.receive(JUKEBOX_MOVE_EVENT, { uri: mine.uri, uid: mine.uid, after: "q2" }, 2);
+        expect(host.desktop.moveInSpotifyQueue).toHaveBeenLastCalledWith({
+            uri: mine.uri,
+            uid: mine.uid,
+            after: { uri: theirs.uri, uid: theirs.uid },
+        });
+        expect(host.desktop.moveInSpotifyQueue).toHaveBeenCalledTimes(1);
+
+        host.receive(JUKEBOX_MOVE_EVENT, { uri: mine.uri, uid: mine.uid, before: "ua" }, 2);
+        host.receive(JUKEBOX_MOVE_EVENT, { uri: upcomingB.uri, uid: upcomingB.uid, before: "ua" }, 2);
+        expect(host.desktop.moveInSpotifyQueue).toHaveBeenCalledTimes(1);
+        host.stop();
+    });
+
+    it("lets a participant remove a playlist track", () => {
+        const host = hostWithPlaylist();
+        host.receive(JUKEBOX_REMOVE_EVENT, { uri: upcomingA.uri, uid: upcomingA.uid }, 2);
+        expect(host.desktop.dequeueOnSpotify).toHaveBeenCalledWith({ uri: upcomingA.uri, uid: upcomingA.uid });
+        host.stop();
+    });
+});
+
 describe("likeTrack", () => {
     it("saves a track through the desktop app, and does nothing without it", () => {
         const likeOnSpotify = vi.fn();

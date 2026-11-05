@@ -27,8 +27,15 @@ const trackUri = z.string().regex(/^spotify:track:[A-Za-z0-9]+$/);
 const queueUid = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const QueueRequest = z.object({ uris: z.array(trackUri).min(1).max(MAX_TRACKS_PER_REQUEST) });
 const RemoveRequest = z.object({ uri: trackUri, uid: queueUid });
-const MoveRequest = RemoveRequest.extend({ direction: z.enum(["up", "down"]) });
-export type MoveDirection = z.infer<typeof MoveRequest>["direction"];
+/** One step up or down (buttons), or just before or after another track of the same list (drag and drop). */
+const Placement = z.union([
+    z.object({ direction: z.enum(["up", "down"]) }),
+    z.object({ before: queueUid }),
+    z.object({ after: queueUid }),
+]);
+export type MovePlacement = z.infer<typeof Placement>;
+export type MoveDirection = "up" | "down";
+const MoveRequest = z.intersection(RemoveRequest, Placement);
 const artworkUrl = z.union([z.literal(""), z.string().startsWith("https://i.scdn.co/image/").max(200)]);
 const JukeboxState = z.object({
     tracks: z
@@ -46,7 +53,15 @@ const JukeboxState = z.object({
         .max(MAX_SHOWN_QUEUE),
     // Older hosts send the queue only.
     upcoming: z
-        .array(z.object({ uri: trackUri, title: z.string().max(200), artist: z.string().max(200), artworkUrl }))
+        .array(
+            z.object({
+                uri: trackUri,
+                uid: queueUid.optional(),
+                title: z.string().max(200),
+                artist: z.string().max(200),
+                artworkUrl,
+            }),
+        )
         .max(MAX_SHOWN_UPCOMING)
         .default([]),
     contextName: z.string().max(200).default(""),
@@ -61,7 +76,7 @@ let actions:
           request: (hostUuid: string) => void;
           add: (room: JamRoom, uri: string) => void;
           remove: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">) => void;
-          move: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, direction: MoveDirection) => void;
+          move: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, placement: MovePlacement) => void;
       }
     | undefined;
 
@@ -81,8 +96,12 @@ export function removeFromJukebox(room: JamRoom, track: Pick<JukeboxTrack, "uri"
 }
 
 /** Moves a track up or down a Jukebox's queue: directly for its host, through the host for the one who added it. */
-export function moveInJukebox(room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, direction: MoveDirection): void {
-    actions?.move(room, track, direction);
+export function moveInJukebox(
+    room: JamRoom,
+    track: Pick<JukeboxTrack, "uri" | "uid">,
+    placement: MoveDirection | MovePlacement,
+): void {
+    actions?.move(room, track, typeof placement === "string" ? { direction: placement } : placement);
 }
 
 /** Saves a track to the Liked Songs of this computer's Spotify; false without the desktop app and the extension. */
@@ -159,14 +178,26 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     const setQueue = (hostUuid: string, queue: JukeboxQueue) =>
         jukeboxQueuesStore.update((queues) => new Map(queues).set(hostUuid, queue));
 
-    /** Where a queued track moves: just before the previous one, or just after the next one. */
-    const moveTarget = (uid: string, direction: MoveDirection) => {
-        const queue = ownQueue();
-        const index = queue.findIndex((track) => track.uid === uid);
-        const neighbour = index < 0 ? undefined : queue[direction === "up" ? index - 1 : index + 1];
-        if (!neighbour) return undefined;
-        const entry = { uri: neighbour.uri, uid: neighbour.uid };
-        return direction === "up" ? { before: entry } : { after: entry };
+    /**
+     * Where a track moves: just before the previous one, or just after the next one, within its own list (the tracks
+     * added to the queue, or the rest of the playlist).
+     */
+    const moveTarget = (uid: string, placement: MovePlacement) => {
+        const { tracks, upcoming } = ownState();
+        const list: { uri: string; uid?: string }[] = tracks.some((track) => track.uid === uid) ? tracks : upcoming;
+        const index = list.findIndex((track) => track.uid === uid);
+        if (index < 0) return undefined;
+        let target: { uri: string; uid?: string } | undefined;
+        if ("direction" in placement) {
+            target = list[placement.direction === "up" ? index - 1 : index + 1];
+        } else {
+            const targetUid = "before" in placement ? placement.before : placement.after;
+            target = targetUid !== uid ? list.find((track) => track.uid === targetUid) : undefined;
+        }
+        if (!target?.uid) return undefined;
+        const entry = { uri: target.uri, uid: target.uid };
+        const before = "direction" in placement ? placement.direction === "up" : "before" in placement;
+        return before ? { before: entry } : { after: entry };
     };
 
     /** A participant of our Jukebox, within the rate limit: the only users a host obeys. */
@@ -204,11 +235,11 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
                 sendTo(room.jam.hostUuid, JUKEBOX_REMOVE_EVENT, request.data);
             }
         },
-        move: (room, track, direction) => {
-            const request = MoveRequest.safeParse({ uri: track.uri, uid: track.uid, direction });
+        move: (room, track, placement) => {
+            const request = MoveRequest.safeParse({ uri: track.uri, uid: track.uid, ...placement });
             if (!request.success) return;
             if (room.jam.hostUuid === context.localUuid()) {
-                const target = moveTarget(request.data.uid, direction);
+                const target = moveTarget(request.data.uid, placement);
                 if (target) desktop?.moveInSpotifyQueue?.({ uri: request.data.uri, uid: request.data.uid, ...target });
             } else {
                 sendTo(room.jam.hostUuid, JUKEBOX_MOVE_EVENT, request.data);
@@ -244,7 +275,7 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
         } else if (name === JUKEBOX_MOVE_EVENT) {
             const request = MoveRequest.safeParse(data);
             const sender = request.success ? acceptFromParticipant(senderId) : undefined;
-            const target = request.success ? moveTarget(request.data.uid, request.data.direction) : undefined;
+            const target = request.success ? moveTarget(request.data.uid, request.data) : undefined;
             if (request.success && sender && target && addedByOf(request.data.uid) === sender.uuid) {
                 desktop?.moveInSpotifyQueue?.({ uri: request.data.uri, uid: request.data.uid, ...target });
             }

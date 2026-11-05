@@ -44,8 +44,11 @@ export interface JukeboxTrack {
     addedByUuid: string;
 }
 
-/** A track still to come from the host's playing playlist or album (or Spotify's autoplay): shown, never edited. */
-export type UpcomingTrack = Pick<JukeboxTrack, "uri" | "title" | "artist" | "artworkUrl">;
+/**
+ * A track still to come from the host's playing playlist or album (or Spotify's autoplay). With its queue uid (desktop
+ * extension 1.3.2+), the host moves or removes it, for this playback only.
+ */
+export type UpcomingTrack = Pick<JukeboxTrack, "uri" | "title" | "artist" | "artworkUrl"> & { uid?: string };
 
 /** What a Jukebox's host plays next: the tracks added to the queue, then the rest of the playlist. */
 export interface JukeboxQueue {
