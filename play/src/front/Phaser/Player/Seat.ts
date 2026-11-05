@@ -57,12 +57,15 @@ function getSeats(scene: GameScene): Seat[] {
         const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -1 : 1);
         const { interaction, trigger } = getObjectInteraction(prefab, categories);
         if (prefab.seat) {
+            // A hitbox added to a catalog chair keeps the feet off its seat tile: touching the object is enough then.
+            const reach = getHitboxReach(entity);
             prefab.seat.forEach((tile, index) => {
                 seats.push({
                     id: `${entityId}:${index}`,
                     entityId,
                     direction,
                     depth,
+                    reach,
                     trigger: interaction === "sit" ? trigger : "auto",
                     feet: { x: entity.x + tile.x * width, y: entity.y + tile.y * height },
                 });
@@ -74,8 +77,20 @@ function getSeats(scene: GameScene): Seat[] {
     return seats;
 }
 
-/** How far around the hitbox of a deduced seat the feet still reach it. */
+/** How far around the hitbox of a seat object the player still reaches it. */
 const SEAT_REACH_MARGIN = 4;
+
+/** The hitbox of the object and its margin, when it has a hitbox. */
+function getHitboxReach(entity: { x: number; y: number; getPrefab(): EntityPrefab }): Seat["reach"] {
+    const hitbox = entity.getPrefab().collisionRectangles?.[0];
+    if (!hitbox) return undefined;
+    return {
+        x: entity.x + hitbox.x - SEAT_REACH_MARGIN,
+        y: entity.y + hitbox.y - SEAT_REACH_MARGIN,
+        width: hitbox.width + SEAT_REACH_MARGIN * 2,
+        height: hitbox.height + SEAT_REACH_MARGIN * 2,
+    };
+}
 
 /**
  * Seats of a chair or a couch the catalog does not describe: at the center of its hitbox (of the image when it has
@@ -129,10 +144,7 @@ export function findSeatUnderFeet(
     const { width, height } = scene.getGameMapFrontWrapper().getTileDimensions();
     const seats = getSeats(scene);
     const onTile = seats.find(
-        (seat) =>
-            seat.reach === undefined &&
-            Math.abs(seat.feet.x - feet.x) < width / 2 &&
-            Math.abs(seat.feet.y - feet.y) < height / 2,
+        (seat) => Math.abs(seat.feet.x - feet.x) < width / 2 && Math.abs(seat.feet.y - feet.y) < height / 2,
     );
     if (onTile) return onTile;
     let nearest: { seat: Seat; distance: number } | undefined;

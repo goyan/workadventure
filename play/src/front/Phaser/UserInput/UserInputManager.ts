@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import { enableUserInputsStore } from "../../Stores/UserInputStore";
 import type { UserInputHandlerInterface } from "../../Interfaces/UserInputHandlerInterface";
 import LL from "../../../i18n/i18n-svelte";
+import { DoubleTapSprint } from "./DoubleTapSprint";
 
 import Key = Phaser.Input.Keyboard.Key;
 import Pointer = Phaser.Input.Pointer;
@@ -239,6 +240,8 @@ export class UserInputManager {
         return !this.isRightClickDisabled;
     }
 
+    private readonly doubleTapSprint = new DoubleTapSprint();
+
     getEventListForGameTick(): ActiveEventList {
         const eventsMap = new ActiveEventList();
         if (this.isInputDisabled) {
@@ -262,6 +265,9 @@ export class UserInputManager {
                 eventsMap.set(d.event, true);
             }
         });
+        if (this.doubleTapSprint.update((event) => eventsMap.get(event), performance.now())) {
+            eventsMap.set(UserInputEvent.SpeedUp, true);
+        }
         return eventsMap;
     }
 

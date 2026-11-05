@@ -243,6 +243,7 @@ import { ApplicationManager } from "../../Chat/Applications/ApplicationManager";
 import { audioPlaybackStore } from "../../Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "../../Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "../Helpers/EnterLeaveScriptingService";
+import { getWaterRectangles, isPointInWater } from "./Water/WaterZones";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -1500,7 +1501,8 @@ export class GameScene extends DirtyScene {
                     sound.play();
                 },
                 () => this.getHearingZones(),
-                (x, y) => surfaces.surfaceAt(x, y),
+                // A swimmer makes the sound of water, whatever the floor under the pool.
+                (x, y) => (isPointInWater(getWaterRectangles(this), { x, y }) ? "water" : surfaces.surfaceAt(x, y)),
             );
         }
         // The feet, not the middle of the sprite, tell which floor tile is walked on.

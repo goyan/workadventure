@@ -1,3 +1,4 @@
 Footstep sounds: "Impact Sounds" by Kenney (Kenney Vleugels, https://kenney.nl/assets/impact-sounds), CC0 1.0 (public domain).
 Files kept: footstep_grass_000-004 (grass-0..4), footstep_wood_000-004 (wood-0..4),
 footstep_carpet_000-004 (carpet-0..4), footstep_concrete_000-004 (stone-0..4).
+Water sounds (water-0..4.wav): generated for WorkAdventure (filtered noise and rising bubbles), no third-party material.
