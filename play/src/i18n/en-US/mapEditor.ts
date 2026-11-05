@@ -364,7 +364,7 @@ const mapEditor: BaseTranslation = {
                 unavailable: "The Gobeur is not ready yet, try again in a moment.",
                 alreadyRunning: "A game is already running.",
             },
-            announce: "The Gobeur is loose! Run to your personal area.",
+            announce: "The Gobeur is loose! Run to your personal area or to the refuge.",
             ranking: {
                 title: "Gobeur ranking",
                 survivor: "Survivor",

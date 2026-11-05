@@ -374,7 +374,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 unavailable: "Le Gobeur n'est pas encore prêt, réessaie dans un instant.",
                 alreadyRunning: "Une partie est déjà en cours.",
             },
-            announce: "Le Gobeur est lâché ! Fuis jusqu'à ta zone personnelle.",
+            announce: "Le Gobeur est lâché ! Fuis jusqu'à ta zone personnelle ou au refuge.",
             ranking: {
                 title: "Classement du Gobeur",
                 survivor: "Survivant",
