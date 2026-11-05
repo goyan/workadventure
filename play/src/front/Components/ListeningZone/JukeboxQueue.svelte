@@ -28,7 +28,7 @@
 
     let queue = $derived($jukeboxQueuesStore.get(room.jam.hostUuid));
     let tracks = $derived(queue?.tracks ?? []);
-    // What the host's playlist plays next: shown, never edited (Spotify only edits the tracks added to the queue).
+    // What the host's playlist plays next: the host moves and removes them too, for this playback only.
     let upcoming = $derived(queue?.upcoming ?? []);
     let mine = $derived(isLocalUser(room.jam.hostUuid));
     let joined = $derived($joinedJamStore?.url === listeningZoneJamKey(room.jam));
@@ -50,6 +50,44 @@
 
     function canMove(track: JukeboxTrack): boolean {
         return mine || (joined && isOwn(track));
+    }
+
+    type DragList = "queue" | "upcoming";
+    /** The track being dragged, and the row it hovers: a drop moves it just before or after that row. */
+    let dragging: { uid: string; uri: string; list: DragList } | undefined = $state();
+    let dropTarget: string | undefined = $state();
+
+    function dragStart(event: DragEvent, track: { uri: string; uid?: string }, list: DragList): void {
+        if (!track.uid) return;
+        dragging = { uid: track.uid, uri: track.uri, list };
+        event.dataTransfer?.setData("text/plain", track.uri);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    }
+
+    function dragOver(event: DragEvent, uid: string | undefined, list: DragList): void {
+        // Within its own list only: the queue and the rest of the playlist are moved separately.
+        if (!dragging || !uid || dragging.list !== list || dragging.uid === uid) return;
+        event.preventDefault();
+        dropTarget = uid;
+    }
+
+    function drop(event: DragEvent, items: { uid?: string }[], targetIndex: number): void {
+        event.preventDefault();
+        const target = items[targetIndex]?.uid;
+        const moved = dragging;
+        dragEnd();
+        if (!moved || !target) return;
+        const from = items.findIndex((item) => item.uid === moved.uid);
+        moveInJukebox(
+            room,
+            { uri: moved.uri, uid: moved.uid },
+            from < targetIndex ? { after: target } : { before: target },
+        );
+    }
+
+    function dragEnd(): void {
+        dragging = undefined;
+        dropTarget = undefined;
     }
 
     function like(track: JukeboxTrack): void {
@@ -81,7 +119,19 @@
         <p class="m-0 text-xs text-white/50">{$LL.spotify.listeningZone.queueEmpty()}</p>
     {/if}
     {#each tracks as track, index (track.uid)}
-        <div class="flex min-w-0 items-center gap-2">
+        <div
+            class="flex min-w-0 items-center gap-2 rounded {canMove(track) ? 'cursor-grab' : ''} {dropTarget ===
+            track.uid
+                ? 'bg-white/10 ring-1 ring-secondary'
+                : ''} {dragging?.uid === track.uid ? 'opacity-40' : ''}"
+            role="listitem"
+            draggable={canMove(track)}
+            ondragstart={(event) => dragStart(event, track, "queue")}
+            ondragover={(event) => dragOver(event, track.uid, "queue")}
+            ondragleave={() => (dropTarget = undefined)}
+            ondrop={(event) => drop(event, tracks, index)}
+            ondragend={dragEnd}
+        >
             {#if track.artworkUrl}
                 <img
                     src={track.artworkUrl}
@@ -158,7 +208,20 @@
                 : $LL.spotify.listeningZone.upNext()}
         </p>
         {#each upcoming as track, index (`${index}:${track.uri}`)}
-            <div class="flex min-w-0 items-center gap-2 opacity-80" data-testid="jukebox-upcoming">
+            <div
+                class="flex min-w-0 items-center gap-2 rounded {mine && track.uid ? 'cursor-grab' : ''} {track.uid &&
+                dropTarget === track.uid
+                    ? 'bg-white/10 ring-1 ring-secondary'
+                    : ''} {track.uid && dragging?.uid === track.uid ? 'opacity-40' : ''}"
+                role="listitem"
+                draggable={mine && track.uid !== undefined}
+                ondragstart={(event) => dragStart(event, track, "upcoming")}
+                ondragover={(event) => dragOver(event, track.uid, "upcoming")}
+                ondragleave={() => (dropTarget = undefined)}
+                ondrop={(event) => drop(event, upcoming, index)}
+                ondragend={dragEnd}
+                data-testid="jukebox-upcoming"
+            >
                 {#if track.artworkUrl}
                     <img
                         src={track.artworkUrl}
@@ -186,6 +249,40 @@
                         }}
                     >
                         {liked.has(track.uri) ? "♥" : "♡"}
+                    </button>
+                {/if}
+                {#if mine && track.uid}
+                    {@const uid = track.uid}
+                    <div class="flex shrink-0 flex-col leading-none">
+                        <button
+                            type="button"
+                            class="rounded px-1 text-[10px] text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30"
+                            title={$LL.spotify.listeningZone.moveUp()}
+                            aria-label={$LL.spotify.listeningZone.moveUp()}
+                            disabled={index === 0}
+                            onclick={() => moveInJukebox(room, { uri: track.uri, uid }, "up")}>▲</button
+                        >
+                        <button
+                            type="button"
+                            class="rounded px-1 text-[10px] text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30"
+                            title={$LL.spotify.listeningZone.moveDown()}
+                            aria-label={$LL.spotify.listeningZone.moveDown()}
+                            disabled={index === upcoming.length - 1}
+                            onclick={() => moveInJukebox(room, { uri: track.uri, uid }, "down")}>▼</button
+                        >
+                    </div>
+                {/if}
+                {#if track.uid && (mine || (joined && !djMode))}
+                    {@const uid = track.uid}
+                    <button
+                        type="button"
+                        class="shrink-0 rounded px-1.5 py-0.5 text-white/60 hover:bg-white/10 hover:text-white"
+                        title={$LL.spotify.listeningZone.remove()}
+                        aria-label={$LL.spotify.listeningZone.remove()}
+                        onclick={() => removeFromJukebox(room, { uri: track.uri, uid })}
+                        data-testid="jukebox-upcoming-remove"
+                    >
+                        ✕
                     </button>
                 {/if}
             </div>
