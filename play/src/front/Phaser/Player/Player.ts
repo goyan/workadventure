@@ -277,6 +277,11 @@ export class Player extends Character {
         return this.swimming ? speed * SWIM_SPEED_FACTOR : speed;
     }
 
+    /** The local player knows it swims: near an edge its body center may be out of the water while it still swims. */
+    protected override isSwimmingHere(): boolean {
+        return this.swimming || super.isSwimmingHere();
+    }
+
     /** Whether the player dove in and is still in the water: the water does not block it then. */
     public isSwimming(): boolean {
         return this.swimming;

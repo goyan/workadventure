@@ -281,16 +281,23 @@ export abstract class Character extends Container implements OutlineableInterfac
     private updateSwimEffect(): void {
         if (!this.scene) return;
         this.swimEffect ??= new SwimEffect(this.scene, this);
-        const inWater = isPointInWater(getWaterRectangles(this.scene), {
-            x: this.x,
-            y: this.y + BODY_CENTER_OFFSET_Y,
-        });
+        const inWater = this.isSwimmingHere();
         if (inWater && !this.swimEffect.isActive) {
             this.swimEffect.start();
         } else if (!inWater && this.swimEffect.isActive) {
             this.swimEffect.stop(this.sprites.values());
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
+    }
+
+    /** Whether the body of the character is in the water: what the other players see of a swimmer. */
+    protected isSwimmingHere(): boolean {
+        return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+    }
+
+    /** Whether the character is drawn swimming (its body in the water), for everyone. */
+    public isInWater(): boolean {
+        return this.swimEffect?.isActive ?? false;
     }
 
     private setDepthIfNeeded(depth: number): void {
