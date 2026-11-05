@@ -160,7 +160,14 @@ export class GobeurGame {
         }
         if (now - this.lastStateSentAt >= GOBEUR_STATE_INTERVAL_MS) {
             this.lastStateSentAt = now;
-            return [{ kind: "send", message: this.stateMessage() }];
+            // The start again, for late joiners and reloaded players the master never saw arrive: the followers ignore
+            // the start of the game they already follow.
+            const effects: GobeurEffect[] = [];
+            if (this.startMessage) {
+                effects.push({ kind: "send", message: this.startMessage });
+            }
+            effects.push({ kind: "send", message: this.stateMessage() });
+            return effects;
         }
         return [];
     }

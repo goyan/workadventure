@@ -131,12 +131,33 @@ describe("GobeurGame master", () => {
         expect(sent(effects).find((m) => m.kind === "end")).toMatchObject({ reason: "allCaught" });
     });
 
-    it("sends state every 5000 ms", () => {
+    it("sends start then state every 5000 ms", () => {
         const g = master();
         expect(g.tick(3000, ["m", "a", "b"])).toEqual([]);
-        expect(kinds(g.tick(6000, ["m", "a", "b"]))).toEqual(["send:state"]);
+        expect(kinds(g.tick(6000, ["m", "a", "b"]))).toEqual(["send:start", "send:state"]);
         expect(g.tick(8000, ["m", "a", "b"])).toEqual([]);
-        expect(kinds(g.tick(11_000, ["m", "a", "b"]))).toEqual(["send:state"]);
+        const effects = g.tick(11_000, ["m", "a", "b"]);
+        expect(kinds(effects)).toEqual(["send:start", "send:state"]);
+        expect(sent(effects)[0]).toEqual(startMsg());
+    });
+
+    it("periodic start is ignored by a follower and adopted by a late joiner", () => {
+        const g = master();
+        g.catchPlayer("a", 2000);
+        const periodic = sent(g.tick(7000, ["m", "a", "b"]));
+        expect(periodic.map((m) => m.kind)).toEqual(["start", "state"]);
+
+        const already = follower("b");
+        expect(already.receive(periodic[0], "m", 7000)).toEqual([]);
+        expect(already.receive(periodic[1], "m", 7000)).toEqual([]);
+        expect(already.caughtOrder).toEqual(["a"]);
+
+        const late = new GobeurGame("a");
+        expect(kinds(late.receive(periodic[0], "m", 7000))).toEqual(["announceStart"]);
+        expect(late.isRunning).toBe(true);
+        expect(kinds(late.receive(periodic[1], "m", 7000))).toEqual(["teleportToPrison"]);
+        expect(late.receive(periodic[1], "m", 12_000)).toEqual([]);
+        expect(late.localStatus).toBe("caught");
     });
 
     it("sends state on playerJoined", () => {
