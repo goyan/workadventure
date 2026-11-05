@@ -27,6 +27,16 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "ヘルプとヒント",
     },
     settings: {
+        theme: {
+            label: "テーマ",
+            palettes: {
+                night: "夜",
+                forest: "森",
+                ember: "残り火",
+                gameboy: "Game Boy",
+                light: "ライト",
+            },
+        },
         videoBandwidth: {
             title: "ビデオの品質",
             low: "低品質",

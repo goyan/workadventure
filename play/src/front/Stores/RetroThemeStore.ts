@@ -1,7 +1,7 @@
 import { writable } from "svelte/store";
 
-/** Palettes of the 16-bit theme of the map editor (style/retro-theme.css). */
-export const RETRO_PALETTES = ["night", "forest", "ember", "gameboy"] as const;
+/** Palettes of the interface theme (style/retro-theme.css). */
+export const RETRO_PALETTES = ["night", "forest", "ember", "gameboy", "light"] as const;
 export type RetroPalette = (typeof RETRO_PALETTES)[number];
 
 const STORAGE_KEY = "mapEditorRetroPalette";

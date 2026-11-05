@@ -27,6 +27,16 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Aiuto e suggerimenti",
     },
     settings: {
+        theme: {
+            label: "Tema",
+            palettes: {
+                night: "Notte",
+                forest: "Foresta",
+                ember: "Brace",
+                gameboy: "Game Boy",
+                light: "Chiaro",
+            },
+        },
         videoBandwidth: {
             title: "Qualità video",
             low: "Bassa",

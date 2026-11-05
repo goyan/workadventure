@@ -11,7 +11,6 @@
 
     import { blocker } from "../../Utils/screenBlocker";
     import PixelSkyline from "../UI/PixelSkyline.svelte";
-    import RetroPaletteSwitcher from "./RetroPaletteSwitcher.svelte";
     import AreaEditor from "./AreaEditor/AreaEditor.svelte";
     import EntityEditor from "./EntityEditor/EntityEditor.svelte";
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
@@ -78,7 +77,6 @@
                 in:fly={{ x: 100, duration: 200, delay: 200 }}
                 out:fly={{ x: 100, duration: 200 }}
             >
-                <RetroPaletteSwitcher />
                 {#if $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
                     <EntityEditor />
                 {/if}

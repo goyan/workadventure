@@ -464,15 +464,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "Gạch đỏ",
         },
     },
-    retroTheme: {
-        label: "Giao diện",
-        palettes: {
-            night: "Đêm",
-            forest: "Rừng",
-            ember: "Than hồng",
-            gameboy: "Game Boy",
-        },
-    },
     categories: {
         base: {
             seats: "Seats",

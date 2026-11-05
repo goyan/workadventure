@@ -1,8 +1,8 @@
 /*
- * Theme engine of the editor menus: modern, with a pixel touch, like the WorkAdventure desktop client.
+ * Theme engine of the interface: modern, with a pixel touch, like the WorkAdventure desktop client.
  *
  * - Tokens: the colors of the desktop client (night navy, slate panels, WorkAdventure blue, warm window light) live
- *   on `.retro-theme`; `data-retro-palette` swaps the accent family (night, forest, ember, gameboy). Components only
+ *   on `.retro-theme`; `data-retro-palette` swaps the palette. Components only
  *   read tokens, so a palette is just a block of variables.
  * - Pixel touch: the selected choice marked by a small square "pixel", crisp previews. Typography and radii
  *   share the same tokens as the rest of the interface.
@@ -25,6 +25,9 @@
     --font-title: var(--font-main);
     --font-content: var(--font-main);
     --font-sans: var(--font-main);
+    --color-white: var(--ui-foreground);
+    --color-black: var(--ui-overlay);
+    --color-neutral-100: var(--ui-foreground);
 
     --radius: 4px;
     --radius-xs: 2px;
@@ -35,6 +38,11 @@
     --radius-2xl: 8px;
     --radius-3xl: 8px;
     --radius-4xl: 8px;
+}
+
+:root {
+    --ui-foreground: #fff;
+    --ui-overlay: #000;
 }
 
 /*
@@ -116,6 +124,72 @@
     --secondary-1000: 74 90% 24%;
 }
 
+:root[data-retro-palette="light"] {
+    color-scheme: light;
+    --ui-foreground: #263044;
+    --ui-overlay: #fff;
+    --contrast-100: 220 28% 21%;
+    --contrast-200: 220 22% 29%;
+    --contrast-300: 220 18% 38%;
+    --contrast-400: 220 18% 55%;
+    --contrast-500: 220 24% 74%;
+    --contrast-600: 220 28% 85%;
+    --contrast: 220 35% 94%;
+    --contrast-800: 220 35% 94%;
+    --contrast-900: 220 45% 98%;
+    --contrast-1000: 220 45% 100%;
+    --contrast-1100: 220 45% 100%;
+    --secondary-500: 233 76% 55%;
+    --secondary-600: 233 76% 48%;
+    --secondary: 233 76% 48%;
+    --secondary-800: 233 76% 42%;
+    --secondary-900: 233 76% 36%;
+    --secondary-1000: 233 76% 30%;
+    --danger: 11 70% 38%;
+    --success: 140 55% 30%;
+    --warning: 35 85% 30%;
+    --color-dark-purple: hsl(var(--contrast-900));
+    --color-medium-purple: hsl(var(--contrast-600));
+    --color-light-purple: hsl(var(--contrast-500));
+    --color-lighter-purple: hsl(var(--contrast-300));
+    --color-light-purple-alt: hsl(var(--contrast-400));
+    --color-dark-blue: hsl(var(--contrast-900));
+    --color-dark: hsl(var(--contrast-1000));
+}
+
+/* Foreground utilities adapt to light surfaces, but stay white on filled accent buttons and dark alerts. */
+:root[data-retro-palette="light"]
+    :is(
+        .bg-primary,
+        .bg-secondary,
+        .bg-secondary-600,
+        .bg-danger,
+        .bg-success,
+        .bg-warning,
+        .bg-danger-1000\/70,
+        .retro-btn-primary,
+        .btn-primary:not(.btn-border):not(.btn-ghost),
+        .btn-secondary:not(.btn-border):not(.btn-ghost),
+        .btn-danger:not(.btn-border):not(.btn-ghost),
+        .btn-neutral:not(.btn-border):not(.btn-ghost),
+        .btn-success:not(.btn-border):not(.btn-ghost),
+        .btn-warning:not(.btn-border):not(.btn-ghost)
+    ) {
+    --ui-foreground: #fff;
+    color: #fff;
+}
+
+:root[data-retro-palette="light"] .input-switch::after {
+    background-color: #fff;
+}
+
+:root[data-retro-palette="light"]
+    .btn:not(.btn-primary):not(.btn-secondary):not(.btn-danger):not(.btn-neutral):not(.btn-success):not(
+        .btn-warning
+    ):not(.btn-light) {
+    color: hsl(var(--contrast-100));
+}
+
 /* The tokens of the menus are aliases of the design system: one source of colors for the whole interface. */
 .retro-theme {
     --rt-bg: hsl(var(--contrast-900));
@@ -131,7 +205,7 @@
     --rt-accent-soft: hsl(var(--secondary) / 0.16);
     --rt-highlight: #ffd36b;
     --rt-primary: hsl(var(--secondary));
-    --rt-danger: #ec7c62;
+    --rt-danger: hsl(var(--danger));
     --rt-hitbox: #ec7c62;
     --rt-water: #5ec4f5;
     --rt-radius-s: var(--radius-sm);

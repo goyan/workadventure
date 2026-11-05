@@ -27,6 +27,16 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Hilfe & Tipps",
     },
     settings: {
+        theme: {
+            label: "Thema",
+            palettes: {
+                night: "Nacht",
+                forest: "Wald",
+                ember: "Glut",
+                gameboy: "Game Boy",
+                light: "Hell",
+            },
+        },
         proximityDiscussionVolume: "Proximity discussion volume",
         videoBandwidth: {
             title: "Videoqualität",

@@ -27,6 +27,16 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Pomoc a pokiwki",
     },
     settings: {
+        theme: {
+            label: "Tema",
+            palettes: {
+                night: "Nóc",
+                forest: "Lěs",
+                ember: "Žar",
+                gameboy: "Game Boy",
+                light: "Swětły",
+            },
+        },
         videoBandwidth: {
             title: "Kwalita wideja",
             low: "Niska",

@@ -464,15 +464,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             brique: "벽돌",
         },
     },
-    retroTheme: {
-        label: "테마",
-        palettes: {
-            night: "밤",
-            forest: "숲",
-            ember: "잉걸불",
-            gameboy: "Game Boy",
-        },
-    },
     categories: {
         base: {
             seats: "Seats",

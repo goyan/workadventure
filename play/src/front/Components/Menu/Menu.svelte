@@ -4,7 +4,6 @@
     import { onDestroy, onMount } from "svelte";
     import type { Unsubscriber } from "svelte/store";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import chevronImg from "../images/chevron.svg";
     import type { MenuItem } from "../../Stores/MenuStore";
     import {
         activeSubMenuStore,
@@ -27,6 +26,7 @@
     import ChatSubMenu from "./ChatSubMenu.svelte";
     import ShortcutSubMenu from "./ShortcutSubMenu.svelte";
     import HelpSubMenu from "./HelpSubMenu.svelte";
+    import { IconChevronRight } from "@wa-icons";
 
     // raw, not $state: this holds one of the objects in subMenusStore and is compared back against
     // them with ===, both here and in the markup. A deep-reactive $state would proxy it, and a proxy
@@ -201,14 +201,11 @@
                                 >
                                     {subMenuTranslations[i]}
                                 </button>
-                                <img
-                                    src={chevronImg}
+                                <IconChevronRight
                                     class="hidden @md/main-layout:block absolute transition-all right-4 group-hover:right-6 top-0 bottom-0 m-auto w-4 z-10 {activeSubMenu ===
                                     submenu
                                         ? 'opacity-100 group-hover:right-4'
                                         : 'opacity-30'}"
-                                    alt="open submenu"
-                                    draggable="false"
                                 />
                             </div>
                         </div>
