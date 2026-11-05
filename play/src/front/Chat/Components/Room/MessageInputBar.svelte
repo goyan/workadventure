@@ -41,6 +41,7 @@
     import { draftMessageService } from "../../Services/DraftMessageService";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import { showFloatingUi } from "../../../Utils/svelte-floatingui-show";
+    import { hasMessageContent } from "../../../Utils/MessageContent";
     import { formatFileSize } from "../../../Utils/FileSize";
     import PollCreateDialog from "../PollCreateDialog.svelte";
     import LazyEmote from "../../../Components/EmoteMenu/LazyEmote.svelte";
@@ -192,7 +193,7 @@
         }
         if (stopTypingTimeOutID) clearTimeout(stopTypingTimeOutID);
 
-        const isEmptyMessage = message.replace(/<br>/g, "").trim() == "" || message == undefined;
+        const isEmptyMessage = !hasMessageContent(message);
         if (keyDownEvent.key === "Enter" || isEmptyMessage) {
             room.stopTyping().catch((error) => console.error(error));
         } else {
@@ -213,7 +214,7 @@
             keyDownEvent.preventDefault();
         }
 
-        if (keyDownEvent.key === "Enter" && !isEmptyMessage) {
+        if (keyDownEvent.key === "Enter" && (!isEmptyMessage || files.length > 0 || applicationProperty?.link)) {
             // message contains HTML tags. Actually, the only tags we allow are for the new line, ie. <br> tags.
             // We can turn those back into carriage returns.
             const messageToSend = message.replace(/<br>/g, "\n");
@@ -258,7 +259,7 @@
         }
 
         // send message
-        if (messageToSend.trim().length !== 0) {
+        if (hasMessageContent(messageToSend)) {
             room?.sendMessage(messageToSend);
             analyticsClient.trackAdminEvent("chat.message_sent", {
                 chatContext: room instanceof ProximityChatRoom ? "proximity" : "room",
@@ -280,8 +281,7 @@
 
     function onInputHandler() {
         // We remove the <br> tags and the whitespace to check if the message is empty
-        const messageToSend = message.replace(/<br>/g, "").trim();
-        if (messageToSend == "" || messageToSend == undefined) {
+        if (!hasMessageContent(message)) {
             if (stopTypingTimeOutID) clearTimeout(stopTypingTimeOutID);
             room.stopTyping().catch((error) => console.error(error));
         }
@@ -967,7 +967,7 @@
     >
         <IconMoodSmile font-size={18} />
     </button>
-    {#if message.trim().length !== 0 || files.length !== 0 || (applicationProperty && applicationProperty.link.length !== 0)}
+    {#if hasMessageContent(message) || files.length !== 0 || (applicationProperty && applicationProperty.link.length !== 0)}
         <button
             data-testid="sendMessageButton"
             class="disabled:opacity-30 disabled:!cursor-not-allowed disabled:text-white py-0 px-3 m-0 bg-secondary h-full rounded-md"

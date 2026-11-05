@@ -50,7 +50,7 @@ function buildSpaceKeyboardBadgeHtml(): string {
     textElement.setAttribute("x", "24");
     textElement.setAttribute("y", "12");
     textElement.setAttribute("text-anchor", "middle");
-    textElement.setAttribute("font-family", "system-ui, -apple-system, Segoe UI, sans-serif");
+    textElement.setAttribute("font-family", "var(--font-main)");
     textElement.setAttribute("font-size", "7");
     textElement.setAttribute("font-weight", "700");
     textElement.setAttribute("letter-spacing", "0.04em");
@@ -89,7 +89,7 @@ function buildEscapeKeyboardBadgeHtml(isInteractive: boolean): string {
     textElement.setAttribute("x", "17");
     textElement.setAttribute("y", "12");
     textElement.setAttribute("text-anchor", "middle");
-    textElement.setAttribute("font-family", "system-ui, -apple-system, Segoe UI, sans-serif");
+    textElement.setAttribute("font-family", "var(--font-main)");
     textElement.setAttribute("font-size", "8");
     textElement.setAttribute("font-weight", "700");
     textElement.setAttribute("letter-spacing", "0.06em");
@@ -111,10 +111,10 @@ function bubbleOuterStyle(type: "warning" | "message"): string {
         "z-index:10",
         "box-sizing:border-box",
         "padding:8px 12px",
-        "border-radius:12px",
+        "border-radius:var(--radius-lg)",
         "font-size:10px",
         "line-height:1.45",
-        'font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+        "font-family:var(--font-main)",
         "letter-spacing:0.01em",
         "cursor:pointer",
         "max-width:min(320px,85vw)",
@@ -123,18 +123,17 @@ function bubbleOuterStyle(type: "warning" | "message"): string {
         "overflow-x:hidden",
         "white-space:normal",
         "word-break:break-word",
-        "backdrop-filter:blur(12px)",
-        "-webkit-backdrop-filter:blur(12px)",
     ];
     if (type === "message") {
-        base.push("background:rgba(27,52,65,0.50)", "color:white", "border:1px solid rgba(27,52,65,0.50)");
+        base.push("background:rgba(27,52,65,0.90)", "color:white", "border:1px solid rgba(27,52,65,0.50)");
     } else {
-        base.push("background:rgba(27,52,65,0.50)", "color:white", "border:1px solid rgba(233,110,83,0.50)");
+        base.push("background:rgba(27,52,65,0.90)", "color:white", "border:1px solid rgba(233,110,83,0.50)");
     }
     return base.join(";");
 }
 
 export class SpeechDomElement extends DOMElement {
+    private disposed = false;
     private timeoutDestroyText: NodeJS.Timeout | null = null;
     private readonly span: HTMLSpanElement | null = null;
     /** Same reference passed to add/removeEventListener on the escape badge (ESLint listeners rules). */
@@ -166,6 +165,7 @@ export class SpeechDomElement extends DOMElement {
         if (textMarked instanceof Promise) {
             textMarked
                 .then((resolvedText) => {
+                    if (this.disposed) return;
                     span.innerHTML = sanitizeHtml(resolvedText);
                     this.wireEscapeHintListener(span);
                 })
@@ -198,7 +198,7 @@ export class SpeechDomElement extends DOMElement {
         this.escapeHintClickHandler = (e: Event): void => {
             e.preventDefault();
             e.stopPropagation();
-            this.escapeCallback!();
+            this.escapeCallback?.();
         };
         escapeEl.addEventListener("click", this.escapeHintClickHandler);
     }
@@ -234,6 +234,9 @@ export class SpeechDomElement extends DOMElement {
     }
 
     public destroy() {
+        if (this.disposed) return;
+        this.disposed = true;
+        this.scene?.tweens.killTweensOf(this);
         if (this.span) {
             this.span.removeEventListener("click", this.callback);
             this.removeEscapeHintListener(this.span);

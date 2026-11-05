@@ -6,6 +6,7 @@ import type { AvailabilityStatus as AvailabilityStatusType } from "@workadventur
 import { SayMessageType, AvailabilityStatus, PositionMessage_Direction } from "@workadventure/messages";
 import { defaultWoka, Deferred, type Movable, type PositionInterface } from "@workadventure/shared-utils";
 import { Subject } from "rxjs";
+import { hasMessageContent } from "../../Utils/MessageContent";
 import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import { createColorStore } from "../../Stores/OutlineColorStore";
@@ -748,6 +749,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     ) {
         if (this.texts.has(id)) {
             this.destroyText(id);
+        }
+        if (!hasMessageContent(text)) {
+            this.textsToBuild.delete(id);
+            return;
         }
         this.textsToBuild.set(id, { text, duration, callback, type, escapeCallback });
 

@@ -39,7 +39,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { getLayerDepth } from "./EntityLayerDepth";
-import { makesEntityActivatable, replaceEntityProperty } from "./EntityProperties";
+import { replaceEntityProperty } from "./EntityProperties";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
@@ -243,6 +243,9 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         }
         if (get(mapEditorModeStore)) {
             actionsMenuStore.clear();
+            return;
+        }
+        if (!this.hasAnyPropertiesSet()) {
             return;
         }
         this.toggleActionsMenu();
@@ -503,10 +506,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (!this.canEdit && !this.canRead) {
             return false;
         }
-        if (!this.entityData.properties) {
-            return false;
-        }
-        return Object.values(this.entityData.properties).some((value) => makesEntityActivatable(value));
+        return Boolean(this.description?.trim()) || this.getDefaultActionsMenuActions().length > 0;
     }
 
     private toggleActionsMenu(): void {
