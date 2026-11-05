@@ -99,10 +99,6 @@
         background-color: #333333;
         color: whitesmoke;
 
-        h2 {
-            font-family: "Press Start 2P";
-        }
-
         section.streams {
             display: flex;
             flex-direction: row;

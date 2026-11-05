@@ -37,7 +37,7 @@
         color: white;
         z-index: 10000 !important;
         position: absolute !important;
-        font-family: "Roboto", sans-serif;
+        font-family: var(--font-main);
         p {
             font-size: xx-large;
         }

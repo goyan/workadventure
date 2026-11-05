@@ -4,19 +4,37 @@
  * - Tokens: the colors of the desktop client (night navy, slate panels, WorkAdventure blue, warm window light) live
  *   on `.retro-theme`; `data-retro-palette` swaps the accent family (night, forest, ember, gameboy). Components only
  *   read tokens, so a palette is just a block of variables.
- * - Pixel touch: titles in Pixelify Sans (the font of the desktop client), the selected choice marked by a small
- *   square "pixel", crisp previews. Everything else stays modern: 1px lines, soft radii, smooth transitions.
+ * - Pixel touch: the selected choice marked by a small square "pixel", crisp previews. Typography and radii
+ *   share the same tokens as the rest of the interface.
  * - Components: .retro-panel, .retro-card, .retro-heading, .retro-title, .retro-choice(s), .retro-btn (+ -primary,
  *   -danger), .retro-label, .retro-hint, .retro-error, .retro-pixel; native inputs, selects, checkboxes and scrollbars
  *   inside `.retro-theme` follow the same look.
  */
 
 @font-face {
-    /* SIL Open Font License, see ./fonts/pixelify/OFL.txt. Used for titles only. */
+    /* SIL Open Font License, see ./fonts/pixelify/OFL.txt. */
     font-family: "Pixelify Sans";
     src: url("./fonts/pixelify/PixelifySans.ttf") format("truetype");
     font-weight: 400 700;
     font-display: swap;
+}
+
+/* Override the upstream design system once, including its inline font and radius utilities. */
+@theme inline {
+    --font-main: "Pixelify Sans", system-ui, sans-serif;
+    --font-title: var(--font-main);
+    --font-content: var(--font-main);
+    --font-sans: var(--font-main);
+
+    --radius: 4px;
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 8px;
+    --radius-2xl: 8px;
+    --radius-3xl: 8px;
+    --radius-4xl: 8px;
 }
 
 /*
@@ -116,10 +134,9 @@
     --rt-danger: #ec7c62;
     --rt-hitbox: #ec7c62;
     --rt-water: #5ec4f5;
-    --rt-radius-s: 0.375rem;
-    --rt-radius-m: 0.625rem;
+    --rt-radius-s: var(--radius-sm);
+    --rt-radius-m: var(--radius-lg);
     --rt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-    --rt-font-pixel: "Pixelify Sans", system-ui, sans-serif;
 
     color: var(--rt-text);
     background: hsl(var(--contrast-900) / 0.94);
@@ -152,7 +169,7 @@
 .retro-theme .retro-heading,
 .retro-theme .retro-title,
 .retro-theme .retro-pixel {
-    font-family: var(--rt-font-pixel);
+    font-family: var(--font-main);
     letter-spacing: 0.01em;
 }
 
@@ -377,12 +394,12 @@
     border-bottom: 1px solid var(--rt-line);
 }
 
-/* A small warm pill in the pixel font ("Beta", counts, states). */
+/* A small warm badge ("Beta", counts, states). */
 .retro-theme .retro-badge {
     display: inline-flex;
     align-items: center;
     padding: 0.1rem 0.45rem;
-    font-family: var(--rt-font-pixel);
+    font-family: var(--font-main);
     font-size: 0.75rem;
     font-weight: 600;
     color: #2b2108;

@@ -98,7 +98,7 @@
         position: relative;
         z-index: 2;
         background: rgba(34, 197, 94, 0.15);
-        border-radius: 12px;
+        border-radius: var(--radius-lg);
         padding: 10px;
         display: flex;
         align-items: center;

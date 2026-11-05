@@ -65,9 +65,3 @@
         <div class="animate-pulse text-sm">{text}</div>
     </div>
 </div>
-
-<style>
-    .loader {
-        font-family: "Roboto", sans-serif;
-    }
-</style>
