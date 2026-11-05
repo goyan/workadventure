@@ -65,6 +65,16 @@ vi.mock("../../../../src/front/Components/MapEditor/EntityEditor/PlacedImageSize
     default: vi.fn(),
 }));
 
+vi.mock(
+    "../../../../src/front/Components/MapEditor/EntityEditor/CustomEntityEditionForm/CustomEntityEditionForm.svelte",
+    () => ({
+        default: vi.fn(),
+    }),
+);
+vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
+    executeUpdateWAMSettings: vi.fn(),
+}));
+
 /** An entity that stores properties like Entity does: updateProperty deep-merges, replaceProperty replaces. */
 function fakeEntity(properties: EntityDataProperties): Entity {
     const entity = mock<Entity>();
