@@ -535,6 +535,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Gira",
         },
         customEntityEditorForm: {
+            shapeEditorHint:
+                "Arrossega la zona per moure-la i les nanses per redimensionar-la. Fletxes: 1 px, Maj + fletxes: mida.",
             titles: {
                 upload: "Nou objecte",
                 edit: "Edita l’objecte",

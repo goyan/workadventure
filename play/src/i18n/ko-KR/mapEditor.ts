@@ -532,6 +532,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "회전",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "영역을 끌어 이동하고 핸들로 크기를 조절하세요. 화살표: 1px, Shift + 화살표: 크기.",
             titles: {
                 upload: "새 오브젝트",
                 edit: "오브젝트 편집",

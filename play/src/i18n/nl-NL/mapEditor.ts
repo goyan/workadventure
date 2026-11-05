@@ -537,6 +537,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Draaien",
         },
         customEntityEditorForm: {
+            shapeEditorHint:
+                "Sleep de zone om te verplaatsen, de grepen om de grootte te wijzigen. Pijlen: 1 px, Shift + pijlen: grootte.",
             titles: {
                 upload: "Nieuw object",
                 edit: "Object bewerken",

@@ -529,6 +529,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "تدوير",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "اسحب المنطقة لتحريكها ومقابضها لتغيير حجمها. الأسهم: 1 بكسل، Shift + الأسهم: الحجم.",
             titles: {
                 upload: "كائن جديد",
                 edit: "تعديل الكائن",

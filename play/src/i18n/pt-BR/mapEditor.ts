@@ -536,6 +536,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Girar",
         },
         customEntityEditorForm: {
+            shapeEditorHint:
+                "Arraste a zona para movê-la e as alças para redimensionar. Setas: 1 px, Shift + setas: tamanho.",
             titles: {
                 upload: "Novo objeto",
                 edit: "Editar objeto",

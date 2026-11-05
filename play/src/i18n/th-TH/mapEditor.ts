@@ -529,6 +529,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "หมุน",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "ลากโซนเพื่อย้าย ลากจุดจับเพื่อปรับขนาด ลูกศร: 1 px, Shift + ลูกศร: ขนาด",
             titles: {
                 upload: "วัตถุใหม่",
                 edit: "แก้ไขวัตถุ",

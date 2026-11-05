@@ -530,6 +530,7 @@ const mapEditor: BaseTranslation = {
             turn: "Turn",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "Drag the zone to move it, its handles to resize it. Arrows: 1 px, Shift + arrows: size.",
             titles: {
                 upload: "New object",
                 edit: "Edit object",

@@ -532,6 +532,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Xoay",
         },
         customEntityEditorForm: {
+            shapeEditorHint:
+                "Kéo vùng để di chuyển, kéo tay nắm để đổi kích thước. Mũi tên: 1 px, Shift + mũi tên: kích thước.",
             titles: {
                 upload: "Vật thể mới",
                 edit: "Sửa vật thể",

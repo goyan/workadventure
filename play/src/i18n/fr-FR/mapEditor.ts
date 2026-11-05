@@ -539,6 +539,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "Pivoter",
         },
         customEntityEditorForm: {
+            shapeEditorHint:
+                "Glissez la zone pour la déplacer, ses poignées pour la redimensionner. Flèches : 1 px, Maj + flèches : taille.",
             titles: {
                 upload: "Nouvel objet",
                 edit: "Modifier l’objet",

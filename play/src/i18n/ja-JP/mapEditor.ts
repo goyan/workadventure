@@ -533,6 +533,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "回転",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "ゾーンをドラッグで移動、ハンドルでサイズ変更。矢印: 1px、Shift + 矢印: サイズ。",
             titles: {
                 upload: "新しいオブジェクト",
                 edit: "オブジェクトを編集",

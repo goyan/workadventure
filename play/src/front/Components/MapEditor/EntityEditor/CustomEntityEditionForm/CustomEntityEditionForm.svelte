@@ -28,6 +28,7 @@
     } from "../../../../Utils/EntityCategory";
     import EntityEditionCollisionGrid from "./EntityEditionCollisionGrid.svelte";
     import EntityShapesOverlay from "./EntityShapesOverlay.svelte";
+    import EntityShapeEditor from "./EntityShapeEditor.svelte";
     import EntityRectangleInputs from "./EntityRectangleInputs.svelte";
 
     interface Props {
@@ -97,6 +98,12 @@
         hitbox.length > 0 || (!floatingObject && collisionGrid.some((row) => row.some((cell) => cell === 1))),
     );
     const TT = $derived($LL.mapEditor.entityEditor.customEntityEditorForm);
+    // The enlarged editor replaces the small preview as soon as there is a hitbox or water to adjust.
+    const showShapeEditor = $derived(
+        frameWidth > 0 &&
+            frameHeight > 0 &&
+            ((needsHitbox && hitbox.length > 0) || (layer === "floor" && hasWater && water.length > 0)),
+    );
 
     // Every object of the library belongs to a category: chosen among the existing ones, or created here.
     const NEW_CATEGORY = "__new__";
@@ -369,7 +376,23 @@
 
     <div class="retro-body">
         <div class="retro-preview">
-            <div class="relative flex items-center checkerboard">
+            {#if showShapeEditor}
+                <div class="flex flex-col items-center gap-2">
+                    <EntityShapeEditor
+                        imageSource={customEntity.imagePath}
+                        {frameWidth}
+                        {frameHeight}
+                        frameCount={animation?.frameCount ?? 1}
+                        hitbox={needsHitbox ? hitbox[0] : undefined}
+                        water={layer === "floor" && hasWater ? water[0] : undefined}
+                        active={needsHitbox ? "hitbox" : "water"}
+                        onHitboxChange={(rectangle) => (hitbox = [rectangle])}
+                        onWaterChange={(rectangle) => (water = [rectangle])}
+                    />
+                    <span class="retro-hint text-center">{TT.shapeEditorHint()}</span>
+                </div>
+            {/if}
+            <div class="relative flex items-center checkerboard" class:hidden={showShapeEditor}>
                 {#if !floatingObject}
                     <EntityEditionCollisionGrid
                         {collisionGrid}

@@ -527,6 +527,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             turn: "旋转",
         },
         customEntityEditorForm: {
+            shapeEditorHint: "拖动区域移动，拖动手柄调整大小。方向键：1 像素，Shift + 方向键：尺寸。",
             titles: {
                 upload: "新物体",
                 edit: "编辑物体",
