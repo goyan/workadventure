@@ -12,7 +12,7 @@ import { AbortError } from "@workadventure/shared-utils/src/Abort/AbortError";
 import { AvailabilityStatus, FilterType } from "@workadventure/messages";
 import { loadLocaleAsync } from "../../../../../i18n/i18n-util.async";
 import { setLocale } from "../../../../../i18n/i18n-svelte";
-import type { SpaceInterface, SpaceUserExtended } from "../../../../Space/SpaceInterface";
+import type { PublicEventsObservables, SpaceInterface, SpaceUserExtended } from "../../../../Space/SpaceInterface";
 import type { SpaceRegistryInterface } from "../../../../Space/SpaceRegistry/SpaceRegistryInterface";
 import type { MessageUserJoined } from "../../../../Connection/ConnexionModels";
 import { RemotePlayersRepository } from "../../../../Phaser/Game/RemotePlayersRepository";
@@ -23,6 +23,9 @@ import { selectedRoomStore } from "../../../Stores/SelectRoomStore";
 import { chatVisibilityStore } from "../../../../Stores/ChatStore";
 import { navChat, shouldRestoreChatStateStore } from "../../../Stores/ChatStore";
 import type { ChatConversation } from "../../ChatConnection";
+import { localUserStore } from "../../../../Connection/LocalUserStore";
+
+const { playSound } = vi.hoisted(() => ({ playSound: vi.fn() }));
 
 vi.mock("../../../../Api/IframeListener", () => {
     // Anything the room (or a module it pulls in) calls is a spy; anything it subscribes to is a stream.
@@ -59,7 +62,7 @@ vi.mock("../../../../Phaser/Entity/CharacterLayerManager", () => ({
     wokaBase64: () => Promise.resolve(""),
 }));
 vi.mock("../../../../Phaser/Game/GameManager", () => ({
-    gameManager: { getCurrentGameScene: () => ({ roomUrl: "room" }) },
+    gameManager: { getCurrentGameScene: () => ({ roomUrl: "room", playSound }) },
 }));
 vi.mock("../../../../Connection/ConnectionManager", () => ({
     connectionManager: { roomConnectionStream: new Subject() },
@@ -106,6 +109,7 @@ function player(userId: number): MessageUserJoined {
 }
 
 function createFakeSpace(users: Map<string, SpaceUserExtended>, spaceName = "bubble") {
+    const spaceMessages: NonNullable<PublicEventsObservables["spaceMessage"]> = new Subject();
     const observeUserJoined = new Subject<SpaceUserExtended>();
     const observeUserLeft = new Subject<SpaceUserExtended>();
     const stateStore = writable<SpaceState>(emptySpaceState());
@@ -121,14 +125,14 @@ function createFakeSpace(users: Map<string, SpaceUserExtended>, spaceName = "bub
         usersStore: writable(users),
         getMetadata: () => new Map(),
         state: { store: stateStore, isInitialized: () => isStateInitialized },
-        observePublicEvent: () => new Subject(),
+        observePublicEvent: (key: string) => (key === "spaceMessage" ? spaceMessages : new Subject()),
         observePrivateEvent: () => new Subject(),
         observeUserJoined,
         observeUserLeft,
         getUsers: () => Promise.resolve(users),
         emitPublicMessage: vi.fn(),
     } as unknown as SpaceInterface;
-    return { space, observeUserJoined, observeUserLeft, users, stateStore, receiveState };
+    return { space, spaceMessages, observeUserJoined, observeUserLeft, users, stateStore, receiveState };
 }
 
 function createRoom(
@@ -180,8 +184,101 @@ describe("ProximityChatRoom join events", () => {
         chatVisibilityStore.set(false);
         shouldRestoreChatStateStore.set(false);
         vi.clearAllMocks();
+        vi.restoreAllMocks();
         vi.useRealTimers();
     });
+
+    it.each(["default", "proximity"] as const)(
+        "plays the existing sound for live human and NPC text in a displayed %s bubble",
+        async (kind) => {
+            vi.spyOn(localUserStore, "getChatSounds").mockReturnValue(true);
+            const fake = createFakeSpace(new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)])));
+            const repository = new RemotePlayersRepository();
+            repository.addPlayer(player(2));
+            const room = createRoom(fake.space, repository, kind);
+            try {
+                await room.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+                selectedRoomStore.set(room);
+                chatVisibilityStore.set(true);
+                playSound.mockClear();
+                for (const sender of ["room_2", "npc_ada"]) {
+                    fake.spaceMessages.next({
+                        $case: "spaceMessage",
+                        spaceName: "bubble",
+                        sender,
+                        spaceMessage: { message: "Hello", characterTextures: [], name: sender },
+                    });
+                }
+                expect(playSound.mock.calls).toEqual([["new-message"], ["new-message"]]);
+                playSound.mockClear();
+                room.sendMessage("My message");
+                room.sendMessage("Joined", "incoming", false);
+                room.sendMessage("Left", "outcoming", false);
+                fake.spaceMessages.next({
+                    $case: "spaceMessage",
+                    spaceName: "bubble",
+                    sender: MY_SPACE_USER_ID,
+                    spaceMessage: { message: "My echo", characterTextures: [] },
+                });
+                await room.loadMorePreviousMessages();
+                get(room.messages);
+                expect(playSound).not.toHaveBeenCalled();
+                chatVisibilityStore.set(false);
+                fake.spaceMessages.next({
+                    $case: "spaceMessage",
+                    spaceName: "bubble",
+                    sender: "room_2",
+                    spaceMessage: { message: "Hidden panel", characterTextures: [] },
+                });
+                expect(playSound.mock.calls).toEqual([["new-message"]]);
+                playSound.mockClear();
+            } finally {
+                room.destroy();
+            }
+            fake.spaceMessages.next({
+                $case: "spaceMessage",
+                spaceName: "bubble",
+                sender: "room_2",
+                spaceMessage: { message: "After leaving", characterTextures: [] },
+            });
+            expect(playSound).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([
+        { kind: "default", sounds: false, muted: false },
+        { kind: "default", sounds: true, muted: true },
+        ...(["meeting", "speaker", "listener", "area"] as const).map((kind) => ({
+            kind,
+            sounds: true,
+            muted: false,
+        })),
+    ] as const)(
+        "keeps displayed messages silent for $kind, sounds=$sounds, muted=$muted",
+        async ({ kind, sounds, muted }) => {
+            vi.spyOn(localUserStore, "getChatSounds").mockReturnValue(sounds);
+            const fake = createFakeSpace(new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)])));
+            const repository = new RemotePlayersRepository();
+            repository.addPlayer(player(2));
+            const room = createRoom(fake.space, repository, kind);
+            try {
+                await room.joinSpace("bubble", [], false, FilterType.ALL_USERS, false);
+                selectedRoomStore.set(room);
+                chatVisibilityStore.set(true);
+                room.areNotificationsMuted.set(muted);
+                playSound.mockClear();
+                fake.spaceMessages.next({
+                    $case: "spaceMessage",
+                    spaceName: "bubble",
+                    sender: "room_2",
+                    spaceMessage: { message: "Hello", characterTextures: [] },
+                });
+                expect(playSound).not.toHaveBeenCalled();
+            } finally {
+                room.destroy();
+            }
+        },
+    );
 
     it("switches an open bubble chat to the meeting and sends to that meeting space", async () => {
         const users = new Map([1, 2].map((id) => [`room_${id}`, spaceUser(id)]));
