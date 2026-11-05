@@ -538,8 +538,7 @@ export class AreaEditorTool extends MapEditorTool {
             const prefab = entity.getPrefab();
             items.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
         }
-        // Outside of the floors there is nothing to snap to: an empty rectangle is not created.
-        return snapRectToFloors(modelFromPlacedPrefabs(items), rect) ?? { x: rect.x, y: rect.y, width: 0, height: 0 };
+        return snapRectToFloors(modelFromPlacedPrefabs(items), rect);
     }
 
     private getAreaEditorToolObjectsFromGameObjects(gameObjects: GameObject[]): (AreaPreview | SizeAlteringSquare)[] {
