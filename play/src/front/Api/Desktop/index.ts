@@ -1,4 +1,4 @@
-import { get } from "svelte/store";
+import { derived, get } from "svelte/store";
 import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import {
     availabilityStatusStore,
@@ -7,6 +7,7 @@ import {
     silentStore,
 } from "../../Stores/MediaStore";
 import type {
+    DesktopAppearance,
     DesktopListening,
     DesktopStatusRequest,
     WorkAdventureDesktopApi,
@@ -16,6 +17,7 @@ import type { RequestedStatus } from "../../Rules/StatusRules/statusRules";
 import { getStatusLabel } from "../../Utils/AvailabilityStatus";
 import { isPlayingTrack, listeningSourceOf } from "../../../common/SpotifyListening";
 import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
+import { retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
 
 declare global {
     interface Window {
@@ -66,6 +68,7 @@ class DesktopApi {
         });
 
         this.initStatus(window.WAD);
+        this.initAppearance(window.WAD);
         window.WAD.onListenAlongAvailable?.((available) => listenAlongAvailableStore.set(available === true));
     }
 
@@ -81,6 +84,19 @@ class DesktopApi {
             jamAreaName: listening.jamAreaId === "" ? "" : listening.jamAreaName,
         };
         window.WAD?.reportListening?.(desktopListening);
+    }
+
+    /** Optional: older desktop apps keep their own look. */
+    private initAppearance(desktop: WorkAdventureDesktopApi) {
+        const reportAppearance = desktop.reportAppearance;
+        if (!reportAppearance) return;
+        const appearance = derived(
+            [retroPaletteStore, uiFontStore],
+            ([palette, font]): DesktopAppearance => ({ palette, font }),
+        );
+        // Not unsubscribing is ok, this is a singleton.
+        //eslint-disable-next-line svelte/no-ignored-unsubscribe
+        appearance.subscribe(reportAppearance);
     }
 
     /** Optional: older desktop apps provide neither member, and nothing changes for them. */
