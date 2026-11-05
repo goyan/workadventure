@@ -18,7 +18,12 @@ import { GobeurBrain } from "./GobeurBrain";
 import type { GobeurBrainMap, GobeurTarget } from "./GobeurBrain";
 import { GobeurGame } from "./GobeurGame";
 import type { GobeurEffect } from "./GobeurGame";
-import { GOBEUR_POS_INTERVAL_MS, decodeGobeurMessage, encodeGobeurMessage } from "./GobeurProtocol";
+import {
+    GOBEUR_MASTER_TIMEOUT_MS,
+    GOBEUR_POS_INTERVAL_MS,
+    decodeGobeurMessage,
+    encodeGobeurMessage,
+} from "./GobeurProtocol";
 import type { GobeurMessage, GobeurStartMessage } from "./GobeurProtocol";
 import { areaCentre, isInsideArea, isSafe } from "./GobeurSafety";
 import type { Point } from "./GobeurSafety";
@@ -62,6 +67,16 @@ export class GobeurManager {
     private knownPlayerIds = new Set<number>();
     private readonly checkTimer: Phaser.Time.TimerEvent;
     private lastPublished = "";
+    private lastCheckAt = Date.now();
+    /**
+     * The master games run on the Phaser loop, which stops with a hidden tab: the followers would end them after
+     * GOBEUR_MASTER_TIMEOUT_MS while the master plays on. A hidden master tab ends its games at once.
+     */
+    private readonly visibilityListener = (): void => {
+        if (document.visibilityState === "hidden") {
+            this.interruptMasterGames();
+        }
+    };
     private readonly updateListener = (_time: number, delta: number): void => this.update(delta);
 
     constructor(private readonly scene: GameScene) {
@@ -102,6 +117,7 @@ export class GobeurManager {
             callback: () => this.check(),
         });
         scene.events.on(Phaser.Scenes.Events.UPDATE, this.updateListener);
+        document.addEventListener("visibilitychange", this.visibilityListener);
     }
 
     public launch(entityId: string): Promise<GobeurLaunchResult> {
@@ -173,6 +189,14 @@ export class GobeurManager {
         }
     }
 
+    private interruptMasterGames(): void {
+        for (const instance of this.instances.values()) {
+            if (instance.game.isRunning && instance.game.isMaster) {
+                this.apply(instance, instance.game.stop("interrupted"));
+            }
+        }
+    }
+
     /** The Gobeurs on screen open the doors, like the animals (the caller makes them silent). */
     public forEachDoorOpener(callback: (position: Point) => void): void {
         for (const instance of this.instances.values()) {
@@ -188,6 +212,7 @@ export class GobeurManager {
         this.unsubscribePlayers();
         this.checkTimer.remove();
         this.scene.events.off(Phaser.Scenes.Events.UPDATE, this.updateListener);
+        document.removeEventListener("visibilitychange", this.visibilityListener);
         for (const instance of this.instances.values()) {
             this.hideGobeur(instance);
         }
@@ -440,6 +465,12 @@ export class GobeurManager {
     /** A few times per second: the guards, the clock of the games, the prison of the local player. */
     private check(): void {
         const now = Date.now();
+        const sinceLastCheck = now - this.lastCheckAt;
+        this.lastCheckAt = now;
+        // The loop was stopped (hidden tab, frozen browser) long enough for the followers to end the games.
+        if (sinceLastCheck > GOBEUR_MASTER_TIMEOUT_MS) {
+            this.interruptMasterGames();
+        }
         const present = this.presentUuids();
         for (const instance of this.instances.values()) {
             const start = instance.game.currentStart;
