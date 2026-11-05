@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { get } from "svelte/store";
+import PrivateMessageHistoryConfirmation from "../../../src/front/Components/PrivateMessage/PrivateMessageHistoryConfirmation.svelte";
 import PrivateMessageModal from "../../../src/front/Components/PrivateMessage/PrivateMessageModal.svelte";
 import {
     clearPrivateMessages,
@@ -10,6 +11,9 @@ import {
 } from "../../../src/front/Stores/PrivateMessageStore";
 import { enableUserInputsStore, inputFormFocusStore } from "../../../src/front/Stores/UserInputStore";
 import { blackListManager } from "../../../src/front/WebRtc/BlackListManager";
+import { modals } from "@wa-modals";
+
+const closeModal = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../src/i18n/i18n-svelte", async () => {
     const { readable } = await import("svelte/store");
@@ -18,6 +22,12 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
             chat: {
                 privateMessage: {
                     label: () => "Private message",
+                    deleteMessage: () => "Delete this message from this browser",
+                    clearHistory: () => "Clear history with this person",
+                    clearHistoryConfirmation: ({ userName }: { userName: string }) =>
+                        `Delete history with ${userName}?`,
+                    cancelDelete: () => "Cancel",
+                    confirmDelete: () => "Delete history",
                     sending: () => "Sending",
                     unavailable: () => "This user is unavailable",
                 },
@@ -29,7 +39,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
     };
 });
 
-vi.mock("@wa-modals", () => ({ modals: { close: vi.fn() } }));
+vi.mock("@wa-modals", () => ({ modals: { close: closeModal, open: vi.fn() } }));
 
 const target = document.createElement("div");
 let component: ReturnType<typeof mount> | undefined;
@@ -108,9 +118,101 @@ afterEach(async () => {
     inputFormFocusStore.set(false);
     blackListManager.cancelBlackList("peer-ada");
     vi.restoreAllMocks();
+    vi.clearAllMocks();
 });
 
 describe("PrivateMessageModal", () => {
+    it("deletes one displayed message with an accessible cross without sending or losing the draft", () => {
+        restorePrivateMessages("human", "room-one");
+        receive("First");
+        receive("Second");
+        receive("Other peer", "peer-other");
+        const send = vi.fn(() => Promise.resolve());
+        const textarea = renderModal(send);
+        setText(textarea, "My draft");
+        const cross = target.querySelector<HTMLButtonElement>('[aria-label="Delete this message from this browser"]');
+        if (!cross) throw new Error("Message deletion button did not render");
+        expect(cross.type).toBe("button");
+        flushSync(() => cross.click());
+        expect(history().textContent).not.toContain("First");
+        expect(history().textContent).toContain("Second");
+        expect(target.querySelector(".select-text p")?.textContent).toBe("Second");
+        expect(textarea.value).toBe("My draft");
+        expect(send).not.toHaveBeenCalled();
+        expect(closeModal).not.toHaveBeenCalled();
+        restorePrivateMessages("human", "room-one");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Second", "Other peer"]);
+    });
+
+    it("opens a peer-specific confirmation and clears only that history without sending the draft", () => {
+        restorePrivateMessages("human", "room-one");
+        receive("Ada message");
+        receive("Other peer", "peer-other");
+        const send = vi.fn(() => Promise.resolve());
+        const textarea = renderModal(send);
+        setText(textarea, "My draft");
+        const clear = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.textContent?.includes("Clear history"),
+        );
+        if (!clear) throw new Error("History clear button did not render");
+        flushSync(() => clear.click());
+        expect(get(privateMessageHistoryStore)).toHaveLength(2);
+        const props = vi.mocked(modals.open).mock.calls.at(-1)?.[1];
+        expect(props?.userName).toBe("Ada");
+        const confirm = props?.confirm;
+        if (typeof confirm !== "function") throw new Error("History confirmation callback missing");
+        flushSync(() => confirm());
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual(["Other peer"]);
+        expect(textarea.value).toBe("My draft");
+        expect(send).not.toHaveBeenCalled();
+        expect(clear.disabled).toBe(true);
+    });
+
+    it("ignores a confirmation after the underlying conversation is destroyed", async () => {
+        receive("Keep");
+        renderModal();
+        const clear = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.textContent?.includes("Clear history"),
+        );
+        if (!clear) throw new Error("History clear button did not render");
+        flushSync(() => clear.click());
+        const confirm = vi.mocked(modals.open).mock.calls.at(-1)?.[1]?.confirm;
+        if (typeof confirm !== "function") throw new Error("History confirmation callback missing");
+        const mounted = component;
+        component = undefined;
+        if (!mounted) throw new Error("Private message modal not mounted");
+        await unmount(mounted, { outro: false });
+        confirm();
+        expect(get(privateMessageHistoryStore)).toHaveLength(1);
+    });
+
+    it("offers cancellation, Escape and close without calling the deletion callback", () => {
+        const confirm = vi.fn();
+        flushSync(() => {
+            component = mount(PrivateMessageHistoryConfirmation, {
+                target,
+                props: { isOpen: true, userName: "Ada", confirm },
+            });
+        });
+        expect(target.textContent).toContain("Delete history with Ada?");
+        const cancel = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.textContent?.includes("Cancel"),
+        );
+        if (!cancel) throw new Error("Cancel button not rendered");
+        expect(document.activeElement).toBe(cancel);
+        cancel.click();
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", cancelable: true }));
+        target.querySelector<HTMLButtonElement>('[data-testid="closeModal"]')?.click();
+        expect(confirm).not.toHaveBeenCalled();
+        expect(closeModal).toHaveBeenCalledTimes(3);
+        const remove = Array.from(target.querySelectorAll("button")).find((button) =>
+            button.textContent?.includes("Delete history"),
+        );
+        if (!remove) throw new Error("Confirm button not rendered");
+        remove.click();
+        expect(confirm).toHaveBeenCalledTimes(1);
+    });
+
     it("restores the selected peer after reconnecting, without failed sends or drafts", async () => {
         restorePrivateMessages("human", "room-one");
         receive("Received from Ada");

@@ -20,6 +20,13 @@ const chat: DeepPartial<Translation["chat"]> = {
     users: "使用者",
     chat: "聊天",
     privateMessage: {
+        // English fallback until translated.
+        deleteMessage: "Delete this message from this browser",
+        clearHistory: "Clear history with this person",
+        clearHistoryConfirmation:
+            "Delete the history with {userName} from this browser? This does not delete their copy or your draft.",
+        cancelDelete: "Cancel",
+        confirmDelete: "Delete history",
         label: "私人訊息",
         unavailable: "無法確認傳送。對方可能已離開此地圖，請稍後重試。",
         sending: "傳送中…",

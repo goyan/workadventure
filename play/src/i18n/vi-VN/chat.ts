@@ -22,6 +22,13 @@ const chat: DeepPartial<Translation["chat"]> = {
     users: "Người dùng",
     chat: "Trò chuyện",
     privateMessage: {
+        // English fallback until translated.
+        deleteMessage: "Delete this message from this browser",
+        clearHistory: "Clear history with this person",
+        clearHistoryConfirmation:
+            "Delete the history with {userName} from this browser? This does not delete their copy or your draft.",
+        cancelDelete: "Cancel",
+        confirmDelete: "Delete history",
         label: "Tin nhắn riêng",
         unavailable: "Không thể xác nhận việc gửi. Người nhận có thể đã rời bản đồ; hãy thử lại sau.",
         sending: "Đang gửi…",

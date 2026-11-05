@@ -1,11 +1,18 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { getPrivateMessageRecorder, privateMessageHistoryStore } from "../../Stores/PrivateMessageStore";
+    import {
+        getPrivateMessageDeleter,
+        getPrivateMessageRecorder,
+        privateMessageHistoryStore,
+    } from "../../Stores/PrivateMessageStore";
     import { inputFormFocusStore } from "../../Stores/UserInputStore";
     import { blackListManager } from "../../WebRtc/BlackListManager";
     import Popup from "../Modal/Popup.svelte";
     import Button from "../UI/Button.svelte";
+    import PrivateMessageHistoryConfirmation from "./PrivateMessageHistoryConfirmation.svelte";
+    import { IconX } from "@wa-icons";
+    import { modals } from "@wa-modals";
 
     interface Props {
         isOpen: boolean;
@@ -47,6 +54,18 @@
             followLatest = true;
         }
     });
+
+    function requestClearHistory(): void {
+        if (!messages.length) return;
+        const peerUuid = userUuid;
+        const remove = getPrivateMessageDeleter(peerUuid);
+        modals.open(PrivateMessageHistoryConfirmation, {
+            userName,
+            confirm: (): void => {
+                if (!lifetime.signal.aborted && userUuid === peerUuid) remove();
+            },
+        });
+    }
 
     function handleHistoryScroll(): void {
         if (!messageHistory) return;
@@ -99,11 +118,26 @@
             >
                 {#each messages as message (message.id)}
                     <div class="select-text shrink-0 rounded bg-white/10 p-3">
-                        <strong>{message.incoming ? message.peerName : $LL.chat.you()}</strong>
+                        <div class="flex justify-between items-start gap-2">
+                            <strong>{message.incoming ? message.peerName : $LL.chat.you()}</strong>
+                            <Button
+                                type="button"
+                                size="xs"
+                                square
+                                aria-label={$LL.chat.privateMessage.deleteMessage()}
+                                title={$LL.chat.privateMessage.deleteMessage()}
+                                onclick={() => getPrivateMessageDeleter(userUuid)(message.id)}
+                            >
+                                {#snippet icon()}<IconX />{/snippet}
+                            </Button>
+                        </div>
                         <p class="m-0 whitespace-pre-wrap break-words">{message.text}</p>
                     </div>
                 {/each}
             </div>
+            <Button type="button" disabled={!messages.length} onclick={requestClearHistory}>
+                {$LL.chat.privateMessage.clearHistory()}
+            </Button>
             <form
                 class="flex flex-col gap-2"
                 onsubmit={async (event) => {
