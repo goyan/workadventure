@@ -602,6 +602,7 @@ export class GameMapFrontWrapper {
         }
         this.collisionGridDirty = true;
         this.sharedCollisionGridDirty = true;
+        this.placementCollisionGrid = undefined;
     }
 
     private rebuildAreasCollisionLayer(): void {
@@ -1104,18 +1105,29 @@ export class GameMapFrontWrapper {
             return true;
         }
 
-        // Check if position is not colliding
-        const height = this.collisionGrid.length;
-        const width = this.collisionGrid[0].length;
+        // Areas only block players (restricted access, full...): an object may be placed on them, so they are left
+        // out of the grid used to place objects.
+        const placementGrid = this.getPlacementCollisionGrid();
+        const height = placementGrid.length;
+        const width = placementGrid[0]?.length ?? 0;
         const xIndex = Math.floor(topLeftX / this.getTileDimensions().width);
         const yIndex = Math.floor(topLeftY / this.getTileDimensions().height);
         if (yIndex >= height || yIndex < 0 || xIndex >= width || xIndex < 0) {
             return false;
         }
-        if (this.collisionGrid[yIndex][xIndex] !== 0) {
+        if (placementGrid[yIndex][xIndex] !== 0) {
             return false;
         }
         return true;
+    }
+
+    private placementCollisionGrid: number[][] | undefined;
+
+    /** The collision grid without the areas: what objects may not be placed on. Rebuilt with the collision grid. */
+    private getPlacementCollisionGrid(): number[][] {
+        this.ensureCollisionGridUpToDate(false);
+        this.placementCollisionGrid ??= this.composeCollisionGrid(false);
+        return this.placementCollisionGrid;
     }
 
     public isOutOfMapBounds(topLeftX: number, topLeftY: number, width = 0, height = 0): boolean {
