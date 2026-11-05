@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { privateMessageHistoryStore, recordPrivateMessage } from "../../Stores/PrivateMessageStore";
+    import { getPrivateMessageRecorder, privateMessageHistoryStore } from "../../Stores/PrivateMessageStore";
     import { inputFormFocusStore } from "../../Stores/UserInputStore";
     import { blackListManager } from "../../WebRtc/BlackListManager";
     import Popup from "../Modal/Popup.svelte";
@@ -69,10 +69,11 @@
             sending = false;
             return Promise.resolve();
         }
+        const recordMessage = getPrivateMessageRecorder();
         return send(message)
             .then(() => {
                 if (lifetime.signal.aborted) return;
-                recordPrivateMessage({ peerUuid: userUuid, peerName: userName, text: message, incoming: false });
+                recordMessage({ peerUuid: userUuid, peerName: userName, text: message, incoming: false });
                 text = "";
             })
             .catch(() => {

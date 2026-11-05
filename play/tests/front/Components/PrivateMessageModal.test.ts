@@ -6,6 +6,7 @@ import {
     clearPrivateMessages,
     privateMessageHistoryStore,
     recordPrivateMessage,
+    restorePrivateMessages,
 } from "../../../src/front/Stores/PrivateMessageStore";
 import { enableUserInputsStore, inputFormFocusStore } from "../../../src/front/Stores/UserInputStore";
 import { blackListManager } from "../../../src/front/WebRtc/BlackListManager";
@@ -103,12 +104,46 @@ afterEach(async () => {
     target.replaceChildren();
     target.remove();
     clearPrivateMessages();
+    localStorage.clear();
     inputFormFocusStore.set(false);
     blackListManager.cancelBlackList("peer-ada");
     vi.restoreAllMocks();
 });
 
 describe("PrivateMessageModal", () => {
+    it("restores the selected peer after reconnecting, without failed sends or drafts", async () => {
+        restorePrivateMessages("human", "room-one");
+        receive("Received from Ada");
+        receive("Other peer", "peer-other");
+        const textarea = renderModal();
+        setText(textarea, "Sent to Ada");
+        submitForm();
+        await vi.waitFor(() => expect(get(privateMessageHistoryStore)).toHaveLength(3));
+        const mountedComponent = component;
+        component = undefined;
+        if (!mountedComponent) throw new Error("Private message modal was not mounted");
+        await unmount(mountedComponent, { outro: false });
+        target.replaceChildren();
+        clearPrivateMessages();
+        restorePrivateMessages("human", "room-one");
+
+        const restoredTextarea = renderModal(() => Promise.reject(new Error("offline")));
+        expect(target.textContent).toContain("Received from Ada");
+        expect(target.textContent).toContain("Sent to Ada");
+        expect(target.textContent).not.toContain("Other peer");
+        expect(history().scrollTop).toBe(100);
+        setText(restoredTextarea, "Unsent draft");
+        submitForm();
+        await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).not.toBeNull());
+        clearPrivateMessages();
+        restorePrivateMessages("human", "room-one");
+        expect(get(privateMessageHistoryStore).map((entry) => entry.text)).toEqual([
+            "Received from Ada",
+            "Other peer",
+            "Sent to Ada",
+        ]);
+    });
+
     it("opens at the newest message and follows incoming replies while at the bottom", () => {
         receive("First");
         receive("Second");
