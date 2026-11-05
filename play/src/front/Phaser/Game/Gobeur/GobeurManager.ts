@@ -14,11 +14,12 @@ import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
 import { blockRectangles } from "../Wander/WanderCollisions";
 import { WanderingCharactersManager } from "../Wander/WanderingCharactersManager";
-import { GobeurBrain } from "./GobeurBrain";
+import { GOBEUR_LEVELS, GobeurBrain } from "./GobeurBrain";
 import type { GobeurBrainMap, GobeurTarget } from "./GobeurBrain";
 import { GobeurGame } from "./GobeurGame";
 import type { GobeurEffect } from "./GobeurGame";
 import {
+    GOBEUR_COUNTDOWN_MS,
     GOBEUR_MASTER_TIMEOUT_MS,
     GOBEUR_POS_INTERVAL_MS,
     decodeGobeurMessage,
@@ -154,13 +155,16 @@ export class GobeurManager {
             return { ok: false, reason: "noPlayer" };
         }
         const now = Date.now();
+        const huntsAt = now + GOBEUR_COUNTDOWN_MS;
         const start: GobeurStartMessage = {
             kind: "start",
             gameId: crypto.randomUUID(),
             entityId,
             masterUuid: this.localUuid,
             startedAt: now,
-            endsAt: now + property.durationSeconds * 1000,
+            huntsAt,
+            // The time of the game counts from the end of the countdown.
+            endsAt: huntsAt + property.durationSeconds * 1000,
             level: property.level,
             prisonAreaId: property.prisonAreaId,
             fallbackSafeAreaId: property.fallbackSafeAreaId,
@@ -177,6 +181,9 @@ export class GobeurManager {
             this.tileDimensions.width,
         );
         instance.lastPosSentAt = Number.NEGATIVE_INFINITY;
+        console.info(
+            `Gobeur: level ${property.level}, ${Math.round(WOKA_SPEED * 20 * GOBEUR_LEVELS[property.level].speedFactor)} px/s`,
+        );
         this.apply(instance, instance.game.startAsMaster(start, present));
         return { ok: true };
     }
@@ -333,7 +340,8 @@ export class GobeurManager {
                     });
                     break;
                 case "announceStart":
-                    gobeurAnnounceStore.set({ entityId: instance.entityId, at: Date.now() });
+                    // Announced when the chase starts, after the countdown.
+                    gobeurAnnounceStore.set({ entityId: instance.entityId, at: instance.game.huntsAt });
                     break;
                 case "ended":
                     this.hideGobeur(instance);
@@ -426,6 +434,16 @@ export class GobeurManager {
                 instance.sprite.interpolate(now);
                 continue;
             }
+            if (now < instance.game.huntsAt) {
+                // Countdown: the Gobeur waits at its place, and still tells the followers the master is there.
+                if (now - instance.lastPosSentAt >= GOBEUR_POS_INTERVAL_MS) {
+                    instance.lastPosSentAt = now;
+                    const { x, y } = instance.sprite.position;
+                    const pos = { x, y, direction: "down" as const, at: now };
+                    this.apply(instance, [{ kind: "send", message: { kind: "pos", gameId: start.gameId, ...pos } }]);
+                }
+                continue;
+            }
             const result = instance.brain.update(now, delta, this.targets(instance.game.survivors, start));
             instance.sprite.setPose(result.x, result.y, result.direction, now);
             if (now - instance.lastPosSentAt >= GOBEUR_POS_INTERVAL_MS) {
@@ -507,6 +525,8 @@ export class GobeurManager {
             views.set(entityId, {
                 running: instance.game.isRunning,
                 isMaster: instance.game.isMaster,
+                level: instance.game.currentStart?.level,
+                huntsAt: instance.game.huntsAt,
                 endsAt: instance.game.endsAt,
                 survivors: instance.game.survivors,
                 caught: instance.game.caughtOrder,

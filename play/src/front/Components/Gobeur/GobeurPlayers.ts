@@ -63,3 +63,8 @@ export function formatGobeurRemaining(milliseconds: number): string {
     const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
+
+/** The seconds left before the Gobeur chases (5, 4, ... 1), undefined once the chase is on. */
+export function gobeurCountdownSeconds(huntsAt: number, now: number): number | undefined {
+    return now < huntsAt ? Math.ceil((huntsAt - now) / 1000) : undefined;
+}

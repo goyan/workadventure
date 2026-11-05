@@ -5,6 +5,8 @@ export const GOBEUR_EVENT_PREFIX = "infogene.gobeur.";
 export const GOBEUR_POS_INTERVAL_MS = 200;
 export const GOBEUR_STATE_INTERVAL_MS = 5_000;
 export const GOBEUR_MASTER_TIMEOUT_MS = 5_000;
+/** Between "Lancer" and the chase: the players see a countdown, the Gobeur waits at its place. */
+export const GOBEUR_COUNTDOWN_MS = 5_000;
 
 export type GobeurDirection = "down" | "left" | "right" | "up";
 
@@ -16,6 +18,8 @@ const GobeurStartSchema = z.object({
     entityId: z.string(),
     masterUuid: z.string(),
     startedAt: finite,
+    /** End of the countdown: the Gobeur chases from then on. Absent: from startedAt. */
+    huntsAt: finite.optional(),
     endsAt: finite,
     level: GobeurLevel,
     prisonAreaId: z.string(),

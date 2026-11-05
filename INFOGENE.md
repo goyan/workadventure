@@ -501,7 +501,7 @@ s'affiche (`Components/Gobeur/*`).
 | --- | --- | --- | --- |
 | Débutant | 0,70 | 6 cases | 1 500 ms |
 | Intermédiaire | 0,95 | 10 cases | 800 ms |
-| Hard | 1,15 | toute la carte | 400 ms |
+| Hard | 2,5 (vitesse de course) | toute la carte | 400 ms |
 
 La marche de référence est `WOKA_SPEED * 20` px/s (comme `Player.deduceSpeed`). Un joueur est gobé à moins de 16 px du
 Gobeur, s'il est hors refuge. Sans cible, le Gobeur erre vers une case marchable tirée à moins de 5 cases.

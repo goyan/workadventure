@@ -60,6 +60,11 @@ export class GobeurGame {
         return this._endsAt;
     }
 
+    /** When the Gobeur starts chasing, at the end of the countdown. */
+    get huntsAt(): number {
+        return this.startMessage?.huntsAt ?? this.startMessage?.startedAt ?? 0;
+    }
+
     /** The start message of the running game (players already filtered for a master), undefined when not running. */
     get currentStart(): GobeurStartMessage | undefined {
         return this.running ? this.startMessage : undefined;

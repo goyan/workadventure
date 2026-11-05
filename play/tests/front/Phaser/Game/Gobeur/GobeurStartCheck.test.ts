@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GobeurPropertyData } from "@workadventure/map-editor";
+import { GOBEUR_COUNTDOWN_MS } from "../../../../../src/front/Phaser/Game/Gobeur/GobeurProtocol";
 import {
     GOBEUR_START_DURATION_MARGIN_MS,
     isStartConsistentWithProperty,
@@ -66,5 +67,19 @@ describe("isStartConsistentWithProperty", () => {
     it("rejects a duration longer than the property's plus the margin", () => {
         const endsAt = 1000 + 60_000 + GOBEUR_START_DURATION_MARGIN_MS + 1;
         expect(isStartConsistentWithProperty(start({ endsAt }), property())).toBe(false);
+    });
+
+    it("measures the duration from the end of the countdown", () => {
+        const huntsAt = 1000 + GOBEUR_COUNTDOWN_MS;
+        const endsAt = huntsAt + 60_000 + GOBEUR_START_DURATION_MARGIN_MS;
+        expect(isStartConsistentWithProperty(start({ huntsAt, endsAt }), property())).toBe(true);
+        expect(isStartConsistentWithProperty(start({ huntsAt, endsAt: endsAt + 1 }), property())).toBe(false);
+    });
+
+    it("rejects a countdown longer than the usual one, or ending before it starts or after the game", () => {
+        const late = 1000 + GOBEUR_COUNTDOWN_MS + GOBEUR_START_DURATION_MARGIN_MS + 1;
+        expect(isStartConsistentWithProperty(start({ huntsAt: late, endsAt: late + 1000 }), property())).toBe(false);
+        expect(isStartConsistentWithProperty(start({ huntsAt: 999 }), property())).toBe(false);
+        expect(isStartConsistentWithProperty(start({ huntsAt: 2000, endsAt: 1500 }), property())).toBe(false);
     });
 });

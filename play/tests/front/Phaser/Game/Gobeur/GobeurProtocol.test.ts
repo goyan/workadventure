@@ -44,6 +44,12 @@ describe("GobeurProtocol", () => {
         expect(decodeGobeurMessage(name, JSON.parse(JSON.stringify(data)))).toEqual(m);
     });
 
+    it("round-trips a start with its countdown", () => {
+        const withCountdown: GobeurStartMessage = { ...start, huntsAt: 1500 };
+        const { name, data } = encodeGobeurMessage(withCountdown);
+        expect(decodeGobeurMessage(name, JSON.parse(JSON.stringify(data)))).toEqual(withCountdown);
+    });
+
     it("names pos events", () => {
         expect(encodeGobeurMessage(messages[1]).name).toBe("infogene.gobeur.pos");
     });

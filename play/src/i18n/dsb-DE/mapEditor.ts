@@ -353,6 +353,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             noPlayerPresent: "No player is present.",
             prison: "Prison area",
             fallbackSafe: "Fallback safe area",
+            unnamedArea: "Unnamed area ({x}, {y})",
             none: "None",
             level: "Level",
             beginner: "Beginner",
@@ -371,6 +372,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 unavailable: "The Gobeur is not ready yet, try again in a moment.",
                 alreadyRunning: "A game is already running.",
             },
+            countdown: "The Gobeur sets off in {seconds}…",
             announce: "The Gobeur is loose! Run to your personal area or to the refuge.",
             ranking: {
                 title: "Gobeur ranking",

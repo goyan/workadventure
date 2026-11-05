@@ -8,7 +8,8 @@ export const GOBEUR_LEVELS: Record<
 > = {
     beginner: { speedFactor: 0.7, detectionTiles: 6, repathMs: 1500 },
     intermediate: { speedFactor: 0.95, detectionTiles: 10, repathMs: 800 },
-    hard: { speedFactor: 1.15, detectionTiles: null, repathMs: 400 },
+    // As fast as a running avatar (Player: 2.5 x the walking speed): only a refuge saves the player.
+    hard: { speedFactor: 2.5, detectionTiles: null, repathMs: 400 },
 };
 
 export const GOBEUR_CATCH_DISTANCE_PX = 16;

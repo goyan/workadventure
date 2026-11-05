@@ -405,4 +405,11 @@ describe("GobeurGame guards and late joiners", () => {
         expect(kinds(effects)).toEqual(["send:start", "send:state"]);
         expect(sent(effects)[0]).toMatchObject({ gameId: "g1", players: ["m", "a", "b"] });
     });
+
+    it("knows when the chase starts: after the countdown, or at the start without one", () => {
+        const g = new GobeurGame("m");
+        g.startAsMaster(startMsg({ huntsAt: 6000, endsAt: 66_000 }), ["m", "a", "b"]);
+        expect(g.huntsAt).toBe(6000);
+        expect(master().huntsAt).toBe(1000);
+    });
 });

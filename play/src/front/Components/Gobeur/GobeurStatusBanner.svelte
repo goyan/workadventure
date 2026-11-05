@@ -4,21 +4,24 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { gobeurAnnounceStore, gobeurGamesStore } from "../../Stores/GobeurStore";
-    import { formatGobeurRemaining } from "./GobeurPlayers";
+    import { formatGobeurRemaining, gobeurCountdownSeconds } from "./GobeurPlayers";
 
     const ANNOUNCE_DURATION_MS = 5000;
 
     const localUuid = localUserStore.getLocalUser()?.uuid ?? "";
 
     let now = $state(Date.now());
+    // Often enough for the countdown to change on time.
     const clock = setInterval(() => {
         now = Date.now();
-    }, 1000);
+    }, 200);
     onDestroy(() => clearInterval(clock));
 
-    // The announcement shows for a few seconds after the start it was set for.
+    // The announcement shows for a few seconds once the chase starts, at the end of the countdown.
     let announcing = $derived(
-        $gobeurAnnounceStore !== undefined && now - $gobeurAnnounceStore.at < ANNOUNCE_DURATION_MS,
+        $gobeurAnnounceStore !== undefined &&
+            now >= $gobeurAnnounceStore.at &&
+            now - $gobeurAnnounceStore.at < ANNOUNCE_DURATION_MS,
     );
 
     // The running games this browser takes part in, as a player or as the master.
@@ -45,10 +48,24 @@
             <strong>{$LL.mapEditor.properties.gobeur.announce()}</strong>
         {/if}
         {#each games as [entityId, game] (entityId)}
+            {@const countdown = gobeurCountdownSeconds(game.huntsAt, now)}
             <div class="flex flex-col gap-1 text-sm">
-                <span>
-                    {$LL.mapEditor.properties.gobeur.remaining({ time: formatGobeurRemaining(game.endsAt - now) })}
-                </span>
+                {#if countdown !== undefined}
+                    <strong class="text-lg" data-testid="gobeurCountdown">
+                        {$LL.mapEditor.properties.gobeur.countdown({ seconds: countdown })}
+                    </strong>
+                {:else}
+                    <span>
+                        {$LL.mapEditor.properties.gobeur.remaining({ time: formatGobeurRemaining(game.endsAt - now) })}
+                    </span>
+                {/if}
+                {#if game.level}
+                    <span
+                        >{$LL.mapEditor.properties.gobeur.level()} : {$LL.mapEditor.properties.gobeur[
+                            game.level
+                        ]()}</span
+                    >
+                {/if}
                 <span>
                     {$LL.mapEditor.properties.gobeur.survivors({ count: game.survivors.length })} ·
                     {$LL.mapEditor.properties.gobeur.caught({ count: game.caught.length })}

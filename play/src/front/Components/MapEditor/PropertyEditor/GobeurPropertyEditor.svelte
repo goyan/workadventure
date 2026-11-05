@@ -34,7 +34,13 @@
 
     // Read once: the areas are edited in another tool, the panel is rebuilt when the entity is selected again.
     const areas = [...(scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [])]
-        .map((area) => ({ id: area.id, name: area.name || area.id }))
+        // An unnamed area shows where it is, rather than its id.
+        .map((area) => ({
+            id: area.id,
+            name:
+                area.name ||
+                $LL.mapEditor.properties.gobeur.unnamedArea({ x: Math.round(area.x / 32), y: Math.round(area.y / 32) }),
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
 
     let durationMinutes = $state(property.durationSeconds / 60);
@@ -189,7 +195,7 @@
                     onchange={onPrisonChange}
                 >
                     <option value="">{$LL.mapEditor.properties.gobeur.none()}</option>
-                    {#each areas as area (area.id)}
+                    {#each areas.filter((area) => area.id !== property.fallbackSafeAreaId) as area (area.id)}
                         <option value={area.id}>{area.name}</option>
                     {/each}
                 </select>
@@ -208,7 +214,7 @@
                     onchange={onFallbackChange}
                 >
                     <option value="">{$LL.mapEditor.properties.gobeur.none()}</option>
-                    {#each areas as area (area.id)}
+                    {#each areas.filter((area) => area.id !== property.prisonAreaId) as area (area.id)}
                         <option value={area.id}>{area.name}</option>
                     {/each}
                 </select>

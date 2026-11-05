@@ -105,7 +105,7 @@ describe("GobeurBrain", () => {
     it("exposes the level table", () => {
         expect(GOBEUR_LEVELS.beginner).toEqual({ speedFactor: 0.7, detectionTiles: 6, repathMs: 1500 });
         expect(GOBEUR_LEVELS.intermediate).toEqual({ speedFactor: 0.95, detectionTiles: 10, repathMs: 800 });
-        expect(GOBEUR_LEVELS.hard).toEqual({ speedFactor: 1.15, detectionTiles: null, repathMs: 400 });
+        expect(GOBEUR_LEVELS.hard).toEqual({ speedFactor: 2.5, detectionTiles: null, repathMs: 400 });
         expect(GOBEUR_CATCH_DISTANCE_PX).toBe(16);
         expect(GOBEUR_WANDER_RADIUS_TILES).toBe(5);
     });
@@ -136,18 +136,19 @@ describe("GobeurBrain", () => {
     });
 
     it.each(["beginner", "intermediate", "hard"] as const)(
-        "%s moves at walk speed times its factor over 1 s",
+        "%s moves at walk speed times its factor over 0.48 s",
         async (level) => {
             const brain = makeBrain(level);
+            // 5 tiles away: within the beginner range, not reached by the hard level (2.5 x) within the 0.48 s.
             const t = [target("a", { x: 15, y: 10 })];
             const before = await settle(brain, 0, t);
             let last = before;
-            for (let i = 1; i <= 25; i++) {
+            for (let i = 1; i <= 12; i++) {
                 last = brain.update(i * 40, 40, t);
                 await flush();
             }
             const moved = Math.hypot(last.x - before.x, last.y - before.y);
-            expect(Math.abs(moved - SPEED * GOBEUR_LEVELS[level].speedFactor)).toBeLessThanOrEqual(2);
+            expect(Math.abs(moved - SPEED * GOBEUR_LEVELS[level].speedFactor * 0.48)).toBeLessThanOrEqual(2);
             expect(last.direction).toBe("right");
         },
     );
