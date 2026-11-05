@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { UserInputEvent } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { DoubleTapSprint } from "../../../../src/front/Phaser/UserInput/DoubleTapSprint";
 
-
 const keys =
     (...down: UserInputEvent[]) =>
     (event: UserInputEvent) =>
