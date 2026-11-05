@@ -47,21 +47,24 @@
     scrollbar-color: var(--rt-line-strong) transparent;
 }
 
-.retro-theme[data-retro-palette="forest"] {
+.retro-theme[data-retro-palette="forest"],
+[data-retro-palette="forest"] .retro-theme {
     --rt-accent: #3fa76a;
     --rt-accent-hover: #4cbf7b;
     --rt-accent-soft: rgb(63 167 106 / 0.16);
     --rt-primary: #3fa76a;
 }
 
-.retro-theme[data-retro-palette="ember"] {
+.retro-theme[data-retro-palette="ember"],
+[data-retro-palette="ember"] .retro-theme {
     --rt-accent: #e07b3c;
     --rt-accent-hover: #f08f4f;
     --rt-accent-soft: rgb(224 123 60 / 0.16);
     --rt-primary: #e07b3c;
 }
 
-.retro-theme[data-retro-palette="gameboy"] {
+.retro-theme[data-retro-palette="gameboy"],
+[data-retro-palette="gameboy"] .retro-theme {
     --rt-bg: #172117;
     --rt-bg-deep: #101810;
     --rt-surface: #1f2c1f;
@@ -308,4 +311,46 @@
     .retro-theme .retro-btn {
         transition: none;
     }
+}
+
+/* Key / value rows separated by hairlines, like the About window of the desktop client. */
+.retro-theme .retro-rows {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--rt-line);
+}
+
+.retro-theme .retro-rows > * {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 0.25rem;
+    border-bottom: 1px solid var(--rt-line);
+}
+
+/* A small warm pill in the pixel font ("Beta", counts, states). */
+.retro-theme .retro-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.45rem;
+    font-family: var(--rt-font-pixel);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #2b2108;
+    background: var(--rt-highlight);
+    border-radius: var(--rt-radius-s);
+}
+
+/* Text-only actions ("Notes de version", "Copier les infos"). */
+.retro-theme .retro-btn-quiet {
+    color: var(--rt-muted);
+    background: transparent;
+    border-color: transparent;
+}
+
+.retro-theme .retro-btn-quiet:hover:not(:disabled) {
+    color: var(--rt-text);
+    background: var(--rt-surface-raised);
+    border-color: transparent;
 }

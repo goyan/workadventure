@@ -37,11 +37,11 @@
 
 {#if $characterPickerStore}
     <div
-        class="m-auto my-0 h-fit w-80 max-w-[calc(100vw-1.5rem)] z-50 bg-contrast/80 backdrop-blur rounded-lg pointer-events-auto overflow-hidden md:mr-0"
+        class="m-auto my-0 h-fit w-80 max-w-[calc(100vw-1.5rem)] z-50 retro-theme rounded-lg pointer-events-auto overflow-hidden md:mr-0"
         data-testid="character-picker"
     >
         <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-1">
-            <h3 class="text-white text-base font-bold m-0">{$LL.woka.picker.title()}</h3>
+            <h3 class="retro-title">{$LL.woka.picker.title()}</h3>
             <ButtonClose onclick={close} />
         </div>
         <ul class="list-none m-0 p-2 flex flex-col gap-1">

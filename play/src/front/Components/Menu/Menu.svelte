@@ -158,7 +158,7 @@
 >
     <div class="flex flex-row items-center gap-2">
         <div
-            class="menu-nav-sidebar rounded-lg @md/main-layout:w-[200px] @md/main-layout:rounded-xl overflow-hidden bg-contrast/80 backdrop-blur w-md relative h-full"
+            class="menu-nav-sidebar retro-theme rounded-lg @md/main-layout:w-[200px] @md/main-layout:rounded-xl overflow-hidden bg-contrast/80 backdrop-blur w-md relative h-full"
         >
             <!--<h2 class="p-8 text-white/10 h-5 tracking-[1rem] mb-8">{$LL.menu.title()}</h2>-->
             <nav
@@ -223,7 +223,7 @@
         </div>
     </div>
     <div
-        class="menu-submenu-container w-full rounded-xl overflow-y relative h-full bg-contrast/80 backdrop-blur overflow-hidden"
+        class="menu-submenu-container retro-theme w-full rounded-xl overflow-y relative h-full bg-contrast/80 backdrop-blur overflow-hidden"
     >
         <div
             class="h-full mt-0 text-white rounded-none @md/main-layout:rounded-tl-lg overflow-y-scroll @md/main-layout:overflow-none"

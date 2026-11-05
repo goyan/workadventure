@@ -16,12 +16,22 @@ function readStoredPalette(): RetroPalette {
     }
 }
 
+/** The palette applies to every menu using the theme (`.retro-theme`), wherever it is in the page. */
+function applyPalette(palette: RetroPalette): void {
+    if (typeof document !== "undefined") {
+        document.documentElement.dataset.retroPalette = palette;
+    }
+}
+
 function createRetroPaletteStore() {
-    const { subscribe, set } = writable<RetroPalette>(readStoredPalette());
+    const initial = readStoredPalette();
+    applyPalette(initial);
+    const { subscribe, set } = writable<RetroPalette>(initial);
     return {
         subscribe,
         set: (palette: RetroPalette) => {
             set(palette);
+            applyPalette(palette);
             try {
                 localStorage.setItem(STORAGE_KEY, palette);
             } catch {
