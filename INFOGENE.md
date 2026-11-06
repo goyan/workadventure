@@ -1007,3 +1007,19 @@ explicitement et mémorisent ce choix dans `_avatarSwimwear`. Le profil ne propo
 Le Jukebox demande aussi un nouvel instantané Spotify lors de l’ouverture de sa file dans le client desktop.
 L’extension Spicetify relit le contexte après `songchange` et 600 ms après ; les métadonnées absentes sont réessayées,
 et les prochains titres restent affichables avant que Spotify leur ait attribué un identifiant de file.
+
+## Position et conversation après reconnexion
+
+Le client mémorise la dernière position pour la carte et le compte, pendant les déplacements et à la fermeture de la page.
+Un rafraîchissement revient à cette position si elle reste dans la carte et accessible au compte. Le bureau personnel
+ne sert plus de point de connexion automatique ; la maison en bas à droite permet de s’y téléporter explicitement.
+Les libellés utilisent les traductions existantes de l’action « Aller à mon bureau ».
+
+La disparition temporaire des variables de zone pendant une reconnexion ne quitte plus le Jam. Les salons restent
+sauvegardés côté serveur avec leur délai de reconnexion existant. La conversation de proximité se reforme à la
+position restaurée ; les préférences micro et caméra restent celles mémorisées par le client.
+
+Recette locale effectuée avec deux navigateurs : rechargement d’un participant puis redémarrage du back, mêmes
+positions et mêmes participants retrouvés, micro coupé et caméra activée conservés. Bouton maison et coupure des
+variables du Jam vérifiés avec des données de test. Écoute Spotify réelle, appels externes et partage d’écran non
+vérifiés ; recette en beta à confirmer après fusion.

@@ -5,9 +5,8 @@ import type { ITiledMap } from "@workadventure/tiled-map-type-guard";
 import { computeStartPosition } from "../../../../src/front/Phaser/Game/StartPositionCalculator";
 import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 
-// No personal desk: the user is anonymous.
 vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
-    localUserStore: { getLocalUser: () => undefined },
+    localUserStore: { getLocalUser: () => ({ uuid: "me" }) },
 }));
 
 const lobby: AreaData = {
@@ -59,6 +58,32 @@ function computeStartPositionFor(areas: AreaData[], userTags: string[], startPos
 }
 
 describe("computeStartPosition", () => {
+    it("keeps the last position instead of a personal desk or default start", () => {
+        const position = { x: 400, y: 336 };
+        const getGameMap = vi.fn();
+        const wrapper = { getGameMap, getAreas: vi.fn() } as unknown as GameMapFrontWrapper;
+        expect(computeStartPosition(wrapper, mapFile, position, undefined, () => true)).toEqual(position);
+        expect(getGameMap).not.toHaveBeenCalled();
+    });
+
+    it("uses the default start instead of a personal desk without a last position", () => {
+        const desk = { x: 400, y: 400, width: 64, height: 64 };
+        const wrapper = {
+            getAreas: () => new Map([[lobby.id, lobby]]),
+            getGameMap: () => ({ getWamFile: () => ({ getGameMapAreas: () => ({ findPersonalArea: () => desk }) }) }),
+        } as unknown as GameMapFrontWrapper;
+        const position = computeStartPosition(wrapper, mapFile, undefined, undefined, () => true);
+        expect(position.x).toBeLessThanOrEqual(lobby.width);
+        expect(position.y).toBeLessThanOrEqual(lobby.height);
+    });
+
+    it("falls back to a start area when a saved position is outside the updated map", () => {
+        const wrapper = { getAreas: () => new Map([[lobby.id, lobby]]) } as unknown as GameMapFrontWrapper;
+        const position = computeStartPosition(wrapper, mapFile, { x: 10000, y: 336 }, undefined, () => true);
+        expect(position.x).toBeLessThanOrEqual(lobby.width);
+        expect(position.y).toBeLessThanOrEqual(lobby.height);
+    });
+
     it("spawns in the start area named in the URL when the user has access to it", () => {
         const { position, isInside } = computeStartPositionFor([lobby, class5b], ["class5b"], "class5b");
 

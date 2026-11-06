@@ -191,6 +191,8 @@ export function leaveJam(): void {
  */
 export function syncJoinedJam(): Unsubscriber {
     const unsubscribeRooms = allJamRoomsStore.subscribe((rooms) => {
+        // No manager means the scene is reconnecting, not that the host closed the room.
+        if (!get(areaPropertyVariablesManagerStore)) return;
         const joined = get(joinedJamStore);
         const own = rooms.find((room) => isLocalUser(room.jam.hostUuid));
         if (own) {
