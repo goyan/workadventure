@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
     NIGHT_MAX_OPACITY,
-    nightOpacity,
     nightOpacityAtMinutes,
     parisMinutes,
     parseNightAt,
@@ -45,13 +44,6 @@ describe("parisMinutes", () => {
 
     it("uses UTC+2 in summer", () => {
         expect(parisMinutes(new Date("2026-07-15T17:00:00Z"))).toBe(19 * 60);
-    });
-});
-
-describe("nightOpacity", () => {
-    it("is at maximum at 19:00 Paris time, winter and summer", () => {
-        expect(nightOpacity(new Date("2026-01-15T18:00:00Z"))).toBeCloseTo(NIGHT_MAX_OPACITY);
-        expect(nightOpacity(new Date("2026-07-15T17:00:00Z"))).toBeCloseTo(NIGHT_MAX_OPACITY);
     });
 });
 

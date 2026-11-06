@@ -38,11 +38,6 @@ export function nightOpacityAtMinutes(minutes: number): number {
     return NIGHT_MAX_OPACITY;
 }
 
-/** Darkness of the night veil at this instant, 0 (day) to NIGHT_MAX_OPACITY. */
-export function nightOpacity(date: Date): number {
-    return nightOpacityAtMinutes(parisMinutes(date));
-}
-
 /**
  * Development override: "HH:MM" from the `nightAt` URL parameter, as minutes since midnight,
  * or undefined (absent, invalid, or not in dev mode).
