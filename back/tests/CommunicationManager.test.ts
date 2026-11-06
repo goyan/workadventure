@@ -8,6 +8,7 @@ import {
     FilterType,
 } from "@workadventure/messages";
 import { emptySpaceState } from "@workadventure/shared-utils";
+import { buildJamSpaceName } from "@workadventure/map-editor";
 import type { InitialStateFactory } from "../src/Model/CommunicationManager";
 import { CommunicationManager, findRecording } from "../src/Model/CommunicationManager";
 import { CommunicationType } from "../src/Model/Types/CommunicationTypes";
@@ -23,7 +24,6 @@ import { UserRegistry } from "../src/Model/Services/UserRegistry";
 import type { ICommunicationStrategy } from "../src/Model/Interfaces/ICommunicationStrategy";
 import type { IRecordingManager } from "../src/Model/RecordingManager";
 import { AutoRecorder } from "../src/Model/AutoRecorder";
-import { buildJamSpaceName } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
 import { analyticsEventsQueue } from "../src/Services/AnalyticsEventsQueue";
 import { adminApi } from "../src/Services/AdminApi";
 import { setCapabilities } from "../src/Services/Capabilities";
