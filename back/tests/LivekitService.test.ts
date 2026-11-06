@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { RecordingWebhookPhase } from "@workadventure/messages";
 import type { EgressInfo, DirectFileOutput } from "livekit-server-sdk";
-import { EgressStatus, S3Upload, TrackSource } from "livekit-server-sdk";
+import { EgressStatus, S3Upload, TokenVerifier, TrackSource } from "livekit-server-sdk";
+import type { SpaceUser } from "@workadventure/messages";
 import type { LivekitWebhookError } from "../src/Model/Services/LivekitService";
 import { LiveKitService } from "../src/Model/Services/LivekitService";
 
@@ -320,5 +321,32 @@ describe("LiveKitService egress times", () => {
         const service = createServiceListing([{ startedAt: 1_000_000_000_000n, endedAt: 0n, fileResults: [] }]);
 
         await expect(service.getEgressFile("EG_1")).resolves.toBeUndefined();
+    });
+});
+
+describe("LiveKitService publish rights", () => {
+    const user = { spaceUserId: "space-user-1", name: "Ada", uuid: "uuid-1" } as SpaceUser;
+
+    async function publishSources(token: string): Promise<string[] | undefined> {
+        const claims = await new TokenVerifier("api-key", "api-secret").verify(token);
+        return claims.video?.canPublishSources as unknown as string[] | undefined;
+    }
+
+    it("lets a token publish the four ordinary sources only, which excludes a music track", async () => {
+        const token = await createService().generateToken("jam-space", user);
+
+        expect(await publishSources(token)).toEqual(["camera", "microphone", "screen_share", "screen_share_audio"]);
+    });
+
+    it("keeps the ordinary restriction when music rights are explicitly refused", async () => {
+        const token = await createService().generateToken("jam-space", user, { canPublishMusic: false });
+
+        expect(await publishSources(token)).toHaveLength(4);
+    });
+
+    it("lifts the source restriction for the host, since a token cannot list the unknown source", async () => {
+        const token = await createService().generateToken("jam-space", user, { canPublishMusic: true });
+
+        expect(await publishSources(token)).toBeUndefined();
     });
 });

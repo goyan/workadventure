@@ -7,6 +7,8 @@ import type { ICommunicationSpace } from "../Interfaces/ICommunicationSpace";
 import type { LivekitCredentialsResponse } from "../../Services/Repository/LivekitCredentialsResponse";
 import { LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_HOST, PLAY_URL } from "../../Enum/EnvironmentVariable";
 import { LiveKitService, type RecordingStartInfo } from "../Services/LivekitService";
+import { createJamRoomDirectory, resolveJamSpaceAccess } from "../AreaPropertyEvents/JamSpaceAccess";
+import { socketManager } from "../../Services/SocketManager";
 import type { EgressFile, IAutoRecordableState, IRecordableState } from "../Interfaces/ICommunicationState";
 import type { IRecordableStrategy } from "../Interfaces/ICommunicationStrategy";
 import { CommunicationState } from "./AbstractCommunicationState";
@@ -38,6 +40,12 @@ export class LivekitState
                     _livekitServerCredentials.livekitHost.replace("http", "ws"),
                     PLAY_URL,
                 ),
+                (spaceName, user) =>
+                    resolveJamSpaceAccess(
+                        spaceName,
+                        user,
+                        createJamRoomDirectory(() => socketManager.getWorlds()),
+                    ),
             ),
             users,
             usersToNotify,
