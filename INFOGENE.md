@@ -561,6 +561,39 @@ Limites :
   n'a pas tourné depuis plus de 5 s.
 - Le `map-storage` officiel (prod) rejette la nouvelle propriété du WAM : prototype, **pas pour la prod**.
 
+### Toquer à une zone verrouillée
+
+S'appuie sur la propriété de zone upstream `lockableAreaPropertyData` (verrou depuis le menu, collision côté navigateur
+pour qui est dehors, déverrouillage par le back quand la zone se vide). Ajouts :
+
+- **Toquer** : devant une zone verrouillée, « Espace pour toquer ». Les occupants entendent « toc toc » (même en « Ne
+  pas déranger ») et voient une carte « X toque à la porte » avec **Entrer** / **Pas maintenant** ; la première réponse
+  reçue l'emporte. Sans réponse : « Personne ne répond » (30 s pour les cartes, 32 s pour le visiteur). Anti-spam : 30 s
+  par visiteur et zone. Le visiteur qui s'éloigne de plus de 64 px annule sa demande.
+- **Laissez-passer** : *Entrer* lève la collision pour ce seul visiteur pendant 60 s (`AreasManager.setLockPass`) ; la
+  zone reste verrouillée pour les autres.
+- **Admin** : Espace toque aussi ; pendant l'attente, un second Espace force l'ouverture (déverrouillage upstream).
+- **Portes** : une porte d'une zone verrouillée (`isDoorInZone`) ne s'ouvre que pour un joueur qui est dans la zone ou
+  en sort depuis moins de 2 s, ou qui a un laissez-passer ; jamais pour un animal (`DoorAnimator`, `DoorLocks`).
+- **Ne pas déranger** : verrouiller **son** bureau personnel passe en « Ne pas déranger » ; déverrouiller, sortir,
+  accepter un visiteur ou quitter la scène remet le statut d'avant, seulement si c'est le lien qui l'avait posé
+  (propriété mémorisée sous la clé `knockDndOwnership` pour survivre à un rechargement).
+- **Espace** (`Character.handlePressSpacePlayerTextCallback`) : un appui ne déclenche que les textes déjà affichés ;
+  un texte créé ou remplacé par un rappel attend l'appui suivant (sinon toquer déclenchait aussitôt le texte d'attente).
+
+Réseau : événements de script `infogene.knock.request|answer|cancel` (`Knock/KnockProtocol.ts`), état local identique
+sur chaque navigateur (`KnockState.ts`, échéances depuis la réception, marge de 2 s entre navigateurs). Aucun changement
+de back, protobuf, map-storage ni WAM : **compatible avec la prod** (seule l'image `play` change).
+
+Fichiers : `play/src/front/Phaser/Game/Knock/*`, `Stores/KnockStore.ts`, `Components/Knock/KnockRequests.svelte`,
+`GameMap/AreasManager.ts`, `Entity/Area.ts`, `Entity/Character.ts`, `MapEditor/MapLayer/DoorAnimator.ts`,
+`public/resources/objects/doors/door-knock.ogg` (synthétisé par `tools/door_knock.py` du repo d'infra), i18n `area.knock`.
+
+Limites :
+- Les événements se forgent depuis la console, comme le verrou upstream qui est déjà contournable côté navigateur.
+- Deux occupants qui répondent au même instant peuvent voir brièvement un état différent (chacun garde sa réponse).
+- Un joueur arrivé après l'acceptation ne connaît pas le laissez-passer : il voit la porte fermée pour le visiteur.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont

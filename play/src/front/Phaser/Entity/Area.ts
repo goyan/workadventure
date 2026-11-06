@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import type { AreaData, AtLeast, LockableAreaPropertyData } from "@workadventure/map-editor";
+import type { AreaData, AtLeast } from "@workadventure/map-editor";
 import { deepmergeIntoCustom, type DeepMergeLeafURI } from "deepmerge-ts";
 import { get } from "svelte/store";
 import type { GameScene } from "../Game/GameScene";
@@ -7,7 +7,6 @@ import type { GameScene } from "../Game/GameScene";
 import LL from "../../../i18n/i18n-svelte";
 import { gameManager } from "../Game/GameManager";
 import type { AreasManager } from "../Game/GameMap/AreasManager";
-import { setAreaPropertyVariable } from "../../Stores/AreaPropertyVariablesStore";
 import { touchScreenManager } from "../../Touch/TouchScreenManager";
 
 import Rectangle = Phaser.GameObjects.Rectangle;
@@ -169,28 +168,16 @@ export class Area extends Rectangle {
             if (blockReason) {
                 switch (blockReason) {
                     case "locked":
-                        if (this.connection?.hasTag("admin")) {
-                            const lockableProperty = this.areaData.properties.find(
-                                (property): property is LockableAreaPropertyData =>
-                                    property.type === "lockableAreaPropertyData",
-                            );
-
-                            if (lockableProperty) {
-                                message = get(LL).area.blocked.unlockWithTrigger({
-                                    trigger: touchScreenManager.detectPrimaryTouchDevice()
-                                        ? "👆"
-                                        : get(LL).trigger.spaceKeyboard(),
-                                });
-
-                                //message = message.replace("[SPACE]", svg.outerHTML);
-                                callback = () => {
-                                    setAreaPropertyVariable(this.areaData.id, lockableProperty.id, "lock", false);
-                                    this.scene.CurrentPlayer.destroyText(messageId);
-                                };
-                                break;
-                            }
-                        }
-                        message = get(LL).area.blocked.locked();
+                        // Everyone knocks, admins included: their forced unlock is offered while they wait.
+                        message = get(LL).area.knock.prompt({
+                            trigger: touchScreenManager.detectPrimaryTouchDevice()
+                                ? "👆"
+                                : get(LL).trigger.spaceKeyboard(),
+                        });
+                        callback = () => {
+                            this.scene.CurrentPlayer.destroyText(messageId);
+                            this.scene.knockManager?.knock(this.areaData.id);
+                        };
                         break;
                     case "maxUsers":
                         message = get(LL).area.blocked.maxUsers();

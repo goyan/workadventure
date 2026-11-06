@@ -284,6 +284,7 @@ import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { GobeurManager } from "./Gobeur/GobeurManager";
+import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
@@ -431,6 +432,7 @@ export class GameScene extends DirtyScene {
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private _gobeurManager: GobeurManager | undefined;
+    private _knockManager: KnockManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
@@ -571,6 +573,7 @@ export class GameScene extends DirtyScene {
         this.load.audio("new-message", "/resources/objects/new-message.mp3");
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
+        this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
         for (const { key, url } of FOOTSTEP_SOUNDS) {
             this.load.audio(key, url);
         }
@@ -1428,6 +1431,8 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this._gobeurManager?.destroy();
         this._gobeurManager = undefined;
+        this._knockManager?.destroy();
+        this._knockManager = undefined;
         this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
@@ -1543,12 +1548,17 @@ export class GameScene extends DirtyScene {
         );
         // Doors react to the collision body of a character (the one that is blocked by the walls), not to the middle of
         // its sprite, which overlaps the wall when the character walks along it.
-        const asDoorCharacter = (character: {
-            x: number;
-            y: number;
-            getPathAhead?: () => { x: number; y: number }[];
-            lastDirection?: PositionMessage_Direction;
-        }): DoorCharacter => ({
+        // Players carry their uuid: the doors of a locked area only open for its occupants and the visitors let in.
+        const asDoorCharacter = (
+            character: {
+                x: number;
+                y: number;
+                getPathAhead?: () => { x: number; y: number }[];
+                lastDirection?: PositionMessage_Direction;
+            },
+            uuid?: string,
+        ): DoorCharacter => ({
+            uuid,
             x: character.x,
             y: character.y + CHARACTER_BODY_OFFSET_Y,
             facingSideways:
@@ -1560,11 +1570,12 @@ export class GameScene extends DirtyScene {
                 y: point.y + CHARACTER_BODY_OFFSET_Y,
             })),
         });
-        const listener = asDoorCharacter(this.CurrentPlayer);
+        const localUuid = this._knockManager?.localUuid;
+        const listener = asDoorCharacter(this.CurrentPlayer, localUuid === "" ? undefined : localUuid);
         const characters: DoorCharacter[] = [listener];
         if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
         for (const player of this.MapPlayersByKey.values()) {
-            characters.push(asDoorCharacter(player));
+            characters.push(asDoorCharacter(player, player.userUuid));
             if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
         // The animals open the doors without a sound.
@@ -1573,7 +1584,7 @@ export class GameScene extends DirtyScene {
             characters.push({ ...position, silent: true }),
         );
         this._gobeurManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
-        this.doorAnimator.update(time, characters, listener);
+        this.doorAnimator.update(time, characters, listener, this._knockManager?.getDoorLocks());
     }
 
     public update(time: number, delta: number): void {
@@ -2113,6 +2124,10 @@ export class GameScene extends DirtyScene {
 
     public get gobeurManager(): GobeurManager | undefined {
         return this._gobeurManager;
+    }
+
+    public get knockManager(): KnockManager | undefined {
+        return this._knockManager;
     }
 
     public getWanderingCharactersManager(): WanderingCharactersManager | undefined {
@@ -2655,6 +2670,9 @@ export class GameScene extends DirtyScene {
                 this.wanderingCharactersManager?.destroy();
                 this.wanderingCharactersManager = new WanderingCharactersManager(this);
                 this._gobeurManager = new GobeurManager(this);
+                // Same: one event subscription and one timer at a time.
+                this._knockManager?.destroy();
+                this._knockManager = new KnockManager(this);
                 const connection = this.connection;
                 this.konamiCodeDetector = new KonamiCodeDetector(() => {
                     this.duckRushManager?.start(connection.getUserId(), () => ({

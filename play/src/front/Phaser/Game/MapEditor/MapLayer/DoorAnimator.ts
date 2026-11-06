@@ -28,6 +28,8 @@ const RESCAN_PERIOD_MS = 500;
 const DOOR_MAX_VOLUME = 0.3;
 /** Doors farther than this from the local player are silent. */
 const HEARING_DISTANCE = 10 * MAP_LAYER_TILE_SIZE;
+/** Someone who left a locked area keeps its doors open for them this long, so they can walk out through them. */
+const LEFT_ZONE_GRACE_MS = 2_000;
 
 /** Recorded door sounds (CC0, see `resources/objects/doors/CREDITS.txt`): one to open a door, one to close it. */
 export const DOOR_SOUND_KEYS = { open: "audio-door-open", close: "audio-door-close" } as const;
@@ -45,6 +47,8 @@ export interface DoorCharacter {
     facingSideways?: boolean;
     /** The doors this character opens make no sound (the animals): only the players' doors are heard. */
     silent?: boolean;
+    /** Identity of the player: the doors of a locked area only open for characters that have one. */
+    uuid?: string;
 }
 
 interface DoorRect {
@@ -61,6 +65,11 @@ interface DoorRect {
  */
 function isInsideDoor(rect: DoorRect, point: { x: number; y: number }): boolean {
     return point.x > rect.left && point.x < rect.right && point.y > rect.top && point.y < rect.bottom;
+}
+
+/** Whether a point is strictly inside a zone. */
+function isInsideZone(zone: HearingZone, point: { x: number; y: number }): boolean {
+    return point.x > zone.x && point.x < zone.x + zone.width && point.y > zone.y && point.y < zone.y + zone.height;
 }
 
 /** Rectangle of an area of the map, as the map editor stores it. */
@@ -85,6 +94,17 @@ export function isDoorInZone(rect: DoorRect, orientation: DoorPiece["orientation
     const touchesX = rect.left <= zoneRight && rect.right >= zone.x;
     const touchesY = rect.top <= zoneBottom && rect.bottom >= zone.y;
     return orientation === "h" ? acrossX && touchesY : touchesX && acrossY;
+}
+
+/** A locked area of the map: its doors stay closed to those who are neither inside nor holding a pass. */
+export interface LockedDoorZone extends HearingZone {
+    areaId: string;
+}
+
+export interface DoorLocks {
+    zones: readonly LockedDoorZone[];
+    /** Whether the player has been let into the area (they knocked and were accepted). */
+    hasPass(uuid: string, areaId: string): boolean;
 }
 
 interface DoorPieceState {
@@ -121,6 +141,8 @@ export class DoorAnimator {
     private states = new Map<string, DoorState>();
     private nextScanAt = 0;
     private readonly pieceCache = new Map<string, DoorPiece | null>();
+    /** `${uuid}:${areaId}` -> last time (scene clock) the character was seen inside the locked area. */
+    private readonly lastInsideZone = new Map<string, number>();
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -135,8 +157,14 @@ export class DoorAnimator {
     /**
      * @param characters Every character that opens doors: the players, local and remote, and their companions.
      * @param listener The local player, one of `characters`: sets how loud the doors are.
+     * @param locks The locked areas: their doors only open for the characters allowed through. Undefined: no lock.
      */
-    public update(time: number, characters: readonly DoorCharacter[], listener: DoorCharacter): void {
+    public update(
+        time: number,
+        characters: readonly DoorCharacter[],
+        listener: DoorCharacter,
+        locks?: DoorLocks,
+    ): void {
         if (time >= this.nextScanAt) {
             this.nextScanAt = time + RESCAN_PERIOD_MS;
             this.scan();
@@ -145,11 +173,15 @@ export class DoorAnimator {
             return;
         }
 
+        if (locks) {
+            this.trackLockedZones(time, characters, locks);
+        }
+
         const nearest = new Map<string, DoorCharacter | undefined>();
         for (const state of this.pieces.values()) {
             const key = this.doorKey(state);
             if (!nearest.has(key)) {
-                nearest.set(key, this.nearestCharacter(state, characters));
+                nearest.set(key, this.nearestCharacter(state, characters, time, locks));
             }
             const door = this.getDoorState(key, time);
             const pusher = nearest.get(key);
@@ -168,10 +200,52 @@ export class DoorAnimator {
         }
     }
 
+    /** Whether the door the piece `entityId` belongs to is not closed (any frame but the closed one). */
+    public isDoorOpen(entityId: string): boolean {
+        const state = this.pieces.get(entityId);
+        const door = state && this.states.get(this.doorKey(state));
+        return door !== undefined && door.frame !== DOOR_CLOSED_FRAME;
+    }
+
     public destroy(): void {
         // Doors are left as they are: the entities own their texture.
         this.pieces.clear();
         this.states.clear();
+        this.lastInsideZone.clear();
+    }
+
+    /** Remembers when each character was last inside each locked area, and forgets what is older than the grace period. */
+    private trackLockedZones(time: number, characters: readonly DoorCharacter[], locks: DoorLocks): void {
+        for (const character of characters) {
+            if (character.uuid === undefined) continue;
+            for (const zone of locks.zones) {
+                if (isInsideZone(zone, character)) {
+                    this.lastInsideZone.set(`${character.uuid}:${zone.areaId}`, time);
+                }
+            }
+        }
+        for (const [key, last] of this.lastInsideZone) {
+            if (time - last >= LEFT_ZONE_GRACE_MS) {
+                this.lastInsideZone.delete(key);
+            }
+        }
+    }
+
+    /** Whether the character may open a door that belongs to the locked zones `zones`. */
+    private canOpenLockedDoor(
+        character: DoorCharacter,
+        zones: readonly LockedDoorZone[],
+        time: number,
+        locks: DoorLocks,
+    ): boolean {
+        const { uuid } = character;
+        if (character.silent || uuid === undefined) {
+            return false;
+        }
+        return zones.some((zone) => {
+            const last = this.lastInsideZone.get(`${uuid}:${zone.areaId}`);
+            return (last !== undefined && time - last < LEFT_ZONE_GRACE_MS) || locks.hasPass(uuid, zone.areaId);
+        });
     }
 
     /** The two pieces of a door share their animation: it is told by the segment the door starts on. */
@@ -281,13 +355,27 @@ export class DoorAnimator {
     }
 
     /** The character near the door that is the closest to its middle, if any. */
-    private nearestCharacter(state: DoorPieceState, characters: readonly DoorCharacter[]): DoorCharacter | undefined {
+    private nearestCharacter(
+        state: DoorPieceState,
+        characters: readonly DoorCharacter[],
+        time: number,
+        locks: DoorLocks | undefined,
+    ): DoorCharacter | undefined {
+        const lockedZones = locks?.zones.filter((zone) => isDoorInZone(state.rect, state.piece.orientation, zone));
         const centerX = (state.rect.left + state.rect.right) / 2;
         const centerY = (state.rect.top + state.rect.bottom) / 2;
         let best: DoorCharacter | undefined;
         let bestDistance = Infinity;
         for (const character of characters) {
             if (!this.isNear(state.rect, state.piece.orientation, character)) continue;
+            if (
+                locks &&
+                lockedZones &&
+                lockedZones.length > 0 &&
+                !this.canOpenLockedDoor(character, lockedZones, time, locks)
+            ) {
+                continue;
+            }
             const distance = Math.hypot(character.x - centerX, character.y - centerY);
             if (distance < bestDistance) {
                 best = character;

@@ -24,6 +24,8 @@ export class AreasManager {
     private areaPermissions: AreaPermissions;
     private areaPropertyVariablesSubscription: Unsubscriber | undefined;
     private variableChangesSubscription: Unsubscriber | undefined;
+    // Tells whether the local player holds a pass (an accepted knock) for a locked area.
+    private hasLockPass: (areaId: string) => boolean = () => false;
 
     constructor(
         private scene: GameScene,
@@ -177,14 +179,39 @@ export class AreasManager {
     }
 
     /**
-     * Checks if the specified area is locked.
-     * @param areaId - The ID of the area to check
-     * @returns true if the area is locked, false otherwise
+     * Lets a knock pass through a locked area: no collision for the local player while it returns true.
+     * The caller must call updateAreaCollision(areaId) when a pass starts or ends.
+     * @param hasPass - Returns true when the local player currently holds a pass for the given area
      */
-    private isAreaLocked(areaId: string): boolean {
+    public setLockPass(hasPass: (areaId: string) => boolean): void {
+        this.hasLockPass = hasPass;
+    }
+
+    /**
+     * Lists the areas with a lockable property whose `lock` variable is true.
+     * @returns For each locked area, its id, the id of its lockable property and its data
+     */
+    public getLockedAreas(): { areaId: string; propertyId: string; area: AreaData }[] {
+        const lockedAreas: { areaId: string; propertyId: string; area: AreaData }[] = [];
+        for (const areaId of this.areas.keys()) {
+            const area = this.gameMapAreas.getArea(areaId);
+            const lockableProperty = this.getLockedProperty(areaId);
+            if (area && lockableProperty) {
+                lockedAreas.push({ areaId, propertyId: lockableProperty.id, area });
+            }
+        }
+        return lockedAreas;
+    }
+
+    /**
+     * Returns the lockable property of the specified area if the area is locked.
+     * @param areaId - The ID of the area to check
+     * @returns The lockable property when its `lock` variable is true, undefined otherwise
+     */
+    private getLockedProperty(areaId: string): LockableAreaPropertyData | undefined {
         const area = this.gameMapAreas.getArea(areaId);
         if (!area) {
-            return false;
+            return undefined;
         }
 
         const lockableProperty = area.properties.find(
@@ -192,17 +219,26 @@ export class AreasManager {
         );
 
         if (!lockableProperty) {
-            return false;
+            return undefined;
         }
 
         // Get lock state from area property variables
         const manager = get(areaPropertyVariablesManagerStore);
         if (!manager) {
-            return false;
+            return undefined;
         }
 
         const lockState = manager.getVariable(areaId, lockableProperty.id, "lock");
-        return lockState === true;
+        return lockState === true ? lockableProperty : undefined;
+    }
+
+    /**
+     * Checks if the specified area is locked.
+     * @param areaId - The ID of the area to check
+     * @returns true if the area is locked, false otherwise
+     */
+    private isAreaLocked(areaId: string): boolean {
+        return this.getLockedProperty(areaId) !== undefined;
     }
 
     /**
@@ -266,8 +302,9 @@ export class AreasManager {
         if (isLocked) {
             // If area is locked and current player is not inside, block entry
             // Users already inside can still exit
+            // A player holding a pass (accepted knock) is treated as if the area were not locked
             // Lock takes priority over access permissions
-            if (!isCurrentPlayerInside) {
+            if (!isCurrentPlayerInside && !this.hasLockPass(areaId)) {
                 if (area.updateCollision(true)) {
                     this.onCollisionStateChanged?.();
                 }
@@ -325,8 +362,9 @@ export class AreasManager {
         const isLocked = this.isAreaLocked(areaId);
 
         // If area is locked and current player is not inside, block entry
+        // A player holding a pass (accepted knock) is treated as if the area were not locked
         // Lock takes priority over access permissions
-        if (isLocked && !isCurrentPlayerInside) {
+        if (isLocked && !isCurrentPlayerInside && !this.hasLockPass(areaId)) {
             return "locked";
         }
 

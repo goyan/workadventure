@@ -125,3 +125,101 @@ describe("DoorAnimator borders", () => {
         expect(opensWhileWalking(animator, playSound, { x: 80, y: 176 }, { x: 176, y: 176 })).toBe(true);
     });
 });
+
+// A locked area: its doors stay closed except for the players who leave it (or left it a moment ago) and those who
+// hold a pass. The zone is the room under the door of makeAnimator.
+describe("DoorAnimator locked areas", () => {
+    const ZONE = { areaId: "z", x: 96, y: 192, width: 128, height: 128 };
+    const NO_PASS = { zones: [ZONE], hasPass: () => false };
+
+    // Walks a character in 4 s, the animator being given `locks`; reports the sound of opening and whether the door opened.
+    function walk(
+        animator: DoorAnimator,
+        playSound: ReturnType<typeof vi.fn>,
+        from: Point,
+        to: Point,
+        extra: Partial<DoorCharacter>,
+        locks?: Parameters<DoorAnimator["update"]>[3],
+    ) {
+        const walker: DoorCharacter = { ...from, ...extra };
+        let everOpen = false;
+        for (let time = 0; time <= 4_000; time += FRAME_STEP_MS) {
+            walker.x = from.x + ((to.x - from.x) * time) / 4_000;
+            walker.y = from.y + ((to.y - from.y) * time) / 4_000;
+            animator.update(time, [walker], walker, locks);
+            everOpen ||= animator.isDoorOpen("door");
+        }
+        return { sound: soundsOf(playSound).includes(DOOR_SOUND_KEYS.open), everOpen };
+    }
+
+    const NORTH = { x: 160, y: 120 };
+    const SOUTH = { x: 160, y: 240 };
+
+    it("a passer-by coming from the north does not open the door", () => {
+        const { animator, playSound } = makeAnimator();
+        const result = walk(animator, playSound, NORTH, SOUTH, { uuid: "p" }, NO_PASS);
+        expect(result.sound).toBe(false);
+        expect(result.everOpen).toBe(false);
+    });
+
+    it("an animal never opens the door", () => {
+        const { animator, playSound } = makeAnimator();
+        const result = walk(animator, playSound, NORTH, SOUTH, { uuid: "a", silent: true }, NO_PASS);
+        expect(result.everOpen).toBe(false);
+    });
+
+    it("an animal does not open the door even with a pass", () => {
+        const { animator, playSound } = makeAnimator();
+        const locks = { zones: [ZONE], hasPass: () => true };
+        const result = walk(animator, playSound, NORTH, SOUTH, { uuid: "a", silent: true }, locks);
+        expect(result.everOpen).toBe(false);
+    });
+
+    it("a character without uuid never opens the door", () => {
+        const { animator, playSound } = makeAnimator();
+        const locks = { zones: [ZONE], hasPass: () => true };
+        expect(walk(animator, playSound, NORTH, SOUTH, {}, locks).sound).toBe(false);
+    });
+
+    it("an occupant leaving the area opens the door", () => {
+        const { animator, playSound } = makeAnimator();
+        expect(walk(animator, playSound, SOUTH, NORTH, { uuid: "o" }, NO_PASS).sound).toBe(true);
+    });
+
+    it("a visitor with a pass opens the door", () => {
+        const { animator, playSound } = makeAnimator();
+        const locks = { zones: [ZONE], hasPass: (uuid: string, areaId: string) => uuid === "v" && areaId === "z" };
+        expect(walk(animator, playSound, NORTH, SOUTH, { uuid: "v" }, locks).sound).toBe(true);
+    });
+
+    it("someone who left the area more than the grace period ago does not open the door", () => {
+        const { animator, playSound } = makeAnimator();
+        const walker: DoorCharacter = { ...SOUTH, uuid: "o" };
+        animator.update(0, [walker], walker, NO_PASS);
+        walker.x = 160;
+        walker.y = 100;
+        animator.update(100, [walker], walker, NO_PASS);
+        // Back at the door a long time after: the memory of the area is gone.
+        walker.y = 176;
+        for (let time = 5_000; time <= 6_000; time += FRAME_STEP_MS) {
+            animator.update(time, [walker], walker, NO_PASS);
+        }
+        expect(soundsOf(playSound)).not.toContain(DOOR_SOUND_KEYS.open);
+    });
+
+    it("the same paths without locks open the door as before", () => {
+        const { animator, playSound } = makeAnimator();
+        expect(walk(animator, playSound, NORTH, SOUTH, { uuid: "p" }).sound).toBe(true);
+    });
+
+    it("a door outside every locked zone is not affected", () => {
+        const { animator, playSound } = makeAnimator();
+        const far = { zones: [{ areaId: "f", x: 1_000, y: 1_000, width: 64, height: 64 }], hasPass: () => false };
+        expect(walk(animator, playSound, NORTH, SOUTH, { uuid: "p" }, far).sound).toBe(true);
+    });
+
+    it("isDoorOpen is false for an unknown entity", () => {
+        const { animator } = makeAnimator();
+        expect(animator.isDoorOpen("nope")).toBe(false);
+    });
+});
