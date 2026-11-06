@@ -124,6 +124,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "ล็อกการสนทนา",
             desc: "เมื่อเปิดใช้ฟีเจอร์นี้ จะไม่มีใครสามารถเข้าร่วมการสนทนาได้อีก คุณคือเจ้าของพื้นที่ และเฉพาะคนที่อยู่แล้วเท่านั้นที่โต้ตอบกันได้",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "เลือกพื้นที่ที่จะล็อก/ปลดล็อก",
             bubbleLabel: "บับเบิลสนทนา",
             unnamedArea: "พื้นที่ไม่มีชื่อ",

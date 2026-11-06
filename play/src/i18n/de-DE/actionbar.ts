@@ -126,6 +126,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "Unterhaltung sperren",
             desc: "Durch Aktivierung dieser Funktion stellen Sie sicher, dass niemand der Diskussion beitreten kann. Sie sind der Herr Ihres Raums, und nur die bereits Anwesenden können interagieren.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Bereich zum Sperren/Entsperren wählen",
             bubbleLabel: "Diskussionsblase",
             unnamedArea: "Unbenannter Bereich",

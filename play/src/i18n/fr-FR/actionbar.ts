@@ -122,6 +122,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "Verrouiller la discussion",
             desc: "En activant cette fonctionnalité, vous garantissez que personne ne pourra rejoindre la discussion. Vous êtes maître de votre espace, et seules les personnes déjà présentes peuvent interagir.",
+            doorCloseTitle: "Fermer la porte",
+            doorReopenTitle: "Rouvrir la porte",
+            doorDesc: "Les autres devront toquer pour entrer.",
             areaPickerTitle: "Choisir la zone à verrouiller/déverrouiller",
             bubbleLabel: "Bulle de discussion",
             unnamedArea: "Zone sans nom",

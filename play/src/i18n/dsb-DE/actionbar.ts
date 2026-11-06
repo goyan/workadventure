@@ -125,6 +125,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "Rozgrono zawrěś",
             desc: "Gaž toś tu funkciju aktiwěrujośo, zawěsćijośo, až njechtó njemóžo se diskusiji pśidaś. Sćo kněz wašogo ruma, a jano te, kótarež su južo pśitomne, mógu interagěrowaś.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Wobcerk za zawrěśenje/wótwardenje wubraś",
             bubbleLabel: "Diskusijowa balonka",
             unnamedArea: "Wobcerk běz mjenja",

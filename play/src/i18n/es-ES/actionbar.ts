@@ -125,6 +125,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "Bloquear conversación",
             desc: "Al habilitar esta función, te aseguras de que nadie pueda unirse a la discusión. Eres el dueño de tu espacio, y solo los que ya están presentes pueden interactuar.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Elegir zona para bloquear/desbloquear",
             bubbleLabel: "Burbuja de discusión",
             unnamedArea: "Zona sin nombre",

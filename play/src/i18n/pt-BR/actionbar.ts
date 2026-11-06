@@ -129,6 +129,9 @@ const actionbar: BaseTranslation = {
         lock: {
             title: "Bloquear conversa",
             desc: "Ao habilitar este recurso, você garante que ninguém possa se juntar à discussão. Você é o mestre do seu espaço, e apenas aqueles já presentes podem interagir.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Escolher área para bloquear/desbloquear",
             bubbleLabel: "Bolha de discussão",
             unnamedArea: "Área sem nome",
