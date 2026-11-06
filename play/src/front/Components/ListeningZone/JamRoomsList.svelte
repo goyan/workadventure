@@ -2,7 +2,7 @@
     import { SvelteSet } from "svelte/reactivity";
     import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { isPlayingTrack } from "../../../common/SpotifyListening";
+    import { isPlayingTrack, spotifyTrackUri } from "../../../common/SpotifyListening";
     import {
         allJamRoomsStore,
         isLocalUser,
@@ -14,7 +14,7 @@
         stopSharingJam,
     } from "../../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
-    import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
+    import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { playersStore } from "../../Stores/PlayersStore";
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
@@ -43,6 +43,7 @@
     {@const hostListening = $listeningByUserUuidStore.get(jam.hostUuid)}
     {@const hostTrack = isPlayingTrack(hostListening) ? hostListening : undefined}
     {@const home = isHomeJam(jam)}
+    {@const following = $followedUserUuidStore === jam.hostUuid}
     {@const mine = isLocalUser(jam.hostUuid)}
     {@const joined = $joinedJamStore?.url === listeningZoneJamKey(jam)}
     {@const hostName = hostNameOf(jam.hostUuid, jam.hostName)}
@@ -117,6 +118,17 @@
                           : $LL.spotify.listeningZone.joinHomeSilent()
                       : $LL.spotify.listeningZone.join()}
             </Button>
+            {#if !home && canHomeJam && (following || (hostTrack && spotifyTrackUri(hostTrack.trackUrl)))}
+                <Button
+                    variant="success"
+                    appearance="border"
+                    size="sm"
+                    onclick={() => followedUserUuidStore.set(following ? undefined : jam.hostUuid)}
+                    dataTestId="listening-zone-listen-via-extension"
+                >
+                    {following ? $LL.spotify.card.stopListeningAlong() : $LL.spotify.listeningZone.listenViaExtension()}
+                </Button>
+            {/if}
             {#if home && !canHomeJam}
                 <p class="m-0 text-xs text-white/60">{$LL.spotify.listeningZone.homeSilentNote()}</p>
             {:else if joined && home}
