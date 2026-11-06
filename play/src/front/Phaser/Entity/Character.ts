@@ -131,7 +131,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.updateSwimEffect();
         const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
         if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
-        this.musicHeadphonesEffect?.update(showHeadphones, this._lastDirection, this.sprites.values().next().value);
+        this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
