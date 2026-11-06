@@ -10,6 +10,8 @@ import {
     recordPrivateMessage,
     restorePrivateMessages,
 } from "../../../src/front/Stores/PrivateMessageStore";
+const notifySystem = vi.hoisted(() => vi.fn());
+vi.mock("../../../src/front/Notification/SystemNotifier", () => ({ notifySystem }));
 import { blackListManager } from "../../../src/front/WebRtc/BlackListManager";
 
 const message = {
@@ -21,6 +23,7 @@ const message = {
 describe("private message history", () => {
     beforeEach(() => {
         localStorage.clear();
+        notifySystem.mockClear();
     });
 
     afterEach(() => {
@@ -229,5 +232,54 @@ describe("private message history", () => {
         receivePrivateMessage(message);
         expect(get(privateMessageHistoryStore)).toHaveLength(1);
         expect(localStorage.length).toBe(0);
+    });
+});
+
+describe("private message system notification", () => {
+    beforeEach(() => {
+        localStorage.clear();
+        notifySystem.mockClear();
+    });
+
+    afterEach(() => {
+        clearPrivateMessages();
+        localStorage.clear();
+    });
+
+    it("notifies once for a live incoming message, with the text truncated to 60 characters", () => {
+        receivePrivateMessage({ ...message, text: "x".repeat(80) });
+
+        expect(notifySystem).toHaveBeenCalledTimes(1);
+        expect(notifySystem).toHaveBeenCalledWith({
+            kind: "privateMessage",
+            title: "NPC · Ada",
+            body: `${"x".repeat(60)}…`,
+            tag: "pm:npc:ada",
+            onClick: expect.any(Function),
+        });
+    });
+
+    it("keeps a short text as is", () => {
+        receivePrivateMessage({ ...message, text: "x".repeat(60) });
+
+        expect(notifySystem).toHaveBeenCalledWith(expect.objectContaining({ body: "x".repeat(60) }));
+    });
+
+    it("does not notify for your own message", () => {
+        recordPrivateMessage({ peerUuid: "npc:ada", peerName: "Ada", text: "Mine", incoming: false });
+
+        expect(notifySystem).not.toHaveBeenCalled();
+    });
+
+    it("does not notify when the history is restored", () => {
+        restorePrivateMessages("human", "https://play.test/~/office.wam");
+        receivePrivateMessage(message);
+        clearPrivateMessages();
+        notifySystem.mockClear();
+
+        restorePrivateMessages("human", "https://play.test/~/office.wam");
+
+        expect(get(privateMessageHistoryStore)).toHaveLength(1);
+        expect(notifySystem).not.toHaveBeenCalled();
     });
 });

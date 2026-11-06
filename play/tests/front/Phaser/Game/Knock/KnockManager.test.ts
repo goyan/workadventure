@@ -25,6 +25,8 @@ vi.mock("../../../../../src/front/Rules/StatusRules/statusChangerFunctions", () 
 vi.mock("../../../../../src/front/Stores/AreaPropertyVariablesStore", () => ({
     setAreaPropertyVariable: vi.fn(),
 }));
+const notifySystem = vi.hoisted(() => vi.fn());
+vi.mock("../../../../../src/front/Notification/SystemNotifier", () => ({ notifySystem }));
 vi.mock("../../../../../src/front/Touch/TouchScreenManager", () => ({
     touchScreenManager: { detectPrimaryTouchDevice: () => false },
 }));
@@ -33,6 +35,7 @@ vi.mock("../../../../../src/i18n/i18n-svelte", () => {
         trigger: { spaceKeyboard: () => "Space" },
         area: {
             knock: {
+                request: ({ name }: { name: string }) => `request ${name}`,
                 waiting: () => "waiting",
                 later: () => "later",
                 noAnswer: () => "noAnswer",
@@ -143,6 +146,7 @@ describe("KnockManager", () => {
         vi.useFakeTimers();
         vi.setSystemTime(1_000_000);
         onVisitorAccepted.mockClear();
+        notifySystem.mockClear();
         linkDestroy.mockClear();
         vi.mocked(setAreaPropertyVariable).mockClear();
     });
@@ -191,6 +195,13 @@ describe("KnockManager", () => {
 
         fake.tick();
         expect(fake.soundPlay).toHaveBeenCalledTimes(1);
+        expect(notifySystem).toHaveBeenCalledTimes(1);
+        expect(notifySystem).toHaveBeenCalledWith({
+            kind: "knock",
+            title: "request Alice",
+            body: "",
+            tag: "knock:z:v",
+        });
     });
 
     it("shows nothing and plays no sound to a player outside the area", () => {
@@ -201,6 +212,7 @@ describe("KnockManager", () => {
 
         expect(get(knockRequestsStore)).toEqual([]);
         expect(fake.soundPlay).not.toHaveBeenCalled();
+        expect(notifySystem).not.toHaveBeenCalled();
     });
 
     it("answers enter: emits the answer, clears the request and lets the status link restore the status", () => {
