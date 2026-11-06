@@ -9,6 +9,17 @@ const area: DeepPartial<Translation["area"]> = {
         noAccess: "Ho sentim, no tens accés a aquesta àrea.",
         unlockWithTrigger: "{trigger} per desbloquejar aquesta àrea.",
     },
+    knock: {
+        prompt: "{trigger} to knock.",
+        waiting: "You knocked, waiting…",
+        waitingAdmin: "You knocked — {trigger} to force the door open.",
+        later: "Not now.",
+        noAnswer: "Nobody answers.",
+        opened: "{name} opens the door for you.",
+        request: "{name} is knocking at the door",
+        enter: "Let in",
+        notNow: "Not now",
+    },
     personalArea: {
         claimDescription: "Aquesta és una àrea personal. Vols fer-la teva?",
         buttons: {

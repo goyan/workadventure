@@ -8,6 +8,17 @@ const area: BaseTranslation = {
         noAccess: "Sorry, you don't have access to this area.",
         unlockWithTrigger: "{trigger} to unlock this area.",
     },
+    knock: {
+        prompt: "{trigger} to knock.",
+        waiting: "You knocked, waiting…",
+        waitingAdmin: "You knocked — {trigger} to force the door open.",
+        later: "Not now.",
+        noAnswer: "Nobody answers.",
+        opened: "{name} opens the door for you.",
+        request: "{name} is knocking at the door",
+        enter: "Let in",
+        notNow: "Not now",
+    },
     personalArea: {
         claimDescription: "This is a personal area. Do you want to make it yours ?",
         buttons: {
