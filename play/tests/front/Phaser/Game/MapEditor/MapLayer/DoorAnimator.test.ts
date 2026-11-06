@@ -223,3 +223,74 @@ describe("DoorAnimator locked areas", () => {
         expect(animator.isDoorOpen("nope")).toBe(false);
     });
 });
+
+// A red padlock marks the doors of a locked area: one per door, in its middle.
+describe("DoorAnimator locked door markers", () => {
+    const ZONE = { x: 96, y: 192, width: 128, height: 128 };
+
+    // Both pieces of the horizontal door 128..192 x 160..192.
+    function makeDoubleDoor() {
+        const prefabOf = (name: string) => mapLayerPrefabId("Carte Portes", name);
+        const piece = (entityId: string, name: string, x: number) =>
+            ({
+                entityId,
+                x,
+                y: 160,
+                depth: 0,
+                texture: { key: `${name}.png` },
+                getPrefab: () => ({ collectionName: "Carte Portes", id: prefabOf(name), imagePath: `${name}.png` }),
+                setDepth: () => undefined,
+            }) as unknown as Entity;
+        const entities = [piece("left", "porte-h-gris-g", 128), piece("right", "porte-h-gris-d", 160)];
+        return new DoorAnimator(
+            {} as Phaser.Scene,
+            () => entities,
+            () => Promise.resolve(undefined),
+            () => {},
+            () => {},
+            () => [],
+        );
+    }
+
+    /** Lets the animator find its doors (they are read on the first update). */
+    function scanned(animator: DoorAnimator): DoorAnimator {
+        animator.update(0, [], { x: 0, y: 0 });
+        return animator;
+    }
+
+    it("marks a door of a locked zone in its middle", () => {
+        const { animator } = makeAnimator();
+        expect(Array.from(scanned(animator).getLockedDoorMarkers([ZONE]).values())).toEqual([{ x: 160, y: 176 }]);
+    });
+
+    it("marks a vertical door in the middle of what is seen of it", () => {
+        // Door centred on x = 128, 112..144 x 160..224, on the left edge of the zone. Its last 12 px are under the joint
+        // of the vertex below: the door is seen from 160 to 212.
+        const { animator } = makeAnimator("porte-v-gris-haut", 96, 160);
+        const zone = { x: 128, y: 160, width: 128, height: 64 };
+        expect(Array.from(scanned(animator).getLockedDoorMarkers([zone]).values())).toEqual([{ x: 128, y: 186 }]);
+    });
+
+    it("marks the two pieces of a door once", () => {
+        expect(Array.from(scanned(makeDoubleDoor()).getLockedDoorMarkers([ZONE]).values())).toEqual([
+            { x: 160, y: 176 },
+        ]);
+    });
+
+    it("does not mark a door outside every locked zone", () => {
+        const { animator } = makeAnimator();
+        const far = { x: 1_000, y: 1_000, width: 64, height: 64 };
+        expect(scanned(animator).getLockedDoorMarkers([far]).size).toBe(0);
+    });
+
+    it("marks nothing without a locked zone", () => {
+        const { animator } = makeAnimator();
+        expect(scanned(animator).getLockedDoorMarkers([]).size).toBe(0);
+    });
+
+    it("marks a door once when it belongs to two locked zones", () => {
+        const { animator } = makeAnimator();
+        const north = { x: 96, y: 32, width: 128, height: 128 };
+        expect(scanned(animator).getLockedDoorMarkers([ZONE, north]).size).toBe(1);
+    });
+});
