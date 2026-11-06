@@ -284,6 +284,7 @@ import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { GobeurManager } from "./Gobeur/GobeurManager";
+import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
@@ -432,6 +433,7 @@ export class GameScene extends DirtyScene {
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private _gobeurManager: GobeurManager | undefined;
+    private nightManager: NightManager | undefined;
     private _knockManager: KnockManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
@@ -1431,6 +1433,8 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this._gobeurManager?.destroy();
         this._gobeurManager = undefined;
+        this.nightManager?.destroy();
+        this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
         this.wanderingCharactersManager?.destroy();
@@ -1621,6 +1625,7 @@ export class GameScene extends DirtyScene {
         }
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
+            this.nightManager?.update(time);
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -2670,6 +2675,9 @@ export class GameScene extends DirtyScene {
                 this.wanderingCharactersManager?.destroy();
                 this.wanderingCharactersManager = new WanderingCharactersManager(this);
                 this._gobeurManager = new GobeurManager(this);
+                // One veil at a time.
+                this.nightManager?.destroy();
+                this.nightManager = new NightManager(this);
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
                 this._knockManager = new KnockManager(this);
