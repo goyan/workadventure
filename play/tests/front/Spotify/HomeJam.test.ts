@@ -69,6 +69,7 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
         enqueueOnSpotify: vi.fn(),
         dequeueOnSpotify: vi.fn(),
         moveInSpotifyQueue: vi.fn(),
+        refreshSpotifyQueue: vi.fn(),
         watchSpotifyQueue: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => {
             onSpotifyQueue = callback;
             return () => (onSpotifyQueue = undefined);
@@ -107,6 +108,13 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
 
 afterEach(() => {
     jukeboxQueuesStore.set(new Map());
+});
+
+it("refreshes the host's live Spotify snapshot when opening their own Jukebox queue", () => {
+    const host = createHarness("host");
+    requestJukeboxQueue("host");
+    expect(host.desktop.refreshSpotifyQueue).toHaveBeenCalledOnce();
+    host.stop();
 });
 
 describe("Jukebox, as a guest", () => {
@@ -336,6 +344,22 @@ describe("Jukebox, moving tracks anywhere", () => {
         });
         return host;
     }
+
+    it("shares newly loaded playlist tracks without queue ids and keeps other valid entries", () => {
+        const host = createHarness("host");
+        const first = { uri: "spotify:track:first", title: "First", artist: "Artist", artworkUrl: "" };
+        host.spotifyQueueChanges({
+            tracks: [],
+            upcoming: [first, { ...first, uri: "spotify:track:second", uid: "temporary:id" }],
+            contextName: "Mix Work",
+        });
+        const state = get(jukeboxQueuesStore).get("host");
+        expect(state?.upcoming).toHaveLength(2);
+        expect(state?.upcoming[0]?.uid).toBeUndefined();
+        expect(state?.upcoming[1]?.uid).toBeUndefined();
+        expect(host.send).toHaveBeenLastCalledWith(JUKEBOX_STATE_EVENT, state, []);
+        host.stop();
+    });
 
     it("lets the host move the rest of the playlist, by step or to a given track", () => {
         const host = hostWithPlaylist();

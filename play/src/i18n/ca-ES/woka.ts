@@ -3,6 +3,17 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        rotate: "Gira l’avatar",
+        parts: {
+            body: "Cos",
+            eyes: "Ulls",
+            hair: "Cabells",
+            clothes: "Roba",
+            hat: "Barret",
+            accessory: "Accessoris",
+        },
+        bath: "Bany",
+        bathHint: "El banyador es porta a l’aigua i a una casella de la piscina.",
         title: "Personalitzar el vostre WOKA",
         navigation: {
             finish: "Acabar",
@@ -17,7 +28,24 @@ const woka: DeepPartial<Translation["woka"]> = {
         randomize: "Seleccionar aleatòriament",
     },
     menu: {
+        changeOutfit: "Canvia la roba",
+        swimwear: "Bany",
+        actions: "Accions del meu avatar",
+        closeActions: "Tanca les accions",
+        profile: "Mostra el perfil",
         businessCard: "Targeta de visita",
+    },
+    swimwear: {
+        auto: "Segons l’avatar",
+        shorts: "Pantalons de bany",
+        twoPiece: "Banyador de dues peces",
+    },
+    actions: {
+        idle: "Atura",
+        dance: "Ballar",
+        coffee: "Beure cafè",
+        sleep: "Dormir",
+        toilet: "Anar al lavabo",
     },
     picker: {
         title: "A qui vols seleccionar?",

@@ -1,4 +1,6 @@
 <script lang="ts">
+    import LL from "../../../i18n/i18n-svelte";
+    import type { Swimwear } from "../../Phaser/Entity/Swimwear";
     import type { WokaData } from "./WokaTypes";
     import WokaImage from "./WokaImage.svelte";
 
@@ -7,9 +9,10 @@
         wokaData: WokaData | null;
         getTextureUrl: (url: string) => string;
         onrotate?: (direction: number) => void;
+        swimwear?: Swimwear;
     }
 
-    let { selectedTextures, wokaData = null, getTextureUrl = (url) => url, onrotate }: Props = $props();
+    let { selectedTextures, wokaData = null, getTextureUrl = (url) => url, onrotate, swimwear }: Props = $props();
 
     // Directions correspond to the order of images in the sprite sheet:
     const directionsMapping = [0, 1, 3, 2];
@@ -21,7 +24,7 @@
 <div class="woka-preview flex items-center justify-center relative">
     <div class="p-6 relative flex items-center justify-center w-fit bg-white/10 rounded-lg">
         <button
-            aria-label="Rotate avatar"
+            aria-label={$LL.woka.customWoka.rotate()}
             class="bg-white/10 hover:bg-white/20 rounded-md absolute bottom-2 right-2 aspect-square p-2 flex items-center justify-center"
             onclick={() => {
                 direction = (direction + 1) % 4;
@@ -50,6 +53,7 @@
             {wokaData}
             {getTextureUrl}
             {canvasSize}
+            {swimwear}
             direction={directionsMapping[direction]}
         />
     </div>

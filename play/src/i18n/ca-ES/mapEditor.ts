@@ -510,6 +510,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     categories: {
         base: {
+            beds: "Llits",
+            toilets: "Lavabos",
+            coffee: "Cafè",
             seats: "Seats",
             pools: "Pools",
             rugs: "Rugs & floors",
@@ -522,6 +525,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             misc: "Miscellaneous",
         },
         interactions: {
+            dance: "Ballar",
+            coffee: "Beure cafè",
+            sleep: "Dormir",
+            toilet: "Anar al lavabo",
+
             none: "None",
             sit: "Sit",
             swim: "Swim",

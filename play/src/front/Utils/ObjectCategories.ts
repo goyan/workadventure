@@ -1,4 +1,5 @@
 import type { CategorySettings, EntityPrefab, InteractionTrigger, ObjectInteraction } from "@workadventure/map-editor";
+import { AvatarAction } from "../Phaser/Entity/AvatarAction";
 import { getEntityCategory, isSameCategory, isSeatObject } from "./EntityCategory";
 
 /**
@@ -8,6 +9,9 @@ import { getEntityCategory, isSameCategory, isSeatObject } from "./EntityCategor
 export const BASE_CATEGORIES: readonly ({ id: string } & CategorySettings)[] = [
     { id: "seats", interaction: "sit", trigger: "auto" },
     { id: "pools", interaction: "swim", trigger: "key", layer: "floor" },
+    { id: "beds", interaction: AvatarAction.Sleep, trigger: "key" },
+    { id: "toilets", interaction: AvatarAction.Toilet, trigger: "key" },
+    { id: "coffee", interaction: AvatarAction.Coffee, trigger: "key" },
     { id: "rugs", interaction: "none", trigger: "auto", layer: "floor" },
     { id: "lights", interaction: "none", trigger: "auto", layer: "overhead" },
     { id: "plants", interaction: "none", trigger: "auto" },
@@ -59,6 +63,10 @@ export function getObjectInteraction(
     if (prefab.water?.length) {
         return { interaction: "swim", trigger: "key" };
     }
+    if (/\b(toilets?|wc)\b/i.test(prefab.name)) return { interaction: AvatarAction.Toilet, trigger: "key" };
+    if (/\b(beds?|lits?)\b/i.test(prefab.name)) return { interaction: AvatarAction.Sleep, trigger: "key" };
+    if (/\b(coffee|café|cafeti[eè]re)\b/i.test(prefab.name))
+        return { interaction: AvatarAction.Coffee, trigger: "key" };
     if (isSeatObject(prefab)) {
         return { interaction: "sit", trigger: "auto" };
     }

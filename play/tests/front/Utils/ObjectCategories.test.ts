@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AvatarAction } from "../../../src/front/Phaser/Entity/AvatarAction";
 import {
     getCategorySettings,
     getObjectInteraction,
@@ -40,6 +41,30 @@ describe("ObjectCategories", () => {
             trigger: "auto",
         });
         expect(getObjectInteraction(object(["Furniture"], "Big shelf"), undefined).interaction).toBe("none");
+    });
+
+    it("recognizes action objects and lets map categories assign or override actions", () => {
+        for (const [name, action] of [
+            ["Bed", AvatarAction.Sleep],
+            ["Toilet", AvatarAction.Toilet],
+            ["Coffee machine", AvatarAction.Coffee],
+        ] as const) {
+            expect(getObjectInteraction(object(["Furniture"], name), undefined)).toEqual({
+                interaction: action,
+                trigger: "key",
+            });
+        }
+        expect(getObjectInteraction(object(["Beds"]), undefined).interaction).toBe(AvatarAction.Sleep);
+        expect(getObjectInteraction(object(["Toilets"]), undefined).interaction).toBe(AvatarAction.Toilet);
+        expect(
+            getObjectInteraction(object(["Dance floor"]), {
+                "dance floor": { interaction: AvatarAction.Dance, trigger: "auto" },
+            }),
+        ).toEqual({ interaction: AvatarAction.Dance, trigger: "auto" });
+        expect(
+            getObjectInteraction(object(["Beds"]), { beds: { interaction: AvatarAction.Coffee, trigger: "key" } })
+                .interaction,
+        ).toBe(AvatarAction.Coffee);
     });
 
     it("lets a category the map created carry an interaction", () => {

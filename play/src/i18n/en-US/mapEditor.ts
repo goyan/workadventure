@@ -505,6 +505,9 @@ const mapEditor: BaseTranslation = {
     },
     categories: {
         base: {
+            beds: "Beds",
+            toilets: "Toilets",
+            coffee: "Coffee",
             seats: "Seats",
             pools: "Pools",
             rugs: "Rugs & floors",
@@ -517,6 +520,11 @@ const mapEditor: BaseTranslation = {
             misc: "Miscellaneous",
         },
         interactions: {
+            dance: "Dance",
+            coffee: "Drink coffee",
+            sleep: "Sleep",
+            toilet: "Use the toilet",
+
             none: "None",
             sit: "Sit",
             swim: "Swim",

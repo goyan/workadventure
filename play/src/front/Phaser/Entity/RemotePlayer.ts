@@ -75,6 +75,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
 
     public updatePosition(position: PositionMessage): void {
         this.stopMoveTo();
+        if (position.moving) this.standUp();
         this.playAnimation(position.direction, position.moving, position.running ? RUN_ANIMATION_SPEED : 1);
         this.setPosition(position.x, position.y);
         this.updateSeatedState(position.moving);
@@ -90,7 +91,7 @@ export class RemotePlayer extends Character implements ActivatableInterface {
     private updateSeatedState(moving: boolean): void {
         const seat = moving ? undefined : findSeatOfCharacter(this.scene, this);
         if (seat) {
-            this.sit(seat.direction);
+            this.sit(this.lastDirection);
         } else {
             this.standUp();
         }

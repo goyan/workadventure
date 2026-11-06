@@ -21,6 +21,8 @@ import { followRoleStore, followStateStore, followUsersStore } from "../../Store
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { wokaMenuStore } from "../../Stores/WokaMenuStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "../../Stores/CharacterPickerStore";
+import { AvatarAction } from "../Entity/AvatarAction";
+import { Swimwear } from "../Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { cameraDetachedStore } from "../../Stores/CameraStore";
 import { waScaleManager } from "../Services/WaScaleManager";
@@ -209,7 +211,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             for (const object of gameObjects) {
                 const isCharacter = object instanceof Player || object instanceof RemotePlayer;
-                if (isCharacter && this.offerCharacterChoice(gameObjects)) {
+                if (isCharacter && this.offerCharacterChoice(gameObjects, pointer)) {
                     return;
                 }
                 if (isActivatable(object)) {
@@ -217,7 +219,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     return;
                 }
                 if (object instanceof Player) {
-                    this.toggleOwnCard(object);
+                    this.toggleOwnCard(object, pointer);
                     return;
                 }
             }
@@ -296,7 +298,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
      * opening the front-most one, which made a character hidden behind another unreachable.
      * Returns false when only one character is clickable here, so the usual click handling applies.
      */
-    private offerCharacterChoice(gameObjects: GameObject[]): boolean {
+    private offerCharacterChoice(gameObjects: GameObject[], pointer: Pointer): boolean {
         const candidates: CharacterPickerCandidate[] = [];
         for (const object of gameObjects) {
             if (object instanceof Player) {
@@ -305,7 +307,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     name: object.playerName,
                     pictureStore: object.pictureStore,
                     isSelf: true,
-                    select: () => this.toggleOwnCard(object),
+                    select: () => this.toggleOwnCard(object, pointer),
                 });
             } else if (object instanceof RemotePlayer && object.isActivatable()) {
                 candidates.push({
@@ -331,14 +333,78 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     /** A click on one's own woka shows one's own card, as others see it, without the actions meant for others. */
-    private toggleOwnCard(player: Player): void {
+    private toggleOwnCard(player: Player, pointer: Pointer): void {
         const uuid = localUserStore.getLocalUser()?.uuid;
         if (!uuid) return;
         if (get(wokaMenuStore)?.isSelf) {
             wokaMenuStore.clear();
             return;
         }
-        wokaMenuStore.openOwnCard(player.playerName, uuid);
+        const position =
+            pointer.event instanceof MouseEvent
+                ? { x: pointer.event.clientX, y: pointer.event.clientY }
+                : { x: pointer.x, y: pointer.y };
+        wokaMenuStore.openOwnCard(player.playerName, uuid, position);
+        wokaMenuStore.addAction({
+            actionName: get(LL).woka.menu.profile(),
+            emoji: "👤",
+            testId: "avatar-profile",
+            callback: () => wokaMenuStore.openOwnCard(player.playerName, uuid),
+        });
+        for (const action of [AvatarAction.Dance, AvatarAction.Coffee, AvatarAction.Idle]) {
+            wokaMenuStore.addAction({
+                actionName: get(LL).woka.actions[action](),
+                emoji: action === AvatarAction.Dance ? "🕺" : action === AvatarAction.Coffee ? "☕" : "⏹",
+                testId: `avatar-action-${action}`,
+                callback: () => {
+                    player.setAvatarAction(action);
+                    wokaMenuStore.clear();
+                },
+            });
+        }
+        wokaMenuStore.addAction({
+            actionName: get(LL).woka.menu.changeOutfit(),
+            emoji: "👕",
+            testId: "avatar-change-outfit",
+            callback: () => {
+                wokaMenuStore.clear();
+                Promise.all([
+                    import("../Game/GameManager"),
+                    import("../Login/SelectCharacterScene"),
+                    import("../../Stores/SelectCharacterStore"),
+                ])
+                    .then(
+                        ([
+                            { gameManager },
+                            { SelectCharacterScene, SelectCharacterSceneName },
+                            { selectCharacterSceneVisibleStore },
+                        ]) => {
+                            selectCharacterSceneVisibleStore.set(true);
+                            gameManager.leaveGame(SelectCharacterSceneName, new SelectCharacterScene());
+                        },
+                    )
+                    .catch((error) => console.error("Could not open avatar customization", error));
+            },
+        });
+        wokaMenuStore.addAction({
+            actionName: get(LL).woka.menu.swimwear(),
+            emoji: "🩱",
+            testId: "avatar-swimwear",
+            callback: () => {
+                wokaMenuStore.openOwnCard(player.playerName, uuid, position);
+                for (const style of Object.values(Swimwear)) {
+                    wokaMenuStore.addAction({
+                        actionName: get(LL).woka.swimwear[style](),
+                        emoji: style === Swimwear.TwoPiece ? "👙" : style === Swimwear.Shorts ? "🩳" : "🩱",
+                        testId: `avatar-swimwear-${style}`,
+                        callback: () => {
+                            player.setSwimwear(style);
+                            wokaMenuStore.clear();
+                        },
+                    });
+                }
+            },
+        });
     }
 
     public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {

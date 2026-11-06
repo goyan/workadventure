@@ -64,6 +64,7 @@
     import LimitRoomModal from "./Modal/LimitRoomModal.svelte";
     import ActionsMenu from "./ActionsMenu/ActionsMenu.svelte";
     import WokaMenu from "./ActionsMenu/WokaMenu.svelte";
+    import AvatarRadialMenu from "./ActionsMenu/AvatarRadialMenu.svelte";
     import CharacterPicker from "./ActionsMenu/CharacterPicker.svelte";
     import Lazy from "./Lazy.svelte";
     import UiWebsiteContainer from "./UI/Website/UIWebsiteContainer.svelte";
@@ -501,6 +502,9 @@
             <GobeurRanking />
 
             <ExternalComponents zone="popup" />
+            {#if $wokaMenuStore?.isSelf && $wokaMenuStore.actions.length}
+                <AvatarRadialMenu menu={$wokaMenuStore} />
+            {/if}
             {#if sidePanelOpen}
                 <div
                     transition:fly={{ x: 210, duration: 500 }}
@@ -514,7 +518,7 @@
                     {#if $characterPickerStore}
                         <CharacterPicker />
                     {/if}
-                    {#if $wokaMenuStore}
+                    {#if $wokaMenuStore && !($wokaMenuStore.isSelf && $wokaMenuStore.actions.length)}
                         <WokaMenu />
                     {/if}
                     {#if $actionsMenuStore}

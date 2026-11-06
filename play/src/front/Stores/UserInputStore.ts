@@ -5,6 +5,7 @@ import { emoteMenuStore } from "./EmoteStore";
 import { refreshPromptStore } from "./RefreshPromptStore";
 import { mapDeletedPromptStore } from "./MapDeletedPromptStore";
 import { releaseNotesVisibleStore } from "./ReleaseNotesStore";
+import { avatarActionsOpenStore } from "./WokaMenuStore";
 
 export const inputFormFocusStore = writable(false);
 
@@ -21,6 +22,7 @@ export const enableUserInputsStore = derived(
         refreshPromptStore,
         mapDeletedPromptStore,
         releaseNotesVisibleStore,
+        avatarActionsOpenStore,
     ],
     ([
         $menuInputFocusStore,
@@ -31,6 +33,7 @@ export const enableUserInputsStore = derived(
         $refreshPromptStore,
         $mapDeletedPromptStore,
         $releaseNotesVisibleStore,
+        $avatarActionsOpenStore,
     ]) => {
         return (
             !$menuInputFocusStore &&
@@ -40,7 +43,8 @@ export const enableUserInputsStore = derived(
             !$emoteMenuStore &&
             !$refreshPromptStore &&
             !$mapDeletedPromptStore &&
-            !$releaseNotesVisibleStore
+            !$releaseNotesVisibleStore &&
+            !$avatarActionsOpenStore
         );
     },
 );

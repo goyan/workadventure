@@ -68,6 +68,19 @@ export function isPointInWater(rectangles: WaterRectangle[], point: Point): bool
     );
 }
 
+/** At most one map tile from the water boundary, including the diagonal neighbouring tiles. */
+export function isWithinOneTileOfWater(
+    rectangles: WaterRectangle[],
+    point: Point,
+    tile: { width: number; height: number },
+): boolean {
+    return rectangles.some(
+        (r) =>
+            Math.abs(point.x - clamp(point.x, r.x, r.x + r.width)) <= tile.width &&
+            Math.abs(point.y - clamp(point.y, r.y, r.y + r.height)) <= tile.height,
+    );
+}
+
 export function intersectsWater(rectangles: WaterRectangle[], box: WaterRectangle): boolean {
     return rectangles.some(
         (r) => box.x < r.x + r.width && r.x < box.x + box.width && box.y < r.y + r.height && r.y < box.y + box.height,
