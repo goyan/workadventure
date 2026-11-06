@@ -18,13 +18,18 @@
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { playersStore } from "../../Stores/PlayersStore";
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
+    import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
+    import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
+    import { requestedMicrophoneDeviceIdStore } from "../../Stores/MediaStore";
     import Button from "../UI/Button.svelte";
+    import JamAudioControls from "./JamAudioControls.svelte";
     import JukeboxQueue from "./JukeboxQueue.svelte";
 
     // A home Jam plays on the Spotify app of this computer, through the desktop app and the Spicetify extension.
     let canHomeJam = $derived($listenAlongAvailableStore);
     /** The Jukeboxes whose queue is shown, by host uuid. */
     const openQueues = new SvelteSet<string>();
+    const jamMusicCaptureState = jamMusicCapture.state;
 
     function toggleQueue(hostUuid: string): void {
         if (!openQueues.delete(hostUuid)) openQueues.add(hostUuid);
@@ -95,6 +100,16 @@
             {#if openQueues.has(jam.hostUuid)}
                 <JukeboxQueue {room} />
             {/if}
+        {/if}
+        {#if !home}
+            <!-- The music of a Spotify Jam travels through the media session of the Jam: no Spotify Premium to hear it. -->
+            <JamAudioControls
+                jam={{ areaId: room.zone.areaId, propertyId: room.zone.propertyId, hostUuid: jam.hostUuid }}
+                {mine}
+                session={jamAudioSession}
+                micDeviceId={$requestedMicrophoneDeviceIdStore}
+                captureState={jamMusicCaptureState}
+            />
         {/if}
         {#if mine}
             <Button variant="light" appearance="border" size="sm" onclick={stopSharingJam}>

@@ -111,6 +111,44 @@ describe("JamAudioSession", () => {
         });
     });
 
+    describe("state for the UI", () => {
+        it("names the Jam listened to once joined and forgets it when listening stops", async () => {
+            const { session } = setup();
+            expect(get(session.listeningSpaceName)).toBeUndefined();
+            await session.listen(jam);
+            expect(get(session.listeningSpaceName)).toBe(spaceName);
+            await session.stopListening();
+            expect(get(session.listeningSpaceName)).toBeUndefined();
+        });
+
+        it("names the Jam shared once the capture started and forgets it when it stops", async () => {
+            const { session } = setup();
+            await session.shareMusic(jam, "blackhole");
+            expect(get(session.sharingSpaceName)).toBe(spaceName);
+            await session.stopSharingMusic();
+            expect(get(session.sharingSpaceName)).toBeUndefined();
+        });
+
+        it("forgets the Jam shared when the capture ends by itself", async () => {
+            const captureState = writable<JamMusicCaptureState>({ status: "idle" });
+            const capture: JamMusicCapture = {
+                state: captureState,
+                start: vi.fn().mockResolvedValue(undefined),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            const { session } = setup({ capture });
+            await session.shareMusic(jam, "blackhole");
+            captureState.set({ status: "error", reason: "ended" });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(session.sharingSpaceName)).toBeUndefined();
+        });
+
+        it("gives the space name of a Jam in the current room", () => {
+            const { session } = setup();
+            expect(session.spaceNameOf(jam)).toBe(spaceName);
+        });
+    });
+
     describe("shareMusic", () => {
         it("joins the space, then starts the capture with the microphone forbidden", async () => {
             const { session, joinSpace, captureStart } = setup();
