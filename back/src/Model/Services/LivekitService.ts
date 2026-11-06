@@ -127,10 +127,9 @@ export class LiveKitService {
 
     /**
      * In the space of a Jam, a guest publishes screens only (their voice stays in the bubble or meeting they stand in)
-     * and the host also publishes the music. A music track has no source of its own (it is published as `unknown`), and
-     * a token cannot list that source: the host gets it by lifting the list, which allows every source. Only the
-     * host's client keeps them from publishing a camera or a microphone there. Without a role, the space is an
-     * ordinary one.
+     * and the host also publishes the music. The music travels as a microphone track under a name of its own, like the
+     * audio of the scripts: a guest has no microphone right there, so the server refuses their music. Only the host's
+     * client keeps them from speaking in the Jam. Without a role, the space is an ordinary one.
      */
     async generateToken(
         roomName: string,
@@ -160,10 +159,10 @@ export class LiveKitService {
         return token.toJwt();
     }
 
-    private publishSources(jamRole: "host" | "guest" | undefined): TrackSource[] | undefined {
+    private publishSources(jamRole: "host" | "guest" | undefined): TrackSource[] {
         switch (jamRole) {
             case "host":
-                return undefined;
+                return [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
             case "guest":
                 return [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
             case undefined:

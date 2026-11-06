@@ -344,9 +344,9 @@ describe("LiveKitService publish rights", () => {
         expect(await publishSources(token)).toEqual(["screen_share", "screen_share_audio"]);
     });
 
-    it("lifts the source restriction for the host, since a token cannot list the unknown source", async () => {
+    it("lets the host of a Jam publish the music, which travels as a named microphone track, and share a screen", async () => {
         const token = await createService().generateToken("jam-space", user, { jamRole: "host" });
 
-        expect(await publishSources(token)).toBeUndefined();
+        expect(await publishSources(token)).toEqual(["microphone", "screen_share", "screen_share_audio"]);
     });
 });
