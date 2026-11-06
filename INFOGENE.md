@@ -602,6 +602,38 @@ Limites :
 - Une zone ajoutée par un autre éditeur ne s'allume qu'après rechargement.
 - En marchant, les trous du voile peuvent suivre la caméra avec une image de retard.
 
+### Coucou et notifications système
+
+Pour faire revenir sur la carte un collègue dont l'onglet est en arrière-plan.
+
+- **Coucou** : bouton « 👋 Coucou » dans la fiche d'un avatar et dans le menu d'un joueur de la liste. L'expéditeur
+  affiche l'émoji 👋 (visible de tous). Un coucou au même destinataire au plus toutes les 10 s (bouton grisé). Si le
+  destinataire est en « Ne pas déranger », l'expéditeur lit « X ne veut pas être dérangé : ton coucou l'attendra. »
+- **Réception** : carte « X te fait coucou 👋 » avec **Y aller** (`emitAskPosition`), **Répondre** (message privé) et
+  **×** ; une seule carte par expéditeur (heure mise à jour). Son et notification au plus une fois par 10 s et par
+  expéditeur ; la carte, elle, se met toujours à jour.
+- **Notifications système** (`Notification/SystemNotifier.ts`) : coucou, message privé reçu en direct (texte tronqué à
+  60 caractères, l'historique restauré ne notifie pas) et toc toc. Seulement si l'onglet n'a pas le focus, la
+  permission est accordée et le réglage « notifications » est actif (**désactivé par défaut** : Paramètres). En « Ne pas
+  déranger » (demandé ou effectif), seul le toc toc passe. Notification de page (`new Notification`, `renotify`) : un
+  clic ramène l'onglet et ouvre la carte ou le message.
+- **Son** : le son de réception suit la règle upstream (`allowNotificationSound`) : coupé aussi en « de retour bientôt »,
+  en réunion Jitsi/BBB, etc.
+
+Réseau : événement de script `infogene.wave` (`{ targetUuid, at }`, zod), diffusé à la salle ; l'expéditeur est le
+`senderId` posé par le serveur. Aucun changement de back, protobuf ni WAM : **compatible avec la prod** (la notification
+de message privé n'existe que là où les messages privés du fork existent).
+
+Fichiers : `play/src/front/Phaser/Game/Wave/*` (`WaveProtocol`, `WaveState` purs et testés ; `WaveManager`),
+`Stores/WaveStore.ts`, `Components/Wave/WaveCards.svelte`, `Notification/SystemNotifier.ts`,
+`Stores/PrivateMessageStore.ts`, `Knock/KnockManager.ts`, `Entity/RemotePlayer.ts`, `UserList/UserActionButton.svelte`,
+`GameScene.ts`, i18n `wave`.
+
+Limites :
+- Toute la salle reçoit l'événement : on peut voir dans la console qui fait coucou à qui (l'émoji est déjà public).
+- Pas de notification sur navigateur mobile (constructeur `Notification` refusé).
+- Coucou seulement entre joueurs de la même carte.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
