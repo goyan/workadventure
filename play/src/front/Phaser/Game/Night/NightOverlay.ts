@@ -41,9 +41,42 @@ function ensureSoftRectTexture(scene: Phaser.Scene): void {
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 }
 
+/** White disc, opaque at the centre and fading to transparent at its edge: the brush of the player halos. */
+const SOFT_DISC_TEXTURE = "night-soft-disc";
+const SOFT_DISC_SIZE = 128;
+
+function ensureSoftDiscTexture(scene: Phaser.Scene): void {
+    if (scene.textures.exists(SOFT_DISC_TEXTURE)) {
+        return;
+    }
+    const texture = scene.textures.createCanvas(SOFT_DISC_TEXTURE, SOFT_DISC_SIZE, SOFT_DISC_SIZE);
+    if (!texture) {
+        return;
+    }
+    const context = texture.getContext();
+    const image = context.createImageData(SOFT_DISC_SIZE, SOFT_DISC_SIZE);
+    const half = SOFT_DISC_SIZE / 2;
+    for (let y = 0; y < SOFT_DISC_SIZE; y++) {
+        for (let x = 0; x < SOFT_DISC_SIZE; x++) {
+            // Distance of the texel centre to the disc centre, 0 at the centre and 1 at the edge.
+            const t = Math.min(1, Math.hypot(x + 0.5 - half, y + 0.5 - half) / half);
+            // Smoothstep falloff: no visible ring where the light ends.
+            const alpha = 1 - t * t * (3 - 2 * t);
+            const offset = (y * SOFT_DISC_SIZE + x) * 4;
+            image.data[offset] = 255;
+            image.data[offset + 1] = 255;
+            image.data[offset + 2] = 255;
+            image.data[offset + 3] = Math.round(alpha * 255);
+        }
+    }
+    context.putImageData(image, 0, 0);
+    texture.refresh();
+    texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+}
+
 /**
  * The night veil: a texture the size of the screen, filled with the night tint, out of which the lit areas are
- * erased with a soft brush. It is only redrawn when asked (see nightRenderAction).
+ * erased with a soft brush, and the player halos with a soft disc. It is only redrawn when asked (see nightRenderAction).
  *
  * Placement under zoom: the texture has one texel per screen pixel and a scroll factor of 0, but Phaser still
  * applies the camera zoom to scroll-factor-0 objects, around the camera origin (originX * width, originY * height):
@@ -56,11 +89,14 @@ export class NightOverlay {
     // One brush per lit area drawn this frame: the texture's drawing commands run at render(), so a brush cannot be
     // moved between two erases of the same frame.
     private readonly brushes: Phaser.GameObjects.NineSlice[] = [];
+    // Same for the halos: one disc per halo drawn this frame.
+    private readonly discs: Phaser.GameObjects.Image[] = [];
     private textureWidth = 0;
     private textureHeight = 0;
 
     constructor(private readonly scene: Phaser.Scene) {
         ensureSoftRectTexture(scene);
+        ensureSoftDiscTexture(scene);
         const camera = scene.cameras.main;
         this.textureWidth = Math.ceil(camera.width);
         this.textureHeight = Math.ceil(camera.height);
@@ -117,6 +153,22 @@ export class NightOverlay {
             this.texture.erase(brush);
         }
 
+        let discsUsed = 0;
+        for (const halo of frame.halos) {
+            if (
+                halo.x + halo.radius <= view.x ||
+                halo.y + halo.radius <= view.y ||
+                halo.x - halo.radius >= view.x + view.width ||
+                halo.y - halo.radius >= view.y + view.height
+            ) {
+                continue;
+            }
+            const disc = this.disc(discsUsed++);
+            const diameter = halo.radius * 2 * zoom;
+            disc.setDisplaySize(diameter, diameter).setPosition((halo.x - view.x) * zoom, (halo.y - view.y) * zoom);
+            this.texture.erase(disc);
+        }
+
         this.texture.render();
         this.texture.setVisible(true);
     }
@@ -131,7 +183,11 @@ export class NightOverlay {
             brush.destroy();
         }
         this.brushes.length = 0;
-        // The soft brush texture stays in the texture manager: it is tiny and reused by the next scene.
+        for (const disc of this.discs) {
+            disc.destroy();
+        }
+        this.discs.length = 0;
+        // The soft brush textures stay in the texture manager: they are small and reused by the next scene.
     }
 
     private brush(index: number): Phaser.GameObjects.NineSlice {
@@ -155,5 +211,15 @@ export class NightOverlay {
             this.brushes[index] = brush;
         }
         return brush;
+    }
+
+    private disc(index: number): Phaser.GameObjects.Image {
+        let disc = this.discs[index];
+        if (disc === undefined) {
+            // Not added to the display list either. Unlike NineSlice, Image also renders with the canvas renderer.
+            disc = new Phaser.GameObjects.Image(this.scene, 0, 0, SOFT_DISC_TEXTURE).setOrigin(0.5, 0.5);
+            this.discs[index] = disc;
+        }
+        return disc;
     }
 }

@@ -1,3 +1,4 @@
+import type { Halo } from "./NightHalos";
 import type { LitArea } from "./NightLights";
 
 /** The part of the world shown by the camera (world pixels) and its zoom. */
@@ -16,6 +17,8 @@ export interface NightFrame {
     disabled: boolean;
     view: NightView;
     lit: readonly LitArea[];
+    halos: readonly Halo[];
+    /** An area is fading or a halo is moving or changing radius: the veil changes again next frame. */
     fading: boolean;
 }
 
@@ -46,6 +49,16 @@ function sameLit(a: readonly LitArea[], b: readonly LitArea[]): boolean {
     });
 }
 
+function sameHalos(a: readonly Halo[], b: readonly Halo[]): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+    return a.every((halo, index) => {
+        const other = b[index];
+        return halo.id === other.id && halo.x === other.x && halo.y === other.y && halo.radius === other.radius;
+    });
+}
+
 /**
  * What to do with the night veil this frame: "hidden" (day, map editor open, or night turned off),
  * "keep" (nothing changed since `previous`, the texture already shows the right thing), or "draw".
@@ -60,7 +73,8 @@ export function nightRenderAction(frame: NightFrame, previous: NightFrame | unde
         frame.fading ||
         frame.opacity !== previous.opacity ||
         !sameView(frame.view, previous.view) ||
-        !sameLit(frame.lit, previous.lit)
+        !sameLit(frame.lit, previous.lit) ||
+        !sameHalos(frame.halos, previous.halos)
     ) {
         return "draw";
     }

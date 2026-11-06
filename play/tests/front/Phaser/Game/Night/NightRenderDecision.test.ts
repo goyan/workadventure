@@ -9,6 +9,7 @@ function frame(overrides: Partial<NightFrame> = {}): NightFrame {
         disabled: false,
         view: { x: 100, y: 200, width: 800, height: 600, zoom: 2 },
         lit: [{ id: "office", x: 0, y: 0, width: 64, height: 64, intensity: 1 }],
+        halos: [{ id: "local", x: 32, y: 32, radius: 48 }],
         fading: false,
         ...overrides,
     };
@@ -75,6 +76,35 @@ describe("nightRenderAction", () => {
         expect(nightRenderAction(moved, frame())).toBe("draw");
         const renamed = frame({ lit: [{ id: "other", x: 0, y: 0, width: 64, height: 64, intensity: 1 }] });
         expect(nightRenderAction(renamed, frame())).toBe("draw");
+    });
+
+    it("keeps the veil when the halos did not change", () => {
+        const halos = [
+            { id: "local", x: 32, y: 32, radius: 48 },
+            { id: "7", x: 300, y: 200, radius: 48 },
+        ];
+        expect(nightRenderAction(frame({ halos }), frame({ halos: halos.map((halo) => ({ ...halo })) }))).toBe("keep");
+    });
+
+    it("draws when a halo moved", () => {
+        expect(nightRenderAction(frame({ halos: [{ id: "local", x: 33, y: 32, radius: 48 }] }), frame())).toBe("draw");
+        expect(nightRenderAction(frame({ halos: [{ id: "local", x: 32, y: 31, radius: 48 }] }), frame())).toBe("draw");
+    });
+
+    it("draws when a halo radius changed", () => {
+        expect(nightRenderAction(frame({ halos: [{ id: "local", x: 32, y: 32, radius: 56 }] }), frame())).toBe("draw");
+    });
+
+    it("draws when a halo appeared or disappeared", () => {
+        expect(nightRenderAction(frame({ halos: [] }), frame())).toBe("draw");
+        const more = frame({
+            halos: [
+                { id: "local", x: 32, y: 32, radius: 48 },
+                { id: "7", x: 300, y: 200, radius: 48 },
+            ],
+        });
+        expect(nightRenderAction(more, frame())).toBe("draw");
+        expect(nightRenderAction(frame({ halos: [{ id: "7", x: 32, y: 32, radius: 48 }] }), frame())).toBe("draw");
     });
 
     it("draws while an area is fading", () => {

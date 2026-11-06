@@ -1,9 +1,11 @@
 import type { Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
+import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { nightDisabledStore } from "../../../Stores/NightStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
+import { NightHalos } from "./NightHalos";
 import { lightableAreas, NightLights } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
@@ -13,12 +15,16 @@ import type { NightFrame } from "./NightRenderDecision";
 const CLOCK_INTERVAL_MS = 1000;
 
 /**
- * Night mode of the map: darkens the scene in the evening and lights the areas where someone is.
+ * Night mode of the map: darkens the scene in the evening, lights the areas where someone is and carries a halo of
+ * light around every player.
  * Everything is local (same Paris clock for everyone, players known by this browser): nothing goes on the network.
  */
 export class NightManager {
     private readonly overlay: NightOverlay;
     private readonly lights = new NightLights();
+    private readonly halos = new NightHalos();
+    // Halo id of the local player; remote players use their MapPlayersByKey key.
+    private readonly localId = localUserStore.getLocalUser()?.uuid ?? "local";
     // Development override of the clock (`?nightAt=HH:MM`), fixed for the life of the scene.
     private readonly forcedMinutes: number | undefined;
     private readonly unsubscribeEditor: Unsubscriber;
@@ -59,13 +65,16 @@ export class NightManager {
                 this.previous = undefined;
                 // Lit areas fade in again when the veil comes back.
                 this.lights.reset();
+                this.halos.reset();
                 // The game only renders dirty scenes: without this, an idle scene would keep showing the veil.
                 this.scene.markDirty();
             }
             return;
         }
 
-        const lit = this.lights.update(now, this.areas, this.players());
+        const players = this.players();
+        const lit = this.lights.update(now, this.areas, players);
+        const halos = this.halos.update(now, players);
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
             opacity: this.opacity,
@@ -79,7 +88,8 @@ export class NightManager {
                 zoom: camera.zoom,
             },
             lit,
-            fading: this.lights.isFading(),
+            halos,
+            fading: this.lights.isFading() || this.halos.isAnimating(),
         };
 
         // "hidden" cannot happen here: those cases returned above.
@@ -105,11 +115,12 @@ export class NightManager {
         this.areas = lightableAreas(areas, mapWidth, mapHeight);
     }
 
-    private players(): { x: number; y: number }[] {
-        // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset.
-        const players = [{ x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
-        for (const player of this.scene.MapPlayersByKey.values()) {
-            players.push({ x: player.x, y: player.y });
+    private players(): { id: string; x: number; y: number }[] {
+        // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset, the
+        // halos are centred on them (the body). Animals and the Gobeur are not players: they carry no light.
+        const players = [{ id: this.localId, x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
+        for (const [key, player] of this.scene.MapPlayersByKey) {
+            players.push({ id: String(key), x: player.x, y: player.y });
         }
         return players;
     }
