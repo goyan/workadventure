@@ -17,3 +17,9 @@ export function setJamMusicStream(spaceName: string, stream: MediaStream | undef
         return next;
     });
 }
+
+/** The volume of the music alone, between 0 and 1: the voices and the audio of the screens keep their own. */
+export const jamMusicVolumeStore = writable(1);
+
+/** Whether the local user silenced the music while staying in the Jam. */
+export const jamMusicMutedStore = writable(false);
