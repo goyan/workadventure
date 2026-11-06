@@ -4,7 +4,7 @@ import { arrayEmoji } from "../Stores/Utils/emojiSchema";
 import type { RequestedStatus } from "../Rules/StatusRules/statusRules";
 import { requestedStatusFactory } from "../Rules/StatusRules/StatusFactory/RequestedStatusFactory";
 import { INITIAL_SIDEBAR_WIDTH } from "../Stores/ChatStore";
-import { readSwimwear, SWIMWEAR_VARIABLE } from "../Phaser/Entity/Swimwear";
+import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Phaser/Entity/Swimwear";
 import type { Swimwear } from "../Phaser/Entity/Swimwear";
 import type { LocalUser } from "./LocalUser";
 import { areCharacterTexturesValid, isUserNameValid } from "./LocalUserUtils";
@@ -207,6 +207,16 @@ class LocalUserStore {
     getCharacterTextures(): string[] | null {
         const value = JSON.parse(localStorage.getItem(characterTexturesKey) || "null");
         return areCharacterTexturesValid(value) ? value : null;
+    }
+
+    public setSwimwearColor(value: unknown): void {
+        const color = readSwimwearColor(value);
+        if (color) localStorage.setItem(SWIMWEAR_COLOR_VARIABLE, color);
+        else localStorage.removeItem(SWIMWEAR_COLOR_VARIABLE);
+    }
+
+    public getSwimwearColor(): string | undefined {
+        return readSwimwearColor(localStorage.getItem(SWIMWEAR_COLOR_VARIABLE));
     }
 
     public setSwimwear(style: Swimwear): void {

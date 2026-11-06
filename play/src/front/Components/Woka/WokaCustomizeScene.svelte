@@ -22,7 +22,7 @@
 
     interface Props {
         back: () => void;
-        saveAndContinue: (texturesId: string[], swimwear: Swimwear) => void;
+        saveAndContinue: (texturesId: string[], swimwear: Swimwear, swimwearColor?: string) => void;
     }
 
     let { back, saveAndContinue }: Props = $props();
@@ -42,6 +42,7 @@
     let assetsDirection: number = $state(0);
     let showBath = $state(false);
     let selectedSwimwear = $state(localUserStore.getSwimwear() ?? Swimwear.Auto);
+    let selectedSwimwearColor = $state(localUserStore.getSwimwearColor());
     const swimwearStyles = Object.values(Swimwear);
 
     const bodyPartOrder: WokaBodyPart[] = ["body", "eyes", "hair", "clothes", "hat", "accessory"];
@@ -126,7 +127,7 @@
             }
 
             analyticsClient.trackAdminEvent("onboarding.custom_woka_selected");
-            saveAndContinue(textureIds, selectedSwimwear);
+            saveAndContinue(textureIds, selectedSwimwear, selectedSwimwearColor);
         } catch (err) {
             console.error("Error saving textures:", err);
             error = "Failed to save character customization";
@@ -305,6 +306,7 @@
                             {wokaData}
                             {getTextureUrl}
                             swimwear={showBath ? selectedSwimwear : undefined}
+                            swimwearColor={selectedSwimwearColor}
                             onrotate={(direction) => {
                                 assetsDirection = direction;
                             }}
@@ -366,6 +368,22 @@
                         {#if showBath}
                             <h3 class="text-lg font-semibold">{$LL.woka.menu.swimwear()}</h3>
                             <p class="text-sm text-white/70">{$LL.woka.customWoka.bathHint()}</p>
+                            <div class="flex items-center flex-wrap gap-3 py-2">
+                                <label class="flex items-center gap-2 text-sm">
+                                    {$LL.woka.customWoka.color()}
+                                    <input
+                                        type="color"
+                                        value={selectedSwimwearColor ??
+                                            (selectedSwimwear === Swimwear.TwoPiece ? "#df6691" : "#4792cc")}
+                                        onchange={(event) => (selectedSwimwearColor = event.currentTarget.value)}
+                                        class="h-9 w-12 cursor-pointer rounded border border-white/30 bg-transparent"
+                                        data-testid="woka-swimwear-color"
+                                    />
+                                </label>
+                                <button class="text-sm underline" onclick={() => (selectedSwimwearColor = undefined)}>
+                                    {$LL.woka.customWoka.defaultColor()}
+                                </button>
+                            </div>
                             <div
                                 class="flex flex-wrap gap-3 overflow-y-auto py-4"
                                 role="group"
@@ -387,6 +405,7 @@
                                             {getTextureUrl}
                                             direction={assetsDirection}
                                             swimwear={style}
+                                            swimwearColor={selectedSwimwearColor}
                                         />
                                         <span class="text-sm">{$LL.woka.swimwear[style]()}</span>
                                     </button>

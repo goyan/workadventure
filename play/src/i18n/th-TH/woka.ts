@@ -3,6 +3,8 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        color: "สี",
+        defaultColor: "สีเริ่มต้น",
         rotate: "หมุนตัวละคร",
         parts: {
             body: "ร่างกาย",

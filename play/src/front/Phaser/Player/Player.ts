@@ -23,7 +23,7 @@ import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
 import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
 import LL from "../../../i18n/i18n-svelte";
 import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "../Entity/AvatarAction";
-import { readSwimwear, SWIMWEAR_VARIABLE } from "../Entity/Swimwear";
+import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -166,6 +166,15 @@ export class Player extends Character {
             persist: false,
             scope: "room",
         });
+    }
+
+    public override setSwimwearColor(value: unknown): void {
+        const color = readSwimwearColor(value);
+        super.setSwimwearColor(color);
+        localUserStore.setSwimwearColor(color);
+        this.scene
+            .getPlayerVariablesManager()
+            ?.setVariableFromApp(SWIMWEAR_COLOR_VARIABLE, color ?? null, { public: true });
     }
 
     public override setSwimwear(value: unknown): void {

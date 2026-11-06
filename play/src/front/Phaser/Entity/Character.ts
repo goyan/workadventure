@@ -36,7 +36,7 @@ import { SwimEffect } from "./SwimEffect";
 import { AvatarAction, readAvatarAction } from "./AvatarAction";
 import { AvatarActionEffect } from "./AvatarActionEffect";
 import { getSeatedTexture, SEATED_DIRECTIONS } from "./SeatedPose";
-import { Swimwear, readSwimwear } from "./Swimwear";
+import { Swimwear, readSwimwear, readSwimwearColor } from "./Swimwear";
 import { SwimwearEffect } from "./SwimwearEffect";
 import { isHumanAvatar, MusicHeadphonesEffect } from "./MusicHeadphonesEffect";
 
@@ -135,6 +135,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
+    private swimwearColor: string | undefined;
     private swimwearEffect: SwimwearEffect | undefined;
 
     /**
@@ -326,7 +327,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             tile,
         );
         if (inWater || nearby) this.swimwearEffect ??= new SwimwearEffect(this.scene, this);
-        this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle);
+        this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle, this.swimwearColor);
     }
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
@@ -341,6 +342,11 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     public get swimwear(): Swimwear {
         return this.swimwearStyle;
+    }
+
+    public setSwimwearColor(value: unknown): void {
+        this.swimwearColor = readSwimwearColor(value);
+        this.scene.markDirty();
     }
 
     public setSwimwear(value: unknown): void {

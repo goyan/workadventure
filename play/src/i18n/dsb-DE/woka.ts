@@ -3,6 +3,8 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        color: "Barwa",
+        defaultColor: "Standardna barwa",
         rotate: "Awatar wobwjertnuś",
         parts: {
             body: "Śěło",

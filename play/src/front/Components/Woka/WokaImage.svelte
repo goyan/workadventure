@@ -1,7 +1,12 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { drawSwimwearFrame, resolveSwimwear, sampleAvatarSkinTone } from "../../Phaser/Entity/Swimwear";
-    import type { Swimwear } from "../../Phaser/Entity/Swimwear";
+    import {
+        drawSwimwearFrame,
+        loadSwimwearAssets,
+        resolveSwimwear,
+        sampleAvatarSkinTone,
+    } from "../../Phaser/Entity/Swimwear";
+    import type { Swimwear, SwimwearAssets } from "../../Phaser/Entity/Swimwear";
     import type { WokaData, WokaTexture } from "./WokaTypes";
 
     interface Props {
@@ -12,6 +17,7 @@
         getTextureUrl?: (url: string) => string;
         classList?: string;
         swimwear?: Swimwear;
+        swimwearColor?: string;
     }
 
     let {
@@ -22,6 +28,7 @@
         getTextureUrl = (url) => url,
         classList = "",
         swimwear,
+        swimwearColor,
     }: Props = $props();
 
     const bodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "accessory", "woka"];
@@ -34,6 +41,19 @@
     let raf: number;
     let outfitCanvas: HTMLCanvasElement;
     let outfitContext: CanvasRenderingContext2D | null = null;
+    let swimwearAssets = $state<SwimwearAssets | undefined>();
+    $effect(() => {
+        if (swimwear === undefined) return;
+        let active = true;
+        loadSwimwearAssets()
+            .then((assets) => {
+                if (active) swimwearAssets = assets;
+            })
+            .catch((error: unknown) => console.error("Could not preview swimwear", error));
+        return () => {
+            active = false;
+        };
+    });
 
     function findTextureUrl(bodyPart: string): string | null {
         const textureId = selectedTextures?.[bodyPart];
@@ -69,7 +89,7 @@
                 ctx.drawImage(img, imageFrame * 32, direction * 32, 32, 32, 0, 0, canvasSize, canvasSize);
             }
         }
-        if (swimwear === undefined || !outfitContext) return;
+        if (swimwear === undefined || !outfitContext || !swimwearAssets) return;
         const frameContext = outfitContext;
         frameContext.clearRect(0, 0, 32, 32);
         for (const part of bodyPartOrder.filter((part) => part !== "clothes" && part !== "accessory")) {
@@ -91,9 +111,11 @@
             drawSwimwearFrame(
                 ctx,
                 outfitCanvas,
+                swimwearAssets,
                 resolveSwimwear(swimwear, Object.values(selectedTextures)),
                 direction * 3 + imageFrame,
                 skinTone,
+                swimwearColor,
             );
             ctx.restore();
             for (const part of ["hair", "hat"]) {
