@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Subject } from "rxjs";
 import { get, readable, writable } from "svelte/store";
+import { marked } from "marked";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
 const onVisitorAccepted = vi.fn();
@@ -51,7 +52,12 @@ import {
 import { knockRequestsStore } from "../../../../../src/front/Stores/KnockStore";
 import { encodeKnockMessage } from "../../../../../src/front/Phaser/Game/Knock/KnockProtocol";
 import type { KnockMessage } from "../../../../../src/front/Phaser/Game/Knock/KnockProtocol";
-import { KNOCK_PASS_MS } from "../../../../../src/front/Phaser/Game/Knock/KnockState";
+import {
+    KNOCK_CLOCK_MARGIN_MS,
+    KNOCK_COOLDOWN_MS,
+    KNOCK_PASS_MS,
+    KNOCK_REPLY_TIMEOUT_MS,
+} from "../../../../../src/front/Phaser/Game/Knock/KnockState";
 import { Character } from "../../../../../src/front/Phaser/Entity/Character";
 import { setAreaPropertyVariable } from "../../../../../src/front/Stores/AreaPropertyVariablesStore";
 
@@ -80,7 +86,9 @@ function makeScene({ admin = false }: { admin?: boolean } = {}) {
         y: 90,
         playerName: "Local",
         texts,
+        // Like Character.playText: a text shown again under the same id is removed, then added at the end.
         playText: vi.fn((id: string, text: string, _duration: number, callback: () => void) => {
+            texts.delete(id);
             texts.set(id, { text, callback });
         }),
         destroyText: vi.fn((id: string) => {
@@ -364,5 +372,91 @@ describe("KnockManager", () => {
 
         expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
         expect(fake.player.playText).not.toHaveBeenCalled();
+    });
+    it("does not unlock nor hide the waiting text of an admin when the prompt precedes it (one press)", () => {
+        const fake = makeScene({ admin: true });
+        manager = new KnockManager(fake.scene);
+        manager.knock("z");
+        // The bubble stack can reorder the texts (by length): here the prompt comes first.
+        const waiting = fake.player.texts.get("knock-z");
+        fake.player.texts.delete("knock-z");
+        showPrompt(fake, manager);
+        if (waiting) fake.player.texts.set("knock-z", waiting);
+        expect([...fake.player.texts.keys()]).toEqual(["area-blocked-z", "knock-z"]);
+
+        fake.pressSpace();
+
+        expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
+        expect(setAreaPropertyVariable).not.toHaveBeenCalled();
+        expect(fake.player.texts.get("knock-z")?.text).toBe("waitingAdmin Space");
+    });
+
+    it("shows no waiting text when the knock was not sent (own request still pending after the cooldown)", () => {
+        const fake = makeScene();
+        manager = new KnockManager(fake.scene);
+        manager.knock("z");
+        vi.advanceTimersByTime(KNOCK_COOLDOWN_MS);
+        fake.player.playText.mockClear();
+
+        manager.knock("z");
+
+        expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
+        expect(fake.player.playText).not.toHaveBeenCalled();
+    });
+
+    it("drops the echo of its own request", () => {
+        const fake = makeScene();
+        manager = new KnockManager(fake.scene);
+
+        fake.receive({ kind: "request", areaId: "z", visitorUuid: "local", visitorName: "Local", at: 0 });
+        manager.knock("z");
+
+        expect(emittedKinds(fake.emitScriptableEvent)).toEqual(["infogene.knock.request"]);
+    });
+
+    it("waits a clock margin longer than the occupants before telling the visitor nobody answers", () => {
+        const fake = makeScene();
+        manager = new KnockManager(fake.scene);
+        manager.knock("z");
+
+        vi.advanceTimersByTime(KNOCK_REPLY_TIMEOUT_MS);
+        fake.tick();
+        expect(fake.player.texts.get("knock-z")?.text).toBe("waiting");
+
+        vi.advanceTimersByTime(KNOCK_CLOCK_MARGIN_MS);
+        fake.tick();
+        expect(fake.player.texts.get("knock-z")?.text).toBe("noAnswer");
+    });
+
+    it("removes the card of an occupant after the reply timeout", () => {
+        const fake = makeScene();
+        fake.insideAreas.add("z");
+        manager = new KnockManager(fake.scene);
+        fake.receive({ kind: "request", areaId: "z", visitorUuid: "v", visitorName: "Alice", at: 0 });
+
+        vi.advanceTimersByTime(KNOCK_REPLY_TIMEOUT_MS);
+        fake.tick();
+
+        expect(get(knockRequestsStore)).toEqual([]);
+    });
+
+    it("escapes the Markdown of the name in the visitor's bubble", () => {
+        const fake = makeScene();
+        manager = new KnockManager(fake.scene);
+        manager.knock("z");
+
+        fake.receive({
+            kind: "answer",
+            areaId: "z",
+            visitorUuid: "local",
+            answer: "enter",
+            answeredBy: "a_b*c[x](y)",
+            at: 0,
+        });
+
+        const text = fake.player.texts.get("knock-z")?.text ?? "";
+        expect(text).toBe("opened a\\_b\\*c\\[x\\]\\(y\\)");
+        // Rendered as the bubble does: the name comes out literally, no emphasis nor link.
+        expect(marked.parse(text, { async: false })).toBe("<p>opened a_b*c[x](y)</p>\n");
     });
 });

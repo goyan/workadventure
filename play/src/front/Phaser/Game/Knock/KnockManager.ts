@@ -15,7 +15,7 @@ import type { GameScene } from "../GameScene";
 import type { DoorLocks, LockedDoorZone } from "../MapEditor/MapLayer/DoorAnimator";
 import { decodeKnockMessage, encodeKnockMessage } from "./KnockProtocol";
 import type { KnockAnswer, KnockMessage } from "./KnockProtocol";
-import { KNOCK_REPLY_TIMEOUT_MS, KnockState } from "./KnockState";
+import { KNOCK_CLOCK_MARGIN_MS, KNOCK_REPLY_TIMEOUT_MS, KnockState } from "./KnockState";
 import type { KnockEffect, KnockRequest } from "./KnockState";
 import { KnockStatusLink } from "./KnockStatusLink";
 
@@ -28,6 +28,8 @@ export const KNOCK_CANCEL_DISTANCE_PX = 64;
 const TICK_INTERVAL_MS = 500;
 /** How long the answers stay above the visitor's head. */
 const ANSWER_TEXT_DURATION_MS = 5000;
+/** localStorage key: the DND set by the lock of the own desk, kept across a reload (see KnockStatusLink). */
+const DND_OWNERSHIP_KEY = "knockDndOwnership";
 
 /**
  * Knocking on the door of a locked area. The visitor broadcasts a request through the scriptable events of the
@@ -50,15 +52,27 @@ export class KnockManager {
         this.localUuid = localUserStore.getLocalUser()?.uuid ?? "";
         this.eventSubscription = scene.connection?.receivedEventMessageStream.subscribe(({ name, data }) => {
             const message = decodeKnockMessage(name, data);
-            if (message) {
-                this.apply(this.state.receive(message, Date.now()));
+            // The echo of our own request: already applied when sent, with the visitor's longer reply timeout.
+            if (!message || (message.kind === "request" && message.visitorUuid === this.localUuid)) {
+                return;
             }
+            this.apply(this.state.receive(message, Date.now()));
         });
         this.statusLink = new KnockStatusLink({
             lockableAreas: currentPlayerLockableAreasStore,
             ownAreaId: derived(personalAreaDataStore, (area) => area?.id),
             requestedStatus: requestedStatusStore,
             setStatus: resetAllStatusStoreExcept,
+            ownership: {
+                get: () => localStorage.getItem(DND_OWNERSHIP_KEY),
+                set: (value) => {
+                    if (value === null) {
+                        localStorage.removeItem(DND_OWNERSHIP_KEY);
+                    } else {
+                        localStorage.setItem(DND_OWNERSHIP_KEY, value);
+                    }
+                },
+            },
         });
         this.installLockPass();
         this.tickTimer = scene.time.addEvent({
@@ -74,22 +88,29 @@ export class KnockManager {
         if (this.localUuid === "") {
             return;
         }
-        if (!this.state.canKnock(this.localUuid, areaId, now)) {
-            // Refused silently, except that an admin keeps the forced unlock at hand during the cooldown.
-            const lockedArea = this.adminLockedArea(areaId);
-            if (lockedArea) {
-                this.showWaitingAdmin(areaId, lockedArea.propertyId);
-            }
+        // Not sent either while our previous request still waits for its answer (longer than the cooldown).
+        const sent =
+            this.state.canKnock(this.localUuid, areaId, now) &&
+            this.send(
+                {
+                    kind: "request",
+                    areaId,
+                    visitorUuid: this.localUuid,
+                    visitorName: this.scene.CurrentPlayer.playerName,
+                    at: now,
+                },
+                // The visitor waits a bit longer than the occupants: a late answer still reaches it.
+                KNOCK_REPLY_TIMEOUT_MS + KNOCK_CLOCK_MARGIN_MS,
+            );
+        if (sent) {
+            this.showWaiting(areaId);
             return;
         }
-        this.send({
-            kind: "request",
-            areaId,
-            visitorUuid: this.localUuid,
-            visitorName: this.scene.CurrentPlayer.playerName,
-            at: now,
-        });
-        this.showWaiting(areaId);
+        // Refused silently, except that an admin keeps the forced unlock at hand.
+        const lockedArea = this.adminLockedArea(areaId);
+        if (lockedArea) {
+            this.showWaitingAdmin(areaId, lockedArea.propertyId);
+        }
     }
 
     /** An occupant answers a knock. The first answer wins: an answer to a request already settled is not sent. */
@@ -146,8 +167,8 @@ export class KnockManager {
     }
 
     /** Applies the message locally, then broadcasts it if it changed anything. */
-    private send(message: KnockMessage): boolean {
-        const effects = this.state.receive(message, Date.now());
+    private send(message: KnockMessage, replyTimeoutMs?: number): boolean {
+        const effects = this.state.receive(message, Date.now(), replyTimeoutMs);
         if (effects.length === 0) {
             return false;
         }
@@ -198,7 +219,11 @@ export class KnockManager {
             switch (effect.kind) {
                 case "answered":
                     if (effect.answer === "enter") {
-                        this.showText(effect.areaId, get(LL).area.knock.opened({ name: effect.answeredBy }), "message");
+                        this.showText(
+                            effect.areaId,
+                            get(LL).area.knock.opened({ name: escapeMarkdown(effect.answeredBy) }),
+                            "message",
+                        );
                         this.areasManager?.updateAreaCollision(effect.areaId);
                     } else {
                         this.showText(effect.areaId, get(LL).area.knock.later(), "warning");
@@ -315,4 +340,9 @@ function distanceToRectangle(
     const dx = Math.max(rectangle.x - x, 0, x - (rectangle.x + rectangle.width));
     const dy = Math.max(rectangle.y - y, 0, y - (rectangle.y + rectangle.height));
     return Math.hypot(dx, dy);
+}
+
+/** The bubble texts are Markdown: a name is shown literally, never as emphasis, a link or HTML. */
+export function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|<>]/g, "\\$&");
 }

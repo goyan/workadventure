@@ -6,6 +6,12 @@ export const KNOCK_REPLY_TIMEOUT_MS = 30_000;
 export const KNOCK_COOLDOWN_MS = 30_000;
 /** How long a visitor may cross a locked area after an "enter" answer. */
 export const KNOCK_PASS_MS = 60_000;
+/**
+ * Each client counts the delays from its own reception: the clients differ by the latency. A receiver applies the
+ * cooldown minus this margin (a re-knock sent right at 30 s is not lost), and the visitor waits this much longer
+ * than the occupants before "noAnswer" (a late answer still reaches it).
+ */
+export const KNOCK_CLOCK_MARGIN_MS = 2_000;
 
 export interface KnockRequest {
     areaId: string;
@@ -32,18 +38,21 @@ function keyOf(areaId: string, visitorUuid: string): string {
  */
 export class KnockState {
     private readonly pendingRequests = new Map<string, KnockRequest>();
+    /** Time after which each pending request gets "noAnswer". */
+    private readonly replyDeadlines = new Map<string, number>();
     /** Reception time of the last request per (area, visitor), kept after resolution for the cooldown. */
     private readonly lastRequestAt = new Map<string, number>();
     /** Pass expiry time per (area, visitor). */
     private readonly passes = new Map<string, { areaId: string; visitorUuid: string; expiresAt: number }>();
 
-    receive(message: KnockMessage, now: number): KnockEffect[] {
+    /** @param replyTimeoutMs for a request: how long it waits for an answer here (the visitor waits longer). */
+    receive(message: KnockMessage, now: number, replyTimeoutMs = KNOCK_REPLY_TIMEOUT_MS): KnockEffect[] {
         const key = keyOf(message.areaId, message.visitorUuid);
         switch (message.kind) {
             case "request": {
                 // The sender applies its own request, then gets the echo: ignore it (and any
                 // request inside the cooldown) so that nothing is reset.
-                if (this.pendingRequests.has(key) || !this.cooldownElapsed(key, now)) {
+                if (this.pendingRequests.has(key) || !this.cooldownElapsed(key, now, KNOCK_CLOCK_MARGIN_MS)) {
                     return [];
                 }
                 const request: KnockRequest = {
@@ -53,12 +62,13 @@ export class KnockState {
                     receivedAt: now,
                 };
                 this.pendingRequests.set(key, request);
+                this.replyDeadlines.set(key, now + replyTimeoutMs);
                 this.lastRequestAt.set(key, now);
                 return [{ kind: "requested", request }];
             }
             case "answer": {
                 // First answer wins: once the request left `pending`, later answers are ignored.
-                if (!this.pendingRequests.delete(key)) {
+                if (!this.removePending(key)) {
                     return [];
                 }
                 if (message.answer === "enter") {
@@ -79,7 +89,7 @@ export class KnockState {
                 ];
             }
             case "cancel": {
-                if (!this.pendingRequests.delete(key)) {
+                if (!this.removePending(key)) {
                     return [];
                 }
                 return [{ kind: "withdrawn", areaId: message.areaId, visitorUuid: message.visitorUuid }];
@@ -91,8 +101,8 @@ export class KnockState {
     expire(now: number): KnockEffect[] {
         const effects: KnockEffect[] = [];
         for (const [key, request] of this.pendingRequests) {
-            if (now >= request.receivedAt + KNOCK_REPLY_TIMEOUT_MS) {
-                this.pendingRequests.delete(key);
+            if (now >= (this.replyDeadlines.get(key) ?? request.receivedAt + KNOCK_REPLY_TIMEOUT_MS)) {
+                this.removePending(key);
                 effects.push({ kind: "noAnswer", areaId: request.areaId, visitorUuid: request.visitorUuid });
             }
         }
@@ -128,15 +138,22 @@ export class KnockState {
         const effects: KnockEffect[] = [];
         for (const [key, request] of this.pendingRequests) {
             if (request.areaId === areaId) {
-                this.pendingRequests.delete(key);
+                this.removePending(key);
                 effects.push({ kind: "withdrawn", areaId, visitorUuid: request.visitorUuid });
             }
         }
         return effects;
     }
 
-    private cooldownElapsed(key: string, now: number): boolean {
+    /** @param marginMs shortens the cooldown: used on reception, where the clocks of the clients differ. */
+    private cooldownElapsed(key: string, now: number, marginMs = 0): boolean {
         const at = this.lastRequestAt.get(key);
-        return at === undefined || now >= at + KNOCK_COOLDOWN_MS;
+        return at === undefined || now >= at + KNOCK_COOLDOWN_MS - marginMs;
+    }
+
+    /** @returns whether the request was pending. */
+    private removePending(key: string): boolean {
+        this.replyDeadlines.delete(key);
+        return this.pendingRequests.delete(key);
     }
 }

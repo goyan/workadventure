@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { KnockState } from "../../../../../src/front/Phaser/Game/Knock/KnockState";
+import {
+    KNOCK_CLOCK_MARGIN_MS,
+    KNOCK_COOLDOWN_MS,
+    KNOCK_REPLY_TIMEOUT_MS,
+    KnockState,
+} from "../../../../../src/front/Phaser/Game/Knock/KnockState";
 import type { KnockMessage } from "../../../../../src/front/Phaser/Game/Knock/KnockProtocol";
 
 const request = (areaId = "a", visitorUuid = "v"): KnockMessage => ({
@@ -96,5 +101,26 @@ describe("KnockState", () => {
             { kind: "withdrawn", areaId: "a", visitorUuid: "v2" },
         ]);
         expect(s.pending().map((r) => r.areaId)).toEqual(["b"]);
+    });
+    it("accepts a new request a clock margin before the end of the cooldown, unlike canKnock", () => {
+        expect(KNOCK_CLOCK_MARGIN_MS).toBe(2_000);
+        const s = new KnockState();
+        s.receive(request(), 0);
+        s.receive(cancel(), 1_000);
+        const accepted = KNOCK_COOLDOWN_MS - KNOCK_CLOCK_MARGIN_MS;
+        // The sender keeps the full cooldown.
+        expect(s.canKnock("v", "a", accepted)).toBe(false);
+        expect(s.receive(request(), accepted - 1)).toEqual([]);
+        expect(s.receive(request(), accepted)).toHaveLength(1);
+    });
+
+    it("lets the caller give a request a longer reply timeout", () => {
+        const s = new KnockState();
+        s.receive(request(), 0, KNOCK_REPLY_TIMEOUT_MS + KNOCK_CLOCK_MARGIN_MS);
+        expect(s.expire(KNOCK_REPLY_TIMEOUT_MS)).toEqual([]);
+        expect(s.pending()).toHaveLength(1);
+        expect(s.expire(KNOCK_REPLY_TIMEOUT_MS + KNOCK_CLOCK_MARGIN_MS)).toEqual([
+            { kind: "noAnswer", areaId: "a", visitorUuid: "v" },
+        ]);
     });
 });
