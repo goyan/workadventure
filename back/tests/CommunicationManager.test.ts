@@ -10,7 +10,7 @@ import {
 import { emptySpaceState } from "@workadventure/shared-utils";
 import { buildJamSpaceName } from "@workadventure/map-editor";
 import type { InitialStateFactory } from "../src/Model/CommunicationManager";
-import { CommunicationManager, findRecording } from "../src/Model/CommunicationManager";
+import { CommunicationManager, DefaultInitialStateFactory, findRecording } from "../src/Model/CommunicationManager";
 import { CommunicationType } from "../src/Model/Types/CommunicationTypes";
 import type { ICommunicationSpace } from "../src/Model/Interfaces/ICommunicationSpace";
 import type { ICommunicationState } from "../src/Model/Interfaces/ICommunicationState";
@@ -202,6 +202,36 @@ describe("CommunicationManager", () => {
             mocks,
         };
     };
+
+    describe("initial state of a space", () => {
+        const spaceNamed = (name: string, properties: string[]): ICommunicationSpace => ({
+            ...createSpace(),
+            getSpaceName: () => name,
+            getPropertiesToSync: () => properties,
+        });
+        const factory = new DefaultInitialStateFactory();
+        const jamSpaceName = `world.${buildJamSpaceName({
+            roomUrl: "https://play.example/_/global/map.json",
+            areaId: "area",
+            propertyId: "prop",
+            hostUuid: "host",
+        })}`;
+
+        it("carries media for a space that syncs a media property", () => {
+            const state = factory.createInitialState(spaceNamed("bubble", ["cameraState"]), new Map(), new Map());
+            expect(state.communicationType).toBe(CommunicationType.WEBRTC);
+        });
+
+        it("carries nothing for a space that syncs no media property", () => {
+            const state = factory.createInitialState(spaceNamed("world.list", ["chatID"]), new Map(), new Map());
+            expect(state.communicationType).not.toBe(CommunicationType.WEBRTC);
+        });
+
+        it("carries media for the space of a Jam, which syncs none: its music and screens travel through it", () => {
+            const state = factory.createInitialState(spaceNamed(jamSpaceName, []), new Map(), new Map());
+            expect(state.communicationType).toBe(CommunicationType.WEBRTC);
+        });
+    });
 
     describe("constructor", () => {
         it("should create manager with default dependencies when none provided", () => {
