@@ -123,7 +123,7 @@
     {/if}
 {:else if listening}
     <div data-testid="jam-audio-player"><JamMusicPlayer {spaceName} /></div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
         <Button
             variant="light"
             appearance="border"

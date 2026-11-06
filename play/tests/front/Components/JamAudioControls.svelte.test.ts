@@ -122,6 +122,15 @@ describe("JamAudioControls", () => {
             expect(q("jam-audio-listen")).not.toBeNull();
         });
 
+        it("lets the listening buttons wrap onto another line instead of overflowing the card", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            const row = q("jam-audio-stop-listen")?.parentElement;
+            expect(row?.classList.contains("flex-wrap")).toBe(true);
+            expect(q("jam-audio-mute")?.parentElement).toBe(row);
+        });
+
         it("stops listening on click", async () => {
             await render(false);
             listeningSpaceName.set(spaceName);
