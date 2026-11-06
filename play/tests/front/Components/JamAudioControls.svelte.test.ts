@@ -4,6 +4,7 @@ import { get, writable } from "svelte/store";
 import JamAudioControls from "../../../src/front/Components/ListeningZone/JamAudioControls.svelte";
 import type { JamAudioSession } from "../../../src/front/ListeningZone/JamAudioSession";
 import type { JamMusicCaptureState } from "../../../src/front/ListeningZone/JamMusicCapture";
+import { jamAudioInputStore } from "../../../src/front/ListeningZone/JamAudioInputStore";
 import { jamMusicMutedStore, jamMusicVolumeStore } from "../../../src/front/ListeningZone/JamMusicStore";
 
 vi.mock("../../../src/i18n/i18n-svelte", async () => {
@@ -61,6 +62,7 @@ describe("JamAudioControls", () => {
         captureState.set({ status: "idle" });
         jamMusicMutedStore.set(false);
         jamMusicVolumeStore.set(1);
+        jamAudioInputStore.set("");
         listen.mockClear();
         stopListening.mockClear();
         shareMusic.mockClear();
@@ -126,9 +128,9 @@ describe("JamAudioControls", () => {
             await render(false);
             listeningSpaceName.set(spaceName);
             flushSync();
-            const row = q("jam-audio-stop-listen")?.parentElement;
-            expect(row?.classList.contains("flex-wrap")).toBe(true);
-            expect(q("jam-audio-mute")?.parentElement).toBe(row);
+            const row = q("jam-audio-stop-listen")?.closest(".flex-wrap");
+            expect(row).not.toBeNull();
+            expect(q("jam-audio-mute")?.closest(".flex-wrap")).toBe(row);
         });
 
         it("stops listening on click", async () => {
@@ -137,6 +139,40 @@ describe("JamAudioControls", () => {
             flushSync();
             q("jam-audio-stop-listen")?.click();
             expect(stopListening).toHaveBeenCalledTimes(1);
+        });
+
+        it("shows the mute as an icon button named in full for screen readers and tooltips", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            const mute = q("jam-audio-mute") as HTMLElement;
+            expect(mute.textContent?.trim()).toBe("");
+            expect(mute.querySelector("svg")).not.toBeNull();
+            expect(mute.getAttribute("aria-label")).toBe("Mute");
+            mute.click();
+            flushSync();
+            expect(mute.getAttribute("aria-label")).toBe("Unmute");
+        });
+
+        it("shows stop listening as an icon button with its full name", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            const stop = q("jam-audio-stop-listen") as HTMLElement;
+            expect(stop.textContent?.trim()).toBe("");
+            expect(stop.querySelector("svg")).not.toBeNull();
+            expect(stop.getAttribute("aria-label")).toBe("Stop listening");
+        });
+
+        it("names each icon button in a tooltip shown above it", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            const tooltips = [...target.querySelectorAll('[role="tooltip"]')];
+            expect(tooltips.map((tooltip) => tooltip.textContent?.trim())).toEqual(["Stop listening", "Mute"]);
+            for (const tooltip of tooltips) {
+                expect(tooltip.classList.contains("bottom-full")).toBe(true);
+            }
         });
 
         it("mutes and unmutes the music alone", async () => {
@@ -162,6 +198,42 @@ describe("JamAudioControls", () => {
             flushSync();
             q("jam-audio-share")?.click();
             expect(shareMusic).toHaveBeenCalledWith(jam, "bh", { forbiddenDeviceIds: ["mic"] });
+        });
+
+        it("remembers the chosen input when the card is rebuilt, as after a server restart", async () => {
+            await render(true, "mic");
+            const select = q("jam-audio-input") as HTMLSelectElement;
+            await vi.waitFor(() => expect(select.options.length).toBe(2));
+            select.value = "bh";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            flushSync();
+            const first = component;
+            component = undefined;
+            if (first) await unmount(first);
+            target.replaceChildren();
+            await render(true, "mic");
+            const rebuilt = q("jam-audio-input") as HTMLSelectElement;
+            await vi.waitFor(() => expect(rebuilt.options.length).toBe(2));
+            expect(rebuilt.value).toBe("bh");
+            expect((q("jam-audio-share") as HTMLButtonElement).disabled).toBe(false);
+        });
+
+        it("keeps the chosen input in the browser, where the installed app and a tab of the profile find it", async () => {
+            await render(true, "mic");
+            const select = q("jam-audio-input") as HTMLSelectElement;
+            await vi.waitFor(() => expect(select.options.length).toBe(2));
+            select.value = "bh";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            flushSync();
+            expect(localStorage.getItem("jamAudioInputDeviceId")).toBe("bh");
+        });
+
+        it("forgets a remembered input that is not there any more", async () => {
+            jamAudioInputStore.set("unplugged");
+            await render(true, "mic");
+            const select = q("jam-audio-input") as HTMLSelectElement;
+            await vi.waitFor(() => expect(select.options.length).toBe(2));
+            expect((q("jam-audio-share") as HTMLButtonElement).disabled).toBe(true);
         });
 
         it("cannot share before an input is chosen", async () => {

@@ -40,6 +40,7 @@ const cameraPrivacySettings = "cameraPrivacySettings";
 const microphonePrivacySettings = "microphonePrivacySettings";
 const emojiFavorite = "emojiFavorite";
 const speakerDeviceId = "speakerDeviceId";
+const jamAudioInputDeviceId = "jamAudioInputDeviceId";
 const ignoredNewMediaDeviceIdsKey = "ignoredNewMediaDeviceIds";
 const matrixUserId = "matrixUserId";
 const matrixAccessToken = "matrixAccessToken";
@@ -728,6 +729,14 @@ class LocalUserStore {
 
     setSpeakerDeviceId(value: string) {
         localStorage.setItem(speakerDeviceId, value);
+    }
+
+    setJamAudioInputDeviceId(value: string) {
+        localStorage.setItem(jamAudioInputDeviceId, value);
+    }
+
+    getJamAudioInputDeviceId(): string | null {
+        return localStorage.getItem(jamAudioInputDeviceId);
     }
 
     getSpeakerDeviceId() {
