@@ -553,6 +553,10 @@ pour qui est dehors, déverrouillage par le back quand la zone se vide). Ajouts 
   upstream par Espace depuis l'extérieur est retiré : une zone se déverrouille d'elle-même quand elle se vide).
 - **Portes** : une porte d'une zone verrouillée (`isDoorInZone`) ne s'ouvre que pour un joueur qui est dans la zone ou
   en sort depuis moins de 2 s, ou qui a un laissez-passer ; jamais pour un animal (`DoorAnimator`, `DoorLocks`).
+- **Cadenas** : tant qu'une zone est verrouillée, un cadenas rouge est posé au milieu de chacune de ses portes, pour tout le
+  monde (occupants compris), au-dessus du voile de nuit (`DEPTH_DOOR_LOCK_INDEX`), avec un fondu de 200 ms ; une porte double
+  n'en a qu'un, il reste quand la porte s'ouvre. Dessiné en code (`DoorLockIcons`), placé par
+  `DoorAnimator.getLockedDoorMarkers` (milieu de la partie visible : une porte verticale passe sous le raccord du bas).
 - **Ne pas déranger** : verrouiller **son** bureau personnel passe en « Ne pas déranger » ; déverrouiller, sortir,
   accepter un visiteur ou quitter la scène remet le statut d'avant, seulement si c'est le lien qui l'avait posé
   (propriété mémorisée sous la clé `knockDndOwnership` pour survivre à un rechargement).
@@ -564,7 +568,7 @@ sur chaque navigateur (`KnockState.ts`, échéances depuis la réception, marge 
 de back, protobuf, map-storage ni WAM : **compatible avec la prod** (seule l'image `play` change).
 
 Fichiers : `play/src/front/Phaser/Game/Knock/*`, `Stores/KnockStore.ts`, `Components/Knock/KnockRequests.svelte`,
-`GameMap/AreasManager.ts`, `Entity/Area.ts`, `Entity/Character.ts`, `MapEditor/MapLayer/DoorAnimator.ts`,
+`GameMap/AreasManager.ts`, `Entity/Area.ts`, `Entity/Character.ts`, `MapEditor/MapLayer/{DoorAnimator,DoorLockIcons}.ts`,
 `public/resources/objects/doors/door-knock.ogg` (synthétisé par `tools/door_knock.py` du repo d'infra), i18n `area.knock`.
 
 Limites :

@@ -253,6 +253,7 @@ import { OutlineManager } from "./UI/OutlineManager";
 import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
+import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
@@ -418,6 +419,7 @@ export class GameScene extends DirtyScene {
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
     private doorAnimator: DoorAnimator | undefined;
+    private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
@@ -1587,7 +1589,11 @@ export class GameScene extends DirtyScene {
         this.wanderingCharactersManager?.forEachDoorOpener((position) =>
             characters.push({ ...position, silent: true }),
         );
-        this.doorAnimator.update(time, characters, listener, this._knockManager?.getDoorLocks());
+        const locks = this._knockManager?.getDoorLocks();
+        this.doorAnimator.update(time, characters, listener, locks);
+        // Red padlocks on the doors of the locked areas, for everyone.
+        this.doorLockIcons ??= new DoorLockIcons(this, () => this.markDirty());
+        this.doorLockIcons.update(this.doorAnimator.getLockedDoorMarkers(locks?.zones ?? []));
     }
 
     public update(time: number, delta: number): void {

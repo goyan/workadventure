@@ -207,6 +207,29 @@ export class DoorAnimator {
         return door !== undefined && door.frame !== DOOR_CLOSED_FRAME;
     }
 
+    /**
+     * Middle of what is seen of each door that belongs to one of the locked zones `zones`, by door: where its padlock is
+     * drawn. Both
+     * pieces of a door, and a door shared by two locked zones, give one marker.
+     */
+    public getLockedDoorMarkers(zones: readonly HearingZone[]): Map<string, { x: number; y: number }> {
+        const markers = new Map<string, { x: number; y: number }>();
+        if (zones.length === 0) {
+            return markers;
+        }
+        for (const state of this.pieces.values()) {
+            const key = this.doorKey(state);
+            if (markers.has(key)) continue;
+            const { rect, piece } = state;
+            if (zones.some((zone) => isDoorInZone(rect, piece.orientation, zone))) {
+                // The bottom of a vertical door passes under the joint of the vertex below it: it is not seen.
+                const bottom = piece.orientation === "v" ? rect.bottom - WALL_THICKNESS : rect.bottom;
+                markers.set(key, { x: (rect.left + rect.right) / 2, y: (rect.top + bottom) / 2 });
+            }
+        }
+        return markers;
+    }
+
     public destroy(): void {
         // Doors are left as they are: the entities own their texture.
         this.pieces.clear();
