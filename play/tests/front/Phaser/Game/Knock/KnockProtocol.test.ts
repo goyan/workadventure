@@ -9,6 +9,7 @@ const messages: KnockMessage[] = [
     { kind: "request", areaId: "a1", visitorUuid: "v1", visitorName: "Alice", at: 1000 },
     { kind: "answer", areaId: "a1", visitorUuid: "v1", answer: "enter", answeredBy: "Bob", at: 2000 },
     { kind: "cancel", areaId: "a1", visitorUuid: "v1", at: 3000 },
+    { kind: "entered", areaId: "a1", visitorUuid: "v1", at: 4000 },
 ];
 
 describe("KnockProtocol", () => {

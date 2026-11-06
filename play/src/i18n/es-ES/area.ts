@@ -12,7 +12,6 @@ const area: DeepPartial<Translation["area"]> = {
     knock: {
         prompt: "{trigger} to knock.",
         waiting: "You knocked, waiting…",
-        waitingAdmin: "You knocked — {trigger} to force the door open.",
         later: "Not now.",
         noAnswer: "Nobody answers.",
         opened: "{name} opens the door for you.",

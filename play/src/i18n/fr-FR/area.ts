@@ -12,7 +12,6 @@ const area: DeepPartial<Translation["area"]> = {
     knock: {
         prompt: "{trigger} pour toquer.",
         waiting: "Tu as toqué, en attente…",
-        waitingAdmin: "Tu as toqué — {trigger} pour forcer l'ouverture.",
         later: "Pas maintenant.",
         noAnswer: "Personne ne répond.",
         opened: "{name} t'ouvre la porte.",

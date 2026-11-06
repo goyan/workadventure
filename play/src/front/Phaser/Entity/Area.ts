@@ -168,7 +168,7 @@ export class Area extends Rectangle {
             if (blockReason) {
                 switch (blockReason) {
                     case "locked":
-                        // Everyone knocks, admins included: their forced unlock is offered while they wait.
+                        // Everyone knocks, admins included: nobody can force a locked door open.
                         message = get(LL).area.knock.prompt({
                             trigger: touchScreenManager.detectPrimaryTouchDevice()
                                 ? "👆"
