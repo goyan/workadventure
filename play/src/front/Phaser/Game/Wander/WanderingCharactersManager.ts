@@ -9,7 +9,7 @@ import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRect
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
-import { blockRectangles, sameGrids } from "./WanderCollisions";
+import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { WanderSchedule } from "./WanderSchedule";
 import type { Point, WanderDirection, WanderMap } from "./WanderSchedule";
@@ -201,8 +201,9 @@ export class WanderingCharactersManager {
 
     /**
      * Feeds the pathfinding with the current collisions and walls, at most once per reconcile: the walls and the
-     * rectangles are rebuilt from every entity. Other collisions or other walls (an object placed, moved or loaded
-     * after the characters) make every character compute its path again.
+     * rectangles are rebuilt from every entity, and the borders of the locked areas are added to the walls. Other
+     * collisions or other walls (an object placed, moved or loaded after the characters, an area locked or unlocked)
+     * make every character compute its path again.
      */
     private refreshMap(): void {
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
@@ -211,7 +212,9 @@ export class WanderingCharactersManager {
             this.collisionRectangles(),
             this.tileDimensions,
         );
-        const barriers = gameMapFrontWrapper.getWallBarriers();
+        // Locking an area closes it to the characters too (checked on every reconcile, twice a second).
+        const lockedAreas = (gameMapFrontWrapper.areasManager?.getLockedAreas() ?? []).map((entry) => entry.area);
+        const barriers = withAreaBorders(gameMapFrontWrapper.getWallBarriers(), lockedAreas, this.tileDimensions);
         const changed =
             this.collisionGrid === undefined ||
             this.barriers === undefined ||

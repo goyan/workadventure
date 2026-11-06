@@ -1,4 +1,5 @@
 import { PathTileType } from "../../../Utils/PathfindingManager";
+import type { TileBarriers } from "../../../Utils/TileBarriers";
 
 export interface WanderRectangle {
     x: number;
@@ -61,4 +62,35 @@ export function sameGrids(a: readonly (readonly number[])[], b: readonly (readon
         }
     }
     return true;
+}
+
+/**
+ * The walls plus a barrier all around each locked area: the wandering characters neither walk into a locked room nor
+ * out of it, like the players who have to knock. The borders follow the tile lines nearest to the area's edges.
+ * Returns the walls themselves when no area is locked.
+ */
+export function withAreaBorders(
+    walls: TileBarriers,
+    lockedAreas: readonly WanderRectangle[],
+    tileSize: { width: number; height: number },
+): TileBarriers {
+    if (lockedAreas.length === 0) {
+        return walls;
+    }
+    const barriers = walls.copy();
+    for (const area of lockedAreas) {
+        const left = Math.round(area.x / tileSize.width);
+        const right = Math.round((area.x + area.width) / tileSize.width);
+        const top = Math.round(area.y / tileSize.height);
+        const bottom = Math.round((area.y + area.height) / tileSize.height);
+        for (let y = top; y < bottom; y++) {
+            barriers.addWestBorder(left, y);
+            barriers.addWestBorder(right, y);
+        }
+        for (let x = left; x < right; x++) {
+            barriers.addSouthBorder(x, top - 1);
+            barriers.addSouthBorder(x, bottom - 1);
+        }
+    }
+    return barriers;
 }
