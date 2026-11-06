@@ -21,6 +21,7 @@ const audioPlayerMuteKey = "audioMute";
 const helpCameraSettingsShown = "helpCameraSettingsShown";
 const fullscreenKey = "fullscreen";
 const blockAudio = "blockAudio";
+const disableNight = "disableNight";
 const forceCowebsiteTriggerKey = "forceCowebsiteTrigger";
 const ignoreFollowRequests = "ignoreFollowRequests";
 const decreaseAudioPlayerVolumeWhileTalking = "decreaseAudioPlayerVolumeWhileTalking";
@@ -327,6 +328,13 @@ class LocalUserStore {
     }
     getBlockAudio(): boolean {
         return localStorage.getItem(blockAudio) === "true";
+    }
+
+    setDisableNight(value: boolean): void {
+        localStorage.setItem(disableNight, value.toString());
+    }
+    getDisableNight(): boolean {
+        return localStorage.getItem(disableNight) === "true";
     }
 
     setForceCowebsiteTrigger(value: boolean): void {

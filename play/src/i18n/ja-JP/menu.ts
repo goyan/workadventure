@@ -27,6 +27,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "ヘルプとヒント",
     },
     settings: {
+        night: {
+            disable: "Turn off night mode",
+        },
         theme: {
             label: "テーマ",
             palettes: {

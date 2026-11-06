@@ -26,6 +26,9 @@ const menu: BaseTranslation = {
         helpAndTips: "Help & Tips",
     },
     settings: {
+        night: {
+            disable: "Turn off night mode",
+        },
         theme: {
             label: "Theme",
             palettes: {

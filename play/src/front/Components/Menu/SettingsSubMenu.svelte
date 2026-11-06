@@ -17,6 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
+    import { nightDisabledStore } from "../../Stores/NightStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -330,6 +331,12 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
+        <InputSwitch
+            id="disable-night-toggle"
+            value={$nightDisabledStore}
+            onchange={() => nightDisabledStore.update((disabled) => !disabled)}
+            label={$LL.menu.settings.night.disable()}
+        />
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.font.label()} dataTestId="font-settings">
         <FontSettings />
