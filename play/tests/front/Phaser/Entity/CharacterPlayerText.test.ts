@@ -53,4 +53,27 @@ describe("Character.handlePressSpacePlayerTextCallback", () => {
 
         expect(second).not.toHaveBeenCalled();
     });
+    it("does not run a text replaced under the same id during the press", () => {
+        const character = withTexts();
+        const replaced = vi.fn();
+        const replacement = vi.fn();
+        character.texts.set("first", {
+            callback: () => {
+                // Like the knock prompt: it closes, then shows a text again under an id already shown, which
+                // Character.playText removes and adds at the end.
+                character.texts.delete("first");
+                character.texts.delete("second");
+                character.texts.set("second", { callback: replacement });
+            },
+        });
+        character.texts.set("second", { callback: replaced });
+
+        pressSpace(character);
+
+        expect(replaced).not.toHaveBeenCalled();
+        expect(replacement).not.toHaveBeenCalled();
+
+        pressSpace(character);
+        expect(replacement).toHaveBeenCalledTimes(1);
+    });
 });
