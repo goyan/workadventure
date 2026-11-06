@@ -35,7 +35,6 @@
         IconLockHash,
         IconLock,
         IconHeadphones,
-        IconGhost,
     } from "@wa-icons";
 
     interface Props {
@@ -410,19 +409,6 @@
         }}
         testId="addTooltipProperty"
         img={IconTooltip}
-    />
-{/if}
-{#if property === "gobeurPropertyData"}
-    <AddPropertyButton
-        headerText={$LL.mapEditor.properties.gobeur.label()}
-        descriptionText={$LL.mapEditor.properties.gobeur.description()}
-        style={`z-index: 205;${isActive ? "background-color: #4156f6;" : ""}`}
-        testId="gobeurPropertyData"
-        {disabled}
-        onclick={(event) => {
-            onclick?.(event);
-        }}
-        img={IconGhost}
     />
 {/if}
 {#if property === "openFile"}

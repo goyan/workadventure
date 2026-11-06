@@ -59,7 +59,6 @@ export { default as IconVerify } from "~icons/tabler/rosetteDiscountCheck";
 export { default as IconUserEdit } from "~icons/tabler/user-edit";
 export { default as IconMail } from "~icons/tabler/mail";
 export { default as IconClock } from "~icons/tabler/clock";
-export { default as IconGhost } from "~icons/tabler/ghost";
 export { default as IconHistory } from "~icons/tabler/history";
 export { default as IconPoint } from "~icons/tabler/point";
 export { default as IconDoor } from "~icons/tabler/door";

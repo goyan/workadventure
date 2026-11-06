@@ -96,9 +96,8 @@ export class ActivatablesManager {
                     : get(LL).trigger.object();
                 if (this.selectedActivatableObjectByDistance instanceof Entity) {
                     for (const property of this.selectedActivatableObjectByDistance.getEntityData().properties) {
-                        if (property.type === "entityDescriptionProperties" || property.type === "gobeurPropertyData")
-                            continue;
-                        if (property.triggerMessage) {
+                        // Not every property type carries a trigger message (description, deprecated ones).
+                        if ("triggerMessage" in property && property.triggerMessage) {
                             triggerMessage = property.triggerMessage;
                             break;
                         }

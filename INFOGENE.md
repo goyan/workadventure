@@ -530,49 +530,11 @@ carte en cours d'édition, peuvent montrer brièvement des positions différente
 
 Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
 
-### Gobeur (propriété d'objet `gobeurPropertyData`)
+### Gobeur (retiré)
 
-Un objet de la carte peut porter la propriété `gobeurPropertyData`, réglée depuis le menu de l'objet
-(`GobeurPropertyEditor.svelte`) : joueurs concernés, zone de prison (obligatoire), refuge de secours (facultatif,
-valable seulement pour un joueur sans zone personnelle), niveau et durée (180 s par défaut). Quelqu'un qui peut éditer la
-carte (`mapEditorActivated`, `Stores/MenuStore.ts`) lance la partie depuis ce menu. Un personnage, le Gobeur, poursuit les
-joueurs choisis ; un joueur gobé hors refuge est envoyé en prison jusqu'à la fin de la partie. À la fin, un classement
-s'affiche (`Components/Gobeur/*`).
-
-| Niveau | Vitesse (× marche) | Repérage | Recalcul du chemin |
-| --- | --- | --- | --- |
-| Débutant | 0,70 | 6 cases | 1 500 ms |
-| Intermédiaire | 0,95 | 10 cases | 800 ms |
-| Hard | 2,5 (vitesse de course) | toute la carte | 400 ms |
-
-La marche de référence est `WOKA_SPEED * 20` px/s (comme `Player.deduceSpeed`). Un joueur est gobé à moins de 16 px du
-Gobeur, s'il est hors refuge. Sans cible, le Gobeur erre vers une case marchable tirée à moins de 5 cases.
-
-Réseau : le navigateur du **maître de jeu** (celui qui a lancé la partie) calcule le Gobeur et diffuse des événements
-de script `infogene.gobeur.*` : `start`, `pos` (toutes les 200 ms), `state` (toutes les 5 s, précédé à chaque fois d'un nouvel envoi du `start` pour
-les joueurs arrivés tard ou rechargés, et à l'arrivée d'un joueur), `caught` et `end`. Aucun changement de protobuf, de back ni de pusher ; chaque joueur ne téléporte que lui-même.
-Un suiveur n'adopte un `start` que s'il correspond à l'objet de sa carte (`GobeurStartCheck.ts` : même prison, joueurs
-choisis dans l'objet, durée au plus celle de l'objet + 10 s), et ne se téléporte pas dans une prison située dans une
-zone qui lui est interdite (`GameScene.isPositionAllowedForCurrentUser`). Un objet qui ne porte que le Gobeur n'est pas
-activable (pas d'invite « espace »).
-
-Fichiers : `play/src/front/Phaser/Game/Gobeur/*` (modules purs, sans Phaser), `Stores/GobeurStore.ts`,
-`Components/MapEditor/PropertyEditor/GobeurPropertyEditor.svelte`, `Components/Gobeur/*`, `Entity.replaceProperty`
-(le menu remplace la propriété au lieu de la fusionner) et `WanderingCharactersManager.setSuppressed` (un objet
-Gobeur ne se promène jamais).
-
-Sprite : la planche est le `wander.sheetPath` du prefab. Soit des images de 32 px (format woka), soit une grande planche
-4 × 4 découpée au chargement, dont le fond de bordure est rendu transparent.
-
-Limites :
-- Les événements se forgent depuis la console : n'importe qui peut en émettre (chacun ne téléporte que soi-même).
-- Un navigateur ne connaît que les joueurs proches : le Gobeur ne poursuit que ceux que voit le maître, et un joueur
-  qui quitte la partie reste « survivant ».
-- Si le maître ferme son onglet, la partie est interrompue après 5 s sans message.
-- **Le maître doit garder l'onglet visible** : la boucle Phaser s'arrête dans un onglet caché. Le maître interrompt donc
-  ses parties dès que l'onglet passe en arrière-plan (`visibilitychange`), ou au retour si sa vérification périodique
-  n'a pas tourné depuis plus de 5 s.
-- Le `map-storage` officiel (prod) rejette la nouvelle propriété du WAM : prototype, **pas pour la prod**.
+Le Gobeur (mini-jeu de poursuite) a été retiré le 2026-11-06. Le WAM continue de tolérer la propriété
+`gobeurPropertyData` (dépréciée, ignorée par le front, plus proposée dans l'éditeur) pour que les cartes existantes
+(dont la carte d'entrée de la beta) se chargent toujours.
 
 ### Toquer à une zone verrouillée
 
@@ -618,7 +580,7 @@ crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'
   navigateur a les pieds dedans (même règle que l'entrée de zone : `AREA_POSITION_OFFSET_Y`). Une zone de plus du
   quart de la carte n'éclaire jamais (zones techniques).
 - **Halo** : chaque joueur porte une lumière, 1,5 case à l'arrêt, 3 cases en marche (transition linéaire) ; il
-  s'éteint dans une pièce allumée et revient en sortant. Pas de halo pour les animaux ni le Gobeur.
+  s'éteint dans une pièce allumée et revient en sortant. Pas de halo pour les animaux.
 - **Pas de nuit** en mode édition, ni avec le réglage « Désactiver la nuit » (Paramètres → Thème, clé `disableNight`).
 - **Recette locale** : `?nightAt=21:00` force l'heure, seulement en développement (`import.meta.env.DEV`).
 

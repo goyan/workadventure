@@ -196,6 +196,8 @@ export const PersonalAreaPropertyData = PropertyBase.extend({
     ownerId: z.string().nullable(), //Proto handle null here. If something goes wrong with personal area, this may be the issue
 });
 
+// DEPRECATED: the Gobeur mini-game was removed. This property (and its level) is kept only so that existing maps
+// (e.g. the beta entry map) still parse; the front ignores it and the map editor no longer offers it.
 export const GobeurLevel = z.enum(["beginner", "intermediate", "hard"]);
 
 export const GobeurPropertyData = PropertyBase.extend({
@@ -606,8 +608,7 @@ export type EntityDataPropertiesKeys =
     | "playAudio"
     | "openWebsite"
     | "openFile"
-    | "livekitRoomProperty"
-    | "gobeurPropertyData";
+    | "livekitRoomProperty";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;

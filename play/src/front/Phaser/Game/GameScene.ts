@@ -283,7 +283,6 @@ import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
-import { GobeurManager } from "./Gobeur/GobeurManager";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
@@ -432,7 +431,6 @@ export class GameScene extends DirtyScene {
     private locateManager!: LocateManager;
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
-    private _gobeurManager: GobeurManager | undefined;
     private nightManager: NightManager | undefined;
     private _knockManager: KnockManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
@@ -1431,8 +1429,6 @@ export class GameScene extends DirtyScene {
         this.locateManager?.destroy();
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
-        this._gobeurManager?.destroy();
-        this._gobeurManager = undefined;
         this.nightManager?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
@@ -1587,7 +1583,6 @@ export class GameScene extends DirtyScene {
         this.wanderingCharactersManager?.forEachDoorOpener((position) =>
             characters.push({ ...position, silent: true }),
         );
-        this._gobeurManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
         this.doorAnimator.update(time, characters, listener, this._knockManager?.getDoorLocks());
     }
 
@@ -2125,10 +2120,6 @@ export class GameScene extends DirtyScene {
 
     public getGameMap(): GameMap {
         return this.gameMapFrontWrapper.getGameMap();
-    }
-
-    public get gobeurManager(): GobeurManager | undefined {
-        return this._gobeurManager;
     }
 
     public get knockManager(): KnockManager | undefined {
@@ -2671,10 +2662,8 @@ export class GameScene extends DirtyScene {
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
                 // Its listeners are on the scene: never two of them at once.
-                this._gobeurManager?.destroy();
                 this.wanderingCharactersManager?.destroy();
                 this.wanderingCharactersManager = new WanderingCharactersManager(this);
-                this._gobeurManager = new GobeurManager(this);
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);

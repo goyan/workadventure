@@ -147,7 +147,7 @@ function openers(manager: WanderingCharactersManager): Point[] {
     return positions;
 }
 
-describe("WanderingCharactersManager.setSuppressed", () => {
+describe("WanderingCharactersManager", () => {
     let manager: WanderingCharactersManager | undefined;
 
     afterEach(() => {
@@ -155,7 +155,7 @@ describe("WanderingCharactersManager.setSuppressed", () => {
         manager = undefined;
     });
 
-    it("hides a suppressed character, stops it opening doors, and shows it again once restored", () => {
+    it("makes a visible wandering character that opens doors and hides its entity", () => {
         const scene = makeScene();
         manager = scene.manager;
         scene.reconcile();
@@ -163,43 +163,10 @@ describe("WanderingCharactersManager.setSuppressed", () => {
         expect(scene.sprite.visible).toBe(true);
         expect(scene.entity.visible).toBe(false);
         expect(openers(manager)).toHaveLength(1);
-
-        manager.setSuppressed("duck", true);
-        scene.update();
-        expect(scene.sprite.visible).toBe(false);
-        expect(openers(manager)).toEqual([]);
-        // Whoever suppressed the character owns the entity meanwhile: it is not shown again.
-        expect(scene.entity.visible).toBe(false);
-
-        manager.setSuppressed("duck", false);
-        scene.update();
-        expect(scene.sprite.visible).toBe(true);
-        expect(openers(manager)).toHaveLength(1);
-    });
-
-    it("keeps a character suppressed before it is created hidden", () => {
-        const scene = makeScene();
-        manager = scene.manager;
-        manager.setSuppressed("duck", true);
-        scene.reconcile();
-        scene.update();
-        expect(scene.sprite.visible).toBe(false);
-        expect(openers(manager)).toEqual([]);
-    });
-
-    it("never makes a wandering character of a Gobeur, even with a wander sheet", () => {
-        const scene = makeScene([{ type: "gobeurPropertyData" }]);
-        manager = scene.manager;
-        scene.reconcile();
-        scene.update();
-        expect(scene.addSprite).not.toHaveBeenCalled();
-        expect(openers(manager)).toEqual([]);
-        // Idle, the Gobeur is the object as placed.
-        expect(scene.entity.visible).toBe(true);
     });
 
     it("leaves a sheet that is not 4 rows of 32 px frames as a still object", () => {
-        // A big sheet, like the drawing of a Gobeur before its property is set: cut in 32 px frames, it is garbage.
+        // A big drawing cut in 32 px frames would be garbage.
         const scene = makeScene([], { width: 1536, height: 1024, frameTotal: 48 * 32 + 1 });
         manager = scene.manager;
         scene.reconcile();

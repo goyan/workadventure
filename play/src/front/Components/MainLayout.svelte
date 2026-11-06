@@ -70,9 +70,7 @@
     import UiWebsiteContainer from "./UI/Website/UIWebsiteContainer.svelte";
     import Modal from "./Modal/Modal.svelte";
     import PrivateMessageNotification from "./PrivateMessage/PrivateMessageNotification.svelte";
-    import GobeurStatusBanner from "./Gobeur/GobeurStatusBanner.svelte";
     import KnockRequests from "./Knock/KnockRequests.svelte";
-    import GobeurRanking from "./Gobeur/GobeurRanking.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
     import ObjectDetails from "./Modal/ObjectDetails.svelte";
@@ -456,7 +454,6 @@
                  visibleRaisedHandSectionsStore). Opening the agenda settles the reminders: it lists the same meetings. -->
             <div class="absolute top-0 right-2 z-[999] flex flex-col gap-2 items-end">
                 <PrivateMessageNotification />
-                <GobeurStatusBanner />
                 <KnockRequests />
                 {#each [...$toastStore.entries()] as toastEntry (toastEntry[0])}
                     {@const toast = toastEntry[1]}
@@ -521,8 +518,6 @@
             {#if $warningMessageStore.length > 0}
                 <WarningToast />
             {/if}
-
-            <GobeurRanking />
 
             <ExternalComponents zone="popup" />
             {#if $wokaMenuStore?.isSelf && $wokaMenuStore.actions.length}
