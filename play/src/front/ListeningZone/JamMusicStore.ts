@@ -23,3 +23,24 @@ export const jamMusicVolumeStore = writable(1);
 
 /** Whether the local user silenced the music while staying in the Jam. */
 export const jamMusicMutedStore = writable(false);
+
+/** What shares the music of a Jam in its space: the LiveKit connection of that space. */
+export interface JamMusicPublisher {
+    publishJamMusic(mediaStream: MediaStream | undefined): Promise<void>;
+}
+
+const jamMusicPublishers = new Map<string, JamMusicPublisher>();
+
+/** Makes the publisher of a Jam space reachable by its name; returns what takes it away. */
+export function registerJamMusicPublisher(spaceName: string, publisher: JamMusicPublisher): () => void {
+    jamMusicPublishers.set(spaceName, publisher);
+    return () => {
+        if (jamMusicPublishers.get(spaceName) === publisher) {
+            jamMusicPublishers.delete(spaceName);
+        }
+    };
+}
+
+export function getJamMusicPublisher(spaceName: string): JamMusicPublisher | undefined {
+    return jamMusicPublishers.get(spaceName);
+}

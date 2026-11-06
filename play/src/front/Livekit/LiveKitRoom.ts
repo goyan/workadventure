@@ -8,6 +8,7 @@ import type {
     TrackPublishOptions,
 } from "livekit-client";
 import {
+    AudioPresets,
     BackupCodecPolicy,
     LocalAudioTrack,
     LocalVideoTrack,
@@ -47,7 +48,7 @@ import { subscribeToOutboundVideoQualityAnalytics } from "../WebRtc/VideoQuality
 import { LIVEKIT_PIXEL_DENSITY } from "../Enum/EnvironmentVariable";
 import { audioPlaybackStore } from "../Stores/AudioPlaybackStore";
 import { effectiveNoiseSuppressionProviderStore, noiseSuppressionEnabledStore } from "../Stores/NoiseSuppressionStore";
-import { SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
+import { JAM_MUSIC_TRACK_NAME, SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
 import { LiveKitParticipant } from "./LivekitParticipant";
 import type { LiveKitRoomInterface } from "./LiveKitRoomInterface";
 
@@ -78,6 +79,9 @@ export class LiveKitRoom implements LiveKitRoomInterface {
     private scriptingAudioTrack: MediaStreamTrack | undefined;
     // Scripting stream received while the room was not connected, published once it is (see dispatchStream)
     private pendingScriptingStream: MediaStream | undefined;
+    // The music the host shares in a Jam, and the one waiting for the room to be connected (see publishJamMusic)
+    private jamMusicTrack: MediaStreamTrack | undefined;
+    private pendingJamMusic: MediaStream | undefined;
     private localScreenSharingVideoTrack: LocalVideoTrack | undefined;
     private localScreenSharingAudioTrack: LocalAudioTrack | undefined;
     private localCameraTrack: LocalVideoTrack | undefined;
@@ -198,6 +202,7 @@ export class LiveKitRoom implements LiveKitRoomInterface {
 
         this.synchronizeMediaState();
         this.flushPendingScriptingStream();
+        this.flushPendingJamMusic();
 
         // Subscribe to observeUserJoined to process pending participants when a specific spaceUser becomes available
         this.rxjsSubscriptions.push(
@@ -500,6 +505,7 @@ export class LiveKitRoom implements LiveKitRoomInterface {
             this.queueScreenShareUpdate(get(this.screenShareStreamStore));
         }
         this.flushPendingScriptingStream();
+        this.flushPendingJamMusic();
     }
 
     private flushPendingScriptingStream() {
@@ -990,6 +996,66 @@ export class LiveKitRoom implements LiveKitRoomInterface {
             source: Track.Source.Microphone,
         });
         this.scriptingAudioTrack = audioTrack;
+    }
+
+    /**
+     * Shares the music of a Jam: a microphone track under a name of its own, which the guests receive apart from the
+     * voice. The capture keeps the track: unpublishing does not stop it. Without a stream, the music stops. Like the
+     * scripting audio, it waits for the room to be connected.
+     */
+    public async publishJamMusic(mediaStream: MediaStream | undefined): Promise<void> {
+        if (!this.localParticipant) {
+            console.error("Local participant not found");
+            Sentry.captureException(new Error("Local participant not found"));
+            return;
+        }
+
+        const audioTrack = mediaStream?.getAudioTracks()[0];
+        if (!mediaStream || !audioTrack) {
+            this.pendingJamMusic = undefined;
+            await this.unpublishJamMusic();
+            return;
+        }
+        if (this.jamMusicTrack === audioTrack) {
+            return;
+        }
+        if (!this.isRoomConnected()) {
+            this.pendingJamMusic = mediaStream;
+            return;
+        }
+
+        this.pendingJamMusic = undefined;
+        await this.unpublishJamMusic();
+        await this.localParticipant.publishTrack(audioTrack, {
+            name: JAM_MUSIC_TRACK_NAME,
+            source: Track.Source.Microphone,
+            // Music, not speech: stereo, and no discontinuous transmission, which would clip quiet passages.
+            audioPreset: AudioPresets.musicStereo,
+            dtx: false,
+            forceStereo: true,
+        });
+        this.jamMusicTrack = audioTrack;
+    }
+
+    private async unpublishJamMusic(): Promise<void> {
+        const track = this.jamMusicTrack;
+        if (!track) {
+            return;
+        }
+        this.jamMusicTrack = undefined;
+        await this.localParticipant?.unpublishTrack(track, false);
+    }
+
+    private flushPendingJamMusic() {
+        const stream = this.pendingJamMusic;
+        if (!stream) {
+            return;
+        }
+        this.pendingJamMusic = undefined;
+        this.publishJamMusic(stream).catch((err) => {
+            console.error("An error occurred while publishing the pending Jam music", err);
+            Sentry.captureException(err);
+        });
     }
 
     private handleParticipantConnected(participant: RemoteParticipant) {
