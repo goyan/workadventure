@@ -1,3 +1,4 @@
 Door sounds: "Door Open, Door Close Set" by qubodup (Iwan "qubodup" Gabovitch), CC0 1.0 (public domain).
 Source: https://opengameart.org/content/door-open-door-close-set
 Files kept: DoorOpen01 (door-open.ogg) and DoorClose01 (door-close.ogg).
+Knock sound: door-knock.ogg, synthesized by tools/door_knock.py (infrastructure repository), public domain (CC0 1.0).
