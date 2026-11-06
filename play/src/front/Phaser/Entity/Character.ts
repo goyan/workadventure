@@ -38,6 +38,7 @@ import { AvatarActionEffect } from "./AvatarActionEffect";
 import { getSeatedTexture, SEATED_DIRECTIONS } from "./SeatedPose";
 import { Swimwear, readSwimwear } from "./Swimwear";
 import { SwimwearEffect } from "./SwimwearEffect";
+import { isHumanAvatar, MusicHeadphonesEffect } from "./MusicHeadphonesEffect";
 
 import Container = Phaser.GameObjects.Container;
 import RenderTexture = Phaser.GameObjects.RenderTexture;
@@ -87,6 +88,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
     private listeningMusic = false;
+    private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -127,6 +129,9 @@ export abstract class Character extends Container implements OutlineableInterfac
             if (this.avatarAction !== AvatarAction.Idle) this.scene.markDirty();
         }
         this.updateSwimEffect();
+        const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
+        if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
+        this.musicHeadphonesEffect?.update(showHeadphones, this._lastDirection, this.sprites.values().next().value);
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -792,6 +797,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.swimEffect?.destroy();
         this.swimwearEffect?.destroy();
         this.avatarActionEffect?.destroy();
+        this.musicHeadphonesEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

@@ -866,6 +866,7 @@ Rafraîchir le jeu après le déploiement et faire le premier essai avec « Sons
 ## Actions de l’avatar et tenues de bain
 
 Un clic sur son avatar ouvre une roue : profil, danse, café, arrêt, changement de tenue et choix du maillot.
+Pendant l’écoute de musique, les avatars humains du catalogue portent un casque pixel avec une note, qui suit leur orientation et leur pose. Les animaux et les avatars externes sans métadonnée humaine ne reçoivent pas cet accessoire.
 Les actions s’arrêtent au déplacement et sont partagées via la variable publique de salle `_avatarAction`.
 La danse combine les frames existantes avec un balancement ; l’assise génère les jambes pliées dans les quatre sens,
 sans ajouter de planches pour chaque couche de personnage.
