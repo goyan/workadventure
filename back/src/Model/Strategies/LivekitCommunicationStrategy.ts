@@ -9,6 +9,7 @@ import type { ICommunicationSpace } from "../Interfaces/ICommunicationSpace";
 import type { IRecordableStrategy } from "../Interfaces/ICommunicationStrategy";
 import type { EgressFile } from "../Interfaces/ICommunicationState";
 import type { LiveKitService, RecordingStartInfo } from "../Services/LivekitService";
+import type { JamSpaceAccess } from "../AreaPropertyEvents/JamSpaceAccess";
 
 export class LivekitCommunicationStrategy implements IRecordableStrategy {
     private usersReady: Set<string> = new Set();
@@ -26,6 +27,9 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
     constructor(
         private space: ICommunicationSpace,
         private livekitService: LiveKitService,
+        // Decides who enters the space of a Jam and who publishes its music; an ordinary space keeps its rights.
+        private resolveJamAccess: (spaceName: string, user: SpaceUser) => Promise<JamSpaceAccess> = () =>
+            Promise.resolve({ kind: "not-a-jam" }),
     ) {}
 
     /**
@@ -231,7 +235,18 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
     }
 
     private async sendLivekitInvitationMessage(user: SpaceUser): Promise<void> {
-        const token = await this.livekitService.generateToken(this.space.getSpaceName(), user);
+        const spaceName = this.space.getSpaceName();
+        const jamAccess = await this.resolveJamAccess(spaceName, user);
+        if (jamAccess.kind === "refused") {
+            console.warn(`User ${user.spaceUserId} is not allowed in the Jam space ${spaceName}`);
+            return;
+        }
+        const token =
+            jamAccess.kind === "jam"
+                ? await this.livekitService.generateToken(spaceName, user, {
+                      canPublishMusic: jamAccess.canPublishMusic,
+                  })
+                : await this.livekitService.generateToken(spaceName, user);
 
         this.space.dispatchPrivateEvent({
             spaceName: this.space.getSpaceName(),
