@@ -1,12 +1,21 @@
 # Vérifications d'une pull request vers `infogene` (play, back et contrats partagés).
 # Reprend les étapes de l'ancien « Continuous Integration Play » d'upstream : types, svelte-check, lint, formatage, tests.
 #
-# SÉCURITÉ : repo public. Déclencheur `pull_request` uniquement (jamais `pull_request_target`) : le jeton est en lecture
-# seule et aucun secret n'est exposé aux PR venant de forks. Actions épinglées par SHA.
+# Trois jobs en parallèle (types et formats, lint, tests), résumés par le contrôle exigé « Contrôles play », partagent l'installation `.github/actions/setup-play`
+# (`node_modules` en cache). Le lint garde un cache ESLint entre les exécutions : seuls les fichiers modifiés sont relus.
+# Les exécutions sur `infogene` (après fusion) remplissent ces caches : une PR ne peut lire que ceux de sa branche de base.
+# Limite du cache ESLint : les règles typées d'un fichier inchangé ne sont pas réévaluées quand un type importé change ;
+# l'exécution sur `infogene`, qui repart du dernier cache, rattrape ces cas au plus tard après fusion.
+#
+# SÉCURITÉ : repo public. Déclencheurs `pull_request` et `push` sur `infogene` uniquement (jamais
+# `pull_request_target`) : le jeton est en lecture seule et aucun secret n'est exposé aux PR venant de forks. Actions
+# épinglées par SHA.
 name: pr-checks
 
 on:
   pull_request:
+    branches: [infogene]
+  push:
     branches: [infogene]
 
 concurrency:
@@ -16,42 +25,22 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --max-old-space-size=8192
+
 jobs:
-  play:
-    name: Contrôles play
+  types:
+    name: Types et formats play
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      NODE_OPTIONS: --max-old-space-size=8192
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: 24
-          cache: npm
-
-      - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
+      - uses: ./.github/actions/setup-play
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          version: "3.x"
-
-      - name: Dépendances
-        run: npm ci --workspace=workadventure-play --workspace=workadventureback
-
-      - name: Dépendances des messages protobuf
-        run: npm ci
-        working-directory: messages
-
-      - name: Génération des messages protobuf
-        run: npm run ts-proto
-        working-directory: messages
-
-      - name: Fichiers i18n
-        run: npm run typesafe-i18n
-        working-directory: play
 
       - name: Complétude des traductions
         run: npm run i18n:check
@@ -65,16 +54,8 @@ jobs:
         run: npm run svelte-check
         working-directory: play
 
-      - name: Lint
-        run: npm run lint
-        working-directory: play
-
       - name: Formatage
         run: npm run pretty-check
-        working-directory: play
-
-      - name: Tests unitaires
-        run: npm test
         working-directory: play
 
       - name: Typecheck back et contrats partagés
@@ -97,3 +78,61 @@ jobs:
       - name: Tests back
         run: npm test -- --run
         working-directory: back
+
+  lint:
+    name: Lint play
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-play
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Clé : configuration et dépendances (un changement invalide tout), plus l'exécution (chaque exécution enregistre
+      # son cache) ; la restauration reprend le plus récent de même configuration.
+      - name: Cache ESLint
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: play/.eslintcache
+          key: eslint-${{ runner.os }}-${{ hashFiles('package-lock.json', 'play/eslint.config.js', 'libs/eslint-config/**', 'play/tsconfig.json') }}-${{ github.run_id }}
+          restore-keys: |
+            eslint-${{ runner.os }}-${{ hashFiles('package-lock.json', 'play/eslint.config.js', 'libs/eslint-config/**', 'play/tsconfig.json') }}-
+
+      - name: Lint
+        run: npm run lint -- --cache --cache-strategy content --cache-location .eslintcache
+        working-directory: play
+
+  tests:
+    name: Tests play
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-play
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tests unitaires
+        run: npm test -- --run
+        working-directory: play
+
+  # Seul contrôle exigé par la protection de `infogene` : vert seulement si les trois jobs le sont.
+  checks:
+    name: Contrôles play
+    if: always()
+    needs: [types, lint, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Résultat des trois jobs
+        run: |
+          echo "types=${{ needs.types.result }} lint=${{ needs.lint.result }} tests=${{ needs.tests.result }}"
+          test "${{ needs.types.result }}" = success
+          test "${{ needs.lint.result }}" = success
+          test "${{ needs.tests.result }}" = success
