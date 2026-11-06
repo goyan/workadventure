@@ -585,7 +585,6 @@ const mapEditor: BaseTranslation = {
             left: "Left",
             right: "Right",
             add: "Add a view",
-            turn: "Turn",
         },
         customEntityEditorForm: {
             saving: "Saving…",

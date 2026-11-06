@@ -7,11 +7,17 @@ import { fileURLToPath } from "url";
 //  - Summary mode (no args): tsx scripts/diff-i18n.ts
 //  - Detailed check mode (CI/CD): tsx scripts/diff-i18n.ts --check
 //  - Verbose output: add --verbose
+//  - Restrict the check to some locales: add --only=fr-FR,de-DE (the others may stay incomplete, they fall back)
 // Defaults: source = en-US
 const args = process.argv.slice(2);
 const isCheckMode = args.includes("--check");
 const isVerboseMode = args.includes("--verbose");
 const isQuietMode = !isVerboseMode;
+const onlyLocales = args
+    .find((arg) => arg.startsWith("--only="))
+    ?.slice("--only=".length)
+    .split(",")
+    .filter((locale) => locale !== "");
 // Filter out flags to get locale arguments
 const localeArgs = args.filter((arg) => !arg.startsWith("--"));
 const targetLocale = localeArgs[0];
@@ -117,7 +123,9 @@ async function runDetailedCheck() {
         console.log("📁 Detecting locales in src/i18n/...");
     }
 
-    const languages = listLocaleDirs(baseDir, sourceLocale);
+    const languages = listLocaleDirs(baseDir, sourceLocale).filter(
+        (locale) => onlyLocales === undefined || onlyLocales.includes(locale)
+    );
     const langCount = languages.length;
     if (!isQuietMode) {
         console.log(`✅ Locales detected: ${langCount}`);

@@ -32,6 +32,7 @@ import type { ITiledPlace } from "../GameMapPropertiesListener";
 import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
 import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
+import { sameGrids } from "../Wander/WanderCollisions";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
@@ -652,7 +653,7 @@ export class GameMapFrontWrapper {
         if (this.sharedCollisionGridDirty) {
             this.sharedCollisionGridDirty = false;
             const grid = this.composeCollisionGrid(false);
-            if (!areSameGrids(grid, this.sharedCollisionGrid)) {
+            if (!sameGrids(grid, this.sharedCollisionGrid)) {
                 this.sharedCollisionGrid = grid;
             }
         }
@@ -1953,23 +1954,4 @@ export class GameMapFrontWrapper {
         this.entitiesManager.close();
         this.areasManager?.destroy();
     }
-}
-
-function areSameGrids(a: number[][], b: number[][]): boolean {
-    if (a.length !== b.length) {
-        return false;
-    }
-    for (let y = 0; y < a.length; y++) {
-        const rowA = a[y];
-        const rowB = b[y];
-        if (rowA.length !== rowB.length) {
-            return false;
-        }
-        for (let x = 0; x < rowA.length; x++) {
-            if (rowA[x] !== rowB[x]) {
-                return false;
-            }
-        }
-    }
-    return true;
 }

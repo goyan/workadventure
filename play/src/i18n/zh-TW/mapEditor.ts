@@ -582,7 +582,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "左側",
             right: "右側",
             add: "新增視角",
-            turn: "旋轉",
         },
         customEntityEditorForm: {
             saving: "正在儲存…",

@@ -595,7 +595,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "Gauche",
             right: "Droite",
             add: "Ajouter une vue",
-            turn: "Pivoter",
         },
         customEntityEditorForm: {
             saving: "Enregistrement…",
