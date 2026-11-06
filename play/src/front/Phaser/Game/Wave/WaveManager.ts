@@ -113,8 +113,14 @@ export class WaveManager {
             return;
         }
         const senderName = sender.name || get(LL).wave.someone();
-        this.state.receive(sender.uuid, senderName, Date.now());
+        const now = Date.now();
+        const alert = this.state.shouldAlert(sender.uuid, now);
+        this.state.receive(sender.uuid, senderName, now);
         this.publish();
+        // A burst of waves from the same colleague only updates the card: no sound, no system notification.
+        if (!alert) {
+            return;
+        }
         // Through GameScene.playSound: muted when the local status forbids notification sounds ("do not disturb").
         this.scene.playBubbleInSound();
         notifySystem({

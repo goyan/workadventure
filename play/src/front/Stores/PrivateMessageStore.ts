@@ -7,6 +7,12 @@ import { notifySystem } from "../Notification/SystemNotifier";
 
 const historyLimit = 100;
 const notificationBodyLimit = 60;
+/** Cuts by code points, so an emoji is never split in half. */
+function truncateByCodePoints(text: string, limit: number): string {
+    const codePoints = Array.from(text);
+    return codePoints.length > limit ? `${codePoints.slice(0, limit).join("")}…` : text;
+}
+
 const historyStorageKey = "workadventure.private-message-history.v1";
 const privateMessageEntrySchema = z.object({
     id: z.number().int().positive(),
@@ -104,7 +110,7 @@ function notifyIncomingPrivateMessage(entry: PrivateMessageEntry): void {
     notifySystem({
         kind: "privateMessage",
         title: peerName,
-        body: text.length > notificationBodyLimit ? `${text.slice(0, notificationBodyLimit)}…` : text,
+        body: truncateByCodePoints(text, notificationBodyLimit),
         tag: `pm:${peerUuid}`,
         onClick: () => {
             // Lazy import: the modal pulls the game scene and Svelte components, which a store must not load.

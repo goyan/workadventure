@@ -220,6 +220,26 @@ describe("WaveManager", () => {
         );
     });
 
+    it("throttles the sound and the notification of repeated waves from the same sender, but updates the card", () => {
+        const fake = makeScene();
+        manager = new WaveManager(fake.scene);
+
+        fake.receive("local", 7);
+        vi.advanceTimersByTime(WAVE_COOLDOWN_MS - 1);
+        fake.receive("local", 7);
+
+        expect(fake.playBubbleInSound).toHaveBeenCalledTimes(1);
+        expect(notifySystem).toHaveBeenCalledTimes(1);
+        expect(get(waveCardsStore)).toEqual([
+            { senderUuid: "sam", senderName: "Sam", receivedAt: 1_000_000 + WAVE_COOLDOWN_MS - 1 },
+        ]);
+
+        vi.advanceTimersByTime(WAVE_COOLDOWN_MS);
+        fake.receive("local", 7);
+        expect(fake.playBubbleInSound).toHaveBeenCalledTimes(2);
+        expect(notifySystem).toHaveBeenCalledTimes(2);
+    });
+
     it("keeps one card per sender, most recent first", () => {
         playersById.set(8, { userUuid: "alice", name: "Alice", availabilityStatus: AvailabilityStatus.ONLINE });
         const fake = makeScene();

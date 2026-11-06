@@ -259,6 +259,12 @@ describe("private message system notification", () => {
         });
     });
 
+    it("never cuts an emoji in half at the truncation boundary", () => {
+        receivePrivateMessage({ ...message, text: `${"x".repeat(59)}😀${"y".repeat(10)}` });
+
+        expect(notifySystem).toHaveBeenCalledWith(expect.objectContaining({ body: `${"x".repeat(59)}😀…` }));
+    });
+
     it("keeps a short text as is", () => {
         receivePrivateMessage({ ...message, text: "x".repeat(60) });
 

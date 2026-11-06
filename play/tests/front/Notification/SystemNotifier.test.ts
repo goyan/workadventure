@@ -90,6 +90,11 @@ describe("notifySystem", () => {
         expect(instances[0].options).toMatchObject({ body: "waves at you", tag: "wave:1" });
     });
 
+    it.each(kinds)("asks to renotify when a %s replaces a notification with the same tag", (kind) => {
+        notifySystem({ ...notif, kind });
+        expect(instances[0].options).toMatchObject({ tag: "wave:1", renotify: true });
+    });
+
     it("does nothing when not allowed", () => {
         stubNotification("denied");
         notifySystem(notif);

@@ -10,6 +10,7 @@ export interface WaveCard {
 
 export class WaveState {
     private readonly lastSentAt = new Map<string, number>();
+    private readonly lastReceivedAt = new Map<string, number>();
     private readonly cardsBySender = new Map<string, WaveCard>();
 
     canWave(targetUuid: string, now: number): boolean {
@@ -19,6 +20,16 @@ export class WaveState {
 
     recordSent(targetUuid: string, now: number): void {
         this.lastSentAt.set(targetUuid, now);
+    }
+
+    /**
+     * Recipient-side anti-spam: true when no wave from this sender was received during the last cooldown. Every call
+     * counts as a reception, so a sender who keeps waving stays silent until they stop for a full cooldown.
+     */
+    shouldAlert(senderUuid: string, now: number): boolean {
+        const last = this.lastReceivedAt.get(senderUuid);
+        this.lastReceivedAt.set(senderUuid, now);
+        return last === undefined || now - last >= WAVE_COOLDOWN_MS;
     }
 
     /** Upserts the single card of this sender and returns it. */

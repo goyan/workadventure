@@ -34,6 +34,9 @@ export interface SystemNotification {
     onClick?: () => void;
 }
 
+/** `renotify` is part of the Notification API but missing from the DOM lib typings of this TypeScript version. */
+type RenotifyingNotificationOptions = NotificationOptions & { renotify?: boolean };
+
 /** Reads the real context (focus, permission, user setting, local status) and shows a page notification when allowed. */
 export function notifySystem(notification: SystemNotification): void {
     if (typeof Notification === "undefined") {
@@ -53,11 +56,15 @@ export function notifySystem(notification: SystemNotification): void {
         if (!shouldNotify(notification.kind, context)) {
             return;
         }
-        const pageNotification = new Notification(notification.title, {
+        const options: RenotifyingNotificationOptions = {
             ...defaultOptions,
             body: notification.body,
             tag: notification.tag,
-        });
+            // Notifications sharing a tag replace each other, silently (no banner, no sound) without `renotify`.
+            // Waves are already throttled per sender by the WaveManager.
+            renotify: true,
+        };
+        const pageNotification = new Notification(notification.title, options);
         pageNotification.onclick = () => {
             try {
                 pageNotification.close();
