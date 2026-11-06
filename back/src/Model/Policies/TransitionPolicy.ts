@@ -17,6 +17,8 @@ export class TransitionPolicy implements ITransitionPolicy {
         private readonly switchOnCpuLimitation: boolean = true,
         /** A recorded space (see AutoRecorder) lives on LiveKit, where the egress records. */
         private readonly autoRecording: { readonly isEnabled: boolean } = { isEnabled: false },
+        /** The space of a Jam relays media through LiveKit only: the server signs who publishes what. */
+        private readonly livekitOnly: boolean = false,
     ) {}
 
     /**
@@ -29,8 +31,8 @@ export class TransitionPolicy implements ITransitionPolicy {
      * - LiveKit -> WebRTC: when user count drops to or below maxUsersForWebRTC, unless a recording is running or a
      *   `cpuLimited` user is present. The two legs are asymmetric on purpose: once a bubble moved for a flag, only
      *   that user leaving brings it back, so a third member coming and going never bounces it
-     * - A space recorded automatically goes to LiveKit as soon as someone is in it, whatever its size, and never
-     *   leaves it
+     * - A space recorded automatically, or the space of a Jam, goes to LiveKit as soon as someone is in it, whatever
+     *   its size, and never leaves it
      * - VoidState: no transitions
      *
      * @param currentType - The current communication type
@@ -40,10 +42,11 @@ export class TransitionPolicy implements ITransitionPolicy {
      */
     shouldTransition(currentType: CommunicationType, userCount: number, cpuLimitedUserCount = 0): boolean {
         const cpuLimited = this.switchOnCpuLimitation && cpuLimitedUserCount > 0;
+        const livekitRequired = this.autoRecording.isEnabled || this.livekitOnly;
 
         if (currentType === CommunicationType.WEBRTC) {
             const shouldSwitch =
-                (this.autoRecording.isEnabled && userCount > 0) ||
+                (livekitRequired && userCount > 0) ||
                 userCount > this.maxUsersForWebRTC ||
                 (cpuLimited && userCount > 2);
             if (shouldSwitch && !this.livekitChecker.isAvailable()) {
@@ -57,7 +60,7 @@ export class TransitionPolicy implements ITransitionPolicy {
             userCount <= this.maxUsersForWebRTC &&
             !this.recordingManager.isRecording &&
             !cpuLimited &&
-            !this.autoRecording.isEnabled
+            !livekitRequired
         ) {
             return true;
         }

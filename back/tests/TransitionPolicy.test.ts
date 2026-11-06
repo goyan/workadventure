@@ -372,4 +372,42 @@ describe("TransitionPolicy", () => {
             expect(recorded(false).shouldTransition(CommunicationType.WEBRTC, 2)).toBe(false);
         });
     });
+
+    describe("livekit only (the space of a Jam)", () => {
+        const jam = (livekitAvailable = true) =>
+            new TransitionPolicy(
+                MAX_USERS_FOR_WEBRTC,
+                createLivekitChecker(livekitAvailable),
+                createRecordingManager(),
+                true,
+                { isEnabled: false },
+                true,
+            );
+
+        it("moves the space to LiveKit with its first user, far below the WebRTC limit", () => {
+            expect(jam().shouldTransition(CommunicationType.WEBRTC, 1)).toBe(true);
+        });
+
+        it("leaves an empty space where it is", () => {
+            expect(jam().shouldTransition(CommunicationType.WEBRTC, 0)).toBe(false);
+        });
+
+        it("never brings the space back to WebRTC", () => {
+            expect(jam().shouldTransition(CommunicationType.LIVEKIT, 1)).toBe(false);
+        });
+
+        it("does not transition while LiveKit is not available", () => {
+            expect(jam(false).shouldTransition(CommunicationType.WEBRTC, 2)).toBe(false);
+        });
+
+        it("leaves an ordinary space of two users on WebRTC", () => {
+            const ordinary = new TransitionPolicy(
+                MAX_USERS_FOR_WEBRTC,
+                createLivekitChecker(true),
+                createRecordingManager(),
+            );
+
+            expect(ordinary.shouldTransition(CommunicationType.WEBRTC, 2)).toBe(false);
+        });
+    });
 });

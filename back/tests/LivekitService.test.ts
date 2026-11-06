@@ -332,20 +332,20 @@ describe("LiveKitService publish rights", () => {
         return claims.video?.canPublishSources as unknown as string[] | undefined;
     }
 
-    it("lets a token publish the four ordinary sources only, which excludes a music track", async () => {
-        const token = await createService().generateToken("jam-space", user);
+    it("lets an ordinary token publish the four ordinary sources", async () => {
+        const token = await createService().generateToken("space", user);
 
         expect(await publishSources(token)).toEqual(["camera", "microphone", "screen_share", "screen_share_audio"]);
     });
 
-    it("keeps the ordinary restriction when music rights are explicitly refused", async () => {
-        const token = await createService().generateToken("jam-space", user, { canPublishMusic: false });
+    it("lets a guest of a Jam share a screen and nothing else: no voice, no camera, no music", async () => {
+        const token = await createService().generateToken("jam-space", user, { jamRole: "guest" });
 
-        expect(await publishSources(token)).toHaveLength(4);
+        expect(await publishSources(token)).toEqual(["screen_share", "screen_share_audio"]);
     });
 
     it("lifts the source restriction for the host, since a token cannot list the unknown source", async () => {
-        const token = await createService().generateToken("jam-space", user, { canPublishMusic: true });
+        const token = await createService().generateToken("jam-space", user, { jamRole: "host" });
 
         expect(await publishSources(token)).toBeUndefined();
     });

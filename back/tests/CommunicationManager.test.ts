@@ -23,6 +23,7 @@ import { UserRegistry } from "../src/Model/Services/UserRegistry";
 import type { ICommunicationStrategy } from "../src/Model/Interfaces/ICommunicationStrategy";
 import type { IRecordingManager } from "../src/Model/RecordingManager";
 import { AutoRecorder } from "../src/Model/AutoRecorder";
+import { buildJamSpaceName } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
 import { analyticsEventsQueue } from "../src/Services/AnalyticsEventsQueue";
 import { adminApi } from "../src/Services/AdminApi";
 import { setCapabilities } from "../src/Services/Capabilities";
@@ -332,6 +333,54 @@ describe("CommunicationManager", () => {
             await manager.handleUserAdded(user);
 
             expect(orchestrator.mocks.cancelPendingTransition).toHaveBeenCalled();
+        });
+    });
+
+    describe("the space of a Jam", () => {
+        const jamSpace = (): ICommunicationSpace => ({
+            ...createSpace(),
+            getSpaceName: () =>
+                `world.${buildJamSpaceName({ roomUrl: "http://room", areaId: "a", propertyId: "p", hostUuid: "host" })}`,
+        });
+
+        it("adds nobody to a peer-to-peer state while LiveKit has not taken the space", async () => {
+            const state = createState(CommunicationType.WEBRTC);
+            const manager = new CommunicationManager(jamSpace(), {
+                lifecycleManager: createLifecycleManager(state),
+                policy: createPolicy(false),
+            });
+
+            await manager.handleUserAdded(createSpaceUser("user_1"));
+            await manager.handleUserToNotifyAdded(createSpaceUser("user_2"));
+
+            expect(state.mocks.handleUserAdded).not.toHaveBeenCalled();
+            expect(state.mocks.handleUserToNotifyAdded).not.toHaveBeenCalled();
+        });
+
+        it("serves its users once the space runs on LiveKit", async () => {
+            const state = createState(CommunicationType.LIVEKIT);
+            const manager = new CommunicationManager(jamSpace(), {
+                lifecycleManager: createLifecycleManager(state),
+                policy: createPolicy(false),
+            });
+            const user = createSpaceUser("user_1");
+
+            await manager.handleUserAdded(user);
+
+            expect(state.mocks.handleUserAdded).toHaveBeenCalledWith(user);
+        });
+
+        it("keeps serving an ordinary space on WebRTC", async () => {
+            const state = createState(CommunicationType.WEBRTC);
+            const manager = new CommunicationManager(createSpace(), {
+                lifecycleManager: createLifecycleManager(state),
+                policy: createPolicy(false),
+            });
+            const user = createSpaceUser("user_1");
+
+            await manager.handleUserAdded(user);
+
+            expect(state.mocks.handleUserAdded).toHaveBeenCalledWith(user);
         });
     });
 

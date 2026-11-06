@@ -159,7 +159,7 @@ describe("LivekitCommunicationStrategy invitations", () => {
 
         await vi.waitFor(() =>
             expect(livekitService.generateToken).toHaveBeenCalledWith("world.jam-space", user, {
-                canPublishMusic: true,
+                jamRole: "host",
             }),
         );
     });
@@ -171,7 +171,7 @@ describe("LivekitCommunicationStrategy invitations", () => {
 
         await vi.waitFor(() =>
             expect(livekitService.generateToken).toHaveBeenCalledWith("world.jam-space", user, {
-                canPublishMusic: false,
+                jamRole: "guest",
             }),
         );
     });
