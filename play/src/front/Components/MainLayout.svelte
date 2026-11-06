@@ -88,6 +88,7 @@
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
     import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
+    import DraggableJamPanel from "./ListeningZone/DraggableJamPanel.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
@@ -104,6 +105,27 @@
 
     /** When false, the right-hand participant strip in highlight fullscreen is collapsed (toggle with the edge arrow). */
     let highlightParticipantCamerasListOpen = $state(true);
+    let jamPanelLayout = $state({ height: 0, moved: false });
+    let jamSidePanel: HTMLDivElement | undefined = $state();
+    let jamPanelAnchorTop = $state(0);
+
+    $effect(() => {
+        const sidePanel = jamSidePanel;
+        if (!sidePanel) {
+            jamPanelAnchorTop = 0;
+            return;
+        }
+        const updateAnchor = (): void => {
+            const parent = sidePanel.offsetParent ?? sidePanel.parentElement;
+            jamPanelAnchorTop = sidePanel.getBoundingClientRect().top - (parent?.getBoundingClientRect().top ?? 0);
+        };
+        updateAnchor();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(updateAnchor);
+        observer.observe(sidePanel);
+        if (sidePanel.parentElement) observer.observe(sidePanel.parentElement);
+        return () => observer.disconnect();
+    });
 
     const HIGHLIGHT_FULLSCREEN_PARTICIPANT_LIST_AUTO_HIDE_MS = 5000;
     const MAP_EDITOR_TOOLBAR_WIDTH = 64;
@@ -447,14 +469,13 @@
                 {/if}
                 <RaisedHandsDock />
             </div>
-            <!-- The Jam rooms stay under the action bar's menus (z-[301]), unlike the notifications above. With a
-                 player's menu open, they move above it (see below) instead of covering it. -->
-            {#if !sidePanelOpen}
-                <div class="absolute top-0 right-2 z-[300] flex flex-col gap-2 items-end">
-                    <ListeningZoneBubble />
-                    <JamRoomsLauncher />
-                </div>
-            {/if}
+            <!-- One Jam dock survives side-panel transitions and stays outside their scrolling container. -->
+            <DraggableJamPanel anchorTop={jamPanelAnchorTop} onLayout={(layout) => (jamPanelLayout = layout)}>
+                {#snippet children(onDragStart, onDragKeydown)}
+                    <ListeningZoneBubble {onDragStart} {onDragKeydown} />
+                    <JamRoomsLauncher {onDragStart} {onDragKeydown} />
+                {/snippet}
+            </DraggableJamPanel>
 
             {#if $showRecordingList}
                 <RecordingsListModal />
@@ -509,11 +530,13 @@
             {/if}
             {#if sidePanelOpen}
                 <div
+                    bind:this={jamSidePanel}
                     transition:fly={{ x: 210, duration: 500 }}
                     class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-0 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
-                    <ListeningZoneBubble />
-                    <JamRoomsLauncher />
+                    {#if !jamPanelLayout.moved && jamPanelLayout.height > 0}
+                        <div class="shrink-0" style:height={`${jamPanelLayout.height}px`}></div>
+                    {/if}
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
                     {/if}

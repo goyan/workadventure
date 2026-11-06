@@ -9,6 +9,19 @@ de déploiement sont dans le dépôt privé
 [workadventure-selfhost](https://github.com/goyan/workadventure-selfhost) : son accès
 est également nécessaire pour travailler sur ces éléments.
 
+## Panneau Jam déplaçable
+
+Le panneau Jam se déplace en faisant glisser son en-tête à la souris ou au toucher.
+L'en-tête peut aussi recevoir le focus : les flèches le déplacent de 20 pixels.
+Il reste dans l'écran après redimensionnement et conserve sa position pendant
+l'ouverture d'une fiche utilisateur. Les boutons, le défilement et le réordonnancement
+de la file restent indépendants du déplacement ; la position est conservée pour la
+session de page, sans écriture dans le navigateur.
+
+Recette : déplacer le panneau en zone d'écoute et la liste des salons hors zone,
+ouvrir une fiche utilisateur, redimensionner la fenêtre, puis utiliser les boutons
+de Jam et réordonner la file. Vérifier aussi le toucher et les flèches sur l'en-tête.
+
 ## Le circuit
 
 ```

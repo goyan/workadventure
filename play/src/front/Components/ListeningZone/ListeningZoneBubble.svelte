@@ -18,6 +18,13 @@
     import JamRoomsList from "./JamRoomsList.svelte";
     import { IconHeadphones } from "@wa-icons";
 
+    interface Props {
+        onDragStart?: (event: PointerEvent) => void;
+        onDragKeydown?: (event: KeyboardEvent) => void;
+    }
+
+    let { onDragStart, onDragKeydown }: Props = $props();
+
     const linked = spotifyAccount.linked;
     // The desktop app reads the Spotify app of this computer: there is no account to link.
     const readsLocalPlayer = desktopSpotifyPlayer() !== undefined;
@@ -71,7 +78,13 @@
         data-testid="listening-zone-bubble"
     >
         <div class="p-4 flex flex-col gap-3">
-            <div class="flex items-start gap-3">
+            <button
+                type="button"
+                class="flex items-start gap-3 w-full p-0 bg-transparent border-none text-start cursor-grab active:cursor-grabbing touch-none select-none"
+                onpointerdown={onDragStart}
+                onkeydown={onDragKeydown}
+                data-testid="listening-zone-drag-handle"
+            >
                 <div
                     class="shrink-0 w-10 h-10 rounded-full bg-[#1ed760]/20 text-[#1ed760] flex items-center justify-center"
                     aria-hidden="true"
@@ -88,7 +101,7 @@
                             : $LL.spotify.listeningZone.noJam()}
                     </p>
                 </div>
-            </div>
+            </button>
 
             <JamRoomsList />
 
