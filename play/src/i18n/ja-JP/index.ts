@@ -29,6 +29,7 @@ import refreshPrompt from "./refreshPrompt";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import wave from "./wave";
 import recording from "./recording";
 
 const ja_JP = deepmerge(en_US, {
@@ -62,6 +63,7 @@ const ja_JP = deepmerge(en_US, {
     onboarding,
     spotify,
     recording,
+    wave,
 });
 
 export default ja_JP;

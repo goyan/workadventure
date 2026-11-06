@@ -17,7 +17,7 @@
     import { openPrivateMessage } from "../../../Components/PrivateMessage/openPrivateMessage";
     import { blackListManager } from "../../../WebRtc/BlackListManager";
     import type { UserProviderMerger } from "../../UserProviderMerger/UserProviderMerger";
-    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus, IconSend } from "@wa-icons";
+    import { IconForbid, IconDots, IconCamera, IconMapPin, IconUserPlus, IconSend, IconHandStop } from "@wa-icons";
 
     interface Props {
         user: ChatUser;
@@ -211,6 +211,22 @@
                     >
                         <IconSend class="w-4" />
                         {$LL.chat.privateMessage.label()}
+                    </button>
+                    <!-- Read when the menu opens: disabled while the last wave at this colleague is too recent. -->
+                    <button
+                        type="button"
+                        class="wa-dropdown-item text-nowrap flex gap-2 items-center hover:bg-white/10 m-0 p-2 w-full text-sm rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        data-testid="user-list-wave"
+                        disabled={!gameManager.getCurrentGameScene().waveManager?.canWave(user.uuid)}
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            if (user.uuid)
+                                gameManager.getCurrentGameScene().waveManager?.wave(user.uuid, user.username ?? "");
+                            closeChatUserMenu();
+                        }}
+                    >
+                        <IconHandStop class="w-4" />
+                        {$LL.wave.button()}
                     </button>
                 {/if}
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
