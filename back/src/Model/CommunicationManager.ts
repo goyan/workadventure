@@ -9,6 +9,7 @@ import {
     type MicrophoneTrackPublishedMessage,
     FilterType,
 } from "@workadventure/messages";
+import { parseJamSpaceName } from "@workadventure/map-editor";
 import { LIVEKIT_SWITCH_ON_CPU_LIMITATION, MAX_USERS_FOR_WEBRTC } from "../Enum/EnvironmentVariable";
 import { adminApi, type RecordingEventPayload } from "../Services/AdminApi";
 import type { LivekitCredentialsResponse } from "../Services/Repository/LivekitCredentialsResponse";
@@ -25,7 +26,6 @@ import { SessionAnalytics, type SessionEndReason } from "./SessionAnalytics";
 import { AutoRecorder } from "./AutoRecorder";
 import { UserRegistry } from "./Services/UserRegistry";
 import { TransitionPolicy } from "./Policies/TransitionPolicy";
-import { parseJamSpaceName } from "./AreaPropertyEvents/JamSpaceAccess";
 import { TransitionOrchestrator } from "./Services/TransitionOrchestrator";
 import { StateLifecycleManager } from "./Services/StateLifecycleManager";
 import { LivekitAvailabilityService } from "./Services/LivekitAvailabilityService";

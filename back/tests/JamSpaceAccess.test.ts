@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ListeningZoneJam } from "@workadventure/map-editor";
+import { buildJamSpaceName } from "@workadventure/map-editor";
 import type { JamRoomDirectory } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
-import {
-    buildJamSpaceName,
-    createJamRoomDirectory,
-    parseJamSpaceName,
-    resolveJamSpaceAccess,
-} from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
+import { createJamRoomDirectory, resolveJamSpaceAccess } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
 
 const ROOM = "https://play.example.org/_/global/maps.example.org/office.wam";
 const OTHER_ROOM = "https://play.example.org/_/global/maps.example.org/garden.wam";
@@ -27,28 +23,6 @@ function directory(
 }
 
 const spaceName = buildJamSpaceName({ roomUrl: ROOM, areaId: "area-1", propertyId: "prop-1", hostUuid: HOST });
-
-describe("jam space names", () => {
-    it("reads back what it built, even behind the world prefix the pusher adds", () => {
-        expect(parseJamSpaceName(`world.${spaceName}`)).toEqual({
-            roomUrl: ROOM,
-            areaId: "area-1",
-            propertyId: "prop-1",
-            hostUuid: HOST,
-        });
-    });
-
-    it("keeps a name without a dot or a colon inside its parts", () => {
-        const name = buildJamSpaceName({ roomUrl: ROOM, areaId: "a:b.c", propertyId: "p", hostUuid: HOST });
-
-        expect(parseJamSpaceName(name)?.areaId).toBe("a:b.c");
-    });
-
-    it("does not take an ordinary space for a Jam", () => {
-        expect(parseJamSpaceName("world.some-bubble")).toBeUndefined();
-        expect(parseJamSpaceName("world.jam:only:three:parts")).toBeUndefined();
-    });
-});
 
 describe("resolveJamSpaceAccess", () => {
     it("leaves an ordinary space alone", async () => {

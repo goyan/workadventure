@@ -17,6 +17,7 @@ export * from "./GameMap/WamFile";
 export * from "./GameMap/LayersFlattener";
 export * from "./EntitySound";
 export * from "./ListeningZone/ListeningZoneJam";
+export * from "./ListeningZone/JamSpaceName";
 export * from "./types";
 // MapFetcher is not exported because it is using Node imports that are not available in the browser
 //export * from "./MapFetcher";
