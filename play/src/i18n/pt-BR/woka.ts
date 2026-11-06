@@ -2,6 +2,8 @@ import type { BaseTranslation } from "../i18n-types";
 
 const woka: BaseTranslation = {
     customWoka: {
+        color: "Cor",
+        defaultColor: "Cor padrão",
         rotate: "Girar avatar",
         parts: {
             body: "Corpo",

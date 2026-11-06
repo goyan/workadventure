@@ -67,7 +67,7 @@ import { HtmlUtils } from "../../WebRtc/HtmlUtils";
 import { Loader } from "../Components/Loader";
 import { RemotePlayer } from "../Entity/RemotePlayer";
 import { AVATAR_ACTION_VARIABLE } from "../Entity/AvatarAction";
-import { SWIMWEAR_VARIABLE } from "../Entity/Swimwear";
+import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
 import { SelectCharacterScene, SelectCharacterSceneName } from "../Login/SelectCharacterScene";
 import { hasMovedEventName, Player, requestEmoteEventName } from "../Player/Player";
 import { ErrorSceneName } from "../Reconnecting/ErrorScene";
@@ -1864,6 +1864,7 @@ export class GameScene extends DirtyScene {
         }
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
+        character.setSwimwearColor(update.player.variables.get(SWIMWEAR_COLOR_VARIABLE));
         if (update.updated.chatID) {
             character.setChatID(update.player.chatID);
         }
@@ -2852,6 +2853,7 @@ export class GameScene extends DirtyScene {
             this._room.group ?? undefined,
         );
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
+        this.CurrentPlayer.setSwimwearColor(localUserStore.getSwimwearColor());
 
         if (this._spaceRegistry === undefined) {
             throw new Error("Space registry is undefined when joining room");
@@ -4860,6 +4862,9 @@ ${escapedMessage}
         );
         player.setSwimwear(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(SWIMWEAR_VARIABLE),
+        );
+        player.setSwimwearColor(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(SWIMWEAR_COLOR_VARIABLE),
         );
         this.remotePlayersSpatialIndex.set(player.userId, player);
 

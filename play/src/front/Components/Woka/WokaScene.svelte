@@ -14,7 +14,7 @@
     let buildOwnWoka = $state(false);
     let error: string | null = $state(null);
 
-    async function saveAndContinue(texturesId: string[], swimwear?: Swimwear): Promise<void> {
+    async function saveAndContinue(texturesId: string[], swimwear?: Swimwear, swimwearColor?: string): Promise<void> {
         error = null; // Reset error message
         try {
             if (!areCharacterTexturesValid(texturesId)) {
@@ -25,7 +25,10 @@
             analyticsClient.trackAdminEvent("onboarding.woka_validated", { scene: "SelectWoka" });
             gameManager.setCharacterTextureIds(texturesId);
             await connectionManager.saveTextures(texturesId);
-            if (swimwear !== undefined) localUserStore.setSwimwear(swimwear);
+            if (swimwear !== undefined) {
+                localUserStore.setSwimwear(swimwear);
+                localUserStore.setSwimwearColor(swimwearColor);
+            }
             selectCharacterSceneVisibleStore.set(false);
             gameManager.tryToStopScene(SelectCharacterSceneName);
             gameManager.goToNextScene(SelectCharacterSceneName);

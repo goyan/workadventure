@@ -10,9 +10,17 @@
         getTextureUrl: (url: string) => string;
         onrotate?: (direction: number) => void;
         swimwear?: Swimwear;
+        swimwearColor?: string;
     }
 
-    let { selectedTextures, wokaData = null, getTextureUrl = (url) => url, onrotate, swimwear }: Props = $props();
+    let {
+        selectedTextures,
+        wokaData = null,
+        getTextureUrl = (url) => url,
+        onrotate,
+        swimwear,
+        swimwearColor,
+    }: Props = $props();
 
     // Directions correspond to the order of images in the sprite sheet:
     const directionsMapping = [0, 1, 3, 2];
@@ -54,6 +62,7 @@
             {getTextureUrl}
             {canvasSize}
             {swimwear}
+            {swimwearColor}
             direction={directionsMapping[direction]}
         />
     </div>

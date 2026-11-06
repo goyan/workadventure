@@ -3,6 +3,8 @@ import type { DeepPartial } from "../DeepPartial";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        color: "Kleur",
+        defaultColor: "Standaardkleur",
         rotate: "Avatar draaien",
         parts: {
             body: "Lichaam",

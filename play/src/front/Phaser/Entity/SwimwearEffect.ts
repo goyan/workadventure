@@ -1,24 +1,36 @@
 import type * as Phaser from "phaser";
-import { getSwimwearTexture } from "./Swimwear";
-import type { Swimwear } from "./Swimwear";
+import type { GameScene } from "../Game/GameScene";
+import { getSwimwearTexture, loadSwimwearAssets } from "./Swimwear";
+import type { Swimwear, SwimwearAssets } from "./Swimwear";
 import { getSeatedTexture } from "./SeatedPose";
 
 /** A temporary outfit; swimming still owns the bob and water line, and walking keeps its original frames. */
 export class SwimwearEffect {
     private sprite: Phaser.GameObjects.Sprite | undefined;
+    private assets: SwimwearAssets | undefined;
+    private destroyed = false;
     private readonly originalVisibility = new Map<Phaser.GameObjects.Sprite, boolean>();
     private readonly unavailableTextures = new Set<string>();
 
     constructor(
-        private readonly scene: Phaser.Scene,
+        private readonly scene: GameScene,
         private readonly container: Phaser.GameObjects.Container,
-    ) {}
+    ) {
+        loadSwimwearAssets()
+            .then((assets) => {
+                if (this.destroyed) return;
+                this.assets = assets;
+                this.scene.markDirty();
+            })
+            .catch((error: unknown) => console.error("Could not prepare swimwear", error));
+    }
 
     public update(
         active: boolean,
         swimming: boolean,
         sprites: Map<string, Phaser.GameObjects.Sprite>,
         style: Swimwear,
+        color?: string,
     ): void {
         if (!active) {
             this.sprite?.setVisible(false);
@@ -26,13 +38,14 @@ export class SwimwearEffect {
             this.originalVisibility.clear();
             return;
         }
+        if (!this.assets) return;
         const textureKeys = [...sprites.keys()];
-        const cacheKey = JSON.stringify([style, textureKeys]);
+        const cacheKey = JSON.stringify([style, color, textureKeys]);
         if (this.unavailableTextures.has(cacheKey)) {
             this.update(false, swimming, sprites, style);
             return;
         }
-        const key = getSwimwearTexture(this.scene, textureKeys, style);
+        const key = getSwimwearTexture(this.scene, textureKeys, style, this.assets, color);
         if (!key) {
             this.unavailableTextures.add(cacheKey);
             this.update(false, swimming, sprites, style);
@@ -45,7 +58,14 @@ export class SwimwearEffect {
             this.container.addAt(this.sprite, sprites.size);
         }
         const texture = first.texture.key.endsWith("-seated-pose") ? getSeatedTexture(this.scene, key) : key;
-        this.sprite.setTexture(texture, first.frame.name).setPosition(first.x, first.y).setAngle(first.angle);
+        this.sprite
+            .setTexture(texture, first.frame.name)
+            .setOrigin(first.originX, first.originY)
+            .setPosition(first.x, first.y)
+            .setAngle(first.angle)
+            .setScale(first.scaleX, first.scaleY)
+            .setFlip(first.flipX, first.flipY)
+            .setAlpha(first.alpha);
         if (swimming) this.sprite.setCrop(0, 0, 32, 20);
         else this.sprite.setCrop();
         this.sprite.setVisible(
@@ -58,6 +78,7 @@ export class SwimwearEffect {
     }
 
     public destroy(): void {
+        this.destroyed = true;
         this.sprite?.destroy();
         this.originalVisibility.clear();
     }
