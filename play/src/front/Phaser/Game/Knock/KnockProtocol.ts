@@ -31,10 +31,19 @@ const KnockCancelSchema = z.object({
     at: finite,
 });
 
+/** The visitor walked in: their pass is used up, leaving again means knocking again. */
+const KnockEnteredSchema = z.object({
+    kind: z.literal("entered"),
+    areaId: z.string(),
+    visitorUuid: z.string(),
+    at: finite,
+});
+
 const KnockMessageSchema = z.discriminatedUnion("kind", [
     KnockRequestSchema,
     KnockAnswerMessageSchema,
     KnockCancelSchema,
+    KnockEnteredSchema,
 ]);
 
 export type KnockMessage = z.infer<typeof KnockMessageSchema>;

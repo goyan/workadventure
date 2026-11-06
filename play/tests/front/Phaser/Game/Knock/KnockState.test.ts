@@ -23,6 +23,7 @@ const answer = (answerValue: "enter" | "later", areaId = "a", visitorUuid = "v")
     at: 999_999,
 });
 const cancel = (areaId = "a", visitorUuid = "v"): KnockMessage => ({ kind: "cancel", areaId, visitorUuid, at: 0 });
+const entered = (areaId = "a", visitorUuid = "v"): KnockMessage => ({ kind: "entered", areaId, visitorUuid, at: 0 });
 
 describe("KnockState", () => {
     it("registers a request, lists it and applies the cooldown from reception", () => {
@@ -122,5 +123,27 @@ describe("KnockState", () => {
         expect(s.expire(KNOCK_REPLY_TIMEOUT_MS + KNOCK_CLOCK_MARGIN_MS)).toEqual([
             { kind: "noAnswer", areaId: "a", visitorUuid: "v" },
         ]);
+    });
+    it("consumes the pass when the visitor enters, and lets them knock again right away", () => {
+        const state = new KnockState();
+        state.receive(request(), 0);
+        state.receive(answer("enter"), 5_000);
+
+        expect(state.receive(entered(), 8_000)).toEqual([{ kind: "passUsed", areaId: "a", visitorUuid: "v" }]);
+
+        expect(state.hasPass("v", "a", 8_001)).toBe(false);
+        // Once out again, the visitor knocks again without waiting for the anti-spam delay.
+        expect(state.canKnock("v", "a", 8_001)).toBe(true);
+        expect(state.receive(request(), 9_000)).toHaveLength(1);
+        // The consumed pass does not expire a second time.
+        expect(state.expire(65_000).filter((effect) => effect.kind === "passExpired")).toEqual([]);
+    });
+
+    it("ignores an entered message without a pass", () => {
+        const state = new KnockState();
+        state.receive(request(), 0);
+
+        expect(state.receive(entered(), 1_000)).toEqual([]);
+        expect(state.canKnock("v", "a", 1_000)).toBe(false);
     });
 });

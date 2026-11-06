@@ -545,9 +545,11 @@ pour qui est dehors, déverrouillage par le back quand la zone se vide). Ajouts 
   pas déranger ») et voient une carte « X toque à la porte » avec **Entrer** / **Pas maintenant** ; la première réponse
   reçue l'emporte. Sans réponse : « Personne ne répond » (30 s pour les cartes, 32 s pour le visiteur). Anti-spam : 30 s
   par visiteur et zone. Le visiteur qui s'éloigne de plus de 64 px annule sa demande.
-- **Laissez-passer** : *Entrer* lève la collision pour ce seul visiteur pendant 60 s (`AreasManager.setLockPass`) ; la
-  zone reste verrouillée pour les autres.
-- **Admin** : Espace toque aussi ; pendant l'attente, un second Espace force l'ouverture (déverrouillage upstream).
+- **Laissez-passer** : *Entrer* lève la collision pour ce seul visiteur (`AreasManager.setLockPass`), pour **une seule
+  entrée** : il est consommé dès que le visiteur est dans la zone (événement `entered`), au plus tard après 60 s. Ressorti,
+  le visiteur doit toquer à nouveau, sans attendre l'anti-spam. La zone reste verrouillée pour les autres.
+- **Admin** : toque et attend comme tout le monde ; personne ne peut forcer une porte verrouillée (le déverrouillage
+  upstream par Espace depuis l'extérieur est retiré : une zone se déverrouille d'elle-même quand elle se vide).
 - **Portes** : une porte d'une zone verrouillée (`isDoorInZone`) ne s'ouvre que pour un joueur qui est dans la zone ou
   en sort depuis moins de 2 s, ou qui a un laissez-passer ; jamais pour un animal (`DoorAnimator`, `DoorLocks`).
 - **Ne pas déranger** : verrouiller **son** bureau personnel passe en « Ne pas déranger » ; déverrouiller, sortir,
@@ -556,7 +558,7 @@ pour qui est dehors, déverrouillage par le back quand la zone se vide). Ajouts 
 - **Espace** (`Character.handlePressSpacePlayerTextCallback`) : un appui ne déclenche que les textes déjà affichés ;
   un texte créé ou remplacé par un rappel attend l'appui suivant (sinon toquer déclenchait aussitôt le texte d'attente).
 
-Réseau : événements de script `infogene.knock.request|answer|cancel` (`Knock/KnockProtocol.ts`), état local identique
+Réseau : événements de script `infogene.knock.request|answer|cancel|entered` (`Knock/KnockProtocol.ts`), état local identique
 sur chaque navigateur (`KnockState.ts`, échéances depuis la réception, marge de 2 s entre navigateurs). Aucun changement
 de back, protobuf, map-storage ni WAM : **compatible avec la prod** (seule l'image `play` change).
 

@@ -4,12 +4,10 @@ import { derived, get } from "svelte/store";
 import { LL } from "../../../../i18n/i18n-svelte";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { resetAllStatusStoreExcept } from "../../../Rules/StatusRules/statusChangerFunctions";
-import { setAreaPropertyVariable } from "../../../Stores/AreaPropertyVariablesStore";
 import { currentPlayerLockableAreasStore } from "../../../Stores/CurrentPlayerAreaLockStore";
 import { knockRequestsStore } from "../../../Stores/KnockStore";
 import { requestedStatusStore } from "../../../Stores/MediaStore";
 import { personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
-import { touchScreenManager } from "../../../Touch/TouchScreenManager";
 import type { AreasManager } from "../GameMap/AreasManager";
 import type { GameScene } from "../GameScene";
 import type { DoorLocks, LockedDoorZone } from "../MapEditor/MapLayer/DoorAnimator";
@@ -102,14 +100,9 @@ export class KnockManager {
                 // The visitor waits a bit longer than the occupants: a late answer still reaches it.
                 KNOCK_REPLY_TIMEOUT_MS + KNOCK_CLOCK_MARGIN_MS,
             );
+        // Refused silently (anti-spam delay): admins included, nobody can force a door open.
         if (sent) {
             this.showWaiting(areaId);
-            return;
-        }
-        // Refused silently, except that an admin keeps the forced unlock at hand.
-        const lockedArea = this.adminLockedArea(areaId);
-        if (lockedArea) {
-            this.showWaitingAdmin(areaId, lockedArea.propertyId);
         }
     }
 
@@ -206,6 +199,15 @@ export class KnockManager {
                 }
             }
         }
+        // The local visitor who walked in uses up their pass: once out, they have to knock again.
+        for (const entry of lockedAreas ?? []) {
+            if (
+                this.state.hasPass(this.localUuid, entry.areaId, now) &&
+                this.areasManager?.isCurrentPlayerInArea(entry.areaId)
+            ) {
+                this.send({ kind: "entered", areaId: entry.areaId, visitorUuid: this.localUuid, at: now });
+            }
+        }
         // The local player may have walked into or out of an area.
         this.refreshRequests();
     }
@@ -236,6 +238,7 @@ export class KnockManager {
                     this.scene.CurrentPlayer.destroyText(textId(effect.areaId));
                     break;
                 case "passExpired":
+                case "passUsed":
                     this.areasManager?.updateAreaCollision(effect.areaId);
                     break;
             }
@@ -273,11 +276,6 @@ export class KnockManager {
     }
 
     private showWaiting(areaId: string): void {
-        const lockedArea = this.adminLockedArea(areaId);
-        if (lockedArea) {
-            this.showWaitingAdmin(areaId, lockedArea.propertyId);
-            return;
-        }
         const id = textId(areaId);
         this.scene.CurrentPlayer.playText(
             id,
@@ -287,31 +285,6 @@ export class KnockManager {
             true,
             "message",
         );
-    }
-
-    /** An admin may still force the door open, as before the knock existed: Space on this text unlocks the area. */
-    private showWaitingAdmin(areaId: string, propertyId: string): void {
-        const id = textId(areaId);
-        const trigger = touchScreenManager.detectPrimaryTouchDevice() ? "👆" : get(LL).trigger.spaceKeyboard();
-        this.scene.CurrentPlayer.playText(
-            id,
-            get(LL).area.knock.waitingAdmin({ trigger }),
-            KNOCK_REPLY_TIMEOUT_MS,
-            () => {
-                setAreaPropertyVariable(areaId, propertyId, "lock", false);
-                this.scene.CurrentPlayer.destroyText(id);
-            },
-            true,
-            "message",
-        );
-    }
-
-    /** The locked area, when the local player is an admin who may force it open. */
-    private adminLockedArea(areaId: string): { areaId: string; propertyId: string } | undefined {
-        if (!this.scene.connection?.hasTag("admin")) {
-            return undefined;
-        }
-        return this.areasManager?.getLockedAreas().find((entry) => entry.areaId === areaId);
     }
 
     private showText(areaId: string, text: string, type: "warning" | "message"): void {

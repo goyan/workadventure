@@ -4,7 +4,7 @@ import type { KnockAnswer, KnockMessage } from "./KnockProtocol";
 export const KNOCK_REPLY_TIMEOUT_MS = 30_000;
 /** Anti-spam: a visitor cannot knock again on the same area before this delay, counted from the request. */
 export const KNOCK_COOLDOWN_MS = 30_000;
-/** How long a visitor may cross a locked area after an "enter" answer. */
+/** How long a visitor may cross a locked area after an "enter" answer: the pass is used up as soon as they are in. */
 export const KNOCK_PASS_MS = 60_000;
 /**
  * Each client counts the delays from its own reception: the clients differ by the latency. A receiver applies the
@@ -26,7 +26,8 @@ export type KnockEffect =
     | { kind: "answered"; areaId: string; visitorUuid: string; answer: KnockAnswer; answeredBy: string }
     | { kind: "withdrawn"; areaId: string; visitorUuid: string }
     | { kind: "noAnswer"; areaId: string; visitorUuid: string }
-    | { kind: "passExpired"; areaId: string; visitorUuid: string };
+    | { kind: "passExpired"; areaId: string; visitorUuid: string }
+    | { kind: "passUsed"; areaId: string; visitorUuid: string };
 
 function keyOf(areaId: string, visitorUuid: string): string {
     return JSON.stringify([areaId, visitorUuid]);
@@ -93,6 +94,14 @@ export class KnockState {
                     return [];
                 }
                 return [{ kind: "withdrawn", areaId: message.areaId, visitorUuid: message.visitorUuid }];
+            }
+            case "entered": {
+                // One pass, one entry. The anti-spam delay is lifted too: once out again, the visitor knocks again.
+                if (!this.passes.delete(key)) {
+                    return [];
+                }
+                this.lastRequestAt.delete(key);
+                return [{ kind: "passUsed", areaId: message.areaId, visitorUuid: message.visitorUuid }];
             }
         }
     }

@@ -34,7 +34,6 @@ vi.mock("../../../../../src/i18n/i18n-svelte", () => {
         area: {
             knock: {
                 waiting: () => "waiting",
-                waitingAdmin: ({ trigger }: { trigger: string }) => `waitingAdmin ${trigger}`,
                 later: () => "later",
                 noAnswer: () => "noAnswer",
                 opened: ({ name }: { name: string }) => `opened ${name}`,
@@ -224,6 +223,21 @@ describe("KnockManager", () => {
         expect(onVisitorAccepted).toHaveBeenCalledTimes(1);
     });
 
+    it("consumes the local visitor's pass once inside: leaving again means knocking again", () => {
+        const fake = makeScene();
+        manager = new KnockManager(fake.scene);
+        manager.knock("z");
+        fake.receive({ kind: "answer", areaId: "z", visitorUuid: "local", answer: "enter", answeredBy: "Bob", at: 0 });
+        fake.areasManager.updateAreaCollision.mockClear();
+
+        fake.insideAreas.add("z");
+        fake.tick();
+
+        expect(emittedKinds(fake.emitScriptableEvent)).toContain("infogene.knock.entered");
+        expect(manager.hasPass("local", "z")).toBe(false);
+        expect(fake.areasManager.updateAreaCollision).toHaveBeenCalledWith("z");
+    });
+
     it("gives the local visitor a pass on enter, removed after KNOCK_PASS_MS", () => {
         const fake = makeScene();
         manager = new KnockManager(fake.scene);
@@ -330,7 +344,7 @@ describe("KnockManager", () => {
         expect(fake.player.texts.has("knock-z")).toBe(false);
     });
 
-    it("lets an admin force the door open only with a second press, on the waiting text", () => {
+    it("makes an admin knock and wait like everyone, with no way to force the door open", () => {
         const fake = makeScene({ admin: true });
         manager = new KnockManager(fake.scene);
         showPrompt(fake, manager);
@@ -338,28 +352,26 @@ describe("KnockManager", () => {
         fake.pressSpace();
 
         expect(emittedKinds(fake.emitScriptableEvent)).toEqual(["infogene.knock.request"]);
-        expect(fake.player.texts.get("knock-z")?.text).toBe("waitingAdmin Space");
-        expect(setAreaPropertyVariable).not.toHaveBeenCalled();
+        expect(fake.player.texts.get("knock-z")?.text).toBe("waiting");
 
+        // A second press only closes the waiting text.
         fake.pressSpace();
 
-        expect(setAreaPropertyVariable).toHaveBeenCalledExactlyOnceWith("z", "lock-prop", "lock", false);
         expect(fake.player.texts.has("knock-z")).toBe(false);
+        expect(setAreaPropertyVariable).not.toHaveBeenCalled();
     });
 
-    it("offers the forced unlock again to an admin whose knock is refused by the cooldown", () => {
+    it("shows nothing new to an admin whose knock is refused by the cooldown", () => {
         const fake = makeScene({ admin: true });
         manager = new KnockManager(fake.scene);
         manager.knock("z");
-        fake.player.destroyText("knock-z");
         fake.player.playText.mockClear();
 
         manager.knock("z");
 
         expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
-        expect(fake.player.texts.get("knock-z")?.text).toBe("waitingAdmin Space");
-        fake.player.texts.get("knock-z")?.callback();
-        expect(setAreaPropertyVariable).toHaveBeenCalledExactlyOnceWith("z", "lock-prop", "lock", false);
+        expect(fake.player.playText).not.toHaveBeenCalled();
+        expect(setAreaPropertyVariable).not.toHaveBeenCalled();
     });
 
     it("shows nothing new to a non-admin whose knock is refused by the cooldown", () => {
@@ -373,8 +385,8 @@ describe("KnockManager", () => {
         expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
         expect(fake.player.playText).not.toHaveBeenCalled();
     });
-    it("does not unlock nor hide the waiting text of an admin when the prompt precedes it (one press)", () => {
-        const fake = makeScene({ admin: true });
+    it("does not knock again when the prompt precedes the waiting text (one press)", () => {
+        const fake = makeScene();
         manager = new KnockManager(fake.scene);
         manager.knock("z");
         // The bubble stack can reorder the texts (by length): here the prompt comes first.
@@ -386,9 +398,9 @@ describe("KnockManager", () => {
 
         fake.pressSpace();
 
+        // No second knock: the prompt's knock is refused by the anti-spam delay.
         expect(fake.emitScriptableEvent).toHaveBeenCalledTimes(1);
         expect(setAreaPropertyVariable).not.toHaveBeenCalled();
-        expect(fake.player.texts.get("knock-z")?.text).toBe("waitingAdmin Space");
     });
 
     it("shows no waiting text when the knock was not sent (own request still pending after the cooldown)", () => {
