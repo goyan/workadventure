@@ -1,10 +1,6 @@
 <script lang="ts">
-    import type {
-        CategorySettings,
-        EntityLayer,
-        InteractionTrigger,
-        ObjectInteraction,
-    } from "@workadventure/map-editor";
+    import type { CategorySettings, EntityLayer, InteractionTrigger } from "@workadventure/map-editor";
+    import { ObjectInteraction } from "@workadventure/map-editor";
     import LL from "../../../../i18n/i18n-svelte";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
@@ -61,7 +57,7 @@
         save(name.toLocaleLowerCase(), { interaction: "none", trigger: "auto" });
     }
 
-    const interactions: ObjectInteraction[] = ["none", "sit", "swim"];
+    const interactions = ObjectInteraction.options;
     const triggers: InteractionTrigger[] = ["auto", "key"];
     const layers: (EntityLayer | "")[] = ["", "floor", "standing", "overhead"];
 </script>

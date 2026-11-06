@@ -3,6 +3,17 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        rotate: "Awatar wobwjertnyć",
+        parts: {
+            body: "Ćěło",
+            eyes: "Woči",
+            hair: "Włosy",
+            clothes: "Drasta",
+            hat: "Kłobuk",
+            accessory: "Přidatki",
+        },
+        bath: "Kupanje",
+        bathHint: "Kupanska drasta so we wodźe a hač k jednej kachli wot basena nosy.",
         title: "twój WOKA wobdźěłać",
         navigation: {
             finish: "wubrać",
@@ -17,7 +28,24 @@ const woka: DeepPartial<Translation["woka"]> = {
         randomize: "Losowo",
     },
     menu: {
+        changeOutfit: "Drastu změnić",
+        swimwear: "Kupanje",
+        actions: "Akcije mojeho awatara",
+        closeActions: "Akcije začinić",
+        profile: "Profil pokazać",
         businessCard: "wizitka",
+    },
+    swimwear: {
+        auto: "Podle awatara",
+        shorts: "Kupanske cholowy",
+        twoPiece: "Dwudźělny kupanski woblek",
+    },
+    actions: {
+        idle: "Zastajić",
+        dance: "Rejować",
+        coffee: "Kofej pić",
+        sleep: "Spać",
+        toilet: "Na toaletę hić",
     },
     picker: {
         title: "Koho chceš wubrać?",

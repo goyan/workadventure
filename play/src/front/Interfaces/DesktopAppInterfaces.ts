@@ -129,6 +129,8 @@ export type WorkAdventureDesktopApi = {
     enqueueOnSpotify?: (request: { uris: string[]; from: string; fromUuid?: string }) => void;
     /** Optional: as a Jukebox's host, the queue of this computer's Spotify, until the returned function is called. */
     watchSpotifyQueue?: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => () => void;
+    /** Re-read the host's playing context and queue when the Jukebox's file is opened. */
+    refreshSpotifyQueue?: () => void;
     /** Optional: as a Jukebox's host, removes a track from the queue of this computer's Spotify. */
     dequeueOnSpotify?: (track: Pick<JukeboxTrack, "uri" | "uid">) => void;
     /** Optional: as a Jukebox's host, moves a queued track just before or just after another one. */

@@ -13,6 +13,8 @@
     import SwordIcon from "../Icons/SwordIcon.svelte";
     import ShuffleIcon from "../Icons/ShuffleIcon.svelte";
     import Button from "../UI/Button.svelte";
+    import { Swimwear } from "../../Phaser/Entity/Swimwear";
+    import { localUserStore } from "../../Connection/LocalUserStore";
     import WokaPreview from "./WokaPreview.svelte";
     import type { WokaBodyPart, WokaData, WokaTexture } from "./WokaTypes";
     import { getItemsPerRow } from "./ItemsPerRow";
@@ -20,7 +22,7 @@
 
     interface Props {
         back: () => void;
-        saveAndContinue: (texturesId: string[]) => void;
+        saveAndContinue: (texturesId: string[], swimwear: Swimwear) => void;
     }
 
     let { back, saveAndContinue }: Props = $props();
@@ -38,6 +40,9 @@
     let isLoading = $state(true);
     let error = $state("");
     let assetsDirection: number = $state(0);
+    let showBath = $state(false);
+    let selectedSwimwear = $state(localUserStore.getSwimwear() ?? Swimwear.Auto);
+    const swimwearStyles = Object.values(Swimwear);
 
     const bodyPartOrder: WokaBodyPart[] = ["body", "eyes", "hair", "clothes", "hat", "accessory"];
 
@@ -121,7 +126,7 @@
             }
 
             analyticsClient.trackAdminEvent("onboarding.custom_woka_selected");
-            saveAndContinue(textureIds);
+            saveAndContinue(textureIds, selectedSwimwear);
         } catch (err) {
             console.error("Error saving textures:", err);
             error = "Failed to save character customization";
@@ -167,6 +172,7 @@
 
     let timeOutToScroll: ReturnType<typeof setTimeout> | null = null;
     function selectBodyPart(bodyPart: WokaBodyPart) {
+        showBath = false;
         selectedBodyPart = bodyPart;
 
         // Clear previous timeout if it exists
@@ -195,6 +201,15 @@
     // Function to handle keyboard navigation
     function useKeyBoardNavigation(event: KeyboardEvent) {
         if (!wokaData) return;
+        if (showBath && event.key.startsWith("Arrow")) {
+            event.preventDefault();
+            const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+            selectedSwimwear =
+                swimwearStyles[
+                    (swimwearStyles.indexOf(selectedSwimwear) + step + swimwearStyles.length) % swimwearStyles.length
+                ];
+            return;
+        }
         if (
             event.key === "ArrowLeft" ||
             event.key === "ArrowRight" ||
@@ -236,7 +251,7 @@
         if (!wokaData) return;
         if (event.key === "Enter" && enterPressed) {
             enterPressed = false;
-            if (selectedBodyPart === "accessory") {
+            if (showBath || selectedBodyPart === "accessory") {
                 // If it's the last body part, save and continue
                 handlerSaveAndContinue();
             } else {
@@ -289,6 +304,7 @@
                             {selectedTextures}
                             {wokaData}
                             {getTextureUrl}
+                            swimwear={showBath ? selectedSwimwear : undefined}
                             onrotate={(direction) => {
                                 assetsDirection = direction;
                             }}
@@ -309,87 +325,109 @@
                             </Button>
                         </div>
                     </div>
-                    <div class="flex flex-col gap-0 mb-4 w-full lg:w-fit sm:hidden">
-                        {#each bodyPartOrder as bodyPart (bodyPart)}
-                            {@const BodyPartIcon = getBodyPartIcon(bodyPart)}
-                            <button
-                                class="flex-1 px-4 py-2 flex-grow capitalize flex flex-row items-center justify-center gap-2 border-b-2 {selectedBodyPart ===
-                                bodyPart
-                                    ? 'text-white border-white'
-                                    : 'text-white/50 border-white/10'}"
-                                onclick={() => (selectedBodyPart = bodyPart)}
-                                style="border-bottom-style: solid;"
-                            >
-                                <BodyPartIcon
-                                    height="h-5"
-                                    width="w-5"
-                                    strokeColor={selectedBodyPart === bodyPart ? "stroke-white " : "stroke-white/50"}
-                                    fillColor={selectedBodyPart === bodyPart ? "fill-white " : "fill-white/50"}
-                                />
-                                {bodyPart}
-                            </button>
-                        {/each}
-                    </div>
                 </div>
 
-                <div class="flex flex-col flex-1 h-full min-h-0 min-w-0">
-                    <div class="flex-wrap gap-0 mb-4 w-full sm:flex hidden">
+                <div class="flex flex-col flex-1 h-full min-h-0 min-w-0 w-full sm:w-auto">
+                    <div class="woka-tabs">
                         {#each bodyPartOrder as bodyPart (bodyPart)}
                             {@const BodyPartIcon = getBodyPartIcon(bodyPart)}
                             <button
-                                class="flex-1 px-4 py-2 capitalize flex flex-row items-center justify-center gap-2 border-b-2 {selectedBodyPart ===
-                                bodyPart
+                                class="border-b-2 {selectedBodyPart === bodyPart && !showBath
                                     ? 'text-white border-white'
                                     : 'text-white/50 border-white/10'}"
                                 onclick={() => selectBodyPart(bodyPart)}
                                 style="border-bottom-style: solid;"
                             >
                                 <BodyPartIcon
-                                    height="h-5"
-                                    width="w-5"
-                                    strokeColor={selectedBodyPart === bodyPart ? "stroke-white " : "stroke-white/50"}
-                                    fillColor={selectedBodyPart === bodyPart ? "fill-white " : "fill-white/50"}
+                                    height="h-4"
+                                    width="w-4"
+                                    strokeColor={selectedBodyPart === bodyPart && !showBath
+                                        ? "stroke-white "
+                                        : "stroke-white/50"}
+                                    fillColor={selectedBodyPart === bodyPart && !showBath
+                                        ? "fill-white "
+                                        : "fill-white/50"}
                                 />
-                                {bodyPart}
+                                {$LL.woka.customWoka.parts[bodyPart]()}
                             </button>
                         {/each}
+                        <button
+                            class="border-b-2 {showBath ? 'text-white border-white' : 'text-white/50 border-white/10'}"
+                            style="border-bottom-style: solid;"
+                            onclick={() => (showBath = true)}
+                            data-testid="woka-bath-tab"
+                        >
+                            <span aria-hidden="true">🩱</span>
+                            {$LL.woka.customWoka.bath()}
+                        </button>
                     </div>
 
                     <div class="rounded-lg flex flex-col flex-1 min-h-0 min-w-0">
-                        <h3 class="text-lg font-semibold capitalize">
-                            {selectedBodyPart} Options
-                        </h3>
-                        <div
-                            class="flex-none lg:flex-1 flex flex-col items-start gap-0 min-h-0 min-w-0 max-h-full overflow-y-scroll overflow-x-auto scroll-mask py-[20px]"
-                        >
-                            {#each wokaData?.[selectedBodyPart]?.collections || [] as collection, collectionIndex (collection.name)}
-                                <p class="text-sm text-gray-500 mb-1 mt-4 p-0">{collection.name}</p>
-                                <div
-                                    class="w-full flex flex-row flex-wrap items-start justify-start gap-3"
-                                    id={`woka-line-${collectionIndex}`}
-                                >
-                                    {#each getAvailableTextures(collectionIndex, selectedBodyPart) as texture (texture.id)}
-                                        <button
-                                            class="rounded border border-solid box-border p-0 h-fit {selectedTextures[
-                                                selectedBodyPart
-                                            ] === texture.id
-                                                ? 'bg-white/50 border-white'
-                                                : 'bg-white/10 hover:bg-white/20 border-transparent'}"
-                                            onclick={() => selectTexture(selectedBodyPart, texture.id)}
-                                            id={`texture-${selectedBodyPart}-${texture.id}`}
-                                        >
-                                            <WokaImage
-                                                selectedTextures={{ [selectedBodyPart]: texture.id }}
-                                                {wokaData}
-                                                {getTextureUrl}
-                                                classList="p-2"
-                                                direction={assetsDirection}
-                                            />
-                                        </button>
-                                    {/each}
-                                </div>
-                            {/each}
-                        </div>
+                        {#if showBath}
+                            <h3 class="text-lg font-semibold">{$LL.woka.menu.swimwear()}</h3>
+                            <p class="text-sm text-white/70">{$LL.woka.customWoka.bathHint()}</p>
+                            <div
+                                class="flex flex-wrap gap-3 overflow-y-auto py-4"
+                                role="group"
+                                aria-label={$LL.woka.menu.swimwear()}
+                            >
+                                {#each swimwearStyles as style (style)}
+                                    <button
+                                        class="rounded border border-solid p-2 flex flex-col items-center gap-2 {selectedSwimwear ===
+                                        style
+                                            ? 'bg-white/30 border-white'
+                                            : 'bg-white/10 hover:bg-white/20 border-transparent'}"
+                                        aria-pressed={selectedSwimwear === style}
+                                        onclick={() => (selectedSwimwear = style)}
+                                        data-testid={`woka-swimwear-${style}`}
+                                    >
+                                        <WokaImage
+                                            {selectedTextures}
+                                            {wokaData}
+                                            {getTextureUrl}
+                                            direction={assetsDirection}
+                                            swimwear={style}
+                                        />
+                                        <span class="text-sm">{$LL.woka.swimwear[style]()}</span>
+                                    </button>
+                                {/each}
+                            </div>
+                        {:else}
+                            <h3 class="text-lg font-semibold capitalize">
+                                {$LL.woka.customWoka.parts[selectedBodyPart]()}
+                            </h3>
+                            <div
+                                class="flex-none lg:flex-1 flex flex-col items-start gap-0 min-h-0 min-w-0 max-h-full overflow-y-scroll overflow-x-auto scroll-mask py-[20px]"
+                            >
+                                {#each wokaData?.[selectedBodyPart]?.collections || [] as collection, collectionIndex (collection.name)}
+                                    <p class="text-sm text-gray-500 mb-1 mt-4 p-0">{collection.name}</p>
+                                    <div
+                                        class="w-full flex flex-row flex-wrap items-start justify-start gap-3"
+                                        id={`woka-line-${collectionIndex}`}
+                                    >
+                                        {#each getAvailableTextures(collectionIndex, selectedBodyPart) as texture (texture.id)}
+                                            <button
+                                                class="rounded border border-solid box-border p-0 h-fit {selectedTextures[
+                                                    selectedBodyPart
+                                                ] === texture.id
+                                                    ? 'bg-white/50 border-white'
+                                                    : 'bg-white/10 hover:bg-white/20 border-transparent'}"
+                                                onclick={() => selectTexture(selectedBodyPart, texture.id)}
+                                                id={`texture-${selectedBodyPart}-${texture.id}`}
+                                            >
+                                                <WokaImage
+                                                    selectedTextures={{ [selectedBodyPart]: texture.id }}
+                                                    {wokaData}
+                                                    {getTextureUrl}
+                                                    classList="p-2"
+                                                    direction={assetsDirection}
+                                                />
+                                            </button>
+                                        {/each}
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
                     </div>
                 </div>
             </div>
@@ -412,6 +450,23 @@
 </div>
 
 <style>
+    .woka-tabs {
+        display: flex;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
+        margin-bottom: 1rem;
+        overflow-x: auto;
+    }
+    .woka-tabs button {
+        flex: 1 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.3rem;
+        padding: 0.5rem 0.4rem;
+        white-space: nowrap;
+        font-size: 0.65rem;
+    }
     .mobile-webkit {
         max-height: -webkit-fill-available !important;
     }

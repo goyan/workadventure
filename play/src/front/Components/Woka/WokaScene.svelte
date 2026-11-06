@@ -6,13 +6,15 @@
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { connectionManager } from "../../Connection/ConnectionManager";
     import { selectCharacterSceneVisibleStore } from "../../Stores/SelectCharacterStore";
+    import { localUserStore } from "../../Connection/LocalUserStore";
+    import type { Swimwear } from "../../Phaser/Entity/Swimwear";
     import WokaSelectScene from "./WokaSelectScene.svelte";
     import WokaCustomizeScene from "./WokaCustomizeScene.svelte";
 
     let buildOwnWoka = $state(false);
     let error: string | null = $state(null);
 
-    async function saveAndContinue(texturesId: string[]) {
+    async function saveAndContinue(texturesId: string[], swimwear?: Swimwear): Promise<void> {
         error = null; // Reset error message
         try {
             if (!areCharacterTexturesValid(texturesId)) {
@@ -23,6 +25,7 @@
             analyticsClient.trackAdminEvent("onboarding.woka_validated", { scene: "SelectWoka" });
             gameManager.setCharacterTextureIds(texturesId);
             await connectionManager.saveTextures(texturesId);
+            if (swimwear !== undefined) localUserStore.setSwimwear(swimwear);
             selectCharacterSceneVisibleStore.set(false);
             gameManager.tryToStopScene(SelectCharacterSceneName);
             gameManager.goToNextScene(SelectCharacterSceneName);

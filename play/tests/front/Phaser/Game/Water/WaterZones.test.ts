@@ -5,6 +5,7 @@ import {
     findDiveTarget,
     intersectsWater,
     isPointInWater,
+    isWithinOneTileOfWater,
     segmentCrossesWater,
 } from "../../../../../src/front/Phaser/Game/Water/WaterZones";
 
@@ -41,5 +42,16 @@ describe("WaterZones", () => {
     it("detects a walk across the water", () => {
         expect(segmentCrossesWater([pool], { x: 50, y: 150 }, { x: 350, y: 150 })).toBe(true);
         expect(segmentCrossesWater([pool], { x: 50, y: 50 }, { x: 350, y: 50 })).toBe(false);
+    });
+});
+
+describe("pool swimwear boundary", () => {
+    it("uses the map tile size and stops just beyond one tile from the pool", () => {
+        expect(isWithinOneTileOfWater([pool], { x: 68, y: 100 }, { width: 32, height: 32 })).toBe(true);
+        expect(isWithinOneTileOfWater([pool], { x: 67, y: 100 }, { width: 32, height: 32 })).toBe(false);
+        expect(isWithinOneTileOfWater([pool], { x: 150, y: 150 }, { width: 32, height: 32 })).toBe(true);
+        expect(isWithinOneTileOfWater([pool], { x: 68, y: 84 }, { width: 32, height: 16 })).toBe(true);
+        expect(isWithinOneTileOfWater([pool], { x: 68, y: 83 }, { width: 32, height: 16 })).toBe(false);
+        expect(isWithinOneTileOfWater([], { x: 100, y: 100 }, { width: 32, height: 32 })).toBe(false);
     });
 });

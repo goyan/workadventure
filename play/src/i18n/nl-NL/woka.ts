@@ -3,6 +3,17 @@ import type { DeepPartial } from "../DeepPartial";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        rotate: "Avatar draaien",
+        parts: {
+            body: "Lichaam",
+            eyes: "Ogen",
+            hair: "Haar",
+            clothes: "Kleding",
+            hat: "Hoed",
+            accessory: "Accessoires",
+        },
+        bath: "Zwemmen",
+        bathHint: "Je zwemkleding wordt in het water en binnen één tegel van het zwembad gedragen.",
         title: "Bouw je WOKA",
         navigation: {
             finish: "Voltooien",
@@ -17,7 +28,24 @@ const woka: DeepPartial<Translation["woka"]> = {
         randomize: "Willekeurig",
     },
     menu: {
+        changeOutfit: "Kleding veranderen",
+        swimwear: "Zwemmen",
+        actions: "Acties van mijn avatar",
+        closeActions: "Acties sluiten",
+        profile: "Profiel bekijken",
         businessCard: "Visitekaartje",
+    },
+    swimwear: {
+        auto: "Op basis van de avatar",
+        shorts: "Zwembroek",
+        twoPiece: "Tweedelig badpak",
+    },
+    actions: {
+        idle: "Stoppen",
+        dance: "Dansen",
+        coffee: "Koffie drinken",
+        sleep: "Slapen",
+        toilet: "Naar het toilet gaan",
     },
     picker: {
         title: "Wie wil je selecteren?",

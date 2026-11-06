@@ -862,3 +862,24 @@ Un nouveau texte reçu d’un autre participant (humain ou NPC) dans la discussi
 Recette beta : dans une bulle ouverte, recevoir un texte humain puis un texte NPC ; vérifier un son par message. Envoyer un texte soi-même, quitter/rejoindre et rouvrir le panneau : aucun son de message supplémentaire. Désactiver « Sons du chat », puis mettre la conversation en sourdine : réception silencieuse. Vérifier une réunion affichée : comportement conservé. Interaction et écoute à confirmer par l’utilisateur après fusion.
 
 Rafraîchir le jeu après le déploiement et faire le premier essai avec « Sons du chat » activé et le statut « En ligne ». Refaire ensuite le test en « Ne pas déranger » : le texte doit arriver sans son.
+
+## Actions de l’avatar et tenues de bain
+
+Un clic sur son avatar ouvre une roue : profil, danse, café, arrêt, changement de tenue et choix du maillot.
+Pendant l’écoute de musique, les avatars humains du catalogue portent un casque pixel avec une note, qui suit leur orientation et leur pose. Les animaux et les avatars externes sans métadonnée humaine ne reçoivent pas cet accessoire.
+Les actions s’arrêtent au déplacement et sont partagées via la variable publique de salle `_avatarAction`.
+La danse combine les frames existantes avec un balancement ; l’assise génère les jambes pliées dans les quatre sens,
+sans ajouter de planches pour chaque couche de personnage.
+
+Les catégories d’objets peuvent porter les interactions `dance`, `coffee`, `sleep` et `toilet`, avec le déclencheur
+par touche ou automatique. Les lits et toilettes font approcher le joueur ; les toilettes ajoutent une mosaïque opaque.
+Les noms usuels de lits, toilettes et machines à café sont reconnus pour les anciens objets sans catégorie dédiée.
+
+Le maillot apparaît pendant la nage ou à une case maximum de l’eau, puis la tenue habituelle revient.
+Le mode automatique utilise deux pièces pour les avatars prédéfinis `female*`, un short pour les autres ;
+les avatars personnalisés n’ont pas de métadonnée de genre. La roue et l’onglet Bain de l’éditeur permettent de choisir
+explicitement et mémorisent ce choix dans `_avatarSwimwear`. Le profil ne propose pas de sélecteur de maillot. Les images externes interdisant la lecture de pixels gardent leur apparence habituelle.
+
+Le Jukebox demande aussi un nouvel instantané Spotify lors de l’ouverture de sa file dans le client desktop.
+L’extension Spicetify relit le contexte après `songchange` et 600 ms après ; les métadonnées absentes sont réessayées,
+et les prochains titres restent affichables avant que Spotify leur ait attribué un identifiant de file.

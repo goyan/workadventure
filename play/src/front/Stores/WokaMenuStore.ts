@@ -1,4 +1,4 @@
-import { writable } from "svelte/store";
+import { derived, writable } from "svelte/store";
 import { v4 } from "uuid";
 import type { WorkAdventureComponent } from "../../types/component";
 
@@ -10,6 +10,7 @@ export type WokaMenuAction = {
     priority?: number;
     style?: "is-success" | "is-error" | "is-primary" | string;
     actionIcon?: string | WorkAdventureComponent;
+    emoji?: string;
     testId?: string;
 };
 
@@ -19,8 +20,9 @@ export interface WokaMenuData {
     visitCardUrl?: string;
     userId: number; // -1 if the user is not found yet and woka menu is in progress
     userUuid: string;
-    /** The local user's own card: no action, their own woka and status. */
+    /** The local user's own avatar and status, with actions meant for them. */
     isSelf?: boolean;
+    menuPosition?: { x: number; y: number };
 }
 
 function createWokaMenuStore() {
@@ -38,8 +40,8 @@ function createWokaMenuStore() {
             });
         },
         /** The local user's own card, from a click on their own woka: what others see, without actions. */
-        openOwnCard: (wokaName: string, userUuid: string) => {
-            set({ wokaName, actions: [], userId: -1, userUuid, isSelf: true });
+        openOwnCard: (wokaName: string, userUuid: string, menuPosition?: { x: number; y: number }) => {
+            set({ wokaName, actions: [], userId: -1, userUuid, isSelf: true, menuPosition });
         },
         addAction: (action: WokaMenuAction) => {
             update((data) => {
@@ -81,6 +83,7 @@ function createWokaMenuStore() {
 }
 
 export const wokaMenuStore = createWokaMenuStore();
+export const avatarActionsOpenStore = derived(wokaMenuStore, (menu) => Boolean(menu?.isSelf && menu.actions.length));
 
 export const wokaMenuProgressStore = writable<
     | {

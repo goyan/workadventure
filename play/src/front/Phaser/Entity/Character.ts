@@ -21,12 +21,24 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 
 import { UsernameDisplay } from "../Components/UsernameDisplay";
 import { findSeatUnderFeet } from "../Player/Seat";
-import { BODY_CENTER_OFFSET_Y, getWaterRectangles, isPointInWater } from "../Game/Water/WaterZones";
+import {
+    BODY_CENTER_OFFSET_Y,
+    getWaterRectangles,
+    isPointInWater,
+    isWithinOneTileOfWater,
+} from "../Game/Water/WaterZones";
+import { findActionableObject } from "../Player/ActionableObjects";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
 import { ThinkingCloud } from "./ThinkingCloud";
 import { SwimEffect } from "./SwimEffect";
+import { AvatarAction, readAvatarAction } from "./AvatarAction";
+import { AvatarActionEffect } from "./AvatarActionEffect";
+import { getSeatedTexture, SEATED_DIRECTIONS } from "./SeatedPose";
+import { Swimwear, readSwimwear } from "./Swimwear";
+import { SwimwearEffect } from "./SwimwearEffect";
+import { isHumanAvatar, MusicHeadphonesEffect } from "./MusicHeadphonesEffect";
 
 import Container = Phaser.GameObjects.Container;
 import RenderTexture = Phaser.GameObjects.RenderTexture;
@@ -76,6 +88,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
     private listeningMusic = false;
+    private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -99,13 +112,30 @@ export abstract class Character extends Container implements OutlineableInterfac
     private currentPathSegmentDistanceFromStart = 0;
     private pathFollowingResolve?: (result: PathFollowResult) => void;
     private seated = false;
+    private avatarAction = AvatarAction.Idle;
+    private avatarActionEffect: AvatarActionEffect | undefined;
     private depthCache: { x: number; y: number; depth: number } | undefined;
     private readonly syncDisplayPositionWithPhysics = (): void => {
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
+        if (this.avatarActionEffect) {
+            this.avatarActionEffect.update(
+                this.avatarAction,
+                this.scene.time.now,
+                this.sprites.values(),
+                this.seated,
+                this._lastDirection,
+            );
+            if (this.avatarAction !== AvatarAction.Idle) this.scene.markDirty();
+        }
         this.updateSwimEffect();
+        const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
+        if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
+        this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
     };
     private swimEffect: SwimEffect | undefined;
+    private swimwearStyle = Swimwear.Auto;
+    private swimwearEffect: SwimwearEffect | undefined;
 
     /**
      * A deferred promise that resolves when the texture of the character is actually displayed.
@@ -289,6 +319,14 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.swimEffect.stop(this.sprites.values());
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
+        const tile = this.scene.getGameMapFrontWrapper()?.getTileDimensions() ?? { width: 32, height: 32 };
+        const nearby = isWithinOneTileOfWater(
+            getWaterRectangles(this.scene),
+            { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
+            tile,
+        );
+        if (inWater || nearby) this.swimwearEffect ??= new SwimwearEffect(this.scene, this);
+        this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle);
     }
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
@@ -299,6 +337,15 @@ export abstract class Character extends Container implements OutlineableInterfac
     /** Whether the character is drawn swimming (its body in the water), for everyone. */
     public isInWater(): boolean {
         return this.swimEffect?.isActive ?? false;
+    }
+
+    public get swimwear(): Swimwear {
+        return this.swimwearStyle;
+    }
+
+    public setSwimwear(value: unknown): void {
+        this.swimwearStyle = readSwimwear(value);
+        this.scene.markDirty();
     }
 
     private setDepthIfNeeded(depth: number): void {
@@ -445,7 +492,16 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     protected playAnimation(direction: PositionMessage_Direction, moving: boolean, animationSpeed = 1): void {
         if (this.invisible) return;
+        this._lastDirection = direction;
+        if (moving && this.avatarAction !== AvatarAction.Idle) this.setAvatarAction(AvatarAction.Idle);
         for (const [texture, sprite] of this.sprites.entries()) {
+            if ((this.seated || this.avatarAction === AvatarAction.Toilet) && !moving) {
+                sprite.anims.stop();
+                const index = SEATED_DIRECTIONS.indexOf(direction);
+                sprite.setTexture(getSeatedTexture(this.scene, texture), Math.max(0, index));
+                continue;
+            }
+            if (sprite.texture.key !== texture) sprite.setTexture(texture);
             if (!sprite.anims) {
                 console.error("ANIMS IS NOT DEFINED!!!");
                 return;
@@ -490,13 +546,38 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
             const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
             const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
-            this.depthCache = { x: this.x, y: this.y, depth: seat?.depth ?? this.y + 16 };
+            const actionObject =
+                this.avatarAction === AvatarAction.Sleep || this.avatarAction === AvatarAction.Toilet
+                    ? findActionableObject(this.scene, { x: this.x, y: feetY })
+                    : undefined;
+            this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
         }
         return this.depthCache.depth;
     }
 
     public isSeated(): boolean {
         return this.seated;
+    }
+
+    public get action(): AvatarAction {
+        return this.avatarAction;
+    }
+
+    public setAvatarAction(value: unknown): void {
+        const action = readAvatarAction(value);
+        if (action === this.avatarAction) return;
+        this.avatarAction = action;
+        this.depthCache = undefined;
+        this.playAnimation(this._lastDirection, false);
+        if (action !== AvatarAction.Idle) this.avatarActionEffect ??= new AvatarActionEffect(this.scene, this);
+        this.avatarActionEffect?.update(
+            action,
+            this.scene.time.now,
+            this.sprites.values(),
+            this.seated,
+            this._lastDirection,
+        );
+        this.scene.markDirty();
     }
 
     /**
@@ -529,6 +610,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         for (const sprite of this.sprites.values()) {
             sprite.y = 0;
         }
+        this.playAnimation(this._lastDirection, false);
         this.setDepthIfNeeded(this.computeDepth());
         this.scene.markDirty();
     }
@@ -713,6 +795,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     destroy(): void {
         this.usernameDisplay?.destroy();
         this.swimEffect?.destroy();
+        this.swimwearEffect?.destroy();
+        this.avatarActionEffect?.destroy();
+        this.musicHeadphonesEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

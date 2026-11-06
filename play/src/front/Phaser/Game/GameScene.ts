@@ -66,6 +66,8 @@ import { localUserStore } from "../../Connection/LocalUserStore";
 import { HtmlUtils } from "../../WebRtc/HtmlUtils";
 import { Loader } from "../Components/Loader";
 import { RemotePlayer } from "../Entity/RemotePlayer";
+import { AVATAR_ACTION_VARIABLE } from "../Entity/AvatarAction";
+import { SWIMWEAR_VARIABLE } from "../Entity/Swimwear";
 import { SelectCharacterScene, SelectCharacterSceneName } from "../Login/SelectCharacterScene";
 import { hasMovedEventName, Player, requestEmoteEventName } from "../Player/Player";
 import { ErrorSceneName } from "../Reconnecting/ErrorScene";
@@ -1860,6 +1862,8 @@ export class GameScene extends DirtyScene {
         if (update.updated.availabilityStatus) {
             character.setAvailabilityStatus(update.player.availabilityStatus);
         }
+        character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
+        character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
         if (update.updated.chatID) {
             character.setChatID(update.player.chatID);
         }
@@ -2847,6 +2851,7 @@ export class GameScene extends DirtyScene {
             this._room.id,
             this._room.group ?? undefined,
         );
+        this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
 
         if (this._spaceRegistry === undefined) {
             throw new Error("Space registry is undefined when joining room");
@@ -4850,6 +4855,12 @@ ${escapedMessage}
         player.setListeningMusic(this.listeningUserUuids.has(player.userUuid));
         this.MapPlayersByKey.set(player.userId, player);
         player.updatePosition(addPlayerData.position);
+        player.setAvatarAction(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),
+        );
+        player.setSwimwear(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(SWIMWEAR_VARIABLE),
+        );
         this.remotePlayersSpatialIndex.set(player.userId, player);
 
         player.on(Phaser.Input.Events.POINTER_OVER, () => {

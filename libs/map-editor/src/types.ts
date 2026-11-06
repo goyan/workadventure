@@ -540,7 +540,7 @@ export const PrefabOverride = z.object({
 export type PrefabOverride = z.infer<typeof PrefabOverride>;
 
 /** What players do with the objects of a category: nothing, sit on them, swim in their water. */
-export const ObjectInteraction = z.enum(["none", "sit", "swim"]);
+export const ObjectInteraction = z.enum(["none", "sit", "swim", "dance", "coffee", "sleep", "toilet"]);
 export type ObjectInteraction = z.infer<typeof ObjectInteraction>;
 /** `auto`: on touching the object; `key`: the interaction key (space) when next to it. */
 export const InteractionTrigger = z.enum(["auto", "key"]);

@@ -56,7 +56,7 @@ const JukeboxState = z.object({
         .array(
             z.object({
                 uri: trackUri,
-                uid: queueUid.optional(),
+                uid: queueUid.optional().catch(undefined),
                 title: z.string().max(200),
                 artist: z.string().max(200),
                 artworkUrl,
@@ -216,6 +216,7 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     actions = {
         request: (hostUuid) => {
             if (hostUuid !== context.localUuid()) sendTo(hostUuid, JUKEBOX_STATE_REQUEST_EVENT, {});
+            else desktop?.refreshSpotifyQueue?.();
         },
         add: (room, uri) => {
             const request = QueueRequest.safeParse({ uris: [uri] });

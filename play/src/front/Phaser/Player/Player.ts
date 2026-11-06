@@ -22,10 +22,13 @@ import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Wat
 import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
 import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
 import LL from "../../../i18n/i18n-svelte";
+import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "../Entity/AvatarAction";
+import { readSwimwear, SWIMWEAR_VARIABLE } from "../Entity/Swimwear";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
 import { findSeatUnderFeet, isSeatTaken } from "./Seat";
+import { findActionableObject } from "./ActionableObjects";
 
 /** Water set to dive on contact: the body center this close to it makes the player dive. */
 const AUTO_DIVE_DISTANCE = 10;
@@ -54,6 +57,9 @@ export class Player extends Character {
     private diveTarget: ReturnType<typeof findDiveTarget>;
     private readonly divePrompt: InteractionPrompt;
     private readonly sitPrompt: InteractionPrompt;
+    private readonly actionPrompt: InteractionPrompt;
+    private actionObject: ReturnType<typeof findActionableObject>;
+    private ignoredActionObjectId: string | undefined;
 
     constructor(
         Scene: GameScene,
@@ -72,6 +78,11 @@ export class Player extends Character {
         this.runSmokeTrail = new RunSmokeTrail(Scene);
         this.divePrompt = new InteractionPrompt(Scene, "water-dive", () => get(LL).trigger.swim());
         this.sitPrompt = new InteractionPrompt(Scene, "seat-sit", () => get(LL).trigger.sit());
+        this.actionPrompt = new InteractionPrompt(Scene, "avatar-object-action", () =>
+            get(LL).trigger.avatarAction({
+                action: get(LL).woka.actions[this.actionObject?.action ?? AvatarAction.Idle](),
+            }),
+        );
 
         this.unsubscribeVisibilityStore = visibilityStore.subscribe((isVisible) => {
             if (!isVisible) {
@@ -83,6 +94,7 @@ export class Player extends Character {
 
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
         this.updateSwimming();
+        this.updateObjectAction();
         const state = get(followStateStore);
         const role = get(followRoleStore);
 
@@ -130,6 +142,78 @@ export class Player extends Character {
             activeUserInputEvents.get(UserInputEvent.MoveLeft) ||
             activeUserInputEvents.get(UserInputEvent.MoveRight)
         );
+    }
+
+    public override setAvatarAction(value: unknown): void {
+        const action = readAvatarAction(value);
+        if (action === this.action) return;
+        if (action !== AvatarAction.Idle) {
+            if (this.isInWater() || this.isSlidingToSeat || get(followStateStore) !== "off") return;
+            this.finishFollowingPath(true);
+            this.stop();
+            userMovingStore.set(false);
+            this.emit(hasMovedEventName, {
+                moving: false,
+                running: false,
+                direction: this.lastDirection,
+                x: this.x,
+                y: this.y,
+            });
+        }
+        super.setAvatarAction(action);
+        this.scene.getPlayerVariablesManager()?.setVariableFromApp(AVATAR_ACTION_VARIABLE, action, {
+            public: true,
+            persist: false,
+            scope: "room",
+        });
+    }
+
+    public override setSwimwear(value: unknown): void {
+        const style = readSwimwear(value);
+        super.setSwimwear(style);
+        localUserStore.setSwimwear(style);
+        this.scene.getPlayerVariablesManager()?.setVariableFromApp(SWIMWEAR_VARIABLE, style, { public: true });
+    }
+
+    private updateObjectAction(): void {
+        const body = this.getBody();
+        const object = findActionableObject(this.scene, { x: this.x, y: this.y + body.offset.y + body.height / 2 });
+        if (object?.entityId !== this.ignoredActionObjectId) this.ignoredActionObjectId = undefined;
+        if (object?.entityId !== this.actionObject?.entityId || object?.action !== this.actionObject?.action)
+            this.actionPrompt.hide();
+        this.actionObject = object;
+        if (
+            this.action !== AvatarAction.Idle ||
+            this.isInWater() ||
+            !object ||
+            object.entityId === this.ignoredActionObjectId
+        ) {
+            this.actionPrompt.hide();
+            return;
+        }
+        const activate = (): void => {
+            this.actionPrompt.hide();
+            this.ignoredActionObjectId = object.entityId;
+            if (object.action === AvatarAction.Sleep || object.action === AvatarAction.Toilet) {
+                this.seatEntityId = object.entityId;
+                this.isSlidingToSeat = true;
+                this.stop();
+                userMovingStore.set(false);
+                this.setPathToFollow([object.feet], WOKA_SPEED)
+                    .then((result) => {
+                        this.isSlidingToSeat = false;
+                        if (result.cancelled) return;
+                        this._lastDirection = object.direction;
+                        this.setAvatarAction(object.action);
+                    })
+                    .catch((error) => console.error("Could not approach avatar action object", error))
+                    .finally(() => {
+                        this.isSlidingToSeat = false;
+                    });
+            } else this.setAvatarAction(object.action);
+        };
+        if (object.trigger === "auto") activate();
+        else this.actionPrompt.show(activate);
     }
 
     /**
@@ -592,6 +676,7 @@ export class Player extends Character {
         this.divePrompt.hide();
         this.sitPrompt.hide();
         this.destinationMarker.destroy();
+        this.actionPrompt.hide();
         super.destroy();
     }
 }

@@ -15,6 +15,9 @@ import { RemotePlayer } from "../../../../src/front/Phaser/Entity/RemotePlayer";
 import { Player } from "../../../../src/front/Phaser/Player/Player";
 import { WOKA_SPEED } from "../../../../src/front/Enum/EnvironmentVariable";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
+import { wokaMenuStore, avatarActionsOpenStore } from "../../../../src/front/Stores/WokaMenuStore";
+import { AvatarAction } from "../../../../src/front/Phaser/Entity/AvatarAction";
+import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
@@ -32,7 +35,9 @@ vi.mock("../../../../src/front/Phaser/Game/ActivatableInterface", () => ({ isAct
 vi.mock("../../../../src/front/Stores/MenuStore", () => ({}));
 vi.mock("../../../../src/front/Stores/FollowStore", () => ({}));
 vi.mock("../../../../src/front/Stores/EmoteStore", () => ({}));
-vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({}));
+vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
+    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }) },
+}));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
 
@@ -65,6 +70,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         tileSnap.enabled = false;
+        wokaMenuStore.clear();
         mapEditorModeStore.set(false);
         vi.mocked(isActivatable).mockReturnValue(false);
         camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(480, 640));
@@ -90,6 +96,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     });
 
     afterEach(() => {
+        wokaMenuStore.clear();
         mapEditorModeStore.set(false);
         vi.restoreAllMocks();
     });
@@ -254,12 +261,67 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             ]);
         });
 
+        it("opens the own-avatar wheel, runs dance, and exposes a swimwear selection", () => {
+            const setAvatarAction = vi.fn();
+            const setSwimwear = vi.fn();
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                setAvatarAction,
+                setSwimwear,
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(get(avatarActionsOpenStore)).toBe(true);
+            const actions = get(wokaMenuStore)?.actions ?? [];
+            expect(actions.map(({ testId }) => testId)).toEqual([
+                "avatar-profile",
+                "avatar-action-dance",
+                "avatar-action-coffee",
+                "avatar-action-idle",
+                "avatar-change-outfit",
+                "avatar-swimwear",
+            ]);
+            actions.find(({ testId }) => testId === "avatar-action-dance")?.callback();
+            expect(setAvatarAction).toHaveBeenCalledWith(AvatarAction.Dance);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            get(wokaMenuStore)
+                ?.actions.find(({ testId }) => testId === "avatar-swimwear")
+                ?.callback();
+            get(wokaMenuStore)
+                ?.actions.find(({ testId }) => testId === "avatar-swimwear-twoPiece")
+                ?.callback();
+            expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
+            expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
         it("opens a lone woka directly, without a choice", () => {
             const alone = remote("Alice", "uuid-a");
             handler.handlePointerUpEvent(pointer(0, 1), [alone]);
 
             expect(get(characterPickerStore)).toBeUndefined();
             expect(activatablesManager.handlePointerDownEvent.mock.calls).toEqual([[alone]]);
+            expect(get(avatarActionsOpenStore)).toBe(false);
+            expect(get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-action-dance")).not.toBe(true);
+        });
+
+        it("opens another player's profile after choosing them from overlapping avatars", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                pictureStore: readable(undefined),
+            });
+            const other = remote("Alice", "uuid-a");
+            vi.spyOn(activatablesManager, "handlePointerDownEvent").mockImplementation(() => {
+                wokaMenuStore.initialize(other.playerName, other.userId, other.userUuid, undefined);
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self, other]);
+            get(characterPickerStore)
+                ?.find(({ isSelf }) => !isSelf)
+                ?.select();
+
+            expect(get(wokaMenuStore)?.userUuid).toBe("uuid-a");
+            expect(get(wokaMenuStore)?.isSelf).not.toBe(true);
+            expect(get(avatarActionsOpenStore)).toBe(false);
+            expect(get(wokaMenuStore)?.actions).toEqual([]);
         });
 
         it("ignores a woka that has left the map while the choice was open", () => {

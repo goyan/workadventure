@@ -3,6 +3,17 @@ import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
     customWoka: {
+        rotate: "아바타 회전",
+        parts: {
+            body: "몸",
+            eyes: "눈",
+            hair: "머리카락",
+            clothes: "옷",
+            hat: "모자",
+            accessory: "액세서리",
+        },
+        bath: "수영복",
+        bathHint: "물속과 수영장에서 한 칸 이내에서는 수영복을 입습니다.",
         title: "WOKA 만들기",
         navigation: {
             finish: "완료",
@@ -17,7 +28,24 @@ const woka: DeepPartial<Translation["woka"]> = {
         randomize: "무작위 선택",
     },
     menu: {
+        changeOutfit: "옷 갈아입기",
+        swimwear: "수영복",
+        actions: "내 아바타 행동",
+        closeActions: "행동 닫기",
+        profile: "프로필 보기",
         businessCard: "명함",
+    },
+    swimwear: {
+        auto: "아바타에 맞게",
+        shorts: "수영 반바지",
+        twoPiece: "투피스 수영복",
+    },
+    actions: {
+        idle: "중지",
+        dance: "춤추기",
+        coffee: "커피 마시기",
+        sleep: "잠자기",
+        toilet: "화장실 가기",
     },
     picker: {
         title: "누구를 선택하시겠습니까?",

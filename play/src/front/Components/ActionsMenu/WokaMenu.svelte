@@ -175,7 +175,7 @@
             </div>
         </div>
 
-        {#if sortedActions && !wokaMenuData.isSelf}
+        {#if sortedActions?.length}
             <div
                 class="flex items-center bg-contrast w-full justify-center"
                 class:margin-close={!wokaMenuData.wokaName}

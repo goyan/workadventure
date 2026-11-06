@@ -1311,6 +1311,113 @@
                 }
               },
               "additionalProperties": false
+            },
+            "prefabOverrides": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "layer": {
+                    "type": "string",
+                    "enum": [
+                      "floor",
+                      "standing",
+                      "overhead"
+                    ]
+                  },
+                  "depthOffset": {
+                    "type": "number"
+                  },
+                  "collisionGrid": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "collisionRectangles": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        },
+                        "width": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        },
+                        "height": {
+                          "type": "number",
+                          "exclusiveMinimum": 0
+                        }
+                      },
+                      "required": [
+                        "x",
+                        "y",
+                        "width",
+                        "height"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "water": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/WAMFileFormat/properties/settings/properties/prefabOverrides/additionalProperties/properties/collisionRectangles/items"
+                    }
+                  },
+                  "sittable": {
+                    "type": "boolean"
+                  },
+                  "category": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "categories": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "interaction": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "sit",
+                      "swim",
+                      "dance",
+                      "coffee",
+                      "sleep",
+                      "toilet"
+                    ]
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      "key"
+                    ]
+                  },
+                  "layer": {
+                    "$ref": "#/definitions/WAMFileFormat/properties/settings/properties/prefabOverrides/additionalProperties/properties/layer"
+                  }
+                },
+                "required": [
+                  "interaction",
+                  "trigger"
+                ],
+                "additionalProperties": false
+              }
             }
           },
           "additionalProperties": false
