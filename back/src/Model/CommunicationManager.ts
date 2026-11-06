@@ -73,11 +73,13 @@ export class DefaultInitialStateFactory implements InitialStateFactory {
         usersToNotify: ReadonlyMap<string, SpaceUser>,
     ): ICommunicationState<ICommunicationStrategy> {
         const propertiesToSync = space.getPropertiesToSync();
-        const hasMediaProperties = propertiesToSync.some((prop) =>
-            ["cameraState", "microphoneState", "screenSharingState"].includes(prop),
-        );
+        // The space of a Jam relays its host's music and the screens, and syncs no camera or microphone of its own:
+        // it is a media space all the same, or it would never reach LiveKit nor invite anyone.
+        const carriesMedia =
+            propertiesToSync.some((prop) => ["cameraState", "microphoneState", "screenSharingState"].includes(prop)) ||
+            parseJamSpaceName(space.getSpaceName()) !== undefined;
 
-        return hasMediaProperties ? new WebRTCState(space, users, usersToNotify) : new VoidState();
+        return carriesMedia ? new WebRTCState(space, users, usersToNotify) : new VoidState();
     }
 }
 
