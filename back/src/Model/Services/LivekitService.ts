@@ -125,7 +125,15 @@ export class LiveKitService {
         await this.roomServiceClient.createRoom(createOptions);
     }
 
-    async generateToken(roomName: string, user: SpaceUser): Promise<string> {
+    /**
+     * `canPublishMusic` is for the host of a Jam only. A music track has no source of its own (it is published as
+     * `unknown`), and a token cannot list that source: it is allowed by lifting the list, which allows every source.
+     */
+    async generateToken(
+        roomName: string,
+        user: SpaceUser,
+        options: { canPublishMusic?: boolean } = {},
+    ): Promise<string> {
         const livekitRoomName = getLivekitRoomName(roomName);
 
         const token = new AccessToken(this.livekitApiKey, this.livekitApiSecret, {
@@ -144,12 +152,14 @@ export class LiveKitService {
             canPublish: true,
             canSubscribe: true,
             roomJoin: true,
-            canPublishSources: [
-                TrackSource.CAMERA,
-                TrackSource.MICROPHONE,
-                TrackSource.SCREEN_SHARE,
-                TrackSource.SCREEN_SHARE_AUDIO,
-            ],
+            canPublishSources: options.canPublishMusic
+                ? undefined
+                : [
+                      TrackSource.CAMERA,
+                      TrackSource.MICROPHONE,
+                      TrackSource.SCREEN_SHARE,
+                      TrackSource.SCREEN_SHARE_AUDIO,
+                  ],
         });
         return token.toJwt();
     }
