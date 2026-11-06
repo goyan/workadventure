@@ -1,7 +1,7 @@
 import { Subject } from "rxjs";
 import { writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ConnectionState, DisconnectReason, Track } from "livekit-client";
+import { AudioPresets, ConnectionState, DisconnectReason, Track } from "livekit-client";
 import type * as LivekitClient from "livekit-client";
 import type { Readable } from "svelte/store";
 import type { LocalStreamStoreValue } from "../Stores/MediaStore";
@@ -11,7 +11,7 @@ import type { StreamableSubjects } from "../Space/SpacePeerManager/SpacePeerMana
 import { demotedCodecStore } from "../WebRtc/CodecPerformance";
 import { analyticsClient } from "../Administration/AnalyticsClient";
 import { LiveKitRoom } from "./LiveKitRoom";
-import { SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
+import { JAM_MUSIC_TRACK_NAME, SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
 
 const audioPlaybackStoreMock = vi.hoisted(() => {
     const subscribers = new Set<(value: ReadonlySet<unknown>) => void>();
@@ -426,6 +426,97 @@ describe("LiveKitRoom", () => {
         room["handleReconnected"]();
         await vi.waitFor(() => expect(publishTrack).toHaveBeenCalledOnce());
         expect(publishTrack).toHaveBeenCalledWith(audioTrack, expect.objectContaining({ name: expect.any(String) }));
+    });
+
+    describe("publishJamMusic", () => {
+        function createConnectedRoom() {
+            const room = createLiveKitRoom({
+                screenSharingLocalStreamStore: writable(undefined),
+                shouldPublishScreenShareStore: writable(false),
+            });
+            const publishTrack = vi.fn().mockResolvedValue(undefined);
+            const unpublishTrack = vi.fn().mockResolvedValue(undefined);
+            const sdkRoom = { state: ConnectionState.Connected };
+            room["room"] = sdkRoom as never;
+            room["localParticipant"] = { publishTrack, unpublishTrack } as never;
+            return { room, publishTrack, unpublishTrack, sdkRoom };
+        }
+        const musicTrack = { id: "music-track", kind: "audio" } as unknown as MediaStreamTrack;
+        const musicStream = { getAudioTracks: () => [musicTrack] } as unknown as MediaStream;
+
+        it("publishes the music as a named microphone track, in stereo and without silence gating", async () => {
+            const { room, publishTrack } = createConnectedRoom();
+
+            await room.publishJamMusic(musicStream);
+
+            expect(publishTrack).toHaveBeenCalledWith(
+                musicTrack,
+                expect.objectContaining({
+                    name: JAM_MUSIC_TRACK_NAME,
+                    source: Track.Source.Microphone,
+                    audioPreset: AudioPresets.musicStereo,
+                    dtx: false,
+                    forceStereo: true,
+                }),
+            );
+        });
+
+        it("does not publish the same track twice", async () => {
+            const { room, publishTrack } = createConnectedRoom();
+
+            await room.publishJamMusic(musicStream);
+            await room.publishJamMusic(musicStream);
+
+            expect(publishTrack).toHaveBeenCalledTimes(1);
+        });
+
+        it("unpublishes the music without stopping the track, which the capture owns", async () => {
+            const { room, unpublishTrack } = createConnectedRoom();
+
+            await room.publishJamMusic(musicStream);
+            await room.publishJamMusic(undefined);
+
+            expect(unpublishTrack).toHaveBeenCalledWith(musicTrack, false);
+        });
+
+        it("defers the music while the room is not connected and publishes it once reconnected", async () => {
+            const { room, publishTrack, sdkRoom } = createConnectedRoom();
+            sdkRoom.state = ConnectionState.Reconnecting;
+
+            await room.publishJamMusic(musicStream);
+            expect(publishTrack).not.toHaveBeenCalled();
+
+            sdkRoom.state = ConnectionState.Connected;
+            room["handleReconnected"]();
+            await vi.waitFor(() => expect(publishTrack).toHaveBeenCalledOnce());
+        });
+
+        it("forgets a deferred music that is stopped before the room reconnects", async () => {
+            const { room, publishTrack, sdkRoom } = createConnectedRoom();
+            sdkRoom.state = ConnectionState.Reconnecting;
+
+            await room.publishJamMusic(musicStream);
+            await room.publishJamMusic(undefined);
+            sdkRoom.state = ConnectionState.Connected;
+            room["handleReconnected"]();
+
+            expect(publishTrack).not.toHaveBeenCalled();
+        });
+
+        it("leaves the scripting audio and the microphone alone", async () => {
+            const { room, publishTrack } = createConnectedRoom();
+            const scriptingTrack = { id: "scripting-track", kind: "audio" } as unknown as MediaStreamTrack;
+
+            await room.dispatchStream({ getAudioTracks: () => [scriptingTrack] } as unknown as MediaStream);
+            await room.publishJamMusic(musicStream);
+
+            expect(publishTrack).toHaveBeenCalledTimes(2);
+            expect(publishTrack).toHaveBeenNthCalledWith(
+                1,
+                scriptingTrack,
+                expect.objectContaining({ name: SCRIPTING_AUDIO_TRACK_NAME }),
+            );
+        });
     });
 
     describe("handleDisconnected", () => {

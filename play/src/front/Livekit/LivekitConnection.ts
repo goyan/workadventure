@@ -3,10 +3,12 @@ import { ConnectionError, ConnectionErrorReason } from "livekit-client";
 import type { Subscription } from "rxjs";
 import * as Sentry from "@sentry/svelte";
 import type { Readable } from "svelte/store";
+import { parseJamSpaceName } from "@workadventure/map-editor";
 import type { SpaceInterface } from "../Space/SpaceInterface";
 import type { StreamableSubjects } from "../Space/SpacePeerManager/SpacePeerManager";
 import { CommunicationMessageType } from "../Space/SpacePeerManager/CommunicationMessageType";
 import { streamingMegaphoneStore, type LocalStreamStoreValue } from "../Stores/MediaStore";
+import { registerJamMusicPublisher } from "../ListeningZone/JamMusicStore";
 import type { LiveKitRoomInterface } from "./LiveKitRoomInterface";
 import { LiveKitRoom } from "./LiveKitRoom";
 
@@ -25,6 +27,12 @@ export class LivekitConnection {
     // Last scripting stream dispatched to this space. Every room (the first one and every replacement after a
     // terminal disconnection) publishes it right after joining.
     private lastDispatchedStream: MediaStream | undefined;
+    // The space of a Jam relays the music of its host and the screens: it is not a bubble or a meeting, so it never
+    // flags the megaphone.
+    private readonly isJamSpace: boolean;
+    // The music the host shares, published by every room too, like the scripting stream.
+    private lastJamMusicStream: MediaStream | undefined;
+    private unregisterJamMusicPublisher: (() => void) | undefined;
     constructor(
         private space: SpaceInterface,
         private _streamableSubjects: StreamableSubjects,
@@ -32,6 +40,12 @@ export class LivekitConnection {
         private _screenSharingLocalStreamStore: Readable<LocalStreamStoreValue | undefined>,
         private _streamingMegaphoneStore = streamingMegaphoneStore,
     ) {
+        this.isJamSpace = parseJamSpaceName(this.space.getName()) !== undefined;
+        if (this.isJamSpace) {
+            this.unregisterJamMusicPublisher = registerJamMusicPublisher(this.space.getName(), {
+                publishJamMusic: (mediaStream) => this.publishJamMusic(mediaStream),
+            });
+        }
         this.initialize();
     }
 
@@ -49,7 +63,9 @@ export class LivekitConnection {
             shutdownAbortSignal,
             this._screenSharingLocalStreamStore,
         );
-        this._streamingMegaphoneStore.set(true);
+        if (!this.isJamSpace) {
+            this._streamingMegaphoneStore.set(true);
+        }
         return this.livekitRoom;
     }
 
@@ -75,6 +91,9 @@ export class LivekitConnection {
                     await room.joinRoom();
                     if (this.lastDispatchedStream) {
                         await this.dispatchStream(this.lastDispatchedStream);
+                    }
+                    if (this.lastJamMusicStream) {
+                        await this.publishJamMusic(this.lastJamMusicStream);
                     }
                 })().catch((err) => {
                     if (err instanceof ConnectionError && err.message === "Client initiated disconnect") {
@@ -129,7 +148,25 @@ export class LivekitConnection {
         }
     }
 
+    /** Shares (or, without a stream, stops sharing) the music of the Jam this space serves. */
+    async publishJamMusic(mediaStream: MediaStream | undefined): Promise<void> {
+        this.lastJamMusicStream = mediaStream;
+        if (!this.livekitRoom) {
+            return;
+        }
+
+        try {
+            await this.livekitRoom.publishJamMusic(mediaStream);
+        } catch (err) {
+            console.error("Error publishing the Jam music to the Livekit room:", err);
+            Sentry.captureException(err);
+            throw err;
+        }
+    }
+
     destroy() {
+        this.unregisterJamMusicPublisher?.();
+        this.unregisterJamMusicPublisher = undefined;
         if (!this.livekitRoom) {
             return;
         }
@@ -142,7 +179,9 @@ export class LivekitConnection {
             console.error("Error destroying Livekit room:", err);
             Sentry.captureException(err);
         }
-        this._streamingMegaphoneStore.set(false);
+        if (!this.isJamSpace) {
+            this._streamingMegaphoneStore.set(false);
+        }
         for (const subscription of this.unsubscribers) {
             subscription.unsubscribe();
         }
