@@ -1,6 +1,6 @@
 import { FilterType } from "@workadventure/messages";
 import { buildJamSpaceName } from "@workadventure/map-editor";
-import type { Writable } from "svelte/store";
+import { type Readable, type Writable, writable } from "svelte/store";
 import type { SpaceInterface } from "../Space/SpaceInterface";
 import type { SpaceRegistryInterface } from "../Space/SpaceRegistry/SpaceRegistryInterface";
 import { jamMusicCapture, type JamMusicCapture } from "./JamMusicCapture";
@@ -24,6 +24,11 @@ export interface JamAudioSessionDependencies {
 }
 
 export interface JamAudioSession {
+    /** The space name of the Jam the user listens to, once joined. */
+    readonly listeningSpaceName: Readable<string | undefined>;
+    /** The space name of the Jam whose music the user shares, once started. */
+    readonly sharingSpaceName: Readable<string | undefined>;
+    spaceNameOf(jam: JamAudioTarget): string;
     /** Joins the Jam space and starts downloading the music of the Jam. Replaces the Jam listened to before. */
     listen(jam: JamAudioTarget): Promise<void>;
     stopListening(): Promise<void>;
@@ -114,11 +119,14 @@ export function createJamAudioSession({
         }
     }
 
+    const listeningSpaceName = writable<string | undefined>(undefined);
+    const sharingSpaceName = writable<string | undefined>(undefined);
     let listenLease: Lease | undefined;
 
     async function stopListening(): Promise<void> {
         const lease = listenLease;
         listenLease = undefined;
+        listeningSpaceName.set(undefined);
         listeningStore.set(false);
         await lease?.release();
     }
@@ -143,6 +151,7 @@ export function createJamAudioSession({
         }
         // Stopped, or moved to another Jam, while joining: this lease is already released.
         if (listenLease === lease) {
+            listeningSpaceName.set(lease.spaceName);
             listeningStore.set(true);
         }
     }
@@ -153,6 +162,7 @@ export function createJamAudioSession({
     async function stopSharingMusic(): Promise<void> {
         const lease = shareLease;
         shareLease = undefined;
+        sharingSpaceName.set(undefined);
         unwatchCapture?.();
         unwatchCapture = undefined;
         if (!lease) {
@@ -186,10 +196,12 @@ export function createJamAudioSession({
         if (shareLease !== lease) {
             return;
         }
+        sharingSpaceName.set(lease.spaceName);
         // A capture that fails or ends by itself (device unplugged, refused) no longer needs the space.
         unwatchCapture = capture.state.subscribe((state) => {
             if (state.status === "error" && shareLease === lease) {
                 shareLease = undefined;
+                sharingSpaceName.set(undefined);
                 const unwatch = unwatchCapture;
                 unwatchCapture = undefined;
                 queueMicrotask(() => unwatch?.());
@@ -198,7 +210,15 @@ export function createJamAudioSession({
         });
     }
 
-    return { listen, stopListening, shareMusic, stopSharingMusic };
+    return {
+        listeningSpaceName,
+        sharingSpaceName,
+        spaceNameOf: (jam) => buildJamSpaceName({ roomUrl: getRoomUrl(), ...jam }),
+        listen,
+        stopListening,
+        shareMusic,
+        stopSharingMusic,
+    };
 }
 
 /** The session of the running game; the space registry and the room belong to the current scene. */
