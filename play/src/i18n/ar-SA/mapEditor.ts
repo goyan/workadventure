@@ -584,7 +584,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "يسار",
             right: "يمين",
             add: "إضافة عرض",
-            turn: "تدوير",
         },
         customEntityEditorForm: {
             saving: "جارٍ الحفظ…",

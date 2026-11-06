@@ -1,6 +1,6 @@
 # Contribuer au fork Infogène de WorkAdventure
 
-Ce dépôt est un fork de [workadventure/workadventure](https://github.com/workadventure/workadventure) (base `v1.32.6`)
+Ce dépôt est un fork de [workadventure/workadventure](https://github.com/workadventure/workadventure) (base `v1.34.4`)
 qui alimente notre WorkAdventure interne. La CI construit les images **`play`**, **`back`** et **`map-storage`** du fork.
 Les conventions de code de WorkAdventure sont dans `AGENTS.md` / `play/AGENTS.md`.
 
@@ -56,7 +56,8 @@ confirmée côté VPS et comportement visuel confirmé par l'utilisateur.
 
 ## Vérifications automatiques d'une PR (`pr-checks`)
 
-Sur `play/` : typecheck, svelte-check, lint, formatage Prettier, complétude des traductions et tests unitaires.
+Sur `play/` : typecheck, svelte-check, lint, formatage Prettier, complétude des traductions **françaises** (référence
+`en-US` ; les autres langues peuvent rester incomplètes, elles retombent sur l'anglais) et tests unitaires.
 Les contrats partagés et le back sont également vérifiés, avec les tests du back et les fichiers des messages privés.
 Pour les lancer en local (Node 24, `protoc` installé) :
 
@@ -95,7 +96,7 @@ Le bandeau décrit aussi les fonctionnalités et correctifs ajoutés depuis le f
 type, date, heure et auteur. Les textes sont les sujets français des commits publics `feat(front):`
 et `fix(front):` depuis `v1.32.6`, du plus récent au plus ancien ; les dates sont celles des
 commits appliqués, affichées avec l'heure dans le fuseau et la langue du lecteur
-(`formatReleaseNoteDate`), et les auteurs sont leurs noms Git (sans email ni corps de commit).
+(`formatReleaseNoteTime`, jours groupés par `groupReleaseNotesByDay`), et les auteurs sont leurs noms Git (sans email ni corps de commit).
 `build-play` régénère `play/src/common/release-notes.json` avant chaque image, beta ou release :
 la liste ne dépend donc pas d'un service GitHub pendant le jeu. Le snapshot versionné sert
 au développement local ; le régénérer depuis le clone complet avec
