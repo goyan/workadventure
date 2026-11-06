@@ -80,6 +80,15 @@ export class NightLights {
         return lit;
     }
 
+    /**
+     * Forgets every area and the time of the last update: the next update starts from darkness, so areas occupied
+     * when the veil comes back (after day, the map editor or the setting) fade in instead of jumping to full light.
+     */
+    public reset(): void {
+        this.states.clear();
+        this.lastNow = undefined;
+    }
+
     /** Whether an intensity is still fading (a redraw is needed next frame). */
     public isFading(): boolean {
         for (const state of this.states.values()) {

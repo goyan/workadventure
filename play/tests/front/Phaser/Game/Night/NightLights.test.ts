@@ -37,6 +37,16 @@ describe("NightLights", () => {
         expect(lights.isFading()).toBe(false);
     });
 
+    it("fades in again after a reset, whatever the time elapsed", () => {
+        const lights = new NightLights();
+        lights.update(0, [a], [inside]);
+        lights.update(1000, [a], [inside]);
+        lights.reset();
+        expect(lights.update(60_000, [a], [inside])).toEqual([]);
+        expect(lights.isFading()).toBe(true);
+        expect(lights.update(60_500, [a], [inside])[0].intensity).toBe(0.5);
+    });
+
     it("fades out once the player leaves", () => {
         const lights = new NightLights();
         lights.update(0, [a], [inside]);

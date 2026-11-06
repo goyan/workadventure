@@ -135,7 +135,8 @@ export class NightOverlay {
     private brush(index: number): Phaser.GameObjects.NineSlice {
         let brush = this.brushes[index];
         if (brush === undefined) {
-            // Not added to the display list: only drawn into the veil.
+            // Not added to the display list: only drawn into the veil. NineSlice has no canvas renderer in Phaser 4.2:
+            // with the canvas renderer the veil shows without lit areas (accepted, WebGL is the normal case).
             brush = new Phaser.GameObjects.NineSlice(
                 this.scene,
                 0,

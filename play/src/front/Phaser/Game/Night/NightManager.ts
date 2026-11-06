@@ -57,6 +57,10 @@ export class NightManager {
             if (this.previous !== undefined) {
                 this.overlay.hide();
                 this.previous = undefined;
+                // Lit areas fade in again when the veil comes back.
+                this.lights.reset();
+                // The game only renders dirty scenes: without this, an idle scene would keep showing the veil.
+                this.scene.markDirty();
             }
             return;
         }
@@ -78,11 +82,11 @@ export class NightManager {
             fading: this.lights.isFading(),
         };
 
-        const action = nightRenderAction(frame, this.previous);
-        if (action === "draw") {
+        // "hidden" cannot happen here: those cases returned above.
+        if (nightRenderAction(frame, this.previous) === "draw") {
             this.overlay.draw(frame);
-        } else if (action === "hidden") {
-            this.overlay.hide();
+            // Fades, dusk and dawn change the veil while nothing else moves: ask for a render.
+            this.scene.markDirty();
         }
         this.previous = frame;
     }
