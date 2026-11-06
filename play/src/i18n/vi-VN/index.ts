@@ -29,6 +29,7 @@ import externalModule from "./externalModule";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import wave from "./wave";
 import recording from "./recording";
 
 const vi_VN = deepmerge(en_US, {
@@ -62,6 +63,7 @@ const vi_VN = deepmerge(en_US, {
     onboarding,
     spotify,
     recording,
+    wave,
 });
 
 export default vi_VN;

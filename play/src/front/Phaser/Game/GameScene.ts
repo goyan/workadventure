@@ -285,6 +285,7 @@ import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
+import { WaveManager } from "./Wave/WaveManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
@@ -433,6 +434,7 @@ export class GameScene extends DirtyScene {
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private nightManager: NightManager | undefined;
     private _knockManager: KnockManager | undefined;
+    private _waveManager: WaveManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
@@ -1433,6 +1435,8 @@ export class GameScene extends DirtyScene {
         this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
+        this._waveManager?.destroy();
+        this._waveManager = undefined;
         this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
@@ -2126,6 +2130,15 @@ export class GameScene extends DirtyScene {
         return this._knockManager;
     }
 
+    public get waveManager(): WaveManager | undefined {
+        return this._waveManager;
+    }
+
+    /** The space of every user connected to the world, once joined. */
+    public get worldSpace(): SpaceInterface | undefined {
+        return this.allUserSpace;
+    }
+
     public getWanderingCharactersManager(): WanderingCharactersManager | undefined {
         return this.wanderingCharactersManager;
     }
@@ -2670,6 +2683,8 @@ export class GameScene extends DirtyScene {
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
                 this._knockManager = new KnockManager(this);
+                this._waveManager?.destroy();
+                this._waveManager = new WaveManager(this);
                 const connection = this.connection;
                 this.konamiCodeDetector = new KonamiCodeDetector(() => {
                     this.duckRushManager?.start(connection.getUserId(), () => ({

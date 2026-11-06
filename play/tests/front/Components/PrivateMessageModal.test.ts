@@ -15,6 +15,8 @@ import { modals } from "@wa-modals";
 
 const closeModal = vi.hoisted(() => vi.fn());
 
+vi.mock("../../../src/front/Notification/SystemNotifier", () => ({ notifySystem: vi.fn() }));
+
 vi.mock("../../../src/i18n/i18n-svelte", async () => {
     const { readable } = await import("svelte/store");
     return {

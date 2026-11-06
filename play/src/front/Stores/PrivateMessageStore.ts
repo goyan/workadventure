@@ -3,8 +3,16 @@ import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { privateMessageSchema } from "@workadventure/shared-utils";
 import { blackListManager } from "../WebRtc/BlackListManager";
+import { notifySystem } from "../Notification/SystemNotifier";
 
 const historyLimit = 100;
+const notificationBodyLimit = 60;
+/** Cuts by code points, so an emoji is never split in half. */
+function truncateByCodePoints(text: string, limit: number): string {
+    const codePoints = Array.from(text);
+    return codePoints.length > limit ? `${codePoints.slice(0, limit).join("")}…` : text;
+}
+
 const historyStorageKey = "workadventure.private-message-history.v1";
 const privateMessageEntrySchema = z.object({
     id: z.number().int().positive(),
@@ -90,7 +98,27 @@ export function recordPrivateMessage(message: PrivateMessageInput): void {
             });
         }
     }
-    if (entry.incoming) privateMessageNotificationStore.set(entry);
+    if (entry.incoming) {
+        privateMessageNotificationStore.set(entry);
+        notifyIncomingPrivateMessage(entry);
+    }
+}
+
+/** Only live incoming messages reach this point: restored history does not go through recordPrivateMessage. */
+function notifyIncomingPrivateMessage(entry: PrivateMessageEntry): void {
+    const { peerUuid, peerName, text } = entry;
+    notifySystem({
+        kind: "privateMessage",
+        title: peerName,
+        body: truncateByCodePoints(text, notificationBodyLimit),
+        tag: `pm:${peerUuid}`,
+        onClick: () => {
+            // Lazy import: the modal pulls the game scene and Svelte components, which a store must not load.
+            import("../Components/PrivateMessage/openPrivateMessage")
+                .then(({ openPrivateMessage }) => openPrivateMessage(peerUuid, peerName))
+                .catch((error) => Sentry.captureException(error));
+        },
+    });
 }
 
 /** An ACK from an old connection must not enter another account's or room's history. */

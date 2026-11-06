@@ -29,6 +29,7 @@ import locate from "./locate";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import wave from "./wave";
 import recording from "./recording";
 
 const ar_SA = deepmerge(en_US, {
@@ -62,6 +63,7 @@ const ar_SA = deepmerge(en_US, {
     onboarding,
     spotify,
     recording,
+    wave,
 });
 
 export default ar_SA;

@@ -27,7 +27,7 @@ import { userIsConnected } from "../../Stores/MenuStore";
 import RequiresLoginForChatModal from "../../Chat/Components/RequiresLoginForChatModal.svelte";
 import { analyticsClient } from "../../Administration/AnalyticsClient";
 import { openPrivateMessage } from "../../Components/PrivateMessage/openPrivateMessage";
-import { IconCamera, IconUserPlus, IconSend } from "@wa-icons";
+import { IconCamera, IconUserPlus, IconSend, IconHandStop } from "@wa-icons";
 import { modals } from "@wa-modals";
 
 /**
@@ -242,6 +242,17 @@ export class RemotePlayer extends Character implements ActivatableInterface {
                 style: "bg-white/10 hover:bg-white/30",
                 callback: () => openPrivateMessage(this.userUuid, this.playerName),
                 actionIcon: IconSend,
+            });
+            // Read when the menu opens: greyed out while the last wave at this colleague is too recent.
+            const canWave = this.scene.waveManager?.canWave(this.userUuid) ?? false;
+            actions.push({
+                actionName: get(LL).wave.button(),
+                protected: false,
+                priority: 2,
+                style: canWave ? "bg-white/10 hover:bg-white/30" : "bg-white/10 opacity-50 pointer-events-none",
+                testId: "wokamenu-wave-button",
+                callback: () => this.scene.waveManager?.wave(this.userUuid, this.playerName),
+                actionIcon: IconHandStop,
             });
             actions.push({
                 actionName: get(LL).chat.userList.TalkTo(),

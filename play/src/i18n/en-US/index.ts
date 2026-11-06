@@ -29,6 +29,7 @@ import locate from "./locate";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import wave from "./wave";
 
 const en_US: BaseTranslation = {
     area,
@@ -61,6 +62,7 @@ const en_US: BaseTranslation = {
     randomNames,
     onboarding,
     spotify,
+    wave,
 };
 
 export default en_US;

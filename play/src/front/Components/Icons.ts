@@ -166,3 +166,4 @@ export { default as IconEraser } from "~icons/tabler/eraser";
 export { default as IconBucket } from "~icons/tabler/bucket";
 export { default as IconRectangle } from "~icons/tabler/rectangle";
 export { default as IconHome } from "~icons/tabler/home";
+export { default as IconHandStop } from "~icons/tabler/hand-stop";
