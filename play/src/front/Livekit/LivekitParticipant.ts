@@ -21,7 +21,8 @@ import { subscribeToVideoQualityAnalytics } from "../WebRtc/VideoQualityAnalytic
 import { createLivekitWebRtcStats } from "../WebRtc/WebRtcStatsFactory";
 import { registerAudioQualitySource } from "../WebRtc/AudioQualityAnalytics";
 import type { Streamable } from "../Space/Streamable";
-import { SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
+import { jamMusicListeningStore, setJamMusicStream } from "../ListeningZone/JamMusicStore";
+import { JAM_MUSIC_TRACK_NAME, SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
 
 // Maximize/minimize can briefly mount 2 video components for the same participant.
 // Delaying the final unsubscribe avoids sending a false->true bounce to LiveKit during that handoff.
@@ -69,6 +70,9 @@ export class LiveKitParticipant {
     private _cameraPublication: RemoteTrackPublication | undefined;
     private _microphonePublication: RemoteTrackPublication | undefined;
     private _scriptingAudioPublication: RemoteTrackPublication | undefined;
+    // The music of a Jam: a microphone track under a name of its own, kept apart from the voice.
+    private _jamMusicPublication: RemoteTrackPublication | undefined;
+    private readonly unsubscribeJamMusicListening: Unsubscriber;
     private _screenSharePublication: RemoteTrackPublication | undefined;
     private _screenShareAudioPublication: RemoteTrackPublication | undefined;
     private _microphoneStream: MediaStream | undefined;
@@ -109,6 +113,11 @@ export class LiveKitParticipant {
         this.participant.on(ParticipantEvent.TrackMuted, this.boundHandleTrackMuted);
         this.participant.on(ParticipantEvent.TrackUnmuted, this.boundHandleTrackUnmuted);
         this.participant.on(ParticipantEvent.IsSpeakingChanged, this.boundHandleIsSpeakingChanged);
+
+        // The music is only downloaded while the local user chose to hear it.
+        this.unsubscribeJamMusicListening = jamMusicListeningStore.subscribe((listening) => {
+            this._jamMusicPublication?.setSubscribed(listening);
+        });
 
         this._spaceUser = spaceUser;
         this._isSpeakingStore = writable(this.participant.isSpeaking);
@@ -240,6 +249,14 @@ export class LiveKitParticipant {
         this._screenSharePublication?.setSubscribed(this._screenShareVideoSubscribed);
     }
 
+    private isJamMusicPublication(publication: TrackPublication): boolean {
+        return (
+            publication.source === Track.Source.Microphone &&
+            publication.kind === Track.Kind.Audio &&
+            publication.trackName === JAM_MUSIC_TRACK_NAME
+        );
+    }
+
     private isScriptingAudioPublication(publication: TrackPublication): boolean {
         return (
             publication.source === Track.Source.Microphone &&
@@ -319,6 +336,12 @@ export class LiveKitParticipant {
             this._canEmitScreenShareAudio.set(true);
             this._hasScreenShareAudio.set(!publication.isMuted);
             this.refreshLivekitScreenShareStreamStore();
+        } else if (this.isJamMusicPublication(publication)) {
+            if (this._jamMusicPublication && this._jamMusicPublication !== publication) {
+                this._jamMusicPublication.setSubscribed(false);
+            }
+            this._jamMusicPublication = publication;
+            publication.setSubscribed(get(jamMusicListeningStore));
         } else if (this.isScriptingAudioPublication(publication)) {
             if (this._scriptingAudioPublication && this._scriptingAudioPublication !== publication) {
                 console.warn(
@@ -372,6 +395,10 @@ export class LiveKitParticipant {
             }
         } else if (publication.source === Track.Source.ScreenShareAudio) {
             this._audioScreenShareStreamStore.set(track.mediaStream);
+        } else if (this.isJamMusicPublication(publication)) {
+            if (this._jamMusicPublication === publication) {
+                setJamMusicStream(this.space.getName(), track.mediaStream);
+            }
         } else if (this.isScriptingAudioPublication(publication)) {
             this._scriptingAudioStream = track.mediaStream;
             this.refreshLivekitAudioStreamStore();
@@ -406,6 +433,12 @@ export class LiveKitParticipant {
                 this._hasScreenShareAudio.set(false);
                 this.refreshLivekitScreenShareStreamStore();
             }
+        } else if (this.isJamMusicPublication(publication)) {
+            publication.setSubscribed(false);
+            if (this._jamMusicPublication === publication) {
+                this._jamMusicPublication = undefined;
+                setJamMusicStream(this.space.getName(), undefined);
+            }
         } else if (this.isScriptingAudioPublication(publication)) {
             publication.setSubscribed(false);
             if (this._scriptingAudioPublication === publication) {
@@ -439,6 +472,10 @@ export class LiveKitParticipant {
                 this._audioScreenShareStreamStore.set(undefined);
                 this._hasScreenShareAudio.set(false);
                 this.refreshLivekitScreenShareStreamStore();
+            }
+        } else if (this.isJamMusicPublication(publication)) {
+            if (this._jamMusicPublication === publication) {
+                setJamMusicStream(this.space.getName(), undefined);
             }
         } else if (this.isScriptingAudioPublication(publication)) {
             if (this._scriptingAudioPublication === publication) {
@@ -658,6 +695,12 @@ export class LiveKitParticipant {
         this._cameraPublication?.setSubscribed(false);
         this._microphonePublication?.setSubscribed(false);
         this._scriptingAudioPublication?.setSubscribed(false);
+        this._jamMusicPublication?.setSubscribed(false);
+        if (this._jamMusicPublication) {
+            setJamMusicStream(this.space.getName(), undefined);
+            this._jamMusicPublication = undefined;
+        }
+        this.unsubscribeJamMusicListening();
         this._screenSharePublication?.setSubscribed(false);
         this._screenShareAudioPublication?.setSubscribed(false);
 

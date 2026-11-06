@@ -5,7 +5,8 @@ import { Track, type RemoteParticipant, type RemoteTrack, type RemoteTrackPublic
 import type { SpaceInterface, SpaceUserExtended } from "../Space/SpaceInterface";
 import type { StreamableSubjects } from "../Space/SpacePeerManager/SpacePeerManager";
 import type { LivekitStreamable, Streamable } from "../Space/Streamable";
-import { SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
+import { jamMusicListeningStore, jamMusicStreamsStore } from "../ListeningZone/JamMusicStore";
+import { JAM_MUSIC_TRACK_NAME, SCRIPTING_AUDIO_TRACK_NAME } from "./LivekitConstants";
 import { LiveKitParticipant } from "./LivekitParticipant";
 
 type MockRemoteTrackPublication = RemoteTrackPublication & {
@@ -252,6 +253,73 @@ describe("LiveKitParticipant", () => {
 
         expect(get(media.streamStore)).toBe(microphoneStream);
         expect(get(participant.getStreamable().hasAudio)).toBe(true);
+    });
+});
+
+describe("LiveKitParticipant, music of a Jam", () => {
+    beforeEach(() => {
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        window.capabilities = {};
+        jamMusicStreamsStore.set(new Map());
+        jamMusicListeningStore.set(false);
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function createMusicPublication(): MockRemoteTrackPublication {
+        return createAudioPublication(Track.Source.Microphone, JAM_MUSIC_TRACK_NAME);
+    }
+
+    it("keeps the music out of the voice and hands it to its own store, under the name of the space", () => {
+        jamMusicListeningStore.set(true);
+        const participant = createParticipant({ publications: [] });
+        const media = participant.getStreamable().media as LivekitStreamable;
+        const microphone = createMicrophonePublication();
+        const music = createMusicPublication();
+        const voiceStream = createAudioMediaStream("voice");
+        const musicStream = createAudioMediaStream("music");
+
+        participant["handleTrackPublished"](microphone);
+        participant["handleTrackSubscribed"](createRemoteAudioTrack(voiceStream), microphone);
+        participant["handleTrackPublished"](music);
+        participant["handleTrackSubscribed"](createRemoteAudioTrack(musicStream), music);
+
+        expect(get(media.streamStore)?.getAudioTracks()).toEqual([voiceStream.getAudioTracks()[0]]);
+        expect(get(jamMusicStreamsStore).get("world.space")).toBe(musicStream);
+    });
+
+    it("subscribes to the music only while the local user chose to listen", () => {
+        const participant = createParticipant({ publications: [] });
+        const music = createMusicPublication();
+
+        participant["handleTrackPublished"](music);
+        expect(music.setSubscribed).not.toHaveBeenCalledWith(true);
+
+        jamMusicListeningStore.set(true);
+        expect(music.setSubscribed).toHaveBeenLastCalledWith(true);
+
+        jamMusicListeningStore.set(false);
+        expect(music.setSubscribed).toHaveBeenLastCalledWith(false);
+    });
+
+    it("drops the music when it is unpublished and leaves the voice alone", () => {
+        jamMusicListeningStore.set(true);
+        const participant = createParticipant({ publications: [] });
+        const media = participant.getStreamable().media as LivekitStreamable;
+        const microphone = createMicrophonePublication();
+        const music = createMusicPublication();
+        const voiceStream = createAudioMediaStream("voice");
+
+        participant["handleTrackPublished"](microphone);
+        participant["handleTrackSubscribed"](createRemoteAudioTrack(voiceStream), microphone);
+        participant["handleTrackPublished"](music);
+        participant["handleTrackSubscribed"](createRemoteAudioTrack(createAudioMediaStream("music")), music);
+        participant["handleTrackUnpublished"](music);
+
+        expect(get(jamMusicStreamsStore).has("world.space")).toBe(false);
+        expect(get(media.streamStore)?.getAudioTracks()).toEqual([voiceStream.getAudioTracks()[0]]);
     });
 });
 
