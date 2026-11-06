@@ -1017,8 +1017,11 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     public handlePressSpacePlayerTextCallback() {
-        for (const [, text] of this.texts) {
-            (text as SpeechDomElement).callback();
+        // Only the texts shown when the key was pressed: a callback may show a new text (a knock shows its waiting
+        // text), which a live iteration of the map would also trigger with the same press. A text removed by an
+        // earlier callback is skipped.
+        for (const id of [...this.texts.keys()]) {
+            (this.texts.get(id) as SpeechDomElement | undefined)?.callback();
         }
     }
 
