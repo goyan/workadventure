@@ -244,7 +244,7 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
         const token =
             jamAccess.kind === "jam"
                 ? await this.livekitService.generateToken(spaceName, user, {
-                      canPublishMusic: jamAccess.canPublishMusic,
+                      jamRole: jamAccess.canPublishMusic ? "host" : "guest",
                   })
                 : await this.livekitService.generateToken(spaceName, user);
 

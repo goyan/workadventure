@@ -126,13 +126,16 @@ export class LiveKitService {
     }
 
     /**
-     * `canPublishMusic` is for the host of a Jam only. A music track has no source of its own (it is published as
-     * `unknown`), and a token cannot list that source: it is allowed by lifting the list, which allows every source.
+     * In the space of a Jam, a guest publishes screens only (their voice stays in the bubble or meeting they stand in)
+     * and the host also publishes the music. A music track has no source of its own (it is published as `unknown`), and
+     * a token cannot list that source: the host gets it by lifting the list, which allows every source. Only the
+     * host's client keeps them from publishing a camera or a microphone there. Without a role, the space is an
+     * ordinary one.
      */
     async generateToken(
         roomName: string,
         user: SpaceUser,
-        options: { canPublishMusic?: boolean } = {},
+        options: { jamRole?: "host" | "guest" } = {},
     ): Promise<string> {
         const livekitRoomName = getLivekitRoomName(roomName);
 
@@ -152,16 +155,25 @@ export class LiveKitService {
             canPublish: true,
             canSubscribe: true,
             roomJoin: true,
-            canPublishSources: options.canPublishMusic
-                ? undefined
-                : [
-                      TrackSource.CAMERA,
-                      TrackSource.MICROPHONE,
-                      TrackSource.SCREEN_SHARE,
-                      TrackSource.SCREEN_SHARE_AUDIO,
-                  ],
+            canPublishSources: this.publishSources(options.jamRole),
         });
         return token.toJwt();
+    }
+
+    private publishSources(jamRole: "host" | "guest" | undefined): TrackSource[] | undefined {
+        switch (jamRole) {
+            case "host":
+                return undefined;
+            case "guest":
+                return [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+            case undefined:
+                return [
+                    TrackSource.CAMERA,
+                    TrackSource.MICROPHONE,
+                    TrackSource.SCREEN_SHARE,
+                    TrackSource.SCREEN_SHARE_AUDIO,
+                ];
+        }
     }
 
     async deleteRoom(roomName: string): Promise<void> {

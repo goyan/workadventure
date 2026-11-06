@@ -25,6 +25,7 @@ import { SessionAnalytics, type SessionEndReason } from "./SessionAnalytics";
 import { AutoRecorder } from "./AutoRecorder";
 import { UserRegistry } from "./Services/UserRegistry";
 import { TransitionPolicy } from "./Policies/TransitionPolicy";
+import { parseJamSpaceName } from "./AreaPropertyEvents/JamSpaceAccess";
 import { TransitionOrchestrator } from "./Services/TransitionOrchestrator";
 import { StateLifecycleManager } from "./Services/StateLifecycleManager";
 import { LivekitAvailabilityService } from "./Services/LivekitAvailabilityService";
@@ -112,6 +113,8 @@ export interface CommunicationManagerDependencies {
 export class CommunicationManager implements ICommunicationManager {
     private readonly userRegistry: IUserRegistry;
     private readonly policy: ITransitionPolicy;
+    /** The space of a Jam relays its media through LiveKit only, where the server signs who publishes what. */
+    private readonly livekitOnly: boolean;
     private readonly orchestrator: ITransitionOrchestrator;
     private readonly lifecycleManager: IStateLifecycleManager;
     private readonly space: ICommunicationSpace;
@@ -196,6 +199,8 @@ export class CommunicationManager implements ICommunicationManager {
             dependencies.autoRecorder ?? new AutoRecorder(this.space, () => this.lifecycleManager.getCurrentState());
         this._sessionAnalytics.onSessionChanged = (session) => this.autoRecorder.sessionChanged(session);
 
+        this.livekitOnly = parseJamSpaceName(this.space.getSpaceName()) !== undefined;
+
         // Initialize transition policy with LiveKit availability checker
         this.policy =
             dependencies.policy ??
@@ -205,6 +210,7 @@ export class CommunicationManager implements ICommunicationManager {
                 this._recordingManager,
                 LIVEKIT_SWITCH_ON_CPU_LIMITATION,
                 this.autoRecorder,
+                this.livekitOnly,
             );
     }
 
@@ -225,7 +231,7 @@ export class CommunicationManager implements ICommunicationManager {
         // maps are shared with the states) and the new state's init() already added them.
         const stateBefore = this.lifecycleManager.getCurrentState();
         await this.evaluateAndHandleTransition(user);
-        if (this.lifecycleManager.getCurrentState() === stateBefore) {
+        if (this.lifecycleManager.getCurrentState() === stateBefore && !this.isPeerToPeerForbidden(stateBefore)) {
             await stateBefore.handleUserAdded(user);
         }
     }
@@ -260,7 +266,7 @@ export class CommunicationManager implements ICommunicationManager {
         // Same ordering as handleUserAdded.
         const stateBefore = this.lifecycleManager.getCurrentState();
         await this.evaluateAndHandleTransition(user);
-        if (this.lifecycleManager.getCurrentState() === stateBefore) {
+        if (this.lifecycleManager.getCurrentState() === stateBefore && !this.isPeerToPeerForbidden(stateBefore)) {
             await stateBefore.handleUserToNotifyAdded(user);
         }
     }
@@ -457,6 +463,14 @@ export class CommunicationManager implements ICommunicationManager {
         if (!this.shouldTransition()) {
             this.orchestrator.cancelPendingTransition();
         }
+    }
+
+    /**
+     * The space of a Jam never runs peer-to-peer: while LiveKit has not taken it (not available, or the transition is
+     * pending), nobody is added to a WebRTC state, which would connect its members without the server's say.
+     */
+    private isPeerToPeerForbidden(state: ICommunicationState<ICommunicationStrategy>): boolean {
+        return this.livekitOnly && state.communicationType === CommunicationType.WEBRTC;
     }
 
     /**
