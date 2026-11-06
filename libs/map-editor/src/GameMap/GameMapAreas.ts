@@ -15,6 +15,9 @@ export type AreaUpdateCallback = (
     newProperties: AreaDataProperties | undefined,
 ) => void;
 
+/** A player is in an area by its feet: this many pixels below its position. */
+export const AREA_POSITION_OFFSET_Y = 16;
+
 export class GameMapAreas {
     private wam: WAMFileFormat;
     private enterAreaCallbacks = Array<AreaChangeCallback>();
@@ -25,7 +28,7 @@ export class GameMapAreas {
      * Areas created from within map-editor
      */
     private readonly areas: Map<string, AreaData> = new Map<string, AreaData>();
-    private readonly areasPositionOffsetY: number = 16;
+    private readonly areasPositionOffsetY: number = AREA_POSITION_OFFSET_Y;
 
     constructor(wam: WAMFileFormat) {
         this.wam = wam;

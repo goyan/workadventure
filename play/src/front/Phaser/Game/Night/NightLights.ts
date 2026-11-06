@@ -1,4 +1,5 @@
 import { MathUtils } from "@workadventure/math-utils";
+import { AREA_POSITION_OFFSET_Y } from "@workadventure/map-editor";
 import type { AreaData } from "@workadventure/map-editor";
 
 /** Duration of the fade between dark (0) and lit (1) for an area. */
@@ -32,7 +33,10 @@ export class NightLights {
     private readonly states = new Map<string, AreaState>();
     private lastNow: number | undefined;
 
-    /** Updates which areas are occupied at `now` and returns the areas with a non-zero intensity. */
+    /**
+     * Updates which areas are occupied at `now` and returns the areas with a non-zero intensity.
+     * `players` are raw sprite positions; the feet offset of the areas (AREA_POSITION_OFFSET_Y) is applied here.
+     */
     public update(now: number, areas: readonly AreaData[], players: readonly { x: number; y: number }[]): LitArea[] {
         const dt = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
@@ -42,7 +46,10 @@ export class NightLights {
         const present = new Set<string>();
         for (const area of areas) {
             present.add(area.id);
-            const occupied = players.some((player) => MathUtils.isOverlappingWithRectangle(player, area));
+            // Same rule as the areas themselves (GameMapAreas): a player is inside by its feet.
+            const occupied = players.some((player) =>
+                MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area),
+            );
             let state = this.states.get(area.id);
             if (state === undefined) {
                 if (!occupied) {

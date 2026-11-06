@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MathUtils } from "@workadventure/math-utils";
+import { AREA_POSITION_OFFSET_Y } from "@workadventure/map-editor";
 import type { AreaData } from "@workadventure/map-editor";
 import { lightableAreas, NIGHT_FADE_MS, NightLights } from "../../../../../src/front/Phaser/Game/Night/NightLights";
 
@@ -68,11 +69,32 @@ describe("NightLights", () => {
 
     it("uses the same border rule as MathUtils.isOverlappingWithRectangle", () => {
         const onRightBorder = { x: 150, y: 120 };
-        const expected = MathUtils.isOverlappingWithRectangle(onRightBorder, a);
+        const expected = MathUtils.isOverlappingWithRectangle(
+            { x: onRightBorder.x, y: onRightBorder.y + AREA_POSITION_OFFSET_Y },
+            a,
+        );
         const lights = new NightLights();
         lights.update(0, [a], [onRightBorder]);
         const lit = lights.update(500, [a], [onRightBorder]);
         expect(lit.length === 1).toBe(expected);
+    });
+
+    it("places players by their feet, like the areas (AREA_POSITION_OFFSET_Y below the sprite position)", () => {
+        expect(AREA_POSITION_OFFSET_Y).toBe(16);
+        // Head 10 px above the top edge, feet 6 px inside: lit only thanks to the offset.
+        const aboveTop = { x: 120, y: a.y - 10 };
+        // Sprite position 10 px above the bottom edge, feet 6 px below it: dark only because of the offset.
+        const nearBottom = { x: 120, y: a.y + a.height - 10 };
+        expect(MathUtils.isOverlappingWithRectangle(aboveTop, a)).toBe(false);
+        expect(MathUtils.isOverlappingWithRectangle(nearBottom, a)).toBe(true);
+
+        const lit = new NightLights();
+        lit.update(0, [a], [aboveTop]);
+        expect(lit.update(1000, [a], [aboveTop])[0].intensity).toBe(1);
+
+        const dark = new NightLights();
+        dark.update(0, [a], [nearBottom]);
+        expect(dark.update(1000, [a], [nearBottom])).toEqual([]);
     });
 
     it("lights several areas for several players", () => {

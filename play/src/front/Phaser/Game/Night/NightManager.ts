@@ -106,7 +106,7 @@ export class NightManager {
     }
 
     private players(): { x: number; y: number }[] {
-        // Same position as the one the areas logic uses for the local player.
+        // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset.
         const players = [{ x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
         for (const player of this.scene.MapPlayersByKey.values()) {
             players.push({ x: player.x, y: player.y });

@@ -37,6 +37,8 @@ function ensureSoftRectTexture(scene: Phaser.Scene): void {
     }
     context.putImageData(image, 0, 0);
     texture.refresh();
+    // The game runs without antialiasing (nearest filtering): smooth the stretched gradient anyway.
+    texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 }
 
 /**
