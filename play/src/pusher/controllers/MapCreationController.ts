@@ -12,8 +12,7 @@ import {
 } from "../enums/EnvironmentVariable";
 import type { ResponseWithUserIdentifier } from "../middlewares/Authenticated";
 import { authenticated } from "../middlewares/Authenticated";
-import { adminService } from "../services/AdminService";
-import { jwtTokenManager } from "../services/JWTTokenManager";
+import { fetchMemberRight } from "../services/MemberRight";
 import {
     isCreationAllowed,
     MapCreationError,
@@ -124,23 +123,8 @@ export class MapCreationController extends BaseHttpController {
             return false;
         }
         try {
-            const jwtData = await jwtTokenManager.verifyJWTToken(req.header("authorization") ?? "");
             return await isCreationAllowed(roomUrl, PUSHER_URL, this.creatorTag, {
-                fetchMember: async (trustedRoomUrl) => {
-                    const member = await adminService.fetchMemberDataByUuid(
-                        userIdentifier,
-                        jwtData.accessToken,
-                        trustedRoomUrl,
-                        req.ip ?? "",
-                        [],
-                        undefined,
-                        req.header("accept-language"),
-                        jwtData.tags,
-                    );
-                    return member.status === "error"
-                        ? undefined
-                        : { canEdit: member.canEdit ?? false, tags: member.tags };
-                },
+                fetchMember: await fetchMemberRight(req, userIdentifier),
                 roomExists: (roomPath) => service.roomExists(roomPath),
             });
         } catch (e) {

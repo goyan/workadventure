@@ -4,8 +4,7 @@ import * as Sentry from "@sentry/node";
 import { ADMIN_API_TOKEN, ADMIN_API_URL, PUSHER_URL } from "../enums/EnvironmentVariable";
 import type { ResponseWithUserIdentifier } from "../middlewares/Authenticated";
 import { authenticated } from "../middlewares/Authenticated";
-import { adminService } from "../services/AdminService";
-import { jwtTokenManager } from "../services/JWTTokenManager";
+import { fetchMemberRight } from "../services/MemberRight";
 import {
     canManagePatterns,
     MapPatternError,
@@ -139,23 +138,8 @@ export class MapPatternController extends BaseHttpController {
 
     private async fetchRight(req: Request, userIdentifier: string, roomUrl: string): Promise<PatternRight | undefined> {
         try {
-            const jwtData = await jwtTokenManager.verifyJWTToken(req.header("authorization") ?? "");
             return await canManagePatterns(roomUrl, PUSHER_URL, {
-                fetchMember: async (trustedRoomUrl) => {
-                    const member = await adminService.fetchMemberDataByUuid(
-                        userIdentifier,
-                        jwtData.accessToken,
-                        trustedRoomUrl,
-                        req.ip ?? "",
-                        [],
-                        undefined,
-                        req.header("accept-language"),
-                        jwtData.tags,
-                    );
-                    return member.status === "error"
-                        ? undefined
-                        : { canEdit: member.canEdit ?? false, tags: member.tags };
-                },
+                fetchMember: await fetchMemberRight(req, userIdentifier),
             });
         } catch (e) {
             console.error("Cannot check the map pattern right:", e instanceof Error ? e.message : "unknown error");
