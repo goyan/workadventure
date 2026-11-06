@@ -8,13 +8,16 @@ const { getNotification } = vi.hoisted(() => ({
 
 vi.mock("../../../src/front/Stores/MediaStore", async () => {
     const { writable } = await import("svelte/store");
-    return { availabilityStatusStore: writable(0) };
+    return { availabilityStatusStore: writable(0), requestedStatusStore: writable(null) };
 });
 vi.mock("../../../src/front/Connection/LocalUserStore", () => ({
     localUserStore: { getNotification },
 }));
 
-import { availabilityStatusStore as mockedStatusStore } from "../../../src/front/Stores/MediaStore";
+import {
+    availabilityStatusStore as mockedStatusStore,
+    requestedStatusStore as mockedRequestedStore,
+} from "../../../src/front/Stores/MediaStore";
 import {
     notifySystem,
     shouldNotify,
@@ -70,6 +73,7 @@ describe("notifySystem", () => {
         vi.spyOn(console, "warn").mockImplementation(() => undefined);
         getNotification.mockReturnValue(true);
         (mockedStatusStore as unknown as Writable<number>).set(AvailabilityStatus.ONLINE);
+        (mockedRequestedStore as unknown as Writable<number | null>).set(null);
         stubNotification("granted");
     });
     afterEach(() => {
@@ -107,6 +111,16 @@ describe("notifySystem", () => {
     it("blocks a wave but not a knock in do not disturb", () => {
         (mockedStatusStore as unknown as Writable<number>).set(AvailabilityStatus.DO_NOT_DISTURB);
         notifySystem(notif);
+        expect(ctor).not.toHaveBeenCalled();
+        notifySystem({ ...notif, kind: "knock", tag: "knock:a:1" });
+        expect(ctor).toHaveBeenCalledTimes(1);
+    });
+
+    it("blocks a wave and private message but not a knock when DND is requested while effective status is JITSI", () => {
+        (mockedRequestedStore as unknown as Writable<number | null>).set(AvailabilityStatus.DO_NOT_DISTURB);
+        (mockedStatusStore as unknown as Writable<number>).set(AvailabilityStatus.JITSI);
+        notifySystem(notif);
+        notifySystem({ ...notif, kind: "privateMessage", tag: "pm:1" });
         expect(ctor).not.toHaveBeenCalled();
         notifySystem({ ...notif, kind: "knock", tag: "knock:a:1" });
         expect(ctor).toHaveBeenCalledTimes(1);

@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
 import { AvailabilityStatus } from "@workadventure/messages";
 import { localUserStore } from "../Connection/LocalUserStore";
-import { availabilityStatusStore } from "../Stores/MediaStore";
+import { availabilityStatusStore, requestedStatusStore } from "../Stores/MediaStore";
 import { defaultOptions } from "./Notification";
 
 export type SystemNotificationKind = "wave" | "privateMessage" | "knock";
@@ -44,7 +44,11 @@ export function notifySystem(notification: SystemNotification): void {
             focused: document.hasFocus(),
             permission: Notification.permission,
             enabled: localUserStore.getNotification(),
-            doNotDisturb: get(availabilityStatusStore) === AvailabilityStatus.DO_NOT_DISTURB,
+            // The effective status can be JITSI, BBB, SILENT... even when the user asked for "do not disturb",
+            // so the requested status counts too.
+            doNotDisturb:
+                get(requestedStatusStore) === AvailabilityStatus.DO_NOT_DISTURB ||
+                get(availabilityStatusStore) === AvailabilityStatus.DO_NOT_DISTURB,
         };
         if (!shouldNotify(notification.kind, context)) {
             return;
