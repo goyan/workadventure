@@ -607,6 +607,37 @@ Limites :
 - Deux occupants qui répondent au même instant peuvent voir brièvement un état différent (chacun garde sa réponse).
 - Un joueur arrivé après l'acceptation ne connaît pas le laissez-passer : il voit la porte fermée pour le visiteur.
 
+### Mode nuit
+
+La carte suit l'heure de Paris (`Europe/Paris`, quel que soit le fuseau du poste) : jour de 7 h 30 à 18 h 30,
+crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'à 7 h 30. La nuit, un voile bleu nuit
+(`0x0b1030`, opacité 0,6) couvre la carte, les avatars et les animaux ; bulles, noms et interface restent au-dessus
+(`DEPTH_NIGHT_INDEX = 1_040_000`).
+
+- **Pièces allumées** : une zone du WAM s'éclaire (bords adoucis de 8 px, fondu de 1 s) tant qu'un joueur connu du
+  navigateur a les pieds dedans (même règle que l'entrée de zone : `AREA_POSITION_OFFSET_Y`). Une zone de plus du
+  quart de la carte n'éclaire jamais (zones techniques).
+- **Halo** : chaque joueur porte une lumière, 1,5 case à l'arrêt, 3 cases en marche (transition linéaire) ; il
+  s'éteint dans une pièce allumée et revient en sortant. Pas de halo pour les animaux ni le Gobeur.
+- **Pas de nuit** en mode édition, ni avec le réglage « Désactiver la nuit » (Paramètres → Thème, clé `disableNight`).
+- **Recette locale** : `?nightAt=21:00` force l'heure, seulement en développement (`import.meta.env.DEV`).
+
+Rendu : `RenderTexture` à la taille de l'écran (fixe, compensée pour le zoom), remplie de la teinte puis percée par
+des pinceaux doux réutilisés ; redessinée seulement quand quelque chose change, puis `markDirty()` (le jeu ne dessine
+qu'une scène marquée). Le jour, rien n'est calculé. Rien n'est envoyé sur le réseau : tout le monde voit la même heure.
+Seule l'image `play` change : compatible avec la prod.
+
+Fichiers : `play/src/front/Phaser/Game/Night/*` (`NightClock`, `NightLights`, `NightHalos`, `NightRenderDecision` purs
+et testés ; `NightOverlay`, `NightManager`), `Stores/NightStore.ts`, `Components/Menu/SettingsSubMenu.svelte`,
+`DepthIndexes.ts`, `AREA_POSITION_OFFSET_Y` exporté de `libs/map-editor`, i18n `menu.settings.night`.
+
+Limites :
+- Sites intégrés et objets web de la carte (DOM) restent éclairés.
+- Sans WebGL (rendu canvas), les pièces ne s'allument pas (le pinceau NineSlice n'a pas de rendu canvas) ; les halos, si.
+- Deux pièces allumées qui se touchent gardent un fin trait sombre entre elles.
+- Une zone ajoutée par un autre éditeur ne s'allume qu'après rechargement.
+- En marchant, les trous du voile peuvent suivre la caméra avec une image de retard.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
