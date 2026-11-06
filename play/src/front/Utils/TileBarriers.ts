@@ -62,6 +62,14 @@ export class TileBarriers {
         );
     }
 
+    /** An independent copy, with the same barriers and thickness, that can be extended. */
+    public copy(): TileBarriers {
+        const copy = new TileBarriers(this.halfThickness);
+        for (const key of this.south) copy.south.add(key);
+        for (const key of this.west) copy.west.add(key);
+        return copy;
+    }
+
     /** Whether both have the same barriers and the same thickness. */
     public equals(other: TileBarriers): boolean {
         return (
