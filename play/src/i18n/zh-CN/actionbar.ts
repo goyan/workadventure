@@ -123,6 +123,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "锁定对话",
             desc: "通过启用此功能，您可以确保没有人可以加入讨论。您是您空间的主人，只有已经存在的人可以互动。",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "选择要锁定/解锁的区域",
             bubbleLabel: "讨论气泡",
             unnamedArea: "未命名区域",

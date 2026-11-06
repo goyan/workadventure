@@ -176,10 +176,44 @@
         if (showAreaLock && !canLockSomething) {
             return lockState ? "disabledForbidden" : "disabled";
         }
-        return lockState ? "forbidden" : "normal";
+        if (lockState) {
+            return "forbidden";
+        }
+        // In a lockable area the button closes the door: it stands out, so that people notice they can.
+        return showAreaLock ? "active" : "normal";
+    });
+
+    // In a lockable area the lock closes the door of the room (the others have to knock): the bubble wording and video
+    // would hide that.
+    let tooltipTitle = $derived(
+        showAreaLock
+            ? lockState
+                ? $LL.actionbar.help.lock.doorReopenTitle()
+                : $LL.actionbar.help.lock.doorCloseTitle()
+            : $LL.actionbar.help.lock.title(),
+    );
+    let tooltipDesc = $derived(showAreaLock ? $LL.actionbar.help.lock.doorDesc() : $LL.actionbar.help.lock.desc());
+    let helpMedia = $derived(showAreaLock ? "" : "./static/Videos/LockBubble.mp4");
+
+    // The button pulses for a few seconds when the player walks into a lockable area.
+    const PULSE_DURATION_MS = 3000;
+    let pulsing = $state(false);
+    let pulseTimeout: ReturnType<typeof setTimeout> | undefined;
+    let wasInLockableArea = false;
+    $effect(() => {
+        const inLockableArea = showAreaLock;
+        if (inLockableArea && !wasInLockableArea) {
+            pulsing = true;
+            clearTimeout(pulseTimeout);
+            pulseTimeout = setTimeout(() => {
+                pulsing = false;
+            }, PULSE_DURATION_MS);
+        }
+        wasInLockableArea = inLockableArea;
     });
 
     onDestroy(() => {
+        clearTimeout(pulseTimeout);
         closePicker();
     });
 </script>
@@ -187,14 +221,14 @@
 {#if showAreaLock || showGroupLock}
     <ActionBarButton
         onclick={handleClick}
-        classList="group/btn-lock"
-        tooltipTitle={$LL.actionbar.help.lock.title()}
-        tooltipDesc={$LL.actionbar.help.lock.desc()}
+        classList={pulsing ? "group/btn-lock animate-pulse motion-reduce:animate-none" : "group/btn-lock"}
+        {tooltipTitle}
+        {tooltipDesc}
         disabledHelp={$openedMenuStore !== undefined || (showAreaLock && !canLockSomething)}
         state={buttonState}
         dataTestId="lock-button"
-        media="./static/Videos/LockBubble.mp4"
-        desc={$LL.actionbar.help.lock.desc()}
+        media={helpMedia}
+        desc={tooltipDesc}
         bind:wrapperDiv={triggerElement}
     >
         {#if lockState}

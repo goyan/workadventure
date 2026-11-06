@@ -123,6 +123,9 @@ const actionbar = {
         lock: {
             title: "Lock conversation",
             desc: "By enabling this feature, you ensure that no one can join the discussion. You are the master of your space, and only those already present can interact.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Choose area to lock/unlock",
             bubbleLabel: "Discussion bubble",
             unnamedArea: "Unnamed Area",

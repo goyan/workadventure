@@ -124,6 +124,9 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         lock: {
             title: "Khóa cuộc trò chuyện",
             desc: "Khi bật tính năng này, bạn đảm bảo không ai có thể tham gia cuộc thảo luận. Bạn là chủ không gian của mình, chỉ những người đã có mặt mới có thể tương tác.",
+            doorCloseTitle: "Close the door",
+            doorReopenTitle: "Reopen the door",
+            doorDesc: "Others will have to knock to come in.",
             areaPickerTitle: "Chọn khu vực để khóa/mở khóa",
             bubbleLabel: "Bong bóng thảo luận",
             unnamedArea: "Khu vực chưa đặt tên",
