@@ -4,6 +4,8 @@ export const DEPTH_TILE_INDEX = 0;
 //Note: Player characters use their y coordinate as their depth to simulate a perspective.
 //See the Character class.
 export const DEPTH_OVERLAY_INDEX = 1_000_000;
+/** Night veil: above every map layer (overlay layers included), below conversation bubbles and texts above avatars. */
+export const DEPTH_NIGHT_INDEX = 1_040_000;
 export const DEPTH_CONVERSATION_BUBBLE_INDEX = 1_050_000;
 export const DEPTH_INGAME_TEXT_INDEX = 1_100_000;
 /** Map editor area previews (zones) – above overlay layers so they are always visible when the map editor is open. */
