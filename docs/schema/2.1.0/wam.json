@@ -440,6 +440,7 @@
                     },
                     {
                       "type": "object",
+                      "description": "Deprecated: the Gobeur mini-game was removed. Kept only so that existing maps keep loading; ignored by the front.",
                       "properties": {
                         "id": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"

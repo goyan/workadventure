@@ -39,7 +39,6 @@ import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
 import { getLayerDepth } from "./EntityLayerDepth";
-import { replaceEntityProperty } from "./EntityProperties";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
@@ -451,15 +450,6 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (property) {
             deepmergeInto(property, changes);
         }
-        this.onPropertiesUpdated();
-    }
-
-    /**
-     * Replaces the property of the same id wholesale, for a property whose arrays or optional fields must not be
-     * merged (updateProperty concatenates arrays and ignores undefined). Same notification as updateProperty.
-     */
-    public replaceProperty(property: EntityDataProperty): void {
-        replaceEntityProperty(this.entityData.properties, property);
         this.onPropertiesUpdated();
     }
 

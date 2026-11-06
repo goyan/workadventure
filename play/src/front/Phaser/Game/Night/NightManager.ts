@@ -121,7 +121,7 @@ export class NightManager {
 
     private players(): { id: string; x: number; y: number }[] {
         // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset, the
-        // halos are centred on them (the body). Animals and the Gobeur are not players: they carry no light.
+        // halos are centred on them (the body). Animals are not players: they carry no light.
         const players = [{ id: this.localId, x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
         for (const [key, player] of this.scene.MapPlayersByKey) {
             players.push({ id: String(key), x: player.x, y: player.y });

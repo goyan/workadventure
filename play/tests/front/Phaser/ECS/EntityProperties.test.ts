@@ -23,18 +23,6 @@ describe("makesEntityActivatable", () => {
         expect(makesEntityActivatable(property)).toBe(true);
     });
 
-    it("ignores a Gobeur property: it has its own menu, no action", () => {
-        const property: EntityDataProperty = {
-            id: "g",
-            type: "gobeurPropertyData",
-            players: [],
-            prisonAreaId: "prison",
-            level: "beginner",
-            durationSeconds: 180,
-        };
-        expect(makesEntityActivatable(property)).toBe(false);
-    });
-
     it("counts an action property", () => {
         const property: EntityDataProperty = { id: "o", type: "playAudio", audioLink: "https://example.com/a.mp3" };
         expect(makesEntityActivatable(property)).toBe(true);
