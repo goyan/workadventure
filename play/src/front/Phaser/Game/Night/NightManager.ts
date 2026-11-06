@@ -6,7 +6,7 @@ import { nightDisabledStore } from "../../../Stores/NightStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
-import { lightableAreas, NightLights } from "./NightLights";
+import { isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
@@ -74,7 +74,11 @@ export class NightManager {
 
         const players = this.players();
         const lit = this.lights.update(now, this.areas, players);
-        const halos = this.halos.update(now, players);
+        // No halo in a lit area: the area already lights the player.
+        const halos = this.halos.update(
+            now,
+            players.map((player) => ({ ...player, sheltered: isInLightableArea(player, this.areas) })),
+        );
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
             opacity: this.opacity,

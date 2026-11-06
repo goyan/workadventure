@@ -2,7 +2,7 @@
 export const NIGHT_HALO_IDLE_RADIUS_PX = 48;
 /** Radius of the light around a moving player (3 tiles). */
 export const NIGHT_HALO_MOVING_RADIUS_PX = 96;
-/** Duration of a full change between both radii (linear). */
+/** Duration of a full change between both radii (linear); the same speed applies when fading to or from 0. */
 export const NIGHT_HALO_TRANSITION_MS = 300;
 /** A player counts as moving if its position changed within this delay. */
 export const NIGHT_HALO_MOVING_WINDOW_MS = 200;
@@ -33,8 +33,11 @@ export class NightHalos {
     private lastNow: number | undefined;
     private animating = false;
 
-    /** players: id + raw position (the body, not the feet). Returns one halo per present player. */
-    public update(now: number, players: readonly { id: string; x: number; y: number }[]): Halo[] {
+    /**
+     * players: id + raw position (the body, not the feet); `sheltered` when the player stands in a lit area, where a
+     * halo is useless: its radius goes down to 0. Returns one halo per present player with a non-zero radius.
+     */
+    public update(now: number, players: readonly { id: string; x: number; y: number; sheltered?: boolean }[]): Halo[] {
         const dt = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
         const step = dt * RADIUS_PER_MS;
@@ -47,7 +50,12 @@ export class NightHalos {
             let state = this.states.get(player.id);
             if (state === undefined) {
                 // A player seen for the first time is still: nothing tells it moved.
-                state = { x: player.x, y: player.y, radius: NIGHT_HALO_IDLE_RADIUS_PX, lastMoveAt: undefined };
+                state = {
+                    x: player.x,
+                    y: player.y,
+                    radius: player.sheltered ? 0 : NIGHT_HALO_IDLE_RADIUS_PX,
+                    lastMoveAt: undefined,
+                };
                 this.states.set(player.id, state);
             } else if (state.x !== player.x || state.y !== player.y) {
                 state.x = player.x;
@@ -56,16 +64,16 @@ export class NightHalos {
             }
 
             const moving = state.lastMoveAt !== undefined && now - state.lastMoveAt <= NIGHT_HALO_MOVING_WINDOW_MS;
-            if (moving) {
-                state.radius = Math.min(NIGHT_HALO_MOVING_RADIUS_PX, state.radius + step);
-            } else {
-                state.radius = Math.max(NIGHT_HALO_IDLE_RADIUS_PX, state.radius - step);
-            }
-            const target = moving ? NIGHT_HALO_MOVING_RADIUS_PX : NIGHT_HALO_IDLE_RADIUS_PX;
+            const target = player.sheltered ? 0 : moving ? NIGHT_HALO_MOVING_RADIUS_PX : NIGHT_HALO_IDLE_RADIUS_PX;
+            // Same speed in every direction: 48 px per NIGHT_HALO_TRANSITION_MS.
+            state.radius =
+                state.radius < target ? Math.min(target, state.radius + step) : Math.max(target, state.radius - step);
             if (moving || state.radius !== target) {
                 this.animating = true;
             }
-            halos.push({ id: player.id, x: state.x, y: state.y, radius: state.radius });
+            if (state.radius > 0) {
+                halos.push({ id: player.id, x: state.x, y: state.y, radius: state.radius });
+            }
         }
 
         for (const id of this.states.keys()) {

@@ -24,6 +24,16 @@ export function lightableAreas(areas: Iterable<AreaData>, mapWidth: number, mapH
     return [...areas].filter((area) => area.width * area.height <= maxSurface);
 }
 
+/** Whether a player stands in this area, by its feet: the same rule as the areas themselves (GameMapAreas). */
+function isInArea(player: { x: number; y: number }, area: NightRect): boolean {
+    return MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area);
+}
+
+/** Whether a player (raw sprite position) stands in one of these areas, by its feet. */
+export function isInLightableArea(player: { x: number; y: number }, areas: readonly NightRect[]): boolean {
+    return areas.some((area) => isInArea(player, area));
+}
+
 interface AreaState {
     intensity: number;
     occupied: boolean;
@@ -46,10 +56,7 @@ export class NightLights {
         const present = new Set<string>();
         for (const area of areas) {
             present.add(area.id);
-            // Same rule as the areas themselves (GameMapAreas): a player is inside by its feet.
-            const occupied = players.some((player) =>
-                MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area),
-            );
+            const occupied = players.some((player) => isInArea(player, area));
             let state = this.states.get(area.id);
             if (state === undefined) {
                 if (!occupied) {

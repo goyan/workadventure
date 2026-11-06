@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { MathUtils } from "@workadventure/math-utils";
 import { AREA_POSITION_OFFSET_Y } from "@workadventure/map-editor";
 import type { AreaData } from "@workadventure/map-editor";
-import { lightableAreas, NIGHT_FADE_MS, NightLights } from "../../../../../src/front/Phaser/Game/Night/NightLights";
+import {
+    isInLightableArea,
+    lightableAreas,
+    NIGHT_FADE_MS,
+    NightLights,
+} from "../../../../../src/front/Phaser/Game/Night/NightLights";
 
 function area(id: string, x: number, y: number, width: number, height: number): AreaData {
     return { id, x, y, width, height, name: id, visible: true, properties: [] };
@@ -95,6 +100,14 @@ describe("NightLights", () => {
         const dark = new NightLights();
         dark.update(0, [a], [nearBottom]);
         expect(dark.update(1000, [a], [nearBottom])).toEqual([]);
+    });
+
+    it("tells whether a player stands in one of the areas, by its feet", () => {
+        const b = area("b", 300, 300, 50, 50);
+        expect(isInLightableArea({ x: 120, y: a.y - 10 }, [b, a])).toBe(true);
+        expect(isInLightableArea({ x: 120, y: a.y + a.height - 10 }, [b, a])).toBe(false);
+        expect(isInLightableArea({ x: 320, y: 320 }, [b, a])).toBe(true);
+        expect(isInLightableArea({ x: 120, y: 120 }, [])).toBe(false);
     });
 
     it("lights several areas for several players", () => {

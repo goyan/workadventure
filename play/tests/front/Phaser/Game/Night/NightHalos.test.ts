@@ -59,6 +59,43 @@ describe("NightHalos", () => {
         expect(halos.update(1600, still)[0].radius).toBe(48);
     });
 
+    it("fades the halo out in a lit area and back in when leaving it", () => {
+        const halos = new NightHalos();
+        expect(halos.update(0, [{ id: "p", x: 0, y: 0 }])[0].radius).toBe(48);
+        // Still player entering an area (e.g. its feet crossed the edge): 48 -> 0 in 300 ms.
+        expect(halos.update(150, [{ id: "p", x: 0, y: 0, sheltered: true }])[0].radius).toBeCloseTo(24);
+        expect(halos.isAnimating()).toBe(true);
+        expect(halos.update(300, [{ id: "p", x: 0, y: 0, sheltered: true }])).toEqual([]);
+        expect(halos.isAnimating()).toBe(false);
+        expect(halos.update(400, [{ id: "p", x: 0, y: 0, sheltered: true }])).toEqual([]);
+        // Leaving: grows back from 0 to the idle radius.
+        expect(halos.update(550, [{ id: "p", x: 0, y: 0 }])[0].radius).toBeCloseTo(24);
+        expect(halos.update(700, [{ id: "p", x: 0, y: 0 }])[0].radius).toBe(48);
+        expect(halos.isAnimating()).toBe(false);
+    });
+
+    it("shrinks a moving halo to nothing in 600 ms inside a lit area", () => {
+        const halos = new NightHalos();
+        halos.update(0, [{ id: "p", x: 0, y: 0 }]);
+        for (let t = FRAME_MS; t <= 400; t += FRAME_MS) {
+            halos.update(t, [{ id: "p", x: t, y: 0 }]);
+        }
+        let last = halos.update(450, [{ id: "p", x: 450, y: 0, sheltered: true }]);
+        expect(last[0].radius).toBeCloseTo(88);
+        for (let t = 500; t <= 950; t += FRAME_MS) {
+            last = halos.update(t, [{ id: "p", x: t, y: 0, sheltered: true }]);
+        }
+        expect(last[0].radius).toBeCloseTo(8);
+        // 600 ms after the shrink started (t=400).
+        expect(halos.update(1000, [{ id: "p", x: 1000, y: 0, sheltered: true }])).toEqual([]);
+    });
+
+    it("gives no halo to a player first seen inside a lit area", () => {
+        const halos = new NightHalos();
+        expect(halos.update(0, [{ id: "p", x: 0, y: 0, sheltered: true }])).toEqual([]);
+        expect(halos.isAnimating()).toBe(false);
+    });
+
     it("drops the halo of a player who left", () => {
         const halos = new NightHalos();
         halos.update(0, [
