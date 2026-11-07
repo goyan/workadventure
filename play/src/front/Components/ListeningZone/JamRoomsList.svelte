@@ -12,6 +12,7 @@
         leaveJam,
         localPlayerName,
         stopSharingJam,
+        type JamRoom,
     } from "../../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
     import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
@@ -30,6 +31,13 @@
     /** The Jukeboxes whose queue is shown, by host uuid. */
     const openQueues = new SvelteSet<string>();
     const jamMusicCaptureState = jamMusicCapture.state;
+
+    /** Leaving a Jam, or closing one's own, ends its audio too: the music of the room must not outlive the room. */
+    function endAudioOf(room: JamRoom): void {
+        jamAudioSession
+            .leave({ areaId: room.zone.areaId, propertyId: room.zone.propertyId, hostUuid: room.jam.hostUuid })
+            .catch((error) => console.error("Cannot end the Jam audio", error));
+    }
 
     function toggleQueue(hostUuid: string): void {
         if (!openQueues.delete(hostUuid)) openQueues.add(hostUuid);
@@ -112,7 +120,15 @@
             />
         {/if}
         {#if mine}
-            <Button variant="light" appearance="border" size="sm" onclick={stopSharingJam}>
+            <Button
+                variant="light"
+                appearance="border"
+                size="sm"
+                onclick={() => {
+                    endAudioOf(room);
+                    stopSharingJam();
+                }}
+            >
                 {home ? $LL.spotify.listeningZone.stopHome() : $LL.spotify.listeningZone.stop()}
             </Button>
         {:else}
@@ -121,7 +137,16 @@
                 variant="success"
                 size="sm"
                 appearance={joined ? "border" : "filled"}
-                onclick={() => (joined ? leaveJam() : home ? joinHomeJam(room) : joinJam(room))}
+                onclick={() => {
+                    if (joined) {
+                        endAudioOf(room);
+                        leaveJam();
+                    } else if (home) {
+                        joinHomeJam(room);
+                    } else {
+                        joinJam(room);
+                    }
+                }}
                 dataTestId={home ? "listening-zone-join-home" : "listening-zone-join"}
             >
                 {joined

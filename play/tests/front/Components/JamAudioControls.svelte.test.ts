@@ -54,6 +54,7 @@ describe("JamAudioControls", () => {
         shareMusic,
         stopSharingMusic,
         resume: vi.fn().mockResolvedValue(undefined),
+        leave: vi.fn().mockResolvedValue(undefined),
     };
 
     beforeEach(() => {
@@ -96,6 +97,8 @@ describe("JamAudioControls", () => {
         await vi.waitFor(() => expect(target.querySelector("[data-testid]")).not.toBeNull());
         flushSync();
     }
+    // The tooltip listens on the element around the control, as the pointer enters or leaves it.
+    const anchorOf = (control: HTMLElement) => control.closest<HTMLElement>('[role="presentation"]') as HTMLElement;
     const q = (id: string) => target.querySelector<HTMLElement>(`[data-testid="${id}"]`);
 
     describe("guest", () => {
@@ -170,15 +173,35 @@ describe("JamAudioControls", () => {
             expect(stop.getAttribute("aria-label")).toBe("Stop listening");
         });
 
-        it("names each icon button in a tooltip shown above it", async () => {
+        it("names an icon button in a tooltip shown on hover and on keyboard focus", async () => {
             await render(false);
             listeningSpaceName.set(spaceName);
             flushSync();
-            const tooltips = [...target.querySelectorAll('[role="tooltip"]')];
-            expect(tooltips.map((tooltip) => tooltip.textContent?.trim())).toEqual(["Mute", "Stop listening"]);
-            for (const tooltip of tooltips) {
-                expect(tooltip.classList.contains("bottom-full")).toBe(true);
-            }
+            expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
+            const mute = q("jam-audio-mute") as HTMLElement;
+            anchorOf(mute).dispatchEvent(new MouseEvent("mouseenter"));
+            await vi.waitFor(() =>
+                expect(document.body.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe("Mute"),
+            );
+            anchorOf(mute).dispatchEvent(new MouseEvent("mouseleave"));
+            await vi.waitFor(() => expect(document.body.querySelector('[role="tooltip"]')).toBeNull());
+            const stop = q("jam-audio-stop-listen") as HTMLElement;
+            stop.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+            await vi.waitFor(() =>
+                expect(document.body.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe("Stop listening"),
+            );
+        });
+
+        it("draws the tooltip outside the card, so that the scrolling panel around it cannot cut it", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            anchorOf(q("jam-audio-mute") as HTMLElement).dispatchEvent(new MouseEvent("mouseenter"));
+            await vi.waitFor(() => expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull());
+            const tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]') as HTMLElement;
+            expect(target.contains(tooltip)).toBe(false);
+            expect(tooltip.parentElement).toBe(document.body);
+            expect(tooltip.style.position).toBe("fixed");
         });
 
         it("mutes and unmutes the music alone", async () => {
