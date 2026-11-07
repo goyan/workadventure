@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
-    import { IconShuffle } from "@wa-icons";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { localUserStore } from "../../Connection/LocalUserStore";
@@ -10,6 +9,7 @@
     import type { WokaCollection, WokaData, WokaTexture } from "./WokaTypes";
     import { getItemsPerRow } from "./ItemsPerRow";
     import WokaImage from "./WokaImage.svelte";
+    import { IconShuffle } from "@wa-icons";
 
     /* eslint-disable svelte/require-each-key */
 

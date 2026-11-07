@@ -26,7 +26,13 @@ export default [
     {
         settings: { "import/internal-regex": "^@wa/" },
         rules: {
-            "import/order": ["error", { groups: ["builtin", "external", "internal", "parent", "sibling", "index"] }],
+            "import/order": [
+                "error",
+                {
+                    pathGroups: [{ pattern: "@wa/**", group: "parent", position: "before" }],
+                    pathGroupsExcludedImportTypes: ["builtin", "external"],
+                },
+            ],
             "@typescript-eslint/no-unsafe-call": "off",
             "@typescript-eslint/restrict-plus-operands": "off",
             "@typescript-eslint/no-unsafe-assignment": "off",
