@@ -689,6 +689,35 @@ Limites :
 - Pas de notification sur navigateur mobile (constructeur `Notification` refusé).
 - Coucou seulement entre joueurs de la même carte.
 
+### Pause café
+
+Pour se retrouver autour d'un café improvisé, sans pointage ni historique.
+
+- **Départ** : l'action « Café » (roue de l'avatar ou machine à café) affiche une tasse fixe au-dessus du pseudo
+  (4 px de marge), seule la vapeur bouge. Elle envoie l'invitation au plus une fois toutes les 15 min.
+- **Réception** : petite carte « ☕ X prend une pause café » avec **Rejoindre** (`emitAskPosition`) et **×**. Elle
+  disparaît quand X change d'action, sinon au bout de 10 min. Pas de son, pas de notification système, rien en
+  « Ne pas déranger », rien d'enregistré. Une carte par expéditeur.
+- **Aller vers un collègue** : « Rejoindre », « Y aller » du coucou et « Aller à » du menu s'arrêtent à une case
+  (32 px) de la personne, à la place libre la plus proche, au lieu de se poser sur elle.
+- **Trajets** : la boîte du corps est calculée depuis le sprite (le corps physique reste figé tant que rien ne bouge,
+  après une apparition ou une téléportation). Le meuble que l'avatar chevauche au départ est ignoré, pour sortir d'un
+  avatar apparu dans un objet.
+
+Réseau : événement de script `infogene.coffee` (`{ state: "start" | "end", at }`, zod), diffusé à la salle ; un
+expéditeur pas encore connu est attendu jusqu'à 5 s (`worldSpace.waitForSpaceUser`). Aucun changement de back,
+protobuf ni WAM : **compatible avec la prod**.
+
+Fichiers : `play/src/front/Phaser/Game/Coffee/*` (`CoffeeProtocol`, `CoffeeState` purs et testés ; `CoffeeManager`),
+`Game/RoomSender.ts` (partagé avec le coucou), `Stores/CoffeeStore.ts`, `Components/Coffee/CoffeeCards.svelte`,
+`Entity/AvatarActionEffect.ts`, `Utils/{BodyBox,PathStop,RectangleObstacles}.ts`, `GameMap/{GameMapFrontWrapper,
+StaticGroupsPath}.ts`, `Connection/RoomConnection.ts`, `Player/Player.ts`, `GameScene.ts`, i18n `coffee`.
+
+Limites :
+- Sur la carte d'équipe, la zone d'arrivée chevauche des meubles de la réserve : un avatar peut y apparaître dans une
+  poche dont les passages sont plus étroits qu'une case. Le clavier en sort, pas les trajets calculés.
+- Café seulement entre joueurs de la même carte.
+
 ### Uploader : fichiers binaires dans Redis et image du fork
 
 `RedisStorageProvider.get()` relit les octets bruts (`withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer })`). L'amont
