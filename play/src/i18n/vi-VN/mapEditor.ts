@@ -675,6 +675,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "Thời tiết",
+            description:
+                "Thời tiết được chia sẻ cho mọi người trên bản đồ. Bạn có thể ẩn hiệu ứng trong cài đặt cá nhân.",
+            clear: "Trời quang",
+            rain: "Mưa",
+            snow: "Tuyết",
+            storm: "Giông bão",
+            saving: "Đang lưu…",
+            success: "Đã lưu thời tiết",
+            error: "Không thể lưu thời tiết",
+        },
+
         loading: "Đang tải",
         megaphone: {
             title: "Loa phóng thanh",

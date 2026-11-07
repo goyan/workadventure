@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "도움말 및 팁",
     },
     settings: {
+        weatherEffects: "날씨 효과 표시 (비, 눈, 뇌우 빛)",
         night: {
             label: "낮과 밤 주기",
             server: "서버 시간",

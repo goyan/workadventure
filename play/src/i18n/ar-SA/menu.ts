@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "المساعدة والنصائح", // Help & Tips
     },
     settings: {
+        weatherEffects: "إظهار تأثيرات الطقس (المطر والثلج وضوء العاصفة)",
         night: {
             label: "دورة النهار والليل",
             server: "وقت الخادم",

@@ -285,6 +285,7 @@ import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
+import { WeatherManager } from "./Weather/WeatherManager";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
@@ -436,6 +437,7 @@ export class GameScene extends DirtyScene {
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private nightManager: NightManager | undefined;
+    private weatherManager: WeatherManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
@@ -1444,6 +1446,7 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.weatherManager?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
@@ -1641,6 +1644,7 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this.nightManager?.update(time);
+            this.weatherManager?.update(time, this.nightManager?.serverDate());
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -2697,6 +2701,8 @@ export class GameScene extends DirtyScene {
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);
+                this.weatherManager?.destroy();
+                this.weatherManager = new WeatherManager(this);
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
                 this._knockManager = new KnockManager(this);

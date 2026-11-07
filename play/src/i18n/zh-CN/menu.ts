@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "帮助与提示",
     },
     settings: {
+        weatherEffects: "显示天气效果（雨、雪和雷暴亮光）",
         night: {
             label: "昼夜周期",
             server: "服务器时间",

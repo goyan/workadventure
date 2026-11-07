@@ -120,6 +120,10 @@ export class NightManager {
         this.previous = frame;
     }
 
+    public serverDate(): Date | undefined {
+        return this.clock.now();
+    }
+
     public destroy(): void {
         this.clock.destroy();
         nightDateStore.set(undefined);

@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "說明與提示",
     },
     settings: {
+        weatherEffects: "顯示天氣效果",
         night: {
             label: "日夜週期",
             server: "伺服器時間",
