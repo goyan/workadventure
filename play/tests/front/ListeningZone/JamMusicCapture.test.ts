@@ -161,4 +161,79 @@ describe("JamMusicCapture", () => {
         expect(publisher.publishJamMusic).toHaveBeenLastCalledWith(second);
         expect(second.track.stop).not.toHaveBeenCalled();
     });
+
+    describe("when the connection of the Jam space is replaced", () => {
+        // The server restarts: the space reconnects with a new LiveKit connection, which registers a new publisher.
+        let announce: (spaceName: string, next: JamMusicPublisher) => void;
+        let unwatch: Mock<() => void>;
+
+        beforeEach(() => {
+            const watchers = new Set<{ spaceName: string; callback: (next: JamMusicPublisher) => void }>();
+            unwatch = vi.fn();
+            announce = (spaceName, next) => {
+                for (const watcher of [...watchers]) {
+                    if (watcher.spaceName === spaceName) watcher.callback(next);
+                }
+            };
+            capture = createJamMusicCapture({
+                getUserMedia,
+                getPublisher: (name) => (name === SPACE ? publisher : undefined),
+                onPublisherRegistered: (spaceName, callback) => {
+                    const watcher = { spaceName, callback };
+                    watchers.add(watcher);
+                    return () => {
+                        unwatch();
+                        watchers.delete(watcher);
+                    };
+                },
+            });
+        });
+
+        it("hands the running music to the new publisher", async () => {
+            const stream = fakeStream();
+            getUserMedia.mockResolvedValue(stream);
+            await capture.start(SPACE, "blackhole-id");
+            const replacement = { publishJamMusic: vi.fn().mockResolvedValue(undefined) };
+
+            announce(SPACE, replacement);
+
+            expect(replacement.publishJamMusic).toHaveBeenCalledWith(stream);
+            expect(get(capture.state)).toEqual({ status: "active", label: "BlackHole 2ch" });
+        });
+
+        it("stops publishing through the new publisher, not the old one, afterwards", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const replacement = { publishJamMusic: vi.fn().mockResolvedValue(undefined) };
+            announce(SPACE, replacement);
+
+            await capture.stop();
+
+            expect(replacement.publishJamMusic).toHaveBeenLastCalledWith(undefined);
+            expect(publisher.publishJamMusic).toHaveBeenCalledTimes(1);
+        });
+
+        it("ignores the publisher of another space", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            const other = { publishJamMusic: vi.fn().mockResolvedValue(undefined) };
+
+            announce("world.another-space", other);
+
+            expect(other.publishJamMusic).not.toHaveBeenCalled();
+        });
+
+        it("stops watching once the music is stopped", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            await capture.stop();
+            expect(unwatch).toHaveBeenCalledTimes(1);
+        });
+
+        it("tells when the new publisher cannot carry the music", async () => {
+            vi.spyOn(console, "error").mockImplementation(() => undefined);
+            await capture.start(SPACE, "blackhole-id");
+            const broken = { publishJamMusic: vi.fn().mockRejectedValue(new Error("room closed")) };
+
+            announce(SPACE, broken);
+            await vi.waitFor(() => expect(get(capture.state)).toEqual({ status: "error", reason: "unavailable" }));
+        });
+    });
 });
