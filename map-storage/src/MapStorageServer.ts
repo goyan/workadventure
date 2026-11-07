@@ -387,7 +387,12 @@ const mapStorageServer: MapStorageServer = {
                             userCanEdit,
                             "delete",
                         );
-                        await entitiesManager.executeCommand(
+                        // A map command: it removes the placed copies from the WAM, so the map must be saved. The
+                        // auto-save stops a while after the last map command; through the entities manager, the
+                        // copies were only removed in memory and came back as ghosts when the map was loaded again.
+                        await mapsManager.executeCommand(
+                            mapKey,
+                            mapUrl.host,
                             new DeleteCustomEntityMapStorageCommand(
                                 deleteCustomEntityMessage,
                                 wamFile,

@@ -32,6 +32,7 @@
     import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
+    import { confirmCustomEntityDeletion } from "./ConfirmCustomEntityDeletion";
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -441,8 +442,11 @@
                   }
                 : undefined}
             removeEntity={({ entityId }) => {
-                mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
-                editedModel = undefined;
+                if (!editedModel) return;
+                confirmCustomEntityDeletion(editedModel, () => {
+                    mapEditorDeleteCustomEntityEventStore.set({ id: entityId });
+                    editedModel = undefined;
+                });
             }}
         />
     </div>

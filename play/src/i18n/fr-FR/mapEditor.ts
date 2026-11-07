@@ -553,6 +553,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             backToSelectObject: "Retour à la sélection d'objet",
         },
         deleteButton: "Supprimer",
+        deleteCustomEntity: {
+            title: "Supprimer « {name} » ?",
+            description:
+                "L'image sera retirée de la bibliothèque de toutes les cartes, et ses exemplaires posés sur d'autres cartes n'apparaîtront plus. Exemplaires posés sur cette carte, supprimés avec elle : {count}. Cette action est définitive.",
+            confirm: "Supprimer",
+        },
         eraser: "Gomme",
         eraserHint: "Cliquez ou glissez sur des objets pour les supprimer.",
         testInteractionButton: "Tester interaction",

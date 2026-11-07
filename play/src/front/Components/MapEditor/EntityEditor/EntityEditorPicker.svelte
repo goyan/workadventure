@@ -32,7 +32,8 @@
     import EntityUpload from "./EntityUpload/EntityUpload.svelte";
     import CategoryTile from "./CategoryTile.svelte";
     import CategoryManager from "./CategoryManager.svelte";
-    import { IconChevronLeft, IconEraser, IconPencil } from "@wa-icons";
+    import { confirmCustomEntityDeletion } from "./ConfirmCustomEntityDeletion";
+    import { IconChevronLeft, IconEraser, IconPencil, IconTrash } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
     // Floors and walls of the map layer have their own tool: they are not offered as objects.
@@ -128,6 +129,7 @@
     }
 
     let isEditingCustomEntity = $state(false);
+    let pickedCardHeight = $state(0);
     let showCategoryManager = $state(false);
     function setIsEditingCustomEntity(isEditing: boolean) {
         isEditingCustomEntity = isEditing;
@@ -363,9 +365,10 @@
         {:else}
             {#if pickedEntityVariant && pickedEntity}
                 <div
+                    bind:clientHeight={pickedCardHeight}
                     class={isEditingCustomEntity
                         ? "fixed left-2 top-2 z-20 flex w-[calc(100%-16px)]"
-                        : "fixed left-2 flex flex-row gap-2 items-center justify-center border-b-blue-50 p-4 mb-2 min-h-[200px] bg-white/20 backdrop-blur-xl rounded-2xl w-[calc(100%-16px)]"}
+                        : "fixed left-2 flex flex-col gap-3 justify-center border-b-blue-50 p-4 pr-10 mb-2 min-h-[200px] bg-white/20 backdrop-blur-xl rounded-2xl w-[calc(100%-16px)]"}
                 >
                     {#if isEditingCustomEntity}
                         <CustomEntityEditionForm
@@ -374,53 +377,79 @@
                                 setIsEditingCustomEntity(false);
                             }}
                             removeEntity={({ entityId }) => {
-                                removeEntity(entityId);
+                                if (pickedEntity) {
+                                    confirmCustomEntityDeletion(pickedEntity, () => removeEntity(entityId));
+                                }
                             }}
                             applyEntityModifications={(customModifiedEntity) =>
                                 saveCustomEntityModifications(customModifiedEntity)}
                         />
                     {:else}
-                        <EntityImage
-                            classNames="h-16 w-[64px] object-contain rounded"
-                            imageSource={pickedEntity.imagePath}
-                            animation={pickedEntity.animation}
-                            imageAlt={pickedEntity.name}
-                        />
-                        <div>
-                            <p class="m-0"><b>{pickedEntityVariant.defaultPrefab.name}</b></p>
-                            <EntityVariantColorPicker
-                                colors={pickedEntityVariant.colors}
-                                {selectedColor}
-                                {onColorChange}
+                        <!-- The image and its name on one line, the actions under it: they wrap on a narrow panel. -->
+                        <div class="flex flex-row gap-3 items-center min-w-0">
+                            <EntityImage
+                                classNames="h-16 w-[64px] shrink-0 object-contain rounded"
+                                imageSource={pickedEntity.imagePath}
+                                animation={pickedEntity.animation}
+                                imageAlt={pickedEntity.name}
                             />
-                            <EntityVariantPositionPicker
-                                entityPrefabsPositions={pickedEntityVariant.getEntityPrefabsPositions(selectedColor)}
-                                selectedEntity={pickedEntity}
-                                {onPickItem}
-                            />
+                            <div class="min-w-0 flex-1">
+                                <p class="m-0 break-words"><b>{pickedEntityVariant.defaultPrefab.name}</b></p>
+                                <EntityVariantColorPicker
+                                    colors={pickedEntityVariant.colors}
+                                    {selectedColor}
+                                    {onColorChange}
+                                />
+                                <EntityVariantPositionPicker
+                                    entityPrefabsPositions={pickedEntityVariant.getEntityPrefabsPositions(
+                                        selectedColor,
+                                    )}
+                                    selectedEntity={pickedEntity}
+                                    {onPickItem}
+                                />
+                            </div>
                         </div>
                         {#if canEditCustomEntity(pickedEntity)}
-                            <Button
-                                variant="secondary"
-                                dataTestId="editEntity"
-                                onclick={() => setIsEditingCustomEntity(true)}
-                            >
-                                {#snippet icon()}
-                                    <IconPencil font-size={16} />
-                                {/snippet}
-                                {$LL.mapEditor.entityEditor.buttons.editEntity()}
-                            </Button>
-                            <Button
-                                variant="contrast"
-                                dataTestId="addEntityView"
-                                onclick={() => {
-                                    if (!pickedEntity) return;
-                                    entityUploadViewOfStore.set($state.snapshot(pickedEntity));
-                                    clearEntitySelection();
-                                }}
-                            >
-                                {$LL.mapEditor.entityEditor.views.add()}
-                            </Button>
+                            <div class="flex flex-row flex-wrap gap-2" data-testid="customEntityActions">
+                                <Button
+                                    variant="secondary"
+                                    class="flex-1 min-w-[8rem]"
+                                    dataTestId="editEntity"
+                                    onclick={() => setIsEditingCustomEntity(true)}
+                                >
+                                    {#snippet icon()}
+                                        <IconPencil font-size={16} />
+                                    {/snippet}
+                                    {$LL.mapEditor.entityEditor.buttons.editEntity()}
+                                </Button>
+                                <Button
+                                    variant="danger"
+                                    class="flex-1 min-w-[8rem]"
+                                    dataTestId="deleteCustomEntity"
+                                    onclick={() => {
+                                        const entity = pickedEntity;
+                                        if (!entity) return;
+                                        confirmCustomEntityDeletion(entity, () => removeEntity(entity.id));
+                                    }}
+                                >
+                                    {#snippet icon()}
+                                        <IconTrash font-size={16} />
+                                    {/snippet}
+                                    {$LL.mapEditor.entityEditor.buttons.delete()}
+                                </Button>
+                                <Button
+                                    variant="contrast"
+                                    class="flex-1 min-w-[8rem]"
+                                    dataTestId="addEntityView"
+                                    onclick={() => {
+                                        if (!pickedEntity) return;
+                                        entityUploadViewOfStore.set($state.snapshot(pickedEntity));
+                                        clearEntitySelection();
+                                    }}
+                                >
+                                    {$LL.mapEditor.entityEditor.views.add()}
+                                </Button>
+                            </div>
                         {/if}
                         <div class="absolute top-1 right-1 p-1">
                             <ButtonClose
@@ -440,7 +469,11 @@
                 </div>
             {/if}
             {#if !isEditingCustomEntity}
-                <div class="flex flex-col gap-2" class:mt-52={pickedEntityVariant && pickedEntity}>
+                <!-- The picked object floats above the grid: the grid starts under it, whatever its height (long names, wrapped buttons). -->
+                <div
+                    class="flex flex-col gap-2"
+                    style:margin-top={pickedEntityVariant && pickedEntity ? `${pickedCardHeight + 16}px` : undefined}
+                >
                     {#if $selectCategoryStore}
                         <span class="retro-title">
                             {getCategoryLabel($selectCategoryStore)}
