@@ -8,6 +8,7 @@ import { notifySystem } from "../../../Notification/SystemNotifier";
 import { playersStore } from "../../../Stores/PlayersStore";
 import { waveCardsStore } from "../../../Stores/WaveStore";
 import type { GameScene } from "../GameScene";
+import { resolveRoomSender } from "../RoomSender";
 import { decodeWave, encodeWave } from "./WaveProtocol";
 import { WaveState } from "./WaveState";
 
@@ -108,7 +109,7 @@ export class WaveManager {
         if (senderId === undefined || !connection || senderId === connection.getUserId()) {
             return;
         }
-        const sender = this.resolveSender(senderId);
+        const sender = resolveRoomSender(this.scene, senderId);
         if (sender.uuid === this.localUuid) {
             return;
         }
@@ -131,32 +132,6 @@ export class WaveManager {
             // The card is already in the page: bringing the tab to the front is enough.
             onClick: () => {},
         });
-    }
-
-    /**
-     * The players near the local one first (sprites, then the players store), then the world space, which knows
-     * every connected user, even far away on the map. The uuid is empty when nobody knows the sender.
-     */
-    private resolveSender(senderId: number): { uuid: string; name: string } {
-        const remotePlayer = this.scene.MapPlayersByKey.get(senderId);
-        if (remotePlayer) {
-            return { uuid: remotePlayer.userUuid, name: remotePlayer.playerName };
-        }
-        const player = playersStore.getPlayerById(senderId);
-        if (player?.userUuid) {
-            return { uuid: player.userUuid, name: player.name };
-        }
-        const spaceUser = this.scene.worldSpace?.getSpaceUserBySpaceUserId(this.spaceUserIdOf(senderId));
-        if (spaceUser) {
-            return { uuid: spaceUser.uuid, name: spaceUser.name };
-        }
-        return { uuid: "", name: "" };
-    }
-
-    /** A space user id is `<room url>_<user id>`: the sender is in the same room as the local player. */
-    private spaceUserIdOf(senderId: number): string {
-        const localSpaceUserId = this.scene.connection?.getSpaceUserId() ?? "";
-        return `${localSpaceUserId.slice(0, localSpaceUserId.lastIndexOf("_"))}_${senderId}`;
     }
 
     /** The live status of the world space first: the players store keeps the status a player joined with. */

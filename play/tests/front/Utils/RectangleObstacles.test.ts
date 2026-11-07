@@ -32,6 +32,19 @@ describe("RectangleObstacles", () => {
         expect(obstacles.blocksSegment({ x: 50, y: 110 }, { x: 200, y: 110 })).toBe(true);
         expect(obstacles.blocksSegment({ x: 50, y: 160 }, { x: 200, y: 160 })).toBe(false);
     });
+
+    it("leaves out the rectangle the body overlaps now, not the others", () => {
+        const rectangles = [
+            { x: 100, y: 100, width: 20, height: 20 },
+            { x: 200, y: 100, width: 20, height: 20 },
+        ];
+        // Spawned or pushed with the feet inside the first rectangle.
+        const fromInside = new RectangleObstacles(rectangles, BODY, { x: 110, y: 110 });
+        expect(fromInside.blocksPoint({ x: 110, y: 110 })).toBe(false);
+        expect(fromInside.blocksSegment({ x: 110, y: 110 }, { x: 110, y: 160 })).toBe(false);
+        // The second rectangle on the way still blocks.
+        expect(fromInside.blocksSegment({ x: 110, y: 110 }, { x: 300, y: 110 })).toBe(true);
+    });
 });
 
 describe("PathfindingManager with pixel obstacles", () => {
@@ -45,5 +58,17 @@ describe("PathfindingManager with pixel obstacles", () => {
         expect(path.length).toBeGreaterThan(2);
         expect(path.at(-1)).toEqual(centerOf(5, 1));
         expect(path.some((step) => step.y > 4 * 32)).toBe(true);
+    });
+
+    it("finds a way out when the avatar stands inside an object (spawn on a shelf)", async () => {
+        const manager = new PathfindingManager(emptyGrid(7, 6), tile);
+        // A shelf covering the start tile and its neighbours, the grid does not see it.
+        const start = { x: centerOf(1, 1).x, y: 1 * 32 };
+        const feet = { x: start.x, y: start.y + 16 };
+        manager.setObstacles(new RectangleObstacles([{ x: 10, y: 20, width: 90, height: 50 }], BODY, feet));
+
+        const path = await manager.findPathFromGameCoordinates(start, centerOf(5, 4));
+
+        expect(path.at(-1)).toEqual(centerOf(5, 4));
     });
 });

@@ -14,11 +14,14 @@ export function isPathClearOfStaticGroups(
     if (!(body instanceof Phaser.Physics.Arcade.Body)) {
         return false;
     }
-    let previous = { x: body.center.x, y: body.center.y };
+    // From the sprite: body.center may be stale (see bodyBoxFromSprite).
+    const box = player.getBodyBox();
+    const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    let previous = center;
     for (const step of path) {
         const next = {
-            x: step.x + body.center.x - player.x,
-            y: step.y - body.height / 2 - body.offset.y + body.center.y - player.y,
+            x: step.x + center.x - player.x,
+            y: step.y - body.height / 2 - body.offset.y + center.y - player.y,
         };
         const line = new Phaser.Geom.Line(previous.x, previous.y, next.x, next.y);
         for (const group of groups) {
@@ -33,6 +36,10 @@ export function isPathClearOfStaticGroups(
                     obstacle.width + body.width - 2 * Phaser.Math.EPSILON,
                     obstacle.height + body.height - 2 * Phaser.Math.EPSILON,
                 );
+                // The object the body already overlaps at the start (spawned or pushed into it) can be walked out of.
+                if (expanded.contains(center.x, center.y)) {
+                    continue;
+                }
                 if (Phaser.Geom.Intersects.LineToRectangle(line, expanded)) {
                     return false;
                 }

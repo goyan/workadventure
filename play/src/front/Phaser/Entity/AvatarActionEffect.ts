@@ -36,13 +36,24 @@ export class AvatarActionEffect {
         graphics.clear();
         switch (action) {
             case AvatarAction.Coffee: {
-                const sip = Math.max(0, beat);
-                const x = 7 - sip * 3;
-                const y = 2 - sip * 7;
-                graphics.fillStyle(0xffffff).fillRect(x, y, 5, 5);
-                graphics.lineStyle(1, 0xffffff).strokeRect(x + 5, y + 1, 2, 3);
-                graphics.fillStyle(0x6b3b20).fillRect(x + 1, y, 3, 1);
-                graphics.lineStyle(1, 0xffffff, 0.6).lineBetween(x + 2, y - 2, x + 3, y - 5);
+                // A still cup above the name tag (centered at -18), seen from afar; only its steam moves.
+                const x = -5;
+                const y = (seated ? -4 : 0) - 44;
+                graphics.fillStyle(0x3a2a20).fillRect(x - 1, y - 1, 11, 10);
+                graphics.fillStyle(0x3a2a20).fillRect(x + 9, y + 1, 4, 6);
+                graphics.fillStyle(0xffffff).fillRect(x, y, 9, 8);
+                graphics.fillStyle(0xffffff).fillRect(x + 10, y + 2, 2, 4);
+                graphics.fillStyle(0x3a2a20).fillRect(x + 10, y + 3, 1, 2);
+                graphics.fillStyle(0x6b3b20).fillRect(x + 1, y, 7, 2);
+                // Three wisps rising and fading in turn, each swaying sideways.
+                for (const [index, wispX] of [x + 2, x + 4.5, x + 7].entries()) {
+                    const phase = ((time + index * 500) % 1500) / 1500;
+                    const bottom = y - 2 - phase * 6;
+                    const sway = Math.sin(phase * Math.PI * 2) * 1.5;
+                    graphics
+                        .lineStyle(1, 0xffffff, 0.8 * (1 - phase))
+                        .lineBetween(wispX, bottom, wispX + sway, bottom - 4);
+                }
                 break;
             }
             case AvatarAction.Sleep: {

@@ -23,6 +23,7 @@ import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
 import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
 import LL from "../../../i18n/i18n-svelte";
 import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "../Entity/AvatarAction";
+import { bodyBoxFromSprite, type BodyBox } from "../../Utils/BodyBox";
 import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
 import { getSolidRectangles } from "../../Utils/EntityHitbox";
 import { RUN_ANIMATION_SPEED } from "./Animation";
@@ -167,6 +168,7 @@ export class Player extends Character {
             persist: false,
             scope: "room",
         });
+        this.scene.coffeeManager?.onLocalAction(action);
     }
 
     public override setSwimwearColor(value: unknown): void {
@@ -226,23 +228,21 @@ export class Player extends Character {
         else this.actionPrompt.show(activate);
     }
 
+    /** The box of the body, from the sprite: `body.x/y` may be stale (see bodyBoxFromSprite). */
+    public getBodyBox(): BodyBox {
+        return bodyBoxFromSprite(this, this.getBody());
+    }
+
     /**
      * Sits on the free seat under the feet of the player: slides to its center, then faces the way of the seat.
      */
     private trySitDown(): void {
         const body = this.getBody();
         this.releaseSeatObjectWhenOut();
-        // The physics only steps while something moves (DirtyScene): standing still after the avatar was placed by code
-        // (a slide, a seat), the body is still where it was last synced. Its box is taken from the sprite instead.
         const seat = findSeatUnderFeet(
             this.scene,
             { x: this.x, y: this.y + body.height / 2 + body.offset.y },
-            {
-                x: this.x + this.scaleX * (body.offset.x - this.displayOriginX),
-                y: this.y + this.scaleY * (body.offset.y - this.displayOriginY),
-                width: body.width,
-                height: body.height,
-            },
+            this.getBodyBox(),
         );
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;

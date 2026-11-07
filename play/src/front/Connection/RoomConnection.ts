@@ -156,6 +156,8 @@ import { ConnectionClosedError } from "./ConnectionClosedError";
 import { WorkAdventureWebSocket } from "./WorkAdventureWebSocket";
 
 // This must be greater than RoomManager's PING_INTERVAL
+/** Going to a colleague stops this far from them (one tile). */
+const GO_TO_USER_GAP = 32;
 const manualPingDelay = 100_000;
 
 export class RoomConnection implements RoomConnection {
@@ -771,9 +773,12 @@ export class RoomConnection implements RoomConnection {
                 }
                 case "moveToPositionMessage": {
                     if (message.moveToPositionMessage && message.moveToPositionMessage.position) {
+                        // The position is where the colleague stands: often on a seat or against a desk, whose hitbox
+                        // makes that exact point unreachable. Walk to the nearest free spot instead of not moving, and
+                        // stop one tile before them rather than on top of them.
                         gameManager
                             .getCurrentGameScene()
-                            .moveTo(message.moveToPositionMessage.position, false, WOKA_SPEED * 2.5)
+                            .moveTo(message.moveToPositionMessage.position, true, WOKA_SPEED * 2.5, GO_TO_USER_GAP)
                             .catch((error) => {
                                 console.warn(error);
                             });
