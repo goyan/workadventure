@@ -169,7 +169,7 @@ describe("JamAudioControls", () => {
             listeningSpaceName.set(spaceName);
             flushSync();
             const tooltips = [...target.querySelectorAll('[role="tooltip"]')];
-            expect(tooltips.map((tooltip) => tooltip.textContent?.trim())).toEqual(["Stop listening", "Mute"]);
+            expect(tooltips.map((tooltip) => tooltip.textContent?.trim())).toEqual(["Mute", "Stop listening"]);
             for (const tooltip of tooltips) {
                 expect(tooltip.classList.contains("bottom-full")).toBe(true);
             }

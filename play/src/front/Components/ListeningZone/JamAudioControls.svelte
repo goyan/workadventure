@@ -9,6 +9,7 @@
     import PlayerPauseIcon from "../Icons/PlayerPauseIcon.svelte";
     import PlayerPlayIcon from "../Icons/PlayerPlayIcon.svelte";
     import PlayerStopIcon from "../Icons/PlayerStopIcon.svelte";
+    import VolumeIcon from "../Icons/VolumeIcon.svelte";
     import Button from "../UI/Button.svelte";
     import JamMusicPlayer from "./JamMusicPlayer.svelte";
     import TooltipAbove from "./TooltipAbove.svelte";
@@ -136,53 +137,61 @@
     {/if}
 {:else if listening}
     <div data-testid="jam-audio-player"><JamMusicPlayer {spaceName} /></div>
-    <div class="flex flex-wrap items-center gap-2">
-        <TooltipAbove label={$LL.spotify.listeningZone.audioStopListen()}>
-            <Button
-                variant="light"
-                appearance="border"
-                size="sm"
-                square
-                onclick={() => report(session.stopListening())}
-                dataTestId="jam-audio-stop-listen"
-                aria-label={$LL.spotify.listeningZone.audioStopListen()}
-            >
-                {#snippet icon()}
-                    <PlayerStopIcon height="h-5" width="w-5" hover="" />
-                {/snippet}
-            </Button>
-        </TooltipAbove>
-        <!-- Pause while the music plays, play while it is silenced: an icon takes less room than a long label. -->
+    <!-- A small player: the round button pauses or resumes the music, the slider sets its volume, the other stops it. -->
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-black/25 px-2.5 py-2">
         <TooltipAbove label={muteLabel}>
-            <Button
-                variant="light"
-                appearance="ghost"
-                size="sm"
-                square
+            <button
+                type="button"
+                class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#1ed760] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 onclick={() => jamMusicMutedStore.update((muted) => !muted)}
-                dataTestId="jam-audio-mute"
+                data-testid="jam-audio-mute"
                 aria-label={muteLabel}
             >
-                {#snippet icon()}
-                    {#if $jamMusicMutedStore}
-                        <PlayerPlayIcon height="h-5" width="w-5" hover="" />
-                    {:else}
-                        <PlayerPauseIcon height="h-5" width="w-5" hover="" />
-                    {/if}
-                {/snippet}
-            </Button>
+                {#if $jamMusicMutedStore}
+                    <PlayerPlayIcon
+                        height="h-5"
+                        width="w-5"
+                        strokeColor="stroke-black"
+                        fillColor="fill-black"
+                        hover=""
+                    />
+                {:else}
+                    <PlayerPauseIcon
+                        height="h-5"
+                        width="w-5"
+                        strokeColor="stroke-black"
+                        fillColor="fill-black"
+                        hover=""
+                    />
+                {/if}
+            </button>
+        </TooltipAbove>
+        <div class="flex min-w-[7rem] flex-1 items-center gap-2">
+            <VolumeIcon height="h-5" width="w-5" strokeColor="stroke-white/70" hover="" classList="shrink-0" />
+            <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                class="jam-volume min-w-0 flex-1"
+                style="--fill: {$jamMusicVolumeStore * 100}%"
+                aria-label={$LL.spotify.listeningZone.audioVolume()}
+                bind:value={$jamMusicVolumeStore}
+                data-testid="jam-audio-volume"
+            />
+        </div>
+        <TooltipAbove label={$LL.spotify.listeningZone.audioStopListen()}>
+            <button
+                type="button"
+                class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/25 bg-transparent hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                onclick={() => report(session.stopListening())}
+                data-testid="jam-audio-stop-listen"
+                aria-label={$LL.spotify.listeningZone.audioStopListen()}
+            >
+                <PlayerStopIcon height="h-4" width="w-4" fillColor="fill-white" hover="" />
+            </button>
         </TooltipAbove>
     </div>
-    <input
-        type="range"
-        min="0"
-        max="1"
-        step="0.05"
-        class="w-full"
-        aria-label={$LL.spotify.listeningZone.audioVolume()}
-        bind:value={$jamMusicVolumeStore}
-        data-testid="jam-audio-volume"
-    />
 {:else}
     <Button variant="success" size="sm" onclick={() => report(session.listen(jam))} dataTestId="jam-audio-listen">
         {$LL.spotify.listeningZone.audioListen()}
@@ -191,3 +200,36 @@
 {#if errorMessage}
     <p class="m-0 text-xs text-red-300" data-testid="jam-audio-error">{errorMessage}</p>
 {/if}
+
+<style>
+    /* A thin green track filled up to the volume, with a small round thumb: the native slider is a big white box. */
+    .jam-volume {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 4px;
+        border-radius: 9999px;
+        outline: none;
+        cursor: pointer;
+        background: linear-gradient(to right, #1ed760 var(--fill), rgb(255 255 255 / 0.25) var(--fill));
+    }
+    .jam-volume::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border: 0;
+        border-radius: 9999px;
+        background: #fff;
+    }
+    .jam-volume::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        border: 0;
+        border-radius: 9999px;
+        background: #fff;
+    }
+    .jam-volume:focus-visible {
+        outline: 2px solid #fff;
+        outline-offset: 4px;
+    }
+</style>
