@@ -498,6 +498,22 @@ comme obstacle, sauf pour un nageur ; les murs de la couche carte restent des ba
 local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
 Phaser sans navigateur) : comportement validé en jeu uniquement.
 
+### Supprimer une image importée (avec confirmation)
+
+Dans la bibliothèque de l'éditeur, une image importée (catégorie « Personnalisé ») choisie affiche **Supprimer** à côté
+d'« Éditer », pour qui peut déjà la supprimer (droit d'édition de la carte ou auteur de l'image, vérifié aussi par
+`map-storage`). Une fenêtre demande confirmation (`DeleteCustomEntityModal`) : l'image quitte la bibliothèque de toutes
+les cartes, ses exemplaires posés sur la carte ouverte (comptés) sont supprimés, ceux des autres cartes n'apparaîtront
+plus ; c'est définitif. Annuler, la croix ou Échap ferment sans rien faire (Échap ne désélectionne pas l'image dans
+l'éditeur) ; un double clic ne supprime qu'une fois. Le bouton du formulaire « Éditer » passe par la même confirmation.
+La carte de l'objet choisi s'adapte à la largeur du panneau : nom sur plusieurs lignes, boutons qui passent à la ligne,
+grille d'images décalée de la hauteur réelle de la carte (plus de vignettes recouvertes).
+
+Correctif `map-storage` : la suppression passe par `mapsManager.executeCommand`, qui planifie la sauvegarde de la carte.
+Avant, elle passait par `entitiesManager` : les exemplaires n'étaient retirés qu'en mémoire si la sauvegarde automatique
+s'était déjà arrêtée (15 s sans modification), et revenaient comme objets fantômes au rechargement. Ne s'applique qu'où
+tourne l'image `map-storage` du fork (beta) ; la prod utilise l'image officielle.
+
 ### Hitbox des objets hors grille, des animaux et de l'assise
 
 Règles communes (`play/src/front/Utils/EntityHitbox.ts`), lues par les collisions du joueur, celles des animaux et les sièges :

@@ -544,6 +544,12 @@ const mapEditor: BaseTranslation = {
             backToSelectObject: "Back to select object",
         },
         deleteButton: "Delete",
+        deleteCustomEntity: {
+            title: "Delete “{name}”?",
+            description:
+                "The image will be removed from the library of every map, and its copies placed on other maps will no longer appear. Copies placed on this map, deleted with it: {count}. This cannot be undone.",
+            confirm: "Delete",
+        },
         eraser: "Eraser",
         eraserHint: "Click or drag over objects to delete them.",
         testInteractionButton: "Test Interaction",

@@ -16,6 +16,7 @@ vi.hoisted(() => {
 import { entitiesManager } from "../EntitiesManager";
 import { mapsManager } from "../MapsManager";
 import { mapStorageServer } from "../MapStorageServer";
+import { CustomEntityCollectionService } from "../Services/CustomEntityCollectionService";
 
 const ZONE_TAG = "zone-editor";
 const prefabRef = { id: "chair", collectionName: "basic" };
@@ -51,6 +52,7 @@ type EditMapMessage = NonNullable<NonNullable<EditMapCommandMessage["editMapMess
 
 const VISITOR = { userCanEdit: false, connectedUserTags: [] as string[] };
 const ZONE_EDITOR = { userCanEdit: false, connectedUserTags: [ZONE_TAG] };
+const MAP_EDITOR = { userCanEdit: true, connectedUserTags: [] as string[] };
 
 let wamFile: WamFile;
 let addCommandToQueue: ReturnType<typeof vi.spyOn>;
@@ -201,6 +203,22 @@ describe("MapStorageServer entity edit permissions", () => {
         it("lets a zone editor move an entity inside their zone", async () => {
             await expectAccepted(ZONE_EDITOR, modifyEntity("inside", 96, 96));
             expect(wamFile.getWam().entities.inside.x).toBe(96);
+        });
+    });
+
+    describe("delete custom entity", () => {
+        it("removes its placed copies through a map command, which schedules the save of the map", async () => {
+            vi.spyOn(CustomEntityCollectionService.prototype, "deleteEntity").mockResolvedValue();
+            const response = await send(MAP_EDITOR, {
+                $case: "deleteCustomEntityMessage",
+                deleteCustomEntityMessage: { id: "chair" },
+            });
+            expect(response.editMapMessage?.message?.$case).toBe("deleteCustomEntityMessage");
+            // The auto-save stops a while after the last map command: the deletion must be one of them, otherwise
+            // the copies are only removed in memory and come back as ghosts when the map is loaded again.
+            expect(vi.mocked(mapsManager).executeCommand.mock.calls).toHaveLength(1);
+            expect(entitiesExecute).not.toHaveBeenCalled();
+            expect(wamFile.getWam().entities).toEqual({});
         });
     });
 
