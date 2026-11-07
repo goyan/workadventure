@@ -53,6 +53,7 @@ describe("JamAudioControls", () => {
         stopListening,
         shareMusic,
         stopSharingMusic,
+        resume: vi.fn().mockResolvedValue(undefined),
     };
 
     beforeEach(() => {

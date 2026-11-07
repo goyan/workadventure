@@ -1,6 +1,6 @@
 import { FilterType } from "@workadventure/messages";
 import { buildJamSpaceName } from "@workadventure/map-editor";
-import { type Readable, type Writable, writable } from "svelte/store";
+import { get, type Readable, type Writable, writable } from "svelte/store";
 import type { SpaceInterface } from "../Space/SpaceInterface";
 import type { SpaceRegistryInterface } from "../Space/SpaceRegistry/SpaceRegistryInterface";
 import { jamMusicCapture, type JamMusicCapture } from "./JamMusicCapture";
@@ -13,6 +13,14 @@ export interface JamAudioTarget {
     hostUuid: string;
 }
 
+/** What the user listened to or shared when the page went away: the next page picks it up again. */
+export interface JamAudioMemory {
+    /** The space of the Jam the user listened to. */
+    listening?: string;
+    /** The space of the Jam whose music the user shared, and the input it came from. */
+    sharing?: { spaceName: string; deviceId: string };
+}
+
 export interface JamAudioSessionDependencies {
     getSpaceRegistry: () => Pick<SpaceRegistryInterface, "joinSpace" | "leaveSpace">;
     getRoomUrl: () => string;
@@ -21,6 +29,13 @@ export interface JamAudioSessionDependencies {
     listeningStore: Writable<boolean>;
     /** How long the host waits for the LiveKit connection of the Jam space before trying to share anyway. */
     publisherTimeoutMs?: number;
+    /** Where what is listened to or shared is kept between pages; nothing is kept without it. */
+    memory?: { load: () => JamAudioMemory; save: (value: JamAudioMemory) => void };
+}
+
+/** The inputs that carry the user's own voice: never the music. Without a known microphone, the system default. */
+export function forbiddenAudioInputs(micDeviceId: string | undefined): string[] {
+    return micDeviceId ? [micDeviceId] : ["default"];
 }
 
 export interface JamAudioSession {
@@ -39,6 +54,11 @@ export interface JamAudioSession {
         options?: { forbiddenDeviceIds?: readonly string[] },
     ): Promise<void>;
     stopSharingMusic(): Promise<void>;
+    /**
+     * Picks up what the user listened to or shared before a restart or a reload, for those of the Jams offered that
+     * they were in. Called as the Jams of the room appear: what already runs, or was stopped by the user, is left alone.
+     */
+    resume(jams: readonly JamAudioTarget[], options?: { micDeviceId?: string }): Promise<void>;
 }
 
 const PUBLISHER_POLL_MS = 250;
@@ -58,7 +78,14 @@ export function createJamAudioSession({
     getPublisher,
     listeningStore,
     publisherTimeoutMs = DEFAULT_PUBLISHER_TIMEOUT_MS,
+    memory,
 }: JamAudioSessionDependencies): JamAudioSession {
+    let remembered: JamAudioMemory = memory?.load() ?? {};
+    function remember(patch: Partial<JamAudioMemory>): void {
+        remembered = { ...remembered, ...patch };
+        memory?.save(remembered);
+    }
+
     // One Jam space can serve the music of the host, the music a guest hears and, later, the screens: it is joined by the
     // first use and left by the last one.
     const spaces = new Map<string, { uses: number; space: Promise<SpaceInterface>; abort: AbortController }>();
@@ -128,6 +155,7 @@ export function createJamAudioSession({
         listenLease = undefined;
         listeningSpaceName.set(undefined);
         listeningStore.set(false);
+        remember({ listening: undefined });
         await lease?.release();
     }
 
@@ -153,6 +181,7 @@ export function createJamAudioSession({
         if (listenLease === lease) {
             listeningSpaceName.set(lease.spaceName);
             listeningStore.set(true);
+            remember({ listening: lease.spaceName });
         }
     }
 
@@ -163,6 +192,7 @@ export function createJamAudioSession({
         const lease = shareLease;
         shareLease = undefined;
         sharingSpaceName.set(undefined);
+        remember({ sharing: undefined });
         unwatchCapture?.();
         unwatchCapture = undefined;
         if (!lease) {
@@ -197,11 +227,14 @@ export function createJamAudioSession({
             return;
         }
         sharingSpaceName.set(lease.spaceName);
+        remember({ sharing: { spaceName: lease.spaceName, deviceId } });
         // A capture that fails or ends by itself (device unplugged, refused) no longer needs the space.
         unwatchCapture = capture.state.subscribe((state) => {
             if (state.status === "error" && shareLease === lease) {
                 shareLease = undefined;
                 sharingSpaceName.set(undefined);
+                // Not asked again: a refused or vanished input would fail the same way at every reload.
+                remember({ sharing: undefined });
                 const unwatch = unwatchCapture;
                 unwatchCapture = undefined;
                 queueMicrotask(() => unwatch?.());
@@ -210,7 +243,43 @@ export function createJamAudioSession({
         });
     }
 
+    const resuming = new Set<string>();
+
+    async function resume(jams: readonly JamAudioTarget[], options: { micDeviceId?: string } = {}): Promise<void> {
+        const starts: Promise<void>[] = [];
+        for (const jam of jams) {
+            const spaceName = buildJamSpaceName({ roomUrl: getRoomUrl(), ...jam });
+            const wantsListening = remembered.listening === spaceName && get(listeningSpaceName) !== spaceName;
+            const sharing = remembered.sharing;
+            const wantsSharing = sharing?.spaceName === spaceName && get(sharingSpaceName) !== spaceName;
+            for (const [kind, wanted, start] of [
+                ["listen", wantsListening, () => listen(jam)],
+                [
+                    "share",
+                    wantsSharing && sharing !== undefined,
+                    () =>
+                        shareMusic(jam, sharing?.deviceId ?? "", {
+                            forbiddenDeviceIds: forbiddenAudioInputs(options.micDeviceId),
+                        }),
+                ],
+            ] as const) {
+                const key = `${kind}:${spaceName}`;
+                if (!wanted || resuming.has(key)) {
+                    continue;
+                }
+                resuming.add(key);
+                starts.push(
+                    start()
+                        .catch((error) => console.error("Cannot resume the Jam audio", error))
+                        .finally(() => resuming.delete(key)),
+                );
+            }
+        }
+        await Promise.all(starts);
+    }
+
     return {
+        resume,
         listeningSpaceName,
         sharingSpaceName,
         spaceNameOf: (jam) => buildJamSpaceName({ roomUrl: getRoomUrl(), ...jam }),
@@ -224,6 +293,7 @@ export function createJamAudioSession({
 /** The session of the running game; the space registry and the room belong to the current scene. */
 export function createGameJamAudioSession(
     getScene: () => { spaceRegistry: SpaceRegistryInterface; roomUrl: string },
+    memory?: JamAudioSessionDependencies["memory"],
 ): JamAudioSession {
     return createJamAudioSession({
         getSpaceRegistry: () => getScene().spaceRegistry,
@@ -231,5 +301,6 @@ export function createGameJamAudioSession(
         capture: jamMusicCapture,
         getPublisher: getJamMusicPublisher,
         listeningStore: jamMusicListeningStore,
+        memory,
     });
 }
