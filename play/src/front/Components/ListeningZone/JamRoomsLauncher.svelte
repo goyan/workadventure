@@ -29,7 +29,7 @@
         </button>
         {#if $jamRoomsPanelOpenStore}
             <div
-                class="w-80 max-w-[90vw] max-h-[60vh] overflow-y-auto rounded-lg bg-contrast/80 p-4 backdrop-blur flex flex-col gap-3"
+                class="w-80 max-w-[90vw] max-h-[60vh] overflow-y-auto overflow-x-hidden rounded-lg bg-contrast/80 p-4 backdrop-blur flex flex-col gap-3"
                 data-testid="jam-rooms-panel"
             >
                 <button

@@ -204,14 +204,23 @@
 {/if}
 
 <style>
-    /* A thin green track filled up to the volume, with a small round thumb: the native slider is a big white box. */
+    /*
+     * A thin green track filled up to the volume, with a round thumb centred on it. The track and the thumb are sized
+     * explicitly: left to the browser, the 14px thumb is not centred on a 4px bar everywhere (on Windows it sat above it).
+     */
     .jam-volume {
         -webkit-appearance: none;
         appearance: none;
-        height: 4px;
-        border-radius: 9999px;
+        height: 14px;
+        margin: 0;
+        padding: 0;
+        background: transparent;
         outline: none;
         cursor: pointer;
+    }
+    .jam-volume::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 9999px;
         background: linear-gradient(to right, #1ed760 var(--fill), rgb(255 255 255 / 0.25) var(--fill));
     }
     .jam-volume::-webkit-slider-thumb {
@@ -219,9 +228,21 @@
         appearance: none;
         width: 14px;
         height: 14px;
+        /* (track height - thumb height) / 2 */
+        margin-top: -5px;
         border: 0;
         border-radius: 9999px;
         background: #fff;
+    }
+    .jam-volume::-moz-range-track {
+        height: 4px;
+        border-radius: 9999px;
+        background: rgb(255 255 255 / 0.25);
+    }
+    .jam-volume::-moz-range-progress {
+        height: 4px;
+        border-radius: 9999px;
+        background: #1ed760;
     }
     .jam-volume::-moz-range-thumb {
         width: 14px;
