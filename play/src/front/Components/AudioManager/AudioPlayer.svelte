@@ -18,10 +18,12 @@
     import { activeSecondaryZoneActionBarStore } from "../../Stores/MenuStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { audioOutput } from "../../WebRtc/AudioOutputManager";
+    import { environmentVolumeStore } from "../../Stores/SoundEffectsStore";
 
     let HTMLAudioPlayer: HTMLAudioElement | undefined;
     let unsubscriberFileStore: Unsubscriber | null = null;
     let unsubscriberVolumeStore: Unsubscriber | null = null;
+    let unsubscriberEnvironmentVolumeStore: Unsubscriber | null = null;
     let retryPlayStoreSubscription: Subscription | null = null;
 
     onMount(() => {
@@ -47,7 +49,10 @@
             HTMLAudioPlayer.src = src;
             HTMLAudioPlayer.load();
             HTMLAudioPlayer.loop = get(audioManagerVolumeStore).loop;
-            HTMLAudioPlayer.volume = get(audioManagerVolumeStore).volume * get(audioManagerVolumeStore).soundVolume;
+            HTMLAudioPlayer.volume =
+                get(audioManagerVolumeStore).volume *
+                get(audioManagerVolumeStore).soundVolume *
+                get(environmentVolumeStore);
             HTMLAudioPlayer.muted = get(audioManagerVolumeStore).muted;
             tryPlay();
         });
@@ -60,7 +65,7 @@
             }
             audioManager.volumeReduced = reduceVolume;
             if (HTMLAudioPlayer) {
-                HTMLAudioPlayer.volume = audioManager.volume * audioManager.soundVolume;
+                HTMLAudioPlayer.volume = audioManager.volume * audioManager.soundVolume * get(environmentVolumeStore);
                 HTMLAudioPlayer.muted = audioManager.muted;
                 HTMLAudioPlayer.loop = audioManager.loop;
                 // Use paused attribute to manage audio
@@ -79,6 +84,12 @@
                 }
             }
         });
+        unsubscriberEnvironmentVolumeStore = environmentVolumeStore.subscribe((volume) => {
+            if (HTMLAudioPlayer) {
+                const audioManager = get(audioManagerVolumeStore);
+                HTMLAudioPlayer.volume = audioManager.volume * audioManager.soundVolume * volume;
+            }
+        });
         retryPlayStoreSubscription = audioManagerRetryPlaySubject.subscribe(() => {
             tryPlay();
         });
@@ -91,6 +102,7 @@
         if (unsubscriberVolumeStore) {
             unsubscriberVolumeStore();
         }
+        unsubscriberEnvironmentVolumeStore?.();
         retryPlayStoreSubscription?.unsubscribe();
         audioManagerPlayerState.set(undefined);
     });

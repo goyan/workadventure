@@ -5,6 +5,12 @@ import { WeatherType, type WAMFileFormat } from "@workadventure/map-editor";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
+vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
+    WeatherSounds: class {
+        public update(): void {}
+        public destroy(): void {}
+    },
+}));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");

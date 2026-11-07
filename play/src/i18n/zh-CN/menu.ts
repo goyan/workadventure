@@ -27,6 +27,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "帮助与提示",
     },
     settings: {
+        soundEffects: {
+            title: "音效",
+            footsteps: "脚步声音量",
+            environment: "环境音量（天气、门和地图音频）",
+        },
         weatherEffects: "显示天气效果（雨、雪和雷暴亮光）",
         night: {
             label: "昼夜周期",

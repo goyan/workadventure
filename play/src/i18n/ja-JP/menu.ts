@@ -27,6 +27,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "ヘルプとヒント",
     },
     settings: {
+        soundEffects: {
+            title: "効果音",
+            footsteps: "足音の音量",
+            environment: "環境音の音量（天気、ドア、マップの音声）",
+        },
         weatherEffects: "天気のエフェクトを表示（雨、雪、雷雨の光）",
         night: {
             label: "昼夜の切り替え",

@@ -1046,7 +1046,7 @@ ont aussi été vérifiés dans le navigateur local après rebase sur `infogene`
 
 ## Météo de la carte
 
-Dans « Outils → Éditer la carte → Configurer le salon → Météo », un éditeur de la carte choisit
+Dans « Outils → Météo », un éditeur de la carte choisit
 Ciel clair, Pluie, Neige ou Orage et sauvegarde. Le réglage `settings.weather` du WAM est validé
 et transmis à tous les joueurs par le protocole natif d’édition ; une carte sans ce réglage reste au ciel clair.
 Les droits limités à une zone personnelle ne permettent pas de modifier la météo commune.
@@ -1054,8 +1054,14 @@ Les droits limités à une zone personnelle ne permettent pas de modifier la mé
 Les particules suivent les coordonnées de la carte, avec un rendu limité à 30 images/s et au champ visible.
 L’orage produit une lueur douce synchronisée sur l’heure serveur, indépendante du choix personnel jour/nuit.
 « Paramètres → Thème → Afficher la météo » masque les effets pour soi et conserve ce choix après rechargement.
-Les effets sont masqués pendant l’édition. Cette première version couvre toute la carte, sans son, accumulation
-de neige ni distinction entre intérieur et extérieur.
+Les effets sont masqués pendant l’édition. La pluie joue en boucle et le tonnerre suit la lueur commune ;
+la neige reste silencieuse. Les sons respectent le blocage audio personnel et attendent le déverrouillage audio du navigateur.
+« Paramètres → Bruitages » règle séparément les pas et l’environnement (météo, portes et audio de la carte),
+de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent leurs réglages existants.
+« Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
+Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
-Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo, fermer l’éditeur,
+Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo depuis Outils,
 marcher et zoomer ; désactiver les effets dans une seule session et recharger pour vérifier la préférence.
+Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
+l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
