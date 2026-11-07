@@ -3,6 +3,7 @@ import { get, writable } from "svelte/store";
 import { buildJamSpaceName } from "@workadventure/map-editor";
 import {
     createJamAudioSession,
+    type JamAudioMemory,
     type JamAudioSessionDependencies,
 } from "../../../src/front/ListeningZone/JamAudioSession";
 import type { JamMusicCapture, JamMusicCaptureState } from "../../../src/front/ListeningZone/JamMusicCapture";
@@ -214,6 +215,110 @@ describe("JamAudioSession", () => {
             captureState.set({ status: "error", reason: "ended" });
             await vi.advanceTimersByTimeAsync(0);
             expect(leaveSpace).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe("remembering and resuming after a restart", () => {
+        // What the browser keeps from one page to the next: a reload after a deploy starts a session from it.
+        function memorySetup() {
+            let saved: JamAudioMemory = {};
+            const memory = {
+                load: () => saved,
+                save: (value: JamAudioMemory) => {
+                    saved = value;
+                },
+            };
+            return { memory, saved: () => saved, preset: (value: JamAudioMemory) => (saved = value) };
+        }
+        const other = { areaId: "area1", propertyId: "prop1", hostUuid: "someone-else" };
+
+        it("remembers the Jam listened to, and forgets it when the user stops", async () => {
+            const { memory, saved } = memorySetup();
+            const { session } = setup({ memory });
+            await session.listen(jam);
+            expect(saved().listening).toBe(spaceName);
+            await session.stopListening();
+            expect(saved().listening).toBeUndefined();
+        });
+
+        it("remembers the input the music is shared from, and forgets it when the user stops", async () => {
+            const { memory, saved } = memorySetup();
+            const { session } = setup({ memory });
+            await session.shareMusic(jam, "blackhole");
+            expect(saved().sharing).toEqual({ spaceName, deviceId: "blackhole" });
+            await session.stopSharingMusic();
+            expect(saved().sharing).toBeUndefined();
+        });
+
+        it("forgets what it shared when the capture fails, so that a refused input is not asked again and again", async () => {
+            const { memory, saved } = memorySetup();
+            const captureState = writable<JamMusicCaptureState>({ status: "idle" });
+            const capture: JamMusicCapture = {
+                state: captureState,
+                start: vi.fn().mockImplementation(() => {
+                    captureState.set({ status: "error", reason: "denied" });
+                    return Promise.resolve();
+                }),
+                stop: vi.fn().mockResolvedValue(undefined),
+            };
+            const { session } = setup({ memory, capture });
+            await session.shareMusic(jam, "blackhole");
+            expect(saved().sharing).toBeUndefined();
+        });
+
+        it("listens again to the Jam it listened to before the restart, once that Jam is back", async () => {
+            const { memory, preset } = memorySetup();
+            preset({ listening: spaceName });
+            const { session, joinSpace, listening } = setup({ memory });
+            await session.resume([other, jam]);
+            expect(joinSpace).toHaveBeenCalledTimes(1);
+            expect(joinSpace.mock.calls[0][0]).toBe(spaceName);
+            expect(get(listening)).toBe(true);
+        });
+
+        it("shares again from the same input, never from the microphone, once the Jam is back", async () => {
+            const { memory, preset } = memorySetup();
+            preset({ sharing: { spaceName, deviceId: "blackhole" } });
+            const { session, captureStart } = setup({ memory });
+            await session.resume([jam], { micDeviceId: "mic" });
+            expect(captureStart).toHaveBeenCalledWith(spaceName, "blackhole", { forbiddenDeviceIds: ["mic"] });
+        });
+
+        it("does nothing for a Jam it has no memory of", async () => {
+            const { memory, preset } = memorySetup();
+            preset({ listening: "world.jam:elsewhere", sharing: { spaceName: "world.jam:elsewhere", deviceId: "x" } });
+            const { session, joinSpace, captureStart } = setup({ memory });
+            await session.resume([jam]);
+            expect(joinSpace).not.toHaveBeenCalled();
+            expect(captureStart).not.toHaveBeenCalled();
+        });
+
+        it("does not start again what runs already, nor twice while it is starting", async () => {
+            const { memory, preset } = memorySetup();
+            preset({ sharing: { spaceName, deviceId: "blackhole" } });
+            const { session, captureStart } = setup({ memory });
+            await Promise.all([session.resume([jam]), session.resume([jam])]);
+            await session.resume([jam]);
+            expect(captureStart).toHaveBeenCalledTimes(1);
+        });
+
+        it("does not resume what the user stopped", async () => {
+            const { memory } = memorySetup();
+            const { session, joinSpace } = setup({ memory });
+            await session.listen(jam);
+            await session.stopListening();
+            joinSpace.mockClear();
+            await session.resume([jam]);
+            expect(joinSpace).not.toHaveBeenCalled();
+        });
+
+        it("keeps going when a resume fails", async () => {
+            vi.spyOn(console, "error").mockImplementation(() => undefined);
+            const { memory, preset } = memorySetup();
+            preset({ listening: spaceName });
+            const { session, joinSpace } = setup({ memory });
+            joinSpace.mockRejectedValueOnce(new Error("boom"));
+            await expect(session.resume([jam])).resolves.toBeUndefined();
         });
     });
 });

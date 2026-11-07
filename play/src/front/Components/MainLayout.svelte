@@ -50,6 +50,8 @@
     import { LL } from "../../i18n/i18n-svelte";
     import { sidePanelWidthStore } from "../Stores/SidePanelStore";
     import { jamAudioSession } from "../ListeningZone/GameJamAudioSession";
+    import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
+    import { requestedMicrophoneDeviceIdStore } from "../Stores/MediaStore";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
@@ -90,6 +92,7 @@
     import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
     import DraggableJamPanel from "./ListeningZone/DraggableJamPanel.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
+    import JamAudioResume from "./ListeningZone/JamAudioResume.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
@@ -472,6 +475,12 @@
             </div>
             <!-- The music of the Jam listened to plays here, whatever the panel shows: closing it must not mute it. -->
             <JamAudioPlayback listeningSpaceName={jamAudioSession.listeningSpaceName} />
+            <!-- What the user listened to or shared before a restart or a reload is picked up as its Jam comes back. -->
+            <JamAudioResume
+                session={jamAudioSession}
+                rooms={allJamRoomsStore}
+                micDeviceId={requestedMicrophoneDeviceIdStore}
+            />
             <!-- One Jam dock survives side-panel transitions and stays outside their scrolling container. -->
             <DraggableJamPanel anchorTop={jamPanelAnchorTop} onLayout={(layout) => (jamPanelLayout = layout)}>
                 {#snippet children(onDragStart, onDragKeydown)}

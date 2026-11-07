@@ -2,7 +2,11 @@
     import { onMount } from "svelte";
     import type { Readable } from "svelte/store";
     import { LL } from "../../../i18n/i18n-svelte";
-    import type { JamAudioSession, JamAudioTarget } from "../../ListeningZone/JamAudioSession";
+    import {
+        forbiddenAudioInputs,
+        type JamAudioSession,
+        type JamAudioTarget,
+    } from "../../ListeningZone/JamAudioSession";
     import type { JamMusicCaptureError, JamMusicCaptureState } from "../../ListeningZone/JamMusicCapture";
     import { jamAudioInputStore } from "../../ListeningZone/JamAudioInputStore";
     import { jamMusicMutedStore, jamMusicVolumeStore } from "../../ListeningZone/JamMusicStore";
@@ -38,7 +42,7 @@
     let failed = $state(false);
 
     // The system default is the user's own microphone more often than not: it is hidden when we do not know which.
-    let forbiddenDeviceIds = $derived(micDeviceId ? [micDeviceId] : ["default"]);
+    let forbiddenDeviceIds = $derived(forbiddenAudioInputs(micDeviceId));
     let offeredInputs = $derived(inputs.filter((input) => !forbiddenDeviceIds.includes(input.deviceId)));
     // A remembered input that is unplugged, or that is now the microphone, is not a choice any more.
     let chosenDeviceId = $derived(
