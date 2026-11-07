@@ -321,4 +321,40 @@ describe("JamAudioSession", () => {
             await expect(session.resume([jam])).resolves.toBeUndefined();
         });
     });
+
+    describe("leave", () => {
+        const another = { areaId: "area1", propertyId: "prop1", hostUuid: "someone-else" };
+
+        it("stops listening to the Jam the user leaves, and leaves its space", async () => {
+            const { session, leaveSpace, listening } = setup();
+            await session.listen(jam);
+            await session.leave(jam);
+            expect(get(session.listeningSpaceName)).toBeUndefined();
+            expect(get(listening)).toBe(false);
+            expect(leaveSpace).toHaveBeenCalledTimes(1);
+        });
+
+        it("keeps listening to another Jam when the user leaves this one", async () => {
+            const { session, leaveSpace } = setup();
+            await session.listen(another);
+            await session.leave(jam);
+            expect(get(session.listeningSpaceName)).toBe(session.spaceNameOf(another));
+            expect(leaveSpace).not.toHaveBeenCalled();
+        });
+
+        it("stops sharing the music of the Jam the host closes", async () => {
+            const { session, captureStop } = setup();
+            await session.shareMusic(jam, "blackhole");
+            await session.leave(jam);
+            expect(captureStop).toHaveBeenCalledTimes(1);
+            expect(get(session.sharingSpaceName)).toBeUndefined();
+        });
+
+        it("does nothing for a Jam the user neither listens to nor shares", async () => {
+            const { session, leaveSpace, captureStop } = setup();
+            await session.leave(jam);
+            expect(leaveSpace).not.toHaveBeenCalled();
+            expect(captureStop).not.toHaveBeenCalled();
+        });
+    });
 });

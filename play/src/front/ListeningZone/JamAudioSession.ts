@@ -59,6 +59,8 @@ export interface JamAudioSession {
      * they were in. Called as the Jams of the room appear: what already runs, or was stopped by the user, is left alone.
      */
     resume(jams: readonly JamAudioTarget[], options?: { micDeviceId?: string }): Promise<void>;
+    /** The user leaves a Jam, or its host closes it: stops listening to it and sharing its music, if they did. */
+    leave(jam: JamAudioTarget): Promise<void>;
 }
 
 const PUBLISHER_POLL_MS = 250;
@@ -278,7 +280,18 @@ export function createJamAudioSession({
         await Promise.all(starts);
     }
 
+    async function leave(jam: JamAudioTarget): Promise<void> {
+        const spaceName = buildJamSpaceName({ roomUrl: getRoomUrl(), ...jam });
+        if (get(listeningSpaceName) === spaceName) {
+            await stopListening();
+        }
+        if (get(sharingSpaceName) === spaceName) {
+            await stopSharingMusic();
+        }
+    }
+
     return {
+        leave,
         resume,
         listeningSpaceName,
         sharingSpaceName,
