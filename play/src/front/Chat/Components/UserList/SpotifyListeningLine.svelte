@@ -4,6 +4,8 @@
     import { LL } from "../../../../i18n/i18n-svelte";
     import { isInJam, isPlayingTrack, listeningSourceOf, listenTooLinks } from "../../../../common/SpotifyListening";
     import ListeningSourceIcon from "../../../Components/Listening/ListeningSourceIcon.svelte";
+    import { jamLabelOf } from "../../../ListeningZone/JamTitle";
+    import { allJamRoomsStore } from "../../../ListeningZone/ListeningZoneController";
 
     interface Props {
         listening: Readable<SpotifyListening | undefined>;
@@ -13,6 +15,8 @@
 
     let playing = $derived(isPlayingTrack($listening) ? $listening : undefined);
     let jam = $derived(isInJam($listening) ? $listening : undefined);
+    // The title of the Jam, which the listening does not carry, comes from the rooms of the map.
+    let jamLabel = $derived(jam ? jamLabelOf($allJamRoomsStore, jam) : "");
     let source = $derived(playing ? listeningSourceOf(playing) : "spotify");
     // The track on the service it plays on: its page on Spotify, a search on Apple Music (no public link there).
     let href = $derived(playing ? listenTooLinks(playing)[source] : undefined);
@@ -49,7 +53,7 @@
         {#if jam}
             <span class="shrink-0 opacity-75">
                 {playing ? "· " : ""}{$LL.spotify.userList.jam({
-                    area: jam.jamAreaName || $LL.spotify.listeningZone.defaultName(),
+                    area: jamLabel || $LL.spotify.listeningZone.defaultName(),
                 })}
             </span>
         {/if}
