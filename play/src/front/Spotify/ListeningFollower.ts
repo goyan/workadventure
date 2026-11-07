@@ -51,7 +51,8 @@ export function startListeningFollower(
         if (!listening || !uri || (sent && !movedAway(sent, listening))) {
             return;
         }
-        sent = listening;
+        // World-space updates merge into the previous object: retain a snapshot for track/seek comparison.
+        sent = { ...listening };
         follow({ uri, positionMs: currentPositionMs(listening, now()) ?? 0 });
     });
     return () => {

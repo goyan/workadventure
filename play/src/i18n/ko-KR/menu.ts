@@ -28,6 +28,10 @@ const menu: DeepPartial<Translation["menu"]> = {
     },
     settings: {
         night: {
+            label: "낮과 밤 주기",
+            server: "서버 시간",
+            computer: "내 컴퓨터 시간",
+            disabled: "끄기",
             disable: "Turn off night mode",
         },
         theme: {

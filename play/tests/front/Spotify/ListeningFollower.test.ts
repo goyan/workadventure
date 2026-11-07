@@ -59,6 +59,20 @@ describe("startListeningFollower", () => {
         ]);
     });
 
+    it("keeps a snapshot when world-space updates mutate the previously shared object", () => {
+        const { followed, follow, share } = createHarness();
+        const shared = listening("abc", 0, 1_000);
+        share("nat", shared);
+        followed.set("nat");
+        Object.assign(shared, listening("def", 0, 2_000));
+        share("nat", { ...shared });
+        expect(follow).toHaveBeenCalledTimes(2);
+        Object.assign(shared, listening("def", 90_000, 3_000));
+        share("nat", { ...shared });
+        expect(follow).toHaveBeenCalledTimes(3);
+        expect(follow).toHaveBeenLastCalledWith({ uri: "spotify:track:def", positionMs: 97_000 });
+    });
+
     it("leaves the player as it is when the followed user stops sharing, and resumes with their next track", () => {
         const { followed, follow, share } = createHarness();
         followed.set("nat");

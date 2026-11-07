@@ -17,7 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { nightDisabledStore } from "../../Stores/NightStore";
+    import { NightMode, nightModeStore } from "../../Stores/NightStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -331,12 +331,19 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
-        <InputSwitch
-            id="disable-night-toggle"
-            value={$nightDisabledStore}
-            onchange={() => nightDisabledStore.update((disabled) => !disabled)}
-            label={$LL.menu.settings.night.disable()}
-        />
+        <div class="flex flex-col gap-2">
+            <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
+            <SegmentedControl
+                ariaLabel={$LL.menu.settings.night.label()}
+                bind:value={$nightModeStore}
+                dataTestId="night-mode-control"
+                options={[
+                    { value: NightMode.Server, label: $LL.menu.settings.night.server() },
+                    { value: NightMode.Computer, label: $LL.menu.settings.night.computer() },
+                    { value: NightMode.Disabled, label: $LL.menu.settings.night.disabled() },
+                ]}
+            />
+        </div>
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.font.label()} dataTestId="font-settings">
         <FontSettings />

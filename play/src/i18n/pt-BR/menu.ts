@@ -27,6 +27,10 @@ const menu: BaseTranslation = {
     },
     settings: {
         night: {
+            label: "Ciclo dia/noite",
+            server: "Hora do servidor",
+            computer: "Hora do meu computador",
+            disabled: "Desativado",
             disable: "Turn off night mode",
         },
         theme: {

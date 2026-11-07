@@ -176,6 +176,20 @@ describe("Jam rooms", () => {
         unsubscribe();
     });
 
+    it("keeps the Jam and follow while the room variables are unavailable during reconnect", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(patio, [homeJam]);
+        joinHomeJam(room(patio, homeJam));
+        const manager = get(areaPropertyVariablesManagerStore);
+
+        areaPropertyVariablesManagerStore.set(undefined);
+        expect(get(joinedJamStore)).toMatchObject({ url: "home:nat" });
+        expect(get(followedUserUuidStore)).toBe("nat");
+        areaPropertyVariablesManagerStore.set(manager);
+        expect(get(joinedJamStore)).toMatchObject({ url: "home:nat" });
+        unsubscribe();
+    });
+
     it("ends the home Jam for a guest who stops listening along from the host's card", () => {
         const unsubscribe = syncJoinedJam();
         setRooms(patio, [homeJam]);

@@ -3,7 +3,6 @@ import { MathUtils } from "@workadventure/math-utils";
 import type { ITiledMap, ITiledMapLayer } from "@workadventure/tiled-map-type-guard";
 
 import type { PositionInterface } from "../../Connection/ConnexionModels";
-import { localUserStore } from "../../Connection/LocalUserStore";
 import type { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 
 const DEFAULT_START_NAME = "start";
@@ -24,7 +23,13 @@ export function computeStartPosition(
 ): PositionInterface {
     // From the most to the least specific. Most of them draw a random position, hence the functions.
     const candidates: (() => PositionInterface | undefined)[] = [];
-    if (initPosition !== undefined) {
+    if (
+        initPosition !== undefined &&
+        initPosition.x >= 0 &&
+        initPosition.y >= 0 &&
+        initPosition.x < (mapFile.width ?? 0) * (mapFile.tilewidth ?? 0) &&
+        initPosition.y < (mapFile.height ?? 0) * (mapFile.tileheight ?? 0)
+    ) {
         candidates.push(() => initPosition);
     }
     if (startPositionName) {
@@ -40,7 +45,6 @@ export function computeStartPosition(
         );
     }
     candidates.push(
-        () => getStartPositionFromPersonalArea(gameMapFrontWrapper),
         // map-editor areas with the DEFAULT property set
         () => getStartPositionFromDefaultStartArea(gameMapFrontWrapper),
         () => getStartPositionFromTiledArea(gameMapFrontWrapper, DEFAULT_START_NAME, false),
@@ -75,21 +79,6 @@ export function computeStartPosition(
     return {
         x: (mapFile.width ?? 0) * 16,
         y: (mapFile.height ?? 0) * 16,
-    };
-}
-
-function getStartPositionFromPersonalArea(gameMapFrontWrapper: GameMapFrontWrapper): PositionInterface | undefined {
-    const uuid = localUserStore.getLocalUser()?.uuid;
-    if (!uuid) {
-        return undefined;
-    }
-    const personalArea = gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().findPersonalArea(uuid);
-    if (!personalArea) {
-        return undefined;
-    }
-    return {
-        x: personalArea.x + personalArea.width * 0.5,
-        y: personalArea.y + personalArea.height * 0.5,
     };
 }
 

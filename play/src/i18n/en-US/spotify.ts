@@ -54,6 +54,7 @@ const spotify: BaseTranslation = {
         listenOnAppleMusic: "Listen on Apple Music",
     },
     listeningZone: {
+        listenViaExtension: "Listen via extension",
         defaultName: "Listening zone",
         jamOf: "{name}'s Jam",
         participants: "{count} in the Jam",

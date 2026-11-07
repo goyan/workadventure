@@ -8,7 +8,7 @@ import { isMobile } from "./utils/isMobile";
 
 test.setTimeout(240_000);
 
-test.describe("Personal desk spawn on connect @oidc @nomobile @nowebkit", () => {
+test.describe("Personal desk and last position on reconnect @oidc @nomobile @nowebkit", () => {
     test.beforeEach(({ page }) => {
         test.skip(isMobile(page), "Map editor is not available on mobile");
     });
@@ -17,11 +17,9 @@ test.describe("Personal desk spawn on connect @oidc @nomobile @nowebkit", () => 
         test.skip(browserName === "webkit", "WebKit has issues with camera/microphone");
     });
 
-    test("User with personal desk spawns at their desk on connect", async ({ browser, request }) => {
+    test("Reload preserves the last position outside the personal desk", async ({ browser, request }) => {
         // Given: Admin creates a personal area (dynamic claim). Member1 connects, enters the area and claims it.
-        // When: Member1 reloads the page (new connection).
-        // Then: Member1 spawns at start, then automatically walks to their personal desk.
-        // We assert: after reload and enough time, the user is inside their personal desk (button "Walk to my desk" is disabled).
+        // When: Member1 leaves the desk and reloads, the last position is restored.
 
         await resetWamMaps(request);
 
@@ -43,15 +41,21 @@ test.describe("Personal desk spawn on connect @oidc @nomobile @nowebkit", () => 
         await expect(memberPage.getByTestId("claimPersonalAreaButton")).toBeVisible({ timeout: 15_000 });
         await memberPage.getByTestId("claimPersonalAreaButton").click();
 
-        // Reload to simulate a new connection: user should spawn at start then walk to desk
+        await Map.teleportToPosition(memberPage, 10 * 32, 10 * 32);
+
+        // A reload must not send the user back to their desk.
         await memberPage.reload();
 
         await Menu.waitForMapLoad(memberPage);
+        await expect.poll(() => Map.getPosition(memberPage)).toEqual({ x: 10 * 32, y: 10 * 32 });
 
         await Menu.openMapMenu(memberPage);
         const goToDeskButton = memberPage.getByTestId("go-to-personal-desk-button");
         await expect(goToDeskButton).toBeVisible({ timeout: 15_000 });
-        // User should be inside their personal area: "Walk to my desk" button is disabled
+        await expect(goToDeskButton).not.toHaveClass(/opacity-50|cursor-not-allowed/);
+        await Menu.closeMapMenu(memberPage);
+        await memberPage.getByTestId("teleport-to-personal-desk").click();
+        await Menu.openMapMenu(memberPage);
         await expect(goToDeskButton).toHaveClass(/opacity-50|cursor-not-allowed/);
     });
 });

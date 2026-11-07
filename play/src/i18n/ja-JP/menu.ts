@@ -28,6 +28,10 @@ const menu: DeepPartial<Translation["menu"]> = {
     },
     settings: {
         night: {
+            label: "昼夜の切り替え",
+            server: "サーバーの時刻",
+            computer: "パソコンの時刻",
+            disabled: "無効",
             disable: "Turn off night mode",
         },
         theme: {

@@ -41,7 +41,7 @@
     let canHomeJam = $derived($listenAlongAvailableStore);
 
     function startCreating(): void {
-        creating = canHomeJam ? "choose" : "spotify";
+        creating = "choose";
     }
 
     function cancelCreating(): void {
@@ -62,6 +62,7 @@
     }
 
     function openHomeJam(): void {
+        if (!canHomeJam) return;
         startHomeJam(title);
         cancelCreating();
     }
@@ -158,7 +159,8 @@
                         </button>
                         <button
                             type="button"
-                            class="flex flex-col gap-0.5 rounded-lg border border-[#1ed760]/40 bg-[#1ed760]/10 p-2.5 text-start hover:bg-[#1ed760]/20"
+                            class="flex flex-col gap-0.5 rounded-lg border border-[#1ed760]/40 bg-[#1ed760]/10 p-2.5 text-start enabled:hover:bg-[#1ed760]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!canHomeJam}
                             onclick={openHomeJam}
                             data-testid="listening-zone-create-home"
                         >

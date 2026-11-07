@@ -264,6 +264,7 @@ import { PlayerMovement } from "./PlayerMovement";
 import { PlayersPositionInterpolator } from "./PlayersPositionInterpolator";
 import { DirtyScene } from "./DirtyScene";
 import { computeStartPosition } from "./StartPositionCalculator";
+import { readLastPlayerPosition, saveLastPlayerPosition } from "./LastPlayerPosition";
 import { GameMapPropertiesListener } from "./GameMapPropertiesListener";
 import { ActivatablesManager } from "./ActivatablesManager";
 import type { AddPlayerInterface } from "./AddPlayerInterface";
@@ -736,6 +737,7 @@ export class GameScene extends DirtyScene {
 
     //hook create scene
     create(): void {
+        window.addEventListener("pagehide", this.saveCurrentPosition);
         this.input.topOnly = false;
         this.preloading = false;
         this.cleanupDone = false;
@@ -1284,7 +1286,15 @@ export class GameScene extends DirtyScene {
         this.playSound(`meeting-out`);
     }
 
+    private readonly saveCurrentPosition = (): void => {
+        if (this.CurrentPlayer) {
+            saveLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid, this.CurrentPlayer);
+        }
+    };
+
     public cleanupClosingScene(): void {
+        this.saveCurrentPosition();
+        window.removeEventListener("pagehide", this.saveCurrentPosition);
         this.abortController?.abort();
         this.unregisterAudioContextPlaybackRetry?.();
         this.unregisterAudioContextPlaybackRetry = undefined;
@@ -2465,12 +2475,13 @@ export class GameScene extends DirtyScene {
                 const startPosition = computeStartPosition(
                     this.gameMapFrontWrapper,
                     this.mapFile,
-                    this.initPosition,
+                    this.initPosition ?? readLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid),
                     urlManager.getStartPositionNameFromUrl(),
                     (position) => this.isPositionAllowedForCurrentUser(position),
                 );
 
                 this.createCurrentPlayer(startPosition);
+                this.saveCurrentPosition();
 
                 this.activatablesManager = new ActivatablesManager(this.CurrentPlayer);
                 this.cameraManager.startFollowPlayer(this.CurrentPlayer, 0);
@@ -4578,6 +4589,19 @@ ${escapedMessage}
         areasManager.getAreaById(blockingArea.id)?.displayBlockedWarningMessage();
     }
 
+    /** The Home action is explicit: a reload or server restart must never teleport to the personal desk. */
+    public teleportToPersonalDesk(): void {
+        const desk = get(personalAreaDataStore);
+        if (!desk) return;
+        const position = { x: desk.x + desk.width * 0.5, y: desk.y + desk.height * 0.5 };
+        if (!this.isPositionAllowedForCurrentUser(position)) {
+            warningMessageStore.addWarningMessage(get(LL).actionbar.personalDesk.errorMoving(), { closable: true });
+            return;
+        }
+        this.CurrentPlayer.teleportTo(position.x, position.y);
+        this.getCameraManager().resumePlayerFollow();
+    }
+
     /**
      * Walk the player to their personal desk.
      */
@@ -4775,6 +4799,7 @@ ${escapedMessage}
     }
 
     private doPushPlayerPosition(event: HasPlayerMovedInterface): void {
+        saveLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid, event);
         this.lastMoveEventSent = event;
         this.lastSentTick = this.currentTick;
 
