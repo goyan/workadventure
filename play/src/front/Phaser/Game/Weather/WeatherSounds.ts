@@ -1,30 +1,36 @@
 import type * as Phaser from "phaser";
 import { WeatherType } from "@workadventure/map-editor";
 import { get } from "svelte/store";
+import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { environmentVolumeStore } from "../../../Stores/SoundEffectsStore";
 
 export const WEATHER_SOUNDS = [
+    { key: "audio-weather-night-rain", url: "/resources/objects/weather/night_rain.mp3" },
+    { key: "audio-weather-night", url: "/resources/objects/weather/night.mp3" },
     { key: "audio-weather-sunny", url: "/resources/objects/weather/sunny.mp3" },
     { key: "audio-weather-snow", url: "/resources/objects/weather/snow.mp3" },
     { key: "audio-weather-rain", url: "/resources/objects/weather/rain.mp3" },
     { key: "audio-weather-thunder", url: "/resources/objects/weather/thunder.mp3" },
 ];
 
+const debug = Debug("front:weather-audio");
+
 type WeatherSound = Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound | Phaser.Sound.NoAudioSound;
 
 export class WeatherSounds {
-    private ambient: WeatherSound | undefined;
+    private ambient: HTMLAudioElement | undefined;
     private ambientKey: string | undefined;
+    private playPending = false;
     private thunder: WeatherSound | undefined;
     private lastStormCycle: number | undefined;
 
     constructor(private readonly sound: Phaser.Sound.BaseSoundManager) {}
 
-    public update(weather: WeatherType, serverDate: Date | undefined, editing: boolean): void {
+    public update(weather: WeatherType, serverDate: Date | undefined, editing: boolean, night = false): void {
         const volume = editing || localUserStore.getBlockAudio() ? 0 : get(environmentVolumeStore);
         if (volume === 0) {
-            this.ambient?.stop();
+            this.ambient?.pause();
             this.thunder?.stop();
             this.lastStormCycle = undefined;
             return;
@@ -32,18 +38,36 @@ export class WeatherSounds {
         if (this.sound.locked) return;
         const key =
             weather === WeatherType.Clear
-                ? "audio-weather-sunny"
+                ? night
+                    ? "audio-weather-night"
+                    : "audio-weather-sunny"
                 : weather === WeatherType.Snow
                   ? "audio-weather-snow"
-                  : "audio-weather-rain";
+                  : night
+                    ? "audio-weather-night-rain"
+                    : "audio-weather-rain";
         if (this.ambientKey !== key) {
-            this.ambient?.destroy();
+            this.releaseAmbient();
             this.ambient = undefined;
             this.ambientKey = key;
         }
-        this.ambient ??= this.sound.add(key, { loop: true }) as WeatherSound;
-        this.ambient.setVolume(volume * (weather === WeatherType.Storm ? 0.22 : 0.14));
-        if (!this.ambient.isPlaying) this.ambient.play();
+        if (!this.ambient) {
+            const asset = WEATHER_SOUNDS.find((asset) => asset.key === key);
+            if (!asset) return;
+            this.ambient = new Audio(asset.url);
+            this.ambient.loop = true;
+            this.ambient.preload = "none";
+        }
+        this.ambient.volume = volume * (weather === WeatherType.Storm ? 0.22 : 0.14);
+        if (this.ambient.paused && !this.playPending) {
+            this.playPending = true;
+            this.ambient
+                .play()
+                .catch((error: unknown) => debug("Ambience playback postponed", error))
+                .finally(() => {
+                    this.playPending = false;
+                });
+        }
         if (weather !== WeatherType.Storm || !serverDate) {
             this.thunder?.stop();
             this.lastStormCycle = undefined;
@@ -61,8 +85,16 @@ export class WeatherSounds {
         }
     }
 
+    private releaseAmbient(): void {
+        this.ambient?.pause();
+        this.ambient?.removeAttribute("src");
+        this.ambient?.load();
+        this.ambient = undefined;
+        this.playPending = false;
+    }
+
     public destroy(): void {
-        this.ambient?.destroy();
+        this.releaseAmbient();
         this.thunder?.destroy();
     }
 }

@@ -21,10 +21,10 @@ export class WeatherManager {
             .setVisible(false);
     }
 
-    public update(now: number, serverDate: Date | undefined): void {
+    public update(now: number, serverDate: Date | undefined, night = false): void {
         const configured = this.scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
         const weather = weatherAtTime(configured, serverDate);
-        this.sounds.update(weather, serverDate, get(mapEditorModeStore));
+        this.sounds.update(weather, serverDate, get(mapEditorModeStore), night);
         const enabled = get(weatherEffectsEnabledStore) && !get(mapEditorModeStore);
         if (!enabled || weather === WeatherType.Clear) {
             if (this.visible) {

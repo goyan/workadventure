@@ -120,6 +120,10 @@ export class NightManager {
         this.previous = frame;
     }
 
+    public isNight(): boolean {
+        return this.opacity > 0 && !this.disabled;
+    }
+
     public serverDate(): Date | undefined {
         return this.clock.now();
     }

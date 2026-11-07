@@ -1,20 +1,21 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
-    import { LL } from "../../../i18n/i18n-svelte";
-    import { gameManager } from "../../Phaser/Game/GameManager";
-    import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
-    import { areCharacterTexturesValid } from "../../Connection/LocalUserUtils";
-    import { analyticsClient } from "../../Administration/AnalyticsClient";
-    import BodyIcon from "../Icons/BodyIcon.svelte";
-    import EyesIcon from "../Icons/EyesIcon.svelte";
-    import HairIcon from "../Icons/HairIcon.svelte";
-    import HangerIcon from "../Icons/HangerIcon.svelte";
-    import HatIcon from "../Icons/HatIcon.svelte";
-    import SwordIcon from "../Icons/SwordIcon.svelte";
-    import ShuffleIcon from "../Icons/ShuffleIcon.svelte";
-    import Button from "../UI/Button.svelte";
-    import { Swimwear } from "../../Phaser/Entity/Swimwear";
-    import { localUserStore } from "../../Connection/LocalUserStore";
+    import { LL } from "@wa/i18n/i18n-svelte";
+    import { gameManager } from "@wa/front/Phaser/Game/GameManager";
+    import { ABSOLUTE_PUSHER_URL } from "@wa/front/Enum/ComputedConst";
+    import { areCharacterTexturesValid } from "@wa/front/Connection/LocalUserUtils";
+    import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
+    import BodyIcon from "@wa/front/Components/Icons/BodyIcon.svelte";
+    import EyesIcon from "@wa/front/Components/Icons/EyesIcon.svelte";
+    import HairIcon from "@wa/front/Components/Icons/HairIcon.svelte";
+    import HangerIcon from "@wa/front/Components/Icons/HangerIcon.svelte";
+    import HatIcon from "@wa/front/Components/Icons/HatIcon.svelte";
+    import SwordIcon from "@wa/front/Components/Icons/SwordIcon.svelte";
+    import ShuffleIcon from "@wa/front/Components/Icons/ShuffleIcon.svelte";
+    import Button from "@wa/front/Components/UI/Button.svelte";
+    import { Vehicle, type VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
+    import { localUserStore } from "@wa/front/Connection/LocalUserStore";
     import WokaPreview from "./WokaPreview.svelte";
     import type { WokaBodyPart, WokaData, WokaTexture } from "./WokaTypes";
     import { getItemsPerRow } from "./ItemsPerRow";
@@ -22,7 +23,13 @@
 
     interface Props {
         back: () => void;
-        saveAndContinue: (texturesId: string[], swimwear: Swimwear, swimwearColor?: string) => void;
+        saveAndContinue: (
+            texturesId: string[],
+            swimwear: Swimwear,
+            swimwearColor?: string,
+            vehicle?: Vehicle,
+            vehicleColors?: VehicleColors,
+        ) => void;
     }
 
     let { back, saveAndContinue }: Props = $props();
@@ -41,6 +48,9 @@
     let error = $state("");
     let assetsDirection: number = $state(0);
     let showBath = $state(false);
+    let showVehicle = $state(false);
+    let selectedVehicle = $state(localUserStore.getVehicle());
+    let selectedVehicleColors = $state(localUserStore.getVehicleColors());
     let selectedSwimwear = $state(localUserStore.getSwimwear() ?? Swimwear.Auto);
     let selectedSwimwearColor = $state(localUserStore.getSwimwearColor());
     const swimwearStyles = Object.values(Swimwear);
@@ -127,7 +137,13 @@
             }
 
             analyticsClient.trackAdminEvent("onboarding.custom_woka_selected");
-            saveAndContinue(textureIds, selectedSwimwear, selectedSwimwearColor);
+            saveAndContinue(
+                textureIds,
+                selectedSwimwear,
+                selectedSwimwearColor,
+                selectedVehicle,
+                selectedVehicleColors,
+            );
         } catch (err) {
             console.error("Error saving textures:", err);
             error = "Failed to save character customization";
@@ -174,6 +190,7 @@
     let timeOutToScroll: ReturnType<typeof setTimeout> | null = null;
     function selectBodyPart(bodyPart: WokaBodyPart) {
         showBath = false;
+        showVehicle = false;
         selectedBodyPart = bodyPart;
 
         // Clear previous timeout if it exists
@@ -202,6 +219,11 @@
     // Function to handle keyboard navigation
     function useKeyBoardNavigation(event: KeyboardEvent) {
         if (!wokaData) return;
+        if (showVehicle && event.key.startsWith("Arrow")) {
+            event.preventDefault();
+            selectedVehicle = selectedVehicle === Vehicle.None ? Vehicle.Skateboard : Vehicle.None;
+            return;
+        }
         if (showBath && event.key.startsWith("Arrow")) {
             event.preventDefault();
             const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
@@ -252,7 +274,7 @@
         if (!wokaData) return;
         if (event.key === "Enter" && enterPressed) {
             enterPressed = false;
-            if (showBath || selectedBodyPart === "accessory") {
+            if (showVehicle || showBath || selectedBodyPart === "accessory") {
                 // If it's the last body part, save and continue
                 handlerSaveAndContinue();
             } else {
@@ -307,6 +329,8 @@
                             {getTextureUrl}
                             swimwear={showBath ? selectedSwimwear : undefined}
                             swimwearColor={selectedSwimwearColor}
+                            vehicle={showVehicle ? selectedVehicle : undefined}
+                            vehicleColors={selectedVehicleColors}
                             onrotate={(direction) => {
                                 assetsDirection = direction;
                             }}
@@ -334,7 +358,7 @@
                         {#each bodyPartOrder as bodyPart (bodyPart)}
                             {@const BodyPartIcon = getBodyPartIcon(bodyPart)}
                             <button
-                                class="border-b-2 {selectedBodyPart === bodyPart && !showBath
+                                class="border-b-2 {selectedBodyPart === bodyPart && !showBath && !showVehicle
                                     ? 'text-white border-white'
                                     : 'text-white/50 border-white/10'}"
                                 onclick={() => selectBodyPart(bodyPart)}
@@ -343,10 +367,10 @@
                                 <BodyPartIcon
                                     height="h-4"
                                     width="w-4"
-                                    strokeColor={selectedBodyPart === bodyPart && !showBath
+                                    strokeColor={selectedBodyPart === bodyPart && !showBath && !showVehicle
                                         ? "stroke-white "
                                         : "stroke-white/50"}
-                                    fillColor={selectedBodyPart === bodyPart && !showBath
+                                    fillColor={selectedBodyPart === bodyPart && !showBath && !showVehicle
                                         ? "fill-white "
                                         : "fill-white/50"}
                                 />
@@ -356,16 +380,93 @@
                         <button
                             class="border-b-2 {showBath ? 'text-white border-white' : 'text-white/50 border-white/10'}"
                             style="border-bottom-style: solid;"
-                            onclick={() => (showBath = true)}
+                            onclick={() => {
+                                showBath = true;
+                                showVehicle = false;
+                            }}
                             data-testid="woka-bath-tab"
                         >
                             <span aria-hidden="true">🩱</span>
                             {$LL.woka.customWoka.bath()}
                         </button>
+                        <button
+                            class="border-b-2 {showVehicle
+                                ? 'text-white border-white'
+                                : 'text-white/50 border-white/10'}"
+                            style="border-bottom-style: solid;"
+                            onclick={() => {
+                                showVehicle = true;
+                                showBath = false;
+                            }}
+                            data-testid="woka-vehicle-tab"
+                        >
+                            <span aria-hidden="true">🛹</span>
+                            {$LL.woka.vehicle.title()}
+                        </button>
                     </div>
 
                     <div class="rounded-lg flex flex-col flex-1 min-h-0 min-w-0">
-                        {#if showBath}
+                        {#if showVehicle}
+                            <h3 class="text-lg font-semibold">{$LL.woka.vehicle.title()}</h3>
+                            <p class="text-sm text-white/70">{$LL.woka.vehicle.hint()}</p>
+                            <div class="grid grid-cols-2 gap-3 py-4" role="group" aria-label={$LL.woka.vehicle.title()}>
+                                {#each Object.values(Vehicle) as vehicle (vehicle)}
+                                    <button
+                                        class="relative rounded-lg border-2 border-solid p-3 flex flex-col items-center gap-2 min-w-0 {selectedVehicle ===
+                                        vehicle
+                                            ? 'bg-white/20 border-white'
+                                            : 'bg-white/5 hover:bg-white/10 border-white/20'}"
+                                        aria-pressed={selectedVehicle === vehicle}
+                                        onclick={() => (selectedVehicle = vehicle)}
+                                        data-testid={`woka-vehicle-${vehicle}`}
+                                    >
+                                        {#if selectedVehicle === vehicle}
+                                            <span class="absolute top-2 right-2 text-sm" aria-hidden="true">✓</span>
+                                        {/if}
+                                        <div class="flex h-24 w-24 items-center justify-center">
+                                            <WokaImage
+                                                {selectedTextures}
+                                                {wokaData}
+                                                {getTextureUrl}
+                                                canvasSize={90}
+                                                {vehicle}
+                                                vehicleColors={selectedVehicleColors}
+                                                direction={assetsDirection}
+                                            />
+                                        </div>
+                                        <span class="text-xs">{$LL.woka.vehicle[vehicle]()}</span>
+                                    </button>
+                                {/each}
+                            </div>
+                            {#if selectedVehicle === Vehicle.Skateboard}
+                                <div class="vehicle-colors">
+                                    <label>
+                                        <span>{$LL.woka.vehicle.centerColor()}</span>
+                                        <input
+                                            type="color"
+                                            bind:value={selectedVehicleColors.color}
+                                            data-testid="woka-vehicle-color"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>{$LL.woka.vehicle.edgeColor()}</span>
+                                        <input
+                                            type="color"
+                                            bind:value={selectedVehicleColors.edgeColor}
+                                            data-testid="woka-vehicle-edge-color"
+                                        />
+                                    </label>
+                                    <label>
+                                        <span>{$LL.woka.vehicle.wheelsColor()}</span>
+                                        <input
+                                            type="color"
+                                            bind:value={selectedVehicleColors.wheelsColor}
+                                            data-testid="woka-vehicle-wheels-color"
+                                        />
+                                    </label>
+                                </div>
+                            {/if}
+                        {:else if showBath}
                             <h3 class="text-lg font-semibold">{$LL.woka.menu.swimwear()}</h3>
                             <p class="text-sm text-white/70">{$LL.woka.customWoka.bathHint()}</p>
                             <div class="flex items-center flex-wrap gap-3 py-2">
@@ -406,6 +507,8 @@
                                             direction={assetsDirection}
                                             swimwear={style}
                                             swimwearColor={selectedSwimwearColor}
+                                            vehicle={showVehicle ? selectedVehicle : undefined}
+                                            vehicleColors={selectedVehicleColors}
                                         />
                                         <span class="text-sm">{$LL.woka.swimwear[style]()}</span>
                                     </button>
@@ -469,6 +572,31 @@
 </div>
 
 <style>
+    .vehicle-colors {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 0.5rem;
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .vehicle-colors label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        font-size: 0.7rem;
+    }
+    .vehicle-colors input {
+        width: 100%;
+        height: 2.5rem;
+        padding: 0.2rem;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.4rem;
+        background: transparent;
+    }
+
     .woka-tabs {
         display: flex;
         flex-wrap: nowrap;

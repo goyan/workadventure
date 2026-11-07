@@ -36,24 +36,21 @@ export class AvatarActionEffect {
         graphics.clear();
         switch (action) {
             case AvatarAction.Coffee: {
-                // A still cup above the name tag (centered at -18), seen from afar; only its steam moves.
-                const x = -5;
-                const y = (seated ? -4 : 0) - 44;
-                graphics.fillStyle(0x3a2a20).fillRect(x - 1, y - 1, 11, 10);
-                graphics.fillStyle(0x3a2a20).fillRect(x + 9, y + 1, 4, 6);
-                graphics.fillStyle(0xffffff).fillRect(x, y, 9, 8);
-                graphics.fillStyle(0xffffff).fillRect(x + 10, y + 2, 2, 4);
-                graphics.fillStyle(0x3a2a20).fillRect(x + 10, y + 3, 1, 2);
-                graphics.fillStyle(0x6b3b20).fillRect(x + 1, y, 7, 2);
-                // Three wisps rising and fading in turn, each swaying sideways.
-                for (const [index, wispX] of [x + 2, x + 4.5, x + 7].entries()) {
-                    const phase = ((time + index * 500) % 1500) / 1500;
-                    const bottom = y - 2 - phase * 6;
-                    const sway = Math.sin(phase * Math.PI * 2) * 1.5;
-                    graphics
-                        .lineStyle(1, 0xffffff, 0.8 * (1 - phase))
-                        .lineBetween(wispX, bottom, wispX + sway, bottom - 4);
-                }
+                // Raise a small cup from the hand to the mouth, in the avatar's facing direction.
+                const sip = Math.max(0, Math.sin(((time % 3000) / 3000) * Math.PI * 2));
+                const left = direction === SEATED_DIRECTIONS[1];
+                const x = Math.round((left ? -10 : 6) + (left ? 3 : -3) * sip);
+                const y = Math.round((seated ? -4 : 0) + 6 - 8 * sip);
+                graphics.fillStyle(0x3a2a20).fillRect(x - 1, y - 1, 7, 7);
+                graphics.fillStyle(0xffffff).fillRect(x, y, 5, 5);
+                const handleX = left ? x - 3 : x + 5;
+                graphics.fillStyle(0x3a2a20).fillRect(handleX, y + 1, 3, 4);
+                graphics.fillStyle(0xffffff).fillRect(handleX + 1, y + 2, 1, 2);
+                graphics.fillStyle(0x6b3b20).fillRect(x, y, 5, 1);
+                const steam = (time % 1000) / 1000;
+                graphics
+                    .lineStyle(1, 0xffffff, 0.6 * (1 - steam))
+                    .lineBetween(x + 2, y - 2 - steam * 3, x + 3, y - 4 - steam * 3);
                 break;
             }
             case AvatarAction.Sleep: {

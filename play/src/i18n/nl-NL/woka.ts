@@ -2,6 +2,17 @@ import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
 const woka: DeepPartial<Translation["woka"]> = {
+    vehicle: {
+        centerColor: "Midden",
+        edgeColor: "Rand",
+        wheelsColor: "Wielen",
+        title: "Voertuig",
+        none: "Geen",
+        skateboard: "Skateboard",
+        hint: "Druk drie keer snel op een richting om te skateboarden, of rust het uit via het actiewiel.",
+        mount: "Skateboard rijden",
+        dismount: "Afstappen",
+    },
     customWoka: {
         color: "Kleur",
         defaultColor: "Standaardkleur",

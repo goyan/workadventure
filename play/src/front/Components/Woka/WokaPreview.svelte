@@ -1,6 +1,8 @@
 <script lang="ts">
-    import LL from "../../../i18n/i18n-svelte";
-    import type { Swimwear } from "../../Phaser/Entity/Swimwear";
+    import type { VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import type { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import LL from "@wa/i18n/i18n-svelte";
+    import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
     import type { WokaData } from "./WokaTypes";
     import WokaImage from "./WokaImage.svelte";
 
@@ -11,6 +13,8 @@
         onrotate?: (direction: number) => void;
         swimwear?: Swimwear;
         swimwearColor?: string;
+        vehicle?: Vehicle;
+        vehicleColors?: VehicleColors;
     }
 
     let {
@@ -20,6 +24,8 @@
         onrotate,
         swimwear,
         swimwearColor,
+        vehicle,
+        vehicleColors,
     }: Props = $props();
 
     // Directions correspond to the order of images in the sprite sheet:
@@ -63,6 +69,8 @@
             {canvasSize}
             {swimwear}
             {swimwearColor}
+            {vehicle}
+            {vehicleColors}
             direction={directionsMapping[direction]}
         />
     </div>

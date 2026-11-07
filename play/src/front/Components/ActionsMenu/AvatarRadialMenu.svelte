@@ -1,11 +1,14 @@
 <script lang="ts">
     import { onDestroy, tick } from "svelte";
-    import { wokaMenuStore } from "../../Stores/WokaMenuStore";
-    import type { WokaMenuData } from "../../Stores/WokaMenuStore";
-    import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
-    import LL from "../../../i18n/i18n-svelte";
+    import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
+    import type { WokaMenuData } from "@wa/front/Stores/WokaMenuStore";
+    import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore";
+    import LL from "@wa/i18n/i18n-svelte";
 
     let { menu }: { menu: WokaMenuData } = $props();
+    const profileAction = $derived(menu.actions.find((action) => action.testId === "avatar-profile"));
+    const actions = $derived(menu.actions.filter((action) => action !== profileAction));
+    const buttonCount = $derived(actions.length + (profileAction ? 1 : 0));
     let width = $state(0);
     let height = $state(0);
     let selected = $state(0);
@@ -19,7 +22,7 @@
     }
 
     function sector(index: number): string {
-        const step = (Math.PI * 2) / menu.actions.length;
+        const step = (Math.PI * 2) / actions.length;
         const start = index * step - Math.PI / 2 - step / 2 + 0.025;
         const end = start + step - 0.05;
         const a = point(143, start);
@@ -30,7 +33,7 @@
     }
 
     function sectorPolygon(index: number): string {
-        const step = (Math.PI * 2) / menu.actions.length;
+        const step = (Math.PI * 2) / actions.length;
         const start = index * step - Math.PI / 2 - step / 2;
         const points = [
             ...Array.from({ length: 13 }, (_, i) => point(146, start + (i * step) / 12)),
@@ -51,7 +54,7 @@
             event.preventDefault();
             const forward =
                 event.key === "ArrowRight" || event.key === "ArrowDown" || (event.key === "Tab" && !event.shiftKey);
-            selected = (selected + (forward ? 1 : -1) + menu.actions.length) % menu.actions.length;
+            selected = (selected + (forward ? 1 : -1) + buttonCount) % buttonCount;
             buttons[selected]?.focus();
         }
     }
@@ -59,7 +62,7 @@
     const previousFocus = document.activeElement;
     $effect(() => {
         // A submenu replaces its buttons without remounting the wheel.
-        if (!menu.actions[0]) return;
+        if (!actions[0]) return;
         selected = 0;
         tick()
             .then(() => buttons[0]?.focus())
@@ -85,7 +88,7 @@
 >
     <svg viewBox="0 0 300 300" aria-hidden="true">
         <circle cx="150" cy="150" r="146" fill="#0b1426" fill-opacity="0.94" stroke="#577487" />
-        {#each menu.actions as action, index (action.uuid)}
+        {#each actions as action, index (action.uuid)}
             <path
                 d={sector(index)}
                 fill={selected === index ? "#256c72" : "#1b2b42"}
@@ -94,12 +97,25 @@
         {/each}
         <circle cx="150" cy="150" r="49" fill="#132033" stroke="#9ee7da" />
     </svg>
-    <div class="wheel-center">
+    {#snippet centerContent()}
         {#if $currentPlayerWokaStore}<img src={$currentPlayerWokaStore} alt="" />{/if}
         <span>{menu.wokaName}</span>
-    </div>
-    {#each menu.actions as action, index (action.uuid)}
-        {@const center = point(97, (index * Math.PI * 2) / menu.actions.length - Math.PI / 2)}
+    {/snippet}
+    {#if profileAction}
+        <button
+            class="wheel-center wheel-profile"
+            bind:this={buttons[actions.length]}
+            aria-label={profileAction.actionName}
+            data-testid="avatar-profile"
+            onclick={profileAction.callback}
+        >
+            {@render centerContent()}
+        </button>
+    {:else}
+        <div class="wheel-center">{@render centerContent()}</div>
+    {/if}
+    {#each actions as action, index (action.uuid)}
+        {@const center = point(97, (index * Math.PI * 2) / actions.length - Math.PI / 2)}
         <button
             bind:this={buttons[index]}
             class="wheel-action"
@@ -152,6 +168,17 @@
         color: #d0eae6;
         font-size: 10px;
         pointer-events: none;
+    }
+    .wheel-profile {
+        pointer-events: auto;
+        cursor: pointer;
+        border: 0;
+        padding: 0;
+        background: transparent;
+        border-radius: 50%;
+    }
+    .wheel-profile:focus-visible {
+        outline: 2px solid #a5fff0;
     }
     .wheel-center img {
         width: 45px;

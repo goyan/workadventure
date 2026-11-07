@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Vehicle, VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { Player } from "../../../../src/front/Phaser/Player/Player";
 import { Character } from "../../../../src/front/Phaser/Entity/Character";
 import { WOKA_SPEED } from "../../../../src/front/Enum/EnvironmentVariable";
@@ -63,6 +64,18 @@ describe("path sprint", () => {
         expect(animation).toHaveBeenCalledWith(0, true, RUN_ANIMATION_SPEED);
         expect(smoke).toHaveBeenCalledWith(30, 36, 20, 0, 99);
         expect(emit).toHaveBeenCalledWith("hasMoved", expect.objectContaining({ moving: true, running: true }));
+    });
+    it("uses sprint dust on the skateboard without switching back to running", () => {
+        const { player, smoke, animation, emit } = fixture();
+        Object.assign(player, {
+            ridingVehicle: true,
+            vehicleState: readVehicleState({ vehicle: Vehicle.Skateboard, mode: VehicleMode.Always }),
+        });
+        player.step(30, 20);
+        player.advance(16);
+        expect(smoke).toHaveBeenCalled();
+        expect(animation).not.toHaveBeenCalled();
+        expect(emit).toHaveBeenCalledWith("hasMoved", expect.objectContaining({ moving: true, running: false }));
     });
     it.each([false, true])("does not produce running effects during walking or swimming (swimming=%s)", (swimming) => {
         const { player, smoke, animation } = fixture(swimming ? WOKA_SPEED * 2.5 : WOKA_SPEED, swimming);

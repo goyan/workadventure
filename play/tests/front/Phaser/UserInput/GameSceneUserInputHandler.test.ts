@@ -2,6 +2,8 @@ import * as Phaser from "phaser";
 import { get, readable } from "svelte/store";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mock } from "vitest-mock-extended";
+import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraManager";
@@ -36,7 +38,7 @@ vi.mock("../../../../src/front/Stores/MenuStore", () => ({}));
 vi.mock("../../../../src/front/Stores/FollowStore", () => ({}));
 vi.mock("../../../../src/front/Stores/EmoteStore", () => ({}));
 vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
-    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }) },
+    localUserStore: { getLocalUser: () => ({ uuid: "self-uuid" }), getVehicle: vi.fn(() => Vehicle.None) },
 }));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
@@ -292,6 +294,25 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ?.callback();
             expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
             expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
+        it("offers a selected scooter only on the own human avatar and equips it permanently", () => {
+            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.Skateboard);
+            const equipVehicle = vi.fn();
+            const self = Object.assign(Object.create(Player.prototype) as unknown as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+                equipVehicle,
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            get(wokaMenuStore)
+                ?.actions.find(({ testId }) => testId === "avatar-vehicle")
+                ?.callback();
+            expect(equipVehicle).toHaveBeenCalledWith(VehicleMode.Always);
+            Object.assign(self, { sprites: new Map([["duck", mock<Phaser.GameObjects.Sprite>()]]) });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-vehicle")).toBe(false);
+            vi.spyOn(localUserStore, "getVehicle").mockReturnValue(Vehicle.None);
         });
 
         it("opens a lone woka directly, without a choice", () => {

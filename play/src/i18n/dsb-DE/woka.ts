@@ -2,6 +2,17 @@ import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
+    vehicle: {
+        centerColor: "Srjejź",
+        edgeColor: "Kšoma",
+        wheelsColor: "Kólaska",
+        title: "Jězdźidło",
+        none: "Žedne",
+        skateboard: "Skateboard",
+        hint: "Tłoc směr tśi raze malsnje za skateboard abo wuzbroj jen w akciskiem kóle.",
+        mount: "Na skateboard stupiś",
+        dismount: "Wótstupiś",
+    },
     customWoka: {
         color: "Barwa",
         defaultColor: "Standardna barwa",

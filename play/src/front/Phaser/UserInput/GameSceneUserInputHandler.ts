@@ -1,31 +1,33 @@
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
-import { getTileCenter } from "../Player/TileSnap";
-import { Player } from "../Player/Player";
-import { RemotePlayer } from "../Entity/RemotePlayer";
-import type { UserInputHandlerInterface } from "../../Interfaces/UserInputHandlerInterface";
-import type { GameScene } from "../Game/GameScene";
-import { mapEditorModeStore, mapExplorationModeStore } from "../../Stores/MapEditorStore";
-import { isActivatable } from "../Game/ActivatableInterface";
-import { mapManagerActivated } from "../../Stores/MenuStore";
-import { displayEmote, isEmoteIndex } from "../../Stores/EmoteStore";
-import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { navChat } from "../../Chat/Stores/ChatStore";
-import { chatVisibilityStore } from "../../Stores/ChatStore";
-import { popupStore } from "../../Stores/PopupStore";
-import SayPopUp from "../../Components/PopUp/SayPopUp.svelte";
-import { isPopupJustClosed } from "../Game/Say/SayManager";
-import LL from "../../../i18n/i18n-svelte";
-import { followRoleStore, followStateStore, followUsersStore } from "../../Stores/FollowStore";
-import { localUserStore } from "../../Connection/LocalUserStore";
-import { wokaMenuStore } from "../../Stores/WokaMenuStore";
-import { characterPickerStore, type CharacterPickerCandidate } from "../../Stores/CharacterPickerStore";
-import { AvatarAction } from "../Entity/AvatarAction";
-import { Swimwear } from "../Entity/Swimwear";
-import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-import { cameraDetachedStore } from "../../Stores/CameraStore";
-import { waScaleManager } from "../Services/WaScaleManager";
+import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
+import { Player } from "@wa/front/Phaser/Player/Player";
+import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
+import type { UserInputHandlerInterface } from "@wa/front/Interfaces/UserInputHandlerInterface";
+import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
+import { mapEditorModeStore, mapExplorationModeStore } from "@wa/front/Stores/MapEditorStore";
+import { isActivatable } from "@wa/front/Phaser/Game/ActivatableInterface";
+import { mapManagerActivated } from "@wa/front/Stores/MenuStore";
+import { displayEmote, isEmoteIndex } from "@wa/front/Stores/EmoteStore";
+import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
+import { navChat } from "@wa/front/Chat/Stores/ChatStore";
+import { chatVisibilityStore } from "@wa/front/Stores/ChatStore";
+import { popupStore } from "@wa/front/Stores/PopupStore";
+import SayPopUp from "@wa/front/Components/PopUp/SayPopUp.svelte";
+import { isPopupJustClosed } from "@wa/front/Phaser/Game/Say/SayManager";
+import LL from "@wa/i18n/i18n-svelte";
+import { followRoleStore, followStateStore, followUsersStore } from "@wa/front/Stores/FollowStore";
+import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
+import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
+import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
+import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
+import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
+import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
+import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
+import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
 import { MapDragPointerCapture } from "./MapDragPointerCapture";
 import { MapDragGesture } from "./MapDragGesture";
 import { MapPanShortcut } from "./MapPanShortcut";
@@ -351,6 +353,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             testId: "avatar-profile",
             callback: () => wokaMenuStore.openOwnCard(player.playerName, uuid),
         });
+        if (localUserStore.getVehicle() !== Vehicle.None && isHumanAvatar(player.sprites.keys())) {
+            const equipped = player.vehicleMode === VehicleMode.Always;
+            wokaMenuStore.addAction({
+                actionName: equipped ? get(LL).woka.vehicle.dismount() : get(LL).woka.vehicle.mount(),
+                emoji: "🛹",
+                testId: "avatar-vehicle",
+                callback: () => {
+                    player.equipVehicle(equipped ? VehicleMode.Off : VehicleMode.Always);
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         for (const action of [AvatarAction.Dance, AvatarAction.Coffee, AvatarAction.Idle]) {
             wokaMenuStore.addAction({
                 actionName: get(LL).woka.actions[action](),
@@ -369,9 +383,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             callback: () => {
                 wokaMenuStore.clear();
                 Promise.all([
-                    import("../Game/GameManager"),
-                    import("../Login/SelectCharacterScene"),
-                    import("../../Stores/SelectCharacterStore"),
+                    import("@wa/front/Phaser/Game/GameManager"),
+                    import("@wa/front/Phaser/Login/SelectCharacterScene"),
+                    import("@wa/front/Stores/SelectCharacterStore"),
                 ])
                     .then(
                         ([

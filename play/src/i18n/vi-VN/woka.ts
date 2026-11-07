@@ -2,6 +2,17 @@ import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
+    vehicle: {
+        centerColor: "Phần giữa",
+        edgeColor: "Viền",
+        wheelsColor: "Bánh xe",
+        title: "Phương tiện",
+        none: "Không",
+        skateboard: "Ván trượt",
+        hint: "Nhấn nhanh một hướng ba lần để đi ván trượt, hoặc trang bị từ vòng hành động.",
+        mount: "Lên ván trượt",
+        dismount: "Xuống ván trượt",
+    },
     customWoka: {
         color: "Màu sắc",
         defaultColor: "Màu mặc định",
