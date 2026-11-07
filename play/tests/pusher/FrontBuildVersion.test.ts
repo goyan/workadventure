@@ -80,6 +80,23 @@ describe("frontend build identity", () => {
         expect(res.set.mock.calls).toContainEqual(["Cache-Control", "no-store"]);
     });
 
+    it("serves the current server time without caching it", () => {
+        const app = mock<Application>();
+        new FrontController(app, frontAssets);
+        const handler = app.get.mock.calls.find(([path]) => path === "/server-time")?.[1];
+        if (typeof handler !== "function") throw new Error("Server clock route was not registered");
+        const res = mock<Response>();
+        res.set.mockReturnValue(res);
+        const now = vi.spyOn(Date, "now").mockReturnValue(123456789);
+        try {
+            handler(mock<Request>(), res);
+            expect(res.json).toHaveBeenCalledWith({ now: 123456789 });
+            expect(res.set.mock.calls).toContainEqual(["Cache-Control", "no-store"]);
+        } finally {
+            now.mockRestore();
+        }
+    });
+
     it("changes the build identity when the deployed frontend assets change", () => {
         const req = mock<Request>();
 

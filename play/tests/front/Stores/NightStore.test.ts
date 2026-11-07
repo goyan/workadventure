@@ -1,36 +1,44 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
+import { NightMode } from "../../../src/front/Stores/NightStore";
+import type * as NightStore from "../../../src/front/Stores/NightStore";
 
-// The store reads localStorage once at import time, so each test re-imports a fresh module.
-async function loadStore() {
+// Preferences are read at import time; reload the module to simulate a fresh page.
+async function loadStore(): Promise<typeof NightStore> {
     vi.resetModules();
-    return (await import("../../../src/front/Stores/NightStore")).nightDisabledStore;
+    return import("../../../src/front/Stores/NightStore");
 }
 
-describe("nightDisabledStore", () => {
+describe("nightModeStore", () => {
     beforeEach(() => localStorage.clear());
 
-    it("is false when nothing was saved", async () => {
-        expect(get(await loadStore())).toBe(false);
+    it("defaults to the shared server clock", async () => {
+        const { nightModeStore, NightMode } = await loadStore();
+        expect(get(nightModeStore)).toBe(NightMode.Server);
     });
 
-    it("reads the saved value at startup", async () => {
+    it("preserves the old disabled preference", async () => {
         localStorage.setItem("disableNight", "true");
-        expect(get(await loadStore())).toBe(true);
+        const { nightModeStore, NightMode } = await loadStore();
+        expect(get(nightModeStore)).toBe(NightMode.Disabled);
     });
 
-    it("persists every set", async () => {
-        const store = await loadStore();
-        store.set(true);
-        expect(localStorage.getItem("disableNight")).toBe("true");
-        store.set(false);
-        expect(localStorage.getItem("disableNight")).toBe("false");
+    it.each(Object.values(NightMode))("persists %s across reloads", async (mode) => {
+        const { nightModeStore } = await loadStore();
+        nightModeStore.set(mode);
+        expect(get((await loadStore()).nightModeStore)).toBe(mode);
+        expect(localStorage.getItem("disableNight")).toBe(String(mode === NightMode.Disabled));
     });
 
-    it("persists every update", async () => {
-        const store = await loadStore();
-        store.update((v) => !v);
-        expect(get(store)).toBe(true);
-        expect(localStorage.getItem("disableNight")).toBe("true");
+    it("persists updates", async () => {
+        const { nightModeStore, NightMode } = await loadStore();
+        nightModeStore.update(() => NightMode.Computer);
+        expect(get((await loadStore()).nightModeStore)).toBe(NightMode.Computer);
+    });
+
+    it("ignores invalid saved clock choices", async () => {
+        localStorage.setItem("nightMode", "invalid");
+        const { nightModeStore, NightMode } = await loadStore();
+        expect(get(nightModeStore)).toBe(NightMode.Server);
     });
 });

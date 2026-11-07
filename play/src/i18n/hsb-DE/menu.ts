@@ -28,6 +28,10 @@ const menu: DeepPartial<Translation["menu"]> = {
     },
     settings: {
         night: {
+            label: "Dnjowy a nócny cyklus",
+            server: "Čas serwera",
+            computer: "Čas mojeho ličaka",
+            disabled: "Wupinjeny",
             disable: "Turn off night mode",
         },
         theme: {

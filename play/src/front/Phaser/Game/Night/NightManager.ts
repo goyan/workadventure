@@ -2,7 +2,7 @@ import type { Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { nightDisabledStore } from "../../../Stores/NightStore";
+import { NightMode, nightModeStore } from "../../../Stores/NightStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
@@ -10,6 +10,7 @@ import { isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
+import { ServerNightClock } from "./ServerNightClock";
 
 /** The clock only moves the veil during dusk and dawn, by minutes: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
@@ -17,20 +18,22 @@ const CLOCK_INTERVAL_MS = 1000;
 /**
  * Night mode of the map: darkens the scene in the evening, lights the areas where someone is and carries a halo of
  * light around every player.
- * Everything is local (same Paris clock for everyone, players known by this browser): nothing goes on the network.
+ * The server supplies the clock; lighting is drawn locally from the players known by this browser.
  */
 export class NightManager {
     private readonly overlay: NightOverlay;
     private readonly lights = new NightLights();
     private readonly halos = new NightHalos();
+    private readonly clock = new ServerNightClock();
     // Halo id of the local player; remote players use their MapPlayersByKey key.
     private readonly localId = localUserStore.getLocalUser()?.uuid ?? "local";
     // Development override of the clock (`?nightAt=HH:MM`), fixed for the life of the scene.
     private readonly forcedMinutes: number | undefined;
     private readonly unsubscribeEditor: Unsubscriber;
-    private readonly unsubscribeDisabled: Unsubscriber;
+    private readonly unsubscribeMode: Unsubscriber;
     private areas: AreaData[] = [];
     private editorOpen = false;
+    private mode = NightMode.Server;
     private disabled = false;
     private opacity = 0;
     private lastClockAt: number | undefined;
@@ -47,15 +50,26 @@ export class NightManager {
             }
             this.editorOpen = open;
         });
-        this.unsubscribeDisabled = nightDisabledStore.subscribe((disabled) => {
-            this.disabled = disabled;
+        this.unsubscribeMode = nightModeStore.subscribe((mode) => {
+            this.mode = mode;
+            this.disabled = mode === NightMode.Disabled;
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
         });
     }
 
     public update(now: number): void {
         if (this.lastClockAt === undefined || now - this.lastClockAt >= CLOCK_INTERVAL_MS) {
             this.lastClockAt = now;
-            this.opacity = nightOpacityAtMinutes(this.forcedMinutes ?? parisMinutes(new Date()));
+            const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
+            const minutes =
+                this.forcedMinutes ??
+                (date
+                    ? this.mode === NightMode.Computer
+                        ? date.getHours() * 60 + date.getMinutes()
+                        : parisMinutes(date)
+                    : undefined);
+            this.opacity = minutes === undefined ? 0 : nightOpacityAtMinutes(minutes);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -106,8 +120,9 @@ export class NightManager {
     }
 
     public destroy(): void {
+        this.clock.destroy();
         this.unsubscribeEditor();
-        this.unsubscribeDisabled();
+        this.unsubscribeMode();
         this.overlay.destroy();
     }
 

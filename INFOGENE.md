@@ -612,7 +612,8 @@ Limites :
 
 ### Mode nuit
 
-La carte suit l'heure de Paris (`Europe/Paris`, quel que soit le fuseau du poste) : jour de 7 h 30 à 18 h 30,
+Par défaut, la carte suit l'heure du serveur convertie en heure de Paris (`Europe/Paris`, quel que soit le fuseau ou le réglage
+de l'horloge du poste) : jour de 7 h 30 à 18 h 30,
 crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'à 7 h 30. La nuit, un voile bleu nuit
 (`0x0b1030`, opacité 0,6) couvre la carte, les avatars et les animaux ; bulles, noms et interface restent au-dessus
 (`DEPTH_NIGHT_INDEX = 1_040_000`).
@@ -622,12 +623,24 @@ crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'
   quart de la carte n'éclaire jamais (zones techniques).
 - **Halo** : chaque joueur porte une lumière, 1,5 case à l'arrêt, 3 cases en marche (transition linéaire) ; il
   s'éteint dans une pièce allumée et revient en sortant. Pas de halo pour les animaux.
-- **Pas de nuit** en mode édition, ni avec le réglage « Désactiver la nuit » (Paramètres → Thème, clé `disableNight`).
+- **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
+  (horloge et fuseau du poste), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+- **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
 - **Recette locale** : `?nightAt=21:00` force l'heure, seulement en développement (`import.meta.env.DEV`).
+
+L’horloge du mode nuit se synchronise via `/server-time` sans cache au démarrage, toutes les cinq minutes et au retour
+dans la fenêtre. Entre deux réponses elle avance avec l’horloge monotone du navigateur ; un changement de l’heure du
+poste n’altère pas le cycle. Pendant une coupure elle conserve la dernière référence serveur. Avant la première réponse,
+le voile reste masqué. Les requêtes et écouteurs sont supprimés à la fermeture de la scène.
+
+Recette locale : deux clients avec des fuseaux et horloges de poste différents gardent la même heure serveur et le même
+cycle. Un client passant à l’heure de son ordinateur suit son propre fuseau sans changer le rendu de l’autre joueur.
+Les trois choix prennent effet immédiatement et restent mémorisés après rechargement ; désactiver masque le voile.
+La recette visuelle en beta reste à confirmer après fusion.
 
 Rendu : `RenderTexture` à la taille de l'écran (fixe, compensée pour le zoom), remplie de la teinte puis percée par
 des pinceaux doux réutilisés ; redessinée seulement quand quelque chose change, puis `markDirty()` (le jeu ne dessine
-qu'une scène marquée). Le jour, rien n'est calculé. Rien n'est envoyé sur le réseau : tout le monde voit la même heure.
+qu'une scène marquée). Le jour, rien n'est calculé. Seule l'heure est synchronisée avec le serveur ; l'éclairage reste calculé localement.
 Seule l'image `play` change : compatible avec la prod.
 
 Fichiers : `play/src/front/Phaser/Game/Night/*` (`NightClock`, `NightLights`, `NightHalos`, `NightRenderDecision` purs

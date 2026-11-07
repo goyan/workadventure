@@ -95,6 +95,10 @@ export class FrontController extends BaseHttpController {
     }
 
     front(): void {
+        this.app.get("/server-time", (_req: Request, res: Response) => {
+            res.set("Cache-Control", "no-store").json({ now: Date.now() });
+        });
+
         this.app.get("/build-version", (_req: Request, res: Response) => {
             res.set("Cache-Control", "no-store").json({
                 version: this.getVersionedTemplate()?.buildVersion,
