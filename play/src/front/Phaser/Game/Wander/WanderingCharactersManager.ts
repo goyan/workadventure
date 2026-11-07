@@ -9,6 +9,7 @@ import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRect
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
+import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { WanderSchedule } from "./WanderSchedule";
@@ -217,12 +218,16 @@ export class WanderingCharactersManager {
     /** The thin collisions of objects and water, which animals never enter. */
     public static collisionRectanglesOf(scene: GameScene): WanderRectangle[] {
         const rectangles: WanderRectangle[] = [...getWaterRectangles(scene)];
-        for (const entity of scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+        const gameMapFrontWrapper = scene.getGameMapFrontWrapper();
+        const cellSize = gameMapFrontWrapper.getTileDimensions().width;
+        for (const entity of gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
-            if (!prefab.collisionRectangles?.length || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
+            // The same rectangles as the players: none for the animals themselves, the grid of an object off the grid.
+            const solid = getSolidRectangles({ x: entity.x, y: entity.y }, prefab, cellSize);
+            if (solid.length === 0 || isMapLayerPrefab(prefab.collectionName, prefab.id)) {
                 continue;
             }
-            rectangles.push(...getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, prefab.collisionRectangles));
+            rectangles.push(...getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, solid));
         }
         return rectangles;
     }

@@ -498,6 +498,24 @@ comme obstacle, sauf pour un nageur ; les murs de la couche carte restent des ba
 local ; en retirer un ne l'annule pas. Le gestionnaire Phaser n'a pas de test automatisé (le dépôt n'a pas de banc
 Phaser sans navigateur) : comportement validé en jeu uniquement.
 
+### Hitbox des objets hors grille, des animaux et de l'assise
+
+Règles communes (`play/src/front/Utils/EntityHitbox.ts`), lues par les collisions du joueur, celles des animaux et les sièges :
+
+- **Objet posé hors grille** (placement libre au pixel) : sa grille `collisionGrid` de 32 px n'est plus écrite dans les
+  cases de la carte (arrondies vers le bas, jusqu'à 31 px à côté de l'image : mur invisible d'un côté, passage dans le
+  meuble de l'autre). Ses cases bloquantes deviennent des rectangles au pixel posés sur l'image. Sur la grille, rien ne
+  change. Déplacer un objet sur ou hors de la grille fait passer sa collision de l'un à l'autre.
+- **Animal promeneur** (`wander`) : l'objet d'origine est caché (un personnage se promène à sa place) et ne bloque plus
+  personne, même avec une hitbox réglée dans la carte.
+- **Assise** : la zone d'approche d'un siège prend la hitbox de l'objet, ou les cases de sa grille (une place adossée à sa
+  propre case bloquante redevient accessible). La physique ne tourne que quand quelque chose bouge (`DirtyScene`) :
+  la détection d'assise prend la boîte du corps depuis la position du sprite, et une téléportation recale le corps
+  physique (sinon l'avatar était « aspiré » vers un siège resté sous l'ancienne position).
+
+Vérifié en jeu sur une copie locale de la carte d'équipe : 67 places sur 72 accessibles (54 avant), 1 bloquée et 4 « voisines »
+dues au placement (canapés empilés, objets posés dessus), aucune aspiration lointaine.
+
 ### Canards promeneurs (champ de catalogue `wander`)
 
 Un prefab de catalogue peut déclarer `wander: { "sheetPath": "canard-sheet.png" }` : une planche au format woka

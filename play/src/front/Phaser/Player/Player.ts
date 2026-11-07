@@ -24,6 +24,7 @@ import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectang
 import LL from "../../../i18n/i18n-svelte";
 import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "../Entity/AvatarAction";
 import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
+import { getSolidRectangles } from "../../Utils/EntityHitbox";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -231,10 +232,17 @@ export class Player extends Character {
     private trySitDown(): void {
         const body = this.getBody();
         this.releaseSeatObjectWhenOut();
+        // The physics only steps while something moves (DirtyScene): standing still after the avatar was placed by code
+        // (a slide, a seat), the body is still where it was last synced. Its box is taken from the sprite instead.
         const seat = findSeatUnderFeet(
             this.scene,
             { x: this.x, y: this.y + body.height / 2 + body.offset.y },
-            { x: body.x, y: body.y, width: body.width, height: body.height },
+            {
+                x: this.x + this.scaleX * (body.offset.x - this.displayOriginX),
+                y: this.y + this.scaleY * (body.offset.y - this.displayOriginY),
+                width: body.width,
+                height: body.height,
+            },
         );
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
@@ -276,10 +284,15 @@ export class Player extends Character {
         if (this.seatEntityId === undefined || this.isSeated() || this.isSlidingToSeat) return;
         const entity = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().get(this.seatEntityId);
         const body = this.getBody();
-        const stillInside = getPrefabCollisionRectangles(
-            { x: entity?.x ?? 0, y: entity?.y ?? 0 },
-            entity?.getPrefab().collisionRectangles,
-        ).some(
+        const position = { x: entity?.x ?? 0, y: entity?.y ?? 0 };
+        const solid = entity
+            ? getSolidRectangles(
+                  position,
+                  entity.getPrefab(),
+                  this.scene.getGameMapFrontWrapper().getTileDimensions().width,
+              )
+            : [];
+        const stillInside = getPrefabCollisionRectangles(position, solid).some(
             (r) =>
                 body.x < r.x + r.width &&
                 r.x < body.x + body.width &&
@@ -657,6 +670,12 @@ export class Player extends Character {
     public teleportTo(x: number, y: number): void {
         this.standUp();
         this.setPosition(x, y);
+        // The physics is paused while nothing moves (DirtyScene): the body must follow now. Its previous positions
+        // follow too, so that the end of a physics step does not move the sprite again by the length of the teleport.
+        const body = this.getBody();
+        body.updateFromGameObject();
+        body.prev.copy(body.position);
+        body.prevFrame.copy(body.position);
         this.finishFollowingPath(true);
         this.emit(hasMovedEventName, {
             moving: false,

@@ -9,6 +9,7 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
+import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
     mapEditorEntityEraserStore,
@@ -165,7 +166,8 @@ export class EntitiesManager extends EventEmitter {
 
         this.bindEntityEventHandlers(entity);
 
-        const colGrid = entity.getCollisionGrid();
+        // Off the grid or wandering, the object blocks with rectangles instead (EntityHitbox).
+        const colGrid = this.getTileCollisionGrid(entity);
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid, withGridUpdate);
         }
@@ -193,6 +195,15 @@ export class EntitiesManager extends EventEmitter {
         return entity;
     }
 
+    /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */
+    private getTileCollisionGrid(entity: Entity): number[][] | undefined {
+        const prefab = entity.getPrefab();
+        if (!prefab.collisionGrid?.some((row) => row.includes(1))) {
+            return undefined;
+        }
+        return getTileCollisionGrid(entity, prefab, this.gameMapFrontWrapper.getTileDimensions().width);
+    }
+
     public deleteEntity(id: string): boolean {
         this.erasingEntityIds.delete(id);
         const entity = this.entities.get(id);
@@ -208,9 +219,9 @@ export class EntitiesManager extends EventEmitter {
             }
         }
 
-        const colGrid = entity.getReversedCollisionGrid();
+        const colGrid = this.getTileCollisionGrid(entity);
         if (colGrid) {
-            this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid);
+            this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", reverseCollisionGrid(colGrid));
         }
         this.gameMapFrontWrapper.removeEntityCollisionRectangles(id);
         const overlappingEntities = entity.getOverlappingEntities();

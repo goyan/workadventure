@@ -33,6 +33,7 @@ import type { GameScene } from "../GameScene";
 import type { Player } from "../../Player/Player";
 import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import { sameGrids } from "../Wander/WanderCollisions";
+import { getTileCollisionGrid } from "../../../Utils/EntityHitbox";
 import { EntitiesManager } from "./EntitiesManager";
 import { AreasManager } from "./AreasManager";
 import { EntityCollisionRectangles } from "./EntityCollisionRectangles";
@@ -178,7 +179,11 @@ export class GameMapFrontWrapper {
             this.tiledTileCollisions = new TiledTileCollisions(scene);
         }
 
-        this.entityCollisionRectangles = new EntityCollisionRectangles(scene);
+        this.entityCollisionRectangles = new EntityCollisionRectangles(
+            scene,
+            "solid",
+            () => this.getTileDimensions().width,
+        );
         this.entityWaterRectangles = new EntityCollisionRectangles(scene, "water");
 
         this.existingTileIndex = terrains.length > 0 ? terrains[0].firstgid : -1;
@@ -402,7 +407,11 @@ export class GameMapFrontWrapper {
         this.entitiesCollisionLayer.fill(-1);
 
         for (const entity of entities.values()) {
-            const entityCollisionGrid = entity.getCollisionGrid();
+            const entityCollisionGrid = getTileCollisionGrid(
+                entity,
+                entity.getPrefab(),
+                this.getTileDimensions().width,
+            );
             if (entityCollisionGrid === undefined) {
                 continue;
             }
