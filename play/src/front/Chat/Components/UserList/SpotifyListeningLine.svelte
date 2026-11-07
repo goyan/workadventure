@@ -2,10 +2,11 @@
     import type { SpotifyListening } from "@workadventure/messages";
     import type { Readable } from "svelte/store";
     import { LL } from "../../../../i18n/i18n-svelte";
-    import { isInJam, isPlayingTrack, listeningSourceOf, listenTooLinks } from "../../../../common/SpotifyListening";
+    import { isInJam, listeningSourceOf, listenTooLinks } from "../../../../common/SpotifyListening";
     import ListeningSourceIcon from "../../../Components/Listening/ListeningSourceIcon.svelte";
-    import { jamLabelOf } from "../../../ListeningZone/JamTitle";
+    import { jamLabelOf, shownTrackOf } from "../../../ListeningZone/JamTitle";
     import { allJamRoomsStore } from "../../../ListeningZone/ListeningZoneController";
+    import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirectory";
 
     interface Props {
         listening: Readable<SpotifyListening | undefined>;
@@ -13,7 +14,8 @@
 
     let { listening }: Props = $props();
 
-    let playing = $derived(isPlayingTrack($listening) ? $listening : undefined);
+    // A guest who listens to the streamed music plays nothing themselves: the track shown is their host's.
+    let playing = $derived(shownTrackOf($listening, $listeningByUserUuidStore));
     let jam = $derived(isInJam($listening) ? $listening : undefined);
     // The title of the Jam, which the listening does not carry, comes from the rooms of the map.
     let jamLabel = $derived(jam ? jamLabelOf($allJamRoomsStore, jam) : "");
