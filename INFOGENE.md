@@ -1023,3 +1023,7 @@ Recette locale effectuée avec deux navigateurs : rechargement d’un participan
 positions et mêmes participants retrouvés, micro coupé et caméra activée conservés. Bouton maison et coupure des
 variables du Jam vérifiés avec des données de test. Écoute Spotify réelle, appels externes et partage d’écran non
 vérifiés ; recette en beta à confirmer après fusion.
+Le choix « Jukebox » reste visible pendant la détection de Spicetify ; il est désactivé tant que l’extension ne répond
+pas, puis s’active sans fermer le menu. Une déconnexion de l’extension désactive à nouveau la création. La description
+traduite existante indique les prérequis. Deux tests DOM reproduisent ces transitions ; le menu français et son activation
+ont aussi été vérifiés dans le navigateur local après rebase sur `infogene`.
