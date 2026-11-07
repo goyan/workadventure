@@ -245,6 +245,7 @@ import { ApplicationManager } from "../../Chat/Applications/ApplicationManager";
 import { audioPlaybackStore } from "../../Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "../../Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "../Helpers/EnterLeaveScriptingService";
+import { stopShortOf } from "../../Utils/PathStop";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -288,6 +289,7 @@ import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager"
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
+import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
 import { ScriptingVideoManager } from "./ScriptingVideoManager";
@@ -438,6 +440,7 @@ export class GameScene extends DirtyScene {
     private nightManager: NightManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
+    private _coffeeManager: CoffeeManager | undefined;
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 
@@ -1449,6 +1452,8 @@ export class GameScene extends DirtyScene {
         this._knockManager = undefined;
         this._waveManager?.destroy();
         this._waveManager = undefined;
+        this._coffeeManager?.destroy();
+        this._coffeeManager = undefined;
         this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
@@ -2150,6 +2155,10 @@ export class GameScene extends DirtyScene {
         return this._waveManager;
     }
 
+    public get coffeeManager(): CoffeeManager | undefined {
+        return this._coffeeManager;
+    }
+
     /** The space of every user connected to the world, once joined. */
     public get worldSpace(): SpaceInterface | undefined {
         return this.allUserSpace;
@@ -2702,6 +2711,8 @@ export class GameScene extends DirtyScene {
                 this._knockManager = new KnockManager(this);
                 this._waveManager?.destroy();
                 this._waveManager = new WaveManager(this);
+                this._coffeeManager?.destroy();
+                this._coffeeManager = new CoffeeManager(this);
                 const connection = this.connection;
                 this.konamiCodeDetector = new KonamiCodeDetector(() => {
                     this.duckRushManager?.start(connection.getUserId(), () => ({
@@ -4459,10 +4470,15 @@ ${escapedMessage}
     /**
      * Walk the player to position x,y expressed in Game pixels.
      */
+    /**
+     * @param stopDistance Stop this many pixels before the destination (going to a colleague: next to them, not on
+     * them). Only applied when the path does reach the destination.
+     */
     public async moveTo(
         position: { x: number; y: number },
         tryFindingNearestAvailable = false,
         speed: number | undefined = undefined,
+        stopDistance: number | undefined = undefined,
     ): Promise<{ x: number; y: number; cancelled: boolean }> {
         const pathfindingManager = this.getPathfindingManager();
 
@@ -4477,7 +4493,7 @@ ${escapedMessage}
             pathfindingManager.setObstacles(this.gameMapFrontWrapper.getPathObstacles(this.CurrentPlayer));
             // Each attempt must fully complete (walk, then maybe reroute) before the next one starts.
             // eslint-disable-next-line no-await-in-loop
-            const path = await pathfindingManager.findPathFromGameCoordinates(
+            const foundPath = await pathfindingManager.findPathFromGameCoordinates(
                 {
                     x: this.CurrentPlayer.x,
                     y: this.CurrentPlayer.y,
@@ -4485,6 +4501,11 @@ ${escapedMessage}
                 position,
                 tryFindingNearestAvailable,
             );
+            const path = this.stopShortOfDestination(foundPath, position, stopDistance);
+            if (foundPath.length > 0 && path.length < 2) {
+                // Already next to the destination.
+                return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: false };
+            }
             if (path.length === 0) {
                 if (attempt === 0) {
                     // The destination is unreachable from the start (typically an already locked area):
@@ -4508,6 +4529,27 @@ ${escapedMessage}
         // stands right before the blocking tile: warn about the area blocking the destination.
         this.displayPathBlockedWarning(position);
         return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: true };
+    }
+
+    /**
+     * The path cut `stopDistance` before its end, when that end is the destination itself. A nearest free spot found
+     * instead (the destination tile is taken) is already next to it: kept as is.
+     */
+    private stopShortOfDestination(
+        path: { x: number; y: number }[],
+        destination: { x: number; y: number },
+        stopDistance: number | undefined,
+    ): { x: number; y: number }[] {
+        const end = path.at(-1);
+        if (
+            stopDistance === undefined ||
+            end === undefined ||
+            path.length < 2 ||
+            Math.hypot(end.x - destination.x, end.y - destination.y) > stopDistance
+        ) {
+            return path;
+        }
+        return stopShortOf(path, end, stopDistance);
     }
 
     /**

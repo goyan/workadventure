@@ -29,6 +29,7 @@ import locate from "./locate";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import coffee from "./coffee";
 import wave from "./wave";
 
 const en_US: BaseTranslation = {
@@ -62,6 +63,7 @@ const en_US: BaseTranslation = {
     randomNames,
     onboarding,
     spotify,
+    coffee,
     wave,
 };
 

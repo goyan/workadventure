@@ -29,6 +29,7 @@ import messageScreen from "./messageScreen";
 import randomNames from "./randomNames";
 import onboarding from "./onboarding";
 import spotify from "./spotify";
+import coffee from "./coffee";
 import wave from "./wave";
 import recording from "./recording";
 
@@ -63,6 +64,7 @@ const fr_FR = deepmerge(en_US, {
     onboarding,
     spotify,
     recording,
+    coffee,
     wave,
 });
 

@@ -1923,13 +1923,15 @@ export class GameMapFrontWrapper {
         }
         // The pathfinder moves the feet of the avatar (see Character.getPositionForFeet).
         const feet = { x: player.x, y: player.y + body.height / 2 + body.offset.y };
+        const box = player.getBodyBox();
         return new RectangleObstacles(
             [
                 ...(this.tiledTileCollisions?.getPathObstacles() ?? []),
                 ...this.entityCollisionRectangles.getPathObstacles(player),
                 ...this.entityWaterRectangles.getPathObstacles(player),
             ],
-            { offsetX: body.x - feet.x, offsetY: body.y - feet.y, width: body.width, height: body.height },
+            { offsetX: box.x - feet.x, offsetY: box.y - feet.y, width: box.width, height: box.height },
+            feet,
         );
     }
 

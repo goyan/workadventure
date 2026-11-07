@@ -31,7 +31,11 @@ export class RectangleObstacles {
     /** Feet positions that make the body touch each rectangle: open boxes, a body only touching an edge passes. */
     private readonly cells = new Map<number, ObstacleRectangle[]>();
 
-    constructor(rectangles: readonly ObstacleRectangle[], body: FeetBody) {
+    /**
+     * @param ignoredAt Feet position of the avatar now: a rectangle its body already overlaps there is left out. An
+     * avatar spawned or pushed into an object (a shelf over the spawn point) must be able to walk out of it.
+     */
+    constructor(rectangles: readonly ObstacleRectangle[], body: FeetBody, ignoredAt?: Point) {
         for (const rectangle of rectangles) {
             const grown = {
                 x: rectangle.x - body.offsetX - body.width,
@@ -39,6 +43,9 @@ export class RectangleObstacles {
                 width: rectangle.width + body.width,
                 height: rectangle.height + body.height,
             };
+            if (ignoredAt && isInside(ignoredAt, grown)) {
+                continue;
+            }
             for (let cy = Math.floor(grown.y / CELL); cy <= Math.floor((grown.y + grown.height) / CELL); cy += 1) {
                 for (let cx = Math.floor(grown.x / CELL); cx <= Math.floor((grown.x + grown.width) / CELL); cx += 1) {
                     const key = RectangleObstacles.key(cx, cy);

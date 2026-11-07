@@ -37,6 +37,17 @@ export interface SystemNotification {
 /** `renotify` is part of the Notification API but missing from the DOM lib typings of this TypeScript version. */
 type RenotifyingNotificationOptions = NotificationOptions & { renotify?: boolean };
 
+/**
+ * The effective status can be JITSI, BBB, SILENT... even when the user asked for "do not disturb", so the requested
+ * status counts too.
+ */
+export function isLocalDoNotDisturb(): boolean {
+    return (
+        get(requestedStatusStore) === AvailabilityStatus.DO_NOT_DISTURB ||
+        get(availabilityStatusStore) === AvailabilityStatus.DO_NOT_DISTURB
+    );
+}
+
 /** Reads the real context (focus, permission, user setting, local status) and shows a page notification when allowed. */
 export function notifySystem(notification: SystemNotification): void {
     if (typeof Notification === "undefined") {
@@ -47,11 +58,7 @@ export function notifySystem(notification: SystemNotification): void {
             focused: document.hasFocus(),
             permission: Notification.permission,
             enabled: localUserStore.getNotification(),
-            // The effective status can be JITSI, BBB, SILENT... even when the user asked for "do not disturb",
-            // so the requested status counts too.
-            doNotDisturb:
-                get(requestedStatusStore) === AvailabilityStatus.DO_NOT_DISTURB ||
-                get(availabilityStatusStore) === AvailabilityStatus.DO_NOT_DISTURB,
+            doNotDisturb: isLocalDoNotDisturb(),
         };
         if (!shouldNotify(notification.kind, context)) {
             return;
