@@ -2,6 +2,17 @@ import type { DeepPartial } from "../DeepPartial";
 import type { Translation } from "../i18n-types";
 
 const woka: DeepPartial<Translation["woka"]> = {
+    vehicle: {
+        centerColor: "الوسط",
+        edgeColor: "الحافة",
+        wheelsColor: "العجلات",
+        title: "المركبة",
+        none: "بدون",
+        skateboard: "لوح التزلج",
+        hint: "اضغط على الاتجاه ثلاث مرات بسرعة للتزلج، أو جهّز لوح التزلج من قائمة الإجراءات.",
+        mount: "ركوب لوح التزلج",
+        dismount: "النزول",
+    },
     customWoka: {
         color: "اللون",
         defaultColor: "اللون الافتراضي",

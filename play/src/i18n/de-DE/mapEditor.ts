@@ -682,6 +682,20 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            automatic: "Automatisch (alle 30 Minuten)",
+            title: "Wetter",
+            description:
+                "Das Wetter gilt für alle auf dieser Karte. Die Effekte können in den persönlichen Einstellungen ausgeblendet werden.",
+            clear: "Klarer Himmel",
+            rain: "Regen",
+            snow: "Schnee",
+            storm: "Gewitter",
+            saving: "Speichern…",
+            success: "Wetter gespeichert",
+            error: "Wetter konnte nicht gespeichert werden",
+        },
+
         loading: "Laden...",
         megaphone: {
             title: "Megaphon",

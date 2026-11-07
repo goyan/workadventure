@@ -1247,6 +1247,16 @@
         "settings": {
           "type": "object",
           "properties": {
+            "weather": {
+              "type": "string",
+              "enum": [
+                "automatic",
+                "clear",
+                "rain",
+                "snow",
+                "storm"
+              ]
+            },
             "megaphone": {
               "type": "object",
               "properties": {

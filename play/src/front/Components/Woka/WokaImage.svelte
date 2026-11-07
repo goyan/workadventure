@@ -1,12 +1,15 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
+    import type { VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { Vehicle, readVehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { createVehicleSheet, drawVehiclePreview } from "@wa/front/Phaser/Vehicle/VehicleAssets";
     import {
         drawSwimwearFrame,
         loadSwimwearAssets,
         resolveSwimwear,
         sampleAvatarSkinTone,
-    } from "../../Phaser/Entity/Swimwear";
-    import type { Swimwear, SwimwearAssets } from "../../Phaser/Entity/Swimwear";
+    } from "@wa/front/Phaser/Entity/Swimwear";
+    import type { Swimwear, SwimwearAssets } from "@wa/front/Phaser/Entity/Swimwear";
     import type { WokaData, WokaTexture } from "./WokaTypes";
 
     interface Props {
@@ -18,6 +21,8 @@
         classList?: string;
         swimwear?: Swimwear;
         swimwearColor?: string;
+        vehicle?: Vehicle;
+        vehicleColors?: VehicleColors;
     }
 
     let {
@@ -29,7 +34,18 @@
         classList = "",
         swimwear,
         swimwearColor,
+        vehicle,
+        vehicleColors = readVehicleColors(null),
     }: Props = $props();
+
+    let vehicleCanvas: HTMLCanvasElement | undefined;
+    $effect(() => {
+        if (vehicle !== Vehicle.Skateboard) return;
+        vehicleCanvas = createVehicleSheet(vehicleColors);
+        return () => {
+            vehicleCanvas = undefined;
+        };
+    });
 
     const bodyPartOrder = ["body", "eyes", "hair", "clothes", "hat", "accessory", "woka"];
 
@@ -80,6 +96,13 @@
     }
 
     function draw() {
+        if (vehicle === Vehicle.Skateboard && vehicleCanvas) {
+            const layers = bodyPartOrder.flatMap((part) =>
+                images[part] ? [{ image: images[part], head: ["hair", "hat", "eyes"].includes(part) }] : [],
+            );
+            drawVehiclePreview(ctx, vehicleCanvas, layers, direction, canvasSize);
+            return;
+        }
         const imageFrame = swimwear === undefined ? frame : 1;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         for (const part of bodyPartOrder) {

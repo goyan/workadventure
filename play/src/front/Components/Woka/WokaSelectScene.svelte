@@ -213,7 +213,11 @@
         {:else if error}
             <div class="text-center text-red-600 mb-4">
                 <p>{error}</p>
-                <button class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" onclick={loadWokaData}>
+                <button
+                    type="button"
+                    class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    onclick={loadWokaData}
+                >
                     Retry
                 </button>
             </div>
@@ -261,6 +265,7 @@
                                 >
                                     {#each collection.textures || [] as texture (texture.id)}
                                         <button
+                                            type="button"
                                             class="rounded border border-solid box-border p-0 h-fit {selectedWokaTextureId?.woka ===
                                             texture.id
                                                 ? 'bg-white/50 border-white'
@@ -287,10 +292,15 @@
                 class="w-full p-3 flex flex-row items-center gap-2 border-t-2 border-t-white/10"
                 style="border-top-style: solid;"
             >
-                <button class="w-full px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded" onclick={customize}>
+                <button
+                    type="button"
+                    class="w-full px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded"
+                    onclick={customize}
+                >
                     {$LL.woka.selectWoka.customize()}
                 </button>
                 <button
+                    type="button"
                     class="selectCharacterSceneFormSubmit w-full px-4 py-3 bg-secondary text-white rounded hover:bg-secondary-600"
                     onclick={() => saveAndContinue([selectedWokaTextureId["woka"]])}
                 >

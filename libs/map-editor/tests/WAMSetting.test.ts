@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { UpdateWAMSettingCommand, type WAMFileFormat } from "../src";
+import { UpdateWAMSettingCommand, WeatherType, WAMFileFormat as WamSchema, type WAMFileFormat } from "../src";
 
 describe("WAM Setting", () => {
     const defaultWamFile: WAMFileFormat = {
@@ -20,6 +20,22 @@ describe("WAM Setting", () => {
             rights: ["testRecordingRights"],
         },
     };
+    it("stores shared weather without changing other map settings and rejects unknown weather", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile, settings: { recording: { enableSounds: true } } };
+        const setWeather = (weather: string): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: { $case: "updateWeatherSettingMessage", updateWeatherSettingMessage: { weather } },
+            }).execute();
+        await setWeather(WeatherType.Automatic);
+        expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Automatic);
+        await setWeather(WeatherType.Storm);
+        expect(wam.settings).toEqual({ recording: { enableSounds: true }, weather: WeatherType.Storm });
+        expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Storm);
+        await expect(Promise.resolve().then(() => setWeather("invalid-weather"))).rejects.toThrow();
+        expect(wam.settings?.weather).toBe(WeatherType.Storm);
+        expect(WamSchema.parse({ ...wam, settings: { weather: "invalid" } }).settings?.weather).toBeUndefined();
+    });
+
     it("should change WAM file loaded when WAMSettingCommand received", async () => {
         const wamFile: WAMFileFormat = { ...defaultWamFile };
         const command = new UpdateWAMSettingCommand(

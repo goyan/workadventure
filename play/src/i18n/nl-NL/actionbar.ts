@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Verwijderen",
     },
     personalDesk: {
+        find: "Zoek een vrij bureau",
+        findDescription: "Kies een vrije zone. Loop erheen en bevestig om deze te claimen.",
+        noAvailable: "Er zijn geen vrije bureaus op deze kaart die je kunt claimen.",
+        loginToClaim: "Log in om een persoonlijk bureau te claimen.",
+        visit: "Ga",
         label: "Naar mijn bureau gaan",
         unclaim: "Mijn bureau vrijgeven",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

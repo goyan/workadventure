@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "제거",
     },
     personalDesk: {
+        find: "빈 책상 찾기",
+        findDescription: "빈 구역을 선택하고 이동한 다음 확인하여 소유하세요.",
+        noAvailable: "이 지도에는 소유할 수 있는 빈 책상이 없습니다.",
+        loginToClaim: "개인 책상을 소유하려면 로그인하세요.",
+        visit: "이동",
         label: "내 책상으로 이동",
         unclaim: "내 책상 해제",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

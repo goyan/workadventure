@@ -1,6 +1,17 @@
 import type { BaseTranslation } from "../i18n-types";
 
 const woka: BaseTranslation = {
+    vehicle: {
+        centerColor: "Center",
+        edgeColor: "Edge",
+        wheelsColor: "Wheels",
+        title: "Vehicle",
+        none: "None",
+        skateboard: "Skateboard",
+        hint: "Tap a direction three times to sprint on your skateboard, or equip it from the action wheel.",
+        mount: "Ride skateboard",
+        dismount: "Dismount",
+    },
     customWoka: {
         color: "Color",
         defaultColor: "Default color",

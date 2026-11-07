@@ -678,6 +678,19 @@ const mapEditor: BaseTranslation = {
         },
     },
     settings: {
+        weather: {
+            automatic: "Automatic (every 30 minutes)",
+            title: "Weather",
+            description: "Weather shared by everyone on this map. You can hide its effects in your personal settings.",
+            clear: "Clear sky",
+            rain: "Rain",
+            snow: "Snow",
+            storm: "Storm",
+            saving: "Saving…",
+            success: "Weather saved",
+            error: "Could not save the weather",
+        },
+
         loading: "Loading",
         megaphone: {
             title: "Megaphone",

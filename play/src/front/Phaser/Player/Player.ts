@@ -2,30 +2,42 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import { AskPositionMessage_AskType, PositionMessage_Direction } from "@workadventure/messages";
-import type { GameScene } from "../Game/GameScene";
-import type { ActiveEventList } from "../UserInput/UserInputManager";
-import { UserInputEvent } from "../UserInput/UserInputManager";
-import { Character } from "../Entity/Character";
-import type { PathFollowResult } from "../Entity/Character";
-import { PathTileType } from "../../Utils/PathfindingManager";
-import { isWaypointBlocked } from "../../Utils/PathValidation";
-
-import { userMovingStore } from "../../Stores/GameStore";
-import { followStateStore, followRoleStore, followUsersStore } from "../../Stores/FollowStore";
-import { ENABLE_TILE_SNAP, WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-import { visibilityStore } from "../../Stores/VisibilityStore";
-import { passStatusToOnline } from "../../Rules/StatusRules/statusChangerFunctions";
-import { localUserStore } from "../../Connection/LocalUserStore";
-import { WalkDestinationMarker } from "../Components/WalkDestinationMarker";
-import { RunSmokeTrail } from "../Components/RunSmokeTrail";
-import { findDiveTarget, getWaterRectangles, intersectsWater } from "../Game/Water/WaterZones";
-import { InteractionPrompt } from "../Game/Water/InteractionPrompt";
-import { getPrefabCollisionRectangles } from "../../Utils/PrefabCollisionRectangles";
-import LL from "../../../i18n/i18n-svelte";
-import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "../Entity/AvatarAction";
-import { bodyBoxFromSprite, type BodyBox } from "../../Utils/BodyBox";
-import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
-import { getSolidRectangles } from "../../Utils/EntityHitbox";
+import {
+    Vehicle,
+    VehicleMode,
+    VEHICLE_VARIABLE,
+    VEHICLE_SPEED_FACTOR,
+    readVehicleState,
+} from "@wa/front/Phaser/Vehicle/Vehicle";
+import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
+import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
+import type { ActiveEventList } from "@wa/front/Phaser/UserInput/UserInputManager";
+import { UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
+import { Character } from "@wa/front/Phaser/Entity/Character";
+import type { PathFollowResult } from "@wa/front/Phaser/Entity/Character";
+import { PathTileType } from "@wa/front/Utils/PathfindingManager";
+import { isWaypointBlocked } from "@wa/front/Utils/PathValidation";
+import { userMovingStore } from "@wa/front/Stores/GameStore";
+import { followStateStore, followRoleStore, followUsersStore } from "@wa/front/Stores/FollowStore";
+import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
+import { visibilityStore } from "@wa/front/Stores/VisibilityStore";
+import { passStatusToOnline } from "@wa/front/Rules/StatusRules/statusChangerFunctions";
+import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { WalkDestinationMarker } from "@wa/front/Phaser/Components/WalkDestinationMarker";
+import { RunSmokeTrail } from "@wa/front/Phaser/Components/RunSmokeTrail";
+import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/Phaser/Game/Water/WaterZones";
+import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
+import { getPrefabCollisionRectangles } from "@wa/front/Utils/PrefabCollisionRectangles";
+import LL from "@wa/i18n/i18n-svelte";
+import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
+import { bodyBoxFromSprite, type BodyBox } from "@wa/front/Utils/BodyBox";
+import {
+    readSwimwear,
+    readSwimwearColor,
+    SWIMWEAR_VARIABLE,
+    SWIMWEAR_COLOR_VARIABLE,
+} from "@wa/front/Phaser/Entity/Swimwear";
+import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -96,6 +108,15 @@ export class Player extends Character {
 
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
         this.updateSwimming();
+        if (this.swimming || get(followStateStore) !== "off") this.equipVehicle(VehicleMode.Off);
+        if (activeUserInputEvents.get(UserInputEvent.VehicleSprint) && this.vehicleMode !== VehicleMode.Always)
+            this.equipVehicle(VehicleMode.Sprint);
+        if (
+            this.vehicleMode === VehicleMode.Sprint &&
+            !activeUserInputEvents.get(UserInputEvent.SpeedUp) &&
+            !this.pathToFollow
+        )
+            this.equipVehicle(VehicleMode.Off);
         this.updateObjectAction();
         const state = get(followStateStore);
         const role = get(followRoleStore);
@@ -114,7 +135,7 @@ export class Player extends Character {
                 return;
             }
             this.standUp();
-        } else if (!this.pathToFollow && state === "off") {
+        } else if (!this.pathToFollow && state === "off" && this.vehicleMode === VehicleMode.Off) {
             this.trySitDown();
             if (this.isSlidingToSeat) {
                 return;
@@ -150,6 +171,7 @@ export class Player extends Character {
         const action = readAvatarAction(value);
         if (action === this.action) return;
         if (action !== AvatarAction.Idle) {
+            this.equipVehicle(VehicleMode.Off);
             if (this.isInWater() || this.isSlidingToSeat || get(followStateStore) !== "off") return;
             this.finishFollowingPath(true);
             this.stop();
@@ -169,6 +191,41 @@ export class Player extends Character {
             scope: "room",
         });
         this.scene.coffeeManager?.onLocalAction(action);
+    }
+
+    public equipVehicle(mode: VehicleMode): void {
+        const vehicle = localUserStore.getVehicle();
+        if (mode !== VehicleMode.Off) {
+            if (
+                vehicle === Vehicle.None ||
+                this.swimming ||
+                this.isInWater() ||
+                this.isSlidingToSeat ||
+                get(followStateStore) !== "off" ||
+                !isHumanAvatar(this.sprites.keys())
+            )
+                return;
+            this.setAvatarAction(AvatarAction.Idle);
+            this.standUp();
+        }
+        this.setVehicle({ vehicle, mode, ...localUserStore.getVehicleColors() });
+    }
+
+    public override setVehicle(value: unknown): void {
+        const state = readVehicleState(value);
+        if (state.mode === this.vehicleMode && state.mode === VehicleMode.Off) return;
+        super.setVehicle(state);
+        this.scene.getPlayerVariablesManager()?.setVariableFromApp(VEHICLE_VARIABLE, state, {
+            public: true,
+            persist: false,
+            scope: "room",
+        });
+    }
+
+    protected override getPathWalkingSpeed(): number {
+        return this.vehicleMode !== VehicleMode.Off && !this.swimming && !this.isSlidingToSeat
+            ? WOKA_SPEED * VEHICLE_SPEED_FACTOR
+            : super.getPathWalkingSpeed();
     }
 
     public override setSwimwearColor(value: unknown): void {
@@ -195,6 +252,7 @@ export class Player extends Character {
             this.actionPrompt.hide();
         this.actionObject = object;
         if (
+            this.vehicleMode !== VehicleMode.Off ||
             this.action !== AvatarAction.Idle ||
             this.isInWater() ||
             !object ||
@@ -377,6 +435,8 @@ export class Player extends Character {
     }
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
+        if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming)
+            return WOKA_SPEED * VEHICLE_SPEED_FACTOR;
         const speed = this.pathWalkingSpeed
             ? this.pathWalkingSpeed
             : speedUp && !followMode
@@ -492,7 +552,7 @@ export class Player extends Character {
         }
 
         // Send movement events
-        const running = moving && speedUp && !followMode;
+        const running = moving && speedUp && !followMode && this.vehicleMode === VehicleMode.Off;
         const emit = () => this.emit(hasMovedEventName, { moving, running, direction, x: this.x, y: this.y });
         if (moving) {
             if (!this.isMoving) {
@@ -500,7 +560,7 @@ export class Player extends Character {
                 this.emit(startMovingEventName, { direction, x: this.x, y: this.y });
             }
             this.moveBy(x, y, running);
-            if (running) {
+            if (running || this.isRidingVehicle()) {
                 const body = this.getBody();
                 this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
             }
@@ -617,11 +677,22 @@ export class Player extends Character {
         }
     }
 
+    private isRunningPath(): boolean {
+        return (
+            this.vehicleMode === VehicleMode.Off &&
+            this.isFollowingPath() &&
+            (this.pathWalkingSpeed ?? WOKA_SPEED) > WOKA_SPEED &&
+            !this.swimming &&
+            !this.isSlidingToSeat
+        );
+    }
+
     protected followPath(delta: number): void {
         super.followPath(delta);
+        if (!this.isFollowingPath()) return;
         this.emit(hasMovedEventName, {
             moving: true,
-            running: false,
+            running: this.isRunningPath(),
             direction: this._lastDirection,
             x: this.x,
             y: this.y,
@@ -629,8 +700,21 @@ export class Player extends Character {
     }
 
     protected moveToPathPosition(x: number, y: number): void {
+        const oldX = this.x;
+        const oldY = this.y;
         passStatusToOnline();
         super.moveToPathPosition(x, y);
+        if ((this.isRunningPath() || this.isRidingVehicle()) && (x !== oldX || y !== oldY)) {
+            if (this.isRunningPath()) this.playAnimation(this._lastDirection, true, RUN_ANIMATION_SPEED);
+            const body = this.getBody();
+            this.runSmokeTrail.emit(
+                this.x,
+                this.y + body.offset.y + body.height / 2,
+                x - oldX,
+                y - oldY,
+                this.depth - 1,
+            );
+        }
     }
 
     public finishFollowingPath(cancelled = false, blocked = false): void {

@@ -33,20 +33,22 @@ import {
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
-import { textMessageStore } from "../../Stores/TypeMessageStore/TextMessageStore";
-import { soundPlayingStore } from "../../Stores/SoundPlayingStore";
-import { connectionManager } from "../../Connection/ConnectionManager";
-import { urlManager } from "../../Url/UrlManager";
-import { mediaManager } from "../../WebRtc/MediaManager";
-import { iceServersManager } from "../../WebRtc/IceServersManager";
-import { ActiveEventList, UserInputEvent, UserInputManager } from "../UserInput/UserInputManager";
-import { touchScreenManager } from "../../Touch/TouchScreenManager";
-import { PinchManager } from "../UserInput/PinchManager";
-import { waScaleManager } from "../Services/WaScaleManager";
-import { lazyLoadPlayerCharacterTextures } from "../Entity/PlayerTexturesLoadingManager";
-import { lazyLoadPlayerCompanionTexture } from "../Companion/CompanionTexturesLoadingManager";
-import { iframeListener } from "../../Api/IframeListener";
-import { coWebsiteManager, coWebsites } from "../../Stores/CoWebsiteStore";
+import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
+import { VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
+import { soundPlayingStore } from "@wa/front/Stores/SoundPlayingStore";
+import { connectionManager } from "@wa/front/Connection/ConnectionManager";
+import { urlManager } from "@wa/front/Url/UrlManager";
+import { mediaManager } from "@wa/front/WebRtc/MediaManager";
+import { iceServersManager } from "@wa/front/WebRtc/IceServersManager";
+import { ActiveEventList, UserInputEvent, UserInputManager } from "@wa/front/Phaser/UserInput/UserInputManager";
+import { touchScreenManager } from "@wa/front/Touch/TouchScreenManager";
+import { PinchManager } from "@wa/front/Phaser/UserInput/PinchManager";
+import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
+import { lazyLoadPlayerCharacterTextures } from "@wa/front/Phaser/Entity/PlayerTexturesLoadingManager";
+import { lazyLoadPlayerCompanionTexture } from "@wa/front/Phaser/Companion/CompanionTexturesLoadingManager";
+import { iframeListener } from "@wa/front/Api/IframeListener";
+import { coWebsiteManager, coWebsites } from "@wa/front/Stores/CoWebsiteStore";
 import {
     ADMIN_URL,
     DEBUG_MODE,
@@ -59,24 +61,24 @@ import {
     PUBLIC_MAP_STORAGE_PREFIX,
     UPLOADER_URL,
     WOKA_SPEED,
-} from "../../Enum/EnvironmentVariable";
-import { Room } from "../../Connection/Room";
-import { CharacterTextureError } from "../../Exception/CharacterTextureError";
-import { localUserStore } from "../../Connection/LocalUserStore";
-import { HtmlUtils } from "../../WebRtc/HtmlUtils";
-import { Loader } from "../Components/Loader";
-import { RemotePlayer } from "../Entity/RemotePlayer";
-import { AVATAR_ACTION_VARIABLE } from "../Entity/AvatarAction";
-import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Entity/Swimwear";
-import { SelectCharacterScene, SelectCharacterSceneName } from "../Login/SelectCharacterScene";
-import { hasMovedEventName, Player, requestEmoteEventName } from "../Player/Player";
-import { ErrorSceneName } from "../Reconnecting/ErrorScene";
-import { ReconnectingSceneName } from "../Reconnecting/ReconnectingScene";
-import { TextUtils } from "../Components/TextUtils";
-import { PropertyUtils } from "../Map/PropertyUtils";
-import { analyticsClient } from "../../Administration/AnalyticsClient";
-import { stripUrlSensitiveParts } from "../../Administration/CowebsiteAnalyticsProperties";
-import { PathfindingManager, PathTileType } from "../../Utils/PathfindingManager";
+} from "@wa/front/Enum/EnvironmentVariable";
+import { Room } from "@wa/front/Connection/Room";
+import { CharacterTextureError } from "@wa/front/Exception/CharacterTextureError";
+import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { HtmlUtils } from "@wa/front/WebRtc/HtmlUtils";
+import { Loader } from "@wa/front/Phaser/Components/Loader";
+import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
+import { AVATAR_ACTION_VARIABLE } from "@wa/front/Phaser/Entity/AvatarAction";
+import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "@wa/front/Phaser/Entity/Swimwear";
+import { SelectCharacterScene, SelectCharacterSceneName } from "@wa/front/Phaser/Login/SelectCharacterScene";
+import { hasMovedEventName, Player, requestEmoteEventName } from "@wa/front/Phaser/Player/Player";
+import { ErrorSceneName } from "@wa/front/Phaser/Reconnecting/ErrorScene";
+import { ReconnectingSceneName } from "@wa/front/Phaser/Reconnecting/ReconnectingScene";
+import { TextUtils } from "@wa/front/Phaser/Components/TextUtils";
+import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
+import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
+import { stripUrlSensitiveParts } from "@wa/front/Administration/CowebsiteAnalyticsProperties";
+import { PathfindingManager, PathTileType } from "@wa/front/Utils/PathfindingManager";
 import type {
     GroupCreatedUpdatedMessageInterface,
     MessageUserMovedInterface,
@@ -84,22 +86,22 @@ import type {
     PositionInterface,
     RoomJoinedMessageInterface,
     ViewportInterface,
-} from "../../Connection/ConnexionModels";
-import type { RoomConnection } from "../../Connection/RoomConnection";
-import type { ActionableItem } from "../Items/ActionableItem";
-import type { ItemFactoryInterface } from "../Items/ItemFactoryInterface";
-import { biggestAvailableAreaStore } from "../../Stores/BiggestAvailableAreaStore";
-import { playersStore } from "../../Stores/PlayersStore";
-import { emoteStore } from "../../Stores/EmoteStore";
-import { isHandRaisedStore, requestedHandRaiseState } from "../../Stores/RaiseHandStore";
-import { raisedHandPlayerIdsStore } from "../../Stores/RaisedHandsStore";
-import { isInRemoteConversation } from "../../Stores/StreamableCollectionStore";
+} from "@wa/front/Connection/ConnexionModels";
+import type { RoomConnection } from "@wa/front/Connection/RoomConnection";
+import type { ActionableItem } from "@wa/front/Phaser/Items/ActionableItem";
+import type { ItemFactoryInterface } from "@wa/front/Phaser/Items/ItemFactoryInterface";
+import { biggestAvailableAreaStore } from "@wa/front/Stores/BiggestAvailableAreaStore";
+import { playersStore } from "@wa/front/Stores/PlayersStore";
+import { emoteStore } from "@wa/front/Stores/EmoteStore";
+import { isHandRaisedStore, requestedHandRaiseState } from "@wa/front/Stores/RaiseHandStore";
+import { raisedHandPlayerIdsStore } from "@wa/front/Stores/RaisedHandsStore";
+import { isInRemoteConversation } from "@wa/front/Stores/StreamableCollectionStore";
 import {
     jitsiParticipantsCountStore,
     userIsAdminStore,
     userIsEditorStore,
     userIsJitsiDominantSpeakerStore,
-} from "../../Stores/GameStore";
+} from "@wa/front/Stores/GameStore";
 import {
     contactPageStore,
     inviteUserActivated,
@@ -107,11 +109,11 @@ import {
     mapManagerActivated,
     roomListActivated,
     screenSharingActivatedStore,
-} from "../../Stores/MenuStore";
-import type { WasCameraUpdatedEvent } from "../../Api/Events/WasCameraUpdatedEvent";
-import { audioManagerFileStore, bubbleSoundStore } from "../../Stores/AudioManagerStore";
-import { currentPlayerGroupIdStore, currentPlayerGroupLockStateStore } from "../../Stores/CurrentPlayerGroupStore";
-import { errorScreenStore } from "../../Stores/ErrorScreenStore";
+} from "@wa/front/Stores/MenuStore";
+import type { WasCameraUpdatedEvent } from "@wa/front/Api/Events/WasCameraUpdatedEvent";
+import { audioManagerFileStore, bubbleSoundStore } from "@wa/front/Stores/AudioManagerStore";
+import { currentPlayerGroupIdStore, currentPlayerGroupLockStateStore } from "@wa/front/Stores/CurrentPlayerGroupStore";
+import { errorScreenStore } from "@wa/front/Stores/ErrorScreenStore";
 import {
     availabilityStatusStore,
     batchGetUserMediaStore,
@@ -122,109 +124,111 @@ import {
     requestedMicrophoneDeviceIdStore,
     requestedMicrophoneState,
     speakerSelectedStore,
-} from "../../Stores/MediaStore";
-import { devicesToOffer } from "../../Stores/AudioOutputStore";
-import NoMicrophoneSoundToast from "../../Components/Toasts/NoMicrophoneSoundToast.svelte";
-import LoudEnvironmentToast from "../../Components/Toasts/LoudEnvironmentToast.svelte";
-import { LL, locale } from "../../../i18n/i18n-svelte";
-import { toastStore } from "../../Stores/ToastStoreSingleton";
-import { audioInterruptedStore } from "../../Stores/AudioInterruptedStore";
-import { loudEnvironmentWarningStore } from "../../Stores/LoudEnvironmentWarningStore";
-import { GameSceneUserInputHandler } from "../UserInput/GameSceneUserInputHandler";
-import { followUsersColorStore, followUsersStore } from "../../Stores/FollowStore";
-import { axiosWithRetry, hideConnectionIssueMessage, showConnectionIssueMessage } from "../../Connection/AxiosUtils";
-import { StringUtils } from "../../Utils/StringUtils";
-import { PHASER_COLOR_DESIGN_SYSTEM_SECONDARY } from "../../Utils/DesignSystemPhaserColors";
-
-import { SuperLoaderPlugin } from "../Services/SuperLoaderPlugin";
-import { embedScreenLayoutStore } from "../../Stores/EmbedScreenLayoutStore";
-import { highlightedEmbedScreen } from "../../Stores/HighlightedEmbedScreenStore";
-import type { AddPlayerEvent } from "../../Api/Events/AddPlayerEvent";
-
-import { chatVisibilityStore, forceRefreshChatStore } from "../../Stores/ChatStore";
-import type { HasPlayerMovedInterface } from "../../Api/Events/HasPlayerMovedInterface";
-import { extensionModuleStore, gameSceneIsLoadedStore, gameSceneStore } from "../../Stores/GameSceneStore";
-import { myCameraBlockedStore, myMicrophoneBlockedStore } from "../../Stores/MyMediaStore";
-import type { GameStateEvent } from "../../Api/Events/GameStateEvent";
-import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
+} from "@wa/front/Stores/MediaStore";
+import { devicesToOffer } from "@wa/front/Stores/AudioOutputStore";
+import NoMicrophoneSoundToast from "@wa/front/Components/Toasts/NoMicrophoneSoundToast.svelte";
+import LoudEnvironmentToast from "@wa/front/Components/Toasts/LoudEnvironmentToast.svelte";
+import { LL, locale } from "@wa/i18n/i18n-svelte";
+import { toastStore } from "@wa/front/Stores/ToastStoreSingleton";
+import { audioInterruptedStore } from "@wa/front/Stores/AudioInterruptedStore";
+import { loudEnvironmentWarningStore } from "@wa/front/Stores/LoudEnvironmentWarningStore";
+import { GameSceneUserInputHandler } from "@wa/front/Phaser/UserInput/GameSceneUserInputHandler";
+import { followUsersColorStore, followUsersStore } from "@wa/front/Stores/FollowStore";
+import {
+    axiosWithRetry,
+    hideConnectionIssueMessage,
+    showConnectionIssueMessage,
+} from "@wa/front/Connection/AxiosUtils";
+import { StringUtils } from "@wa/front/Utils/StringUtils";
+import { PHASER_COLOR_DESIGN_SYSTEM_SECONDARY } from "@wa/front/Utils/DesignSystemPhaserColors";
+import { SuperLoaderPlugin } from "@wa/front/Phaser/Services/SuperLoaderPlugin";
+import { embedScreenLayoutStore } from "@wa/front/Stores/EmbedScreenLayoutStore";
+import { highlightedEmbedScreen } from "@wa/front/Stores/HighlightedEmbedScreenStore";
+import type { AddPlayerEvent } from "@wa/front/Api/Events/AddPlayerEvent";
+import { chatVisibilityStore, forceRefreshChatStore } from "@wa/front/Stores/ChatStore";
+import type { HasPlayerMovedInterface } from "@wa/front/Api/Events/HasPlayerMovedInterface";
+import { extensionModuleStore, gameSceneIsLoadedStore, gameSceneStore } from "@wa/front/Stores/GameSceneStore";
+import { myCameraBlockedStore, myMicrophoneBlockedStore } from "@wa/front/Stores/MyMediaStore";
+import type { GameStateEvent } from "@wa/front/Api/Events/GameStateEvent";
+import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore";
 import {
     mapEditorModeStore,
     mapEditorSelectedToolStore,
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
-} from "../../Stores/MapEditorStore";
-import { refreshPromptStore } from "../../Stores/RefreshPromptStore";
-import { mapDeletedPromptStore } from "../../Stores/MapDeletedPromptStore";
-import { SpaceRegistry } from "../../Space/SpaceRegistry/SpaceRegistry";
-import { SpaceScriptingBridgeService } from "../../Space/Utils/SpaceScriptingBridgeService";
-import { debugAddPlayer, debugRemovePlayer, debugUpdatePlayer, debugZoom } from "../../Utils/Debuggers";
-import { checkCoturnServer } from "../../Components/Video/utils";
-import { BroadcastService } from "../../Streaming/BroadcastService";
+} from "@wa/front/Stores/MapEditorStore";
+import { refreshPromptStore } from "@wa/front/Stores/RefreshPromptStore";
+import { mapDeletedPromptStore } from "@wa/front/Stores/MapDeletedPromptStore";
+import { SpaceRegistry } from "@wa/front/Space/SpaceRegistry/SpaceRegistry";
+import { SpaceScriptingBridgeService } from "@wa/front/Space/Utils/SpaceScriptingBridgeService";
+import { debugAddPlayer, debugRemovePlayer, debugUpdatePlayer, debugZoom } from "@wa/front/Utils/Debuggers";
+import { checkCoturnServer } from "@wa/front/Components/Video/utils";
+import { BroadcastService } from "@wa/front/Streaming/BroadcastService";
 import {
     megaphoneCanBeUsedStore,
     megaphoneSpaceSettingsStore,
     megaphoneSpaceStore,
     requestedMegaphoneStore,
-} from "../../Stores/MegaphoneStore";
-import { stopMegaphoneLive } from "../../Components/ActionBar/MenuIcons/megaphoneActions";
-import { CompanionTextureError } from "../../Exception/CompanionTextureError";
-import { SelectCompanionScene, SelectCompanionSceneName } from "../Login/SelectCompanionScene";
-import { scriptUtils } from "../../Api/ScriptUtils";
-import { statusChanger } from "../../Components/ActionBar/AvailabilityStatus/statusChanger";
-import { warningMessageStore } from "../../Stores/ErrorStore";
-import { closeCoWebsite, getCoWebSite, openCoWebSite, openCoWebSiteWithoutSource } from "../../Chat/Utils";
-import { navChat } from "../../Chat/Stores/ChatStore";
-import { ProximityChatRoom } from "../../Chat/Connection/Proximity/ProximityChatRoom";
+} from "@wa/front/Stores/MegaphoneStore";
+import { stopMegaphoneLive } from "@wa/front/Components/ActionBar/MenuIcons/megaphoneActions";
+import { CompanionTextureError } from "@wa/front/Exception/CompanionTextureError";
+import { SelectCompanionScene, SelectCompanionSceneName } from "@wa/front/Phaser/Login/SelectCompanionScene";
+import { scriptUtils } from "@wa/front/Api/ScriptUtils";
+import { statusChanger } from "@wa/front/Components/ActionBar/AvailabilityStatus/statusChanger";
+import { warningMessageStore } from "@wa/front/Stores/ErrorStore";
+import { closeCoWebsite, getCoWebSite, openCoWebSite, openCoWebSiteWithoutSource } from "@wa/front/Chat/Utils";
+import { navChat } from "@wa/front/Chat/Stores/ChatStore";
+import { ProximityChatRoom } from "@wa/front/Chat/Connection/Proximity/ProximityChatRoom";
 import {
     DEFAULT_PROXIMITY_SPACE_NAME,
     ProximityChatRoomManager,
     type ProximityChatRoomKind,
-} from "../../Chat/Connection/Proximity/ProximityChatRoomManager";
-import { ProximitySpaceManager } from "../../WebRtc/ProximitySpaceManager";
-import { BubbleListeningManager } from "../../WebRtc/BubbleListeningManager";
-import { overheardLoudness, overheardLoudnessStore, userIdOfSpaceUser } from "../../Stores/BubbleListeningStore";
-import { audioContextManager } from "../../WebRtc/AudioContextManager";
-import { bindAudioOutput, pendingSinkRequests } from "../../WebRtc/AudioOutputManager";
-import { noMicrophoneSoundWarningVisibleStore } from "../../Stores/NoMicrophoneSoundWarningVisibleStore";
-import type { SpaceRegistryInterface } from "../../Space/SpaceRegistry/SpaceRegistryInterface";
-import { WorldUserProvider } from "../../Chat/UserProvider/WorldUserProvider";
-import { ChatUserProvider } from "../../Chat/UserProvider/ChatUserProvider";
-import { UserProviderMerger } from "../../Chat/UserProviderMerger/UserProviderMerger";
-import { AdminUserProvider } from "../../Chat/UserProvider/AdminUserProvider";
-import { ExtensionModuleStatusSynchronization } from "../../Rules/StatusRules/ExtensionModuleStatusSynchronization";
-import { resetAllStatusStoreExcept } from "../../Rules/StatusRules/statusChangerFunctions";
-import { calendarEventsStore, isActivatedStore as isCalendarActiveStore } from "../../Stores/CalendarStore";
-import { isActivatedStore as isTodoListActiveStore, todoListsStore } from "../../Stores/TodoListStore";
-import { externalSvelteComponentService } from "../../Stores/Utils/externalSvelteComponentService";
-import type { ExtensionModule } from "../../ExternalModule/ExtensionModule";
-import type { SpaceInterface } from "../../Space/SpaceInterface";
-import { spotifyAccount } from "../../Spotify/SpotifyAccount";
-import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
-import { SpotifyListeningSharer } from "../../Spotify/SpotifyListeningSharer";
+} from "@wa/front/Chat/Connection/Proximity/ProximityChatRoomManager";
+import { ProximitySpaceManager } from "@wa/front/WebRtc/ProximitySpaceManager";
+import { BubbleListeningManager } from "@wa/front/WebRtc/BubbleListeningManager";
+import { overheardLoudness, overheardLoudnessStore, userIdOfSpaceUser } from "@wa/front/Stores/BubbleListeningStore";
+import { audioContextManager } from "@wa/front/WebRtc/AudioContextManager";
+import { bindAudioOutput, pendingSinkRequests } from "@wa/front/WebRtc/AudioOutputManager";
+import { noMicrophoneSoundWarningVisibleStore } from "@wa/front/Stores/NoMicrophoneSoundWarningVisibleStore";
+import type { SpaceRegistryInterface } from "@wa/front/Space/SpaceRegistry/SpaceRegistryInterface";
+import { WorldUserProvider } from "@wa/front/Chat/UserProvider/WorldUserProvider";
+import { ChatUserProvider } from "@wa/front/Chat/UserProvider/ChatUserProvider";
+import { UserProviderMerger } from "@wa/front/Chat/UserProviderMerger/UserProviderMerger";
+import { AdminUserProvider } from "@wa/front/Chat/UserProvider/AdminUserProvider";
+import { ExtensionModuleStatusSynchronization } from "@wa/front/Rules/StatusRules/ExtensionModuleStatusSynchronization";
+import { resetAllStatusStoreExcept } from "@wa/front/Rules/StatusRules/statusChangerFunctions";
+import { calendarEventsStore, isActivatedStore as isCalendarActiveStore } from "@wa/front/Stores/CalendarStore";
+import { isActivatedStore as isTodoListActiveStore, todoListsStore } from "@wa/front/Stores/TodoListStore";
+import { externalSvelteComponentService } from "@wa/front/Stores/Utils/externalSvelteComponentService";
+import type { ExtensionModule } from "@wa/front/ExternalModule/ExtensionModule";
+import type { SpaceInterface } from "@wa/front/Space/SpaceInterface";
+import { spotifyAccount } from "@wa/front/Spotify/SpotifyAccount";
+import { desktopSpotifyPlayer } from "@wa/front/Spotify/LocalSpotifyPlayer";
+import { SpotifyListeningSharer } from "@wa/front/Spotify/SpotifyListeningSharer";
 import {
     followedUserUuidStore,
     listenAlongAvailableStore,
     startListeningFollower,
-} from "../../Spotify/ListeningFollower";
-import { desktopApi } from "../../Api/Desktop";
+} from "@wa/front/Spotify/ListeningFollower";
+import { desktopApi } from "@wa/front/Api/Desktop";
 import {
     bindListeningDirectory,
     type ListeningByUserUuid,
     listeningByUserUuidStore,
-} from "../../Spotify/SpotifyListeningDirectory";
-import { spotifySharingEnabledStore } from "../../Spotify/SpotifySettingsStore";
-import { joinedJamStore, listeningZoneNamesStore } from "../../ListeningZone/ListeningZoneStore";
-import { allJamRoomsStore, syncJoinedJam } from "../../ListeningZone/ListeningZoneController";
-import { startHomeJam } from "../../Spotify/HomeJam";
-import type { UserProviderInterface } from "../../Chat/UserProvider/UserProviderInterface";
-import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "../../Stores/AdditionalItemsMenuStore";
-import { popupStore } from "../../Stores/PopupStore";
-import PopUpRoomAccessDenied from "../../Components/PopUp/PopUpRoomAccessDenied.svelte";
-import PopUpTriggerActionMessage from "../../Components/PopUp/PopUpTriggerActionMessage.svelte";
-import PopUpMapEditorNotEnabled from "../../Components/PopUp/PopUpMapEditorNotEnabled.svelte";
-import PopUpMapEditorShortcut from "../../Components/PopUp/PopUpMapEditorShortcut.svelte";
-import { enableUserInputsStore } from "../../Stores/UserInputStore";
-import { ScriptLoadedError } from "../../Api/ScriptLoadedError";
+} from "@wa/front/Spotify/SpotifyListeningDirectory";
+import { spotifySharingEnabledStore } from "@wa/front/Spotify/SpotifySettingsStore";
+import { joinedJamStore, listeningZoneNamesStore } from "@wa/front/ListeningZone/ListeningZoneStore";
+import { allJamRoomsStore, syncJoinedJam } from "@wa/front/ListeningZone/ListeningZoneController";
+import { startHomeJam } from "@wa/front/Spotify/HomeJam";
+import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
+import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "@wa/front/Stores/AdditionalItemsMenuStore";
+import { popupStore } from "@wa/front/Stores/PopupStore";
+import PopUpRoomAccessDenied from "@wa/front/Components/PopUp/PopUpRoomAccessDenied.svelte";
+import PopUpTriggerActionMessage from "@wa/front/Components/PopUp/PopUpTriggerActionMessage.svelte";
+import PopUpMapEditorNotEnabled from "@wa/front/Components/PopUp/PopUpMapEditorNotEnabled.svelte";
+import PopUpMapEditorShortcut from "@wa/front/Components/PopUp/PopUpMapEditorShortcut.svelte";
+import { enableUserInputsStore } from "@wa/front/Stores/UserInputStore";
+import { ScriptLoadedError } from "@wa/front/Api/ScriptLoadedError";
 import {
     mediaSynchronizedSpacesStore,
     heardVideoBoxesStore,
@@ -232,20 +236,21 @@ import {
     raisedHandSectionsStore,
     screenShareStreamStore,
     videoStreamStore,
-} from "../../Stores/PeerStore";
-import type { ChatConnectionInterface, ChatUser } from "../../Chat/Connection/ChatConnection";
-import { selectedRoomStore } from "../../Chat/Stores/SelectRoomStore";
-import { getCustomEntityCollectionUrl } from "../../Utils/MapStorageUrl";
-import { CHARACTER_BODY_OFFSET_Y, PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "../Entity/Character";
-import { type Avatar, ConversationBubble } from "../Entity/ConversationBubble";
-import { DarkenOutsideAreaEffect } from "../Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
-import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../Stores/PersonalDeskStore";
-import { areaPropertyVariablesManagerStore } from "../../Stores/AreaPropertyVariablesStore";
-import { ApplicationManager } from "../../Chat/Applications/ApplicationManager";
-import { audioPlaybackStore } from "../../Stores/AudioPlaybackStore";
-import { requestedScreenSharingState } from "../../Stores/ScreenSharingStore";
-import { EnterLeaveScriptingService } from "../Helpers/EnterLeaveScriptingService";
-import { stopShortOf } from "../../Utils/PathStop";
+} from "@wa/front/Stores/PeerStore";
+import type { ChatConnectionInterface, ChatUser } from "@wa/front/Chat/Connection/ChatConnection";
+import { selectedRoomStore } from "@wa/front/Chat/Stores/SelectRoomStore";
+import { getCustomEntityCollectionUrl } from "@wa/front/Utils/MapStorageUrl";
+import { CHARACTER_BODY_OFFSET_Y, PLAYTEXT_NEW_MEDIA_DEVICE_PREFIX } from "@wa/front/Phaser/Entity/Character";
+import { type Avatar, ConversationBubble } from "@wa/front/Phaser/Entity/ConversationBubble";
+import { DarkenOutsideAreaEffect } from "@wa/front/Phaser/Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
+import { isInsidePersonalAreaStore, personalAreaDataStore } from "@wa/front/Stores/PersonalDeskStore";
+import { areaPropertyVariablesManagerStore } from "@wa/front/Stores/AreaPropertyVariablesStore";
+import { ApplicationManager } from "@wa/front/Chat/Applications/ApplicationManager";
+import { audioPlaybackStore } from "@wa/front/Stores/AudioPlaybackStore";
+import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
+import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
+import { stopShortOf } from "@wa/front/Utils/PathStop";
+import { environmentVolumeStore, footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -256,6 +261,7 @@ import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapL
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
+import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
@@ -286,6 +292,7 @@ import { InviteManager } from "./InviteManager";
 import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
+import { WeatherManager } from "./Weather/WeatherManager";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
@@ -424,6 +431,7 @@ export class GameScene extends DirtyScene {
     private doorAnimator: DoorAnimator | undefined;
     private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
+    private skateboardSounds: SkateboardSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
     private activatablesManager!: ActivatablesManager;
@@ -438,6 +446,7 @@ export class GameScene extends DirtyScene {
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private nightManager: NightManager | undefined;
+    private weatherManager: WeatherManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -582,7 +591,11 @@ export class GameScene extends DirtyScene {
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
         this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
-        for (const { key, url } of FOOTSTEP_SOUNDS) {
+        for (const { key, url } of [
+            ...FOOTSTEP_SOUNDS,
+            ...SKATEBOARD_SOUNDS,
+            ...WEATHER_SOUNDS.filter((sound) => sound.key === "audio-weather-thunder"),
+        ]) {
             this.load.audio(key, url);
         }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
@@ -1447,6 +1460,8 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.weatherManager?.destroy();
+        this.skateboardSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
@@ -1503,7 +1518,7 @@ export class GameScene extends DirtyScene {
         if (changed) overheardLoudnessStore.set(loudness);
     }
 
-    /** Quiet footsteps of the players walking nearby, the local player included, sounding like the floor they walk on. */
+    /** Only the local player hears their footsteps and rolling skateboard. */
     private updateFootsteps(): void {
         if (!this.footstepSounds) {
             const surfaces = new FootstepSurfaces(
@@ -1526,6 +1541,8 @@ export class GameScene extends DirtyScene {
             );
             this.footstepSounds = new FootstepSounds(
                 (key, { volume, detune, pan }) => {
+                    volume *= get(footstepVolumeStore);
+                    if (volume === 0) return;
                     const sound = this.sound.add(key, { volume, detune });
                     if (sound instanceof Phaser.Sound.WebAudioSound) sound.setPan(pan);
                     sound.once(Phaser.Sound.Events.COMPLETE, () => sound.destroy());
@@ -1543,16 +1560,32 @@ export class GameScene extends DirtyScene {
             y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
             swimming: this.CurrentPlayer.isSwimming() || this.CurrentPlayer.isInWater(),
         };
-        const characters = [listener];
-        for (const player of this.MapPlayersByKey.values()) {
-            characters.push({
-                id: String(player.userId),
-                x: player.x,
-                y: player.y + CHARACTER_BODY_OFFSET_Y,
-                swimming: player.isInWater(),
-            });
-        }
+        const characters = [
+            ...(this.CurrentPlayer.isRidingVehicle() ? [] : [listener]),
+            ...Array.from(this.MapPlayersByKey.values())
+                .filter((player) => !player.isRidingVehicle())
+                .map((player) => ({
+                    id: String(player.userId),
+                    x: player.x,
+                    y: player.y + CHARACTER_BODY_OFFSET_Y,
+                    swimming: player.isInWater(),
+                })),
+        ];
         this.footstepSounds.update(characters, listener);
+        this.skateboardSounds ??= new SkateboardSounds(this.sound);
+        this.skateboardSounds.update(
+            {
+                x: listener.x,
+                y: listener.y,
+                riding: this.CurrentPlayer.isRidingVehicle(),
+                moving: this.CurrentPlayer.isVehicleMoving(),
+                indoor:
+                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition(listener)
+                        .length ?? 0) > 0,
+            },
+            this.mapEditorModeManager?.isActive() ?? false,
+            this.currentTick,
+        );
     }
 
     /** The doors of the map layer open when a player, a companion or a duck comes near. */
@@ -1562,7 +1595,8 @@ export class GameScene extends DirtyScene {
             () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
             (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
             (key, volume) => {
-                this.sound.play(key, { volume });
+                volume *= get(environmentVolumeStore);
+                if (volume > 0) this.sound.play(key, { volume });
             },
             () => this.markDirty(),
             () => this.getHearingZones(),
@@ -1646,6 +1680,7 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this.nightManager?.update(time);
+            this.weatherManager?.update(time, this.nightManager?.serverDate(), this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -1898,6 +1933,7 @@ export class GameScene extends DirtyScene {
         if (update.updated.availabilityStatus) {
             character.setAvailabilityStatus(update.player.availabilityStatus);
         }
+        character.setVehicle(update.player.variables.get(VEHICLE_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
         character.setSwimwearColor(update.player.variables.get(SWIMWEAR_COLOR_VARIABLE));
@@ -2337,7 +2373,7 @@ export class GameScene extends DirtyScene {
             switch (itemType) {
                 case "computer": {
                     //eslint-disable-next-line no-await-in-loop
-                    const module = await import("../Items/Computer/computer");
+                    const module = await import("@wa/front/Phaser/Items/Computer/computer");
                     itemFactory = module.default;
                     break;
                 }
@@ -2706,6 +2742,9 @@ export class GameScene extends DirtyScene {
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);
+                this.weatherManager?.destroy();
+                this.skateboardSounds?.destroy();
+                this.weatherManager = new WeatherManager(this);
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
                 this._knockManager = new KnockManager(this);
@@ -3043,7 +3082,7 @@ export class GameScene extends DirtyScene {
 
     private initExtensionModule() {
         if (this._room.modules) {
-            const externalModules = import.meta.glob("../../external-modules/*/index.ts");
+            const externalModules = import.meta.glob("@wa/front/external-modules/*/index.ts");
 
             for (const moduleName of this._room.modules) {
                 const moduleFactory = externalModules[`../../external-modules/${moduleName}/index.ts`];
@@ -4960,6 +4999,9 @@ ${escapedMessage}
         player.setListeningMusic(this.listeningUserUuids.has(player.userUuid));
         this.MapPlayersByKey.set(player.userId, player);
         player.updatePosition(addPlayerData.position);
+        player.setVehicle(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(VEHICLE_VARIABLE),
+        );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),
         );

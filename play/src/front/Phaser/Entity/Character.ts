@@ -6,28 +6,29 @@ import type { AvailabilityStatus as AvailabilityStatusType } from "@workadventur
 import { SayMessageType, AvailabilityStatus, PositionMessage_Direction } from "@workadventure/messages";
 import { defaultWoka, Deferred, type Movable, type PositionInterface } from "@workadventure/shared-utils";
 import { Subject } from "rxjs";
-import { hasMessageContent } from "../../Utils/MessageContent";
-import { currentPlayerWokaStore } from "../../Stores/CurrentPlayerWokaStore";
-import type { OutlineableInterface } from "../Game/OutlineableInterface";
-import { createColorStore } from "../../Stores/OutlineColorStore";
-import type { PictureStore } from "../../Stores/PictureStore";
-import { TexturesHelper } from "../Helpers/TexturesHelper";
-import type { GameScene } from "../Game/GameScene";
-import { Companion } from "../Companion/Companion";
-import { CharacterTextureError } from "../../Exception/CharacterTextureError";
-import { getPlayerAnimations, PlayerAnimationTypes } from "../Player/Animation";
-import { ProtobufClientUtils } from "../../Network/ProtobufClientUtils";
-import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-
-import { UsernameDisplay } from "../Components/UsernameDisplay";
-import { findSeatUnderFeet } from "../Player/Seat";
+import { hasMessageContent } from "@wa/front/Utils/MessageContent";
+import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore";
+import type { OutlineableInterface } from "@wa/front/Phaser/Game/OutlineableInterface";
+import { createColorStore } from "@wa/front/Stores/OutlineColorStore";
+import type { PictureStore } from "@wa/front/Stores/PictureStore";
+import { TexturesHelper } from "@wa/front/Phaser/Helpers/TexturesHelper";
+import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
+import { Companion } from "@wa/front/Phaser/Companion/Companion";
+import { CharacterTextureError } from "@wa/front/Exception/CharacterTextureError";
+import { getPlayerAnimations, PlayerAnimationTypes } from "@wa/front/Phaser/Player/Animation";
+import { ProtobufClientUtils } from "@wa/front/Network/ProtobufClientUtils";
+import { WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
+import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
+import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
     getWaterRectangles,
     isPointInWater,
     isWithinOneTileOfWater,
-} from "../Game/Water/WaterZones";
-import { findActionableObject } from "../Player/ActionableObjects";
+} from "@wa/front/Phaser/Game/Water/WaterZones";
+import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
+import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
+import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -112,6 +113,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     private currentPathSegmentDistanceFromStart = 0;
     private pathFollowingResolve?: (result: PathFollowResult) => void;
     private seated = false;
+    private vehicleState = readVehicleState(null);
+    private vehicleMoving = false;
+    private ridingVehicle = false;
+    private vehicleEffect: VehicleEffect | undefined;
     private avatarAction = AvatarAction.Idle;
     private avatarActionEffect: AvatarActionEffect | undefined;
     private depthCache: { x: number; y: number; depth: number } | undefined;
@@ -129,6 +134,16 @@ export abstract class Character extends Container implements OutlineableInterfac
             if (this.avatarAction !== AvatarAction.Idle) this.scene.markDirty();
         }
         this.updateSwimEffect();
+        if (this.ridingVehicle) this.vehicleEffect ??= new VehicleEffect(this.scene, this);
+        this.vehicleEffect?.update(
+            this.ridingVehicle,
+            this._lastDirection,
+            this.vehicleState,
+            this.vehicleMoving,
+            this.scene.time.now,
+            this.getBody().velocity,
+        );
+        if (this.ridingVehicle && this.vehicleMoving) this.scene.markDirty();
         const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
         if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
         this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
@@ -497,10 +512,21 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     protected playAnimation(direction: PositionMessage_Direction, moving: boolean, animationSpeed = 1): void {
+        this.vehicleMoving = moving;
+        this.ridingVehicle =
+            this.vehicleMode !== VehicleMode.Off &&
+            (moving || this.vehicleMode === VehicleMode.Always) &&
+            !this.isSwimmingHere() &&
+            isHumanAvatar(this.sprites.keys());
         if (this.invisible) return;
         this._lastDirection = direction;
         if (moving && this.avatarAction !== AvatarAction.Idle) this.setAvatarAction(AvatarAction.Idle);
         for (const [texture, sprite] of this.sprites.entries()) {
+            if (this.ridingVehicle) {
+                sprite.anims.stop();
+                sprite.setTexture(texture, Math.max(0, SEATED_DIRECTIONS.indexOf(direction)) * 3 + 1);
+                continue;
+            }
             if ((this.seated || this.avatarAction === AvatarAction.Toilet) && !moving) {
                 sprite.anims.stop();
                 const index = SEATED_DIRECTIONS.indexOf(direction);
@@ -563,6 +589,33 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     public isSeated(): boolean {
         return this.seated;
+    }
+
+    public get vehicleMode(): VehicleMode {
+        return this.vehicleState?.mode ?? VehicleMode.Off;
+    }
+
+    public isRidingVehicle(): boolean {
+        return this.ridingVehicle;
+    }
+
+    public isVehicleMoving(): boolean {
+        return this.ridingVehicle && this.vehicleMoving;
+    }
+
+    public setVehicle(value: unknown): void {
+        const state = readVehicleState(value);
+        if (
+            state.vehicle === this.vehicleState.vehicle &&
+            state.mode === this.vehicleState.mode &&
+            state.color === this.vehicleState.color &&
+            state.edgeColor === this.vehicleState.edgeColor &&
+            state.wheelsColor === this.vehicleState.wheelsColor
+        )
+            return;
+        this.vehicleState = state;
+        this.playAnimation(this._lastDirection, this.vehicleMoving);
+        this.scene.markDirty();
     }
 
     public get action(): AvatarAction {
@@ -803,6 +856,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.swimEffect?.destroy();
         this.swimwearEffect?.destroy();
         this.avatarActionEffect?.destroy();
+        this.vehicleEffect?.destroy();
         this.musicHeadphonesEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);

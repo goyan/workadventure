@@ -1,6 +1,6 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings } from "../../types";
+import { CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings, Weather } from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {
@@ -59,6 +59,10 @@ export class UpdateWAMSettingCommand extends Command {
                     settings === undefined || settings === null
                         ? others
                         : { ...others, [category]: CategorySettings.parse(settings) };
+                break;
+            }
+            case "updateWeatherSettingMessage": {
+                this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
                 break;
             }
             default: {

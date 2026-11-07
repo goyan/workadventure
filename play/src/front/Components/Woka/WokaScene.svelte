@@ -1,20 +1,28 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
-    import { SelectCharacterSceneName } from "../../Phaser/Login/SelectCharacterScene";
-    import { areCharacterTexturesValid } from "../../Connection/LocalUserUtils";
-    import { analyticsClient } from "../../Administration/AnalyticsClient";
-    import { gameManager } from "../../Phaser/Game/GameManager";
-    import { connectionManager } from "../../Connection/ConnectionManager";
-    import { selectCharacterSceneVisibleStore } from "../../Stores/SelectCharacterStore";
-    import { localUserStore } from "../../Connection/LocalUserStore";
-    import type { Swimwear } from "../../Phaser/Entity/Swimwear";
+    import type { VehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import { SelectCharacterSceneName } from "@wa/front/Phaser/Login/SelectCharacterScene";
+    import { areCharacterTexturesValid } from "@wa/front/Connection/LocalUserUtils";
+    import { analyticsClient } from "@wa/front/Administration/AnalyticsClient";
+    import { gameManager } from "@wa/front/Phaser/Game/GameManager";
+    import { connectionManager } from "@wa/front/Connection/ConnectionManager";
+    import { selectCharacterSceneVisibleStore } from "@wa/front/Stores/SelectCharacterStore";
+    import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+    import type { Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
+    import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
     import WokaSelectScene from "./WokaSelectScene.svelte";
     import WokaCustomizeScene from "./WokaCustomizeScene.svelte";
 
     let buildOwnWoka = $state(false);
     let error: string | null = $state(null);
 
-    async function saveAndContinue(texturesId: string[], swimwear?: Swimwear, swimwearColor?: string): Promise<void> {
+    async function saveAndContinue(
+        texturesId: string[],
+        swimwear?: Swimwear,
+        swimwearColor?: string,
+        vehicle?: Vehicle,
+        vehicleColors?: VehicleColors,
+    ): Promise<void> {
         error = null; // Reset error message
         try {
             if (!areCharacterTexturesValid(texturesId)) {
@@ -28,6 +36,10 @@
             if (swimwear !== undefined) {
                 localUserStore.setSwimwear(swimwear);
                 localUserStore.setSwimwearColor(swimwearColor);
+            }
+            if (vehicle !== undefined) {
+                localUserStore.setVehicle(vehicle);
+                localUserStore.setVehicleColors(vehicleColors);
             }
             selectCharacterSceneVisibleStore.set(false);
             gameManager.tryToStopScene(SelectCharacterSceneName);

@@ -210,6 +210,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "إزالة",
     },
     personalDesk: {
+        find: "البحث عن مكتب متاح",
+        findDescription: "اختر منطقة متاحة. اذهب إليها ثم أكد لحجزها.",
+        noAvailable: "لا يوجد مكتب متاح يمكنك حجزه على هذه الخريطة.",
+        loginToClaim: "سجل الدخول لحجز مكتب شخصي.",
+        visit: "اذهب",
         label: "الذهاب إلى مكتبي",
         unclaim: "تحرير مكتبي",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

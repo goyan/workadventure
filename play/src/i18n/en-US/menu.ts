@@ -26,6 +26,12 @@ const menu: BaseTranslation = {
         helpAndTips: "Help & Tips",
     },
     settings: {
+        soundEffects: {
+            title: "Sound effects",
+            footsteps: "Footstep volume",
+            environment: "Environment volume (weather, doors and map audio)",
+        },
+        weatherEffects: "Show weather effects (rain, snow and storm light)",
         night: {
             label: "Day/night cycle",
             server: "Server time",

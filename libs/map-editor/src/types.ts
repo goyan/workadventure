@@ -556,7 +556,17 @@ export const CategorySettings = z.object({
 });
 export type CategorySettings = z.infer<typeof CategorySettings>;
 
+export enum WeatherType {
+    Automatic = "automatic",
+    Clear = "clear",
+    Rain = "rain",
+    Snow = "snow",
+    Storm = "storm",
+}
+export const Weather = z.nativeEnum(WeatherType);
+
 export const WAMSettings = z.object({
+    weather: Weather.optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
     /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */

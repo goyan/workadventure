@@ -683,6 +683,20 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            automatic: "Automatisch (elke 30 minuten)",
+            title: "Weer",
+            description:
+                "Iedereen op deze kaart heeft hetzelfde weer. Je kunt de effecten verbergen in je persoonlijke instellingen.",
+            clear: "Heldere hemel",
+            rain: "Regen",
+            snow: "Sneeuw",
+            storm: "Onweer",
+            saving: "Opslaan…",
+            success: "Weer opgeslagen",
+            error: "Het weer kon niet worden opgeslagen",
+        },
+
         loading: "Laden",
         megaphone: {
             title: "Megaphone",

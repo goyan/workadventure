@@ -1,14 +1,17 @@
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
     import type { Snippet } from "svelte";
+    import { LL } from "../../../i18n/i18n-svelte";
+    import { IconRestore } from "@wa-icons";
 
     interface Props {
         children: Snippet<[(event: PointerEvent) => void, (event: KeyboardEvent) => void]>;
         anchorTop?: number;
+        anchorRight?: number;
         onLayout?: (layout: { height: number; moved: boolean }) => void;
     }
 
-    let { children, anchorTop = 0, onLayout }: Props = $props();
+    let { children, anchorTop = 0, anchorRight = 8, onLayout }: Props = $props();
     let panel: HTMLDivElement | undefined = $state();
     let position: { left: number; top: number } | undefined = $state();
     let drag: { pointerId: number; x: number; y: number; left: number; top: number; handle: HTMLElement } | undefined;
@@ -78,6 +81,12 @@
         }
     }
 
+    function resetPosition(): void {
+        stopDrag();
+        position = undefined;
+        reportLayout();
+    }
+
     function endDrag(event: PointerEvent): void {
         if (drag?.pointerId !== event.pointerId) return;
         event.stopPropagation();
@@ -122,11 +131,21 @@
 
 <div
     bind:this={panel}
-    class="absolute right-2 z-[300] flex flex-col gap-2 items-end"
+    class="absolute z-[300] flex flex-col gap-2 items-end"
     style:left={position ? `${position.left}px` : undefined}
     style:top={`${position?.top ?? anchorTop}px`}
-    style:right={position ? "auto" : undefined}
+    style:right={position ? "auto" : `${anchorRight}px`}
     data-testid="draggable-jam-panel"
 >
+    {#if position}
+        <button
+            type="button"
+            class="pointer-events-auto rounded bg-contrast/80 p-1 backdrop-blur hover:bg-contrast"
+            data-testid="reset-jam-position"
+            aria-label={$LL.spotify.listeningZone.resetPosition()}
+            title={$LL.spotify.listeningZone.resetPosition()}
+            onclick={resetPosition}><IconRestore font-size="16" /></button
+        >
+    {/if}
     {@render children(startDrag, moveWithKeyboard)}
 </div>

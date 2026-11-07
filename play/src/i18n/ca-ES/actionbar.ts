@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Eliminar",
     },
     personalDesk: {
+        find: "Troba un escriptori lliure",
+        findDescription: "Tria una zona lliure. Ves-hi i confirma per reclamar-la.",
+        noAvailable: "No hi ha escriptoris lliures que puguis reclamar en aquest mapa.",
+        loginToClaim: "Inicia sessió per reclamar un escriptori personal.",
+        visit: "Ves-hi",
         label: "Anar al meu escriptori",
         unclaim: "Alliberar el meu escriptori",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

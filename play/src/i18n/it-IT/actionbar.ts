@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Rimuovi",
     },
     personalDesk: {
+        find: "Trova una scrivania libera",
+        findDescription: "Scegli una zona libera. Vai lì e conferma per reclamarla.",
+        noAvailable: "Non ci sono scrivanie libere che puoi reclamare su questa mappa.",
+        loginToClaim: "Accedi per reclamare una scrivania personale.",
+        visit: "Vai",
         label: "Vai alla mia scrivania",
         unclaim: "Libera la mia scrivania",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

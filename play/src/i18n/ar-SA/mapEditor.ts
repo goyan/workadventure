@@ -669,6 +669,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            automatic: "تلقائي (كل 30 دقيقة)",
+            title: "الطقس",
+            description: "الطقس مشترك للجميع على هذه الخريطة. يمكنك إخفاء التأثيرات من إعداداتك الشخصية.",
+            clear: "سماء صافية",
+            rain: "مطر",
+            snow: "ثلج",
+            storm: "عاصفة رعدية",
+            saving: "جارٍ الحفظ…",
+            success: "تم حفظ الطقس",
+            error: "تعذر حفظ الطقس",
+        },
+
         loading: "جارٍ التحميل...",
         megaphone: {
             title: "الميغافون",

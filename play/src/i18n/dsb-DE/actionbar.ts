@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Wótpóraś",
     },
     personalDesk: {
+        find: "Lichy pisański blid namakaś",
+        findDescription: "Wubjeŕ lichy wobcerk. Źi tam a wobkšuś, aby jen pśewzeł.",
+        noAvailable: "Na toś tej kórśe njejo lichy pisański blid, kótaryž móžoš pśewześ.",
+        loginToClaim: "Pśizjaw se, aby wósobinski pisański blid pśewzeł.",
+        visit: "Hyś",
         label: "K mójomu pisanjejomu blidkoju",
         unclaim: "Mójo pisanje blidko wótpóraś",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

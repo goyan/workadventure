@@ -211,6 +211,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Xóa",
     },
     personalDesk: {
+        find: "Tìm bàn trống",
+        findDescription: "Chọn một khu vực trống. Đi đến đó rồi xác nhận để nhận khu vực.",
+        noAvailable: "Không có bàn trống nào bạn có thể nhận trên bản đồ này.",
+        loginToClaim: "Đăng nhập để nhận bàn cá nhân.",
+        visit: "Đi đến",
         label: "Đi tới bàn làm việc của tôi",
         unclaim: "Trả lại bàn làm việc của tôi",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

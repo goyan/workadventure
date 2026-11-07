@@ -27,6 +27,12 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Pomoc a pokiwki",
     },
     settings: {
+        soundEffects: {
+            title: "Zwukowe efekty",
+            footsteps: "Hłosnosć krokow",
+            environment: "Hłosnosć wokoliny (wjedro, durje a zwuk karty)",
+        },
+        weatherEffects: "Wjedrowe efekty pokazać",
         night: {
             label: "Dnjowy a nócny cyklus",
             server: "Čas serwera",

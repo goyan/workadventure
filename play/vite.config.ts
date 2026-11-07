@@ -122,6 +122,7 @@ export default defineConfig(({ mode }) => {
             conditions: mode === "test" ? ["browser"] : undefined,
             alias: {
                 events: "events",
+                "@wa": fileURLToPath(new URL("./src", import.meta.url)),
                 "@wa-icons": fileURLToPath(new URL("./src/front/Components/Icons.ts", import.meta.url)),
                 "@wa-modals": fileURLToPath(new URL("./src/front/Components/Modal/modalManager.ts", import.meta.url)),
             },

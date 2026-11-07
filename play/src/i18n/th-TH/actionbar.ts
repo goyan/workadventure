@@ -211,6 +211,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "ลบ",
     },
     personalDesk: {
+        find: "ค้นหาโต๊ะว่าง",
+        findDescription: "เลือกพื้นที่ว่าง เดินไปที่นั่นแล้วยืนยันเพื่อรับพื้นที่",
+        noAvailable: "ไม่มีโต๊ะว่างที่คุณสามารถรับได้บนแผนที่นี้",
+        loginToClaim: "เข้าสู่ระบบเพื่อรับโต๊ะส่วนตัว",
+        visit: "ไป",
         label: "เดินไปยังโต๊ะของฉัน",
         unclaim: "ยกเลิกการจองโต๊ะของฉัน",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

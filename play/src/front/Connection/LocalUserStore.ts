@@ -1,11 +1,23 @@
 import { z } from "zod";
-import type { Emoji } from "../Stores/Utils/emojiSchema";
-import { arrayEmoji } from "../Stores/Utils/emojiSchema";
-import type { RequestedStatus } from "../Rules/StatusRules/statusRules";
-import { requestedStatusFactory } from "../Rules/StatusRules/StatusFactory/RequestedStatusFactory";
-import { INITIAL_SIDEBAR_WIDTH } from "../Stores/ChatStore";
-import { readSwimwear, readSwimwearColor, SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "../Phaser/Entity/Swimwear";
-import type { Swimwear } from "../Phaser/Entity/Swimwear";
+import {
+    Vehicle,
+    VEHICLE_PREFERENCE_KEY,
+    readVehicle,
+    readVehicleColors,
+    type VehicleColors,
+} from "@wa/front/Phaser/Vehicle/Vehicle";
+import type { Emoji } from "@wa/front/Stores/Utils/emojiSchema";
+import { arrayEmoji } from "@wa/front/Stores/Utils/emojiSchema";
+import type { RequestedStatus } from "@wa/front/Rules/StatusRules/statusRules";
+import { requestedStatusFactory } from "@wa/front/Rules/StatusRules/StatusFactory/RequestedStatusFactory";
+import { INITIAL_SIDEBAR_WIDTH } from "@wa/front/Stores/ChatStore";
+import {
+    readSwimwear,
+    readSwimwearColor,
+    SWIMWEAR_VARIABLE,
+    SWIMWEAR_COLOR_VARIABLE,
+} from "@wa/front/Phaser/Entity/Swimwear";
+import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import type { LocalUser } from "./LocalUser";
 import { areCharacterTexturesValid, isUserNameValid } from "./LocalUserUtils";
 
@@ -210,6 +222,31 @@ class LocalUserStore {
     getCharacterTextures(): string[] | null {
         const value = JSON.parse(localStorage.getItem(characterTexturesKey) || "null");
         return areCharacterTexturesValid(value) ? value : null;
+    }
+
+    public getVehicleColors(): VehicleColors {
+        return readVehicleColors(this.readJsonObject(`${VEHICLE_PREFERENCE_KEY}Colors`));
+    }
+
+    public setVehicleColors(value: unknown): void {
+        localStorage.setItem(`${VEHICLE_PREFERENCE_KEY}Colors`, JSON.stringify(readVehicleColors(value)));
+    }
+
+    private readJsonObject(key: string): unknown {
+        try {
+            return JSON.parse(localStorage.getItem(key) ?? "null");
+        } catch {
+            return null;
+        }
+    }
+
+    public getVehicle(): Vehicle {
+        const saved = localStorage.getItem(VEHICLE_PREFERENCE_KEY);
+        return saved === null ? Vehicle.Skateboard : readVehicle(saved);
+    }
+
+    public setVehicle(value: unknown): void {
+        localStorage.setItem(VEHICLE_PREFERENCE_KEY, readVehicle(value));
     }
 
     public setSwimwearColor(value: unknown): void {

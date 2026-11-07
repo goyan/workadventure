@@ -1,9 +1,10 @@
 import * as Phaser from "phaser";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
-import { enableUserInputsStore } from "../../Stores/UserInputStore";
-import type { UserInputHandlerInterface } from "../../Interfaces/UserInputHandlerInterface";
-import LL from "../../../i18n/i18n-svelte";
+import { enableUserInputsStore } from "@wa/front/Stores/UserInputStore";
+import type { UserInputHandlerInterface } from "@wa/front/Interfaces/UserInputHandlerInterface";
+import LL from "@wa/i18n/i18n-svelte";
+import { TripleTapVehicle } from "./TripleTapVehicle";
 import { DoubleTapSprint } from "./DoubleTapSprint";
 
 import Key = Phaser.Input.Keyboard.Key;
@@ -26,6 +27,7 @@ export enum UserInputEvent {
     SpeedUp,
     Interact,
     Follow,
+    VehicleSprint,
 }
 
 // The reason why the controls are disabled
@@ -240,11 +242,13 @@ export class UserInputManager {
         return !this.isRightClickDisabled;
     }
 
+    private readonly tripleTapVehicle = new TripleTapVehicle();
     private readonly doubleTapSprint = new DoubleTapSprint();
 
     getEventListForGameTick(): ActiveEventList {
         const eventsMap = new ActiveEventList();
         if (this.isInputDisabled) {
+            this.tripleTapVehicle.reset();
             return eventsMap;
         }
         this.keysCode.forEach((d) => {
@@ -268,6 +272,19 @@ export class UserInputManager {
         if (this.doubleTapSprint.update((event) => eventsMap.get(event), performance.now())) {
             eventsMap.set(UserInputEvent.SpeedUp, true);
         }
+        const directions = [
+            UserInputEvent.MoveUp,
+            UserInputEvent.MoveDown,
+            UserInputEvent.MoveLeft,
+            UserInputEvent.MoveRight,
+        ];
+        if (
+            this.tripleTapVehicle.update(
+                directions.filter((event) => eventsMap.get(event)),
+                performance.now(),
+            )
+        )
+            eventsMap.set(UserInputEvent.VehicleSprint, true);
         return eventsMap;
     }
 

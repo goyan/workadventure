@@ -683,6 +683,20 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            automatic: "Automático (cada 30 minutos)",
+            title: "Tiempo",
+            description:
+                "El tiempo es común para todos en este mapa. Puedes ocultar sus efectos en tus ajustes personales.",
+            clear: "Cielo despejado",
+            rain: "Lluvia",
+            snow: "Nieve",
+            storm: "Tormenta",
+            saving: "Guardando…",
+            success: "Tiempo guardado",
+            error: "No se pudo guardar el tiempo",
+        },
+
         loading: "Cargando",
         megaphone: {
             title: "Megáfono",

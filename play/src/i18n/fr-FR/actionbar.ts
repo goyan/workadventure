@@ -215,6 +215,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Supprimer",
     },
     personalDesk: {
+        find: "Trouver un bureau libre",
+        findDescription: "Choisissez une zone libre. Allez sur place, puis confirmez pour vous l’attribuer.",
+        noAvailable: "Aucun bureau libre que vous pouvez réclamer sur cette carte.",
+        loginToClaim: "Connectez-vous pour prendre un bureau personnel.",
+        visit: "Aller",
         label: "Aller à mon bureau",
         unclaim: "Libérer mon bureau",
         unclaimConfirmation: "Libérer le bureau « {name} » ? Il deviendra disponible pour les autres.",

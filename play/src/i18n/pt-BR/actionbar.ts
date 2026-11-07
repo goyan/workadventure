@@ -216,6 +216,11 @@ const actionbar: BaseTranslation = {
         removeHighlightText: "Remover",
     },
     personalDesk: {
+        find: "Encontrar uma mesa livre",
+        findDescription: "Escolha uma área livre. Vá até ela e confirme para reivindicá-la.",
+        noAvailable: "Não há mesas livres que você possa reivindicar neste mapa.",
+        loginToClaim: "Entre para reivindicar uma mesa pessoal.",
+        visit: "Ir",
         label: "Ir para minha mesa",
         unclaim: "Liberar minha mesa",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

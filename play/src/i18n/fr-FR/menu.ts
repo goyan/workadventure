@@ -27,6 +27,12 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Aide et astuces",
     },
     settings: {
+        soundEffects: {
+            title: "Bruitages",
+            footsteps: "Volume des pas",
+            environment: "Volume de l’environnement (météo, portes et sons de la carte)",
+        },
+        weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
         night: {
             label: "Cycle jour/nuit",
             server: "Heure du serveur",
