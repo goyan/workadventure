@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
+import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import type { Entity } from "../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Player } from "../../Player/Player";
@@ -15,7 +16,8 @@ interface EntityCollisionState {
 }
 
 /**
- * `solid`: the `collisionRectangles` of the prefab, always blocking.
+ * `solid`: the `collisionRectangles` of the prefab (or the cells of its grid, for an object placed off the grid),
+ * always blocking; nothing for a wandering object (EntityHitbox).
  * `water`: the `water` rectangles, blocking only a player who is not swimming (one dives in on purpose).
  */
 export type EntityRectanglesKind = "solid" | "water";
@@ -31,6 +33,8 @@ export class EntityCollisionRectangles {
     constructor(
         private readonly scene: Phaser.Scene,
         private readonly kind: EntityRectanglesKind = "solid",
+        /** Size of a cell of the 32px collision grids: the tile width of the map. */
+        private readonly getCellSize: () => number = () => 32,
     ) {
         this.scene.events.on(Phaser.Scenes.Events.UPDATE, this.followEntities);
     }
@@ -80,7 +84,9 @@ export class EntityCollisionRectangles {
 
     private getRectangles(entity: Entity) {
         const prefab = entity.getPrefab();
-        return this.kind === "water" ? prefab.water : prefab.collisionRectangles;
+        return this.kind === "water"
+            ? prefab.water
+            : getSolidRectangles({ x: entity.x, y: entity.y }, prefab, this.getCellSize());
     }
 
     private createCollider(player: Player, state: EntityCollisionState): Phaser.Physics.Arcade.Collider {

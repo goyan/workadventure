@@ -5,6 +5,7 @@ import type { Character } from "../Entity/Character";
 import type { GameMapFrontWrapper } from "../Game/GameMap/GameMapFrontWrapper";
 import type { EntitiesManager } from "../Game/GameMap/EntitiesManager";
 import { getObjectInteraction } from "../../Utils/ObjectCategories";
+import { getHitboxBounds } from "../../Utils/EntityHitbox";
 
 // Below this distance (in pixels), a character is considered to be exactly on its seat.
 const SEAT_POSITION_TOLERANCE = 1.5;
@@ -74,7 +75,7 @@ function computeSeats(scene: GameScene): Seat[] {
         const { interaction, trigger } = getObjectInteraction(prefab, categories);
         if (prefab.seat) {
             // A hitbox added to a catalog chair keeps the feet off its seat tile: touching the object is enough then.
-            const reach = getHitboxReach(entity);
+            const reach = getHitboxReach(entity, width);
             prefab.seat.forEach((tile, index) => {
                 seats.push({
                     id: `${entityId}:${index}`,
@@ -96,9 +97,12 @@ function computeSeats(scene: GameScene): Seat[] {
 /** How far around the hitbox of a seat object the player still reaches it. */
 const SEAT_REACH_MARGIN = 4;
 
-/** The hitbox of the object and its margin, when it has a hitbox. */
-function getHitboxReach(entity: { x: number; y: number; getPrefab(): EntityPrefab }): Seat["reach"] {
-    const hitbox = entity.getPrefab().collisionRectangles?.[0];
+/**
+ * The hitbox of the object (its rectangles, else the cells of its 32px grid) and its margin, when it has a hitbox: a
+ * seat backed onto a blocking cell of its own object is reached by touching the object.
+ */
+function getHitboxReach(entity: { x: number; y: number; getPrefab(): EntityPrefab }, cellSize: number): Seat["reach"] {
+    const hitbox = getHitboxBounds(entity.getPrefab(), cellSize);
     if (!hitbox) return undefined;
     return {
         x: entity.x + hitbox.x - SEAT_REACH_MARGIN,

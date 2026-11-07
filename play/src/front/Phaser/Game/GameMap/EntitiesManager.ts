@@ -9,6 +9,7 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
+import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
 import {
     mapEditorEntityEraserStore,
@@ -165,7 +166,12 @@ export class EntitiesManager extends EventEmitter {
 
         this.bindEntityEventHandlers(entity);
 
-        const colGrid = entity.getCollisionGrid();
+        // Off the grid or wandering, the object blocks with rectangles instead (EntityHitbox).
+        const colGrid = getTileCollisionGrid(
+            entity,
+            entity.getPrefab(),
+            this.gameMapFrontWrapper.getTileDimensions().width,
+        );
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid, withGridUpdate);
         }
@@ -208,9 +214,13 @@ export class EntitiesManager extends EventEmitter {
             }
         }
 
-        const colGrid = entity.getReversedCollisionGrid();
+        const colGrid = getTileCollisionGrid(
+            entity,
+            entity.getPrefab(),
+            this.gameMapFrontWrapper.getTileDimensions().width,
+        );
         if (colGrid) {
-            this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid);
+            this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", reverseCollisionGrid(colGrid));
         }
         this.gameMapFrontWrapper.removeEntityCollisionRectangles(id);
         const overlappingEntities = entity.getOverlappingEntities();

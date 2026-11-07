@@ -6,6 +6,7 @@ import type { GameScene } from "../../../GameScene";
 import type { FrontCommandInterface } from "../FrontCommandInterface";
 import type { RoomConnection } from "../../../../../Connection/RoomConnection";
 import { analyticsClient } from "../../../../../Administration/AnalyticsClient";
+import { getTileCollisionGrid, reverseCollisionGrid } from "../../../../../Utils/EntityHitbox";
 
 export class UpdateEntityFrontCommand extends UpdateEntityCommand implements FrontCommandInterface {
     constructor(
@@ -81,12 +82,21 @@ export class UpdateEntityFrontCommand extends UpdateEntityCommand implements Fro
         this.scene.markDirty();
     }
 
+    /**
+     * The grid is written to the tiles only where the object sits on the grid of the map (EntityHitbox): a move on or
+     * off the grid moves its collision between the tile layer and the rectangles.
+     */
     private updateCollisionGrid(entity: Entity, oldX: number, oldY: number): void {
-        const reversedGrid = entity.getReversedCollisionGrid();
-        const grid = entity.getCollisionGrid();
-        if (reversedGrid && grid) {
-            this.scene.getGameMapFrontWrapper().modifyToCollisionsLayer(oldX, oldY, "0", reversedGrid);
-            this.scene.getGameMapFrontWrapper().modifyToCollisionsLayer(entity.x, entity.y, "0", grid);
+        const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
+        const cellSize = gameMapFrontWrapper.getTileDimensions().width;
+        const oldGrid = getTileCollisionGrid({ x: oldX, y: oldY }, entity.getPrefab(), cellSize);
+        const grid = getTileCollisionGrid(entity, entity.getPrefab(), cellSize);
+        if (oldGrid) {
+            gameMapFrontWrapper.modifyToCollisionsLayer(oldX, oldY, "0", reverseCollisionGrid(oldGrid));
         }
+        if (grid) {
+            gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", grid);
+        }
+        gameMapFrontWrapper.addEntityCollisionRectangles(entity);
     }
 }
