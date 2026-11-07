@@ -26,6 +26,7 @@ const menu: BaseTranslation = {
         helpAndTips: "Ajuda e dicas",
     },
     settings: {
+        weatherEffects: "Mostrar efeitos do clima (chuva, neve e luz da tempestade)",
         night: {
             label: "Ciclo dia/noite",
             server: "Hora do servidor",

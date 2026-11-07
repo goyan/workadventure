@@ -674,6 +674,18 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "天気",
+            description: "このマップの天気は全員で共有されます。個人設定でエフェクトを非表示にできます。",
+            clear: "晴れ",
+            rain: "雨",
+            snow: "雪",
+            storm: "雷雨",
+            saving: "保存中…",
+            success: "天気を保存しました",
+            error: "天気を保存できませんでした",
+        },
+
         loading: "読み込み",
         megaphone: {
             title: "メガホン",

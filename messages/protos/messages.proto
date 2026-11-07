@@ -359,7 +359,13 @@ message UpdateWAMSettingsMessage {
     UpdateRecordingSettingMessage updateRecordingSettingMessage = 2;
     UpdatePrefabOverrideSettingMessage updatePrefabOverrideSettingMessage = 3;
     UpdateCategorySettingMessage updateCategorySettingMessage = 4;
+    UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
   }
+}
+
+// Map-wide weather, validated against WeatherType before it is stored.
+message UpdateWeatherSettingMessage {
+  string weather = 1;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in

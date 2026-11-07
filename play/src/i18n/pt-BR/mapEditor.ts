@@ -680,6 +680,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "Clima",
+            description:
+                "O clima é compartilhado por todos neste mapa. Você pode ocultar os efeitos nas configurações pessoais.",
+            clear: "Céu limpo",
+            rain: "Chuva",
+            snow: "Neve",
+            storm: "Tempestade",
+            saving: "Salvando…",
+            success: "Clima salvo",
+            error: "Não foi possível salvar o clima",
+        },
+
         loading: "Carregando",
         megaphone: {
             title: "Megafone",

@@ -17,6 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
+    import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { NightMode, nightModeStore } from "../../Stores/NightStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -331,6 +332,12 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
+        <InputSwitch
+            id="weather-effects-enabled"
+            bind:value={$weatherEffectsEnabledStore}
+            label={$LL.menu.settings.weatherEffects()}
+            labelPosition="right"
+        />
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
             <SegmentedControl

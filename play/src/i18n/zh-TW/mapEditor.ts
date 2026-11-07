@@ -666,6 +666,18 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "天氣",
+            description: "地圖上的天氣由所有人共享。你可以在個人設定中隱藏效果。",
+            clear: "晴天",
+            rain: "下雨",
+            snow: "下雪",
+            storm: "雷暴",
+            saving: "正在儲存…",
+            success: "天氣已儲存",
+            error: "無法儲存天氣",
+        },
+
         loading: "載入中",
         megaphone: {
             title: "擴音器",

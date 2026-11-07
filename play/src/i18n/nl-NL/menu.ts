@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Help & tips",
     },
     settings: {
+        weatherEffects: "Weereffecten tonen (regen, sneeuw en onweerlicht)",
         night: {
             label: "Dag-nachtcyclus",
             server: "Servertijd",
