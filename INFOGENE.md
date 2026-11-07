@@ -867,16 +867,28 @@ L'image doit rester dans la carte et respecter les droits d'édition et les nouv
 Le moteur officiel ne sauvegarde pas une échelle par instance. Le front importe donc une nouvelle version PNG
 de l'image, avec sa grille de collision et sa profondeur adaptées, puis remplace cet exemplaire par les commandes
 natives. Son identifiant, son nom et ses propriétés sont conservés ; les autres exemplaires restent
-à leur taille précédente. La version redimensionnée est aussi disponible dans le catalogue des images importées.
+à leur taille précédente.
+
+**Copies redimensionnées** (`MapEditor/PlacedImageVariants.ts`) : chaque copie porte l'étiquette cachée
+`resized-from:<id de l'originale>:<largeur>x<hauteur>` (les étiquettes sont gardées par le map-storage officiel). Un
+nouveau redimensionnement repart toujours de **l'image d'origine** (jamais d'une copie déjà rééchantillonnée), en lissage
+de haute qualité : réduire puis réagrandir rend l'image d'origine (écart nul mesuré, contre une image floue avant). Une
+copie de même taille est réutilisée au lieu d'être réimportée. Les copies n'apparaissent plus dans la bibliothèque
+(seule l'originale) et s'appellent « nom de l'originale (L×H) », sans chaîne de tailles. Redimensionner un exemplaire
+qui montre une copie supprime cette copie du serveur dès qu'aucun autre exemplaire de la carte ne l'utilise (les autres
+cartes ne sont pas vérifiables d'ici) ; ce redimensionnement-là n'entre pas dans l'historique d'annulation (annuler
+ramènerait une image supprimée) : on redimensionne de nouveau, depuis l'originale, sans perte. Le premier
+redimensionnement d'une originale reste annulable. Une copie laissée sans exemplaire par une annulation reste sur le
+serveur, cachée, et resservira pour la même taille.
 À l'ouverture de la carte, les catalogues sont revalidés auprès du serveur pour charger les nouveaux imports,
 même si le navigateur possède encore une ancienne copie en cache.
-Ctrl/Cmd+Z annule le remplacement en une étape ; le rétablissement le réapplique. L'image importée reste dans
-le catalogue pour que le rétablissement et les copies restent possibles.
+Ctrl/Cmd+Z annule le remplacement en une étape (sauf celui qui supprime une copie, voir plus haut) ; le rétablissement
+le réapplique.
 
 La sauvegarde de l'image est confirmée par le serveur avant le remplacement. Une erreur ou la fermeture du panneau
 pendant la préparation laisse l'exemplaire d'origine en place. Le poids maximal des messages du serveur reste applicable.
-Un agrandissement ne peut pas recréer les détails absents de l'image ; redimensionner plusieurs fois la même version
-peut réduire sa qualité.
+Un agrandissement au-delà de la taille de l'image d'origine ne peut pas recréer les détails absents. Les copies faites
+avant ce correctif n'ont pas d'étiquette : elles servent d'originale à leurs prochains redimensionnements.
 
 ## Disponibilité de l'enregistrement
 

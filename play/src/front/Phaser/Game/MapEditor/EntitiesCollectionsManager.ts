@@ -13,6 +13,7 @@ import { asError } from "catch-unknown";
 import { withCategory } from "../../../Utils/EntityCategory";
 import { EntityVariant } from "./Entities/EntityVariant";
 import { takeUnseenEntities } from "./EntityCollectionUrls";
+import { isResizedVariant } from "./PlacedImageVariants";
 
 /** How long a collection of entities is waited for, in milliseconds. */
 const COLLECTION_FETCH_TIMEOUT_MS = 10_000;
@@ -36,6 +37,8 @@ export class EntitiesCollectionsManager {
             // entityVariants ordered by collectionName+name
             const entityVariants = new Map<string, EntityVariant>();
             for (const entityPrefab of $entitiesPrefabsStore) {
+                // A resized copy belongs to the instance placed with it: the library only offers the original.
+                if (entityPrefab.type === "Custom" && isResizedVariant(entityPrefab)) continue;
                 const idOrGeneratedName =
                     entityPrefab.type === "Custom"
                         ? (entityPrefab.variantOf ?? entityPrefab.id)
@@ -54,6 +57,12 @@ export class EntitiesCollectionsManager {
 
     public getEntitiesPrefabsVariantStore(): Readable<EntityVariant[]> {
         return this.entitiesPrefabsVariantStore;
+    }
+
+    /** The custom image carrying this tag, if any (a resized copy of an image, PlacedImageVariants). */
+    public async findCustomPrefabByTag(tag: string): Promise<EntityPrefab | undefined> {
+        const prefabsMap = await this.entitiesPrefabsMapPromise;
+        return [...prefabsMap.values()].find((prefab) => prefab.type === "Custom" && prefab.tags.includes(tag));
     }
 
     public async getEntityPrefab(collectionName: string, entityPrefabId: string): Promise<EntityPrefab | undefined> {
