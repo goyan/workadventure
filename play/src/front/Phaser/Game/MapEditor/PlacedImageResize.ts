@@ -1,4 +1,4 @@
-import type { EntityDimensions } from "@workadventure/map-editor";
+import type { EntityDimensions, EntityPrefab } from "@workadventure/map-editor";
 import { CustomEntityDirection } from "@workadventure/messages";
 import { filter, firstValueFrom, fromEvent, takeUntil, timeout } from "rxjs";
 import { v4 as uuid } from "uuid";
@@ -7,6 +7,8 @@ import type { GameScene } from "../GameScene";
 import { CreateEntityFrontCommand } from "./Commands/Entity/CreateEntityFrontCommand";
 import { DeleteEntityFrontCommand } from "./Commands/Entity/DeleteEntityFrontCommand";
 import { UploadEntityFrontCommand } from "./Commands/Entity/UploadEntityFrontCommand";
+import { DeleteCustomEntityFrontCommand } from "./Commands/Entity/DeleteCustomEntityFrontCommand";
+import { getResizedFrom, resizedVariantName, resizedVariantTag, resizedVariantTags } from "./PlacedImageVariants";
 
 // Custom image collision cells are 32px, as in CustomEntityEditionForm.
 const COLLISION_CELL_SIZE = 32;
@@ -125,52 +127,151 @@ export async function resizePlacedImage(
     )
         return;
     const originalPosition = { x: entity.x, y: entity.y };
-    const source = { width: entity.width, height: entity.height };
-    if (source.width <= 0 || source.height <= 0) throw new PlacedImageResizeError("Image is not loaded");
-    const collisionGrid = resizeImageCollisionGrid(prefab.collisionGrid, source, size);
+    const entities = scene.getGameMapFrontWrapper().getEntitiesManager();
+    const collections = scene.getEntitiesCollectionsManager();
+    const manager = scene.getMapEditorModeManager();
+    if (!manager) throw new Error("The map editor is not available");
+
+    // Always from the original image: a resized copy is already resampled, each new step would blur it more.
+    const originalId = getResizedFrom(prefab) ?? prefab.id;
+    const original =
+        originalId === prefab.id
+            ? prefab
+            : ((await collections.getEntityPrefab("custom entities", originalId)) ?? prefab);
+    signal.throwIfAborted();
+    const variantTag = resizedVariantTag(original.id, size);
+    // The same image at the same size already exists: reuse it rather than uploading one more copy.
+    const existing = await collections.findCustomPrefabByTag(variantTag);
+    signal.throwIfAborted();
+
+    const prepared = existing ? undefined : await drawResizedImage(original, size, signal);
+    const collisionGrid = existing ? existing.collisionGrid : prepared?.collisionGrid;
     if (!canResizeImage(scene, entity, size, collisionGrid, position))
         throw new PlacedImageResizeError("Image cannot fit here");
+    const resizedPrefab: EntityPrefab = existing ?? (await uploadResizedImage(scene, original, size, prepared, signal));
+    const id = resizedPrefab.id;
 
-    const response = await fetch(prefab.imagePath, { signal });
+    // The copy the instance shows now is not in the library: it is deleted from the server once no other instance of
+    // this map uses it (the other maps cannot be checked from here). Undoing would bring back that deleted image, so
+    // this resize stays out of the undo history: resizing again starts from the original, nothing is lost.
+    const dropsPrevious =
+        getResizedFrom(prefab) !== undefined &&
+        prefab.id !== id &&
+        wamFile
+            .getGameMapEntities()
+            .findEntitiesByPrefabId(prefab.id)
+            .every((key) => key === entity.entityId);
+
+    // A collaborator may have moved/deleted the instance during the upload.
+    await manager.executeCommands(
+        () => {
+            signal.throwIfAborted();
+            const current = entities.getEntities().get(entity.entityId);
+            if (
+                current !== entity ||
+                (position && (current.x !== originalPosition.x || current.y !== originalPosition.y)) ||
+                !canResizeImage(scene, current, size, collisionGrid, position)
+            ) {
+                throw new PlacedImageResizeError("Image changed during resize");
+            }
+            const data = structuredClone(current.getEntityData());
+            return [
+                new DeleteEntityFrontCommand(wamFile, entity.entityId, undefined, entities),
+                new CreateEntityFrontCommand(
+                    wamFile,
+                    entity.entityId,
+                    { ...data, ...position, prefabRef: { collectionName: resizedPrefab.collectionName, id } },
+                    undefined,
+                    entities,
+                    size,
+                ),
+            ];
+        },
+        dropsPrevious ? false : undefined,
+    );
+
+    if (dropsPrevious && wamFile.getGameMapEntities().findEntitiesByPrefabId(prefab.id).length === 0) {
+        await manager.executeCommands(
+            [new DeleteCustomEntityFrontCommand({ id: prefab.id }, wamFile, entities, collections)],
+            false,
+        );
+    }
+}
+
+interface PreparedResize {
+    canvas: HTMLCanvasElement;
+    collisionGrid: number[][] | undefined;
+    depthOffset: number;
+}
+
+/**
+ * Draws the original image at the new size (every frame of an animated strip alike), and scales its collision grid and
+ * depth offset from the original size.
+ */
+async function drawResizedImage(
+    original: EntityPrefab,
+    size: EntityDimensions,
+    signal: AbortSignal,
+): Promise<PreparedResize> {
+    const response = await fetch(original.imagePath, { signal });
     if (!response.ok) throw new Error("Could not load image");
     const bitmap = await createImageBitmap(await response.blob());
-    // `size` is the size of one frame: every frame of an animated strip is scaled alike.
-    const frameCount = prefab.animation?.frameCount ?? 1;
+    const frameCount = original.animation?.frameCount ?? 1;
+    const source = { width: bitmap.width / frameCount, height: bitmap.height };
     const canvas = document.createElement("canvas");
     canvas.width = size.width * frameCount;
     canvas.height = size.height;
     try {
         signal.throwIfAborted();
+        if (source.width <= 0 || source.height <= 0) throw new PlacedImageResizeError("Image is not loaded");
         const context = canvas.getContext("2d");
         if (!context) throw new Error("Could not resize image");
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
         context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     } finally {
         bitmap.close();
     }
+    return {
+        canvas,
+        collisionGrid: resizeImageCollisionGrid(original.collisionGrid, source, size),
+        depthOffset: Math.round((original.depthOffset ?? 0) * (size.height / source.height)),
+    };
+}
+
+/** Uploads the resized copy, waits for the server to save it, and returns it as the library knows it. */
+async function uploadResizedImage(
+    scene: GameScene,
+    original: EntityPrefab,
+    size: EntityDimensions,
+    prepared: PreparedResize | undefined,
+    signal: AbortSignal,
+): Promise<EntityPrefab> {
+    const connection = scene.connection;
+    const manager = scene.getMapEditorModeManager();
+    if (!prepared || !connection || !manager) throw new Error("The map editor is not available");
+    const { canvas, collisionGrid, depthOffset } = prepared;
     const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not encode image"))), "image/png");
     });
     const file = new Uint8Array(await blob.arrayBuffer());
     signal.throwIfAborted();
     const id = uuid();
-    const entities = scene.getGameMapFrontWrapper().getEntitiesManager();
     const collections = scene.getEntitiesCollectionsManager();
-    const manager = scene.getMapEditorModeManager();
-    if (!manager) throw new Error("The map editor is not available");
     const upload = new UploadEntityFrontCommand(
         {
             id,
             file,
-            name: `${prefab.name} (${size.width}×${size.height})`,
-            tags: [...prefab.tags],
+            name: resizedVariantName(original.name, size),
+            tags: resizedVariantTags(original.tags, original.id, size),
             imagePath: `${id}.png`,
-            direction: CustomEntityDirection[prefab.direction],
+            direction: CustomEntityDirection[original.direction],
             collisionGrid,
-            depthOffset: Math.round((prefab.depthOffset ?? 0) * (size.height / source.height)),
-            color: prefab.color,
-            animation: prefab.animation,
+            depthOffset,
+            color: original.color,
+            animation: original.animation,
         },
-        entities,
+        scene.getGameMapFrontWrapper().getEntitiesManager(),
         collections,
     );
     // Subscribe before sending: the image must be saved before we replace the original.
@@ -186,34 +287,10 @@ export async function resizePlacedImage(
     if (ack.editMapMessage?.message?.$case !== "uploadEntityMessage") {
         throw new PlacedImageResizeError("Image upload was rejected");
     }
-
-    // A collaborator may have moved/deleted the instance during the upload.
     const resizedPrefab = await collections.getEntityPrefab("custom entities", id);
     signal.throwIfAborted();
     if (!resizedPrefab) throw new Error("Resized image was not found");
     // Preload the exact saved pixels so local rendering never races the HTTP image loader.
     scene.textures.addCanvas(resizedPrefab.imagePath, canvas);
-    await manager.executeCommands(() => {
-        signal.throwIfAborted();
-        const current = entities.getEntities().get(entity.entityId);
-        if (
-            current !== entity ||
-            (position && (current.x !== originalPosition.x || current.y !== originalPosition.y)) ||
-            !canResizeImage(scene, current, size, collisionGrid, position)
-        ) {
-            throw new PlacedImageResizeError("Image changed during resize");
-        }
-        const data = structuredClone(current.getEntityData());
-        return [
-            new DeleteEntityFrontCommand(wamFile, entity.entityId, undefined, entities),
-            new CreateEntityFrontCommand(
-                wamFile,
-                entity.entityId,
-                { ...data, ...position, prefabRef: { collectionName: resizedPrefab.collectionName, id } },
-                undefined,
-                entities,
-                size,
-            ),
-        ];
-    });
+    return resizedPrefab;
 }

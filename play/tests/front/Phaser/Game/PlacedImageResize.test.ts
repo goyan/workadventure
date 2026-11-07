@@ -119,12 +119,14 @@ function fixture() {
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) =>
         callback(mock<Blob>({ arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer) })),
     );
-    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue(mock<ImageBitmap>()));
+    // The image as saved: 64x32, the size the instance is displayed at.
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue(mock<ImageBitmap>({ width: 64, height: 32 })));
     vi.stubGlobal(
         "fetch",
         vi.fn().mockResolvedValue(mock<Response>({ ok: true, blob: vi.fn().mockResolvedValue(mock<Blob>()) })),
     );
     scene.textures = mock<Phaser.Textures.TextureManager>();
+    collections.findCustomPrefabByTag.mockResolvedValue(undefined);
     collections.addUploadedEntity.mockImplementation((uploaded) => {
         collections.getEntityPrefab.mockResolvedValue({
             ...uploaded,
@@ -138,7 +140,20 @@ function fixture() {
             editMapMessage: { message: { $case: "uploadEntityMessage", uploadEntityMessage: upload } },
         });
     });
-    return { scene, connection, commands, entity, prefab, manager, wrapper, rendered, data, permissions };
+    return {
+        scene,
+        connection,
+        commands,
+        entity,
+        prefab,
+        manager,
+        wrapper,
+        rendered,
+        data,
+        permissions,
+        collections,
+        wamFile,
+    };
 }
 
 describe("Persisted placed image resize", () => {
@@ -152,7 +167,8 @@ describe("Persisted placed image resize", () => {
                 [1, 1, 0, 0],
             ],
             depthOffset: -64,
-            tags: ["Custom"],
+            name: "Logo (128×64)",
+            tags: ["Custom", "resized-from:source:128x64"],
         });
         expect(
             f.manager.executeCommands.mock.calls.map(([batch, history]) => [
@@ -291,5 +307,95 @@ describe("Persisted placed image resize", () => {
             }),
         ).rejects.toThrow("Image changed during resize");
         expect(f.connection.emitMapEditorDeleteEntity.mock.calls).toHaveLength(0);
+    });
+});
+
+// A resized image is a custom entity of its own, tagged with its original (PlacedImageVariants).
+describe("Resized image variants", () => {
+    const original: EntityPrefab = {
+        id: "orig",
+        name: "Logo",
+        tags: ["Custom"],
+        type: "Custom",
+        direction: "Down",
+        imagePath: "https://maps.test/orig.png",
+        collectionName: "custom entities",
+        color: "",
+        collisionGrid: [[1, 0]],
+        depthOffset: -32,
+    };
+
+    /** The instance shows a 50x25 copy made from `orig`. */
+    function resizedCopyFixture() {
+        const f = fixture();
+        f.prefab.id = "source";
+        f.prefab.name = "Logo (50×25)";
+        f.prefab.tags = ["Custom", "resized-from:orig:50x25"];
+        let uploaded: EntityPrefab | undefined;
+        f.collections.addUploadedEntity.mockImplementation((upload) => {
+            uploaded = { ...upload, collectionName: "custom entities", type: "Custom" };
+        });
+        f.collections.getEntityPrefab.mockImplementation((_collection, id) =>
+            Promise.resolve(id === "orig" ? original : uploaded),
+        );
+        return f;
+    }
+
+    it("starts from the original image, not from the resized copy, and names it with one size", async () => {
+        const f = resizedCopyFixture();
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        expect(vi.mocked(fetch).mock.calls[0][0]).toBe("https://maps.test/orig.png");
+        expect(f.connection.emitMapEditorUploadEntity.mock.calls[0][1]).toMatchObject({
+            name: "Logo (128×64)",
+            tags: ["Custom", "resized-from:orig:128x64"],
+            collisionGrid: [
+                [1, 1, 0, 0],
+                [1, 1, 0, 0],
+            ],
+            depthOffset: -64,
+        });
+    });
+
+    it("reuses a resized copy of the same size instead of uploading another one", async () => {
+        const f = resizedCopyFixture();
+        f.collections.findCustomPrefabByTag.mockImplementation((tag: string) =>
+            Promise.resolve(
+                tag === "resized-from:orig:128x64" ? { ...original, id: "existing", tags: ["Custom", tag] } : undefined,
+            ),
+        );
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        expect(f.connection.emitMapEditorUploadEntity.mock.calls).toHaveLength(0);
+        expect(f.connection.emitMapEditorCreateEntity.mock.calls[0][2]).toMatchObject({
+            prefabRef: { id: "existing", collectionName: "custom entities" },
+        });
+    });
+
+    it("deletes the previous resized copy once no instance of this map uses it", async () => {
+        const f = resizedCopyFixture();
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        expect(f.connection.emitMapEditorDeleteCustomEntity.mock.calls.map(([, message]) => message)).toEqual([
+            { id: "source" },
+        ]);
+    });
+
+    it("keeps that resize out of the undo history: undoing it would bring back a deleted image", async () => {
+        const f = resizedCopyFixture();
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        const replacement = f.manager.executeCommands.mock.calls.find(([batch]) => typeof batch === "function");
+        expect(replacement?.[1]).toBe(false);
+    });
+
+    it("keeps the previous resized copy, and the undo, while another instance of this map shows it", async () => {
+        const f = resizedCopyFixture();
+        f.wamFile.getGameMapEntities().addEntity("other", {
+            x: 320,
+            y: 320,
+            properties: [],
+            prefabRef: { id: "source", collectionName: "custom entities" },
+        });
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        expect(f.connection.emitMapEditorDeleteCustomEntity.mock.calls).toHaveLength(0);
+        const replacement = f.manager.executeCommands.mock.calls.find(([batch]) => typeof batch === "function");
+        expect(replacement?.[1]).toBeUndefined();
     });
 });
