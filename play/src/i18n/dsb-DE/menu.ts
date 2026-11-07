@@ -27,6 +27,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Pomoc a pokiwki",
     },
     settings: {
+        weatherEffects: "Wjedrowe efekty pokazaś",
         night: {
             label: "Cyklus dnja a nocy",
             server: "Cas serwera",

@@ -82,6 +82,7 @@ export const mapEditorEntityFileDroppedStore = writable<boolean>(false);
 export enum WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM {
     Megaphone = "Megaphone",
     Recording = "Recording",
+    Weather = "Weather",
     RoomSettings = "Room Settings",
     MatrixRoomList = "Matrix Room List",
 }

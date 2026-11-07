@@ -26,6 +26,7 @@ const menu: BaseTranslation = {
         helpAndTips: "Help & Tips",
     },
     settings: {
+        weatherEffects: "Show weather effects (rain, snow and storm light)",
         night: {
             label: "Day/night cycle",
             server: "Server time",

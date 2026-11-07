@@ -678,6 +678,19 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "Wjedro",
+            description:
+                "Wjedro jo za wšych na toś tej kórśe samske. Efekty móžośo w wósobinskich nastajenjach schowaś.",
+            clear: "Jasne njebjo",
+            rain: "Dešć",
+            snow: "Sněg",
+            storm: "Njewjedro",
+            saving: "Składowanje…",
+            success: "Wjedro składowane",
+            error: "Wjedro njedajo se składowaś",
+        },
+
         loading: "Lodujo se...",
         megaphone: {
             title: "Megafon",

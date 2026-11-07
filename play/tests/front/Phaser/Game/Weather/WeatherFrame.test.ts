@@ -1,0 +1,30 @@
+import { describe, expect, it } from "vitest";
+import { WeatherType } from "@workadventure/map-editor";
+import { stormGlow, weatherParticles } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+
+const view = { x: 0, y: 0, width: 800, height: 600 };
+
+describe("world weather", () => {
+    it("does no particle work for clear sky", () => {
+        expect(weatherParticles(WeatherType.Clear, 1000, view)).toEqual([]);
+    });
+    it("keeps overlapping particles fixed in the world when the camera moves", () => {
+        const original = weatherParticles(WeatherType.Rain, 1000, view);
+        const shifted = weatherParticles(WeatherType.Rain, 1000, { ...view, x: 64 });
+        expect(original.filter((particle) => particle.x >= 0 && particle.x < 800)).toEqual(
+            shifted.filter((particle) => particle.x >= 0 && particle.x < 800),
+        );
+        expect(weatherParticles(WeatherType.Rain, 1100, view)).not.toEqual(original);
+    });
+    it("bounds particle work even when zoomed far out", () => {
+        expect(weatherParticles(WeatherType.Snow, 1000, { ...view, width: 20000, height: 20000 }).length).toBeLessThan(
+            500,
+        );
+    });
+    it("uses a gentle single storm glow and the same phase for every client", () => {
+        expect(stormGlow(600)).toBeCloseTo(0.12);
+        expect(stormGlow(23600)).toBeCloseTo(stormGlow(600));
+        expect(stormGlow(2000)).toBe(0);
+        expect(stormGlow(22999)).toBe(0);
+    });
+});

@@ -672,6 +672,18 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        weather: {
+            title: "날씨",
+            description: "이 지도의 날씨는 모두에게 동일합니다. 개인 설정에서 효과를 숨길 수 있습니다.",
+            clear: "맑음",
+            rain: "비",
+            snow: "눈",
+            storm: "뇌우",
+            saving: "저장 중…",
+            success: "날씨 저장됨",
+            error: "날씨를 저장할 수 없습니다",
+        },
+
         loading: "불러오는 중",
         megaphone: {
             title: "확성기",

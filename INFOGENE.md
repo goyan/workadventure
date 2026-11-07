@@ -1043,3 +1043,19 @@ Le choix « Jukebox » reste visible pendant la détection de Spicetify ; il est
 pas, puis s’active sans fermer le menu. Une déconnexion de l’extension désactive à nouveau la création. La description
 traduite existante indique les prérequis. Deux tests DOM reproduisent ces transitions ; le menu français et son activation
 ont aussi été vérifiés dans le navigateur local après rebase sur `infogene`.
+
+## Météo de la carte
+
+Dans « Outils → Éditer la carte → Configurer le salon → Météo », un éditeur de la carte choisit
+Ciel clair, Pluie, Neige ou Orage et sauvegarde. Le réglage `settings.weather` du WAM est validé
+et transmis à tous les joueurs par le protocole natif d’édition ; une carte sans ce réglage reste au ciel clair.
+Les droits limités à une zone personnelle ne permettent pas de modifier la météo commune.
+
+Les particules suivent les coordonnées de la carte, avec un rendu limité à 30 images/s et au champ visible.
+L’orage produit une lueur douce synchronisée sur l’heure serveur, indépendante du choix personnel jour/nuit.
+« Paramètres → Thème → Afficher la météo » masque les effets pour soi et conserve ce choix après rechargement.
+Les effets sont masqués pendant l’édition. Cette première version couvre toute la carte, sans son, accumulation
+de neige ni distinction entre intérieur et extérieur.
+
+Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo, fermer l’éditeur,
+marcher et zoomer ; désactiver les effets dans une seule session et recharger pour vérifier la préférence.
