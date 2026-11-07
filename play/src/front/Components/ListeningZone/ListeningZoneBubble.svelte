@@ -74,7 +74,7 @@
 
 {#if zone}
     <div
-        class="w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto bg-contrast/80 backdrop-blur rounded-lg pointer-events-auto"
+        class="w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto overflow-x-hidden bg-contrast/80 backdrop-blur rounded-lg pointer-events-auto"
         data-testid="listening-zone-bubble"
     >
         <div class="p-4 flex flex-col gap-3">
