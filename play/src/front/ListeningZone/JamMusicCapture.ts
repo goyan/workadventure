@@ -1,5 +1,5 @@
 import { type Readable, writable } from "svelte/store";
-import { getJamMusicPublisher, type JamMusicPublisher } from "./JamMusicStore";
+import { getJamMusicPublisher, onJamMusicPublisherRegistered, type JamMusicPublisher } from "./JamMusicStore";
 
 export type JamMusicCaptureError =
     /** The browser or the user refused the input. */
@@ -24,6 +24,8 @@ export type JamMusicCaptureState =
 interface JamMusicCaptureDependencies {
     getUserMedia: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
     getPublisher: (spaceName: string) => JamMusicPublisher | undefined;
+    /** Tells when the space gets a new publisher (its connection was replaced); returns what stops watching. */
+    onPublisherRegistered?: (spaceName: string, callback: (publisher: JamMusicPublisher) => void) => () => void;
 }
 
 export interface JamMusicCapture {
@@ -48,12 +50,16 @@ function errorReason(error: unknown): JamMusicCaptureError {
     }
 }
 
-export function createJamMusicCapture({ getUserMedia, getPublisher }: JamMusicCaptureDependencies): JamMusicCapture {
+export function createJamMusicCapture({
+    getUserMedia,
+    getPublisher,
+    onPublisherRegistered,
+}: JamMusicCaptureDependencies): JamMusicCapture {
     const state = writable<JamMusicCaptureState>({ status: "idle" });
     // Every start and stop takes a number: what comes back from a slower one is dropped, so an old capture never
     // comes back to life over a newer decision.
     let generation = 0;
-    let current: { stream: MediaStream; publisher: JamMusicPublisher } | undefined;
+    let current: { stream: MediaStream; publisher: JamMusicPublisher; unwatch?: () => void } | undefined;
 
     function stopTracks(stream: MediaStream): void {
         for (const track of stream.getTracks()) {
@@ -67,6 +73,7 @@ export function createJamMusicCapture({ getUserMedia, getPublisher }: JamMusicCa
         if (!running) {
             return;
         }
+        running.unwatch?.();
         stopTracks(running.stream);
         try {
             await running.publisher.publishJamMusic(undefined);
@@ -120,7 +127,23 @@ export function createJamMusicCapture({ getUserMedia, getPublisher }: JamMusicCa
                 return;
             }
 
-            current = { stream, publisher };
+            const running = { stream, publisher, unwatch: undefined as (() => void) | undefined };
+            current = running;
+            // The space reconnects with a new connection after a server restart: the music follows it.
+            running.unwatch = onPublisherRegistered?.(spaceName, (replacement) => {
+                if (current !== running || replacement === running.publisher) {
+                    return;
+                }
+                running.publisher = replacement;
+                replacement.publishJamMusic(stream).catch((error) => {
+                    console.error("Could not publish the Jam music again", error);
+                    if (current === running) {
+                        release()
+                            .then(() => state.set({ status: "error", reason: "unavailable" }))
+                            .catch(console.error);
+                    }
+                });
+            });
             const [track] = stream.getAudioTracks();
             track.addEventListener(
                 "ended",
@@ -167,4 +190,5 @@ export function createJamMusicCapture({ getUserMedia, getPublisher }: JamMusicCa
 export const jamMusicCapture = createJamMusicCapture({
     getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
     getPublisher: getJamMusicPublisher,
+    onPublisherRegistered: onJamMusicPublisherRegistered,
 });

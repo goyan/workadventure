@@ -30,10 +30,16 @@ export interface JamMusicPublisher {
 }
 
 const jamMusicPublishers = new Map<string, JamMusicPublisher>();
+const publisherWatchers = new Set<{ spaceName: string; callback: (publisher: JamMusicPublisher) => void }>();
 
 /** Makes the publisher of a Jam space reachable by its name; returns what takes it away. */
 export function registerJamMusicPublisher(spaceName: string, publisher: JamMusicPublisher): () => void {
     jamMusicPublishers.set(spaceName, publisher);
+    for (const watcher of [...publisherWatchers]) {
+        if (watcher.spaceName === spaceName) {
+            watcher.callback(publisher);
+        }
+    }
     return () => {
         if (jamMusicPublishers.get(spaceName) === publisher) {
             jamMusicPublishers.delete(spaceName);
@@ -43,4 +49,19 @@ export function registerJamMusicPublisher(spaceName: string, publisher: JamMusic
 
 export function getJamMusicPublisher(spaceName: string): JamMusicPublisher | undefined {
     return jamMusicPublishers.get(spaceName);
+}
+
+/**
+ * Tells when a connection registers as the publisher of a Jam space: a space that reconnects after a server restart
+ * gets a new connection, and what the old one carried has to be handed to it. Returns what stops watching.
+ */
+export function onJamMusicPublisherRegistered(
+    spaceName: string,
+    callback: (publisher: JamMusicPublisher) => void,
+): () => void {
+    const watcher = { spaceName, callback };
+    publisherWatchers.add(watcher);
+    return () => {
+        publisherWatchers.delete(watcher);
+    };
 }
