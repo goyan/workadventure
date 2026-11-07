@@ -17,5 +17,5 @@ function createVolumeStore(key: string, defaultVolume: number): Writable<number>
     };
 }
 
-export const footstepVolumeStore = createVolumeStore("footstepVolume", 1);
-export const environmentVolumeStore = createVolumeStore("environmentVolume", 0.05);
+export const footstepVolumeStore = createVolumeStore("footstepVolume", 0.5);
+export const environmentVolumeStore = createVolumeStore("environmentVolume", 0.5);

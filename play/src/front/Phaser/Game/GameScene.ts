@@ -33,6 +33,7 @@ import {
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
 import { asError } from "catch-unknown";
+import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { soundPlayingStore } from "@wa/front/Stores/SoundPlayingStore";
@@ -430,6 +431,7 @@ export class GameScene extends DirtyScene {
     private doorAnimator: DoorAnimator | undefined;
     private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
+    private skateboardSounds: SkateboardSounds | undefined;
     private entitiesCollectionsManager!: EntitiesCollectionsManager;
     private pathfindingManager!: PathfindingManager;
     private activatablesManager!: ActivatablesManager;
@@ -591,6 +593,7 @@ export class GameScene extends DirtyScene {
         this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
         for (const { key, url } of [
             ...FOOTSTEP_SOUNDS,
+            ...SKATEBOARD_SOUNDS,
             ...WEATHER_SOUNDS.filter((sound) => sound.key === "audio-weather-thunder"),
         ]) {
             this.load.audio(key, url);
@@ -1458,6 +1461,7 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
         this.weatherManager?.destroy();
+        this.skateboardSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
         this._knockManager = undefined;
@@ -1514,7 +1518,7 @@ export class GameScene extends DirtyScene {
         if (changed) overheardLoudnessStore.set(loudness);
     }
 
-    /** Quiet footsteps of the players walking nearby, the local player included, sounding like the floor they walk on. */
+    /** Only the local player hears their footsteps and rolling skateboard. */
     private updateFootsteps(): void {
         if (!this.footstepSounds) {
             const surfaces = new FootstepSurfaces(
@@ -1556,17 +1560,32 @@ export class GameScene extends DirtyScene {
             y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
             swimming: this.CurrentPlayer.isSwimming() || this.CurrentPlayer.isInWater(),
         };
-        const characters = this.CurrentPlayer.isRidingVehicle() ? [] : [listener];
-        for (const player of this.MapPlayersByKey.values()) {
-            if (player.isRidingVehicle()) continue;
-            characters.push({
-                id: String(player.userId),
-                x: player.x,
-                y: player.y + CHARACTER_BODY_OFFSET_Y,
-                swimming: player.isInWater(),
-            });
-        }
+        const characters = [
+            ...(this.CurrentPlayer.isRidingVehicle() ? [] : [listener]),
+            ...Array.from(this.MapPlayersByKey.values())
+                .filter((player) => !player.isRidingVehicle())
+                .map((player) => ({
+                    id: String(player.userId),
+                    x: player.x,
+                    y: player.y + CHARACTER_BODY_OFFSET_Y,
+                    swimming: player.isInWater(),
+                })),
+        ];
         this.footstepSounds.update(characters, listener);
+        this.skateboardSounds ??= new SkateboardSounds(this.sound);
+        this.skateboardSounds.update(
+            {
+                x: listener.x,
+                y: listener.y,
+                riding: this.CurrentPlayer.isRidingVehicle(),
+                moving: this.CurrentPlayer.isVehicleMoving(),
+                indoor:
+                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition(listener)
+                        .length ?? 0) > 0,
+            },
+            this.mapEditorModeManager?.isActive() ?? false,
+            this.currentTick,
+        );
     }
 
     /** The doors of the map layer open when a player, a companion or a duck comes near. */
@@ -2724,6 +2743,7 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);
                 this.weatherManager?.destroy();
+                this.skateboardSounds?.destroy();
                 this.weatherManager = new WeatherManager(this);
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();

@@ -95,7 +95,13 @@
                 stroke={selected === index ? "#a5fff0" : "#496079"}
             />
         {/each}
-        <circle cx="150" cy="150" r="49" fill="#132033" stroke="#9ee7da" />
+        <circle
+            cx="150"
+            cy="150"
+            r="49"
+            fill={profileAction && selected === actions.length ? "#256c72" : "#132033"}
+            stroke={profileAction && selected === actions.length ? "#a5fff0" : "#9ee7da"}
+        />
     </svg>
     {#snippet centerContent()}
         {#if $currentPlayerWokaStore}<img src={$currentPlayerWokaStore} alt="" />{/if}
@@ -107,6 +113,8 @@
             bind:this={buttons[actions.length]}
             aria-label={profileAction.actionName}
             data-testid="avatar-profile"
+            onpointerenter={() => (selected = actions.length)}
+            onfocus={() => (selected = actions.length)}
             onclick={profileAction.callback}
         >
             {@render centerContent()}

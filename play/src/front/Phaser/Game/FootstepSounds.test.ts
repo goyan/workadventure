@@ -37,7 +37,7 @@ describe("FootstepSounds", () => {
         expect(playSound).toHaveBeenCalledTimes(4);
         for (const [, { volume }] of playSound.mock.calls) {
             expect(volume).toBeGreaterThan(0);
-            expect(volume).toBeLessThanOrEqual(FOOTSTEP_MAX_VOLUME);
+            expect(volume).toBeLessThanOrEqual(FOOTSTEP_MAX_VOLUME * 0.05);
         }
     });
 

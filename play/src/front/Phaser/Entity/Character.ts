@@ -599,6 +599,10 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.ridingVehicle;
     }
 
+    public isVehicleMoving(): boolean {
+        return this.ridingVehicle && this.vehicleMoving;
+    }
+
     public setVehicle(value: unknown): void {
         const state = readVehicleState(value);
         if (

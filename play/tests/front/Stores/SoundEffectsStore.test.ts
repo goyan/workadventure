@@ -8,10 +8,10 @@ beforeEach(() => {
 });
 
 describe("personal sound effect volumes", () => {
-    it("starts with a very quiet, audible environment and preserves explicit saved volumes", async () => {
+    it("starts both volumes at 50% and preserves explicit saved volumes", async () => {
         const first = await import("../../../src/front/Stores/SoundEffectsStore");
-        expect(get(first.environmentVolumeStore)).toBe(0.05);
-        expect(get(first.footstepVolumeStore)).toBe(1);
+        expect(get(first.environmentVolumeStore)).toBe(0.5);
+        expect(get(first.footstepVolumeStore)).toBe(0.5);
         first.environmentVolumeStore.set(0.8);
         vi.resetModules();
         const restored = await import("../../../src/front/Stores/SoundEffectsStore");
@@ -34,10 +34,10 @@ describe("personal sound effect volumes", () => {
         const { footstepVolumeStore, environmentVolumeStore } =
             await import("../../../src/front/Stores/SoundEffectsStore");
         expect(get(footstepVolumeStore)).toBe(0);
-        expect(get(environmentVolumeStore)).toBe(0.05);
+        expect(get(environmentVolumeStore)).toBe(0.5);
         footstepVolumeStore.set(3);
         environmentVolumeStore.set(Number.NaN);
         expect(get(footstepVolumeStore)).toBe(1);
-        expect(get(environmentVolumeStore)).toBe(0.05);
+        expect(get(environmentVolumeStore)).toBe(0.5);
     });
 });

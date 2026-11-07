@@ -315,7 +315,11 @@
         {:else if error}
             <div class="text-center text-red-600 mb-4">
                 <p>{error}</p>
-                <button class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" onclick={loadWokaData}>
+                <button
+                    type="button"
+                    class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    onclick={loadWokaData}
+                >
                     Retry
                 </button>
             </div>
@@ -358,6 +362,7 @@
                         {#each bodyPartOrder as bodyPart (bodyPart)}
                             {@const BodyPartIcon = getBodyPartIcon(bodyPart)}
                             <button
+                                type="button"
                                 class="border-b-2 {selectedBodyPart === bodyPart && !showBath && !showVehicle
                                     ? 'text-white border-white'
                                     : 'text-white/50 border-white/10'}"
@@ -378,6 +383,7 @@
                             </button>
                         {/each}
                         <button
+                            type="button"
                             class="border-b-2 {showBath ? 'text-white border-white' : 'text-white/50 border-white/10'}"
                             style="border-bottom-style: solid;"
                             onclick={() => {
@@ -390,6 +396,7 @@
                             {$LL.woka.customWoka.bath()}
                         </button>
                         <button
+                            type="button"
                             class="border-b-2 {showVehicle
                                 ? 'text-white border-white'
                                 : 'text-white/50 border-white/10'}"
@@ -412,6 +419,7 @@
                             <div class="grid grid-cols-2 gap-3 py-4" role="group" aria-label={$LL.woka.vehicle.title()}>
                                 {#each Object.values(Vehicle) as vehicle (vehicle)}
                                     <button
+                                        type="button"
                                         class="relative rounded-lg border-2 border-solid p-3 flex flex-col items-center gap-2 min-w-0 {selectedVehicle ===
                                         vehicle
                                             ? 'bg-white/20 border-white'
@@ -481,7 +489,11 @@
                                         data-testid="woka-swimwear-color"
                                     />
                                 </label>
-                                <button class="text-sm underline" onclick={() => (selectedSwimwearColor = undefined)}>
+                                <button
+                                    type="button"
+                                    class="text-sm underline"
+                                    onclick={() => (selectedSwimwearColor = undefined)}
+                                >
                                     {$LL.woka.customWoka.defaultColor()}
                                 </button>
                             </div>
@@ -492,6 +504,7 @@
                             >
                                 {#each swimwearStyles as style (style)}
                                     <button
+                                        type="button"
                                         class="rounded border border-solid p-2 flex flex-col items-center gap-2 {selectedSwimwear ===
                                         style
                                             ? 'bg-white/30 border-white'
@@ -529,6 +542,7 @@
                                     >
                                         {#each getAvailableTextures(collectionIndex, selectedBodyPart) as texture (texture.id)}
                                             <button
+                                                type="button"
                                                 class="rounded border border-solid box-border p-0 h-fit {selectedTextures[
                                                     selectedBodyPart
                                                 ] === texture.id
@@ -557,10 +571,15 @@
                 class="w-full p-3 flex flex-row items-center gap-2 border-t-2 border-t-white/10"
                 style="border-top-style: solid;"
             >
-                <button class="w-full px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded" onclick={back}>
+                <button
+                    type="button"
+                    class="w-full px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded"
+                    onclick={back}
+                >
                     {$LL.woka.customWoka.navigation.backToDefaultWoka()}
                 </button>
                 <button
+                    type="button"
                     class="selectCharacterSceneFormSubmit w-full px-4 py-3 bg-secondary text-white rounded hover:bg-secondary-600"
                     onclick={handlerSaveAndContinue}
                 >

@@ -10,8 +10,10 @@ const MAX_DETUNE = 120;
 const MIN_VOLUME_RATIO = 0.7;
 /** A step on the side is heard on that side, never fully in one ear. */
 const MAX_PAN = 0.6;
-/** Footsteps stay barely audible: one right next to the player plays at this volume, and fades with the distance. */
-export const FOOTSTEP_MAX_VOLUME = 0.015;
+/** Maximum gain at 100%; the personal volume starts at 50% and distance further softens steps. */
+export const FOOTSTEP_MAX_VOLUME = 0.3;
+/** Keep nearby players audible at a very low level, independently of personal steps. */
+const OTHER_PLAYER_VOLUME_RATIO = 0.05;
 /** Footsteps farther than this from the local player are silent (8 tiles). */
 export const FOOTSTEP_HEARING_DISTANCE = 8 * 32;
 /** A jump larger than this between two frames is a teleport or a map change, not walking: no burst of steps. */
@@ -121,7 +123,12 @@ export class FootstepSounds {
         const loudness = MIN_VOLUME_RATIO + (1 - MIN_VOLUME_RATIO) * this.random();
         const surface = character.swimming ? "water" : this.getSurfaceAt(character.x, character.y);
         this.playSound(footstepSoundKey(surface, this.nextVariant()), {
-            volume: FOOTSTEP_MAX_VOLUME * closeness * closeness * loudness,
+            volume:
+                FOOTSTEP_MAX_VOLUME *
+                (character.id === listener.id ? 1 : OTHER_PLAYER_VOLUME_RATIO) *
+                closeness *
+                closeness *
+                loudness,
             detune: (this.random() * 2 - 1) * MAX_DETUNE,
             pan: Math.max(-1, Math.min(1, (character.x - listener.x) / FOOTSTEP_HEARING_DISTANCE)) * MAX_PAN,
         });
