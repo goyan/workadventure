@@ -167,11 +167,7 @@ export class EntitiesManager extends EventEmitter {
         this.bindEntityEventHandlers(entity);
 
         // Off the grid or wandering, the object blocks with rectangles instead (EntityHitbox).
-        const colGrid = getTileCollisionGrid(
-            entity,
-            entity.getPrefab(),
-            this.gameMapFrontWrapper.getTileDimensions().width,
-        );
+        const colGrid = this.getTileCollisionGrid(entity);
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", colGrid, withGridUpdate);
         }
@@ -199,6 +195,15 @@ export class EntitiesManager extends EventEmitter {
         return entity;
     }
 
+    /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */
+    private getTileCollisionGrid(entity: Entity): number[][] | undefined {
+        const prefab = entity.getPrefab();
+        if (!prefab.collisionGrid?.some((row) => row.includes(1))) {
+            return undefined;
+        }
+        return getTileCollisionGrid(entity, prefab, this.gameMapFrontWrapper.getTileDimensions().width);
+    }
+
     public deleteEntity(id: string): boolean {
         this.erasingEntityIds.delete(id);
         const entity = this.entities.get(id);
@@ -214,11 +219,7 @@ export class EntitiesManager extends EventEmitter {
             }
         }
 
-        const colGrid = getTileCollisionGrid(
-            entity,
-            entity.getPrefab(),
-            this.gameMapFrontWrapper.getTileDimensions().width,
-        );
+        const colGrid = this.getTileCollisionGrid(entity);
         if (colGrid) {
             this.gameMapFrontWrapper.modifyToCollisionsLayer(entity.x, entity.y, "0", reverseCollisionGrid(colGrid));
         }
