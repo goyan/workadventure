@@ -18,7 +18,7 @@
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
-    import { NightMode, nightModeStore } from "../../Stores/NightStore";
+    import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -50,6 +50,7 @@
     import SettingsSection from "./SettingsSection.svelte";
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
+    import NightSettings from "./NightSettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -340,17 +341,28 @@
         />
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
-            <SegmentedControl
-                ariaLabel={$LL.menu.settings.night.label()}
-                bind:value={$nightModeStore}
-                dataTestId="night-mode-control"
-                options={[
-                    { value: NightMode.Server, label: $LL.menu.settings.night.server() },
-                    { value: NightMode.Computer, label: $LL.menu.settings.night.computer() },
-                    { value: NightMode.Disabled, label: $LL.menu.settings.night.disabled() },
-                ]}
-            />
+            <NightSettings />
         </div>
+    </SettingsSection>
+    <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">
+        <RangeSlider
+            id="footstep-volume"
+            label={$LL.menu.settings.soundEffects.footsteps()}
+            min={0}
+            max={1}
+            step={0.01}
+            bind:value={$footstepVolumeStore}
+            valueFormatter={(value) => String(Math.round(value * 100))}
+        />
+        <RangeSlider
+            id="environment-volume"
+            label={$LL.menu.settings.soundEffects.environment()}
+            min={0}
+            max={1}
+            step={0.01}
+            bind:value={$environmentVolumeStore}
+            valueFormatter={(value) => String(Math.round(value * 100))}
+        />
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.font.label()} dataTestId="font-settings">
         <FontSettings />

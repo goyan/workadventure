@@ -246,6 +246,7 @@ import { audioPlaybackStore } from "../../Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "../../Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "../Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "../../Utils/PathStop";
+import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -256,6 +257,7 @@ import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapL
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
+import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
@@ -584,7 +586,7 @@ export class GameScene extends DirtyScene {
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
         this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
-        for (const { key, url } of FOOTSTEP_SOUNDS) {
+        for (const { key, url } of [...FOOTSTEP_SOUNDS, ...WEATHER_SOUNDS]) {
             this.load.audio(key, url);
         }
         this.load.audio("meeting-in", "/resources/objects/meeting-in.wav");
@@ -1529,6 +1531,8 @@ export class GameScene extends DirtyScene {
             );
             this.footstepSounds = new FootstepSounds(
                 (key, { volume, detune, pan }) => {
+                    volume *= get(footstepVolumeStore);
+                    if (volume === 0) return;
                     const sound = this.sound.add(key, { volume, detune });
                     if (sound instanceof Phaser.Sound.WebAudioSound) sound.setPan(pan);
                     sound.once(Phaser.Sound.Events.COMPLETE, () => sound.destroy());
@@ -1565,7 +1569,8 @@ export class GameScene extends DirtyScene {
             () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
             (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
             (key, volume) => {
-                this.sound.play(key, { volume });
+                volume *= get(environmentVolumeStore);
+                if (volume > 0) this.sound.play(key, { volume });
             },
             () => this.markDirty(),
             () => this.getHearingZones(),

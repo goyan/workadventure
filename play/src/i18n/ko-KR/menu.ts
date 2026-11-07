@@ -27,6 +27,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "도움말 및 팁",
     },
     settings: {
+        soundEffects: {
+            title: "효과음",
+            footsteps: "발소리 볼륨",
+            environment: "환경음 볼륨 (날씨, 문, 지도 오디오)",
+        },
         weatherEffects: "날씨 효과 표시 (비, 눈, 뇌우 빛)",
         night: {
             label: "낮과 밤 주기",

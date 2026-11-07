@@ -8,6 +8,8 @@
     import Select from "../../Input/Select.svelte";
     import ButtonState from "../../Input/ButtonState.svelte";
 
+    let { showTitle = true }: { showTitle?: boolean } = $props();
+
     let weather = $state<string>(
         gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
     );
@@ -40,7 +42,9 @@
     }
 </script>
 
-<h3>{$LL.mapEditor.settings.weather.title()}</h3>
+{#if showTitle}
+    <h3>{$LL.mapEditor.settings.weather.title()}</h3>
+{/if}
 <p>{$LL.mapEditor.settings.weather.description()}</p>
 <div class="flex flex-col gap-4">
     <Select

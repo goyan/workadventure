@@ -5,13 +5,16 @@ import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import { stormGlow, weatherParticles } from "./WeatherFrame";
+import { WeatherSounds } from "./WeatherSounds";
 
 export class WeatherManager {
     private readonly graphics: Phaser.GameObjects.Graphics;
     private lastFrameAt = -Infinity;
     private visible = false;
+    private readonly sounds: WeatherSounds;
 
     constructor(private readonly scene: GameScene) {
+        this.sounds = new WeatherSounds(scene.sound);
         this.graphics = scene.add
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
@@ -20,6 +23,7 @@ export class WeatherManager {
 
     public update(now: number, serverDate: Date | undefined): void {
         const weather = this.scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
+        this.sounds.update(weather, serverDate, get(mapEditorModeStore));
         const enabled = get(weatherEffectsEnabledStore) && !get(mapEditorModeStore);
         if (!enabled || weather === WeatherType.Clear) {
             if (this.visible) {
@@ -64,6 +68,7 @@ export class WeatherManager {
     }
 
     public destroy(): void {
+        this.sounds.destroy();
         this.graphics.destroy();
     }
 }

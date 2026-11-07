@@ -3,6 +3,9 @@ import { flushSync, mount, unmount } from "svelte";
 import { personalAreaDataStore } from "../../../src/front/Stores/PersonalDeskStore";
 import MapSubMenuContent from "../../../src/front/Components/ActionBar/MenuIcons/MapSubMenuContent.svelte";
 import UnclaimPersonalDeskModal from "../../../src/front/Components/ActionBar/MenuIcons/UnclaimPersonalDeskModal.svelte";
+import WeatherSettingsModal from "../../../src/front/Components/Modal/WeatherSettingsModal.svelte";
+import NightSettingsModal from "../../../src/front/Components/Modal/NightSettingsModal.svelte";
+import { mapEditorActivated, mapManagerActivated } from "../../../src/front/Stores/MenuStore";
 
 const mocks = vi.hoisted(() => ({
     open: vi.fn(),
@@ -15,12 +18,13 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@wa-modals", () => ({ modals: { stack: [], open: mocks.open, close: mocks.close } }));
 vi.mock("../../../src/front/Connection/LocalUserStore", () => ({
-    localUserStore: { getLocalUser: () => ({ uuid: mocks.uuid }) },
+    localUserStore: { getLocalUser: () => ({ uuid: mocks.uuid }), getDisableNight: () => false },
 }));
 vi.mock("../../../src/front/Phaser/Game/GameManager", () => ({
     gameManager: { getCurrentGameScene: () => mocks.scene },
 }));
 vi.mock("../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager", () => ({ EditorToolName: {} }));
+vi.mock("../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings: vi.fn() }));
 vi.mock("../../../src/front/Administration/AnalyticsClient", () => ({ analyticsClient: { trackAdminEvent: vi.fn() } }));
 vi.mock("../../../src/front/Stores/ErrorStore", () => ({ warningMessageStore: { addWarningMessage: mocks.warning } }));
 vi.mock("../../../src/front/Components/ActionBar/MenuIcons/AdditionalMenuItems.svelte", async () => ({
@@ -43,7 +47,17 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
         },
         cancel: () => "Cancel",
     };
-    return { LL: readable({ actionbar: labels, refreshPrompt: { whatsNew: () => "News" } }) };
+    return {
+        LL: readable({
+            actionbar: labels,
+            refreshPrompt: { whatsNew: () => "News" },
+            mapEditor: {
+                settings: { weather: { title: () => "Weather" } },
+                sideBar: { exploreTheRoom: () => "Explore" },
+            },
+            menu: { settings: { night: { label: () => "Day/night cycle" } } },
+        }),
+    };
 });
 vi.mock("../../../src/front/Stores/MenuStore", async () => {
     const { writable } = await import("svelte/store");
@@ -51,6 +65,7 @@ vi.mock("../../../src/front/Stores/MenuStore", async () => {
         globalMessageVisibleStore: writable(false),
         mapManagerActivated: writable(false),
         mapEditorMenuVisibleStore: writable(false),
+        mapEditorActivated: writable(false),
         openedMenuStore: { close: vi.fn() },
         helpTextDisabledStore: writable(true),
     };
@@ -74,6 +89,8 @@ function openConfirmation(): () => Promise<void> {
 }
 beforeEach(() => {
     vi.clearAllMocks();
+    mapEditorActivated.set(false);
+    mapManagerActivated.set(false);
     mocks.uuid = "human";
     mocks.desk = {
         id: "desk-one",
@@ -113,6 +130,26 @@ afterEach(async () => {
     vi.restoreAllMocks();
 });
 describe("personal desk release confirmation", () => {
+    it("opens the personal day/night choice directly from Tools", () => {
+        flushSync(() => {
+            component = mount(MapSubMenuContent, { target });
+        });
+        click("Day/night cycle");
+        expect(mocks.open).toHaveBeenCalledWith(NightSettingsModal);
+        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
+    });
+    it("shows the direct common-weather action only with full map editing rights", () => {
+        mapManagerActivated.set(true);
+        flushSync(() => {
+            component = mount(MapSubMenuContent, { target });
+        });
+        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
+        flushSync(() => mapEditorActivated.set(true));
+        click("Weather");
+        expect(mocks.open).toHaveBeenCalledWith(WeatherSettingsModal);
+        flushSync(() => mapEditorActivated.set(false));
+        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
+    });
     it("opens without releasing and confirms the current owned desk once", async () => {
         const confirm = openConfirmation();
         expect(mocks.release).not.toHaveBeenCalled();

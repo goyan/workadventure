@@ -27,6 +27,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Pomoc a pokiwki",
     },
     settings: {
+        soundEffects: {
+            title: "Zwukowe efekty",
+            footsteps: "Głośnosć kšacow",
+            environment: "Głośnosć wokolnosći (wjedro, źurja a zwuk kórty)",
+        },
         weatherEffects: "Wjedrowe efekty pokazaś",
         night: {
             label: "Cyklus dnja a nocy",

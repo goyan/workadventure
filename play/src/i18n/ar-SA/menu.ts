@@ -27,6 +27,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "المساعدة والنصائح", // Help & Tips
     },
     settings: {
+        soundEffects: {
+            title: "المؤثرات الصوتية",
+            footsteps: "مستوى صوت الخطوات",
+            environment: "مستوى صوت البيئة (الطقس والأبواب وأصوات الخريطة)",
+        },
         weatherEffects: "إظهار تأثيرات الطقس (المطر والثلج وضوء العاصفة)",
         night: {
             label: "دورة النهار والليل",

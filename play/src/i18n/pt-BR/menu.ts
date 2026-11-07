@@ -26,6 +26,11 @@ const menu: BaseTranslation = {
         helpAndTips: "Ajuda e dicas",
     },
     settings: {
+        soundEffects: {
+            title: "Efeitos sonoros",
+            footsteps: "Volume dos passos",
+            environment: "Volume do ambiente (clima, portas e áudio do mapa)",
+        },
         weatherEffects: "Mostrar efeitos do clima (chuva, neve e luz da tempestade)",
         night: {
             label: "Ciclo dia/noite",
