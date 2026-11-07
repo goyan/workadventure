@@ -49,6 +49,7 @@
     import type { WorkAdventureComponent } from "../../types/component";
     import { LL } from "../../i18n/i18n-svelte";
     import { sidePanelWidthStore } from "../Stores/SidePanelStore";
+    import { jamAudioSession } from "../ListeningZone/GameJamAudioSession";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
@@ -88,6 +89,7 @@
     import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
     import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
     import DraggableJamPanel from "./ListeningZone/DraggableJamPanel.svelte";
+    import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
@@ -468,6 +470,8 @@
                 {/if}
                 <RaisedHandsDock />
             </div>
+            <!-- The music of the Jam listened to plays here, whatever the panel shows: closing it must not mute it. -->
+            <JamAudioPlayback listeningSpaceName={jamAudioSession.listeningSpaceName} />
             <!-- One Jam dock survives side-panel transitions and stays outside their scrolling container. -->
             <DraggableJamPanel anchorTop={jamPanelAnchorTop} onLayout={(layout) => (jamPanelLayout = layout)}>
                 {#snippet children(onDragStart, onDragKeydown)}

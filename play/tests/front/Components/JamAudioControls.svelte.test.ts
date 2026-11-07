@@ -105,22 +105,27 @@ describe("JamAudioControls", () => {
             expect(q("jam-audio-share")).toBeNull();
         });
 
-        it("shows the volume, the mute and the player only while listening to this Jam", async () => {
+        it("shows the volume and the mute only while listening to this Jam", async () => {
             await render(false);
             expect(q("jam-audio-volume")).toBeNull();
-            expect(q("jam-audio-player")).toBeNull();
             listeningSpaceName.set(spaceName);
             flushSync();
             expect(q("jam-audio-volume")).not.toBeNull();
-            expect(q("jam-audio-player")).not.toBeNull();
             expect(q("jam-audio-listen")).toBeNull();
+        });
+
+        it("does not own the player: the music must outlive the card, the panel being closed or minimised", async () => {
+            await render(false);
+            listeningSpaceName.set(spaceName);
+            flushSync();
+            expect(q("jam-audio-player")).toBeNull();
         });
 
         it("ignores the listening to another Jam", async () => {
             await render(false);
             listeningSpaceName.set("jam:other");
             flushSync();
-            expect(q("jam-audio-player")).toBeNull();
+            expect(q("jam-audio-volume")).toBeNull();
             expect(q("jam-audio-listen")).not.toBeNull();
         });
 
