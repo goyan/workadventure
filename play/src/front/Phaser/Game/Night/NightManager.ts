@@ -2,7 +2,7 @@ import type { Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { NightMode, nightModeStore } from "../../../Stores/NightStore";
+import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
@@ -62,6 +62,7 @@ export class NightManager {
         if (this.lastClockAt === undefined || now - this.lastClockAt >= CLOCK_INTERVAL_MS) {
             this.lastClockAt = now;
             const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
+            nightDateStore.set(date);
             const minutes =
                 this.forcedMinutes ??
                 (date
@@ -121,6 +122,7 @@ export class NightManager {
 
     public destroy(): void {
         this.clock.destroy();
+        nightDateStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
         this.overlay.destroy();

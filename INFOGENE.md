@@ -636,6 +636,9 @@ le voile reste masqué. Les requêtes et écouteurs sont supprimés à la fermet
 Recette locale : deux clients avec des fuseaux et horloges de poste différents gardent la même heure serveur et le même
 cycle. Un client passant à l’heure de son ordinateur suit son propre fuseau sans changer le rendu de l’autre joueur.
 Les trois choix prennent effet immédiatement et restent mémorisés après rechargement ; désactiver masque le voile.
+Une horloge HH:mm est affichée près des commandes en bas à droite et suit la même référence : heure de Paris pour
+le serveur, fuseau du poste pour le choix ordinateur. Elle reste visible lorsque le cycle est désactivé (heure serveur).
+La maison est toujours visible ; elle est grisée sans zone personnelle attribuée et téléporte au centre de sa zone lorsqu’elle est disponible.
 La recette visuelle en beta reste à confirmer après fusion.
 
 Rendu : `RenderTexture` à la taille de l'écran (fixe, compensée pour le zoom), remplie de la teinte puis percée par
@@ -1020,3 +1023,23 @@ explicitement et mémorisent ce choix dans `_avatarSwimwear`. Le profil ne propo
 Le Jukebox demande aussi un nouvel instantané Spotify lors de l’ouverture de sa file dans le client desktop.
 L’extension Spicetify relit le contexte après `songchange` et 600 ms après ; les métadonnées absentes sont réessayées,
 et les prochains titres restent affichables avant que Spotify leur ait attribué un identifiant de file.
+
+## Position et conversation après reconnexion
+
+Le client mémorise la dernière position pour la carte et le compte, pendant les déplacements et à la fermeture de la page.
+Un rafraîchissement revient à cette position si elle reste dans la carte et accessible au compte. Le bureau personnel
+ne sert plus de point de connexion automatique ; la maison en bas à droite permet de s’y téléporter explicitement.
+Les libellés utilisent les traductions existantes de l’action « Aller à mon bureau ».
+
+La disparition temporaire des variables de zone pendant une reconnexion ne quitte plus le Jam. Les salons restent
+sauvegardés côté serveur avec leur délai de reconnexion existant. La conversation de proximité se reforme à la
+position restaurée ; les préférences micro et caméra restent celles mémorisées par le client.
+
+Recette locale effectuée avec deux navigateurs : rechargement d’un participant puis redémarrage du back, mêmes
+positions et mêmes participants retrouvés, micro coupé et caméra activée conservés. Bouton maison et coupure des
+variables du Jam vérifiés avec des données de test. Écoute Spotify réelle, appels externes et partage d’écran non
+vérifiés ; recette en beta à confirmer après fusion.
+Le choix « Jukebox » reste visible pendant la détection de Spicetify ; il est désactivé tant que l’extension ne répond
+pas, puis s’active sans fermer le menu. Une déconnexion de l’extension désactive à nouveau la création. La description
+traduite existante indique les prérequis. Deux tests DOM reproduisent ces transitions ; le menu français et son activation
+ont aussi été vérifiés dans le navigateur local après rebase sur `infogene`.

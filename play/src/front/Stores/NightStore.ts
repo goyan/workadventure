@@ -31,3 +31,6 @@ function createNightModeStore(): Writable<NightMode> {
 }
 
 export const nightModeStore = createNightModeStore();
+
+/** Current clock shown by the map, updated by the existing night-mode tick. */
+export const nightDateStore = writable<Date | undefined>(undefined);

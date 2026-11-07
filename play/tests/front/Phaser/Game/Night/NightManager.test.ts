@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockDeep, mockFn } from "vitest-mock-extended";
-import { writable } from "svelte/store";
+import { get, writable } from "svelte/store";
 import type { RemotePlayer } from "../../../../../src/front/Phaser/Entity/RemotePlayer";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
@@ -41,7 +41,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightHalos", () => ({
         }
     },
 }));
-const { NightMode, nightModeStore } = await import("../../../../../src/front/Stores/NightStore");
+const { NightMode, nightModeStore, nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");
 
 let manager: InstanceType<typeof NightManager> | undefined;
@@ -81,15 +81,21 @@ describe("personal night clock choice", () => {
         await vi.advanceTimersByTimeAsync(0);
         manager.update(0);
         expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+        expect(get(nightDateStore)?.getTime()).toBe(serverNow);
         nightModeStore.set(NightMode.Computer);
         manager.update(1);
         expect(hide).toHaveBeenCalledTimes(1);
+        expect(get(nightDateStore)?.getTime()).toBe(Date.now());
         nightModeStore.set(NightMode.Server);
         manager.update(2);
         expect(draw).toHaveBeenCalledTimes(2);
         nightModeStore.set(NightMode.Disabled);
         manager.update(3);
         expect(hide).toHaveBeenCalledTimes(2);
+        expect(get(nightDateStore)?.getTime()).toBe(serverNow);
+        manager.destroy();
+        manager = undefined;
+        expect(get(nightDateStore)).toBeUndefined();
     });
 
     it("uses computer night in its own time zone while the server sees day", async () => {

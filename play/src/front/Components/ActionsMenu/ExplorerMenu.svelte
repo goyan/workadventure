@@ -2,12 +2,14 @@
     import { onDestroy } from "svelte";
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+    import { personalAreaDataStore } from "../../Stores/PersonalDeskStore";
     import { cameraDetachedStore } from "../../Stores/CameraStore";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { BUTTON_ZOOM_FACTOR_PER_SECOND, BUTTON_ZOOM_STEP_FACTOR } from "../../Phaser/Game/CameraZoomUtils";
     import LL from "../../../i18n/i18n-svelte";
-    import { IconFocusCentered, IconMapSearch, IconMinus, IconPlus } from "@wa-icons";
+    import WorldClock from "./WorldClock.svelte";
+    import { IconFocusCentered, IconHome, IconMapSearch, IconMinus, IconPlus } from "@wa-icons";
 
     interface Props {
         mapEditorRightOffset?: number;
@@ -157,6 +159,24 @@
                 </div>
             </div>
         </div>
+        <button
+            type="button"
+            aria-label={$LL.actionbar.personalDesk.label()}
+            data-testid="teleport-to-personal-desk"
+            disabled={!$personalAreaDataStore}
+            title={$personalAreaDataStore
+                ? $LL.actionbar.personalDesk.label()
+                : $LL.actionbar.personalDesk.errorNotFound()}
+            class="group flex justify-center items-center p-1 rounded hover:bg-white/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            onclick={() => gameManager.getCurrentGameScene().teleportToPersonalDesk()}
+        >
+            <IconHome />
+            <div
+                class="-right-60 opacity-0 group-hover:opacity-90 group-hover:right-11 absolute bg-contrast backdrop-blur text-sm px-2 py-1 rounded whitespace-nowrap transition-all text-white pointer-events-none select-none"
+            >
+                {$LL.actionbar.personalDesk.label()}
+            </div>
+        </button>
         {#if !$mapEditorModeStore && !$cameraDetachedStore}
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -189,3 +209,5 @@
         {/if}
     </div>
 </div>
+
+<WorldClock {mapEditorRightOffset} />
