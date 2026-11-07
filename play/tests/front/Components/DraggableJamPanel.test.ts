@@ -3,6 +3,11 @@ import { flushSync, mount, unmount } from "svelte";
 import { writable } from "svelte/store";
 import DraggableJamPanelContent from "./DraggableJamPanelContent.svelte";
 
+vi.mock("../../../src/i18n/i18n-svelte", async () => {
+    const { readable } = await import("svelte/store");
+    return { LL: readable({ spotify: { listeningZone: { resetPosition: () => "Reset position" } } }) };
+});
+
 const sidePanelOpen = writable(false);
 const onAction = vi.fn();
 const onLayout = vi.fn<(layout: { height: number; moved: boolean }) => void>();
@@ -145,6 +150,24 @@ describe("DraggableJamPanel", () => {
         flushSync(() => sidePanelOpen.set(true));
         expect(panel.style.top).toBe("100px");
         expect(panel.style.left).toBe("");
+    });
+
+    it("resets to the current anchor and stops an active drag", () => {
+        expect(target.querySelector('[data-testid="reset-jam-position"]')).toBeNull();
+        pointer(handle, "pointerdown", { clientX: 500, clientY: 20 });
+        pointer(window, "pointermove", { clientX: 400, clientY: 120 });
+        flushSync(() => sidePanelOpen.set(true));
+        const reset = target.querySelector<HTMLButtonElement>('[data-testid="reset-jam-position"]');
+        if (!reset) throw new Error("Missing reset action");
+        flushSync(() => reset.click());
+        expect(panel.style.left).toBe("");
+        expect(panel.style.top).toBe("100px");
+        pointer(window, "pointermove", { clientX: 200, clientY: 200 });
+        expect(panel.style.left).toBe("");
+        expect(target.querySelector('[data-testid="reset-jam-position"]')).toBeNull();
+        expect(onLayout).toHaveBeenLastCalledWith({ height: 200, moved: false });
+        flushSync(() => sidePanelOpen.set(false));
+        expect(panel.style.top).toBe("0px");
     });
 
     it("reclamps after viewport resize and content growth", () => {

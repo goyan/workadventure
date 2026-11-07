@@ -1094,3 +1094,12 @@ Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo d
 marcher et zoomer ; désactiver les effets dans une seule session et recharger pour vérifier la préférence.
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
 l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
+
+
+### Suite météo et raccourcis (PR 136)
+
+- Outils → Météo → Automatique : ciel clair, pluie, orage, neige, changement toutes les 30 minutes sur l’heure serveur. Les choix fixes restent disponibles. Le cycle conserve sa phase après reconnexion.
+- L’horloge reste fixe en haut à droite, à droite de la position initiale du bouton Jam. Après déplacement, le bouton Réinitialiser la position replace le panneau sous le profil.
+- Maison : téléportation au bureau possédé sur la carte. Sans bureau, liste des zones personnelles libres et réclamables : Aller fait marcher jusqu’à la zone, puis la confirmation existante permet de la réclamer. Connexion, attribution dynamique et tags restent requis. Aucun bureau n’est attribué automatiquement.
+- Double-clic sur la carte : animation de sprint et fumée pendant le trajet, fin des effets à l’arrêt ; aucun effet de course pendant la nage.
+- Ambiance à 5 % par défaut, volume des pas séparé ; préférences déjà enregistrées conservées. rain.mp3, thunder.mp3, snow.mp3 et sunny.mp3 fournis par le propriétaire remplacent les sons synthétiques. L’origine/licence de ces fichiers n’a pas été fournie ; ne pas les présenter comme CC0.

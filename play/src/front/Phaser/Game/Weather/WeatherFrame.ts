@@ -39,3 +39,12 @@ export function stormGlow(epoch: number): number {
     const phase = ((epoch % 23000) + 23000) % 23000;
     return phase < 1200 ? Math.sin((phase / 1200) * Math.PI) * 0.12 : 0;
 }
+
+/** A common thirty-minute phase survives reconnects and server restarts. */
+export function weatherAtTime(configured: WeatherType, serverDate: Date | undefined): WeatherType {
+    if (configured !== WeatherType.Automatic) return configured;
+    if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
+    const cycle = [WeatherType.Clear, WeatherType.Rain, WeatherType.Storm, WeatherType.Snow];
+    const phase = Math.floor(serverDate.getTime() / (30 * 60 * 1000));
+    return cycle[((phase % cycle.length) + cycle.length) % cycle.length] ?? WeatherType.Clear;
+}

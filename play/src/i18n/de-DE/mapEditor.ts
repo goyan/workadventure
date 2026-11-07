@@ -683,6 +683,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
+            automatic: "Automatisch (alle 30 Minuten)",
             title: "Wetter",
             description:
                 "Das Wetter gilt für alle auf dieser Karte. Die Effekte können in den persönlichen Einstellungen ausgeblendet werden.",

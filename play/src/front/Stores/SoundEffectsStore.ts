@@ -1,9 +1,9 @@
 import { get, writable, type Writable } from "svelte/store";
 
-function createVolumeStore(key: string): Writable<number> {
+function createVolumeStore(key: string, defaultVolume: number): Writable<number> {
     const saved = localStorage.getItem(key);
-    const initial = saved === null ? 1 : Number(saved);
-    const clamp = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1);
+    const initial = saved === null ? defaultVolume : Number(saved);
+    const clamp = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : defaultVolume);
     const store = writable(clamp(initial));
     const set = (value: number): void => {
         const volume = clamp(value);
@@ -17,5 +17,5 @@ function createVolumeStore(key: string): Writable<number> {
     };
 }
 
-export const footstepVolumeStore = createVolumeStore("footstepVolume");
-export const environmentVolumeStore = createVolumeStore("environmentVolume");
+export const footstepVolumeStore = createVolumeStore("footstepVolume", 1);
+export const environmentVolumeStore = createVolumeStore("environmentVolume", 0.05);

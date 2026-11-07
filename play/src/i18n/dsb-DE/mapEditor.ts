@@ -679,6 +679,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
+            automatic: "Awtomatiski (kužde 30 minutow)",
             title: "Wjedro",
             description:
                 "Wjedro jo za wšych na toś tej kórśe samske. Efekty móžośo w wósobinskich nastajenjach schowaś.",

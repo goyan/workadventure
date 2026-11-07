@@ -5,14 +5,17 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import { environmentVolumeStore } from "../../../Stores/SoundEffectsStore";
 
 export const WEATHER_SOUNDS = [
-    { key: "audio-weather-rain", url: "/resources/objects/weather/rain.wav" },
-    { key: "audio-weather-thunder", url: "/resources/objects/weather/thunder.wav" },
+    { key: "audio-weather-sunny", url: "/resources/objects/weather/sunny.mp3" },
+    { key: "audio-weather-snow", url: "/resources/objects/weather/snow.mp3" },
+    { key: "audio-weather-rain", url: "/resources/objects/weather/rain.mp3" },
+    { key: "audio-weather-thunder", url: "/resources/objects/weather/thunder.mp3" },
 ];
 
 type WeatherSound = Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound | Phaser.Sound.NoAudioSound;
 
 export class WeatherSounds {
-    private rain: WeatherSound | undefined;
+    private ambient: WeatherSound | undefined;
+    private ambientKey: string | undefined;
     private thunder: WeatherSound | undefined;
     private lastStormCycle: number | undefined;
 
@@ -20,17 +23,27 @@ export class WeatherSounds {
 
     public update(weather: WeatherType, serverDate: Date | undefined, editing: boolean): void {
         const volume = editing || localUserStore.getBlockAudio() ? 0 : get(environmentVolumeStore);
-        const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
-        if (!raining || volume === 0) {
-            this.rain?.stop();
+        if (volume === 0) {
+            this.ambient?.stop();
             this.thunder?.stop();
             this.lastStormCycle = undefined;
             return;
         }
         if (this.sound.locked) return;
-        this.rain ??= this.sound.add("audio-weather-rain", { loop: true }) as WeatherSound;
-        this.rain.setVolume(volume * (weather === WeatherType.Storm ? 0.22 : 0.14));
-        if (!this.rain.isPlaying) this.rain.play();
+        const key =
+            weather === WeatherType.Clear
+                ? "audio-weather-sunny"
+                : weather === WeatherType.Snow
+                  ? "audio-weather-snow"
+                  : "audio-weather-rain";
+        if (this.ambientKey !== key) {
+            this.ambient?.destroy();
+            this.ambient = undefined;
+            this.ambientKey = key;
+        }
+        this.ambient ??= this.sound.add(key, { loop: true }) as WeatherSound;
+        this.ambient.setVolume(volume * (weather === WeatherType.Storm ? 0.22 : 0.14));
+        if (!this.ambient.isPlaying) this.ambient.play();
         if (weather !== WeatherType.Storm || !serverDate) {
             this.thunder?.stop();
             this.lastStormCycle = undefined;
@@ -49,7 +62,7 @@ export class WeatherSounds {
     }
 
     public destroy(): void {
-        this.rain?.destroy();
+        this.ambient?.destroy();
         this.thunder?.destroy();
     }
 }

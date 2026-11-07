@@ -673,6 +673,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
+            automatic: "자동 (30분마다)",
             title: "날씨",
             description: "이 지도의 날씨는 모두에게 동일합니다. 개인 설정에서 효과를 숨길 수 있습니다.",
             clear: "맑음",

@@ -26,6 +26,8 @@ describe("WAM Setting", () => {
             new UpdateWAMSettingCommand(wam, {
                 message: { $case: "updateWeatherSettingMessage", updateWeatherSettingMessage: { weather } },
             }).execute();
+        await setWeather(WeatherType.Automatic);
+        expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Automatic);
         await setWeather(WeatherType.Storm);
         expect(wam.settings).toEqual({ recording: { enableSounds: true }, weather: WeatherType.Storm });
         expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Storm);

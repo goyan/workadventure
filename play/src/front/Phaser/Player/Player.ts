@@ -617,11 +617,21 @@ export class Player extends Character {
         }
     }
 
+    private isRunningPath(): boolean {
+        return (
+            this.isFollowingPath() &&
+            (this.pathWalkingSpeed ?? WOKA_SPEED) > WOKA_SPEED &&
+            !this.swimming &&
+            !this.isSlidingToSeat
+        );
+    }
+
     protected followPath(delta: number): void {
         super.followPath(delta);
+        if (!this.isFollowingPath()) return;
         this.emit(hasMovedEventName, {
             moving: true,
-            running: false,
+            running: this.isRunningPath(),
             direction: this._lastDirection,
             x: this.x,
             y: this.y,
@@ -629,8 +639,21 @@ export class Player extends Character {
     }
 
     protected moveToPathPosition(x: number, y: number): void {
+        const oldX = this.x;
+        const oldY = this.y;
         passStatusToOnline();
         super.moveToPathPosition(x, y);
+        if (this.isRunningPath() && (x !== oldX || y !== oldY)) {
+            this.playAnimation(this._lastDirection, true, RUN_ANIMATION_SPEED);
+            const body = this.getBody();
+            this.runSmokeTrail.emit(
+                this.x,
+                this.y + body.offset.y + body.height / 2,
+                x - oldX,
+                y - oldY,
+                this.depth - 1,
+            );
+        }
     }
 
     public finishFollowingPath(cancelled = false, blocked = false): void {

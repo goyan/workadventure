@@ -4,10 +4,11 @@ import { mockDeep } from "vitest-mock-extended";
 import { WeatherType, type WAMFileFormat } from "@workadventure/map-editor";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
+const sounds = vi.hoisted(() => ({ update: vi.fn() }));
 vi.mock("../../../../../src/front/Stores/MapEditorStore", () => ({ mapEditorModeStore: writable(false) }));
 vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     WeatherSounds: class {
-        public update(): void {}
+        public update = sounds.update;
         public destroy(): void {}
     },
 }));
@@ -17,6 +18,7 @@ const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/We
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
 afterEach(() => {
+    sounds.update.mockClear();
     manager?.destroy();
     manager = undefined;
     weatherEffectsEnabledStore.set(true);
@@ -74,6 +76,23 @@ describe("weather rendering lifecycle", () => {
         manager.destroy();
         manager = undefined;
         expect(graphics.destroy.mock.calls).toHaveLength(1);
+    });
+
+    it("changes graphics and sounds together at the shared server boundary", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Automatic };
+        manager = new WeatherManager(scene);
+        manager.update(0, undefined);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Clear);
+        manager.update(40, new Date(1800000));
+        expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
+        manager.update(80, new Date(5400000));
+        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
+        manager.update(120, new Date(7200000));
+        expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Clear);
     });
 
     it("hides effects immediately for the personal preference and the editor, then restores them", () => {

@@ -669,6 +669,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
+            automatic: "อัตโนมัติ (ทุก 30 นาที)",
             title: "สภาพอากาศ",
             description: "ทุกคนในแผนที่นี้ใช้สภาพอากาศเดียวกัน คุณสามารถซ่อนเอฟเฟกต์ได้ในการตั้งค่าส่วนตัว",
             clear: "ท้องฟ้าแจ่มใส",

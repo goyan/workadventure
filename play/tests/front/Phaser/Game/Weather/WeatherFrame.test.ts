@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
-import { stormGlow, weatherParticles } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { stormGlow, weatherParticles, weatherAtTime } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
 
@@ -26,5 +26,27 @@ describe("world weather", () => {
         expect(stormGlow(23600)).toBeCloseTo(stormGlow(600));
         expect(stormGlow(2000)).toBe(0);
         expect(stormGlow(22999)).toBe(0);
+    });
+});
+
+describe("common automatic weather", () => {
+    it("changes exactly every thirty minutes and repeats after two hours", () => {
+        const halfHour = 30 * 60 * 1000;
+        expect(weatherAtTime(WeatherType.Automatic, new Date(halfHour - 1))).toBe(WeatherType.Clear);
+        for (const [phase, weather] of [
+            WeatherType.Clear,
+            WeatherType.Rain,
+            WeatherType.Storm,
+            WeatherType.Snow,
+            WeatherType.Clear,
+        ].entries()) {
+            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour))).toBe(weather);
+            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour + halfHour - 1))).toBe(weather);
+        }
+    });
+    it("keeps manual choices and waits for a valid server clock", () => {
+        expect(weatherAtTime(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
+        expect(weatherAtTime(WeatherType.Automatic, undefined)).toBe(WeatherType.Clear);
+        expect(weatherAtTime(WeatherType.Automatic, new Date(NaN))).toBe(WeatherType.Clear);
     });
 });

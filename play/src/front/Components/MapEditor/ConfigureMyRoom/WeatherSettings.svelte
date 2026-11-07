@@ -14,6 +14,7 @@
         gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
     );
     const options = $derived([
+        { value: WeatherType.Automatic, label: $LL.mapEditor.settings.weather.automatic() },
         { value: WeatherType.Clear, label: $LL.mapEditor.settings.weather.clear() },
         { value: WeatherType.Rain, label: $LL.mapEditor.settings.weather.rain() },
         { value: WeatherType.Snow, label: $LL.mapEditor.settings.weather.snow() },

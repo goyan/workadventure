@@ -679,6 +679,7 @@ const mapEditor: BaseTranslation = {
     },
     settings: {
         weather: {
+            automatic: "Automatic (every 30 minutes)",
             title: "Weather",
             description: "Weather shared by everyone on this map. You can hide its effects in your personal settings.",
             clear: "Clear sky",

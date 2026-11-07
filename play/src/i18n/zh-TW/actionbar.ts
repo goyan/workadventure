@@ -210,6 +210,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "刪除",
     },
     personalDesk: {
+        find: "尋找空閒辦公桌",
+        findDescription: "選擇空閒區域，前往該區域並確認領取。",
+        noAvailable: "此地圖上沒有你可以領取的空閒辦公桌。",
+        loginToClaim: "登入以領取個人辦公桌。",
+        visit: "前往",
         label: "前往我的辦公桌",
         unclaim: "釋放我的辦公桌",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

@@ -557,6 +557,7 @@ export const CategorySettings = z.object({
 export type CategorySettings = z.infer<typeof CategorySettings>;
 
 export enum WeatherType {
+    Automatic = "automatic",
     Clear = "clear",
     Rain = "rain",
     Snow = "snow",

@@ -212,6 +212,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "Wotstronić",
     },
     personalDesk: {
+        find: "Swobodny pisanski blid namakać",
+        findDescription: "Wubjer swobodny wobłuk. Dźi tam a wobkruć, zo by jón přewzał.",
+        noAvailable: "Na tutej karće njeje swobodny pisanski blid, kotryž móžeš přewzać.",
+        loginToClaim: "Přizjew so, zo by wosobinski pisanski blid přewzał.",
+        visit: "Hić",
         label: "K swojemu pisaćemu blidkej",
         unclaim: "Mój pisaće blidko wotwołać",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

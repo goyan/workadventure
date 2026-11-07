@@ -1250,6 +1250,7 @@
             "weather": {
               "type": "string",
               "enum": [
+                "automatic",
                 "clear",
                 "rain",
                 "snow",

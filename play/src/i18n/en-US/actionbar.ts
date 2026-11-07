@@ -210,6 +210,11 @@ const actionbar = {
         removeHighlightText: "Remove",
     },
     personalDesk: {
+        find: "Find an available desk",
+        findDescription: "Choose a free area. Walk there, then confirm to claim it.",
+        noAvailable: "No available desk you can claim on this map.",
+        loginToClaim: "Sign in to claim a personal desk.",
+        visit: "Go",
         label: "Walk to my desk",
         unclaim: "Unclaim my desk",
         unclaimConfirmation: "Release the desk “{name}”? It will become available to others.",

@@ -211,6 +211,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         removeHighlightText: "削除",
     },
     personalDesk: {
+        find: "空いているデスクを探す",
+        findDescription: "空いているエリアを選んで移動し、確認して取得してください。",
+        noAvailable: "このマップには取得できる空きデスクがありません。",
+        loginToClaim: "個人デスクを取得するにはログインしてください。",
+        visit: "移動",
         label: "自分のデスクに移動",
         unclaim: "自分のデスクを解放",
         unclaimConfirmation: enActionbar.personalDesk.unclaimConfirmation,

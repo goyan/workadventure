@@ -4,7 +4,7 @@ import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
-import { stormGlow, weatherParticles } from "./WeatherFrame";
+import { stormGlow, weatherParticles, weatherAtTime } from "./WeatherFrame";
 import { WeatherSounds } from "./WeatherSounds";
 
 export class WeatherManager {
@@ -22,7 +22,8 @@ export class WeatherManager {
     }
 
     public update(now: number, serverDate: Date | undefined): void {
-        const weather = this.scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
+        const configured = this.scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
+        const weather = weatherAtTime(configured, serverDate);
         this.sounds.update(weather, serverDate, get(mapEditorModeStore));
         const enabled = get(weatherEffectsEnabledStore) && !get(mapEditorModeStore);
         if (!enabled || weather === WeatherType.Clear) {

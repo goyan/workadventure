@@ -8,7 +8,8 @@
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { BUTTON_ZOOM_FACTOR_PER_SECOND, BUTTON_ZOOM_STEP_FACTOR } from "../../Phaser/Game/CameraZoomUtils";
     import LL from "../../../i18n/i18n-svelte";
-    import WorldClock from "./WorldClock.svelte";
+    import PersonalDeskFinderModal from "../Modal/PersonalDeskFinderModal.svelte";
+    import { modals } from "@wa-modals";
     import { IconFocusCentered, IconHome, IconMapSearch, IconMinus, IconPlus } from "@wa-icons";
 
     interface Props {
@@ -161,20 +162,20 @@
         </div>
         <button
             type="button"
-            aria-label={$LL.actionbar.personalDesk.label()}
+            aria-label={$personalAreaDataStore ? $LL.actionbar.personalDesk.label() : $LL.actionbar.personalDesk.find()}
             data-testid="teleport-to-personal-desk"
-            disabled={!$personalAreaDataStore}
-            title={$personalAreaDataStore
-                ? $LL.actionbar.personalDesk.label()
-                : $LL.actionbar.personalDesk.errorNotFound()}
+            title={$personalAreaDataStore ? $LL.actionbar.personalDesk.label() : $LL.actionbar.personalDesk.find()}
             class="group flex justify-center items-center p-1 rounded hover:bg-white/30 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-            onclick={() => gameManager.getCurrentGameScene().teleportToPersonalDesk()}
+            onclick={() => {
+                if ($personalAreaDataStore) gameManager.getCurrentGameScene().teleportToPersonalDesk();
+                else modals.open(PersonalDeskFinderModal);
+            }}
         >
             <IconHome />
             <div
                 class="-right-60 opacity-0 group-hover:opacity-90 group-hover:right-11 absolute bg-contrast backdrop-blur text-sm px-2 py-1 rounded whitespace-nowrap transition-all text-white pointer-events-none select-none"
             >
-                {$LL.actionbar.personalDesk.label()}
+                {$personalAreaDataStore ? $LL.actionbar.personalDesk.label() : $LL.actionbar.personalDesk.find()}
             </div>
         </button>
         {#if !$mapEditorModeStore && !$cameraDetachedStore}
@@ -209,5 +210,3 @@
         {/if}
     </div>
 </div>
-
-<WorldClock {mapEditorRightOffset} />

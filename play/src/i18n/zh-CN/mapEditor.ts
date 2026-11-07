@@ -667,6 +667,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
+            automatic: "自动（每30分钟）",
             title: "天气",
             description: "地图上的天气由所有人共享。你可以在个人设置中隐藏效果。",
             clear: "晴天",

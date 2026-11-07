@@ -90,6 +90,7 @@
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
+    import WorldClock from "./ActionsMenu/WorldClock.svelte";
     import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
     import DraggableJamPanel from "./ListeningZone/DraggableJamPanel.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
@@ -484,7 +485,14 @@
                 micDeviceId={requestedMicrophoneDeviceIdStore}
             />
             <!-- One Jam dock survives side-panel transitions and stays outside their scrolling container. -->
-            <DraggableJamPanel anchorTop={jamPanelAnchorTop} onLayout={(layout) => (jamPanelLayout = layout)}>
+            <div class="absolute right-2 z-[300] pointer-events-auto" style:top={`${jamPanelAnchorTop}px`}>
+                <WorldClock />
+            </div>
+            <DraggableJamPanel
+                anchorTop={jamPanelAnchorTop}
+                anchorRight={72}
+                onLayout={(layout) => (jamPanelLayout = layout)}
+            >
                 {#snippet children(onDragStart, onDragKeydown)}
                     <ListeningZoneBubble {onDragStart} {onDragKeydown} />
                     <JamRoomsLauncher {onDragStart} {onDragKeydown} />

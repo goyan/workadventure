@@ -57,6 +57,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenOnAppleMusic: "Escuchar en Apple Music",
     },
     listeningZone: {
+        resetPosition: "Restablecer posición",
         listenViaExtension: "Escuchar con la extensión",
         defaultName: "Zona de escucha",
         jamOf: "Jam de {name}",

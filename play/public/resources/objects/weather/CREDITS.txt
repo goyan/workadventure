@@ -1,7 +1,6 @@
-Rain and thunder sound effects synthesized for this WorkAdventure fork.
-Original procedural noise, filtering and envelopes; no sampled recordings.
-Dedicated to the public domain under CC0 1.0.
-https://creativecommons.org/publicdomain/zero/1.0/
+Weather audio
 
-Rain: seamless eight-second mono loop. Thunder: six-second mono rumble.
-Both are PCM WAV, 22050 Hz, 16-bit. Snow intentionally has no sound.
+rain.mp3, thunder.mp3, snow.mp3 and sunny.mp3 supplied by the project owner on 2026-11-07.
+Original files retained without transcoding.
+The files replace the previous procedural sounds.
+No third-party source or license was supplied with these files; do not label them CC0.
