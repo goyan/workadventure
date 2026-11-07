@@ -11,7 +11,6 @@
     import PlayerStopIcon from "../Icons/PlayerStopIcon.svelte";
     import VolumeIcon from "../Icons/VolumeIcon.svelte";
     import Button from "../UI/Button.svelte";
-    import JamMusicPlayer from "./JamMusicPlayer.svelte";
     import TooltipAbove from "./TooltipAbove.svelte";
 
     interface Props {
@@ -136,7 +135,6 @@
         </Button>
     {/if}
 {:else if listening}
-    <div data-testid="jam-audio-player"><JamMusicPlayer {spaceName} /></div>
     <!-- A small player: the round button pauses or resumes the music, the slider sets its volume, the other stops it. -->
     <div class="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-black/25 px-2.5 py-2">
         <TooltipAbove label={muteLabel}>
