@@ -23,9 +23,9 @@ export interface AlphaMask {
     alpha: Uint8ClampedArray;
 }
 
-const FLOOR_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, "Infogène Sols"];
+export const FLOOR_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, "Infogène Sols"];
 const FROST_COLOR = 0xeef1fb;
-const MISSING_TEXTURE = "__MISSING";
+export const MISSING_TEXTURE = "__MISSING";
 const FROST_ALPHA = 0.35;
 
 type SnowObject = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
