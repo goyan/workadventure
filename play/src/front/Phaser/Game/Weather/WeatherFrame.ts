@@ -1,4 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
+import { snowPossibleAt } from "../Nature/SeasonClock";
 
 export interface WeatherView {
     x: number;
@@ -42,9 +43,14 @@ export function stormGlow(epoch: number): number {
 
 /** A common thirty-minute phase survives reconnects and server restarts. */
 export function weatherAtTime(configured: WeatherType, serverDate: Date | undefined): WeatherType {
+    if (configured === WeatherType.Snow) {
+        if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
+        return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
+    }
     if (configured !== WeatherType.Automatic) return configured;
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
     const cycle = [WeatherType.Clear, WeatherType.Rain, WeatherType.Storm, WeatherType.Snow];
     const phase = Math.floor(serverDate.getTime() / (30 * 60 * 1000));
-    return cycle[((phase % cycle.length) + cycle.length) % cycle.length] ?? WeatherType.Clear;
+    const weather = cycle[((phase % cycle.length) + cycle.length) % cycle.length] ?? WeatherType.Clear;
+    return weather === WeatherType.Snow && !snowPossibleAt(serverDate) ? WeatherType.Rain : weather;
 }

@@ -1,4 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
+import { snowPossibleAt } from "../Nature/SeasonClock";
 
 export const WEATHER_PHASE_MS = 30 * 60 * 1000;
 export const SNOW_ACCUMULATION_MS = 10 * 60 * 1000;
@@ -6,7 +7,7 @@ export const SNOW_MELT_MS = 10 * 60 * 1000;
 
 /** Server epochs keep coverage identical on reconnect and on every client. */
 export function snowCoverage(configured: WeatherType, epoch: number, startedAt?: number): number {
-    if (!Number.isFinite(epoch)) return 0;
+    if (!Number.isFinite(epoch) || !snowPossibleAt(new Date(epoch))) return 0;
     if (configured === WeatherType.Automatic) {
         const phase = ((Math.floor(epoch / WEATHER_PHASE_MS) % 4) + 4) % 4;
         const elapsed = ((epoch % WEATHER_PHASE_MS) + WEATHER_PHASE_MS) % WEATHER_PHASE_MS;

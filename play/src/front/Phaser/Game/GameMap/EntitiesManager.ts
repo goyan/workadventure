@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import {
     Season,
+    WeatherType,
     AreaDataProperties,
     EntityDataProperties,
     EntityDimensions,
@@ -14,7 +15,9 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
-import { seasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { weatherAtTime } from "../Weather/WeatherFrame";
+import { snowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
@@ -80,6 +83,7 @@ const DIMMED_MAP_LAYER_TINT = 0x808080;
 export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
+    private lastConfiguredWeather: WeatherType | undefined;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -220,11 +224,19 @@ export class EntitiesManager extends EventEmitter {
         return entity;
     }
 
-    /** Check the shared calendar once a minute; revisit sprites only at a season boundary. */
+    /** Follow shared weather each minute, and apply a live editor change immediately. */
     public updateSeason(time: number, serverDate: Date | undefined): void {
-        if (!serverDate || time < this.nextSeasonCheck) return;
-        this.nextSeasonCheck = time + 60_000;
-        const season = seasonAt(serverDate);
+        if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
+        const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
+        const configured = settings?.weather ?? WeatherType.Clear;
+        if (time < this.nextSeasonCheck && configured === this.lastConfiguredWeather) return;
+        this.lastConfiguredWeather = configured;
+        this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
+        const season = treeSeasonAt(
+            serverDate,
+            weatherAtTime(configured, serverDate),
+            snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
+        );
         if (season === this.season) return;
         this.season = season;
         for (const entity of this.entities.values()) entity.setSeason(season);
