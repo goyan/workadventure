@@ -1136,7 +1136,7 @@ n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalTh
 - **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
   leur image d'automne ; feuilles éparses (une par carré de 48 px, placement fixe), feuilles qui tombent (couche de la
   boucle météo, même par temps clair), tas de feuilles au pied des objets dehors (arbres compris), feuilles soulevées
-  par les pas (2-3 tous les 24 px en marche, 4-5 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
+  par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
   `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
 
 Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le

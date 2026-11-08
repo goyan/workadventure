@@ -3,11 +3,11 @@ import { hash01, leafColor } from "./LeafPalette";
 
 export const KICK_WALK_STEP_PX = 24;
 export const KICK_RUN_STEP_PX = 16;
-export const KICK_FALL_MS = 600;
+export const KICK_FALL_MS = 700;
 export const KICK_FADE_MS = 2000;
 export const KICK_MAX = 120;
-const KICK_MIN_PX = 6;
-const KICK_MAX_PX = 10;
+const KICK_MIN_PX = 8;
+const KICK_MAX_PX = 14;
 
 /** A leaf kicked up at the feet: where it starts, and where it lands. */
 export interface KickedLeaf {
@@ -59,7 +59,7 @@ export class KickedLeafTrail {
             state.distance -= step;
             const kick = state.kicks++;
             if (!this.isOutdoor(sample.x, sample.y)) continue;
-            const count = (sample.running ? 4 : 2) + (kick % 2);
+            const count = (sample.running ? 5 : 3) + (kick % 2);
             const heading = Math.atan2(dy, dx);
             for (let i = 0; i < count; i++) {
                 // Sideways or backwards, never ahead of the walker.

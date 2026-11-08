@@ -194,7 +194,7 @@ describe("weather rendering lifecycle", () => {
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
         manager.update(0, new Date(0));
         const leaves = graphics.fillRect.mock.calls.filter(
-            ([, , width, height]) => (width === 3 && height === 2) || (width === 2 && height === 3),
+            ([, , width, height]) => (width === 4 && height === 3) || (width === 3 && height === 4),
         );
         expect(leaves.length).toBeGreaterThan(0);
         expect(graphics.setVisible.mock.lastCall).toEqual([true]);

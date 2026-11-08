@@ -19,21 +19,21 @@ function walk(trail: KickedLeafTrail, from: number, to: number, running = false,
 }
 
 describe("KickedLeafTrail", () => {
-    it("kicks 2 or 3 leaves every 24 px walking", () => {
-        expect(walk(new KickedLeafTrail(() => true), 0, 48)).toHaveLength(5);
+    it("kicks 3 or 4 leaves every 24 px walking", () => {
+        expect(walk(new KickedLeafTrail(() => true), 0, 48)).toHaveLength(7);
     });
 
-    it("kicks 4 or 5 every 16 px running", () => {
-        expect(walk(new KickedLeafTrail(() => true), 0, 32, true)).toHaveLength(9);
+    it("kicks 5 or 6 every 16 px running", () => {
+        expect(walk(new KickedLeafTrail(() => true), 0, 32, true)).toHaveLength(11);
     });
 
-    it("spreads leaves 6 to 10 px, never forward", () => {
+    it("spreads leaves 8 to 14 px, never forward", () => {
         const leaves = walk(new KickedLeafTrail(() => true), 0, 240);
         expect(leaves.length).toBeGreaterThan(20);
         for (const leaf of leaves) {
             const distance = Math.hypot(leaf.dx, leaf.dy);
-            expect(distance).toBeGreaterThanOrEqual(6);
-            expect(distance).toBeLessThanOrEqual(10);
+            expect(distance).toBeGreaterThanOrEqual(8);
+            expect(distance).toBeLessThanOrEqual(14);
             expect(leaf.dx).toBeLessThanOrEqual(1e-9);
         }
     });
@@ -53,7 +53,7 @@ describe("KickedLeafTrail", () => {
 });
 
 describe("KickedLeafLayer", () => {
-    it("keeps 120 leaves at most and fades them out in 2.6 s", () => {
+    it("draws 5×3 tilted leaves, keeps 120 at most and fades them out", () => {
         const scene = mockDeep<Phaser.Scene>();
         scene.add.rectangle.mockImplementation(() => {
             const rectangle = mockDeep<Phaser.GameObjects.Rectangle>();
@@ -67,6 +67,7 @@ describe("KickedLeafLayer", () => {
             0,
         );
         expect(KICK_MAX).toBe(120);
+        expect(scene.add.rectangle.mock.calls[0].slice(2, 4)).toEqual([5, 3]);
         expect(layer.count).toBe(120);
         expect(layer.update(KICK_FALL_MS)).toBe(true);
         expect(layer.update(KICK_FALL_MS + KICK_FADE_MS)).toBe(false);

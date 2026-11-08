@@ -40,7 +40,7 @@ export class LeafScatterLayer {
         this.graphics.clear();
         for (const leaf of scatteredLeavesInView(this.drawn, isOutdoor)) {
             this.graphics.fillStyle(leaf.color, 1);
-            this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 2 : 3, leaf.vertical ? 3 : 2);
+            this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
         }
         return true;
     }

@@ -8,7 +8,7 @@ export interface ScatteredLeaf {
     x: number;
     y: number;
     color: number;
-    /** 2×3 instead of 3×2. */
+    /** 3×4 instead of 4×3. */
     vertical: boolean;
 }
 
@@ -23,8 +23,8 @@ export function scatteredLeavesInView(
     const lastRow = Math.floor((view.y + view.height - 1) / size);
     for (let row = Math.floor(view.y / size); row <= lastRow; row++) {
         for (let col = Math.floor(view.x / size); col <= lastCol; col++) {
-            const x = col * size + Math.floor(hash01(col, row) * (size - 3));
-            const y = row * size + Math.floor(hash01(col, row, 1) * (size - 3));
+            const x = col * size + Math.floor(hash01(col, row) * (size - 4));
+            const y = row * size + Math.floor(hash01(col, row, 1) * (size - 4));
             if (!isOutdoor(x + 1, y + 1)) continue;
             leaves.push({ x, y, color: leafColor(hash01(col, row, 2)), vertical: hash01(col, row, 3) < 0.5 });
         }

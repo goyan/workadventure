@@ -54,6 +54,8 @@ describe("LeafScatterLayer", () => {
         expect(leaves.update({ x: 120, y: 0, width: 400, height: 400 }, outdoors, false)).toBe(true);
         expect(leaves.update({ x: 120, y: 0, width: 400, height: 400 }, outdoors, true)).toBe(true);
         expect(graphics.clear.mock.calls).toHaveLength(3);
+        const sizes = new Set(graphics.fillRect.mock.calls.map(([, , width, height]) => `${width}x${height}`));
+        expect([...sizes].sort()).toEqual(["3x4", "4x3"]);
         leaves.destroy();
         expect(graphics.destroy.mock.calls).toHaveLength(1);
     });

@@ -115,7 +115,7 @@ export class WeatherManager {
             }));
             for (const leaf of keepOutdoorParticles(leaves, isOutdoor)) {
                 this.graphics.fillStyle(leaf.color, 0.95);
-                this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 2 : 3, leaf.vertical ? 3 : 2);
+                this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
             }
         }
         this.scene.markDirty();

@@ -4,7 +4,10 @@ import { KICK_FADE_MS, KICK_FALL_MS, KICK_MAX, type KickedLeaf } from "./KickedL
 /** Leaves sit just below the avatar that kicked them (its depth is its y, its feet are 8 px lower). */
 const DEPTH_BELOW_FEET = 16;
 /** How high a leaf hops on its way down. */
-const HOP_PX = 4;
+const HOP_PX = 8;
+/** Bigger than the leaves on the ground: they must be seen around a walking avatar. */
+const LEAF_WIDTH_PX = 5;
+const LEAF_HEIGHT_PX = 3;
 
 interface Flying {
     leaf: KickedLeaf;
@@ -25,8 +28,10 @@ export class KickedLeafLayer {
     add(leaves: KickedLeaf[], now: number): void {
         for (const leaf of leaves) {
             const shape = this.scene.add
-                .rectangle(leaf.x, leaf.y, 3, 2, leaf.color)
+                .rectangle(leaf.x, leaf.y, LEAF_WIDTH_PX, LEAF_HEIGHT_PX, leaf.color)
                 .setDepth(leaf.y - DEPTH_BELOW_FEET);
+            // Tilted along its flight, so the leaves do not all look like the same little brick.
+            shape.setRotation(Math.atan2(leaf.dy, leaf.dx));
             shape.setVisible(this.visible);
             this.pool.add({ leaf, shape }, now)?.shape.destroy();
         }

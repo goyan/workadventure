@@ -41,7 +41,7 @@ export interface LeafParticle {
     x: number;
     y: number;
     color: number;
-    /** 2×3 instead of 3×2: the leaf turns as it sways. */
+    /** 3×4 instead of 4×3: the leaf turns as it sways. */
     vertical: boolean;
 }
 
