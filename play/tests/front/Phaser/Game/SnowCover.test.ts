@@ -10,6 +10,14 @@ import {
 
 const start = 3 * WEATHER_PHASE_MS;
 describe("shared progressive ground snow", () => {
+    it("never accumulates or melts imaginary snow in warm months", () => {
+        for (const time of ["2026-07-01T01:40:00Z", "2026-07-01T02:00:00Z"]) {
+            const epoch = Date.parse(time);
+            expect(snowCoverage(WeatherType.Automatic, epoch)).toBe(0);
+            expect(snowCoverage(WeatherType.Snow, epoch)).toBe(0);
+        }
+    });
+
     it("accumulates over ten minutes and melts in the following clear phase, even after a reload", () => {
         expect(snowCoverage(WeatherType.Automatic, start)).toBe(0);
         expect(snowCoverage(WeatherType.Automatic, start + SNOW_ACCUMULATION_MS / 2)).toBe(0.5);

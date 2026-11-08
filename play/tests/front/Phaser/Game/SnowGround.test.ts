@@ -221,7 +221,7 @@ describe("ground snow rendering", () => {
         expect(canvas.stamp.mock.calls[0]?.[1]).toBe("block-42-35");
         expect(baseCalls.every((call) => call[4].scaleX >= 1 && call[4].scaleX < 1.1)).toBe(true);
         expect(baseCalls.every((call) => call[4].scaleY >= 1 && call[4].scaleY < 1.25)).toBe(true);
-        expect(canvas.stamp.mock.calls.some((call) => /terrain-snow/.test(String(call[0])))).toBe(true);
+        expect(canvas.stamp.mock.calls.some((call) => /terrain-snow/.test(String(call[0])))).toBe(false);
         expect(canvas.width).toBeLessThanOrEqual(2048);
         expect(canvas.height).toBeLessThanOrEqual(2048);
         ground.destroy();

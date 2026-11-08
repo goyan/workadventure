@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { EntityCollectionRaw, Season } from "@workadventure/map-editor";
-import { seasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { EntityCollectionRaw, Season, WeatherType } from "@workadventure/map-editor";
+import { seasonAt, treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
 import { EntitiesManager } from "@wa/front/Phaser/Game/GameMap/EntitiesManager";
 import type { Entity } from "@wa/front/Phaser/ECS/Entity";
 
@@ -30,11 +30,15 @@ describe("shared seasonal nature", () => {
         const setSeason = vi.fn();
         const markDirty = vi.fn();
         const entity = { setSeason } as unknown as Entity;
+        const settings = { weather: WeatherType.Clear };
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map([["tree", entity]]),
             season: Season.Summer,
             nextSeasonCheck: 0,
-            scene: { markDirty },
+            scene: {
+                markDirty,
+                getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
+            },
         }) as EntitiesManager;
         manager.updateSeason(0, undefined);
         expect(setSeason).not.toHaveBeenCalled();
@@ -44,8 +48,36 @@ describe("shared seasonal nature", () => {
         manager.updateSeason(60_000, new Date("2026-11-08T12:00:00Z"));
         expect(setSeason).toHaveBeenCalledTimes(1);
         manager.updateSeason(120_000, new Date("2026-12-08T12:00:00Z"));
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
         expect(markDirty).toHaveBeenCalledTimes(2);
+        settings.weather = WeatherType.Snow;
+        manager.updateSeason(120_010, new Date("2026-12-08T12:00:00Z"));
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        settings.weather = WeatherType.Rain;
+        manager.updateSeason(120_020, new Date("2026-12-08T12:00:00Z"));
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+        expect(markDirty).toHaveBeenCalledTimes(4);
+    });
+
+    it("keeps autumn orange in rain and uses white artwork only during snow or its melting phase", () => {
+        const autumn = new Date("2026-11-08T12:00:00Z");
+        expect(treeSeasonAt(autumn, WeatherType.Rain, 0)).toBe(Season.Autumn);
+        expect(treeSeasonAt(autumn, WeatherType.Snow, 0)).toBe(Season.Winter);
+        expect(treeSeasonAt(autumn, WeatherType.Clear, 0.5)).toBe(Season.Winter);
+        expect(treeSeasonAt(autumn, WeatherType.Clear, 0)).toBe(Season.Autumn);
+        expect(treeSeasonAt(new Date("2026-01-08T12:00:00Z"), WeatherType.Rain, 0)).toBe(Season.Summer);
+    });
+
+    it("links all 58 selectable trees, including legacy green and explicitly snowy IDs", () => {
+        const trees = catalog.collection.filter(
+            (prefab) =>
+                /^Nature:(tree-|seasonal-|snow-tree-|snow-evergreen-|winter-auto-|nature-[1-6]:)/.test(prefab.id) &&
+                !prefab.name?.startsWith("Feuillage"),
+        );
+        expect(trees).toHaveLength(58);
+        expect(
+            trees.every((prefab) => prefab.seasonal?.summer && prefab.seasonal.autumn && prefab.seasonal.winter),
+        ).toBe(true);
     });
 
     it("ships transparent PNGs, with equal seasonal dimensions and collisions inside the resized trees", () => {
