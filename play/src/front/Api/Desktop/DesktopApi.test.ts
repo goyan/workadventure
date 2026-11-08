@@ -5,6 +5,8 @@ import type { DesktopStatusRequest, WorkAdventureDesktopApi } from "../../Interf
 
 const availabilityStatusStore = writable(AvailabilityStatus.ONLINE);
 const resetAllStatusStoreExcept = vi.fn();
+const readDesktopEnvironment = vi.hoisted(() => vi.fn((): unknown => null));
+vi.mock("./EnvironmentControls", () => ({ applyDesktopEnvironment: vi.fn(), readDesktopEnvironment }));
 
 vi.mock("../../Stores/MediaStore", () => ({
     availabilityStatusStore,
@@ -19,6 +21,27 @@ vi.mock("../../Utils/AvailabilityStatus", () => ({
 
 const { desktopApi } = await import("./index");
 const { listenAlongAvailableStore } = await import("../../Spotify/ListeningFollower");
+
+describe("DesktopApi environment reporting", () => {
+    it("throttles game-loop reads, reports only changes, and disables controls on room departure", () => {
+        const reportEnvironment = vi.fn();
+        installDesktopApp({ reportEnvironment });
+        readDesktopEnvironment.mockReturnValue({ isNight: false });
+        desktopApi.reportEnvironment();
+        desktopApi.reportEnvironment(100);
+        readDesktopEnvironment.mockClear();
+        readDesktopEnvironment.mockReturnValue({ isNight: true });
+        desktopApi.reportEnvironment(200);
+        expect(readDesktopEnvironment).not.toHaveBeenCalled();
+        desktopApi.reportEnvironment(1100);
+        desktopApi.reportEnvironment(2100);
+        expect(reportEnvironment.mock.calls).toEqual([[{ isNight: false }], [{ isNight: true }]]);
+        readDesktopEnvironment.mockReturnValue(null);
+        desktopApi.reportEnvironment();
+        expect(reportEnvironment).toHaveBeenLastCalledWith(null);
+        delete window.WAD;
+    });
+});
 
 function installDesktopApp(extra: Partial<WorkAdventureDesktopApi>): void {
     window.WAD = {

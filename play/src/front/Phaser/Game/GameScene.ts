@@ -29,6 +29,7 @@ import {
     GameMapProperties,
     type WAMFileFormat,
     WAMSettingsUtils,
+    WeatherType,
 } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
 import Debug from "debug";
@@ -251,6 +252,7 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { environmentVolumeStore, footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -1721,6 +1723,7 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this.nightManager?.update(time);
+            desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
             this.christmasThemeManager?.update(time, () => this.christmasWalkers());
@@ -2224,6 +2227,18 @@ export class GameScene extends DirtyScene {
 
         this.scene.stop(this.scene.key);
         this.scene.remove(this.scene.key);
+    }
+
+    public getNightActive(): boolean {
+        return (this.nightManager?.isNight() ?? false) && !this.mapEditorModeManager?.isActive();
+    }
+
+    public getDesktopWeather(): WeatherType {
+        const configured = this.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
+        return effectiveWeather(
+            weatherAtTime(configured, this.nightManager?.serverDate()),
+            this.christmasThemeManager?.isActive() ?? false,
+        );
     }
 
     public getGameMap(): GameMap {

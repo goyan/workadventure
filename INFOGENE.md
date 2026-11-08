@@ -1138,5 +1138,13 @@ Limites : un mur manquant laisse entrer la neige ; une image d'objet illisible (
 déplacé par une autre personne garde sa neige à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
 l'éditeur.
 
+### Contrôles d'ambiance du client desktop
+
+Le pont optionnel `WAD.onEnvironmentRequest` / `reportEnvironment` permet au client desktop de régler directement
+la météo commune du WAM (avec les mêmes droits d'édition et la même commande de sauvegarde), ainsi que les
+préférences personnelles jour/nuit, sol, Noël et effets météo. Les emplacements des réglages dans WA restent identiques.
+L'état remonte à chaque changement, au plus une vérification par seconde dans la boucle du jeu, sans minuterie
+supplémentaire ; il inclut la météo affichée et la nuit effective pour les icônes. Sortir du salon désactive les contrôles.
+
 Recette : régler « Toujours », marcher puis courir dehors et dans une pièce, ouvrir l'éditeur et retirer un mur d'une
 pièce, puis le remettre ; régler « Jamais » et vérifier une carte en orage : pluie et voile seulement dehors.

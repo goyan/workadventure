@@ -1,4 +1,5 @@
 import { derived, get } from "svelte/store";
+import * as Sentry from "@sentry/svelte";
 import { AvailabilityStatus, type SpotifyListening } from "@workadventure/messages";
 import {
     availabilityStatusStore,
@@ -7,6 +8,7 @@ import {
     silentStore,
 } from "../../Stores/MediaStore";
 import type {
+    DesktopEnvironmentRequest,
     DesktopAppearance,
     DesktopListening,
     DesktopStatusRequest,
@@ -18,6 +20,9 @@ import { getStatusLabel } from "../../Utils/AvailabilityStatus";
 import { isPlayingTrack, listeningSourceOf } from "../../../common/SpotifyListening";
 import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
 import { retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
+import { gameSceneStore } from "../../Stores/GameSceneStore";
+import { LL } from "../../../i18n/i18n-svelte";
+import { applyDesktopEnvironment, readDesktopEnvironment } from "./EnvironmentControls";
 
 declare global {
     interface Window {
@@ -35,6 +40,10 @@ export const DESKTOP_STATUS_REQUESTS: Record<DesktopStatusRequest, RequestedStat
 
 class DesktopApi {
     isSilent = false;
+    private environmentBusy = false;
+    private environmentError = "";
+    private nextEnvironmentCheck = 0;
+    private lastEnvironment = "";
 
     init() {
         if (!window?.WAD?.desktop) {
@@ -69,7 +78,47 @@ class DesktopApi {
 
         this.initStatus(window.WAD);
         this.initAppearance(window.WAD);
+        if (window.WAD.reportEnvironment) {
+            // Singleton subscription; leaving the room releases the scene and disables its desktop controls.
+            //eslint-disable-next-line svelte/no-ignored-unsubscribe
+            gameSceneStore.subscribe(() => this.reportEnvironment());
+            window.WAD.onEnvironmentRequest?.((request) => {
+                this.applyEnvironment(request).catch((error: unknown) => Sentry.captureException(error));
+            });
+        }
         window.WAD.onListenAlongAvailable?.((available) => listenAlongAvailableStore.set(available === true));
+    }
+
+    /** Called by the existing game loop: no extra timer and no reference keeping an old room alive. */
+    public reportEnvironment(time?: number): void {
+        const report = window.WAD?.reportEnvironment;
+        if (!report) return;
+        if (time !== undefined) {
+            if (time < this.nextEnvironmentCheck) return;
+            this.nextEnvironmentCheck = time + 1000;
+        } else {
+            this.nextEnvironmentCheck = 0;
+        }
+        const state = readDesktopEnvironment(this.environmentBusy, this.environmentError);
+        const serialized = JSON.stringify(state);
+        if (serialized === this.lastEnvironment) return;
+        this.lastEnvironment = serialized;
+        report(state);
+    }
+
+    private async applyEnvironment(request: DesktopEnvironmentRequest): Promise<void> {
+        if (this.environmentBusy) return;
+        this.environmentBusy = true;
+        this.environmentError = "";
+        this.reportEnvironment();
+        try {
+            await applyDesktopEnvironment(request);
+        } catch {
+            this.environmentError = get(LL).mapEditor.settings.weather.error();
+        } finally {
+            this.environmentBusy = false;
+            this.reportEnvironment();
+        }
     }
 
     /** What the local user shares, for the desktop app (e.g. its menu bar). Optional: older apps ignore it. */
