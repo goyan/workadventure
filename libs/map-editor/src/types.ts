@@ -341,6 +341,21 @@ export const EntityAnimation = z.object({
     frameRate: z.number().positive().max(MAX_ENTITY_ANIMATION_FRAME_RATE),
 });
 
+export enum Season {
+    Spring = "spring",
+    Summer = "summer",
+    Autumn = "autumn",
+    Winter = "winter",
+}
+
+/** Seasonal images share the same canvas and trunk anchor; paths are relative to the catalog. */
+export const EntitySeasonalImages = z.object({
+    spring: z.string().min(1),
+    summer: z.string().min(1),
+    autumn: z.string().min(1),
+    winter: z.string().min(1),
+});
+
 export const EntityRawPrefab = z.object({
     id: z.string(),
     name: z.string(),
@@ -378,6 +393,7 @@ export const EntityRawPrefab = z.object({
     sittable: z.boolean().optional().catch(undefined),
     // Fail open like `collisionRectangles`: an invalid animation shows the image as a still one.
     animation: EntityAnimation.optional().catch(undefined),
+    seasonal: EntitySeasonalImages.optional().catch(undefined),
     /**
      * Places of the entity a player can sit on (e.g. two for a couch), as the position of the sitter's feet in
      * tiles from the top-left corner of the image. The player sits facing `direction`. Fail open like

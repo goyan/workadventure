@@ -80,4 +80,46 @@ describe("EntitiesCollectionsManager reload", () => {
         );
         expect((await manager.getEntityPrefab("animaux", "still"))?.wander).toBeUndefined();
     });
+    it("resolves seasonal paths against the catalog URL", async () => {
+        const url = "https://example.com/collections/NatureCollection.json";
+        const seasonal = {
+            spring: "Nature/spring.png",
+            summer: "Nature/summer.png",
+            autumn: "Nature/autumn.png",
+            winter: "Nature/winter.png",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() =>
+                Promise.resolve(
+                    new Response(
+                        JSON.stringify({
+                            collectionName: "Nature",
+                            version: "1.0",
+                            tags: [],
+                            collection: [
+                                {
+                                    id: "tree",
+                                    name: "Tree",
+                                    imagePath: seasonal.summer,
+                                    direction: "Down",
+                                    tags: [],
+                                    color: "",
+                                    seasonal,
+                                },
+                            ],
+                        }),
+                    ),
+                ),
+            ),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url, type: "Default" }]);
+        expect((await manager.getEntityPrefab("Nature", "tree"))?.seasonal).toEqual({
+            spring: "https://example.com/collections/Nature/spring.png",
+            summer: "https://example.com/collections/Nature/summer.png",
+            autumn: "https://example.com/collections/Nature/autumn.png",
+            winter: "https://example.com/collections/Nature/winter.png",
+        });
+    });
 });

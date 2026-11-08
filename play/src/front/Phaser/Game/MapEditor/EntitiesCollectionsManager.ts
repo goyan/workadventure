@@ -131,6 +131,14 @@ export class EntitiesCollectionsManager {
                                 sittable: entity.sittable,
                                 seat: entity.seat,
                                 animation: entity.animation,
+                                seasonal: entity.seasonal
+                                    ? {
+                                          spring: new URL(entity.seasonal.spring, url).toString(),
+                                          summer: new URL(entity.seasonal.summer, url).toString(),
+                                          autumn: new URL(entity.seasonal.autumn, url).toString(),
+                                          winter: new URL(entity.seasonal.winter, url).toString(),
+                                      }
+                                    : undefined,
                                 wander: entity.wander
                                     ? { sheetPath: new URL(entity.wander.sheetPath, url).toString() }
                                     : undefined,

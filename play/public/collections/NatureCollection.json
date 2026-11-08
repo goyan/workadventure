@@ -1,0 +1,862 @@
+{
+  "collectionName": "Nature",
+  "tags": [
+    "Nature"
+  ],
+  "version": "1.0",
+  "collection": [
+    {
+      "id": "Nature:tree-1-1:Default:Down",
+      "name": "Feuillage clair",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-2:Default:Down",
+      "name": "Chêne clair 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 52,
+          "y": 114,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-3:Default:Down",
+      "name": "Chêne clair 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 50,
+          "y": 123,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-4:Default:Down",
+      "name": "Chêne clair 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 46,
+          "y": 119,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-5:Default:Down",
+      "name": "Feuillage fleuri",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-6:Default:Down",
+      "name": "Arbre fleuri 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 54,
+          "y": 111,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-7:Default:Down",
+      "name": "Arbre fleuri 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 47,
+          "y": 118,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-8:Default:Down",
+      "name": "Feuillage sombre",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-9:Default:Down",
+      "name": "Chêne sombre 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 46,
+          "y": 114,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-10:Default:Down",
+      "name": "Chêne sombre 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 54,
+          "y": 119,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-1-11:Default:Down",
+      "name": "Chêne sombre 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 49,
+          "y": 127,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-1:Default:Down",
+      "name": "Feuillage d’automne",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-2-2:Default:Down",
+      "name": "Arbre d’automne 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 54,
+          "y": 116,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-3:Default:Down",
+      "name": "Arbre d’automne 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 50,
+          "y": 124,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-4:Default:Down",
+      "name": "Arbre d’automne 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 46,
+          "y": 123,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-5:Default:Down",
+      "name": "Cerisier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 52,
+          "y": 142,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-6:Default:Down",
+      "name": "Cerisier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 55,
+          "y": 142,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-7:Default:Down",
+      "name": "Cerisier 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 49,
+          "y": 142,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-8:Default:Down",
+      "name": "Sapin sombre 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 53,
+          "y": 167,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-9:Default:Down",
+      "name": "Sapin sombre 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 49,
+          "y": 171,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-10:Default:Down",
+      "name": "Sapin sombre 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 48,
+          "y": 163,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-2-11:Default:Down",
+      "name": "Sapin sombre 4",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 47,
+          "y": 163,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-1:Default:Down",
+      "name": "Sapin clair 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 54,
+          "y": 180,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-2:Default:Down",
+      "name": "Sapin clair 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 53,
+          "y": 176,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-3:Default:Down",
+      "name": "Sapin clair 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 52,
+          "y": 177,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-4:Default:Down",
+      "name": "Sapin clair 4",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 43,
+          "y": 174,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-5:Default:Down",
+      "name": "Cyprès 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 198,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-6:Default:Down",
+      "name": "Cyprès 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 193,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-7:Default:Down",
+      "name": "Cyprès 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 29,
+          "y": 191,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-8:Default:Down",
+      "name": "Feuillage de saule",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-3-9:Default:Down",
+      "name": "Saule 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 60,
+          "y": 160,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-10:Default:Down",
+      "name": "Saule 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 57,
+          "y": 162,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:tree-3-11:Default:Down",
+      "name": "Saule 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 41,
+          "y": 162,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-1:Default:Down",
+      "name": "Grand chêne 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 82,
+          "y": 212,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-2:Default:Down",
+      "name": "Grand chêne 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 98,
+          "y": 232,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-3:Default:Down",
+      "name": "Palmier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 82,
+          "y": 203,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-4:Default:Down",
+      "name": "Palmier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 70,
+          "y": 190,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-5:Default:Down",
+      "name": "Arbre nu 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 60,
+          "y": 191,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-6:Default:Down",
+      "name": "Arbre nu 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 68,
+          "y": 194,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -12
+    },
+    {
+      "id": "Nature:nature-7:Default:Down",
+      "name": "Souche",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-8:Default:Down",
+      "name": "Rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-9:Default:Down",
+      "name": "Buisson fleuri",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-10:Default:Down",
+      "name": "Buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-11:Default:Down",
+      "name": "Herbes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-12:Default:Down",
+      "name": "Fleurs",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-12.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:seasonal-1:Default:Down",
+      "name": "Arbre saisonnier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/seasonal-1-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 88,
+          "y": 238,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -40,
+      "seasonal": {
+        "spring": "Nature/seasonal-1-spring.png",
+        "summer": "Nature/seasonal-1-summer.png",
+        "autumn": "Nature/seasonal-1-autumn.png",
+        "winter": "Nature/seasonal-1-winter.png"
+      }
+    },
+    {
+      "id": "Nature:seasonal-2:Default:Down",
+      "name": "Arbre saisonnier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/seasonal-2-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 88,
+          "y": 238,
+          "width": 16,
+          "height": 10
+        }
+      ],
+      "depthOffset": -40,
+      "seasonal": {
+        "spring": "Nature/seasonal-2-spring.png",
+        "summer": "Nature/seasonal-2-summer.png",
+        "autumn": "Nature/seasonal-2-autumn.png",
+        "winter": "Nature/seasonal-2-winter.png"
+      }
+    }
+  ]
+}
