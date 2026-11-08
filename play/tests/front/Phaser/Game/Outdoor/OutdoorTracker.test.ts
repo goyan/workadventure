@@ -38,7 +38,7 @@ describe("OutdoorTracker", () => {
         expect(tracker.version).toBe(1);
         at(1301);
         expect(tracker.version).toBe(2);
-        expect(tracker.grid?.isOutdoorCell(2, 0)).toBe(false);
+        expect(tracker.grid?.isOutdoorAt(64, 0)).toBe(false);
     });
 
     it("waits again when walls keep changing", () => {
@@ -52,6 +52,15 @@ describe("OutdoorTracker", () => {
         expect(tracker.version).toBe(1);
         at(1551);
         expect(tracker.version).toBe(2);
+    });
+
+    it("leaves the grass beside a wall that starts mid-cell outdoors", () => {
+        const { entities, tracker, at } = setup();
+        // The team map puts its walls at x = 26 (mod 32): a 32 px cell would swallow 26 px of grass.
+        entities.push({ collectionName: "Carte Murs", x: 26, y: 0, width: 12, height: 320 });
+        at(0);
+        expect(tracker.grid?.isOutdoorAt(20, 10)).toBe(true);
+        expect(tracker.grid?.isOutdoorAt(30, 10)).toBe(false);
     });
 
     it("ignores non-wall entities", () => {

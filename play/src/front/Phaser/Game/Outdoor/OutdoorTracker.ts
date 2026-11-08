@@ -1,7 +1,8 @@
 import { OUTDOOR_WALL_COLLECTIONS, OutdoorGrid, type Rect } from "./OutdoorGrid";
 
 /** Cell size of the team maps. */
-export const OUTDOOR_CELL_SIZE = 32;
+/** 8 px: the team map puts its walls at x = 26 (mod 32), a 32 px cell left a strip of bare grass beside them. */
+export const OUTDOOR_CELL_SIZE = 8;
 /** Wait this long after the last wall change, so a wall being dragged is not recomputed at every frame. */
 export const OUTDOOR_SETTLE_MS = 300;
 const READ_INTERVAL_MS = 100;

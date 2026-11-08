@@ -35,7 +35,7 @@ branche feat/xxx ──PR──▶ infogene ──(auto)──▶ BETA  wa-beta.
    Un patch qui touche peu de fichiers se rebase facilement sur les prochaines versions de WorkAdventure.
 3. **Ouvrir une pull request vers `infogene`**. Elle doit avoir : les vérifications vertes (voir ci-dessous) et **une relecture**.
 4. **Après fusion**, la CI construit l'image et la **beta se met à jour seule** (~10 min). Tester sur https://wa-beta.goyan.fr
-   (Ctrl+F5). *Le code n'est pas déployé en beta avant la fusion.*
+   (Ctrl+F5). _Le code n'est pas déployé en beta avant la fusion._
 5. **Mise en prod** : une release est un tag `v1.32.6-infogene.N` (le numéro final augmente à chaque fois, un tag ne se
    réécrit jamais). Un tag **ne déploie rien seul** : seules les personnes autorisées (« releasers ») décident de la prod.
    Demandez-leur, après validation en beta.
@@ -301,13 +301,13 @@ ouvrir deux salles différentes (aucune éviction).
 
 ### Spotify : ce qu'on écoute et zones d'écoute
 
-**Menu → Réglages → Spotify** : « Lier Spotify » ouvre une fenêtre d'autorisation Spotify (flux *authorization
-code* avec PKCE, sans secret ; seul le scope `user-read-currently-playing` est demandé). Les jetons restent dans le
+**Menu → Réglages → Spotify** : « Lier Spotify » ouvre une fenêtre d'autorisation Spotify (flux _authorization
+code_ avec PKCE, sans secret ; seul le scope `user-read-currently-playing` est demandé). Les jetons restent dans le
 `localStorage` du navigateur. Une fois lié, l'interrupteur « Partager ce que j'écoute » (activé par défaut) publie le
 morceau en cours, relevé toutes les 15 s ; rien n'est affiché en pause, pour les podcasts ou les publicités.
 
 Une app Spotify en mode développement n'accepte que **cinq comptes**, inscrits à la main dans son tableau de bord
-(*User Management*), et l'*extended quota* nous est inaccessible. Sans Client ID personnel, la liaison passe par l'app
+(_User Management_), et l'_extended quota_ nous est inaccessible. Sans Client ID personnel, la liaison passe par l'app
 du serveur et la section le dit : demander d'abord aux administrateurs d'y ajouter son compte Spotify (5 personnes
 maximum). Spotify laisse un compte non inscrit autoriser l'app, puis répond 403 à ses lectures : la section affiche
 alors ce même conseil, et le front ne réinterroge Spotify que toutes les 5 minutes. N'importe qui peut à tout moment
@@ -316,7 +316,7 @@ affiche les étapes et l'URI à déclarer. Le Client ID utilisé est celui de la
 puis de relier.
 
 Configuration (repo d'infra, beta et prod) : `SPOTIFY_CLIENT_ID=<Client ID>` (public, aucun secret). Dans l'app
-Spotify : cocher **Web API** et déclarer les *Redirect URIs* `https://wa-beta.goyan.fr/spotify/callback` et
+Spotify : cocher **Web API** et déclarer les _Redirect URIs_ `https://wa-beta.goyan.fr/spotify/callback` et
 `https://wa.goyan.fr/spotify/callback` (`<PUSHER_URL>/spotify/callback`). Spotify refuse `http://localhost` : la
 liaison se teste en beta. Sans `SPOTIFY_CLIENT_ID`, seules les apps personnelles fonctionnent.
 
@@ -454,7 +454,7 @@ Un changement d'état (début ou fin de course) est envoyé immédiatement, sans
 ### Déplacement au double-clic
 
 Un double-clic gauche sur la carte lance le déplacement vers le point visé à la vitesse
-de course habituelle (celle de Maj), via le pathfinding (`Utils/PathfindingManager.ts`, A* sur les cases, sans
+de course habituelle (celle de Maj), via le pathfinding (`Utils/PathfindingManager.ts`, A\* sur les cases, sans
 dépendance). Les cases bloquées de la grille de collision et les **murs de la couche carte** sont pris en compte : ces
 murs sont des **barrières fines entre deux cases** (`Utils/TileBarriers.ts`, déduites du modèle de la couche carte par
 `MapLayerBarriers`), pas des volumes, et les cases de part et d'autre restent libres. Un mur horizontal sépare sa case de
@@ -580,7 +580,7 @@ pour qui est dehors, déverrouillage par le back quand la zone se vide). Ajouts 
   pas déranger ») et voient une carte « X toque à la porte » avec **Entrer** / **Pas maintenant** ; la première réponse
   reçue l'emporte. Sans réponse : « Personne ne répond » (30 s pour les cartes, 32 s pour le visiteur). Anti-spam : 30 s
   par visiteur et zone. Le visiteur qui s'éloigne de plus de 64 px annule sa demande.
-- **Laissez-passer** : *Entrer* lève la collision pour ce seul visiteur (`AreasManager.setLockPass`), pour **une seule
+- **Laissez-passer** : _Entrer_ lève la collision pour ce seul visiteur (`AreasManager.setLockPass`), pour **une seule
   entrée** : il est consommé dès que le visiteur est dans la zone (événement `entered`), au plus tard après 60 s. Ressorti,
   le visiteur doit toquer à nouveau, sans attendre l'anti-spam. La zone reste verrouillée pour les autres.
 - **Admin** : toque et attend comme tout le monde ; personne ne peut forcer une porte verrouillée (le déverrouillage
@@ -606,6 +606,7 @@ Fichiers : `play/src/front/Phaser/Game/Knock/*`, `Stores/KnockStore.ts`, `Compon
 `public/resources/objects/doors/door-knock.ogg` (synthétisé par `tools/door_knock.py` du repo d'infra), i18n `area.knock`.
 
 Limites :
+
 - Les événements se forgent depuis la console, comme le verrou upstream qui est déjà contournable côté navigateur.
 - Deux occupants qui répondent au même instant peuvent voir brièvement un état différent (chacun garde sa réponse).
 - Un joueur arrivé après l'acceptation ne connaît pas le laissez-passer : il voit la porte fermée pour le visiteur.
@@ -651,6 +652,7 @@ et testés ; `NightOverlay`, `NightManager`), `Stores/NightStore.ts`, `Component
 `DepthIndexes.ts`, `AREA_POSITION_OFFSET_Y` exporté de `libs/map-editor`, i18n `menu.settings.night`.
 
 Limites :
+
 - Sites intégrés et objets web de la carte (DOM) restent éclairés.
 - Sans WebGL (rendu canvas), les pièces ne s'allument pas (le pinceau NineSlice n'a pas de rendu canvas) ; les halos, si.
 - Deux pièces allumées qui se touchent gardent un fin trait sombre entre elles.
@@ -685,6 +687,7 @@ Fichiers : `play/src/front/Phaser/Game/Wave/*` (`WaveProtocol`, `WaveState` purs
 `GameScene.ts`, i18n `wave`.
 
 Limites :
+
 - Toute la salle reçoit l'événement : on peut voir dans la console qui fait coucou à qui (l'émoji est déjà public).
 - Pas de notification sur navigateur mobile (constructeur `Notification` refusé).
 - Coucou seulement entre joueurs de la même carte.
@@ -714,6 +717,7 @@ Fichiers : `play/src/front/Phaser/Game/Coffee/*` (`CoffeeProtocol`, `CoffeeState
 StaticGroupsPath}.ts`, `Connection/RoomConnection.ts`, `Player/Player.ts`, `GameScene.ts`, i18n `coffee`.
 
 Limites :
+
 - Sur la carte d'équipe, la zone d'arrivée chevauche des meubles de la réserve : un avatar peut y apparaître dans une
   poche dont les passages sont plus étroits qu'une case. Le clavier en sort, pas les trajets calculés.
 - Café seulement entre joueurs de la même carte.
@@ -834,24 +838,26 @@ commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
 ## Gommes et suppression dans l'éditeur
 
 L'outil « Corbeille » (raccourci `5`) est supprimé : chaque outil a sa propre suppression.
+
 - **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation).
 - **Objets** : un bouton « Gomme » (à bascule) supprime l'objet cliqué ou survolé le bouton enfoncé ; un bouton « Supprimer »
   dans le panneau de l'objet sélectionné le supprime (la touche Suppr reste). Les sols et murs de la couche carte
   n'en font jamais partie : ils se gomment avec l'outil Carte, qui garde leurs raccords cohérents.
 - **Zones** : un bouton « Gomme » supprime la zone cliquée (la plus petite sous le pointeur) ; un bouton « Supprimer la zone »
   dans son panneau la supprime.
-Choisir un objet à poser quitte la gomme ; changer d'outil la désactive. Les commandes WAM natives assurent la sauvegarde,
-la diffusion et l'annulation. Les calques de fond TMJ restent gérés dans Tiled.
+  Choisir un objet à poser quitte la gomme ; changer d'outil la désactive. Les commandes WAM natives assurent la sauvegarde,
+  la diffusion et l'annulation. Les calques de fond TMJ restent gérés dans Tiled.
 
 ## Outils de l'éditeur indépendants
 
 Chaque outil ne montre que ce qui le concerne ; le reste est atténué (opacité 0,4, `EntitiesManager.setEntitiesDimming`,
 appliqué aussi aux entités qui arrivent d'un autre éditeur) ou masqué :
+
 - **Zones** : les zones sont visibles ; objets, sols et murs sont atténués.
 - **Carte** : sols et murs à pleine opacité, objets atténués, zones masquées.
 - **Objets** : sols et murs restent à pleine opacité, zones masquées (un clic ne bascule plus vers l'outil Zones).
 - Exploration, réglages de la salle et Sélection : rendu normal.
-Les zones ne sont jamais incluses dans les motifs partagés.
+  Les zones ne sont jamais incluses dans les motifs partagés.
 
 Les sols et murs atténués sont assombris par une teinte grise (`DIMMED_MAP_LAYER_TINT`) et non par l'opacité : leurs
 sprites se chevauchent et une opacité de 0,4 par sprite dessinait un damier le long des murs. Les objets gardent l'opacité.
@@ -955,6 +961,7 @@ Gestes : mur (glisser une ligne droite), pièce (glisser un rectangle : murs + s
 unifiée qui n'efface que sols et murs. Un geste = une entrée d'annulation ; l'aperçu montre en vert ce qui sera créé et en rouge ce qui sera supprimé.
 
 Architecture (`Phaser/Game/MapEditor/MapLayer/`, sans Phaser, testée) :
+
 - `MapLayerModel` : la **source de vérité sémantique** (cellules de sol avec leur famille, segments de mur sur les lignes de la grille avec leur teinte).
   Un futur générateur (tracé → pièces) n'a qu'à remplir ce modèle.
 - `MapLayerAutotile` : dérive les prefabs à poser (sol uni, ou « ombre » sur la tuile qui suit un mur horizontal : l'image `ombre` du catalogue est assombrie sur ses premières lignes, la plus foncée contre le mur et estompée vers le bas ; façade fermée ou continue, raccord de chaque sommet) et
@@ -980,6 +987,7 @@ Limites connues : plafond de 4000 entités par geste, remplissage limité à 250
 raccords décoratifs au nord. **Comportement visuel non validé dans le jeu.**
 
 Mises à jour de l'outil Carte :
+
 - Aperçu des tracés : le point suit la **base** du mur, pas son sommet.
 - Profondeur : les sols sont au niveau le plus bas visible, juste au-dessus des tuiles de fond (`MAP_LAYER_FLOOR_DEPTH`), sous les objets, les murs, les
   avatars et le compagnon, qui ne passent plus tantôt dessus tantôt dessous en traversant une rangée.
@@ -991,6 +999,7 @@ Mises à jour de l'outil Carte :
   sont touchés (`EntitiesManager`).
 
 Portes (mode « Porte » de l'outil Carte) :
+
 - Une porte remplace **deux segments de mur consécutifs**, centrée sur le curseur, horizontale (vue du sud) ou verticale (vue de dessus). L'aperçu est vert si
   les deux segments sont des murs libres, rouge sinon (message « doorInvalid » au clic). Elle prend la teinte du mur.
 - Stockage : deux entités WAM de la collection `Carte Portes` (`porte-h-<teinte>-g|d`, `porte-v-<teinte>-haut|bas`, image = porte fermée). Les murs sous la
@@ -1095,7 +1104,6 @@ marcher et zoomer ; désactiver les effets dans une seule session et recharger p
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
 l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
 
-
 ### Suite météo et raccourcis (PR 136)
 
 - Outils → Météo → Automatique : ciel clair, pluie, orage, neige, changement toutes les 30 minutes sur l’heure serveur. Les choix fixes restent disponibles. Le cycle conserve sa phase après reconnexion.
@@ -1107,7 +1115,7 @@ l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt de
 ### Météo dehors et thème de Noël
 
 **Extérieur détecté seul.** Est dehors tout ce qu'on atteint depuis le bord de la carte sans traverser un objet des
-collections « Carte Murs », « Carte Portes » ou « Infogène Murs fins » (cases de 32 px, `Outdoor/OutdoorGrid.ts`).
+collections « Carte Murs », « Carte Portes » ou « Infogène Murs fins » (cases de 8 px, `Outdoor/OutdoorGrid.ts` : les murs de la carte d'équipe commencent en milieu de case de 32 px, une grille de 32 px laissait une bande d'herbe nue le long des façades ; la neige du sol couvre aussi les cases de mur qui touchent le dehors, cachées sous l'image du mur).
 Une pièce fermée, avec ou sans porte, est dedans ; terrasse et chemins sont dehors. La grille est recalculée 300 ms
 après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). Aucun changement du format WAM.
 
