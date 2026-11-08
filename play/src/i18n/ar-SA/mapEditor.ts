@@ -570,13 +570,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "المحاذاة إلى الشبكة",
         specialTags: {
             uncategorizedLabel: "للتصنيف",
-            structureLabel: "الأرضيات والجدران (قديم)",
             customLabel: "مخصص",
             mostUsedLabel: "الأكثر استخدامًا",
         },
         editModel: "تعديل النموذج (كل النسخ)",
         adjustModelForMap: "ضبط هذا الكائن على هذه الخريطة (كل النسخ)",
-        structureHint: "الأرضيات والجدران جزء من بنية الخريطة: استخدم أداة البنية بدلاً من ذلك.",
         views: {
             label: "العرض",
             front: "أمامي",

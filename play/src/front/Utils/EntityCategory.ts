@@ -1,9 +1,13 @@
 import type { EntityPrefab } from "@workadventure/map-editor";
+import { MAP_LAYER_COLLECTIONS } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 
 /** Tags that say where an object comes from, not what it is: never a category. */
 const GENERIC_TAGS = new Set(["basic", "custom", "default"]);
-/** Floors and walls belong to the structure of the map (its own tool), not to the objects placed on it. */
-const STRUCTURE_PATTERN = /^(murs?|sols?|walls?|floors?|cloisons?)\b|\b(murs?|sols?|walls?|floors?)\b/i;
+/**
+ * Floor and wall catalogs published before the map tool: the map tool replaces them, their pieces already placed on a
+ * map stay there, but the library does not offer them anymore.
+ */
+const FORMER_STRUCTURE_COLLECTIONS: readonly string[] = ["Infogène Sols", "Infogène Murs fins"];
 
 /**
  * The category of an object in the library: its first meaningful tag. Uploads put the category chosen by the user
@@ -24,11 +28,11 @@ export function isSameCategory(a: string, b: string): boolean {
     return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 }
 
-/** Old floor and wall objects, kept apart from the furniture: the structure tool of the map replaces them. */
-export function isStructureObject(prefab: Pick<EntityPrefab, "tags" | "collectionName">): boolean {
-    const category = getEntityCategory(prefab);
+/** Floors and walls have their own tool, the map tool: the library of objects does not offer them. */
+export function isHiddenFromLibrary(prefab: Pick<EntityPrefab, "collectionName">): boolean {
     return (
-        (category !== undefined && STRUCTURE_PATTERN.test(category)) || STRUCTURE_PATTERN.test(prefab.collectionName)
+        MAP_LAYER_COLLECTIONS.includes(prefab.collectionName) ||
+        FORMER_STRUCTURE_COLLECTIONS.includes(prefab.collectionName)
     );
 }
 

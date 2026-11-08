@@ -104,7 +104,7 @@ export type CategoryTag =
       }
     | {
           kind: "special";
-          tag: "most_used" | "custom" | "uncategorized" | "structure";
+          tag: "most_used" | "custom" | "uncategorized";
       };
 export type SelectableTag = CategoryTag | undefined;
 export const selectCategoryStore = writable<SelectableTag>(undefined);

@@ -577,13 +577,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Am Raster ausrichten",
         specialTags: {
             uncategorizedLabel: "Zu sortieren",
-            structureLabel: "Böden & Wände (alt)",
             customLabel: "Benutzerdefiniert",
             mostUsedLabel: "Meistverwendet",
         },
         editModel: "Vorlage bearbeiten (alle Kopien)",
         adjustModelForMap: "Dieses Objekt auf dieser Karte anpassen (alle Kopien)",
-        structureHint: "Böden und Wände gehören zur Struktur der Karte: nutze lieber das Struktur-Werkzeug.",
         views: {
             label: "Ansicht",
             front: "Vorne",

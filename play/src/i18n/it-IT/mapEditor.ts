@@ -575,14 +575,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Aggancia alla griglia",
         specialTags: {
             uncategorizedLabel: "Da classificare",
-            structureLabel: "Pavimenti e muri (vecchio)",
             customLabel: "Personalizzato",
             mostUsedLabel: "Più usati",
         },
         editModel: "Modifica il modello (tutte le copie)",
         adjustModelForMap: "Regola questo oggetto su questa mappa (tutte le copie)",
-        structureHint:
-            "Pavimenti e muri fanno parte della struttura della mappa: usa piuttosto lo strumento Struttura.",
         views: {
             label: "Vista",
             front: "Fronte",

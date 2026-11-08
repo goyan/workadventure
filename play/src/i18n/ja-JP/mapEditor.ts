@@ -574,13 +574,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "グリッドにスナップ",
         specialTags: {
             uncategorizedLabel: "未分類",
-            structureLabel: "床と壁（旧）",
             customLabel: "カスタム",
             mostUsedLabel: "よく使うもの",
         },
         editModel: "モデルを編集（すべてのコピー）",
         adjustModelForMap: "このマップでこのオブジェクトを調整（すべてのコピー）",
-        structureHint: "床と壁はマップの構造の一部です。構造ツールを使ってください。",
         views: {
             label: "向き",
             front: "正面",

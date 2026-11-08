@@ -578,14 +578,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Ajustar a la cuadrícula",
         specialTags: {
             uncategorizedLabel: "Por clasificar",
-            structureLabel: "Suelos y muros (antiguo)",
             customLabel: "Personalizado",
             mostUsedLabel: "Más usados",
         },
         editModel: "Editar el modelo (todas las copias)",
         adjustModelForMap: "Ajustar este objeto en este mapa (todas las copias)",
-        structureHint:
-            "Los suelos y muros forman parte de la estructura del mapa: usa mejor la herramienta Estructura.",
         views: {
             label: "Vista",
             front: "Frente",

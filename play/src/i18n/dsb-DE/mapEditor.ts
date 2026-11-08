@@ -575,13 +575,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Na rastr wusměriś",
         specialTags: {
             uncategorizedLabel: "K rědowanju",
-            structureLabel: "Dna a sćěny (stare)",
             customLabel: "Swójski",
             mostUsedLabel: "Nejcesćej wužywane",
         },
         editModel: "Model wobźěłaś (wšykne kopije)",
         adjustModelForMap: "Toś ten objekt na toś tej kórśe pśiměriś (wšykne kopije)",
-        structureHint: "Dna a sćěny słušaju k strukturje kórty: wužyj lěpjej rěd Struktura.",
         views: {
             label: "Naglěd",
             front: "Pśedk",

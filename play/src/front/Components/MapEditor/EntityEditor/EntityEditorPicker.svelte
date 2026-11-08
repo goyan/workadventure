@@ -6,7 +6,6 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
-    import { MAP_LAYER_COLLECTIONS } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import { mapEditorEntityEraserStore, mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
@@ -22,7 +21,7 @@
     import InputSwitch from "../../Input/InputSwitch.svelte";
     import ButtonClose from "../../Input/ButtonClose.svelte";
     import Button from "../../UI/Button.svelte";
-    import { getEntityCategory, isSameCategory, isStructureObject } from "../../../Utils/EntityCategory";
+    import { getEntityCategory, isHiddenFromLibrary, isSameCategory } from "../../../Utils/EntityCategory";
     import { categoryLabel } from "../../../Utils/CategoryLabel";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import EntitiesGrid from "./EntitiesGrid.svelte";
@@ -36,9 +35,9 @@
     import { IconChevronLeft, IconEraser, IconPencil, IconTrash } from "@wa-icons";
 
     const entitiesCollectionsManager = gameManager.getCurrentGameScene().getEntitiesCollectionsManager();
-    // Floors and walls of the map layer have their own tool: they are not offered as objects.
+    // Floors and walls have their own tool, the map tool: they are not offered as objects.
     const entitiesPrefabsVariants = derived(entitiesCollectionsManager.getEntitiesPrefabsVariantStore(), (variants) =>
-        variants.filter((variant) => !MAP_LAYER_COLLECTIONS.includes(variant.defaultPrefab.collectionName)),
+        variants.filter((variant) => !isHiddenFromLibrary(variant.defaultPrefab)),
     );
     const MOST_USED_CATEGORY_LIMIT = 12;
 
@@ -137,20 +136,14 @@
 
     /**
      * The library by category: one category per object (its first meaningful tag, see EntityCategory), then the
-     * objects still to sort, the user's own uploads, and the old floor and wall objects, which belong to the structure
-     * of the map rather than to its objects.
+     * objects still to sort and the user's own uploads.
      */
     function getForEntitiesPrefabsVariantsWithCategories(
         entitiesPrefabsVariants: EntityVariant[],
     ): { category: CategoryTag; entitiesPrefabsVariants: EntityVariant[] }[] {
         const byCategory: Record<string, { label: string; variants: EntityVariant[] }> = {};
         const uncategorized: EntityVariant[] = [];
-        const structure: EntityVariant[] = [];
         for (const variant of entitiesPrefabsVariants) {
-            if (isStructureObject(variant.defaultPrefab)) {
-                structure.push(variant);
-                continue;
-            }
             const category = getEntityCategory(variant.defaultPrefab);
             if (category === undefined) {
                 uncategorized.push(variant);
@@ -185,7 +178,6 @@
                     (variant) => variant.defaultPrefab.type === "Custom",
                 ),
             },
-            { category: { kind: "special", tag: "structure" }, entitiesPrefabsVariants: structure },
         );
         return groupedCategories.filter((group) => group.entitiesPrefabsVariants.length > 0);
     }
@@ -235,8 +227,6 @@
                     return get(LL).mapEditor.entityEditor.specialTags.mostUsedLabel();
                 case "uncategorized":
                     return get(LL).mapEditor.entityEditor.specialTags.uncategorizedLabel();
-                case "structure":
-                    return get(LL).mapEditor.entityEditor.specialTags.structureLabel();
             }
         }
         return categoryLabel(category.tag);
@@ -478,9 +468,6 @@
                         <span class="retro-title">
                             {getCategoryLabel($selectCategoryStore)}
                         </span>
-                        {#if $selectCategoryStore.kind === "special" && $selectCategoryStore.tag === "structure"}
-                            <p class="m-0 text-sm opacity-70">{$LL.mapEditor.entityEditor.structureHint()}</p>
-                        {/if}
                     {/if}
                     <EntitiesGrid
                         entityPrefabVariants={filteredEntityPrefabVariants}

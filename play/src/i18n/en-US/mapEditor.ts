@@ -577,13 +577,11 @@ const mapEditor: BaseTranslation = {
         snapToGrid: "Snap to grid",
         specialTags: {
             uncategorizedLabel: "To sort",
-            structureLabel: "Floors & walls (old)",
             customLabel: "Custom",
             mostUsedLabel: "Most used",
         },
         editModel: "Edit the model (all copies)",
         adjustModelForMap: "Adjust this object on this map (all copies)",
-        structureHint: "Floors and walls are part of the map structure: prefer the Structure tool of the map editor.",
         views: {
             label: "View",
             front: "Front",

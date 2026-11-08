@@ -25,8 +25,8 @@
     import {
         formatCategory,
         getEntityCategory,
+        isHiddenFromLibrary,
         isSeatObject,
-        isStructureObject,
         listCategories,
         withCategory,
     } from "../../../../Utils/EntityCategory";
@@ -151,7 +151,7 @@
         listCategories(
             get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
                 .map((variant) => variant.defaultPrefab)
-                .filter((prefab) => !isStructureObject(prefab)),
+                .filter((prefab) => !isHiddenFromLibrary(prefab)),
         ),
     );
     let category: string = $state((() => getEntityCategory(customEntity) ?? "")());
