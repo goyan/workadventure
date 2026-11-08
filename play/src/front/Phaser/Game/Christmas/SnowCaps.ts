@@ -13,7 +13,7 @@ export interface SnowEntity {
     visible: boolean;
     texture: { key: string };
     frame: { name: string | number; width: number; height: number };
-    getPrefab(): { collectionName: string; id: string };
+    getPrefab(): { collectionName: string; id: string; seasonal?: unknown };
 }
 
 /** One byte of alpha per pixel of an entity's frame. */
@@ -47,8 +47,10 @@ export class SnowCaps {
         for (const entity of entities) {
             // Not loaded yet: Phaser shows its placeholder texture, which must not get snow.
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
-            const { collectionName } = entity.getPrefab();
+            const { collectionName, seasonal } = entity.getPrefab();
             if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName)) continue;
+            // Seasonal objects (trees) carry their own snow in their winter image.
+            if (seasonal) continue;
             // An object stands where its feet are: the middle of its bottom edge.
             if (!grid.isOutdoorAt(entity.x + entity.displayWidth / 2, entity.y + entity.displayHeight - 1)) continue;
             if (FLOOR_COLLECTIONS.includes(collectionName)) {

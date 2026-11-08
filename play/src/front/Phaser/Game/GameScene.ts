@@ -1722,9 +1722,11 @@ export class GameScene extends DirtyScene {
             this.updateDoors(time);
             this.nightManager?.update(time);
             const serverDate = this.nightManager?.serverDate();
-            this.gameMapFrontWrapper.getEntitiesManager().updateSeason(time, serverDate);
             this.outdoorTracker?.update();
             this.christmasThemeManager?.update(time, () => this.christmasWalkers());
+            this.gameMapFrontWrapper
+                .getEntitiesManager()
+                .updateSeason(time, serverDate, this.christmasThemeManager?.isActive() ?? false);
             this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
