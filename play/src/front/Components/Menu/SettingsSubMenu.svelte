@@ -17,7 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { GroundMode, groundModeStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -51,7 +51,7 @@
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
     import NightSettings from "./NightSettings.svelte";
-    import ChristmasThemeSettings from "./ChristmasThemeSettings.svelte";
+    import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -340,15 +340,6 @@
         description={$LL.menu.settings.ambiance.description()}
         dataTestId="ambiance-settings"
     >
-        <Select
-            label={$LL.menu.settings.ground.label()}
-            bind:value={$groundModeStore}
-            dataTestId="ground-mode"
-            options={[
-                { value: GroundMode.Green, label: $LL.menu.settings.ground.green() },
-                { value: GroundMode.Seasonal, label: $LL.menu.settings.ground.seasonal() },
-            ]}
-        />
         <InputSwitch
             id="weather-effects-enabled"
             bind:value={$weatherEffectsEnabledStore}
@@ -360,9 +351,8 @@
             <NightSettings />
         </div>
         <div class="flex flex-col gap-2">
-            <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.christmas.label()}</p>
-            <ChristmasThemeSettings />
-            <p class="m-0 text-xs text-white/60">{$LL.menu.settings.christmas.hint()}</p>
+            <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>
+            <SeasonalThemeSettings />
         </div>
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">
