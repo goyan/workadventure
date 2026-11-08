@@ -568,13 +568,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "對齊格線",
         specialTags: {
             uncategorizedLabel: "待分類",
-            structureLabel: "地板和牆（舊）",
             customLabel: "自訂",
             mostUsedLabel: "最常用",
         },
         editModel: "編輯模型（所有副本）",
         adjustModelForMap: "在此地圖上調整此物件（所有副本）",
-        structureHint: "地板和牆屬於地圖結構：請使用結構工具。",
         views: {
             label: "視角",
             front: "正面",

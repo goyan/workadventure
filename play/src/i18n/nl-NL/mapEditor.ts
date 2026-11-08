@@ -577,14 +577,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Uitlijnen op raster",
         specialTags: {
             uncategorizedLabel: "Te sorteren",
-            structureLabel: "Vloeren & muren (oud)",
             customLabel: "Aangepast",
             mostUsedLabel: "Meest gebruikt",
         },
         editModel: "Model bewerken (alle kopieën)",
         adjustModelForMap: "Dit object op deze kaart aanpassen (alle kopieën)",
-        structureHint:
-            "Vloeren en muren horen bij de structuur van de kaart: gebruik liever het Structuur-gereedschap.",
         views: {
             label: "Aanzicht",
             front: "Voorkant",

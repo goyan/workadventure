@@ -5,7 +5,6 @@ import type { EditMapCommandMessage } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
-import { asError } from "catch-unknown";
 import { entityPlacementBlockerStore } from "../../../../Stores/MapEditorStore";
 import {
     mapEditorCopiedEntityDataPropertiesStore,
@@ -14,7 +13,6 @@ import {
     mapEditorEntityModeStore,
     mapEditorEntityUploadEventStore,
     mapEditorModifyCustomEntityEventStore,
-    mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
     mapEditorSnapEnabledStore,
 } from "../../../../Stores/MapEditorStore";
@@ -27,23 +25,12 @@ import { ModifyCustomEntityFrontCommand } from "../Commands/Entity/ModifyCustomE
 import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCommand";
 import { UploadEntityFrontCommand } from "../Commands/Entity/UploadEntityFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
-import { isPointerInsideCanvas } from "../MapEditorPointer";
 import { isPlacementFree, shouldSnapToGrid } from "../EntityPlacementSnapping";
 import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 
 import Key = Phaser.Input.Keyboard.Key;
 import Pointer = Phaser.Input.Pointer;
 import GameObject = Phaser.GameObjects.GameObject;
-
-const FLOOR_COLLECTION_NAME = "Infogène Sols";
-const FLOOR_TAG = "Sols";
-const FLOOR_DEPTH_OFFSET = -32;
-
-interface FloorStroke {
-    pointerId: number;
-    prefab: EntityPrefab;
-    lastTileIndex: Phaser.Types.Math.Vector2Like;
-}
 
 export class EntityEditorTool extends EntityRelatedEditorTool {
     private handleUpdateEntity: (entityData: EntityData) => void;
@@ -52,23 +39,11 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     protected shiftKey?: Key;
     protected pointerMoveEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
     protected pointerDownEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
-    protected readonly pointerUpEventHandler = (pointer: Pointer): void => {
-        this.handlePointerUpEvent(pointer);
-    };
-    protected readonly pointerOutEventHandler = (): void => {
-        this.stopFloorStroke();
-    };
-    protected readonly windowBlurEventHandler = (): void => {
-        this.stopFloorStroke();
-    };
 
     protected mapEditorEntityUploadStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorModifyCustomEntityEventStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorDeleteCustomEntityEventStoreUnsubscriber: Unsubscriber | undefined;
 
-    private floorStroke: FloorStroke | undefined;
-    private floorPrefabSelectionUnsubscriber: Unsubscriber | undefined;
-    private readonly pendingFloorCreations = new Set<string>();
     private readonly handleShiftKeyDown = (): void => {
         this.changePreviewTint();
     };
@@ -90,9 +65,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         this.subscribeToEntityUpload();
         this.subscribeToModifyCustomEntityEventStore();
         this.subscribeToDeleteCustomEntityEventStore();
-        this.floorPrefabSelectionUnsubscriber = mapEditorSelectedEntityPrefabStore.subscribe(() => {
-            this.stopFloorStroke();
-        });
 
         this.bindEventHandlers();
         this.bindEntitiesManagerEventHandlers();
@@ -100,12 +72,9 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
 
     public clear(): void {
         entityPlacementBlockerStore.set(undefined);
-        this.stopFloorStroke();
         super.clear();
         this.unbindEventHandlers();
         this.unsubscribeStore();
-        this.floorPrefabSelectionUnsubscriber?.();
-        this.floorPrefabSelectionUnsubscriber = undefined;
         this.unbindEntitiesManagerEventHandlers();
     }
 
@@ -238,20 +207,10 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     public destroy() {
-        this.stopFloorStroke();
         super.destroy();
         this.unbindEventHandlers();
         this.unbindEntitiesManagerEventHandlers();
         this.unsubscribeStore();
-        this.floorPrefabSelectionUnsubscriber?.();
-        this.floorPrefabSelectionUnsubscriber = undefined;
-    }
-
-    public handleKeyDownEvent(event: KeyboardEvent): void {
-        if (event.key.toLowerCase() === "escape") {
-            this.stopFloorStroke();
-        }
-        super.handleKeyDownEvent(event);
     }
 
     protected bindEntitiesManagerEventHandlers(): void {
@@ -267,12 +226,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         this.pointerDownEventHandler = (pointer: Pointer, gameObjects: GameObject[]) =>
             this.handlePointerDownEvent(pointer, gameObjects);
         this.scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
-
-        this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
-        this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUpEventHandler);
-        this.scene.input.on(Phaser.Input.Events.GAME_OUT, this.pointerOutEventHandler);
-
-        window.addEventListener("blur", this.windowBlurEventHandler);
 
         this.shiftKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.handleShiftKeyDown);
         this.shiftKey?.on(Phaser.Input.Keyboard.Events.UP, this.handleShiftKeyUp);
@@ -347,8 +300,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     }
 
     protected handlePointerMoveEvent(pointer: Pointer, gameObjects: GameObject[]): void {
-        this.continueFloorStroke(pointer);
-
         // TODO: add shadow when moving into the area
         // .setDropShadow(4, 4, 0x000000);
         if (!this.entityPrefabPreview || !this.entityPrefab) {
@@ -377,7 +328,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
 
     protected handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
         if (pointer.button === 2 || pointer.rightButtonDown()) {
-            this.stopFloorStroke();
             this.cleanPreview();
             return;
         }
@@ -399,17 +349,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         }
 
         this.updateEntityPrefabPreviewPosition(pointer);
-
-        if (this.isFloorPrefab(this.entityPrefab)) {
-            if (
-                (pointer.downElement !== this.scene.game.canvas && pointer.event.target !== this.scene.game.canvas) ||
-                !isPointerInsideCanvas(this.scene, pointer)
-            ) {
-                return;
-            }
-            this.startFloorStroke(pointer, this.entityPrefab);
-            return;
-        }
 
         if (!this.canEntityBePlaced()) {
             return;
@@ -458,19 +397,9 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             .catch((e) => console.error(e));
     }
 
-    protected handlePointerUpEvent(pointer: Phaser.Input.Pointer): void {
-        if (this.floorStroke?.pointerId === pointer.id) {
-            this.stopFloorStroke();
-        }
-    }
-
     protected unbindEventHandlers(): void {
         this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
-        this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
-        this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUpEventHandler);
-        this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.pointerOutEventHandler);
-        window.removeEventListener("blur", this.windowBlurEventHandler);
         this.shiftKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.handleShiftKeyDown);
         this.shiftKey?.off(Phaser.Input.Keyboard.Events.UP, this.handleShiftKeyUp);
     }
@@ -512,131 +441,6 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
 
     private isFreePlacement(): boolean {
         return isPlacementFree(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
-    }
-
-    private isFloorPrefab(prefab: EntityPrefab): boolean {
-        const tileDimensions = this.scene.getGameMapFrontWrapper().getTileDimensions();
-        const collisionGrid = prefab.collisionGrid;
-        const preview = this.entityPrefabPreview;
-
-        return (
-            prefab.collectionName === FLOOR_COLLECTION_NAME &&
-            prefab.tags.includes(FLOOR_TAG) &&
-            prefab.depthOffset === FLOOR_DEPTH_OFFSET &&
-            collisionGrid?.length === 1 &&
-            collisionGrid[0]?.length === 1 &&
-            collisionGrid[0][0] === 0 &&
-            preview !== undefined &&
-            preview.displayWidth === tileDimensions.width &&
-            preview.displayHeight === tileDimensions.height
-        );
-    }
-
-    private startFloorStroke(pointer: Phaser.Input.Pointer, prefab: EntityPrefab): void {
-        const tileIndex = this.scene.getGameMapFrontWrapper().getTileIndexAt(pointer.worldX, pointer.worldY);
-        this.floorStroke = {
-            pointerId: pointer.id,
-            prefab,
-            lastTileIndex: tileIndex,
-        };
-        this.paintFloorTile(prefab, tileIndex);
-    }
-
-    private continueFloorStroke(pointer: Phaser.Input.Pointer): void {
-        const stroke = this.floorStroke;
-        if (!stroke || stroke.pointerId !== pointer.id) {
-            return;
-        }
-        if (
-            !pointer.leftButtonDown() ||
-            !isPointerInsideCanvas(this.scene, pointer) ||
-            this.entityPrefab !== stroke.prefab ||
-            !this.isFloorPrefab(stroke.prefab)
-        ) {
-            this.stopFloorStroke();
-            return;
-        }
-
-        const tileIndex = this.scene.getGameMapFrontWrapper().getTileIndexAt(pointer.worldX, pointer.worldY);
-        const line = new Phaser.Geom.Line(stroke.lastTileIndex.x, stroke.lastTileIndex.y, tileIndex.x, tileIndex.y);
-        for (const point of Phaser.Geom.Line.BresenhamPoints(line)) {
-            this.paintFloorTile(stroke.prefab, point);
-        }
-        stroke.lastTileIndex = tileIndex;
-    }
-
-    private paintFloorTile(prefab: EntityPrefab, tileIndex: Phaser.Types.Math.Vector2Like): void {
-        const tileDimensions = this.scene.getGameMapFrontWrapper().getTileDimensions();
-        const topLeftPos = {
-            x: tileIndex.x * tileDimensions.width,
-            y: tileIndex.y * tileDimensions.height,
-        };
-        const reservationKey = JSON.stringify([prefab.collectionName, prefab.id, topLeftPos.x, topLeftPos.y]);
-        if (this.pendingFloorCreations.has(reservationKey)) {
-            return;
-        }
-
-        for (const entity of this.entitiesManager.getEntities().values()) {
-            const entityPrefab = entity.getPrefab();
-            if (
-                entityPrefab.collectionName === prefab.collectionName &&
-                entityPrefab.id === prefab.id &&
-                entity.x === topLeftPos.x &&
-                entity.y === topLeftPos.y
-            ) {
-                return;
-            }
-        }
-        if (!this.entityPrefabPreview) {
-            return;
-        }
-
-        const width = this.entityPrefabPreview.displayWidth;
-        const height = this.entityPrefabPreview.displayHeight;
-        // The floor brush always works on tile indexes: only Shift ignores collisions, the snapping switch does not apply.
-        if (!this.canEntityBePlacedAt(topLeftPos, width, height, prefab, this.shiftKey?.isDown ?? false)) {
-            return;
-        }
-
-        const wamFile = this.scene.getGameMap().getWamFile();
-        if (!wamFile) {
-            return;
-        }
-
-        const properties = get(mapEditorCopiedEntityDataPropertiesStore);
-        const entityData: WAMEntityData = {
-            x: topLeftPos.x,
-            y: topLeftPos.y,
-            prefabRef: prefab,
-            properties: properties ?? [],
-            name: properties?.find((property) => property.type === "openFile")?.name ?? undefined,
-        };
-
-        this.pendingFloorCreations.add(reservationKey);
-        this.mapEditorModeManager
-            .executeCommand(
-                new CreateEntityFrontCommand(wamFile, uuidv4(), entityData, undefined, this.entitiesManager, {
-                    width,
-                    height,
-                }),
-            )
-            .finally(() => {
-                this.pendingFloorCreations.delete(reservationKey);
-            })
-            .catch((error: unknown) => {
-                const cause = asError(error);
-                console.error("Failed to paint floor tile", {
-                    error: cause,
-                    prefabRef: entityData.prefabRef,
-                    x: topLeftPos.x,
-                    y: topLeftPos.y,
-                });
-                Sentry.captureException(cause);
-            });
-    }
-
-    private stopFloorStroke(): void {
-        this.floorStroke = undefined;
     }
 
     private updateEntityPrefabPreviewPosition(pointer: Pointer): void {

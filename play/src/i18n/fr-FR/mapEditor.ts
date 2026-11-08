@@ -586,14 +586,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Magnétisme",
         specialTags: {
             uncategorizedLabel: "À classer",
-            structureLabel: "Sols et murs (ancien)",
             customLabel: "Personnalisé",
             mostUsedLabel: "Plus utilisés",
         },
         editModel: "Modifier le modèle (toutes les copies)",
         adjustModelForMap: "Régler cet objet sur cette carte (toutes les copies)",
-        structureHint:
-            "Les sols et les murs font partie de la structure de la carte : préférez l’outil Structure de l’éditeur.",
         views: {
             label: "Vue",
             front: "Face",

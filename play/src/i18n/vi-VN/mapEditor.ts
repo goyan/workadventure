@@ -573,13 +573,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Căn theo lưới",
         specialTags: {
             uncategorizedLabel: "Cần phân loại",
-            structureLabel: "Sàn & tường (cũ)",
             customLabel: "Tùy chỉnh",
             mostUsedLabel: "Dùng nhiều nhất",
         },
         editModel: "Sửa mẫu (mọi bản sao)",
         adjustModelForMap: "Chỉnh vật thể này trên bản đồ này (mọi bản sao)",
-        structureHint: "Sàn và tường thuộc cấu trúc bản đồ: hãy dùng công cụ Cấu trúc.",
         views: {
             label: "Góc nhìn",
             front: "Trước",

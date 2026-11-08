@@ -576,13 +576,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "Imant a la graella",
         specialTags: {
             uncategorizedLabel: "Per classificar",
-            structureLabel: "Terres i murs (antic)",
             customLabel: "Personalitzat",
             mostUsedLabel: "Més utilitzats",
         },
         editModel: "Edita el model (totes les còpies)",
         adjustModelForMap: "Ajusta aquest objecte en aquest mapa (totes les còpies)",
-        structureHint: "Els terres i murs formen part de l’estructura del mapa: millor fes servir l’eina Estructura.",
         views: {
             label: "Vista",
             front: "Davant",

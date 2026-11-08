@@ -573,13 +573,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "격자에 맞추기",
         specialTags: {
             uncategorizedLabel: "분류 필요",
-            structureLabel: "바닥과 벽 (이전)",
             customLabel: "사용자 정의",
             mostUsedLabel: "자주 사용됨",
         },
         editModel: "모델 편집 (모든 사본)",
         adjustModelForMap: "이 맵에서 이 오브젝트 조정 (모든 사본)",
-        structureHint: "바닥과 벽은 맵 구조의 일부입니다. 구조 도구를 사용하세요.",
         views: {
             label: "방향",
             front: "앞",

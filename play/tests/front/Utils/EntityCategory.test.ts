@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
     getEntityCategory,
+    isHiddenFromLibrary,
     isSeatObject,
-    isStructureObject,
     listCategories,
     withCategory,
 } from "../../../src/front/Utils/EntityCategory";
@@ -25,11 +25,13 @@ describe("EntityCategory", () => {
         expect(withCategory(["Custom", "eau", "Piscines"], "piscines")).toEqual(["Piscines", "eau"]);
     });
 
-    it("keeps floors and walls apart from the objects", () => {
-        expect(isStructureObject({ tags: ["Murs"], collectionName: "x" })).toBe(true);
-        expect(isStructureObject({ tags: [], collectionName: "Infogène Sols" })).toBe(true);
-        expect(isStructureObject({ tags: ["furniture"], collectionName: "basic furniture" })).toBe(false);
-        expect(isStructureObject({ tags: ["Plantes murales"], collectionName: "Déco" })).toBe(false);
+    it("hides the floors and walls of the map tool and of the former catalogs from the library", () => {
+        const hidden = (collectionName: string) => isHiddenFromLibrary({ collectionName });
+        expect(hidden("Carte Murs")).toBe(true);
+        expect(hidden("Infogène Sols")).toBe(true);
+        expect(hidden("Infogène Murs fins")).toBe(true);
+        expect(hidden("basic furniture")).toBe(false);
+        expect(hidden("custom entities")).toBe(false);
     });
 
     it("recognizes the objects players sit on, by category or name", () => {

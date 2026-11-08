@@ -570,13 +570,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         snapToGrid: "จัดชิดตาราง",
         specialTags: {
             uncategorizedLabel: "รอจัดหมวด",
-            structureLabel: "พื้นและผนัง (เก่า)",
             customLabel: "กำหนดเอง",
             mostUsedLabel: "ใช้บ่อยที่สุด",
         },
         editModel: "แก้ไขต้นแบบ (ทุกสำเนา)",
         adjustModelForMap: "ปรับวัตถุนี้บนแผนที่นี้ (ทุกสำเนา)",
-        structureHint: "พื้นและผนังเป็นโครงสร้างของแผนที่ ควรใช้เครื่องมือโครงสร้าง",
         views: {
             label: "มุมมอง",
             front: "ด้านหน้า",
