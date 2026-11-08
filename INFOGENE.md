@@ -1103,3 +1103,29 @@ l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt de
 - Maison : téléportation au bureau possédé sur la carte. Sans bureau, liste des zones personnelles libres et réclamables : Aller fait marcher jusqu’à la zone, puis la confirmation existante permet de la réclamer. Connexion, attribution dynamique et tags restent requis. Aucun bureau n’est attribué automatiquement.
 - Double-clic sur la carte : animation de sprint et fumée pendant le trajet, fin des effets à l’arrêt ; aucun effet de course pendant la nage.
 - Ambiance à 5 % par défaut, volume des pas séparé ; préférences déjà enregistrées conservées. rain.mp3, thunder.mp3, snow.mp3 et sunny.mp3 fournis par le propriétaire remplacent les sons synthétiques. L’origine/licence de ces fichiers n’a pas été fournie ; ne pas les présenter comme CC0.
+
+### Météo dehors et thème de Noël
+
+**Extérieur détecté seul.** Est dehors tout ce qu'on atteint depuis le bord de la carte sans traverser un objet des
+collections « Carte Murs », « Carte Portes » ou « Infogène Murs fins » (cases de 32 px, `Outdoor/OutdoorGrid.ts`).
+Une pièce fermée, avec ou sans porte, est dedans ; terrasse et chemins sont dehors. La grille est recalculée 300 ms
+après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). Aucun changement du format WAM.
+
+**Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
+(`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
+
+**Thème de Noël** (« Paramètres → Thème de Noël ») : Auto (1er décembre – 6 janvier, date de l'ordinateur, revérifiée
+chaque minute), Toujours, Jamais. Réglage perso (`christmasTheme` dans le navigateur), appliqué sans recharger.
+Thème actif : la météo affichée pour soi devient Neige (flocons et son de la météo existante), le sol extérieur se
+couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du haut, les sols posés dehors sont
+givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une trace en course, fondu en 45 s,
+400 au plus). Les empreintes sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le réseau.
+Le thème est masqué pendant l'édition ; la neige des objets est reposée à la sortie de l'éditeur.
+« Afficher la météo » coupé retire aussi les flocons ; le reste suit seulement le réglage du thème.
+
+Limites : un mur manquant laisse entrer la neige ; une image d'objet illisible (CORS) reste sans neige ; un objet
+déplacé par une autre personne garde sa neige à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
+l'éditeur.
+
+Recette : régler « Toujours », marcher puis courir dehors et dans une pièce, ouvrir l'éditeur et retirer un mur d'une
+pièce, puis le remettre ; régler « Jamais » et vérifier une carte en orage : pluie et voile seulement dehors.
