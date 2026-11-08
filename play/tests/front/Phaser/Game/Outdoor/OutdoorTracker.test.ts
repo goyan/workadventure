@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OutdoorTracker } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorTracker";
+import { entityOutdoorRect, OutdoorTracker } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorTracker";
 
 type TestEntity = { collectionName: string; x: number; y: number; width: number; height: number };
 
@@ -61,5 +61,31 @@ describe("OutdoorTracker", () => {
         at(1000);
         at(2000);
         expect(tracker.version).toBe(1);
+    });
+});
+
+describe("entityOutdoorRect", () => {
+    const door = {
+        x: 64,
+        y: 32,
+        displayWidth: 32,
+        displayHeight: 60,
+        scaleX: 1,
+        scaleY: 1,
+        getPrefab: () => ({ collectionName: "Carte Portes", imagePath: "door.png" }),
+    };
+
+    it("measures an animated door by its prefab image, not its open frame", () => {
+        expect(entityOutdoorRect(door, () => ({ width: 32, height: 32 }))).toEqual({
+            collectionName: "Carte Portes",
+            x: 64,
+            y: 32,
+            width: 32,
+            height: 32,
+        });
+    });
+
+    it("falls back to the displayed size without a prefab image", () => {
+        expect(entityOutdoorRect(door, () => undefined)).toMatchObject({ width: 32, height: 60 });
     });
 });

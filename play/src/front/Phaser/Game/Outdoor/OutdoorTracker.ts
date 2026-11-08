@@ -75,3 +75,33 @@ export class OutdoorTracker {
         this.pendingSignature = undefined;
     }
 }
+
+/** The part of a map entity needed to place it on the outdoor grid (an `Entity` fits). */
+export interface OutdoorSourceEntity {
+    x: number;
+    y: number;
+    displayWidth: number;
+    displayHeight: number;
+    scaleX: number;
+    scaleY: number;
+    getPrefab(): { collectionName: string; imagePath: string };
+}
+
+/**
+ * Where an entity stands, sized by its prefab image: an opening door swaps to a taller frame, which must neither
+ * reopen the room nor trigger a recomputation at every passage.
+ */
+export function entityOutdoorRect(
+    entity: OutdoorSourceEntity,
+    prefabFrameSize: (imagePath: string) => { width: number; height: number } | undefined,
+): OutdoorEntity {
+    const prefab = entity.getPrefab();
+    const frame = prefabFrameSize(prefab.imagePath);
+    return {
+        collectionName: prefab.collectionName,
+        x: entity.x,
+        y: entity.y,
+        width: frame ? frame.width * entity.scaleX : entity.displayWidth,
+        height: frame ? frame.height * entity.scaleY : entity.displayHeight,
+    };
+}

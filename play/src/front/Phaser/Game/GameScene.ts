@@ -293,7 +293,7 @@ import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { WeatherManager } from "./Weather/WeatherManager";
-import { OutdoorTracker } from "./Outdoor/OutdoorTracker";
+import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { ChristmasThemeManager } from "./Christmas/ChristmasThemeManager";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
@@ -2789,13 +2789,11 @@ export class GameScene extends DirtyScene {
                 this.skateboardSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(
                     () =>
-                        Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) => ({
-                            collectionName: entity.getPrefab().collectionName,
-                            x: entity.x,
-                            y: entity.y,
-                            width: entity.displayWidth,
-                            height: entity.displayHeight,
-                        })),
+                        Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) =>
+                            entityOutdoorRect(entity, (imagePath) =>
+                                this.textures.exists(imagePath) ? this.textures.getFrame(imagePath) : undefined,
+                            ),
+                        ),
                     () => {
                         const map = this.gameMapFrontWrapper.getMap();
                         return {
