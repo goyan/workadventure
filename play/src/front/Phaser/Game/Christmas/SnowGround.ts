@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { DEPTH_TILE_INDEX } from "../DepthIndexes";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 
