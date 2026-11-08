@@ -5,16 +5,29 @@ const BASE_ROWS = 4;
 /** The pile covers this share of the base, centred. */
 const PILE_SHARE = 0.7;
 
-/** Columns of the frame where the pile goes: the central 70 % of the opaque base. */
+/**
+ * Where the pile goes: the central 70 % of the opaque base, and the row the object stands on. Many images (the
+ * seasonal trees among them) end with transparent rows, so the base is found from the lowest opaque row up.
+ */
 export function leafPileSpan(
     alpha: Uint8ClampedArray,
     width: number,
     height: number,
-): { left: number; right: number } | undefined {
+): { left: number; right: number; bottom: number } | undefined {
+    let bottom = -1;
+    for (let y = height - 1; y >= 0 && bottom < 0; y--) {
+        for (let x = 0; x < width; x++) {
+            if (alpha[y * width + x] > 0) {
+                bottom = y;
+                break;
+            }
+        }
+    }
+    if (bottom < 0) return undefined;
     let left = -1;
     let right = -1;
     for (let x = 0; x < width; x++) {
-        for (let y = Math.max(0, height - BASE_ROWS); y < height; y++) {
+        for (let y = Math.max(0, bottom - BASE_ROWS + 1); y <= bottom; y++) {
             if (alpha[y * width + x] > 0) {
                 if (left < 0) left = x;
                 right = x;
@@ -26,7 +39,7 @@ export function leafPileSpan(
     const length = right - left + 1;
     const keep = Math.max(1, Math.round(length * PILE_SHARE));
     const start = left + Math.floor((length - keep) / 2);
-    return { left: start, right: start + keep - 1 };
+    return { left: start, right: start + keep - 1, bottom };
 }
 
 /** 12 % of the object's height, between 4 and 8 px. */

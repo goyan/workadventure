@@ -77,6 +77,15 @@ describe("LeafPiles", () => {
         expect(scene.add.image.mock.calls).toHaveLength(0);
     });
 
+    it("sits at the foot of the visible tree, above a transparent margin", () => {
+        const alpha = new Uint8ClampedArray(32 * 32).fill(255);
+        alpha.fill(0, 13 * 32);
+        const { scene, piles } = setup(vi.fn(() => ({ width: 32, height: 32, alpha })));
+        piles.rebuild([entity(0, 0, "Nature", {})], grid);
+        // Trunk ends on row 12: the 4 px pile's bottom sits 2 px under it.
+        expect(scene.add.image.mock.calls[0].slice(0, 2)).toEqual([5, 11]);
+    });
+
     it("reads each image once", () => {
         const readPixels = vi.fn(opaque);
         const { piles } = setup(readPixels);

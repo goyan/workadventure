@@ -32,7 +32,7 @@ function setup(
     options: {
         serverDate?: () => Date | undefined;
         version?: () => number;
-        entities?: () => { visible: boolean }[];
+        entities?: () => { visible: boolean; texture?: { key: string } }[];
     } = {},
 ) {
     manager = new SeasonalThemeManager(mockDeep<Phaser.Scene>(), {
@@ -137,6 +137,16 @@ describe("SeasonalThemeManager", () => {
         entities[1].visible = true;
         manager?.update(500, walking);
         expect(events).toEqual([]);
+        manager?.update(1000, walking);
+        expect(events).toEqual(["autumn:objects"]);
+    });
+
+    it("rebuilds objects when an image changes, as when a tree turns to its season", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        const tree = { visible: true, texture: { key: "tree-summer" } };
+        setup({ entities: () => [tree] }).update(0, walking);
+        events.length = 0;
+        tree.texture.key = "tree-autumn";
         manager?.update(1000, walking);
         expect(events).toEqual(["autumn:objects"]);
     });

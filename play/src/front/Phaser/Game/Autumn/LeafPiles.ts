@@ -8,6 +8,8 @@ const PILE_OVERHANG_PX = 2;
 interface PileTexture {
     key: string;
     left: number;
+    /** Lowest opaque row of the frame: where the object stands. */
+    bottom: number;
     height: number;
 }
 
@@ -37,7 +39,7 @@ export class LeafPiles {
             const scaleY = entity.displayHeight / entity.frame.height;
             const image = this.scene.add.image(
                 entity.x + pile.left * scaleX,
-                entity.y + entity.displayHeight + (PILE_OVERHANG_PX - pile.height) * scaleY,
+                entity.y + (pile.bottom + 1 + PILE_OVERHANG_PX - pile.height) * scaleY,
                 pile.key,
             );
             image.setOrigin(0);
@@ -89,7 +91,7 @@ export class LeafPiles {
         image.data.set(paintLeafPile(width, height, key.length));
         context.putImageData(image, 0, 0);
         canvas.refresh();
-        const pile = { key, left: span.left, height };
+        const pile = { key, left: span.left, bottom: span.bottom, height };
         this.textures.set(key, pile);
         return pile;
     }

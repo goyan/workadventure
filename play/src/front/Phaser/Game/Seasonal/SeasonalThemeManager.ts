@@ -12,7 +12,10 @@ import { readFrameAlpha } from "./readFrameAlpha";
 
 /** The calendar is checked again every minute, so the theme changes at midnight without a reload. */
 const DATE_CHECK_MS = 60_000;
-/** Object images load after the map: count the visible ones this often, and decorate the newcomers. */
+/**
+ * Object images load after the map, and seasonal trees change image with the season: check the visible images this
+ * often, and decorate again when they changed.
+ */
 const LOADED_CHECK_MS = 1000;
 
 export interface SeasonalThemeDeps {
@@ -31,8 +34,8 @@ interface ActiveDecor {
     decor: SeasonalDecor | undefined;
     builtVersion: number;
     visible: boolean;
-    /** Visible entities when the objects were last decorated, and when that was checked. */
-    loadedCount: number;
+    /** Visible images when the objects were last decorated, and when that was checked. */
+    loadedSignature: number;
     loadedCheckAt: number;
 }
 
@@ -90,7 +93,7 @@ export class SeasonalThemeManager {
             this.rebuildObjects(active, decor, grid, time);
         } else if (!this.editing && time - active.loadedCheckAt >= LOADED_CHECK_MS) {
             active.loadedCheckAt = time;
-            if (this.countVisible() !== active.loadedCount) this.rebuildObjects(active, decor, grid, time);
+            if (this.visibleSignature() !== active.loadedSignature) this.rebuildObjects(active, decor, grid, time);
         }
         const visible = !this.editing;
         if (visible !== active.visible) {
@@ -108,16 +111,23 @@ export class SeasonalThemeManager {
 
     private rebuildObjects(active: ActiveDecor, decor: SeasonalDecor, grid: OutdoorGrid, time: number): void {
         decor.rebuildObjects(this.deps.entities(), grid);
-        active.loadedCount = this.countVisible();
+        active.loadedSignature = this.visibleSignature();
         active.loadedCheckAt = time;
         this.objectsStale = false;
         this.deps.markDirty();
     }
 
-    private countVisible(): number {
-        let count = 0;
-        for (const entity of this.deps.entities()) if (entity.visible) count++;
-        return count;
+    /** Changes when an image appears, disappears, or is swapped (a tree turning to its season). */
+    private visibleSignature(): number {
+        let signature = 0;
+        for (const entity of this.deps.entities()) {
+            if (!entity.visible) continue;
+            const key = entity.texture?.key ?? "";
+            let hash = 17;
+            for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
+            signature = (signature * 33 + hash) | 0;
+        }
+        return signature;
     }
 
     private createDecor(theme: SeasonalTheme): ActiveDecor {
@@ -126,7 +136,7 @@ export class SeasonalThemeManager {
             decor: (this.deps.createDecor ?? ((t: SeasonalTheme) => this.defaultDecor(t)))(theme),
             builtVersion: -1,
             visible: true,
-            loadedCount: 0,
+            loadedSignature: 0,
             loadedCheckAt: -Infinity,
         };
         return this.active;

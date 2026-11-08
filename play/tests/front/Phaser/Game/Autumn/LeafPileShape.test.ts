@@ -8,19 +8,23 @@ function opaque(width: number, height: number): Uint8ClampedArray {
 
 describe("leafPileSpan", () => {
     it("keeps the central 70 % of the columns touching the ground", () => {
-        expect(leafPileSpan(opaque(32, 32), 32, 32)).toEqual({ left: 5, right: 26 });
+        expect(leafPileSpan(opaque(32, 32), 32, 32)).toEqual({ left: 5, right: 26, bottom: 31 });
     });
 
-    it("has no pile when the bottom of the image is transparent", () => {
+    it("finds the base above a transparent margin, as on the seasonal trees", () => {
         const alpha = opaque(32, 32);
-        alpha.fill(0, 28 * 32);
-        expect(leafPileSpan(alpha, 32, 32)).toBeUndefined();
+        alpha.fill(0, 13 * 32);
+        expect(leafPileSpan(alpha, 32, 32)).toEqual({ left: 5, right: 26, bottom: 12 });
+    });
+
+    it("has no pile for a fully transparent image", () => {
+        expect(leafPileSpan(new Uint8ClampedArray(32 * 32), 32, 32)).toBeUndefined();
     });
 
     it("follows the base of a narrow object", () => {
         const alpha = new Uint8ClampedArray(32 * 32);
         for (let y = 0; y < 32; y++) for (let x = 12; x < 22; x++) alpha[y * 32 + x] = 255;
-        expect(leafPileSpan(alpha, 32, 32)).toEqual({ left: 13, right: 19 });
+        expect(leafPileSpan(alpha, 32, 32)).toEqual({ left: 13, right: 19, bottom: 31 });
     });
 });
 
