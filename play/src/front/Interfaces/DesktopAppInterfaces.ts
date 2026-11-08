@@ -1,4 +1,28 @@
+import type { WeatherType } from "@workadventure/map-editor";
 import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
+import type { NightMode } from "../Stores/NightStore";
+import type { GroundMode } from "../Stores/WeatherStore";
+import type { ChristmasThemeMode } from "../Phaser/Game/Christmas/ChristmasSeason";
+
+export type DesktopEnvironmentRequest =
+    | { setting: "weather"; value: WeatherType }
+    | { setting: "night"; value: NightMode }
+    | { setting: "ground"; value: GroundMode }
+    | { setting: "christmas"; value: ChristmasThemeMode }
+    | { setting: "effects"; value: boolean };
+
+export interface DesktopEnvironmentState {
+    weather: WeatherType;
+    displayWeather: WeatherType;
+    night: NightMode;
+    isNight: boolean;
+    ground: GroundMode;
+    christmas: ChristmasThemeMode;
+    effects: boolean;
+    canEditWeather: boolean;
+    busy: boolean;
+    error: string;
+}
 // copy of Electron.SourcesOptions to avoid Electron dependency in front
 export interface SourcesOptions {
     types: string[];
@@ -95,6 +119,9 @@ export interface DesktopAppearance {
 
 export type WorkAdventureDesktopApi = {
     desktop: boolean;
+    /** Optional: direct controls in the desktop toolbar; existing web settings keep their places. */
+    onEnvironmentRequest?: (callback: (request: DesktopEnvironmentRequest) => void) => void;
+    reportEnvironment?: (state: DesktopEnvironmentState | null) => void;
     isDevelopment: () => Promise<boolean>;
     getVersion: () => Promise<string>;
     notify: (txt: string) => void;
