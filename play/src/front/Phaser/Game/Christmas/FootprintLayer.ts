@@ -23,6 +23,11 @@ export class FootprintLayer {
         this.createTexture(TRAIL_TEXTURE, 1, TRAIL_WIDTH_PX, (context) => context.fillRect(0, 0, 1, TRAIL_WIDTH_PX));
     }
 
+    /** Number of footprints on the map. */
+    get count(): number {
+        return this.pool.size;
+    }
+
     add(marks: FootprintMark[], now: number): void {
         for (const mark of marks) {
             const image =

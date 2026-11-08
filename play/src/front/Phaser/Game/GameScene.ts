@@ -251,7 +251,6 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { environmentVolumeStore, footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
-import { christmasThemeModeStore } from "../../Stores/ChristmasThemeStore";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -296,7 +295,8 @@ import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager"
 import { WeatherManager } from "./Weather/WeatherManager";
 import { OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
-import { isChristmasActive } from "./Christmas/ChristmasSeason";
+import { ChristmasThemeManager } from "./Christmas/ChristmasThemeManager";
+import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
@@ -452,6 +452,7 @@ export class GameScene extends DirtyScene {
     private nightManager: NightManager | undefined;
     private weatherManager: WeatherManager | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
+    private christmasThemeManager: ChristmasThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -1466,6 +1467,8 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
         this.weatherManager?.destroy();
+        this.christmasThemeManager?.destroy();
+        this.christmasThemeManager = undefined;
         this.skateboardSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
@@ -1527,6 +1530,29 @@ export class GameScene extends DirtyScene {
     /** Outdoor cells of the map, shared by the weather and the Christmas theme. */
     public getOutdoorGrid(): OutdoorGrid | undefined {
         return this.outdoorTracker?.grid;
+    }
+
+    /** Feet of the players who leave footprints: everyone but the riders. */
+    private christmasWalkers(): WalkerSample[] {
+        const walkers: WalkerSample[] = [];
+        if (!this.CurrentPlayer.isRidingVehicle()) {
+            walkers.push({
+                id: "local",
+                x: this.CurrentPlayer.x,
+                y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
+                running: this.CurrentPlayer.isRunning(),
+            });
+        }
+        for (const player of this.MapPlayersByKey.values()) {
+            if (player.isRidingVehicle()) continue;
+            walkers.push({
+                id: String(player.userId),
+                x: player.x,
+                y: player.y + CHARACTER_BODY_OFFSET_Y,
+                running: player.isRunning(),
+            });
+        }
+        return walkers;
     }
 
     /** Changes each time the outdoor grid is recomputed. */
@@ -1696,6 +1722,7 @@ export class GameScene extends DirtyScene {
             this.updateDoors(time);
             this.nightManager?.update(time);
             this.outdoorTracker?.update();
+            this.christmasThemeManager?.update(time, () => this.christmasWalkers());
             this.weatherManager?.update(time, this.nightManager?.serverDate(), this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -2779,7 +2806,14 @@ export class GameScene extends DirtyScene {
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
-                    christmasActive: () => isChristmasActive(get(christmasThemeModeStore), new Date()),
+                    christmasActive: () => this.christmasThemeManager?.isActive() ?? false,
+                });
+                this.christmasThemeManager?.destroy();
+                this.christmasThemeManager = new ChristmasThemeManager(this, {
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
+                    entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+                    markDirty: () => this.markDirty(),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
