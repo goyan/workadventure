@@ -33,6 +33,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "Volume de l’environnement (météo, portes et sons de la carte)",
         },
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
+        christmas: {
+            label: "Thème de Noël",
+            auto: "Auto (1er déc. – 6 janv.)",
+            always: "Toujours",
+            never: "Jamais",
+        },
         night: {
             label: "Cycle jour/nuit",
             server: "Heure du serveur",
