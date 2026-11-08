@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
+import type { Writable } from "svelte/store";
 import { personalAreaDataStore } from "../../../src/front/Stores/PersonalDeskStore";
 import MapSubMenuContent from "../../../src/front/Components/ActionBar/MenuIcons/MapSubMenuContent.svelte";
 import UnclaimPersonalDeskModal from "../../../src/front/Components/ActionBar/MenuIcons/UnclaimPersonalDeskModal.svelte";
-import WeatherSettingsModal from "../../../src/front/Components/Modal/WeatherSettingsModal.svelte";
-import NightSettingsModal from "../../../src/front/Components/Modal/NightSettingsModal.svelte";
-import { mapEditorActivated, mapManagerActivated } from "../../../src/front/Stores/MenuStore";
+import {
+    globalMessageVisibleStore,
+    mapEditorActivated,
+    mapEditorMenuVisibleStore,
+    mapManagerActivated,
+} from "../../../src/front/Stores/MenuStore";
 
 const mocks = vi.hoisted(() => ({
     open: vi.fn(),
@@ -46,6 +50,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
             errorUnclaiming: () => "Failed",
         },
         cancel: () => "Cancel",
+        mapEditor: () => "Edit map",
+        globalMessage: () => "Global message",
     };
     return {
         LL: readable({
@@ -91,6 +97,8 @@ beforeEach(() => {
     vi.clearAllMocks();
     mapEditorActivated.set(false);
     mapManagerActivated.set(false);
+    (mapEditorMenuVisibleStore as Writable<boolean>).set(false);
+    (globalMessageVisibleStore as Writable<boolean>).set(false);
     mocks.uuid = "human";
     mocks.desk = {
         id: "desk-one",
@@ -130,25 +138,17 @@ afterEach(async () => {
     vi.restoreAllMocks();
 });
 describe("personal desk release confirmation", () => {
-    it("opens the personal day/night choice directly from Tools", () => {
-        flushSync(() => {
-            component = mount(MapSubMenuContent, { target });
-        });
-        click("Day/night cycle");
-        expect(mocks.open).toHaveBeenCalledWith(NightSettingsModal);
-        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
-    });
-    it("shows the direct common-weather action only with full map editing rights", () => {
+    it("keeps in Tools only actions that have no other home", () => {
         mapManagerActivated.set(true);
+        mapEditorActivated.set(true);
+        (mapEditorMenuVisibleStore as Writable<boolean>).set(true);
+        (globalMessageVisibleStore as Writable<boolean>).set(true);
         flushSync(() => {
             component = mount(MapSubMenuContent, { target });
         });
-        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
-        flushSync(() => mapEditorActivated.set(true));
-        click("Weather");
-        expect(mocks.open).toHaveBeenCalledWith(WeatherSettingsModal);
-        flushSync(() => mapEditorActivated.set(false));
-        expect(target.querySelector('[data-testid="weather-tools-button"]')).toBeNull();
+        const labels = [...target.querySelectorAll("button")].map((button) => button.textContent?.trim());
+        // Weather lives in the editor (Configure the room), day/night in Settings, exploring in the floating explorer.
+        expect(labels).toEqual(["News", "Edit map", "Global message", "Walk", "Release"]);
     });
     it("opens without releasing and confirms the current owned desk once", async () => {
         const confirm = openConfirmation();

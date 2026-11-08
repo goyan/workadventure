@@ -221,6 +221,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         loginToClaim: "Connectez-vous pour prendre un bureau personnel.",
         visit: "Aller",
         label: "Aller à mon bureau",
+        teleport: "Me téléporter à mon bureau",
         unclaim: "Libérer mon bureau",
         unclaimConfirmation: "Libérer le bureau « {name} » ? Il deviendra disponible pour les autres.",
         errorNoUser: "Impossible de trouver vos informations utilisateur",

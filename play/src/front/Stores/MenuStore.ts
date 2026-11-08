@@ -120,11 +120,6 @@ function createSubMenusStore() {
         },
         {
             type: "translated",
-            key: SubMenusInterface.globalMessages,
-            visible: userIsAdminStore,
-        },
-        {
-            type: "translated",
             key: SubMenusInterface.chat,
             visible: isMatrixChatEnabledStore,
         },

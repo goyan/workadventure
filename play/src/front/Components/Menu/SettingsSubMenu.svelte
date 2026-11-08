@@ -334,6 +334,12 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
+    </SettingsSection>
+    <SettingsSection
+        title={$LL.menu.settings.ambiance.title()}
+        description={$LL.menu.settings.ambiance.description()}
+        dataTestId="ambiance-settings"
+    >
         <Select
             label={$LL.menu.settings.ground.label()}
             bind:value={$groundModeStore}
@@ -356,6 +362,7 @@
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.christmas.label()}</p>
             <ChristmasThemeSettings />
+            <p class="m-0 text-xs text-white/60">{$LL.menu.settings.christmas.hint()}</p>
         </div>
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">

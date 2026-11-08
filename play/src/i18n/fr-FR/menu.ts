@@ -38,11 +38,16 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "Volume de l’environnement (météo, portes et sons de la carte)",
         },
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
+        ambiance: {
+            title: "Ambiance",
+            description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
+        },
         christmas: {
             label: "Thème de Noël",
             auto: "Auto (1er déc. – 6 janv.)",
             always: "Toujours",
             never: "Jamais",
+            hint: "Pendant le thème, la neige remplace le sol extérieur et la météo de la carte.",
         },
         night: {
             label: "Cycle jour/nuit",
@@ -215,6 +220,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         report: "Remonter un bug",
         chat: "Chat",
         help: "Besoin d'aide ?",
+        restartTutorial: "Relancer le tutoriel",
         contextualActions: "Actions contextuelles",
         shortcuts: "Raccourcis",
     },
