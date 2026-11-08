@@ -2,13 +2,7 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { warningMessageStore } from "../../../Stores/ErrorStore";
     import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
-    import {
-        globalMessageVisibleStore,
-        mapManagerActivated,
-        mapEditorMenuVisibleStore,
-        mapEditorActivated,
-        openedMenuStore,
-    } from "../../../Stores/MenuStore";
+    import { globalMessageVisibleStore, mapEditorMenuVisibleStore, openedMenuStore } from "../../../Stores/MenuStore";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
     import {
@@ -24,21 +18,10 @@
     import ActionBarButton from "../ActionBarButton.svelte";
     import { EditorToolName } from "../../../Phaser/Game/MapEditor/MapEditorModeManager";
     import ReleaseNotesModal from "../../Modal/ReleaseNotesModal.svelte";
-    import WeatherSettingsModal from "../../Modal/WeatherSettingsModal.svelte";
-    import NightSettingsModal from "../../Modal/NightSettingsModal.svelte";
     import UnclaimPersonalDeskModal from "./UnclaimPersonalDeskModal.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
     import { modals } from "@wa-modals";
-    import {
-        IconMapSearch,
-        IconDesk,
-        IconDeskExit,
-        IconSpeakerPhone,
-        IconMapEditor,
-        IconHistory,
-        IconCloud,
-        IconSunMoon,
-    } from "@wa-icons";
+    import { IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor, IconHistory } from "@wa-icons";
 
     function resetChatVisibility() {
         chatVisibilityStore.set(false);
@@ -74,21 +57,6 @@
             mapEditorModeStore.switchMode(true);
             gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.EntityEditor);
         }
-        isTodoListVisibleStore.set(false);
-        isCalendarVisibleStore.set(false);
-        closeMapMenu();
-    }
-
-    function toggleMapExplorerMode() {
-        if ($mapExplorationModeStore) {
-            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(undefined);
-            mapEditorModeStore.switchMode(false);
-        } else {
-            mapEditorModeStore.switchMode(true);
-            gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.ExploreTheRoom);
-        }
-
-        analyticsClient.trackAdminEvent("map_explorer.top_button_clicked");
         isTodoListVisibleStore.set(false);
         isCalendarVisibleStore.set(false);
         closeMapMenu();
@@ -204,37 +172,6 @@
         <IconMapEditor font-size="20" />
     </ActionBarButton>
 {/if}
-{#if $mapEditorActivated && $mapManagerActivated}
-    <ActionBarButton
-        dataTestId="weather-tools-button"
-        label={$LL.mapEditor.settings.weather.title()}
-        onclick={() => {
-            closeMapMenu();
-            modals.open(WeatherSettingsModal);
-        }}
-    >
-        <IconCloud font-size="20" />
-    </ActionBarButton>
-{/if}
-{#if $mapManagerActivated}
-    <ActionBarButton
-        onclick={toggleMapExplorerMode}
-        label={$LL.mapEditor.sideBar.exploreTheRoom()}
-        state={$mapExplorationModeStore ? "active" : "normal"}
-    >
-        <IconMapSearch font-size="20" />
-    </ActionBarButton>
-{/if}
-<ActionBarButton
-    dataTestId="night-tools-button"
-    label={$LL.menu.settings.night.label()}
-    onclick={() => {
-        closeMapMenu();
-        modals.open(NightSettingsModal);
-    }}
->
-    <IconSunMoon font-size="20" />
-</ActionBarButton>
 {#if $globalMessageVisibleStore}
     <ActionBarButton onclick={toggleGlobalMessage} label={$LL.actionbar.globalMessage()}>
         <IconSpeakerPhone font-size="20" />

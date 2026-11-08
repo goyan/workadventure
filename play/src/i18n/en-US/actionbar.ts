@@ -216,6 +216,7 @@ const actionbar = {
         loginToClaim: "Sign in to claim a personal desk.",
         visit: "Go",
         label: "Walk to my desk",
+        teleport: "Teleport to my desk",
         unclaim: "Unclaim my desk",
         unclaimConfirmation: "Release the desk “{name}”? It will become available to others.",
         errorNoUser: "Unable to find your user information",

@@ -37,11 +37,16 @@ const menu: BaseTranslation = {
             environment: "Environment volume (weather, doors and map audio)",
         },
         weatherEffects: "Show weather effects (rain, snow and storm light)",
+        ambiance: {
+            title: "Ambiance",
+            description: "What you see on the map. Nothing changes for others.",
+        },
         christmas: {
             label: "Christmas theme",
             auto: "Auto (Dec 1 – Jan 6)",
             always: "Always",
             never: "Never",
+            hint: "While the theme is on, snow replaces the outdoor ground and the map weather.",
         },
         night: {
             label: "Day/night cycle",
@@ -212,6 +217,7 @@ const menu: BaseTranslation = {
         report: "Report Issues",
         chat: "Chat",
         help: "Help & tutorials",
+        restartTutorial: "Restart tutorial",
         contextualActions: "Contextual actions",
         shortcuts: "Shortcuts",
     },
