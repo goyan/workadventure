@@ -119,6 +119,42 @@ function createWorld(): Promise<GameRoom> {
 }
 
 describe("GameRoom", () => {
+    it("expires invitation histories of departed senders while retaining current anti-spam limits", async () => {
+        const world = await createWorld();
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(1_000_000);
+            for (let index = 0; index < 1000; index++) world.logMeetingInvitationRequest(`old-${index}`, "receiver");
+            vi.setSystemTime(1_300_000);
+            for (let index = 0; index < 4; index++) world.logMeetingInvitationRequest("active", "receiver");
+            expect(world.isMeetingInvitationRequestTooHigh("active", "receiver")).toBe(true);
+            vi.setSystemTime(1_600_001);
+            world.logMeetingInvitationRequest("new", "receiver");
+            expect(world).toHaveProperty("meetingInvitationRequestLogBySender.size", 2);
+            expect(world.isMeetingInvitationRequestTooHigh("active", "receiver")).toBe(true);
+            vi.setSystemTime(1_900_000);
+            expect(world.isMeetingInvitationRequestTooHigh("active", "receiver")).toBe(false);
+            expect(world).toHaveProperty("meetingInvitationRequestLogBySender.size", 1);
+        } finally {
+            vi.useRealTimers();
+            world.destroy();
+        }
+    });
+
+    it("preserves the total invitation threshold across different receivers", async () => {
+        const world = await createWorld();
+        try {
+            for (let index = 0; index < 50; index++) world.logMeetingInvitationRequest("sender", `receiver-${index}`);
+            expect(world.isMeetingInvitationRequestTooHigh("sender", "other")).toBe(false);
+            world.logMeetingInvitationRequest("sender", "other");
+            expect(world.isMeetingInvitationRequestTooHigh("sender", "other")).toBe(true);
+            world.clearMeetingInvitationRequestLog("sender");
+            expect(world.isMeetingInvitationRequestTooHigh("sender", "other")).toBe(false);
+        } finally {
+            world.destroy();
+        }
+    });
+
     it("never broadcasts a private message or exposes it to Room API listeners", async () => {
         const world = await createWorld();
         const senderSocket = createMockUserSocket();
