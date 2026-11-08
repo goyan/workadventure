@@ -39,8 +39,6 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-play
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Complétude des traductions
         run: npm run i18n:check
@@ -89,8 +87,6 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-play
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Clé : configuration et dépendances (un changement invalide tout), plus l'exécution (chaque exécution enregistre
       # son cache) ; la restauration reprend le plus récent de même configuration.
@@ -116,8 +112,6 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-play
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tests unitaires
         run: npm test -- --run

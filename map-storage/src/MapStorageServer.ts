@@ -403,6 +403,9 @@ const mapStorageServer: MapStorageServer = {
                     }
                     case "updateWAMSettingsMessage": {
                         const message = editMapMessage.updateWAMSettingsMessage;
+                        if (message.message?.$case === "updateWeatherSettingMessage") {
+                            message.message.updateWeatherSettingMessage.startedAt = Date.now();
+                        }
                         const wam = wamFile.getWam();
                         await mapsManager.executeCommand(
                             mapKey,

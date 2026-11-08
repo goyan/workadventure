@@ -1,5 +1,5 @@
 import type { ServerUnaryCall } from "@grpc/grpc-js";
-import { WamFile } from "@workadventure/map-editor";
+import { WamFile, WeatherType } from "@workadventure/map-editor";
 import type { WAMFileFormat } from "@workadventure/map-editor";
 import type { EditMapCommandMessage, EditMapCommandWithKeyMessage } from "@workadventure/messages";
 import { UploadedFileKind } from "@workadventure/messages";
@@ -155,6 +155,27 @@ describe("MapStorageServer entity edit permissions", () => {
 
     afterEach(() => {
         vi.restoreAllMocks();
+    });
+
+    it("stamps weather with server time and broadcasts the same epoch, ignoring the sender's clock", async () => {
+        vi.spyOn(Date, "now").mockReturnValue(1_800_000);
+        const response = await send(MAP_EDITOR, {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999 },
+                },
+            },
+        });
+        expect(wamFile.getWam().settings?.weatherStartedAt).toBe(1_800_000);
+        const message = response.editMapMessage?.message;
+        expect(
+            message?.$case === "updateWAMSettingsMessage" &&
+                message.updateWAMSettingsMessage.message?.$case === "updateWeatherSettingMessage" &&
+                message.updateWAMSettingsMessage.message.updateWeatherSettingMessage.startedAt,
+        ).toBe(1_800_000);
+        expect(addCommandToQueue).toHaveBeenCalledWith("map.wam", response);
     });
 
     describe("delete", () => {

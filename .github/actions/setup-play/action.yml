@@ -1,13 +1,8 @@
-# Installation commune aux jobs de `pr-checks` : Node, protoc, dépendances (play, back, messages) et fichiers générés
+# Installation commune aux jobs de `pr-checks` : Node, dépendances (play, back, messages) et fichiers générés
 # (messages protobuf, types i18n). Les `node_modules` sont mis en cache par empreinte des lockfiles : `npm ci` ne tourne
 # que lorsqu'elles changent.
 name: Préparer play
-description: Node, protoc, dépendances en cache, messages protobuf et types i18n générés.
-
-inputs:
-  repo-token:
-    description: Jeton GitHub en lecture, pour télécharger protoc sans limite de débit.
-    required: true
+description: Node, dépendances en cache, messages protobuf et types i18n générés.
 
 runs:
   using: composite
@@ -15,11 +10,6 @@ runs:
     - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version: 24
-
-    - uses: arduino/setup-protoc@c65c819552d16ad3c9b72d9dfd5ba5237b9c906b # v3.0.0
-      with:
-        repo-token: ${{ inputs.repo-token }}
-        version: "3.x"
 
     - name: Cache des dépendances
       id: node-modules
@@ -39,6 +29,7 @@ runs:
         npm ci --workspace=workadventure-play --workspace=workadventureback
         (cd messages && npm ci)
 
+    # grpc_tools_node_protoc utilise le compilateur de grpc-tools, installé avec les dépendances.
     - name: Génération des messages protobuf
       shell: bash
       run: npm run ts-proto

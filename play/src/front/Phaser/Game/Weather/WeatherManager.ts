@@ -1,11 +1,12 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
+import { groundModeStore, weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { effectiveWeather, keepOutdoorParticles, stormGlow, weatherParticles, weatherAtTime } from "./WeatherFrame";
+import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
 export interface WeatherManagerOptions {
@@ -20,12 +21,14 @@ export class WeatherManager {
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
+    private readonly snowGround: SnowGround;
 
     constructor(
         private readonly scene: GameScene,
         private readonly options: WeatherManagerOptions = {},
     ) {
         this.sounds = new WeatherSounds(scene.sound);
+        this.snowGround = new SnowGround(scene);
         this.graphics = scene.add
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
@@ -33,13 +36,21 @@ export class WeatherManager {
     }
 
     public update(now: number, serverDate: Date | undefined, night = false): void {
-        const configured = this.scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
-        const weather = effectiveWeather(
-            weatherAtTime(configured, serverDate),
-            this.options.christmasActive?.() ?? false,
-        );
+        const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
+        const configured = settings?.weather ?? WeatherType.Clear;
+        const christmas = this.options.christmasActive?.() ?? false;
+        const weather = effectiveWeather(weatherAtTime(configured, serverDate), christmas);
         this.sounds.update(weather, serverDate, get(mapEditorModeStore), night);
         const enabled = get(weatherEffectsEnabledStore) && !get(mapEditorModeStore);
+        this.snowGround.update(
+            now,
+            serverDate,
+            enabled ? configured : WeatherType.Clear,
+            // The Christmas theme draws its own snow ground over the whole outside: the seasonal ground steps aside.
+            !get(mapEditorModeStore) && !christmas,
+            get(groundModeStore),
+            settings?.weatherStartedAt,
+        );
         if (!enabled || weather === WeatherType.Clear) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
@@ -88,6 +99,7 @@ export class WeatherManager {
 
     public destroy(): void {
         this.sounds.destroy();
+        this.snowGround.destroy();
         this.graphics.destroy();
     }
 }

@@ -37,6 +37,15 @@ describe("world weather", () => {
 });
 
 describe("common automatic weather", () => {
+    it("replaces snowy phases with rain outside November through March", () => {
+        for (const date of ["2026-07-01T01:30:00Z", "2026-04-01T01:30:00Z", "2026-10-01T01:30:00Z"]) {
+            const clock = new Date(date);
+            expect(weatherAtTime(WeatherType.Automatic, clock)).toBe(WeatherType.Rain);
+            expect(weatherAtTime(WeatherType.Snow, clock)).toBe(WeatherType.Rain);
+        }
+        expect(weatherAtTime(WeatherType.Automatic, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+    });
+
     it("changes exactly every thirty minutes and repeats after two hours", () => {
         const halfHour = 30 * 60 * 1000;
         expect(weatherAtTime(WeatherType.Automatic, new Date(halfHour - 1))).toBe(WeatherType.Clear);

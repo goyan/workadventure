@@ -70,6 +70,24 @@ export class UploadController {
         this.patch();
     }
 
+    private limitUpload<T>(storageKey: string, task: () => Promise<T>): Promise<T> {
+        let limiter = this.uploadLimiter.get(storageKey);
+        if (limiter === undefined) {
+            limiter = pLimit(1);
+            this.uploadLimiter.set(storageKey, limiter);
+        }
+        const currentLimiter = limiter;
+        return currentLimiter(task).finally(() => {
+            if (
+                this.uploadLimiter.get(storageKey) === currentLimiter &&
+                currentLimiter.activeCount === 0 &&
+                currentLimiter.pendingCount === 0
+            ) {
+                this.uploadLimiter.delete(storageKey);
+            }
+        });
+    }
+
     private index() {
         this.app.get("/", passportAuthenticator, (req, res) => {
             res.redirect(`${process.env.PATH_PREFIX || ""}/ui/`);
@@ -121,13 +139,7 @@ export class UploadController {
                 // Let's explicitly forbid 2 uploads from running at the same time using a p-limit of 1.
                 // Uploads will be serialized.
                 const virtualDirectory = mapPath(directory, req);
-                let limiter = this.uploadLimiter.get(virtualDirectory);
-                if (limiter === undefined) {
-                    limiter = pLimit(1);
-                    this.uploadLimiter.set(virtualDirectory, limiter);
-                }
-
-                await limiter(async () => {
+                await this.limitUpload(virtualDirectory, async () => {
                     // Read the contents of the ZIP archive
                     const zipDirectory = await UnzipperOpen.file(zipFile.path);
                     const zipEntries = zipDirectory.files.filter(
@@ -271,10 +283,6 @@ export class UploadController {
 
                     res.send("File successfully uploaded.");
                 });
-
-                if (limiter.activeCount === 0 && limiter.pendingCount === 0) {
-                    this.uploadLimiter.delete(virtualDirectory);
-                }
             })().catch((e) => next(e));
         });
     }
@@ -331,13 +339,8 @@ export class UploadController {
                     // Let's explicitly forbid 2 uploads from running at the same time using a p-limit of 1.
                     // Uploads will be serialized.
                     const virtualPath = mapPath(filePath, req);
-                    let limiter = this.uploadLimiter.get(filePath);
-                    if (limiter === undefined) {
-                        limiter = pLimit(1);
-                        this.uploadLimiter.set(virtualPath, limiter);
-                    }
 
-                    await limiter(async () => {
+                    await this.limitUpload(virtualPath, async () => {
                         if (file && file.size > MAX_UNCOMPRESSED_SIZE) {
                             res.status(413).send(
                                 `File too large. Files should be less than ${MAX_UNCOMPRESSED_SIZE} bytes.`,
@@ -426,10 +429,6 @@ export class UploadController {
 
                         res.send("File successfully uploaded.");
                     });
-
-                    if (limiter.activeCount === 0 && limiter.pendingCount === 0) {
-                        this.uploadLimiter.delete(virtualPath);
-                    }
                 })().catch((e) => {
                     console.error(`[${new Date().toISOString()}]`, e);
                     Sentry.captureException(e);
@@ -464,13 +463,8 @@ export class UploadController {
                 // Let's explicitly forbid 2 patches from running at the same time using a p-limit of 1.
                 // Uploads will be serialized.
                 const virtualPath = mapPath(filePath, req);
-                let limiter = this.uploadLimiter.get(filePath);
-                if (limiter === undefined) {
-                    limiter = pLimit(1);
-                    this.uploadLimiter.set(virtualPath, limiter);
-                }
 
-                await limiter(async () => {
+                await this.limitUpload(virtualPath, async () => {
                     const mapValidator = new MapValidator("error", new HttpFileFetcher(req.url));
 
                     let errors: Partial<OrganizedErrors> = {};
@@ -546,10 +540,6 @@ export class UploadController {
 
                     res.json({ success: true });
                 });
-
-                if (limiter.activeCount === 0 && limiter.pendingCount === 0) {
-                    this.uploadLimiter.delete(virtualPath);
-                }
             })().catch((e) => {
                 console.error(`[${new Date().toISOString()}]`, e);
                 Sentry.captureException(e);

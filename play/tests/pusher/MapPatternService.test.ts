@@ -54,6 +54,20 @@ function createService(responses: Partial<Record<"get" | "post" | "delete", unkn
     return { service: new MapPatternService(config, http as unknown as AxiosInstance, now), http };
 }
 
+describe("pattern rate-limit memory", () => {
+    it("forgets expired users without resetting a user's current rate limit", () => {
+        let now = 1_000_000;
+        const { service } = createService({}, () => now);
+        for (let index = 0; index < 1000; index++) service.assertQueryWithinRate(`old-${index}`);
+        now += 30_000;
+        for (let index = 0; index < 60; index++) service.assertQueryWithinRate("active");
+        now += 30_001;
+        service.assertQueryWithinRate("new");
+        expect(service).toHaveProperty("recentQueries.size", 2);
+        expect(() => service.assertQueryWithinRate("active")).toThrow("Too many queries");
+    });
+});
+
 async function errorCodeOf(promise: Promise<unknown>): Promise<string | undefined> {
     try {
         await promise;

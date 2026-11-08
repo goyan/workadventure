@@ -1,6 +1,13 @@
 import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
-import { AreaDataProperties, EntityDataProperties, EntityDimensions, EntityPrefabRef } from "@workadventure/map-editor";
+import {
+    Season,
+    WeatherType,
+    AreaDataProperties,
+    EntityDataProperties,
+    EntityDimensions,
+    EntityPrefabRef,
+} from "@workadventure/map-editor";
 import type { EntityPrefab } from "@workadventure/map-editor";
 import type { Observable } from "rxjs";
 import { Subject } from "rxjs";
@@ -8,6 +15,9 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
+import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { weatherAtTime } from "../Weather/WeatherFrame";
+import { snowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
@@ -71,6 +81,9 @@ const DIMMED_ENTITY_ALPHA = 0.4;
 const DIMMED_MAP_LAYER_TINT = 0x808080;
 
 export class EntitiesManager extends EventEmitter {
+    private season = Season.Summer;
+    private nextSeasonCheck = 0;
+    private lastConfiguredWeather: WeatherType | undefined;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -139,6 +152,7 @@ export class EntitiesManager extends EventEmitter {
 
         const entity = new Entity(this.scene, entityId, data, prefab);
         entity.setVisible(false);
+        entity.setSeason(this.season);
 
         TexturesHelper.loadEntityImage(
             this.scene,
@@ -150,6 +164,21 @@ export class EntitiesManager extends EventEmitter {
                 const entity = this.entities.get(entityId);
                 if (entity) {
                     entity.showPrefabTexture().setVisible(true);
+                    const seasonal = entity.getPrefab().seasonal;
+                    if (seasonal) {
+                        for (const path of new Set(Object.values(seasonal))) {
+                            this.scene.superLoad
+                                .image(path, `${imagePathPrefix ?? ""}${path}`)
+                                .then(() => {
+                                    // A load may complete after deletion or replacement of this entity.
+                                    if (entity.active && this.entities.get(entityId) === entity) {
+                                        entity.setSeason(this.season);
+                                        this.scene.markDirty();
+                                    }
+                                })
+                                .catch((error: unknown) => Sentry.captureException(error));
+                        }
+                    }
                     entity.updateDepth();
                     this.refreshObjectsDepth(entity);
                     if (get(mapEditorSelectedEntityStore)?.entityId === entityId) {
@@ -193,6 +222,25 @@ export class EntitiesManager extends EventEmitter {
             mapEditorSelectedEntityStore.set(entity);
         }
         return entity;
+    }
+
+    /** Follow shared weather each minute, and apply a live editor change immediately. */
+    public updateSeason(time: number, serverDate: Date | undefined): void {
+        if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
+        const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
+        const configured = settings?.weather ?? WeatherType.Clear;
+        if (time < this.nextSeasonCheck && configured === this.lastConfiguredWeather) return;
+        this.lastConfiguredWeather = configured;
+        this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
+        const season = treeSeasonAt(
+            serverDate,
+            weatherAtTime(configured, serverDate),
+            snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
+        );
+        if (season === this.season) return;
+        this.season = season;
+        for (const entity of this.entities.values()) entity.setSeason(season);
+        this.scene.markDirty();
     }
 
     /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */

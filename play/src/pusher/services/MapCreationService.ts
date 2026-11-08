@@ -123,6 +123,7 @@ export async function isCreationAllowed(
 export class MapCreationService {
     private readonly recentCreations = new Map<string, number[]>();
     private readonly recentQueries = new Map<string, number[]>();
+    private nextRateCleanupAt = 0;
 
     constructor(
         private readonly config: MapCreationConfig,
@@ -136,7 +137,7 @@ export class MapCreationService {
         if (recent.length >= MAX_QUERIES_PER_MINUTE) {
             throw new MapCreationError("rate-limit", "Too many queries in the last minute");
         }
-        recent.push(this.now());
+        this.recentQueries.set(userIdentifier, [...recent, this.now()]);
     }
 
     /**
@@ -232,7 +233,7 @@ export class MapCreationService {
             throw new MapCreationError("rate-limit", "Too many maps created in the last hour");
         }
         const reservedAt = this.now();
-        recent.push(reservedAt);
+        this.recentCreations.set(userIdentifier, [...recent, reservedAt]);
         return reservedAt;
     }
 
@@ -240,18 +241,37 @@ export class MapCreationService {
         const recent = this.recentCreations.get(userIdentifier) ?? [];
         const index = recent.indexOf(reservedAt);
         if (index !== -1) {
-            recent.splice(index, 1);
+            const remaining = recent.filter((_, position) => position !== index);
+            if (remaining.length === 0) {
+                this.recentCreations.delete(userIdentifier);
+            } else {
+                this.recentCreations.set(userIdentifier, remaining);
+            }
         }
     }
 
     /** Times of the window, kept in the map; a user with no recent time is removed so the map does not grow forever. */
     private recentTimes(store: Map<string, number[]>, userIdentifier: string, windowInMs: number): number[] {
-        const since = this.now() - windowInMs;
+        const now = this.now();
+        if (now >= this.nextRateCleanupAt) {
+            // Sweep once per minute, including users who never return, without a process-wide timer.
+            for (const [history, window] of [
+                [this.recentQueries, ONE_MINUTE_IN_MS],
+                [this.recentCreations, ONE_HOUR_IN_MS],
+            ] as const) {
+                for (const [user, times] of history) {
+                    if ((times[times.length - 1] ?? 0) <= now - window) history.delete(user);
+                }
+            }
+            this.nextRateCleanupAt = now + ONE_MINUTE_IN_MS;
+        }
+        const since = now - windowInMs;
         const recent = (store.get(userIdentifier) ?? []).filter((time) => time > since);
         if (recent.length === 0) {
             store.delete(userIdentifier);
+        } else {
+            store.set(userIdentifier, recent);
         }
-        store.set(userIdentifier, recent);
         return recent;
     }
 }

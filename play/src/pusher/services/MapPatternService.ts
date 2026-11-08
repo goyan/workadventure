@@ -90,6 +90,7 @@ const PatternName = z.string().trim().min(1).max(MAP_PATTERN_MAX_NAME_LENGTH);
 
 export class MapPatternService {
     private readonly recentQueries = new Map<string, number[]>();
+    private nextRateCleanupAt = 0;
 
     constructor(
         private readonly config: MapPatternConfig,
@@ -101,14 +102,20 @@ export class MapPatternService {
 
     /** Limits how often one user can ask: every query reaches the Admin API. */
     public assertQueryWithinRate(userIdentifier: string): void {
-        const since = this.now() - ONE_MINUTE_IN_MS;
+        const now = this.now();
+        const since = now - ONE_MINUTE_IN_MS;
+        if (now >= this.nextRateCleanupAt) {
+            for (const [user, times] of this.recentQueries) {
+                if ((times[times.length - 1] ?? 0) <= since) this.recentQueries.delete(user);
+            }
+            this.nextRateCleanupAt = now + ONE_MINUTE_IN_MS;
+        }
         const recent = (this.recentQueries.get(userIdentifier) ?? []).filter((time) => time > since);
         if (recent.length >= MAX_QUERIES_PER_MINUTE) {
             this.recentQueries.set(userIdentifier, recent);
             throw new MapPatternError("rate-limit", "Too many queries in the last minute");
         }
-        recent.push(this.now());
-        this.recentQueries.set(userIdentifier, recent);
+        this.recentQueries.set(userIdentifier, [...recent, now]);
     }
 
     public async list(userIdentifier: string, isAdmin: boolean): Promise<MapPatternListForClient> {

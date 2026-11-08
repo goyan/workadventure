@@ -17,7 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import { GroundMode, groundModeStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -334,6 +334,15 @@
 <div class="flex flex-col gap-4 pb-4" transition:fly={{ x: -700, duration: 250 }}>
     <SettingsSection title={$LL.menu.settings.theme.label()} dataTestId="theme-settings">
         <ThemeSettings />
+        <Select
+            label={$LL.menu.settings.ground.label()}
+            bind:value={$groundModeStore}
+            dataTestId="ground-mode"
+            options={[
+                { value: GroundMode.Green, label: $LL.menu.settings.ground.green() },
+                { value: GroundMode.Seasonal, label: $LL.menu.settings.ground.seasonal() },
+            ]}
+        />
         <InputSwitch
             id="weather-effects-enabled"
             bind:value={$weatherEffectsEnabledStore}

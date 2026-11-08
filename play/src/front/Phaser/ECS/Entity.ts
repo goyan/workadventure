@@ -8,7 +8,7 @@ import type {
     EntityPrefab,
     WAMEntityData,
 } from "@workadventure/map-editor";
-import { GameMapProperties } from "@workadventure/map-editor";
+import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
@@ -66,6 +66,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     /** Depth before the manual stacking, from the position of the foot and the neighbouring images. */
     private automaticDepth = 0;
     private prefab: EntityPrefab;
+    private season = Season.Summer;
 
     private activatable!: boolean;
     private oldPosition: { x: number; y: number };
@@ -130,11 +131,19 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         const animationKey = animation
             ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
             : undefined;
-        this.setTexture(this.prefab.imagePath);
+        const seasonalPath = this.prefab.seasonal?.[this.season];
+        this.setTexture(
+            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath,
+        );
         if (animationKey) {
             this.play(animationKey);
         }
         return this;
+    }
+
+    public setSeason(season: Season): void {
+        this.season = season;
+        if (this.prefab.seasonal) this.showPrefabTexture();
     }
 
     public get description(): string | undefined {

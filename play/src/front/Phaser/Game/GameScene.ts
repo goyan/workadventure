@@ -1721,9 +1721,11 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this.nightManager?.update(time);
+            const serverDate = this.nightManager?.serverDate();
+            this.gameMapFrontWrapper.getEntitiesManager().updateSeason(time, serverDate);
             this.outdoorTracker?.update();
             this.christmasThemeManager?.update(time, () => this.christmasWalkers());
-            this.weatherManager?.update(time, this.nightManager?.serverDate(), this.nightManager?.isNight());
+            this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -2316,7 +2318,11 @@ export class GameScene extends DirtyScene {
         // The floor and wall catalogs of the map tool are offered in every room, old maps included.
         const collectionUrls = mergeEntityCollectionUrls(
             this.wamFile.entityCollections.map((collection) => collection.url),
-            [...(this._room.entityCollectionsUrls ?? []), ...MAP_LAYER_CATALOG_URLS],
+            [
+                ...(this._room.entityCollectionsUrls ?? []),
+                ...MAP_LAYER_CATALOG_URLS,
+                new URL("collections/NatureCollection.json", window.location.origin).toString(),
+            ],
         );
         const collectionDescriptors: { url: string; type: EntityPrefabType }[] = collectionUrls.map((url) => ({
             url,

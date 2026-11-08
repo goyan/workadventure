@@ -1,0 +1,2226 @@
+{
+  "collectionName": "Nature",
+  "tags": [
+    "Nature"
+  ],
+  "version": "1.0",
+  "collection": [
+    {
+      "id": "Nature:tree-1-1:Default:Down",
+      "name": "Feuillage clair",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-2:Default:Down",
+      "name": "Chêne clair 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 35,
+          "y": 78,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-2.png",
+        "summer": "Nature/tree-1-2.png",
+        "autumn": "Nature/weather-tree-1-2-autumn.png",
+        "winter": "Nature/weather-tree-1-2-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-3:Default:Down",
+      "name": "Chêne clair 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 34,
+          "y": 83,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-3.png",
+        "summer": "Nature/tree-1-3.png",
+        "autumn": "Nature/weather-tree-1-3-autumn.png",
+        "winter": "Nature/weather-tree-1-3-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-4:Default:Down",
+      "name": "Chêne clair 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 31,
+          "y": 81,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-4.png",
+        "summer": "Nature/tree-1-4.png",
+        "autumn": "Nature/weather-tree-1-4-autumn.png",
+        "winter": "Nature/weather-tree-1-4-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-5:Default:Down",
+      "name": "Feuillage fleuri",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-6:Default:Down",
+      "name": "Arbre fleuri 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 75,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-6.png",
+        "summer": "Nature/tree-1-6.png",
+        "autumn": "Nature/weather-tree-1-6-autumn.png",
+        "winter": "Nature/weather-tree-1-6-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-7:Default:Down",
+      "name": "Arbre fleuri 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 32,
+          "y": 80,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-7.png",
+        "summer": "Nature/tree-1-7.png",
+        "autumn": "Nature/weather-tree-1-7-autumn.png",
+        "winter": "Nature/weather-tree-1-7-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-8:Default:Down",
+      "name": "Feuillage sombre",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-1-9:Default:Down",
+      "name": "Chêne sombre 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 31,
+          "y": 78,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-9.png",
+        "summer": "Nature/tree-1-9.png",
+        "autumn": "Nature/weather-tree-1-9-autumn.png",
+        "winter": "Nature/weather-tree-1-9-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-10:Default:Down",
+      "name": "Chêne sombre 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 81,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-10.png",
+        "summer": "Nature/tree-1-10.png",
+        "autumn": "Nature/weather-tree-1-10-autumn.png",
+        "winter": "Nature/weather-tree-1-10-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-1-11:Default:Down",
+      "name": "Chêne sombre 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-1-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 87,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-11.png",
+        "summer": "Nature/tree-1-11.png",
+        "autumn": "Nature/weather-tree-1-11-autumn.png",
+        "winter": "Nature/weather-tree-1-11-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-1:Default:Down",
+      "name": "Feuillage d’automne",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-2-2:Default:Down",
+      "name": "Arbre d’automne 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 79,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-2-green.png",
+        "summer": "Nature/weather-tree-2-2-green.png",
+        "autumn": "Nature/tree-2-2.png",
+        "winter": "Nature/weather-tree-2-2-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-3:Default:Down",
+      "name": "Arbre d’automne 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 34,
+          "y": 84,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-3-green.png",
+        "summer": "Nature/weather-tree-2-3-green.png",
+        "autumn": "Nature/tree-2-3.png",
+        "winter": "Nature/weather-tree-2-3-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-4:Default:Down",
+      "name": "Arbre d’automne 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 31,
+          "y": 83,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-4-green.png",
+        "summer": "Nature/weather-tree-2-4-green.png",
+        "autumn": "Nature/tree-2-4.png",
+        "winter": "Nature/weather-tree-2-4-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-5:Default:Down",
+      "name": "Cerisier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 35,
+          "y": 96,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-5.png",
+        "summer": "Nature/weather-tree-2-5-green.png",
+        "autumn": "Nature/weather-tree-2-5-autumn.png",
+        "winter": "Nature/weather-tree-2-5-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-6:Default:Down",
+      "name": "Cerisier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 96,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-6.png",
+        "summer": "Nature/weather-tree-2-6-green.png",
+        "autumn": "Nature/weather-tree-2-6-autumn.png",
+        "winter": "Nature/weather-tree-2-6-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-7:Default:Down",
+      "name": "Cerisier 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 96,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-7.png",
+        "summer": "Nature/weather-tree-2-7-green.png",
+        "autumn": "Nature/weather-tree-2-7-autumn.png",
+        "winter": "Nature/weather-tree-2-7-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-8:Default:Down",
+      "name": "Sapin sombre 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 36,
+          "y": 114,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-8.png",
+        "summer": "Nature/tree-2-8.png",
+        "autumn": "Nature/tree-2-8.png",
+        "winter": "Nature/weather-tree-2-8-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-9:Default:Down",
+      "name": "Sapin sombre 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 34,
+          "y": 116,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-9.png",
+        "summer": "Nature/tree-2-9.png",
+        "autumn": "Nature/tree-2-9.png",
+        "winter": "Nature/weather-tree-2-9-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-10:Default:Down",
+      "name": "Sapin sombre 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 111,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-10.png",
+        "summer": "Nature/tree-2-10.png",
+        "autumn": "Nature/tree-2-10.png",
+        "winter": "Nature/weather-tree-2-10-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-2-11:Default:Down",
+      "name": "Sapin sombre 4",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-2-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 32,
+          "y": 111,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-11.png",
+        "summer": "Nature/tree-2-11.png",
+        "autumn": "Nature/tree-2-11.png",
+        "winter": "Nature/weather-tree-2-11-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-1:Default:Down",
+      "name": "Sapin clair 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 123,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-1.png",
+        "summer": "Nature/tree-3-1.png",
+        "autumn": "Nature/tree-3-1.png",
+        "winter": "Nature/weather-tree-3-1-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-2:Default:Down",
+      "name": "Sapin clair 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 36,
+          "y": 119,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-2.png",
+        "summer": "Nature/tree-3-2.png",
+        "autumn": "Nature/tree-3-2.png",
+        "winter": "Nature/weather-tree-3-2-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-3:Default:Down",
+      "name": "Sapin clair 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 35,
+          "y": 120,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-3.png",
+        "summer": "Nature/tree-3-3.png",
+        "autumn": "Nature/tree-3-3.png",
+        "winter": "Nature/weather-tree-3-3-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-4:Default:Down",
+      "name": "Sapin clair 4",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 29,
+          "y": 119,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-4.png",
+        "summer": "Nature/tree-3-4.png",
+        "autumn": "Nature/tree-3-4.png",
+        "winter": "Nature/weather-tree-3-4-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-5:Default:Down",
+      "name": "Cyprès 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 22,
+          "y": 135,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-5.png",
+        "summer": "Nature/tree-3-5.png",
+        "autumn": "Nature/tree-3-5.png",
+        "winter": "Nature/weather-tree-3-5-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-6:Default:Down",
+      "name": "Cyprès 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 22,
+          "y": 131,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-6.png",
+        "summer": "Nature/tree-3-6.png",
+        "autumn": "Nature/tree-3-6.png",
+        "winter": "Nature/weather-tree-3-6-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-7:Default:Down",
+      "name": "Cyprès 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 20,
+          "y": 130,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-7.png",
+        "summer": "Nature/tree-3-7.png",
+        "autumn": "Nature/tree-3-7.png",
+        "winter": "Nature/weather-tree-3-7-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-8:Default:Down",
+      "name": "Feuillage de saule",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "overhead"
+    },
+    {
+      "id": "Nature:tree-3-9:Default:Down",
+      "name": "Saule 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 41,
+          "y": 109,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-9.png",
+        "summer": "Nature/tree-3-9.png",
+        "autumn": "Nature/tree-3-9.png",
+        "winter": "Nature/weather-tree-3-9-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-10:Default:Down",
+      "name": "Saule 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 38,
+          "y": 110,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-10.png",
+        "summer": "Nature/tree-3-10.png",
+        "autumn": "Nature/tree-3-10.png",
+        "winter": "Nature/weather-tree-3-10-snow.png"
+      }
+    },
+    {
+      "id": "Nature:tree-3-11:Default:Down",
+      "name": "Saule 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/tree-3-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 28,
+          "y": 110,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-11.png",
+        "summer": "Nature/tree-3-11.png",
+        "autumn": "Nature/tree-3-11.png",
+        "winter": "Nature/weather-tree-3-11-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-1:Default:Down",
+      "name": "Grand chêne 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 56,
+          "y": 144,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-1.png",
+        "summer": "Nature/nature-1.png",
+        "autumn": "Nature/weather-nature-1-autumn.png",
+        "winter": "Nature/weather-nature-1-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-2:Default:Down",
+      "name": "Grand chêne 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 66,
+          "y": 158,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-2.png",
+        "summer": "Nature/nature-2.png",
+        "autumn": "Nature/weather-nature-2-autumn.png",
+        "winter": "Nature/weather-nature-2-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-3:Default:Down",
+      "name": "Palmier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 56,
+          "y": 138,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-3.png",
+        "summer": "Nature/nature-3.png",
+        "autumn": "Nature/nature-3.png",
+        "winter": "Nature/weather-nature-3-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-4:Default:Down",
+      "name": "Palmier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 47,
+          "y": 129,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-4.png",
+        "summer": "Nature/nature-4.png",
+        "autumn": "Nature/nature-4.png",
+        "winter": "Nature/weather-nature-4-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-5:Default:Down",
+      "name": "Arbre nu 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 31,
+          "y": 98,
+          "width": 8,
+          "height": 5
+        }
+      ],
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/nature-5.png",
+        "summer": "Nature/nature-5.png",
+        "autumn": "Nature/nature-5.png",
+        "winter": "Nature/weather-nature-5-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-6:Default:Down",
+      "name": "Arbre nu 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 35,
+          "y": 99,
+          "width": 8,
+          "height": 5
+        }
+      ],
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/nature-6.png",
+        "summer": "Nature/nature-6.png",
+        "autumn": "Nature/nature-6.png",
+        "winter": "Nature/weather-nature-6-snow.png"
+      }
+    },
+    {
+      "id": "Nature:nature-7:Default:Down",
+      "name": "Souche",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-8:Default:Down",
+      "name": "Rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-9:Default:Down",
+      "name": "Buisson fleuri",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-10:Default:Down",
+      "name": "Buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-11:Default:Down",
+      "name": "Herbes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:nature-12:Default:Down",
+      "name": "Fleurs",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/nature-12.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:seasonal-1:Default:Down",
+      "name": "Arbre saisonnier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/seasonal-1-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 60,
+          "y": 162,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -27,
+      "seasonal": {
+        "spring": "Nature/seasonal-1-spring.png",
+        "summer": "Nature/seasonal-1-summer.png",
+        "autumn": "Nature/seasonal-1-autumn.png",
+        "winter": "Nature/seasonal-1-winter.png"
+      }
+    },
+    {
+      "id": "Nature:seasonal-2:Default:Down",
+      "name": "Arbre saisonnier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/seasonal-2-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 60,
+          "y": 162,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -27,
+      "seasonal": {
+        "spring": "Nature/seasonal-2-spring.png",
+        "summer": "Nature/seasonal-2-summer.png",
+        "autumn": "Nature/seasonal-2-autumn.png",
+        "winter": "Nature/seasonal-2-winter.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-1:Default:Down",
+      "name": "Arbre enneigé 1",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 40,
+          "y": 87,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-1-green.png",
+        "summer": "Nature/weather-snow-tree-1-green.png",
+        "autumn": "Nature/weather-snow-tree-1-autumn.png",
+        "winter": "Nature/snow-tree-1.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-2:Default:Down",
+      "name": "Arbre enneigé 2",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 43,
+          "y": 104,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-2-green.png",
+        "summer": "Nature/weather-snow-tree-2-green.png",
+        "autumn": "Nature/weather-snow-tree-2-autumn.png",
+        "winter": "Nature/snow-tree-2.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-3:Default:Down",
+      "name": "Arbre enneigé 3",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 60,
+          "y": 106,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-3-green.png",
+        "summer": "Nature/weather-snow-tree-3-green.png",
+        "autumn": "Nature/weather-snow-tree-3-autumn.png",
+        "winter": "Nature/snow-tree-3.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-4:Default:Down",
+      "name": "Arbre enneigé 4",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 29,
+          "y": 79,
+          "width": 8,
+          "height": 5
+        }
+      ],
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-4-green.png",
+        "summer": "Nature/weather-snow-tree-4-green.png",
+        "autumn": "Nature/weather-snow-tree-4-autumn.png",
+        "winter": "Nature/snow-tree-4.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-5:Default:Down",
+      "name": "Arbre enneigé 5",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 22,
+          "y": 76,
+          "width": 8,
+          "height": 5
+        }
+      ],
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-5-green.png",
+        "summer": "Nature/weather-snow-tree-5-green.png",
+        "autumn": "Nature/weather-snow-tree-5-autumn.png",
+        "winter": "Nature/snow-tree-5.png"
+      }
+    },
+    {
+      "id": "Nature:snow-tree-6:Default:Down",
+      "name": "Arbre enneigé 6",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-tree-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 16,
+          "y": 77,
+          "width": 8,
+          "height": 5
+        }
+      ],
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-6-green.png",
+        "summer": "Nature/weather-snow-tree-6-green.png",
+        "autumn": "Nature/weather-snow-tree-6-autumn.png",
+        "winter": "Nature/snow-tree-6.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-1:Default:Down",
+      "name": "Sapin enneigé 1",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 43,
+          "y": 131,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-1-green.png",
+        "summer": "Nature/weather-snow-evergreen-1-green.png",
+        "autumn": "Nature/weather-snow-evergreen-1-autumn.png",
+        "winter": "Nature/snow-evergreen-1.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-2:Default:Down",
+      "name": "Sapin enneigé 2",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 36,
+          "y": 130,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-2-green.png",
+        "summer": "Nature/weather-snow-evergreen-2-green.png",
+        "autumn": "Nature/weather-snow-evergreen-2-autumn.png",
+        "winter": "Nature/snow-evergreen-2.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-3:Default:Down",
+      "name": "Sapin enneigé 3",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 131,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-3-green.png",
+        "summer": "Nature/weather-snow-evergreen-3-green.png",
+        "autumn": "Nature/weather-snow-evergreen-3-autumn.png",
+        "winter": "Nature/snow-evergreen-3.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-4:Default:Down",
+      "name": "Sapin enneigé 4",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 38,
+          "y": 123,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-4-green.png",
+        "summer": "Nature/weather-snow-evergreen-4-green.png",
+        "autumn": "Nature/weather-snow-evergreen-4-autumn.png",
+        "winter": "Nature/snow-evergreen-4.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-5:Default:Down",
+      "name": "Sapin enneigé 5",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 39,
+          "y": 133,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-5-green.png",
+        "summer": "Nature/weather-snow-evergreen-5-green.png",
+        "autumn": "Nature/weather-snow-evergreen-5-autumn.png",
+        "winter": "Nature/snow-evergreen-5.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-6:Default:Down",
+      "name": "Sapin enneigé 6",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 37,
+          "y": 132,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-6-green.png",
+        "summer": "Nature/weather-snow-evergreen-6-green.png",
+        "autumn": "Nature/weather-snow-evergreen-6-autumn.png",
+        "winter": "Nature/snow-evergreen-6.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-7:Default:Down",
+      "name": "Sapin enneigé 7",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 33,
+          "y": 127,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-7-green.png",
+        "summer": "Nature/weather-snow-evergreen-7-green.png",
+        "autumn": "Nature/weather-snow-evergreen-7-autumn.png",
+        "winter": "Nature/snow-evergreen-7.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-8:Default:Down",
+      "name": "Saule enneigé 8",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 49,
+          "y": 123,
+          "width": 11,
+          "height": 7
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-8-green.png",
+        "summer": "Nature/weather-snow-evergreen-8-green.png",
+        "autumn": "Nature/weather-snow-evergreen-8-autumn.png",
+        "winter": "Nature/snow-evergreen-8.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-9:Default:Down",
+      "name": "Chêne enneigé 9",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 61,
+          "y": 130,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-9-green.png",
+        "summer": "Nature/weather-snow-evergreen-9-green.png",
+        "autumn": "Nature/weather-snow-evergreen-9-autumn.png",
+        "winter": "Nature/snow-evergreen-9.png"
+      }
+    },
+    {
+      "id": "Nature:snow-evergreen-10:Default:Down",
+      "name": "Palmier enneigé 10",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-evergreen-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "collisionRectangles": [
+        {
+          "x": 41,
+          "y": 124,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-10-green.png",
+        "summer": "Nature/weather-snow-evergreen-10-green.png",
+        "autumn": "Nature/weather-snow-evergreen-10-autumn.png",
+        "winter": "Nature/snow-evergreen-10.png"
+      }
+    },
+    {
+      "id": "Nature:snow-detail-1:Default:Down",
+      "name": "Décor enneigé 1",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-2:Default:Down",
+      "name": "Décor enneigé 2",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-3:Default:Down",
+      "name": "Décor enneigé 3",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-4:Default:Down",
+      "name": "Décor enneigé 4",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-5:Default:Down",
+      "name": "Décor enneigé 5",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-6:Default:Down",
+      "name": "Décor enneigé 6",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-7:Default:Down",
+      "name": "Décor enneigé 7",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-8:Default:Down",
+      "name": "Décor enneigé 8",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-9:Default:Down",
+      "name": "Décor enneigé 9",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-9.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-10:Default:Down",
+      "name": "Décor enneigé 10",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-10.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-11:Default:Down",
+      "name": "Décor enneigé 11",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-11.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-12:Default:Down",
+      "name": "Décor enneigé 12",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-12.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:snow-detail-13:Default:Down",
+      "name": "Décor enneigé 13",
+      "tags": [
+        "Nature",
+        "Neige"
+      ],
+      "imagePath": "Nature/snow-detail-13.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing"
+    },
+    {
+      "id": "Nature:grass-green-1:Default:Down",
+      "name": "Herbe verte 1",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-1:Default:Down",
+      "name": "Herbe d’automne 1",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-1:Default:Down",
+      "name": "Herbe enneigée 1",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-2:Default:Down",
+      "name": "Herbe verte 2",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-2:Default:Down",
+      "name": "Herbe d’automne 2",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-2:Default:Down",
+      "name": "Herbe enneigée 2",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-3:Default:Down",
+      "name": "Herbe verte 3",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-3:Default:Down",
+      "name": "Herbe d’automne 3",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-3:Default:Down",
+      "name": "Herbe enneigée 3",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-4:Default:Down",
+      "name": "Herbe verte 4",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-4:Default:Down",
+      "name": "Herbe d’automne 4",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-4:Default:Down",
+      "name": "Herbe enneigée 4",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-5:Default:Down",
+      "name": "Herbe verte 5",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-5:Default:Down",
+      "name": "Herbe d’automne 5",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-5:Default:Down",
+      "name": "Herbe enneigée 5",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-6:Default:Down",
+      "name": "Herbe verte 6",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-6:Default:Down",
+      "name": "Herbe d’automne 6",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-6:Default:Down",
+      "name": "Herbe enneigée 6",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-7:Default:Down",
+      "name": "Herbe verte 7",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-7:Default:Down",
+      "name": "Herbe d’automne 7",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-7:Default:Down",
+      "name": "Herbe enneigée 7",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-green-8:Default:Down",
+      "name": "Herbe verte 8",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-green-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:grass-autumn-8:Default:Down",
+      "name": "Herbe d’automne 8",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/grass-autumn-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-grass-8:Default:Down",
+      "name": "Herbe enneigée 8",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-grass-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-1:Default:Down",
+      "name": "Herbe et neige mêlées 1",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-1.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-2:Default:Down",
+      "name": "Herbe et neige mêlées 2",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-2.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-3:Default:Down",
+      "name": "Herbe et neige mêlées 3",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-3.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-4:Default:Down",
+      "name": "Herbe et neige mêlées 4",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-4.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-5:Default:Down",
+      "name": "Herbe et neige mêlées 5",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-5.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-6:Default:Down",
+      "name": "Herbe et neige mêlées 6",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-6.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-7:Default:Down",
+      "name": "Herbe et neige mêlées 7",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-7.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:snow-mixed-8:Default:Down",
+      "name": "Herbe et neige mêlées 8",
+      "tags": [
+        "Nature",
+        "Sols"
+      ],
+      "imagePath": "Nature/snow-mixed-8.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "floor",
+      "footstepSound": "grass"
+    },
+    {
+      "id": "Nature:winter-auto-1:Default:Down",
+      "name": "Sapin saisonnier 1",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-1-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-1-summer.png",
+        "summer": "Nature/winter-auto-1-summer.png",
+        "autumn": "Nature/winter-auto-1-summer.png",
+        "winter": "Nature/winter-auto-1-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    },
+    {
+      "id": "Nature:winter-auto-2:Default:Down",
+      "name": "Sapin saisonnier 2",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-2-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-2-summer.png",
+        "summer": "Nature/winter-auto-2-summer.png",
+        "autumn": "Nature/winter-auto-2-summer.png",
+        "winter": "Nature/winter-auto-2-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    },
+    {
+      "id": "Nature:winter-auto-3:Default:Down",
+      "name": "Sapin saisonnier 3",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-3-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-3-summer.png",
+        "summer": "Nature/winter-auto-3-summer.png",
+        "autumn": "Nature/winter-auto-3-summer.png",
+        "winter": "Nature/winter-auto-3-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    },
+    {
+      "id": "Nature:winter-auto-4:Default:Down",
+      "name": "Sapin saisonnier 4",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-4-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-4-summer.png",
+        "summer": "Nature/winter-auto-4-summer.png",
+        "autumn": "Nature/winter-auto-4-summer.png",
+        "winter": "Nature/winter-auto-4-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    },
+    {
+      "id": "Nature:winter-auto-5:Default:Down",
+      "name": "Saule saisonnier",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-5-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-5-summer.png",
+        "summer": "Nature/winter-auto-5-summer.png",
+        "autumn": "Nature/winter-auto-5-summer.png",
+        "winter": "Nature/winter-auto-5-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    },
+    {
+      "id": "Nature:winter-auto-6:Default:Down",
+      "name": "Palmier saisonnier",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/winter-auto-6-summer.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/winter-auto-6-summer.png",
+        "summer": "Nature/winter-auto-6-summer.png",
+        "autumn": "Nature/winter-auto-6-summer.png",
+        "winter": "Nature/winter-auto-6-winter.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 81,
+          "y": 184,
+          "width": 11,
+          "height": 6
+        }
+      ],
+      "depthOffset": -27
+    }
+  ]
+}
