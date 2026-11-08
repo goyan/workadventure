@@ -1,5 +1,6 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
+import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 
 export interface WeatherView {
     x: number;
@@ -63,7 +64,7 @@ export function keepOutdoorParticles(
     return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
 }
 
-/** The personal Christmas theme shows snow, whatever the map weather. */
-export function effectiveWeather(weather: WeatherType, christmas: boolean): WeatherType {
-    return christmas ? WeatherType.Snow : weather;
+/** The personal Christmas theme shows snow, whatever the map weather; autumn keeps the map weather. */
+export function effectiveWeather(weather: WeatherType, theme: SeasonalTheme | undefined): WeatherType {
+    return theme === SeasonalTheme.Christmas ? WeatherType.Snow : weather;
 }

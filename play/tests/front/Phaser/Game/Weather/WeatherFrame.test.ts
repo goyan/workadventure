@@ -8,6 +8,7 @@ import {
     weatherAtTime,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
+import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
 
@@ -88,8 +89,10 @@ describe("outdoor weather", () => {
     });
 
     it("christmas forces snow", () => {
-        expect(effectiveWeather(WeatherType.Rain, true)).toBe(WeatherType.Snow);
-        expect(effectiveWeather(WeatherType.Rain, false)).toBe(WeatherType.Rain);
-        expect(effectiveWeather(WeatherType.Clear, true)).toBe(WeatherType.Snow);
+        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
+        expect(effectiveWeather(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
+        expect(effectiveWeather(WeatherType.Clear, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
+        // Autumn keeps the map weather: its leaves fall on top of it.
+        expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Autumn)).toBe(WeatherType.Rain);
     });
 });

@@ -73,12 +73,32 @@ describe("shared seasonal nature", () => {
             },
         }) as EntitiesManager;
         const date = new Date("2026-12-08T12:00:00Z");
-        manager.updateSeason(0, date, false);
+        manager.updateSeason(0, date);
         expect(setSeason).not.toHaveBeenCalled();
         // Within the same minute: the theme switch must not wait for the next check.
-        manager.updateSeason(10, date, true);
+        manager.updateSeason(10, date, Season.Winter);
         expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
-        manager.updateSeason(20, date, false);
+        manager.updateSeason(20, date);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+    });
+
+    it("forces autumn trees for the autumn theme, then the map season again", () => {
+        const setSeason = vi.fn();
+        const entity = { setSeason } as unknown as Entity;
+        const settings = { weather: WeatherType.Clear };
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", entity]]),
+            season: Season.Summer,
+            nextSeasonCheck: 0,
+            scene: {
+                markDirty: vi.fn(),
+                getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
+            },
+        }) as EntitiesManager;
+        const july = new Date("2026-07-08T12:00:00Z");
+        manager.updateSeason(0, july, Season.Autumn);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        manager.updateSeason(10, july);
         expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
     });
 

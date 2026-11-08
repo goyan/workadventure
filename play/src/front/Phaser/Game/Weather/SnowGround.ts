@@ -1,10 +1,8 @@
 import * as Sentry from "@sentry/svelte";
-import { Season, type WeatherType } from "@workadventure/map-editor";
+import type { WeatherType } from "@workadventure/map-editor";
 import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
-import { GroundMode } from "../../../Stores/WeatherStore";
 import { FootstepSurfaces } from "../FootstepSurfaces";
 import type { GameScene } from "../GameScene";
-import { seasonAt } from "../Nature/SeasonClock";
 import { snowCoverage } from "./SnowCover";
 
 const GREEN_TEXTURE = "/resources/objects/weather/terrain-green.png";
@@ -67,13 +65,11 @@ export class SnowGround {
         serverDate: Date | undefined,
         configured: WeatherType,
         enabled: boolean,
-        groundMode = GroundMode.Green,
+        autumnGround = false,
         startedAt?: number,
     ): void {
-        const coverage =
-            serverDate && groundMode === GroundMode.Seasonal
-                ? snowCoverage(configured, serverDate.getTime(), startedAt)
-                : 0;
+        // Snow on the map settles on the grass for everyone: it is weather, not a decor.
+        const coverage = serverDate ? snowCoverage(configured, serverDate.getTime(), startedAt) : 0;
         if (!enabled || !serverDate || !this.ready) {
             this.lastDrawKey = "";
             if (this.canvas.visible) {
@@ -85,10 +81,8 @@ export class SnowGround {
         const view = this.scene.cameras.main.worldView;
         const tileWidth = this.scene.Map.tileWidth;
         const tileHeight = this.scene.Map.tileHeight;
-        const groundTexture =
-            groundMode === GroundMode.Seasonal && seasonAt(serverDate) === Season.Autumn
-                ? AUTUMN_TEXTURE
-                : GREEN_TEXTURE;
+        // The autumn theme colours the grass; the calendar is the theme's business.
+        const groundTexture = autumnGround ? AUTUMN_TEXTURE : GREEN_TEXTURE;
         const drawKey = `${groundTexture}:${Math.round(coverage * 240)}:${Math.floor(now / 2000)}:${this.scene.cameras.main.zoom}`;
         const previous = this.drawnView;
         if (

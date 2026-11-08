@@ -298,7 +298,7 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
-import { SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import { forcedTreeSeason, type SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
@@ -1735,7 +1735,7 @@ export class GameScene extends DirtyScene {
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
-                .updateSeason(time, serverDate, this.getSeasonalTheme() === SeasonalTheme.Christmas);
+                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
             this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -2241,10 +2241,7 @@ export class GameScene extends DirtyScene {
 
     public getDesktopWeather(): WeatherType {
         const configured = this.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(
-            weatherAtTime(configured, this.nightManager?.serverDate()),
-            this.getSeasonalTheme() === SeasonalTheme.Christmas,
-        );
+        return effectiveWeather(weatherAtTime(configured, this.nightManager?.serverDate()), this.getSeasonalTheme());
     }
 
     public getGameMap(): GameMap {
@@ -2833,7 +2830,7 @@ export class GameScene extends DirtyScene {
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
-                    christmasActive: () => this.getSeasonalTheme() === SeasonalTheme.Christmas,
+                    seasonalTheme: () => this.getSeasonalTheme(),
                 });
                 this.seasonalThemeManager?.destroy();
                 this.seasonalThemeManager = new SeasonalThemeManager(this, {

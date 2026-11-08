@@ -6,7 +6,7 @@ import type { DesktopEnvironmentRequest } from "../../Interfaces/DesktopAppInter
 import { gameSceneStore } from "../../Stores/GameSceneStore";
 import { mapEditorActivated } from "../../Stores/MenuStore";
 import { NightMode, nightModeStore } from "../../Stores/NightStore";
-import { GroundMode, groundModeStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 
@@ -71,11 +71,10 @@ describe("desktop environment settings", () => {
 
     it("changes the real personal stores without editing the map or opening panels", async () => {
         await applyDesktopEnvironment({ setting: "night", value: NightMode.Disabled });
-        await applyDesktopEnvironment({ setting: "ground", value: GroundMode.Seasonal });
         await applyDesktopEnvironment({ setting: "seasonal", value: SeasonalThemeMode.Autumn });
         await applyDesktopEnvironment({ setting: "effects", value: false });
         expect(get(nightModeStore)).toBe(NightMode.Disabled);
-        expect(get(groundModeStore)).toBe(GroundMode.Seasonal);
+        expect(readDesktopEnvironment()?.ground).toBe("seasonal");
         expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Autumn);
         expect(get(weatherEffectsEnabledStore)).toBe(false);
         expect(save).not.toHaveBeenCalled();

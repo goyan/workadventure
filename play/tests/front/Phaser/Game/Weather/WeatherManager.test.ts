@@ -20,9 +20,9 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     },
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
-const { GroundMode, groundModeStore, weatherEffectsEnabledStore } =
-    await import("../../../../../src/front/Stores/WeatherStore");
+const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
+const { SeasonalTheme } = await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
@@ -32,7 +32,6 @@ afterEach(() => {
     manager = undefined;
     ground.update.mockClear();
     ground.destroy.mockClear();
-    groundModeStore.set(GroundMode.Green);
     weatherEffectsEnabledStore.set(true);
     mapEditorModeStore.set(false);
 });
@@ -128,20 +127,29 @@ describe("weather rendering lifecycle", () => {
         expect(ground.update.mock.lastCall?.[3]).toBe(false);
     });
 
-    it("passes the seasonal preference and server snow episode to the ground renderer", () => {
+    it("passes the server snow episode to the ground renderer, with green grass without a theme", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
-        groundModeStore.set(GroundMode.Seasonal);
         manager = new WeatherManager(scene);
         const date = new Date(456);
         manager.update(0, date);
-        expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, GroundMode.Seasonal, 123);
+        expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, false, 123);
+    });
+
+    it("passes the autumn ground for the autumn theme", () => {
+        const { scene, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+        manager.update(0, new Date(0));
+        expect(ground.update.mock.lastCall?.[3]).toBe(true);
+        expect(ground.update.mock.lastCall?.[4]).toBe(true);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
     });
 
     it("draws snow when christmas is active on a clear map", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Clear };
-        manager = new WeatherManager(scene, { christmasActive: () => true });
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
         manager.update(0, new Date(0));
         expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
@@ -150,8 +158,7 @@ describe("weather rendering lifecycle", () => {
     it("hides the seasonal ground while the christmas theme draws its own snow ground", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Clear };
-        groundModeStore.set(GroundMode.Seasonal);
-        manager = new WeatherManager(scene, { christmasActive: () => true });
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
         manager.update(0, new Date(0));
         expect(ground.update.mock.lastCall?.[3]).toBe(false);
     });
