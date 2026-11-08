@@ -1130,6 +1130,9 @@ givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, u
 400 au plus). Les empreintes sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le réseau.
 Le thème est masqué pendant l'édition ; la neige des objets est reposée à la sortie de l'éditeur.
 « Afficher la météo » coupé retire aussi les flocons ; le reste suit seulement le réglage du thème.
+Thème actif, les arbres saisonniers (catalogue Nature) prennent leur image d'hiver pour soi, quelle que soit la météo de
+la carte, et le sol saisonnier s'efface au profit du sol enneigé. Les objets saisonniers ne reçoivent pas de neige sur
+leur bord du haut : leur image d'hiver la porte déjà.
 
 Limites : un mur manquant laisse entrer la neige ; une image d'objet illisible (CORS) reste sans neige ; un objet
 déplacé par une autre personne garde sa neige à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de

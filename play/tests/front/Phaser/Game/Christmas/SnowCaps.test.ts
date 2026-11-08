@@ -41,6 +41,16 @@ function setup(readPixels = vi.fn(opaque)) {
 }
 
 describe("SnowCaps", () => {
+    it("leaves seasonal objects alone: their winter image already carries the snow", () => {
+        const { scene, caps } = setup();
+        const tree = {
+            ...entity(0, 0, "Nature", "oak"),
+            getPrefab: () => ({ collectionName: "Nature", id: "oak", seasonal: {} }),
+        };
+        caps.rebuild([tree, entity(32, 0)], grid);
+        expect(scene.add.image.mock.calls).toHaveLength(1);
+    });
+
     it("caps outdoor objects only", () => {
         const { scene, caps } = setup();
         caps.rebuild([entity(0, 0), entity(128, 128)], grid);

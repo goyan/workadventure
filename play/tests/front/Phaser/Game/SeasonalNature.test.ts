@@ -59,6 +59,29 @@ describe("shared seasonal nature", () => {
         expect(markDirty).toHaveBeenCalledTimes(4);
     });
 
+    it("shows winter trees at once while the personal christmas theme is on, then the map season again", () => {
+        const setSeason = vi.fn();
+        const entity = { setSeason } as unknown as Entity;
+        const settings = { weather: WeatherType.Clear };
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", entity]]),
+            season: Season.Summer,
+            nextSeasonCheck: 0,
+            scene: {
+                markDirty: vi.fn(),
+                getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
+            },
+        }) as EntitiesManager;
+        const date = new Date("2026-12-08T12:00:00Z");
+        manager.updateSeason(0, date, false);
+        expect(setSeason).not.toHaveBeenCalled();
+        // Within the same minute: the theme switch must not wait for the next check.
+        manager.updateSeason(10, date, true);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        manager.updateSeason(20, date, false);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+    });
+
     it("keeps autumn orange in rain and uses white artwork only during snow or its melting phase", () => {
         const autumn = new Date("2026-11-08T12:00:00Z");
         expect(treeSeasonAt(autumn, WeatherType.Rain, 0)).toBe(Season.Autumn);
