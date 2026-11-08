@@ -1,6 +1,7 @@
 import { get, type Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { seasonalThemeModeStore } from "../../../Stores/SeasonalThemeStore";
+import { AutumnDecor } from "../Autumn/AutumnDecor";
 import { ChristmasDecor } from "../Christmas/ChristmasDecor";
 import type { WalkerSample } from "../Christmas/FootprintTrail";
 import type { AlphaMask, SnowEntity } from "../Christmas/SnowCaps";
@@ -136,8 +137,9 @@ export class SeasonalThemeManager {
             isOutdoor: (x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false,
             readPixels: this.deps.readPixels ?? readFrameAlpha(this.scene),
         };
-        if (theme === SeasonalTheme.Christmas) return new ChristmasDecor(this.scene, deps);
-        return undefined;
+        return theme === SeasonalTheme.Christmas
+            ? new ChristmasDecor(this.scene, deps)
+            : new AutumnDecor(this.scene, deps);
     }
 
     private removeDecor(): void {
