@@ -14,6 +14,11 @@ export const FOOTPRINT_STEP_PX = 16;
 export const FOOTPRINT_JUMP_PX = 64;
 export const FOOTPRINT_FADE_MS = 45_000;
 export const FOOTPRINT_MAX = 400;
+/**
+ * Faster than any avatar, vehicles included: a remote teleport, smoothed over 200 ms by the position interpolation,
+ * moves faster than this and must leave no trail.
+ */
+export const FOOTPRINT_MAX_SPEED_PX_PER_MS = 1.2;
 /** A running trail is cut in segments of at least this length. */
 const TRAIL_SEGMENT_PX = 8;
 /** Steps sit left and right of the path. */
@@ -28,6 +33,8 @@ interface WalkerState {
     /** Where the running trail continues from. */
     trailX: number;
     trailY: number;
+    /** When the last sample was taken, if the caller gives the time. */
+    time: number | undefined;
 }
 
 /** Turns the positions of the players into footprints in the snow. Nothing is sent over the network. */
@@ -36,7 +43,8 @@ export class FootprintTrail {
 
     constructor(private readonly isOutdoor: (x: number, y: number) => boolean) {}
 
-    update(samples: WalkerSample[]): FootprintMark[] {
+    /** `now` (ms) lets fast moves be told apart from walks; without it, only jumps over 64 px are ignored. */
+    update(samples: WalkerSample[], now?: number): FootprintMark[] {
         const marks: FootprintMark[] = [];
         const seen = new Set<string>();
         for (const sample of samples) {
@@ -45,8 +53,10 @@ export class FootprintTrail {
             const dx = state ? sample.x - state.x : 0;
             const dy = state ? sample.y - state.y : 0;
             const moved = Math.hypot(dx, dy);
+            const elapsed = state?.time !== undefined && now !== undefined ? now - state.time : undefined;
+            const tooFast = elapsed !== undefined && elapsed > 0 && moved / elapsed > FOOTPRINT_MAX_SPEED_PX_PER_MS;
             // A new player, a teleport or an appearance: start over from here, without a line across the map.
-            if (!state || moved > FOOTPRINT_JUMP_PX) {
+            if (!state || moved > FOOTPRINT_JUMP_PX || tooFast) {
                 this.walkers.set(sample.id, {
                     x: sample.x,
                     y: sample.y,
@@ -54,9 +64,11 @@ export class FootprintTrail {
                     side: 1,
                     trailX: sample.x,
                     trailY: sample.y,
+                    time: now,
                 });
                 continue;
             }
+            state.time = now;
             if (moved === 0) continue;
             state.x = sample.x;
             state.y = sample.y;

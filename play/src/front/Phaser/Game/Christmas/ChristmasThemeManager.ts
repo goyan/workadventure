@@ -10,6 +10,8 @@ import { SnowGround } from "./SnowGround";
 
 /** The date is checked again every minute, so the theme starts at midnight on December 1st without a reload. */
 const DATE_CHECK_MS = 60_000;
+/** Object images load after the map: count the visible ones this often, and snow the newcomers. */
+const LOADED_CHECK_MS = 1000;
 /** Fading footprints only need a redraw now and then. */
 const FADE_REDRAW_MS = 100;
 
@@ -30,6 +32,9 @@ interface Layers {
     trail: FootprintTrail;
     builtVersion: number;
     visible: boolean;
+    /** Visible entities when the caps were last built, and when that was checked. */
+    loadedCount: number;
+    loadedCheckAt: number;
 }
 
 /** The personal Christmas theme outdoors: snowy ground, snow on objects and footprints. */
@@ -79,14 +84,13 @@ export class ChristmasThemeManager {
         const version = this.deps.outdoorVersion();
         if (version !== layers.builtVersion) {
             layers.ground.draw(grid);
-            layers.caps.rebuild(this.deps.entities(), grid);
             layers.builtVersion = version;
-            this.capsStale = false;
-            this.deps.markDirty();
+            this.rebuildCaps(layers, grid, time);
         } else if (this.capsStale && !this.editing) {
-            layers.caps.rebuild(this.deps.entities(), grid);
-            this.capsStale = false;
-            this.deps.markDirty();
+            this.rebuildCaps(layers, grid, time);
+        } else if (!this.editing && time - layers.loadedCheckAt >= LOADED_CHECK_MS) {
+            layers.loadedCheckAt = time;
+            if (this.countVisible() !== layers.loadedCount) this.rebuildCaps(layers, grid, time);
         }
         const visible = !this.editing;
         if (visible !== layers.visible) {
@@ -97,7 +101,7 @@ export class ChristmasThemeManager {
             this.deps.markDirty();
         }
         if (visible) {
-            const marks = layers.trail.update(walkers());
+            const marks = layers.trail.update(walkers(), time);
             if (marks.length > 0) {
                 layers.prints.add(marks, time);
                 this.deps.markDirty();
@@ -118,6 +122,20 @@ export class ChristmasThemeManager {
         this.removeLayers();
     }
 
+    private rebuildCaps(layers: Layers, grid: OutdoorGrid, time: number): void {
+        layers.caps.rebuild(this.deps.entities(), grid);
+        layers.loadedCount = this.countVisible();
+        layers.loadedCheckAt = time;
+        this.capsStale = false;
+        this.deps.markDirty();
+    }
+
+    private countVisible(): number {
+        let count = 0;
+        for (const entity of this.deps.entities()) if (entity.visible) count++;
+        return count;
+    }
+
     private createLayers(): Layers {
         this.layers = {
             ground: new SnowGround(this.scene),
@@ -126,6 +144,8 @@ export class ChristmasThemeManager {
             trail: new FootprintTrail((x, y) => this.deps.outdoorGrid()?.isOutdoorAt(x, y) ?? false),
             builtVersion: -1,
             visible: true,
+            loadedCount: 0,
+            loadedCheckAt: -Infinity,
         };
         return this.layers;
     }

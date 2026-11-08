@@ -17,6 +17,7 @@ function entity(x: number, y: number, collectionName = "Infogène Mobilier", tex
         displayWidth: 32,
         displayHeight: 32,
         depth: 100,
+        visible: true,
         texture: { key: texture },
         frame: { name: "0", width: 32, height: 32 },
         getPrefab: () => ({ collectionName, id: `${collectionName}:${texture}` }),
@@ -90,5 +91,18 @@ describe("SnowCaps", () => {
         const first = scene.add.image.mock.results[0].value as ReturnType<typeof mockDeep<Phaser.GameObjects.Image>>;
         caps.rebuild([entity(0, 0)], grid);
         expect(first.destroy.mock.calls).toHaveLength(1);
+    });
+
+    it("skips objects whose image is not loaded yet", () => {
+        const { scene, readPixels, caps } = setup();
+        caps.rebuild(
+            [
+                { ...entity(0, 0), visible: false },
+                { ...entity(32, 0), texture: { key: "__MISSING" } },
+            ],
+            grid,
+        );
+        expect(scene.add.image.mock.calls).toHaveLength(0);
+        expect(readPixels).not.toHaveBeenCalled();
     });
 });

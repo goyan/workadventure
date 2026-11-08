@@ -67,4 +67,24 @@ describe("FootprintTrail", () => {
         trail.update([]);
         expect(trail.update([{ ...sample, x: 40 }])).toEqual([]);
     });
+
+    it("no mark along an interpolated teleport", () => {
+        const trail = new FootprintTrail(outdoors);
+        const marks: FootprintMark[] = [];
+        // A remote player's 600 px teleport arrives smoothed over 24 frames of 16.7 ms.
+        for (let frame = 0; frame <= 24; frame++) {
+            marks.push(...trail.update([{ id: "a", x: frame * 25, y: 0, running: false }], frame * 16.7));
+        }
+        expect(marks).toEqual([]);
+    });
+
+    it("still marks a real run with timestamps", () => {
+        const trail = new FootprintTrail(outdoors);
+        const marks: FootprintMark[] = [];
+        // 450 px/s: 7.5 px per 16.7 ms frame.
+        for (let frame = 0; frame <= 12; frame++) {
+            marks.push(...trail.update([{ id: "a", x: frame * 7.5, y: 0, running: true }], frame * 16.7));
+        }
+        expect(marks.length).toBeGreaterThan(0);
+    });
 });

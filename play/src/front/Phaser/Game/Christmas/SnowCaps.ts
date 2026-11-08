@@ -9,6 +9,8 @@ export interface SnowEntity {
     displayWidth: number;
     displayHeight: number;
     depth: number;
+    /** Hidden while its image loads. */
+    visible: boolean;
     texture: { key: string };
     frame: { name: string | number; width: number; height: number };
     getPrefab(): { collectionName: string; id: string };
@@ -23,6 +25,7 @@ export interface AlphaMask {
 
 const FLOOR_COLLECTIONS: readonly string[] = [MAP_LAYER_FLOOR_COLLECTION, "Infogène Sols"];
 const FROST_COLOR = 0xeef1fb;
+const MISSING_TEXTURE = "__MISSING";
 const FROST_ALPHA = 0.35;
 
 type SnowObject = Phaser.GameObjects.Image | Phaser.GameObjects.Rectangle;
@@ -42,6 +45,8 @@ export class SnowCaps {
     rebuild(entities: Iterable<SnowEntity>, grid: OutdoorGrid): void {
         this.clear();
         for (const entity of entities) {
+            // Not loaded yet: Phaser shows its placeholder texture, which must not get snow.
+            if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
             const { collectionName } = entity.getPrefab();
             if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName)) continue;
             // An object stands where its feet are: the middle of its bottom edge.

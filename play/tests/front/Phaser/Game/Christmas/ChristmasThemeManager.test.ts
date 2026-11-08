@@ -53,11 +53,18 @@ const { ChristmasThemeManager } = await import("../../../../../src/front/Phaser/
 const grid = OutdoorGrid.fromWalls(320, 320, 32, []);
 let manager: InstanceType<typeof ChristmasThemeManager> | undefined;
 
-function setup(options: { now?: () => Date; grid?: typeof grid | undefined; version?: () => number } = {}) {
+function setup(
+    options: {
+        now?: () => Date;
+        grid?: typeof grid | undefined;
+        version?: () => number;
+        entities?: () => { visible: boolean }[];
+    } = {},
+) {
     manager = new ChristmasThemeManager(mockDeep<Phaser.Scene>(), {
         outdoorGrid: () => ("grid" in options ? options.grid : grid),
         outdoorVersion: options.version ?? (() => 1),
-        entities: () => [],
+        entities: (options.entities ?? (() => [])) as never,
         markDirty: vi.fn(),
         readPixels: () => undefined,
         now: options.now ?? (() => new Date(2026, 6, 14)),
@@ -145,5 +152,20 @@ describe("ChristmasThemeManager", () => {
         const theme = setup({ grid: undefined });
         expect(() => theme.update(0, walking)).not.toThrow();
         expect(layers.prints.created).toBe(0);
+    });
+
+    it("rebuilds the caps when objects finish loading", () => {
+        christmasThemeModeStore.set(ChristmasThemeMode.Always);
+        const objects = [{ visible: true }, { visible: false }];
+        const theme = setup({ entities: () => objects });
+        theme.update(0, walking);
+        expect(layers.caps.instances[0].rebuild.mock.calls).toHaveLength(1);
+        objects[1].visible = true;
+        theme.update(500, walking);
+        expect(layers.caps.instances[0].rebuild.mock.calls).toHaveLength(1);
+        theme.update(1000, walking);
+        expect(layers.caps.instances[0].rebuild.mock.calls).toHaveLength(2);
+        theme.update(2000, walking);
+        expect(layers.caps.instances[0].rebuild.mock.calls).toHaveLength(2);
     });
 });

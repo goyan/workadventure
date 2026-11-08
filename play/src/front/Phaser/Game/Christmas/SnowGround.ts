@@ -47,7 +47,8 @@ export class SnowGround {
         this.image = this.scene.add.image(0, 0, key);
         this.image.setOrigin(0);
         this.image.setDisplaySize(mapView.width, mapView.height);
-        this.image.setDepth(DEPTH_TILE_INDEX + 0.5);
+        // Between the map tiles (below 0) and the floor tiles (MAP_LAYER_FLOOR_DEPTH = 0.5): paving stays on top.
+        this.image.setDepth(DEPTH_TILE_INDEX + 0.25);
         this.image.setVisible(this.visible);
     }
 
