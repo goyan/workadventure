@@ -16,7 +16,7 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
-import { effectiveWeather, weatherAtTime } from "../Weather/WeatherFrame";
+import { weatherAtTime } from "../Weather/WeatherFrame";
 import { snowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
@@ -84,7 +84,7 @@ export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
     private lastConfiguredWeather: WeatherType | undefined;
-    private lastChristmas = false;
+    private lastForcedSeason: Season | undefined;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -226,27 +226,29 @@ export class EntitiesManager extends EventEmitter {
     }
 
     /**
-     * Follow shared weather each minute, and apply a live editor change immediately. The personal Christmas theme
-     * shows snow, so it shows winter trees too, for this person only.
+     * Follow shared weather each minute, and apply a live editor change immediately. The personal seasonal theme
+     * forces its season (autumn, or winter for Christmas), for this person only.
      */
-    public updateSeason(time: number, serverDate: Date | undefined, christmas = false): void {
+    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
         const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
         const configured = settings?.weather ?? WeatherType.Clear;
         if (
             time < this.nextSeasonCheck &&
             configured === this.lastConfiguredWeather &&
-            christmas === this.lastChristmas
+            forcedSeason === this.lastForcedSeason
         )
             return;
         this.lastConfiguredWeather = configured;
-        this.lastChristmas = christmas;
+        this.lastForcedSeason = forcedSeason;
         this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
-        const season = treeSeasonAt(
-            serverDate,
-            effectiveWeather(weatherAtTime(configured, serverDate), christmas),
-            snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
-        );
+        const season =
+            forcedSeason ??
+            treeSeasonAt(
+                serverDate,
+                weatherAtTime(configured, serverDate),
+                snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
+            );
         if (season === this.season) return;
         this.season = season;
         for (const entity of this.entities.values()) entity.setSeason(season);

@@ -1,14 +1,19 @@
 import type { WeatherType } from "@workadventure/map-editor";
 import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
 import type { NightMode } from "../Stores/NightStore";
-import type { GroundMode } from "../Stores/WeatherStore";
-import type { ChristmasThemeMode } from "../Phaser/Game/Christmas/ChristmasSeason";
+import type { SeasonalThemeMode } from "../Phaser/Game/Seasonal/SeasonalTheme";
+
+/** Former Christmas setting: still accepted and reported for desktop apps that predate the seasonal theme. */
+export type LegacyChristmasMode = "auto" | "always" | "never";
+/** Former ground setting: accepted and ignored, reported as "seasonal" while the autumn theme is chosen. */
+export type LegacyGroundMode = "green" | "seasonal";
 
 export type DesktopEnvironmentRequest =
     | { setting: "weather"; value: WeatherType }
     | { setting: "night"; value: NightMode }
-    | { setting: "ground"; value: GroundMode }
-    | { setting: "christmas"; value: ChristmasThemeMode }
+    | { setting: "ground"; value: LegacyGroundMode }
+    | { setting: "seasonal"; value: SeasonalThemeMode }
+    | { setting: "christmas"; value: LegacyChristmasMode }
     | { setting: "effects"; value: boolean };
 
 export interface DesktopEnvironmentState {
@@ -16,8 +21,9 @@ export interface DesktopEnvironmentState {
     displayWeather: WeatherType;
     night: NightMode;
     isNight: boolean;
-    ground: GroundMode;
-    christmas: ChristmasThemeMode;
+    ground: LegacyGroundMode;
+    seasonal: SeasonalThemeMode;
+    christmas: LegacyChristmasMode;
     effects: boolean;
     canEditWeather: boolean;
     busy: boolean;

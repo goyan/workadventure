@@ -6,9 +6,9 @@ import type { DesktopEnvironmentRequest } from "../../Interfaces/DesktopAppInter
 import { gameSceneStore } from "../../Stores/GameSceneStore";
 import { mapEditorActivated } from "../../Stores/MenuStore";
 import { NightMode, nightModeStore } from "../../Stores/NightStore";
-import { GroundMode, groundModeStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
-import { christmasThemeModeStore } from "../../Stores/ChristmasThemeStore";
-import { ChristmasThemeMode } from "../../Phaser/Game/Christmas/ChristmasSeason";
+import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
+import { SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 
 const save = vi.hoisted(() => vi.fn());
 vi.mock("../../Stores/GameSceneStore", async () => {
@@ -71,14 +71,26 @@ describe("desktop environment settings", () => {
 
     it("changes the real personal stores without editing the map or opening panels", async () => {
         await applyDesktopEnvironment({ setting: "night", value: NightMode.Disabled });
-        await applyDesktopEnvironment({ setting: "ground", value: GroundMode.Seasonal });
-        await applyDesktopEnvironment({ setting: "christmas", value: ChristmasThemeMode.Always });
+        await applyDesktopEnvironment({ setting: "seasonal", value: SeasonalThemeMode.Autumn });
         await applyDesktopEnvironment({ setting: "effects", value: false });
         expect(get(nightModeStore)).toBe(NightMode.Disabled);
-        expect(get(groundModeStore)).toBe(GroundMode.Seasonal);
-        expect(get(christmasThemeModeStore)).toBe(ChristmasThemeMode.Always);
+        expect(readDesktopEnvironment()?.ground).toBe("seasonal");
+        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Autumn);
         expect(get(weatherEffectsEnabledStore)).toBe(false);
         expect(save).not.toHaveBeenCalled();
+    });
+
+    it("keeps the former Christmas control working for an older desktop app", async () => {
+        await applyDesktopEnvironment({ setting: "christmas", value: "always" });
+        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.Christmas);
+        expect(readDesktopEnvironment()).toMatchObject({ seasonal: SeasonalThemeMode.Christmas, christmas: "always" });
+        await applyDesktopEnvironment({ setting: "christmas", value: "never" });
+        expect(get(seasonalThemeModeStore)).toBe(SeasonalThemeMode.None);
+        await applyDesktopEnvironment({ setting: "seasonal", value: SeasonalThemeMode.Autumn });
+        // Autumn forced: Christmas never shows, which an older app can display.
+        expect(readDesktopEnvironment()?.christmas).toBe("never");
+        await applyDesktopEnvironment({ setting: "seasonal", value: SeasonalThemeMode.Auto });
+        expect(readDesktopEnvironment()?.christmas).toBe("auto");
     });
 
     it("rejects mismatched values and surfaces failures without claiming a changed setting", async () => {

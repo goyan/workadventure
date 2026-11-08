@@ -1,21 +1,35 @@
 import { get } from "svelte/store";
 import { z } from "zod";
 import { Weather, WeatherType } from "@workadventure/map-editor";
-import type { DesktopEnvironmentRequest, DesktopEnvironmentState } from "../../Interfaces/DesktopAppInterfaces";
+import type {
+    DesktopEnvironmentRequest,
+    DesktopEnvironmentState,
+    LegacyChristmasMode,
+} from "../../Interfaces/DesktopAppInterfaces";
 import { NightMode, nightModeStore } from "../../Stores/NightStore";
-import { GroundMode, groundModeStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
-import { ChristmasThemeMode } from "../../Phaser/Game/Christmas/ChristmasSeason";
-import { christmasThemeModeStore } from "../../Stores/ChristmasThemeStore";
+import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { migrateChristmasMode, SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
+import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
 import { mapEditorActivated } from "../../Stores/MenuStore";
 
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
     z.object({ setting: z.literal("weather"), value: Weather }),
     z.object({ setting: z.literal("night"), value: z.nativeEnum(NightMode) }),
-    z.object({ setting: z.literal("ground"), value: z.nativeEnum(GroundMode) }),
-    z.object({ setting: z.literal("christmas"), value: z.nativeEnum(ChristmasThemeMode) }),
+    // Former ground setting, replaced by the seasonal theme: accepted from older desktop apps and ignored.
+    z.object({ setting: z.literal("ground"), value: z.enum(["green", "seasonal"]) }),
+    z.object({ setting: z.literal("seasonal"), value: z.nativeEnum(SeasonalThemeMode) }),
+    // Former Christmas control, kept for desktop apps that predate the seasonal theme.
+    z.object({ setting: z.literal("christmas"), value: z.enum(["auto", "always", "never"]) }),
     z.object({ setting: z.literal("effects"), value: z.boolean() }),
 ]);
+
+/** What an older desktop app shows in its three-choice Christmas control. */
+function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
+    if (mode === SeasonalThemeMode.Christmas) return "always";
+    if (mode === SeasonalThemeMode.Auto) return "auto";
+    return "never";
+}
 
 /** The same settings and editing rights as the web controls, read without opening their panels. */
 export function readDesktopEnvironment(busy = false, error = ""): DesktopEnvironmentState | null {
@@ -26,8 +40,9 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
         displayWeather: scene.getDesktopWeather(),
         night: get(nightModeStore),
         isNight: scene.getNightActive(),
-        ground: get(groundModeStore),
-        christmas: get(christmasThemeModeStore),
+        ground: get(seasonalThemeModeStore) === SeasonalThemeMode.Autumn ? "seasonal" : "green",
+        seasonal: get(seasonalThemeModeStore),
+        christmas: legacyChristmasMode(get(seasonalThemeModeStore)),
         effects: get(weatherEffectsEnabledStore),
         canEditWeather: Boolean(
             get(mapEditorActivated) &&
@@ -61,10 +76,12 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             nightModeStore.set(request.value);
             break;
         case "ground":
-            groundModeStore.set(request.value);
+            break;
+        case "seasonal":
+            seasonalThemeModeStore.set(request.value);
             break;
         case "christmas":
-            christmasThemeModeStore.set(request.value);
+            seasonalThemeModeStore.set(migrateChristmasMode(request.value) ?? SeasonalThemeMode.Auto);
             break;
         case "effects":
             weatherEffectsEnabledStore.set(request.value);

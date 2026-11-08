@@ -297,7 +297,8 @@ import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager"
 import { WeatherManager } from "./Weather/WeatherManager";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
-import { ChristmasThemeManager } from "./Christmas/ChristmasThemeManager";
+import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
+import { forcedTreeSeason, type SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
@@ -454,7 +455,7 @@ export class GameScene extends DirtyScene {
     private nightManager: NightManager | undefined;
     private weatherManager: WeatherManager | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
-    private christmasThemeManager: ChristmasThemeManager | undefined;
+    private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -1469,8 +1470,8 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
         this.weatherManager?.destroy();
-        this.christmasThemeManager?.destroy();
-        this.christmasThemeManager = undefined;
+        this.seasonalThemeManager?.destroy();
+        this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
@@ -1529,13 +1530,18 @@ export class GameScene extends DirtyScene {
     }
 
     /** Only the local player hears their footsteps and rolling skateboard. */
-    /** Outdoor cells of the map, shared by the weather and the Christmas theme. */
+    /** The personal seasonal theme shown right now, if any. */
+    public getSeasonalTheme(): SeasonalTheme | undefined {
+        return this.seasonalThemeManager?.activeTheme();
+    }
+
+    /** Outdoor cells of the map, shared by the weather and the seasonal theme. */
     public getOutdoorGrid(): OutdoorGrid | undefined {
         return this.outdoorTracker?.grid;
     }
 
     /** Feet of the players who leave footprints: everyone but the riders. */
-    private christmasWalkers(): WalkerSample[] {
+    private seasonalWalkers(): WalkerSample[] {
         const walkers: WalkerSample[] = [];
         if (!this.CurrentPlayer.isRidingVehicle()) {
             walkers.push({
@@ -1726,10 +1732,10 @@ export class GameScene extends DirtyScene {
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
-            this.christmasThemeManager?.update(time, () => this.christmasWalkers());
+            this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
-                .updateSeason(time, serverDate, this.christmasThemeManager?.isActive() ?? false);
+                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
             this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -2235,10 +2241,7 @@ export class GameScene extends DirtyScene {
 
     public getDesktopWeather(): WeatherType {
         const configured = this.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(
-            weatherAtTime(configured, this.nightManager?.serverDate()),
-            this.christmasThemeManager?.isActive() ?? false,
-        );
+        return effectiveWeather(weatherAtTime(configured, this.nightManager?.serverDate()), this.getSeasonalTheme());
     }
 
     public getGameMap(): GameMap {
@@ -2827,14 +2830,15 @@ export class GameScene extends DirtyScene {
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
-                    christmasActive: () => this.christmasThemeManager?.isActive() ?? false,
+                    seasonalTheme: () => this.getSeasonalTheme(),
                 });
-                this.christmasThemeManager?.destroy();
-                this.christmasThemeManager = new ChristmasThemeManager(this, {
+                this.seasonalThemeManager?.destroy();
+                this.seasonalThemeManager = new SeasonalThemeManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
                     entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
                     markDirty: () => this.markDirty(),
+                    serverDate: () => this.nightManager?.serverDate(),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();

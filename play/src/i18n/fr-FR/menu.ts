@@ -27,11 +27,6 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Aide et astuces",
     },
     settings: {
-        ground: {
-            label: "Sol extérieur",
-            seasonal: "Suivre la saison et la météo",
-            green: "Herbe verte uniquement",
-        },
         soundEffects: {
             title: "Bruitages",
             footsteps: "Volume des pas",
@@ -42,12 +37,16 @@ const menu: DeepPartial<Translation["menu"]> = {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
         },
-        christmas: {
-            label: "Thème de Noël",
-            auto: "Auto (1er déc. – 6 janv.)",
-            always: "Toujours",
-            never: "Jamais",
-            hint: "Pendant le thème, la neige remplace le sol extérieur et la météo de la carte.",
+        seasonal: {
+            label: "Thème saisonnier",
+            auto: "Auto",
+            autumn: "Automne",
+            christmas: "Noël",
+            none: "Aucun",
+            hintAuto: "Automne de septembre à novembre, Noël du 1er décembre au 6 janvier.",
+            hintAutumn: "Feuilles au sol et feuilles qui tombent, dehors.",
+            hintChristmas: "Noël : la neige remplace le sol extérieur et la météo de la carte.",
+            hintNone: "Aucun décor saisonnier.",
         },
         night: {
             label: "Cycle jour/nuit",

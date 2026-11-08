@@ -1112,7 +1112,7 @@ l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt de
 - Double-clic sur la carte : animation de sprint et fumée pendant le trajet, fin des effets à l’arrêt ; aucun effet de course pendant la nage.
 - Ambiance à 5 % par défaut, volume des pas séparé ; préférences déjà enregistrées conservées. rain.mp3, thunder.mp3, snow.mp3 et sunny.mp3 fournis par le propriétaire remplacent les sons synthétiques. L’origine/licence de ces fichiers n’a pas été fournie ; ne pas les présenter comme CC0.
 
-### Météo dehors et thème de Noël
+### Météo dehors et thème saisonnier
 
 **Extérieur détecté seul.** Est dehors tout ce qu'on atteint depuis le bord de la carte sans traverser un objet des
 collections « Carte Murs », « Carte Portes » ou « Infogène Murs fins » (cases de 8 px, `Outdoor/OutdoorGrid.ts` : les murs de la carte d'équipe commencent en milieu de case de 32 px, une grille de 32 px laissait une bande d'herbe nue le long des façades ; la neige du sol couvre aussi les cases de mur qui touchent le dehors, cachées sous l'image du mur).
@@ -1122,29 +1122,42 @@ après le dernier changement de mur ou de porte (`Outdoor/OutdoorTracker.ts`). A
 **Météo seulement dehors.** Pluie, neige, voile et lueur d'orage ne sont plus dessinés au-dessus des pièces
 (`WeatherManager`, option `outdoorGrid`). Les sons ne changent pas. Une carte sans mur reste entièrement dehors.
 
-**Thème de Noël** (« Paramètres → Thème de Noël ») : Auto (1er décembre – 6 janvier, date de l'ordinateur, revérifiée
-chaque minute), Toujours, Jamais. Réglage perso (`christmasTheme` dans le navigateur), appliqué sans recharger.
-Thème actif : la météo affichée pour soi devient Neige (flocons et son de la météo existante), le sol extérieur se
-couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du haut, les sols posés dehors sont
-givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une trace en course, fondu en 45 s,
-400 au plus). Les empreintes sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le réseau.
-Le thème est masqué pendant l'édition ; la neige des objets est reposée à la sortie de l'éditeur.
-« Afficher la météo » coupé retire aussi les flocons ; le reste suit seulement le réglage du thème.
-Thème actif, les arbres saisonniers (catalogue Nature) prennent leur image d'hiver pour soi, quelle que soit la météo de
-la carte, et le sol saisonnier s'efface au profit du sol enneigé. Les objets saisonniers ne reçoivent pas de neige sur
-leur bord du haut : leur image d'hiver la porte déjà.
+**Thème saisonnier** (« Paramètres → Ambiance → Thème saisonnier ») : Auto, Automne, Noël, Aucun. Réglage perso
+(`seasonalTheme` dans le navigateur), appliqué sans recharger. Il remplace « Thème de Noël » (repris une fois :
+Toujours → Noël, Jamais → Aucun) et « Sol extérieur » (effacé). Auto suit le calendrier de Paris, revérifié chaque
+minute : automne du 1er septembre au 30 novembre, Noël du 1er décembre au 6 janvier ; tant que l'heure du serveur
+n'est pas reçue, Auto n'affiche rien (`Seasonal/SeasonalTheme.ts`). `SeasonalThemeManager` crée le décor du thème
+(`SeasonalDecor`), le masque pendant l'édition et le reconstruit quand un mur ou un objet change.
 
-Limites : un mur manquant laisse entrer la neige ; une image d'objet illisible (CORS) reste sans neige ; un objet
-déplacé par une autre personne garde sa neige à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
+- **Noël** (`Christmas/ChristmasDecor.ts`) : la météo affichée pour soi devient Neige (flocons et son de la météo
+  existante), le sol extérieur se couvre de neige bleutée, les objets dehors portent une neige épaisse sur leur bord du
+  haut, les sols posés dehors sont givrés, et chaque joueur laisse des empreintes (une tous les 16 px en marche, une
+  trace en course, fondu en 45 s, 400 au plus). Les arbres saisonniers prennent leur image d'hiver, sans neige ajoutée.
+- **Automne** (`Autumn/`) : la météo de la carte est gardée ; l'herbe prend la texture d'automne d'Amine, les arbres
+  leur image d'automne ; feuilles éparses (une par carré de 48 px, placement fixe), feuilles qui tombent (couche de la
+  boucle météo, même par temps clair), tas de feuilles au pied des objets dehors (arbres compris), feuilles soulevées
+  par les pas (3-4 feuilles de 5×3 px tous les 24 px en marche, 5-6 tous les 16 px en course, 120 au plus). Palette `#c8642a`, `#d9a23b`,
+  `#9b3d23`, `#7a5a2e` ; aucune image ajoutée.
+
+Empreintes et feuilles soulevées sont calculées par chaque navigateur depuis les positions déjà reçues : rien sur le
+réseau. « Afficher la météo » coupé retire aussi ce qui tombe (flocons de Noël, feuilles) ; le reste suit le thème.
+Sans thème, la neige de la carte tient sur l'herbe pour tout le monde (elle était réservée à « Suivre la saison et la
+météo »).
+
+Limites : un mur manquant laisse entrer le décor ; une image d'objet illisible (CORS) reste sans neige ni tas ; un objet
+déplacé par une autre personne garde son décor à l'ancien endroit jusqu'au prochain changement de mur ou à la sortie de
 l'éditeur.
+
+Recette : thème « Automne » puis « Noël », marcher puis courir dehors et dans une pièce, poser un objet dehors, ouvrir
+l'éditeur et retirer un mur d'une pièce puis le remettre ; « Aucun » et une carte en orage : pluie et voile seulement
+dehors.
 
 ### Contrôles d'ambiance du client desktop
 
 Le pont optionnel `WAD.onEnvironmentRequest` / `reportEnvironment` permet au client desktop de régler directement
 la météo commune du WAM (avec les mêmes droits d'édition et la même commande de sauvegarde), ainsi que les
-préférences personnelles jour/nuit, sol, Noël et effets météo. Les emplacements des réglages dans WA restent identiques.
+préférences personnelles jour/nuit, thème saisonnier (`seasonal`) et effets météo. Les emplacements des réglages dans
+WA restent identiques. Les anciens réglages `christmas` (auto, always, never → Auto, Noël, Aucun) et `ground` (ignoré)
+restent acceptés et rapportés pour les clients desktop antérieurs au thème saisonnier.
 L'état remonte à chaque changement, au plus une vérification par seconde dans la boucle du jeu, sans minuterie
 supplémentaire ; il inclut la météo affichée et la nuit effective pour les icônes. Sortir du salon désactive les contrôles.
-
-Recette : régler « Toujours », marcher puis courir dehors et dans une pièce, ouvrir l'éditeur et retirer un mur d'une
-pièce, puis le remettre ; régler « Jamais » et vérifier une carte en orage : pluie et voile seulement dehors.

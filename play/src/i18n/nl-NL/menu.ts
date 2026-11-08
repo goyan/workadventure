@@ -27,11 +27,6 @@ const menu: DeepPartial<Translation["menu"]> = {
         helpAndTips: "Help & tips",
     },
     settings: {
-        ground: {
-            label: "Outdoor ground",
-            seasonal: "Follow the season and weather",
-            green: "Green grass only",
-        },
         soundEffects: {
             title: "Geluidseffecten",
             footsteps: "Volume van voetstappen",

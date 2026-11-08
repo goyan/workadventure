@@ -26,11 +26,6 @@ const menu: BaseTranslation = {
         helpAndTips: "Help & Tips",
     },
     settings: {
-        ground: {
-            label: "Outdoor ground",
-            seasonal: "Follow the season and weather",
-            green: "Green grass only",
-        },
         soundEffects: {
             title: "Sound effects",
             footsteps: "Footstep volume",
@@ -41,12 +36,16 @@ const menu: BaseTranslation = {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",
         },
-        christmas: {
-            label: "Christmas theme",
-            auto: "Auto (Dec 1 – Jan 6)",
-            always: "Always",
-            never: "Never",
-            hint: "While the theme is on, snow replaces the outdoor ground and the map weather.",
+        seasonal: {
+            label: "Seasonal theme",
+            auto: "Auto",
+            autumn: "Autumn",
+            christmas: "Christmas",
+            none: "None",
+            hintAuto: "Autumn from September to November, Christmas from December 1st to January 6th.",
+            hintAutumn: "Leaves on the ground and falling leaves, outdoors.",
+            hintChristmas: "Christmas: snow replaces the outdoor ground and the map weather.",
+            hintNone: "No seasonal decor.",
         },
         night: {
             label: "Day/night cycle",
