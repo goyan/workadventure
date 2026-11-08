@@ -106,6 +106,13 @@ export class Player extends Character {
         });
     }
 
+    /** Whether the last movement was a run (Shift or a double-click path). */
+    private lastRunning = false;
+
+    public isRunning(): boolean {
+        return this.lastRunning;
+    }
+
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
         this.updateSwimming();
         if (this.swimming || get(followStateStore) !== "off") this.equipVehicle(VehicleMode.Off);
@@ -553,6 +560,7 @@ export class Player extends Character {
 
         // Send movement events
         const running = moving && speedUp && !followMode && this.vehicleMode === VehicleMode.Off;
+        this.lastRunning = running;
         const emit = () => this.emit(hasMovedEventName, { moving, running, direction, x: this.x, y: this.y });
         if (moving) {
             if (!this.isMoving) {
@@ -639,6 +647,7 @@ export class Player extends Character {
      * Moves the character by the given speed amount.
      */
     private moveBy(x: number, y: number, running = false) {
+        this.lastRunning = running;
         const body = this.getBody();
 
         body.setVelocity(x, y);

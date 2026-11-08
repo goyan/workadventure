@@ -51,6 +51,7 @@
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
     import NightSettings from "./NightSettings.svelte";
+    import ChristmasThemeSettings from "./ChristmasThemeSettings.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -351,6 +352,10 @@
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
             <NightSettings />
+        </div>
+        <div class="flex flex-col gap-2">
+            <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.christmas.label()}</p>
+            <ChristmasThemeSettings />
         </div>
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">

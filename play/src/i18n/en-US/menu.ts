@@ -37,6 +37,12 @@ const menu: BaseTranslation = {
             environment: "Environment volume (weather, doors and map audio)",
         },
         weatherEffects: "Show weather effects (rain, snow and storm light)",
+        christmas: {
+            label: "Christmas theme",
+            auto: "Auto (Dec 1 – Jan 6)",
+            always: "Always",
+            never: "Never",
+        },
         night: {
             label: "Day/night cycle",
             server: "Server time",

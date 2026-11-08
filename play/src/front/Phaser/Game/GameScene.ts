@@ -293,6 +293,10 @@ import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { WeatherManager } from "./Weather/WeatherManager";
+import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
+import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
+import { ChristmasThemeManager } from "./Christmas/ChristmasThemeManager";
+import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
@@ -447,6 +451,8 @@ export class GameScene extends DirtyScene {
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private nightManager: NightManager | undefined;
     private weatherManager: WeatherManager | undefined;
+    private outdoorTracker: OutdoorTracker | undefined;
+    private christmasThemeManager: ChristmasThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
@@ -1461,6 +1467,8 @@ export class GameScene extends DirtyScene {
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
         this.weatherManager?.destroy();
+        this.christmasThemeManager?.destroy();
+        this.christmasThemeManager = undefined;
         this.skateboardSounds?.destroy();
         this.nightManager = undefined;
         this._knockManager?.destroy();
@@ -1519,6 +1527,39 @@ export class GameScene extends DirtyScene {
     }
 
     /** Only the local player hears their footsteps and rolling skateboard. */
+    /** Outdoor cells of the map, shared by the weather and the Christmas theme. */
+    public getOutdoorGrid(): OutdoorGrid | undefined {
+        return this.outdoorTracker?.grid;
+    }
+
+    /** Feet of the players who leave footprints: everyone but the riders. */
+    private christmasWalkers(): WalkerSample[] {
+        const walkers: WalkerSample[] = [];
+        if (!this.CurrentPlayer.isRidingVehicle()) {
+            walkers.push({
+                id: "local",
+                x: this.CurrentPlayer.x,
+                y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y,
+                running: this.CurrentPlayer.isRunning(),
+            });
+        }
+        for (const player of this.MapPlayersByKey.values()) {
+            if (player.isRidingVehicle()) continue;
+            walkers.push({
+                id: String(player.userId),
+                x: player.x,
+                y: player.y + CHARACTER_BODY_OFFSET_Y,
+                running: player.isRunning(),
+            });
+        }
+        return walkers;
+    }
+
+    /** Changes each time the outdoor grid is recomputed. */
+    public getOutdoorVersion(): number {
+        return this.outdoorTracker?.version ?? 0;
+    }
+
     private updateFootsteps(): void {
         if (!this.footstepSounds) {
             const surfaces = new FootstepSurfaces(
@@ -1682,6 +1723,8 @@ export class GameScene extends DirtyScene {
             this.nightManager?.update(time);
             const serverDate = this.nightManager?.serverDate();
             this.gameMapFrontWrapper.getEntitiesManager().updateSeason(time, serverDate);
+            this.outdoorTracker?.update();
+            this.christmasThemeManager?.update(time, () => this.christmasWalkers());
             this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -2750,7 +2793,32 @@ export class GameScene extends DirtyScene {
                 this.nightManager = new NightManager(this);
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
-                this.weatherManager = new WeatherManager(this);
+                this.outdoorTracker = new OutdoorTracker(
+                    () =>
+                        Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) =>
+                            entityOutdoorRect(entity, (imagePath) =>
+                                this.textures.exists(imagePath) ? this.textures.getFrame(imagePath) : undefined,
+                            ),
+                        ),
+                    () => {
+                        const map = this.gameMapFrontWrapper.getMap();
+                        return {
+                            width: (map.width ?? 0) * (map.tilewidth ?? 0),
+                            height: (map.height ?? 0) * (map.tileheight ?? 0),
+                        };
+                    },
+                );
+                this.weatherManager = new WeatherManager(this, {
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    christmasActive: () => this.christmasThemeManager?.isActive() ?? false,
+                });
+                this.christmasThemeManager?.destroy();
+                this.christmasThemeManager = new ChristmasThemeManager(this, {
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
+                    entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+                    markDirty: () => this.markDirty(),
+                });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();
                 this._knockManager = new KnockManager(this);

@@ -39,6 +39,8 @@ export class RemotePlayer extends Character implements ActivatableInterface {
     public readonly activationRadius: number;
 
     private visitCardUrl: string | null;
+    /** Whether the last position received was a run. */
+    private running = false;
     private pathFollowingUpdateCallback: (time: number, delta: number) => void;
 
     constructor(
@@ -73,10 +75,15 @@ export class RemotePlayer extends Character implements ActivatableInterface {
         this.pathFollowingUpdateCallback = (_time: number, delta: number) => this.followPath(delta);
     }
 
+    public isRunning(): boolean {
+        return this.running;
+    }
+
     public updatePosition(position: PositionMessage): void {
         this.stopMoveTo();
         if (position.moving) this.standUp();
         this.playAnimation(position.direction, position.moving, position.running ? RUN_ANIMATION_SPEED : 1);
+        this.running = position.moving && position.running;
         this.setPosition(position.x, position.y);
         this.updateSeatedState(position.moving);
 

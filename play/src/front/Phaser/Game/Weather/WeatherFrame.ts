@@ -54,3 +54,16 @@ export function weatherAtTime(configured: WeatherType, serverDate: Date | undefi
     const weather = cycle[((phase % cycle.length) + cycle.length) % cycle.length] ?? WeatherType.Clear;
     return weather === WeatherType.Snow && !snowPossibleAt(serverDate) ? WeatherType.Rain : weather;
 }
+
+/** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */
+export function keepOutdoorParticles(
+    particles: WeatherParticle[],
+    isOutdoor: ((x: number, y: number) => boolean) | undefined,
+): WeatherParticle[] {
+    return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
+}
+
+/** The personal Christmas theme shows snow, whatever the map weather. */
+export function effectiveWeather(weather: WeatherType, christmas: boolean): WeatherType {
+    return christmas ? WeatherType.Snow : weather;
+}
