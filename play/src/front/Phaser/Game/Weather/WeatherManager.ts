@@ -6,7 +6,14 @@ import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
-import { effectiveWeather, keepOutdoorParticles, stormGlow, weatherParticles, weatherAtTime } from "./WeatherFrame";
+import {
+    effectiveWeather,
+    keepOutdoorParticles,
+    leafParticles,
+    stormGlow,
+    weatherParticles,
+    weatherAtTime,
+} from "./WeatherFrame";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -52,7 +59,10 @@ export class WeatherManager {
             theme === SeasonalTheme.Autumn,
             settings?.weatherStartedAt,
         );
-        if (!enabled || weather === WeatherType.Clear) {
+        const showWeather = enabled && weather !== WeatherType.Clear;
+        // Autumn leaves fall on top of the map weather, even on a clear day.
+        const showLeaves = enabled && theme === SeasonalTheme.Autumn;
+        if (!showWeather && !showLeaves) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.visible = false;
@@ -70,30 +80,43 @@ export class WeatherManager {
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
         const veil = grid ? grid.outdoorRunsInView(view) : [view];
         const epoch = serverDate?.getTime() ?? now;
-        this.graphics.clear().setVisible(true);
-        if (weather !== WeatherType.Snow) {
-            this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.12 : 0.05);
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-        }
-        if (weather === WeatherType.Snow) {
-            this.graphics.fillStyle(0xf2f5ff, 0.8);
-        } else {
-            this.graphics.lineStyle(1, 0xa8c9e5, 0.65);
-            this.graphics.beginPath();
-        }
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
-        for (const particle of keepOutdoorParticles(weatherParticles(weather, epoch, view), isOutdoor)) {
+        this.graphics.clear().setVisible(true);
+        if (showWeather) {
+            if (weather !== WeatherType.Snow) {
+                this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.12 : 0.05);
+                for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            }
             if (weather === WeatherType.Snow) {
-                this.graphics.fillRect(Math.round(particle.x), Math.round(particle.y), 2, 2);
+                this.graphics.fillStyle(0xf2f5ff, 0.8);
             } else {
-                this.graphics.moveTo(particle.x, particle.y);
-                this.graphics.lineTo(particle.x - particle.length / 3, particle.y + particle.length);
+                this.graphics.lineStyle(1, 0xa8c9e5, 0.65);
+                this.graphics.beginPath();
+            }
+            for (const particle of keepOutdoorParticles(weatherParticles(weather, epoch, view), isOutdoor)) {
+                if (weather === WeatherType.Snow) {
+                    this.graphics.fillRect(Math.round(particle.x), Math.round(particle.y), 2, 2);
+                } else {
+                    this.graphics.moveTo(particle.x, particle.y);
+                    this.graphics.lineTo(particle.x - particle.length / 3, particle.y + particle.length);
+                }
+            }
+            if (weather !== WeatherType.Snow) this.graphics.strokePath();
+            if (weather === WeatherType.Storm && serverDate) {
+                this.graphics.fillStyle(0xe3eaff, stormGlow(epoch));
+                for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
         }
-        if (weather !== WeatherType.Snow) this.graphics.strokePath();
-        if (weather === WeatherType.Storm && serverDate) {
-            this.graphics.fillStyle(0xe3eaff, stormGlow(epoch));
-            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+        if (showLeaves) {
+            const leaves = leafParticles(epoch, view).map((leaf) => ({
+                ...leaf,
+                x: Math.round(leaf.x),
+                y: Math.round(leaf.y),
+            }));
+            for (const leaf of keepOutdoorParticles(leaves, isOutdoor)) {
+                this.graphics.fillStyle(leaf.color, 0.95);
+                this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 2 : 3, leaf.vertical ? 3 : 2);
+            }
         }
         this.scene.markDirty();
     }

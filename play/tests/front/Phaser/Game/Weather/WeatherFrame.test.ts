@@ -3,6 +3,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import {
     effectiveWeather,
     keepOutdoorParticles,
+    leafParticles,
     stormGlow,
     weatherParticles,
     weatherAtTime,
@@ -94,5 +95,29 @@ describe("outdoor weather", () => {
         expect(effectiveWeather(WeatherType.Clear, SeasonalTheme.Christmas)).toBe(WeatherType.Snow);
         // Autumn keeps the map weather: its leaves fall on top of it.
         expect(effectiveWeather(WeatherType.Rain, SeasonalTheme.Autumn)).toBe(WeatherType.Rain);
+    });
+});
+
+describe("leafParticles", () => {
+    const view = { x: 0, y: 0, width: 1280, height: 720 };
+    const inView = (particle: { x: number; y: number }) =>
+        particle.x >= view.x &&
+        particle.x < view.x + view.width &&
+        particle.y >= view.y &&
+        particle.y < view.y + view.height;
+
+    it("is about three times sparser than snow", () => {
+        const snow = weatherParticles(WeatherType.Snow, 0, view).filter(inView).length;
+        const leaves = leafParticles(0, view).filter(inView).length;
+        expect(leaves).toBeGreaterThan((snow / 3) * 0.8);
+        expect(leaves).toBeLessThan((snow / 3) * 1.2);
+    });
+
+    it("is the same for everyone at the same time, and falls", () => {
+        expect(leafParticles(5000, view)).toEqual(leafParticles(5000, view));
+        const before = leafParticles(5000, view);
+        const after = leafParticles(5500, view);
+        const fell = before.filter((particle, index) => after[index].y > particle.y).length;
+        expect(fell).toBeGreaterThan(before.length * 0.9);
     });
 });

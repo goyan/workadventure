@@ -1,6 +1,7 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
+import { hash01, leafColor } from "../Autumn/LeafPalette";
 
 export interface WeatherView {
     x: number;
@@ -36,6 +37,35 @@ export function weatherParticles(weather: WeatherType, epoch: number, view: Weat
     return particles;
 }
 
+export interface LeafParticle {
+    x: number;
+    y: number;
+    color: number;
+    /** 2×3 instead of 3×2: the leaf turns as it sways. */
+    vertical: boolean;
+}
+
+/** Leaves fall slower than snow, sway, and drift with a light wind; about three times fewer than snowflakes. */
+export function leafParticles(epoch: number, view: WeatherView): LeafParticle[] {
+    const snowCell = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
+    const cellSize = Math.round(snowCell * Math.sqrt(3));
+    const time = epoch / 1000;
+    const particles: LeafParticle[] = [];
+    for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
+        for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
+            const seed = hash01(col, row);
+            const sway = (time * 2 * Math.PI) / 3 + seed * 20;
+            particles[particles.length] = {
+                x: col * cellSize + ((seed * cellSize + time * 6) % cellSize) + Math.sin(sway) * 8,
+                y: row * cellSize + ((hash01(col, row, 1) * cellSize + time * 12) % cellSize),
+                color: leafColor(hash01(col, row, 2)),
+                vertical: Math.cos(sway) > 0,
+            };
+        }
+    }
+    return particles;
+}
+
 /** One gentle glow every 23 seconds, at the same server time for everyone. */
 export function stormGlow(epoch: number): number {
     const phase = ((epoch % 23000) + 23000) % 23000;
@@ -57,10 +87,10 @@ export function weatherAtTime(configured: WeatherType, serverDate: Date | undefi
 }
 
 /** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */
-export function keepOutdoorParticles(
-    particles: WeatherParticle[],
+export function keepOutdoorParticles<T extends { x: number; y: number }>(
+    particles: T[],
     isOutdoor: ((x: number, y: number) => boolean) | undefined,
-): WeatherParticle[] {
+): T[] {
     return isOutdoor ? particles.filter((particle) => isOutdoor(particle.x, particle.y)) : particles;
 }
 

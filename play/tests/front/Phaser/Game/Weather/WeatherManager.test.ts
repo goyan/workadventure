@@ -187,4 +187,51 @@ describe("weather rendering lifecycle", () => {
             expect(grid.isOutdoorAt(x, y)).toBe(true);
         }
     });
+
+    it("draws falling leaves on a clear map", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+        manager.update(0, new Date(0));
+        const leaves = graphics.fillRect.mock.calls.filter(
+            ([, , width, height]) => (width === 3 && height === 2) || (width === 2 && height === 3),
+        );
+        expect(leaves.length).toBeGreaterThan(0);
+        expect(graphics.setVisible.mock.lastCall).toEqual([true]);
+    });
+
+    it("keeps falling leaves outdoors only", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        scene.cameras.main.worldView.width = 320;
+        scene.cameras.main.worldView.height = 320;
+        const grid = OutdoorGrid.fromWalls(320, 320, 32, [
+            { x: 64, y: 64, width: 160, height: 32 },
+            { x: 64, y: 192, width: 160, height: 32 },
+            { x: 64, y: 96, width: 32, height: 96 },
+            { x: 192, y: 96, width: 32, height: 96 },
+        ]);
+        manager = new WeatherManager(scene, { outdoorGrid: () => grid, seasonalTheme: () => SeasonalTheme.Autumn });
+        for (let time = 0; time < 20_000; time += 1000) manager.update(time, new Date(time));
+        expect(graphics.fillRect.mock.calls.length).toBeGreaterThan(0);
+        for (const [x, y] of graphics.fillRect.mock.calls) expect(grid.isOutdoorAt(x, y)).toBe(true);
+    });
+
+    it("stops falling leaves with the weather switch", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+        manager.update(0, new Date(0));
+        weatherEffectsEnabledStore.set(false);
+        manager.update(100, new Date(100));
+        expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+    });
+
+    it("draws no leaves without the autumn theme", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(graphics.fillRect.mock.calls).toHaveLength(0);
+    });
 });
