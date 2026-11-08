@@ -15,6 +15,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
+const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
 afterEach(() => {
@@ -108,5 +109,39 @@ describe("weather rendering lifecycle", () => {
         mapEditorModeStore.set(true);
         manager.update(3, new Date(3));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+    });
+
+    it("draws snow when christmas is active on a clear map", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        manager = new WeatherManager(scene, { christmasActive: () => true });
+        manager.update(0, new Date(0));
+        expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
+    });
+
+    it("tints only outdoor runs in a storm", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Storm };
+        scene.cameras.main.worldView.width = 320;
+        scene.cameras.main.worldView.height = 320;
+        const grid = OutdoorGrid.fromWalls(320, 320, 32, [
+            { x: 64, y: 64, width: 160, height: 32 },
+            { x: 64, y: 192, width: 160, height: 32 },
+            { x: 64, y: 96, width: 32, height: 96 },
+            { x: 192, y: 96, width: 32, height: 96 },
+        ]);
+        manager = new WeatherManager(scene, { outdoorGrid: () => grid });
+        // 500 ms into the 23 s cycle: the storm glow is drawn too.
+        manager.update(0, new Date(500));
+        const rects = graphics.fillRect.mock.calls;
+        expect(rects.length).toBeGreaterThan(0);
+        for (const [x, y, width, height] of rects) {
+            const coversRoomCenter = x <= 144 && 144 < x + width && y <= 144 && 144 < y + height;
+            expect(coversRoomCenter).toBe(false);
+        }
+        for (const [x, y] of graphics.moveTo.mock.calls) {
+            expect(grid.isOutdoorAt(x, y)).toBe(true);
+        }
     });
 });

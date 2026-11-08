@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
-import { stormGlow, weatherParticles, weatherAtTime } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import {
+    effectiveWeather,
+    keepOutdoorParticles,
+    stormGlow,
+    weatherParticles,
+    weatherAtTime,
+} from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
 
@@ -48,5 +55,32 @@ describe("common automatic weather", () => {
         expect(weatherAtTime(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
         expect(weatherAtTime(WeatherType.Automatic, undefined)).toBe(WeatherType.Clear);
         expect(weatherAtTime(WeatherType.Automatic, new Date(NaN))).toBe(WeatherType.Clear);
+    });
+});
+
+describe("outdoor weather", () => {
+    const closedRoom = OutdoorGrid.fromWalls(320, 320, 32, [
+        { x: 64, y: 64, width: 160, height: 32 },
+        { x: 64, y: 192, width: 160, height: 32 },
+        { x: 64, y: 96, width: 32, height: 96 },
+        { x: 192, y: 96, width: 32, height: 96 },
+    ]);
+    const particles = [
+        { x: 140, y: 140, length: 2 },
+        { x: 10, y: 10, length: 2 },
+    ];
+
+    it("keeps every particle without a grid", () => {
+        expect(keepOutdoorParticles(particles, undefined)).toEqual(particles);
+    });
+
+    it("drops particles above indoor cells", () => {
+        expect(keepOutdoorParticles(particles, (x, y) => closedRoom.isOutdoorAt(x, y))).toEqual([particles[1]]);
+    });
+
+    it("christmas forces snow", () => {
+        expect(effectiveWeather(WeatherType.Rain, true)).toBe(WeatherType.Snow);
+        expect(effectiveWeather(WeatherType.Rain, false)).toBe(WeatherType.Rain);
+        expect(effectiveWeather(WeatherType.Clear, true)).toBe(WeatherType.Snow);
     });
 });
