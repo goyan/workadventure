@@ -21,6 +21,7 @@ class MapsManager {
 
     private saveMapIntervals: Map<string, NodeJS.Timeout>;
     private mapLastChangeTimestamp: Map<string, number>;
+    private readonly activeEditOperations = new Map<string, number>();
 
     private readonly editionLocks = new LockByKey<string>(
         (error, key, timeoutMs) => {
@@ -61,7 +62,32 @@ class MapsManager {
     }
 
     public waitForLock(mapKey: string, callback: () => Promise<void>): Promise<void> {
-        return this.editionLocks.waitForLock(mapKey, callback, EDITION_LOCK_TIMEOUT_MS);
+        return this.editionLocks.waitForLock(
+            mapKey,
+            async () => {
+                this.activeEditOperations.set(mapKey, (this.activeEditOperations.get(mapKey) ?? 0) + 1);
+                try {
+                    await callback();
+                } finally {
+                    const remaining = (this.activeEditOperations.get(mapKey) ?? 1) - 1;
+                    if (remaining > 0) {
+                        this.activeEditOperations.set(mapKey, remaining);
+                    } else {
+                        this.activeEditOperations.delete(mapKey);
+                    }
+                    // A refused/no-op edit has no command eviction timer. Keep pending saves and replay history.
+                    // A lock timeout does not cancel its callback, so another edit may still be running.
+                    if (
+                        remaining === 0 &&
+                        !this.saveMapIntervals.has(mapKey) &&
+                        !this.loadedMapsCommandsQueue.get(mapKey)?.length
+                    ) {
+                        this.loadedMaps.delete(mapKey);
+                    }
+                }
+            },
+            EDITION_LOCK_TIMEOUT_MS,
+        );
     }
 
     public async executeCommand(mapKey: string, domain: string, command: Command): Promise<void> {

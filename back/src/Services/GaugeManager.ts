@@ -11,6 +11,7 @@ class GaugeManager {
     private nbPublishersPerWorldGauge: Gauge<string>;
     private nbWatchersPerWorldGauge: Gauge<string>;
 
+    private readonly spaceStats = new Map<string, { publishers: number; watchers: number }>();
     private worldStats: Map<string, { publishers: number; watchers: number }> = new Map();
     private clientsPerRoom: Map<string, number> = new Map();
 
@@ -51,21 +52,7 @@ class GaugeManager {
         /* eslint rxjs/no-ignored-subscription: "off", svelte/no-ignored-unsubscribe: "off" */
 
         clientEventsEmitter.spaceUpdatedSubject.subscribe((space: Space) => {
-            let spaceStats = this.worldStats.get(space.world);
-            if (!spaceStats) {
-                spaceStats = { publishers: 0, watchers: 0 };
-                this.worldStats.set(space.name, spaceStats);
-            }
-            spaceStats.publishers = space.nbPublishers;
-            spaceStats.watchers = space.nbWatchers;
-            this.nbPublishersPerWorldGauge.set({ world: space.world }, spaceStats.publishers);
-            this.nbWatchersPerWorldGauge.set({ world: space.world }, spaceStats.watchers);
-            if (space.nbPublishers === 0 && space.nbWatchers === 0) {
-                this.worldStats.delete(space.world);
-                // Remove the gauge labels when both reach 0
-                this.nbPublishersPerWorldGauge.remove({ world: space.world });
-                this.nbWatchersPerWorldGauge.remove({ world: space.world });
-            }
+            this.updateSpaceStats(space, space.nbPublishers, space.nbWatchers);
         });
 
         clientEventsEmitter.newSpaceSubject.subscribe((space: Space) => {
@@ -74,15 +61,7 @@ class GaugeManager {
 
         clientEventsEmitter.deleteSpaceSubject.subscribe((space: Space) => {
             this.nbSpacesGauge.dec();
-            const spaceStats = this.worldStats.get(space.world);
-            if (spaceStats) {
-                this.nbPublishersPerWorldGauge.dec({ world: space.world }, spaceStats.publishers);
-                this.nbWatchersPerWorldGauge.dec({ world: space.world }, spaceStats.watchers);
-                this.worldStats.delete(space.world);
-                // Remove the gauge labels when space is deleted
-                this.nbPublishersPerWorldGauge.remove({ world: space.world });
-                this.nbWatchersPerWorldGauge.remove({ world: space.world });
-            }
+            this.updateSpaceStats(space, 0, 0);
         });
 
         clientEventsEmitter.clientJoinSubject.subscribe(({ clientUUid, roomId }) => {
@@ -110,6 +89,29 @@ class GaugeManager {
                 this.nbClientsPerRoomGauge.dec({ room: roomId });
             }
         });
+    }
+
+    private updateSpaceStats(space: Pick<Space, "name" | "world">, publishers: number, watchers: number): void {
+        const previous = this.spaceStats.get(space.name) ?? { publishers: 0, watchers: 0 };
+        const world = this.worldStats.get(space.world) ?? { publishers: 0, watchers: 0 };
+        const total = {
+            publishers: world.publishers + publishers - previous.publishers,
+            watchers: world.watchers + watchers - previous.watchers,
+        };
+        if (publishers === 0 && watchers === 0) {
+            this.spaceStats.delete(space.name);
+        } else {
+            this.spaceStats.set(space.name, { publishers, watchers });
+        }
+        if (total.publishers === 0 && total.watchers === 0) {
+            this.worldStats.delete(space.world);
+            this.nbPublishersPerWorldGauge.remove({ world: space.world });
+            this.nbWatchersPerWorldGauge.remove({ world: space.world });
+        } else {
+            this.worldStats.set(space.world, total);
+            this.nbPublishersPerWorldGauge.set({ world: space.world }, total.publishers);
+            this.nbWatchersPerWorldGauge.set({ world: space.world }, total.watchers);
+        }
     }
 
     incNbRoomGauge(): void {

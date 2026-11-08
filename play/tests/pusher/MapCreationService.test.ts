@@ -47,6 +47,22 @@ function createService(options: { existing?: string[]; responses?: unknown[]; no
     return { service, http };
 }
 
+describe("creation rate-limit memory", () => {
+    it("forgets expired visitors while keeping valid creation reservations", async () => {
+        let now = 1_000_000;
+        const { service } = createService({ now: () => now });
+        for (let index = 0; index < 1000; index++) service.assertQueryWithinRate(`visitor-${index}`);
+        await service.createMap("creator", "Salle");
+        now += 60_001;
+        service.assertQueryWithinRate("new-visitor");
+        expect(service).toHaveProperty("recentQueries.size", 1);
+        expect(service).toHaveProperty("recentCreations.size", 1);
+        now += 3_600_000;
+        service.assertQueryWithinRate("another-visitor");
+        expect(service).toHaveProperty("recentCreations.size", 0);
+    });
+});
+
 describe("roomPathFromUrl", () => {
     const front = "https://wa-beta.goyan.fr";
 

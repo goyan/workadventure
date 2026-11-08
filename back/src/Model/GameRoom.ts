@@ -133,6 +133,7 @@ export class GameRoom implements BrothersFinder {
     private eventListeners: Map<string, Set<EventSocket>> = new Map<string, Set<EventSocket>>();
     // They key to limit the number of meeting invitation requests per sender
     private meetingInvitationRequestLogBySender = new Map<string, { at: Date; receiverUserUuid: string }[]>();
+    private nextInvitationCleanupAt = 0;
 
     private readonly _userLeaveStream = new Subject<User>();
     public readonly userLeaveStream = this._userLeaveStream.asObservable();
@@ -1749,12 +1750,8 @@ export class GameRoom implements BrothersFinder {
 
     // Antispam: log a meeting invitation request
     public logMeetingInvitationRequest(senderUserUuid: string, receiverUserUuid: string): void {
-        const log = this.meetingInvitationRequestLogBySender.get(senderUserUuid);
-        if (log) {
-            log.push({ at: new Date(), receiverUserUuid });
-        } else {
-            this.meetingInvitationRequestLogBySender.set(senderUserUuid, [{ at: new Date(), receiverUserUuid }]);
-        }
+        const log = this.recentMeetingInvitations(senderUserUuid);
+        this.meetingInvitationRequestLogBySender.set(senderUserUuid, [...log, { at: new Date(), receiverUserUuid }]);
     }
 
     // Antispam: clear the meeting invitation request log for a sender (e.g. when an invite is accepted)
@@ -1764,27 +1761,35 @@ export class GameRoom implements BrothersFinder {
 
     // Antispam: check if the number of meeting invitation requests per sender is too high
     public isMeetingInvitationRequestTooHigh(senderUserUuid: string, receiverUserUuid: string): boolean {
-        const log = this.meetingInvitationRequestLogBySender.get(senderUserUuid);
-        if (log) {
-            // Calculate the number of request for the receiver in the last 10 minutes
-            const nbRequests = log
-                .filter(
-                    (request) =>
-                        request.at > new Date(Date.now() - MEETING_INVITATION_REQUEST_WINDOW_MS) &&
-                        request.receiverUserUuid === receiverUserUuid,
-                )
-                .reduce((acc, _) => (acc += 1), 0);
-            let isTooHigh = nbRequests > MEETING_INVITATION_MAX_REQUESTS_PER_USER;
+        const log = this.recentMeetingInvitations(senderUserUuid);
+        return (
+            log.length > MEETING_INVITATION_MAX_REQUESTS ||
+            log.filter((request) => request.receiverUserUuid === receiverUserUuid).length >
+                MEETING_INVITATION_MAX_REQUESTS_PER_USER
+        );
+    }
 
-            // Calculate the total number of requests in the last 10 minutes
-            const totalRequests = log
-                .filter((request) => request.at > new Date(Date.now() - MEETING_INVITATION_REQUEST_WINDOW_MS))
-                .reduce((acc, _) => (acc += 1), 0);
-            console.log("totalRequests", totalRequests);
-            isTooHigh = isTooHigh || totalRequests > MEETING_INVITATION_MAX_REQUESTS;
-            return isTooHigh;
+    private recentMeetingInvitations(senderUserUuid: string): { at: Date; receiverUserUuid: string }[] {
+        const now = Date.now();
+        const since = now - MEETING_INVITATION_REQUEST_WINDOW_MS;
+        if (now >= this.nextInvitationCleanupAt) {
+            // Keep reconnecting users' anti-spam history until expiry, then forget absent senders too.
+            for (const [sender, requests] of this.meetingInvitationRequestLogBySender) {
+                if ((requests[requests.length - 1]?.at.getTime() ?? 0) <= since) {
+                    this.meetingInvitationRequestLogBySender.delete(sender);
+                }
+            }
+            this.nextInvitationCleanupAt = now + 60_000;
         }
-        return false;
+        const recent = (this.meetingInvitationRequestLogBySender.get(senderUserUuid) ?? []).filter(
+            (request) => request.at.getTime() > since,
+        );
+        if (recent.length === 0) {
+            this.meetingInvitationRequestLogBySender.delete(senderUserUuid);
+        } else {
+            this.meetingInvitationRequestLogBySender.set(senderUserUuid, recent);
+        }
+        return recent;
     }
 
     get mapUrl(): string {

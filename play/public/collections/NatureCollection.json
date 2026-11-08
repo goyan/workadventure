@@ -34,7 +34,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-2.png",
+        "summer": "Nature/tree-1-2.png",
+        "autumn": "Nature/weather-tree-1-2-autumn.png",
+        "winter": "Nature/weather-tree-1-2-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-3:Default:Down",
@@ -54,7 +60,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-3.png",
+        "summer": "Nature/tree-1-3.png",
+        "autumn": "Nature/weather-tree-1-3-autumn.png",
+        "winter": "Nature/weather-tree-1-3-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-4:Default:Down",
@@ -74,7 +86,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-4.png",
+        "summer": "Nature/tree-1-4.png",
+        "autumn": "Nature/weather-tree-1-4-autumn.png",
+        "winter": "Nature/weather-tree-1-4-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-5:Default:Down",
@@ -105,7 +123,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-6.png",
+        "summer": "Nature/tree-1-6.png",
+        "autumn": "Nature/weather-tree-1-6-autumn.png",
+        "winter": "Nature/weather-tree-1-6-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-7:Default:Down",
@@ -125,7 +149,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-7.png",
+        "summer": "Nature/tree-1-7.png",
+        "autumn": "Nature/weather-tree-1-7-autumn.png",
+        "winter": "Nature/weather-tree-1-7-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-8:Default:Down",
@@ -156,7 +186,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-9.png",
+        "summer": "Nature/tree-1-9.png",
+        "autumn": "Nature/weather-tree-1-9-autumn.png",
+        "winter": "Nature/weather-tree-1-9-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-10:Default:Down",
@@ -176,7 +212,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-10.png",
+        "summer": "Nature/tree-1-10.png",
+        "autumn": "Nature/weather-tree-1-10-autumn.png",
+        "winter": "Nature/weather-tree-1-10-snow.png"
+      }
     },
     {
       "id": "Nature:tree-1-11:Default:Down",
@@ -196,7 +238,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-1-11.png",
+        "summer": "Nature/tree-1-11.png",
+        "autumn": "Nature/weather-tree-1-11-autumn.png",
+        "winter": "Nature/weather-tree-1-11-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-1:Default:Down",
@@ -227,7 +275,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-2-green.png",
+        "summer": "Nature/weather-tree-2-2-green.png",
+        "autumn": "Nature/tree-2-2.png",
+        "winter": "Nature/weather-tree-2-2-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-3:Default:Down",
@@ -247,7 +301,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-3-green.png",
+        "summer": "Nature/weather-tree-2-3-green.png",
+        "autumn": "Nature/tree-2-3.png",
+        "winter": "Nature/weather-tree-2-3-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-4:Default:Down",
@@ -267,7 +327,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-tree-2-4-green.png",
+        "summer": "Nature/weather-tree-2-4-green.png",
+        "autumn": "Nature/tree-2-4.png",
+        "winter": "Nature/weather-tree-2-4-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-5:Default:Down",
@@ -287,7 +353,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-5.png",
+        "summer": "Nature/weather-tree-2-5-green.png",
+        "autumn": "Nature/weather-tree-2-5-autumn.png",
+        "winter": "Nature/weather-tree-2-5-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-6:Default:Down",
@@ -307,7 +379,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-6.png",
+        "summer": "Nature/weather-tree-2-6-green.png",
+        "autumn": "Nature/weather-tree-2-6-autumn.png",
+        "winter": "Nature/weather-tree-2-6-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-7:Default:Down",
@@ -327,7 +405,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-7.png",
+        "summer": "Nature/weather-tree-2-7-green.png",
+        "autumn": "Nature/weather-tree-2-7-autumn.png",
+        "winter": "Nature/weather-tree-2-7-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-8:Default:Down",
@@ -347,7 +431,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-8.png",
+        "summer": "Nature/tree-2-8.png",
+        "autumn": "Nature/tree-2-8.png",
+        "winter": "Nature/weather-tree-2-8-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-9:Default:Down",
@@ -367,7 +457,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-9.png",
+        "summer": "Nature/tree-2-9.png",
+        "autumn": "Nature/tree-2-9.png",
+        "winter": "Nature/weather-tree-2-9-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-10:Default:Down",
@@ -387,7 +483,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-10.png",
+        "summer": "Nature/tree-2-10.png",
+        "autumn": "Nature/tree-2-10.png",
+        "winter": "Nature/weather-tree-2-10-snow.png"
+      }
     },
     {
       "id": "Nature:tree-2-11:Default:Down",
@@ -407,7 +509,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-2-11.png",
+        "summer": "Nature/tree-2-11.png",
+        "autumn": "Nature/tree-2-11.png",
+        "winter": "Nature/weather-tree-2-11-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-1:Default:Down",
@@ -427,7 +535,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-1.png",
+        "summer": "Nature/tree-3-1.png",
+        "autumn": "Nature/tree-3-1.png",
+        "winter": "Nature/weather-tree-3-1-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-2:Default:Down",
@@ -447,7 +561,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-2.png",
+        "summer": "Nature/tree-3-2.png",
+        "autumn": "Nature/tree-3-2.png",
+        "winter": "Nature/weather-tree-3-2-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-3:Default:Down",
@@ -467,7 +587,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-3.png",
+        "summer": "Nature/tree-3-3.png",
+        "autumn": "Nature/tree-3-3.png",
+        "winter": "Nature/weather-tree-3-3-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-4:Default:Down",
@@ -487,7 +613,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-4.png",
+        "summer": "Nature/tree-3-4.png",
+        "autumn": "Nature/tree-3-4.png",
+        "winter": "Nature/weather-tree-3-4-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-5:Default:Down",
@@ -507,7 +639,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-5.png",
+        "summer": "Nature/tree-3-5.png",
+        "autumn": "Nature/tree-3-5.png",
+        "winter": "Nature/weather-tree-3-5-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-6:Default:Down",
@@ -527,7 +665,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-6.png",
+        "summer": "Nature/tree-3-6.png",
+        "autumn": "Nature/tree-3-6.png",
+        "winter": "Nature/weather-tree-3-6-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-7:Default:Down",
@@ -547,7 +691,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-7.png",
+        "summer": "Nature/tree-3-7.png",
+        "autumn": "Nature/tree-3-7.png",
+        "winter": "Nature/weather-tree-3-7-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-8:Default:Down",
@@ -578,7 +728,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-9.png",
+        "summer": "Nature/tree-3-9.png",
+        "autumn": "Nature/tree-3-9.png",
+        "winter": "Nature/weather-tree-3-9-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-10:Default:Down",
@@ -598,7 +754,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-10.png",
+        "summer": "Nature/tree-3-10.png",
+        "autumn": "Nature/tree-3-10.png",
+        "winter": "Nature/weather-tree-3-10-snow.png"
+      }
     },
     {
       "id": "Nature:tree-3-11:Default:Down",
@@ -618,7 +780,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/tree-3-11.png",
+        "summer": "Nature/tree-3-11.png",
+        "autumn": "Nature/tree-3-11.png",
+        "winter": "Nature/weather-tree-3-11-snow.png"
+      }
     },
     {
       "id": "Nature:nature-1:Default:Down",
@@ -638,7 +806,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-1.png",
+        "summer": "Nature/nature-1.png",
+        "autumn": "Nature/weather-nature-1-autumn.png",
+        "winter": "Nature/weather-nature-1-snow.png"
+      }
     },
     {
       "id": "Nature:nature-2:Default:Down",
@@ -658,7 +832,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-2.png",
+        "summer": "Nature/nature-2.png",
+        "autumn": "Nature/weather-nature-2-autumn.png",
+        "winter": "Nature/weather-nature-2-snow.png"
+      }
     },
     {
       "id": "Nature:nature-3:Default:Down",
@@ -678,7 +858,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-3.png",
+        "summer": "Nature/nature-3.png",
+        "autumn": "Nature/nature-3.png",
+        "winter": "Nature/weather-nature-3-snow.png"
+      }
     },
     {
       "id": "Nature:nature-4:Default:Down",
@@ -698,7 +884,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/nature-4.png",
+        "summer": "Nature/nature-4.png",
+        "autumn": "Nature/nature-4.png",
+        "winter": "Nature/weather-nature-4-snow.png"
+      }
     },
     {
       "id": "Nature:nature-5:Default:Down",
@@ -718,7 +910,13 @@
           "height": 5
         }
       ],
-      "depthOffset": -6
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/nature-5.png",
+        "summer": "Nature/nature-5.png",
+        "autumn": "Nature/nature-5.png",
+        "winter": "Nature/weather-nature-5-snow.png"
+      }
     },
     {
       "id": "Nature:nature-6:Default:Down",
@@ -738,7 +936,13 @@
           "height": 5
         }
       ],
-      "depthOffset": -6
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/nature-6.png",
+        "summer": "Nature/nature-6.png",
+        "autumn": "Nature/nature-6.png",
+        "winter": "Nature/weather-nature-6-snow.png"
+      }
     },
     {
       "id": "Nature:nature-7:Default:Down",
@@ -877,7 +1081,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-1-green.png",
+        "summer": "Nature/weather-snow-tree-1-green.png",
+        "autumn": "Nature/weather-snow-tree-1-autumn.png",
+        "winter": "Nature/snow-tree-1.png"
+      }
     },
     {
       "id": "Nature:snow-tree-2:Default:Down",
@@ -898,7 +1108,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-2-green.png",
+        "summer": "Nature/weather-snow-tree-2-green.png",
+        "autumn": "Nature/weather-snow-tree-2-autumn.png",
+        "winter": "Nature/snow-tree-2.png"
+      }
     },
     {
       "id": "Nature:snow-tree-3:Default:Down",
@@ -919,7 +1135,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-3-green.png",
+        "summer": "Nature/weather-snow-tree-3-green.png",
+        "autumn": "Nature/weather-snow-tree-3-autumn.png",
+        "winter": "Nature/snow-tree-3.png"
+      }
     },
     {
       "id": "Nature:snow-tree-4:Default:Down",
@@ -940,7 +1162,13 @@
           "height": 5
         }
       ],
-      "depthOffset": -6
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-4-green.png",
+        "summer": "Nature/weather-snow-tree-4-green.png",
+        "autumn": "Nature/weather-snow-tree-4-autumn.png",
+        "winter": "Nature/snow-tree-4.png"
+      }
     },
     {
       "id": "Nature:snow-tree-5:Default:Down",
@@ -961,7 +1189,13 @@
           "height": 5
         }
       ],
-      "depthOffset": -6
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-5-green.png",
+        "summer": "Nature/weather-snow-tree-5-green.png",
+        "autumn": "Nature/weather-snow-tree-5-autumn.png",
+        "winter": "Nature/snow-tree-5.png"
+      }
     },
     {
       "id": "Nature:snow-tree-6:Default:Down",
@@ -982,7 +1216,13 @@
           "height": 5
         }
       ],
-      "depthOffset": -6
+      "depthOffset": -6,
+      "seasonal": {
+        "spring": "Nature/weather-snow-tree-6-green.png",
+        "summer": "Nature/weather-snow-tree-6-green.png",
+        "autumn": "Nature/weather-snow-tree-6-autumn.png",
+        "winter": "Nature/snow-tree-6.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-1:Default:Down",
@@ -1003,7 +1243,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-1-green.png",
+        "summer": "Nature/weather-snow-evergreen-1-green.png",
+        "autumn": "Nature/weather-snow-evergreen-1-autumn.png",
+        "winter": "Nature/snow-evergreen-1.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-2:Default:Down",
@@ -1024,7 +1270,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-2-green.png",
+        "summer": "Nature/weather-snow-evergreen-2-green.png",
+        "autumn": "Nature/weather-snow-evergreen-2-autumn.png",
+        "winter": "Nature/snow-evergreen-2.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-3:Default:Down",
@@ -1045,7 +1297,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-3-green.png",
+        "summer": "Nature/weather-snow-evergreen-3-green.png",
+        "autumn": "Nature/weather-snow-evergreen-3-autumn.png",
+        "winter": "Nature/snow-evergreen-3.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-4:Default:Down",
@@ -1066,7 +1324,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-4-green.png",
+        "summer": "Nature/weather-snow-evergreen-4-green.png",
+        "autumn": "Nature/weather-snow-evergreen-4-autumn.png",
+        "winter": "Nature/snow-evergreen-4.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-5:Default:Down",
@@ -1087,7 +1351,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-5-green.png",
+        "summer": "Nature/weather-snow-evergreen-5-green.png",
+        "autumn": "Nature/weather-snow-evergreen-5-autumn.png",
+        "winter": "Nature/snow-evergreen-5.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-6:Default:Down",
@@ -1108,7 +1378,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-6-green.png",
+        "summer": "Nature/weather-snow-evergreen-6-green.png",
+        "autumn": "Nature/weather-snow-evergreen-6-autumn.png",
+        "winter": "Nature/snow-evergreen-6.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-7:Default:Down",
@@ -1129,7 +1405,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-7-green.png",
+        "summer": "Nature/weather-snow-evergreen-7-green.png",
+        "autumn": "Nature/weather-snow-evergreen-7-autumn.png",
+        "winter": "Nature/snow-evergreen-7.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-8:Default:Down",
@@ -1150,7 +1432,13 @@
           "height": 7
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-8-green.png",
+        "summer": "Nature/weather-snow-evergreen-8-green.png",
+        "autumn": "Nature/weather-snow-evergreen-8-autumn.png",
+        "winter": "Nature/snow-evergreen-8.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-9:Default:Down",
@@ -1171,7 +1459,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-9-green.png",
+        "summer": "Nature/weather-snow-evergreen-9-green.png",
+        "autumn": "Nature/weather-snow-evergreen-9-autumn.png",
+        "winter": "Nature/snow-evergreen-9.png"
+      }
     },
     {
       "id": "Nature:snow-evergreen-10:Default:Down",
@@ -1192,7 +1486,13 @@
           "height": 6
         }
       ],
-      "depthOffset": -8
+      "depthOffset": -8,
+      "seasonal": {
+        "spring": "Nature/weather-snow-evergreen-10-green.png",
+        "summer": "Nature/weather-snow-evergreen-10-green.png",
+        "autumn": "Nature/weather-snow-evergreen-10-autumn.png",
+        "winter": "Nature/snow-evergreen-10.png"
+      }
     },
     {
       "id": "Nature:snow-detail-1:Default:Down",

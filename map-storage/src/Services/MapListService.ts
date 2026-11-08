@@ -5,7 +5,6 @@ import type { LimitFunction } from "p-limit";
 import pLimit from "p-limit";
 import * as Sentry from "@sentry/node";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
-import { fileSystem } from "../fileSystem";
 import type { FileSystemInterface } from "../Upload/FileSystemInterface";
 import { ENABLE_WEB_HOOK, MAX_SIMULTANEOUS_FS_READS } from "../Enum/EnvironmentVariable";
 import { mapPathUsingDomain } from "./PathMapper";
@@ -38,26 +37,16 @@ export class MapListService {
     }
 
     private async generateCacheFileNoLimit(domain: string): Promise<void> {
-        const files = await fileSystem.listFiles(mapPathUsingDomain("/", domain), ".wam");
+        const files = await this.fileSystem.listFiles(mapPathUsingDomain("/", domain), ".wam");
 
         const wamFiles: MapsCacheFileFormat = {
             version: WAMVersionHash,
             maps: {},
         };
 
-        const promises: Promise<{ wamFilePath: string; wam: WAMFileFormat }>[] = [];
-        for (const wamFilePath of files) {
-            promises.push(
-                MapListService.maxReadLimit(async () => {
-                    return this.readWamFile(wamFilePath, domain);
-                }),
-            );
-        }
-
-        /*const promises: Promise<{ wamFilePath: string; wam: WAMFileFormat }>[] = [];
-        for (const wamFilePath of files) {
-            promises.push(this.readWamFile(wamFilePath, domain));
-        }*/
+        const promises = files.map((wamFilePath) =>
+            MapListService.maxReadLimit(() => this.readWamFile(wamFilePath, domain)),
+        );
 
         const settledPromises = await Promise.allSettled(promises);
         for (const outcome of settledPromises) {
@@ -82,14 +71,13 @@ export class MapListService {
     private async readWamFile(
         wamFilePath: string,
         domain: string,
-    ): Promise<{ wamFilePath: string; wam: WAMFileFormat }> {
+    ): Promise<{ wamFilePath: string; wam: Pick<WAMFileFormat, "mapUrl" | "metadata" | "vendor"> }> {
         try {
             const virtualPath = mapPathUsingDomain(wamFilePath, domain);
             const wamFileString = await this.fileSystem.readFileAsString(virtualPath);
-            return {
-                wamFilePath: wamFilePath,
-                wam: WAMFileFormat.parse(wamFileMigration.migrate(JSON.parse(wamFileString))),
-            };
+            const wam = WAMFileFormat.parse(wamFileMigration.migrate(JSON.parse(wamFileString)));
+            // Completed reads retain only catalogue metadata, not every map's entities and areas.
+            return { wamFilePath, wam: { mapUrl: wam.mapUrl, metadata: wam.metadata, vendor: wam.vendor } };
         } catch (e) {
             throw new Error(
                 `Error while trying to read WAM file "${wamFilePath}" to generate cache: ${JSON.stringify(
@@ -110,20 +98,15 @@ export class MapListService {
     }
 
     private freeLimiter(domain: string, limiter: LimitFunction): void {
-        if (limiter.activeCount === 0 && limiter.pendingCount === 0) {
+        if (this.limiters.get(domain) === limiter && limiter.activeCount === 0 && limiter.pendingCount === 0) {
             this.limiters.delete(domain);
         }
     }
 
     private limit<T>(domain: string, fn: () => Promise<T>): Promise<T> {
         const limiter = this.getLimiter(domain);
-        return limiter(async () => {
-            try {
-                return await fn();
-            } finally {
-                this.freeLimiter(domain, limiter);
-            }
-        });
+        // p-limit decrements activeCount after the task settles, before this finalizer runs.
+        return limiter(fn).finally(() => this.freeLimiter(domain, limiter));
     }
 
     public async updateWAMFileInCache(domain: string, wamFilePath: string, wamFile: WAMFileFormat): Promise<void> {
