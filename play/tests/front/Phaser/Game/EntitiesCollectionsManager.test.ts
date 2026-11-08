@@ -1,9 +1,28 @@
 import type { EntityCollectionRaw, EntityRawPrefab } from "@workadventure/map-editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { get } from "svelte/store";
+import natureCollection from "../../../../public/collections/NatureCollection.json";
 import { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/MapEditor/EntitiesCollectionsManager";
 
 describe("EntitiesCollectionsManager reload", () => {
     afterEach(() => vi.unstubAllGlobals());
+
+    it("offers only trees from Nature while keeping placed ground and decorations resolvable", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(natureCollection)))),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url: "https://example.com/NatureCollection.json", type: "Default" }]);
+
+        expect(await manager.getEntityPrefab("Nature", "Nature:grass-autumn-1:Default:Down")).toBeDefined();
+        expect(await manager.getEntityPrefab("Nature", "Nature:nature-8:Default:Down")).toBeDefined();
+        const names = get(manager.getEntitiesPrefabsVariantStore()).map((variant) => variant.defaultPrefab.name);
+        expect(names).toHaveLength(58);
+        expect(names).toContain("Arbre saisonnier 1");
+        expect(names).toContain("Palmier saisonnier");
+        expect(names.every((name) => /chêne|arbre|cerisier|sapin|cyprès|saule|palmier/i.test(name))).toBe(true);
+    });
 
     it("loads a newly uploaded resized image after reopening the map with an older cached catalog", async () => {
         const url = "https://example.com/map-storage/assets/entities/entities.json";

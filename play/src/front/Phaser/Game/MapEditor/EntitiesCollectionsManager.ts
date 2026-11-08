@@ -37,6 +37,15 @@ export class EntitiesCollectionsManager {
             // entityVariants ordered by collectionName+name
             const entityVariants = new Map<string, EntityVariant>();
             for (const entityPrefab of $entitiesPrefabsStore) {
+                // Keep legacy Nature decorations resolvable on maps; the picker only offers trees.
+                if (
+                    entityPrefab.collectionName === "Nature" &&
+                    (entityPrefab.layer !== "standing" ||
+                        !/^Nature:(tree-|seasonal-|snow-tree-|snow-evergreen-|winter-auto-|nature-[1-6]:)/.test(
+                            entityPrefab.id,
+                        ))
+                )
+                    continue;
                 // A resized copy belongs to the instance placed with it: the library only offers the original.
                 if (entityPrefab.type === "Custom" && isResizedVariant(entityPrefab)) continue;
                 const idOrGeneratedName =
@@ -131,6 +140,7 @@ export class EntitiesCollectionsManager {
                                 sittable: entity.sittable,
                                 seat: entity.seat,
                                 animation: entity.animation,
+                                footstepSound: entity.footstepSound,
                                 seasonal: entity.seasonal
                                     ? {
                                           spring: new URL(entity.seasonal.spring, url).toString(),

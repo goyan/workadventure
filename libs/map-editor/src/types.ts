@@ -583,6 +583,7 @@ export const Weather = z.nativeEnum(WeatherType);
 
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
+    weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
     /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */

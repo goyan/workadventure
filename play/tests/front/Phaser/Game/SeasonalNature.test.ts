@@ -48,21 +48,32 @@ describe("shared seasonal nature", () => {
         expect(markDirty).toHaveBeenCalledTimes(2);
     });
 
-    it("ships all referenced lossless PNGs, with equal seasonal dimensions and a fixed trunk collision", () => {
-        expect(catalog.collection).toHaveLength(47);
-        expect(new Set(catalog.collection.map((item) => item.id)).size).toBe(47);
+    it("ships transparent PNGs, with equal seasonal dimensions and collisions inside the resized trees", () => {
+        expect(catalog.collection).toHaveLength(114);
+        expect(new Set(catalog.collection.map((item) => item.id)).size).toBe(114);
         for (const prefab of catalog.collection) {
+            const base = readFileSync(resolve(publicRoot, prefab.imagePath));
+            const dimensions = [base.readUInt32BE(16), base.readUInt32BE(20)];
             for (const path of [prefab.imagePath, ...Object.values(prefab.seasonal ?? {})]) {
                 const image = readFileSync(resolve(publicRoot, path));
                 expect(image.subarray(1, 4).toString()).toBe("PNG");
                 expect(image[25]).toBe(6); // RGBA, including the native transparent background.
                 if (prefab.seasonal) {
-                    expect([image.readUInt32BE(16), image.readUInt32BE(20)]).toEqual([192, 288]);
+                    expect([image.readUInt32BE(16), image.readUInt32BE(20)]).toEqual(dimensions);
                 }
             }
             if (prefab.seasonal) {
-                expect(prefab.collisionRectangles).toEqual([{ x: 88, y: 238, width: 16, height: 10 }]);
-                expect(prefab.depthOffset).toBe(-40);
+                expect(prefab.collisionRectangles).toHaveLength(1);
+                for (const rectangle of prefab.collisionRectangles ?? []) {
+                    expect(rectangle.x).toBeGreaterThanOrEqual(0);
+                    expect(rectangle.y).toBeGreaterThanOrEqual(0);
+                    expect(rectangle.width).toBeGreaterThan(0);
+                    expect(rectangle.height).toBeGreaterThan(0);
+                    expect(rectangle.x + rectangle.width).toBeLessThanOrEqual(dimensions[0]);
+                    expect(rectangle.y + rectangle.height).toBeLessThanOrEqual(dimensions[1]);
+                }
+                expect(prefab.depthOffset).toBeLessThan(0);
+                expect(dimensions[1]).toBeLessThanOrEqual(218);
             }
         }
     });

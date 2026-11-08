@@ -629,6 +629,14 @@ export class MapEditorModeManager {
                 }
 
                 const message = editMapCommandMessage.editMapMessage?.message;
+                if (
+                    message?.$case === "updateWAMSettingsMessage" &&
+                    message.updateWAMSettingsMessage.message?.$case === "updateWeatherSettingMessage"
+                ) {
+                    const weather = message.updateWAMSettingsMessage.message.updateWeatherSettingMessage;
+                    const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
+                    if (settings?.weather === weather.weather) settings.weatherStartedAt = weather.startedAt;
+                }
 
                 if (
                     command instanceof UpdateAreaFrontCommand &&

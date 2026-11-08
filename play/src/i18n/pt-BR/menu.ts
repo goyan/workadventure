@@ -26,6 +26,11 @@ const menu: BaseTranslation = {
         helpAndTips: "Ajuda e dicas",
     },
     settings: {
+        ground: {
+            label: "Outdoor ground",
+            seasonal: "Follow the season and weather",
+            green: "Green grass only",
+        },
         soundEffects: {
             title: "Efeitos sonoros",
             footsteps: "Volume dos passos",

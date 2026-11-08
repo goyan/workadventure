@@ -366,6 +366,7 @@ message UpdateWAMSettingsMessage {
 // Map-wide weather, validated against WeatherType before it is stored.
 message UpdateWeatherSettingMessage {
   string weather = 1;
+  optional double startedAt = 2;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in
