@@ -1257,6 +1257,10 @@
                 "storm"
               ]
             },
+            "weatherStartedAt": {
+              "type": "number",
+              "minimum": 0
+            },
             "megaphone": {
               "type": "object",
               "properties": {

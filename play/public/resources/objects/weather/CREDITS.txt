@@ -4,3 +4,11 @@ rain.mp3, thunder.mp3, snow.mp3 and sunny.mp3 supplied by the project owner on 2
 Original files retained without transcoding.
 The files replace the previous procedural sounds.
 No third-party source or license was supplied with these files; do not label them CC0.
+
+Terrain images
+terrain-green.png, terrain-autumn.png and terrain-snow.png are extracted from the
+three-band terrain image supplied by the project owner on 2026-11-08.
+Native pixels are assembled into 1536 x 1280 textures using irregular overlap
+cuts, with a 24-pixel blend only at the repeating outer edges. Plants are not mirrored.
+Reproduce with: python3 play/scripts/import-ground-textures.py /path/to/terrain.png
+No third-party source or license was supplied with this image.

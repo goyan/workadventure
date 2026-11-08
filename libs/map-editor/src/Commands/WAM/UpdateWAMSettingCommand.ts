@@ -14,7 +14,7 @@ export class UpdateWAMSettingCommand extends Command {
         this.oldConfig = structuredClone(this.wam.settings);
     }
 
-    execute(): Promise<void> {
+    public execute(): Promise<void> {
         if (this.wam.settings === undefined) {
             this.wam.settings = {};
         }
@@ -63,6 +63,7 @@ export class UpdateWAMSettingCommand extends Command {
             }
             case "updateWeatherSettingMessage": {
                 this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
+                this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt;
                 break;
             }
             default: {
