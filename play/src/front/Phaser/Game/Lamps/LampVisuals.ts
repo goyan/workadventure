@@ -7,6 +7,8 @@ import { LAMP_BALL_TEXTURE, LAMP_BEAM_TEXTURE, LAMP_DISC_TEXTURE, LAMP_TUBE_TEXT
 export interface LampVisual {
     /** Moves the lamp: the object it belongs to was moved (in the editor, while it is being dragged). */
     moveTo(x: number, y: number): void;
+    /** A lamp whose Jam plays nothing is off: nothing is drawn, the object itself stays. */
+    setVisible(visible: boolean): void;
     update(frame: LampFrame, now: number): void;
     destroy(): void;
 }
@@ -20,6 +22,11 @@ export interface LampPlacement {
     depth: number;
     /** Photosensitivity: no rotation, no flash, steady light only. Asked at each image: the setting can change. */
     reducedMotion: () => boolean;
+    /**
+     * Whether the lamp draws its own body (the ball, the tube, the box). A demo lamp does; a lamp that belongs to an
+     * object of the map does not: the object is the body, and only the light is drawn over it.
+     */
+    drawsBody: boolean;
 }
 
 /** The colours the spot and the discs go through, one step per beat. */
@@ -47,6 +54,10 @@ class SpotLamp implements LampVisual {
 
     public moveTo(x: number, y: number): void {
         this.beam.setPosition(x, y);
+    }
+
+    public setVisible(visible: boolean): void {
+        this.beam.setVisible(visible);
     }
 
     public update(frame: LampFrame, now: number): void {
@@ -99,6 +110,11 @@ class DiscoLamp implements LampVisual {
         this.ball.setPosition(x, y);
     }
 
+    public setVisible(visible: boolean): void {
+        this.ball.setVisible(visible && this.placement.drawsBody);
+        this.dots.forEach((dot) => dot.setVisible(visible));
+    }
+
     public update(frame: LampFrame, now: number): void {
         const delta = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
@@ -129,7 +145,7 @@ class NeonLamp implements LampVisual {
     private readonly tube: Phaser.GameObjects.Image;
     private level = 0;
 
-    constructor(placement: LampPlacement) {
+    constructor(private readonly placement: LampPlacement) {
         this.glow = additive(
             placement.scene.add.image(placement.x, placement.y, LAMP_DISC_TEXTURE),
             placement.depth,
@@ -143,6 +159,11 @@ class NeonLamp implements LampVisual {
     public moveTo(x: number, y: number): void {
         this.glow.setPosition(x, y);
         this.tube.setPosition(x, y);
+    }
+
+    public setVisible(visible: boolean): void {
+        this.glow.setVisible(visible);
+        this.tube.setVisible(visible && this.placement.drawsBody);
     }
 
     public update(frame: LampFrame): void {
@@ -179,6 +200,11 @@ class StrobeLamp implements LampVisual {
     public moveTo(x: number, y: number): void {
         this.body.setPosition(x, y);
         this.flash.setPosition(x, y);
+    }
+
+    public setVisible(visible: boolean): void {
+        this.body.setVisible(visible && this.placement.drawsBody);
+        this.flash.setVisible(visible);
     }
 
     public update(frame: LampFrame, now: number): void {

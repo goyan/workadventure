@@ -32,10 +32,23 @@ function meanOf(spectrum: Uint8Array, from: number, to: number): number {
     return sum / (to - from) / 255;
 }
 
-/** Bass is the first eighth of the spectrum, treble its upper half, mid what lies between. */
-export function bandsOf(spectrum: Uint8Array): LampBands {
-    const bassEnd = Math.floor(spectrum.length / 8);
-    const midEnd = Math.floor(spectrum.length / 2);
+/** A kick drum and a bass guitar live under this; a voice and most instruments between this and the next. */
+const BASS_MAX_HZ = 250;
+const MID_MAX_HZ = 4000;
+
+/**
+ * Bass, mid and treble of a spectrum. With the sample rate, the bands are cut at 250 Hz and 4 kHz (a spectrum of N
+ * bins runs from 0 to half the sample rate): what a kick, a voice and a hi-hat each light up. Without it, the
+ * spectrum is cut in fractions: bass is its first eighth, treble its upper half.
+ */
+export function bandsOf(spectrum: Uint8Array, sampleRate?: number): LampBands {
+    let bassEnd = Math.floor(spectrum.length / 8);
+    let midEnd = Math.floor(spectrum.length / 2);
+    if (sampleRate !== undefined && sampleRate > 0 && spectrum.length > 0) {
+        const binHz = sampleRate / (2 * spectrum.length);
+        bassEnd = Math.min(spectrum.length, Math.ceil(BASS_MAX_HZ / binHz));
+        midEnd = Math.min(spectrum.length, Math.ceil(MID_MAX_HZ / binHz));
+    }
     return {
         bass: meanOf(spectrum, 0, bassEnd),
         mid: meanOf(spectrum, bassEnd, midEnd),

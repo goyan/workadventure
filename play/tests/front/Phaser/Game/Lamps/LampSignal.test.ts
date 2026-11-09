@@ -34,6 +34,40 @@ describe("bandsOf", () => {
     });
 });
 
+describe("bandsOf with the sample rate", () => {
+    // fftSize 1024 at 48 kHz: 512 bins of 46.875 Hz. Bass is below 250 Hz (bins 0 to 5), mid up to 4 kHz (bins 6 to 85),
+    // treble above (bins 86 and more).
+    const SAMPLE_RATE = 48_000;
+
+    it("hears a kick drum, which lives under 250 Hz, as bass only", () => {
+        const spectrum = new Uint8Array(512);
+        spectrum.fill(255, 0, 6);
+        expect(bandsOf(spectrum, SAMPLE_RATE)).toEqual({ bass: 1, mid: 0, treble: 0 });
+    });
+
+    it("hears a voice, between 250 Hz and 4 kHz, as mid only", () => {
+        const spectrum = new Uint8Array(512);
+        spectrum.fill(255, 6, 86);
+        expect(bandsOf(spectrum, SAMPLE_RATE)).toEqual({ bass: 0, mid: 1, treble: 0 });
+    });
+
+    it("hears a hi-hat, above 4 kHz, as treble only", () => {
+        const spectrum = new Uint8Array(512);
+        spectrum.fill(255, 86, 512);
+        expect(bandsOf(spectrum, SAMPLE_RATE)).toEqual({ bass: 0, mid: 0, treble: 1 });
+    });
+
+    it("follows the sample rate: the same bin is treble at 48 kHz and still mid at 44.1 kHz", () => {
+        // Bin 90 is at 4219 Hz at 48 kHz, and at 3876 Hz at 44.1 kHz.
+        const spectrum = new Uint8Array(512);
+        spectrum[90] = 255;
+        expect(bandsOf(spectrum, 48_000).treble).toBeGreaterThan(0);
+        expect(bandsOf(spectrum, 48_000).mid).toBe(0);
+        expect(bandsOf(spectrum, 44_100).mid).toBeGreaterThan(0);
+        expect(bandsOf(spectrum, 44_100).treble).toBe(0);
+    });
+});
+
 describe("BeatDetector", () => {
     // One step per frame at 60 images per second.
     const FRAME_MS = 1000 / 60;
