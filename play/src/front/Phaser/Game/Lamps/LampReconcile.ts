@@ -1,0 +1,68 @@
+import type { LampKind } from "./LampVisuals";
+
+/** What the objects of the map say about lamps: their id, and the kind of lamp their catalog entry asks for (if any). */
+export interface LampObject {
+    id: string;
+    kind: LampKind | undefined;
+}
+
+export interface LampPlan {
+    /** Lamps to light: new objects, and objects whose kind changed. */
+    create: { id: string; kind: LampKind }[];
+    /** Ids whose lamp goes out: deleted objects, objects that are not lamps any more, kinds that changed. */
+    remove: string[];
+}
+
+/**
+ * Compares the lamps that are lit (by object id) with the objects of the map. An object moves without changing: its
+ * lamp follows it, nothing is replaced.
+ */
+export function planLamps(lit: ReadonlyMap<string, LampKind>, objects: readonly LampObject[]): LampPlan {
+    const create: { id: string; kind: LampKind }[] = [];
+    const remove: string[] = [];
+    const present = new Set<string>();
+    for (const object of objects) {
+        present.add(object.id);
+        const current = lit.get(object.id);
+        if (object.kind === undefined) {
+            if (current !== undefined) {
+                remove.push(object.id);
+            }
+        } else if (current !== object.kind) {
+            if (current !== undefined) {
+                remove.push(object.id);
+            }
+            create.push({ id: object.id, kind: object.kind });
+        }
+    }
+    for (const id of lit.keys()) {
+        if (!present.has(id)) {
+            remove.push(id);
+        }
+    }
+    return { create, remove };
+}
+
+/** The part of an object that tells where it is on the screen and how it is drawn. */
+export interface LampBounds {
+    x: number;
+    y: number;
+    displayWidth: number;
+    displayHeight: number;
+    /** Size of the image itself, before any resizing. */
+    width: number;
+    height: number;
+}
+
+/**
+ * Where the light of a lamp object comes from, on the map: the point of the image the catalog names (scaled with the
+ * object if it was resized), or the centre of the object.
+ */
+export function lampSource(object: LampBounds, anchor: { x: number; y: number } | undefined): { x: number; y: number } {
+    if (!anchor) {
+        return { x: object.x + object.displayWidth / 2, y: object.y + object.displayHeight / 2 };
+    }
+    const scaleX = object.width > 0 ? object.displayWidth / object.width : 1;
+    const scaleY = object.height > 0 ? object.displayHeight / object.height : 1;
+    return { x: object.x + anchor.x * scaleX, y: object.y + anchor.y * scaleY };
+}

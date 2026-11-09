@@ -1,0 +1,69 @@
+import { describe, expect, it } from "vitest";
+import { lampSource, planLamps } from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
+
+describe("planLamps", () => {
+    it("creates a lamp for each object of the map that has one", () => {
+        const plan = planLamps(new Map(), [
+            { id: "a", kind: "spot" },
+            { id: "b", kind: "neon" },
+        ]);
+        expect(plan.create).toEqual([
+            { id: "a", kind: "spot" },
+            { id: "b", kind: "neon" },
+        ]);
+        expect(plan.remove).toEqual([]);
+    });
+
+    it("ignores the objects that are not lamps", () => {
+        expect(planLamps(new Map(), [{ id: "chair", kind: undefined }]).create).toEqual([]);
+    });
+
+    it("keeps a lamp that is still there, as it is", () => {
+        const plan = planLamps(new Map([["a", "spot" as const]]), [{ id: "a", kind: "spot" }]);
+        expect(plan).toEqual({ create: [], remove: [] });
+    });
+
+    it("removes the lamp of an object that was deleted", () => {
+        const plan = planLamps(new Map([["a", "spot" as const]]), []);
+        expect(plan.remove).toEqual(["a"]);
+    });
+
+    it("removes the lamp of an object that is not a lamp any more", () => {
+        const plan = planLamps(new Map([["a", "spot" as const]]), [{ id: "a", kind: undefined }]);
+        expect(plan.remove).toEqual(["a"]);
+        expect(plan.create).toEqual([]);
+    });
+
+    it("replaces a lamp whose kind changed", () => {
+        const plan = planLamps(new Map([["a", "spot" as const]]), [{ id: "a", kind: "neon" }]);
+        expect(plan.remove).toEqual(["a"]);
+        expect(plan.create).toEqual([{ id: "a", kind: "neon" }]);
+    });
+});
+
+describe("lampSource", () => {
+    // An object drawn from (100, 50), 32 by 64 pixels on the screen, from an image of 32 by 64 pixels.
+    const object = { x: 100, y: 50, displayWidth: 32, displayHeight: 64, width: 32, height: 64 };
+
+    it("lights from the centre of the object when the catalog names no point", () => {
+        expect(lampSource(object, undefined)).toEqual({ x: 116, y: 82 });
+    });
+
+    it("lights from the point of the image the catalog names", () => {
+        expect(lampSource(object, { x: 16, y: 4 })).toEqual({ x: 116, y: 54 });
+    });
+
+    it("follows an object that was resized: the point scales with the image", () => {
+        // Twice as big on the screen: a point 16 pixels along the image is 32 along the object.
+        const resized = { ...object, displayWidth: 64, displayHeight: 128 };
+        expect(lampSource(resized, { x: 16, y: 4 })).toEqual({ x: 132, y: 58 });
+    });
+
+    it("follows an object that was moved", () => {
+        expect(lampSource({ ...object, x: 300, y: 10 }, { x: 16, y: 4 })).toEqual({ x: 316, y: 14 });
+    });
+
+    it("does not divide by an image without size", () => {
+        expect(lampSource({ ...object, width: 0, height: 0 }, { x: 16, y: 4 })).toEqual({ x: 116, y: 54 });
+    });
+});
