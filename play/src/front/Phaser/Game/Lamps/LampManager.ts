@@ -78,6 +78,8 @@ interface PlacedLamp {
     /** How bright it is, from 0 to 1: it rises quickly and dies away slowly (see nextBrightness). */
     brightness: number;
     lastUpdateAt: number | undefined;
+    /** A mirror ball draws its own turning body: the object's flat sprite is hidden under it (not in the editor). */
+    bodyHidden: boolean;
 }
 
 /** The music of a Jam being read: the stream it comes from, and what listens to it. */
@@ -292,7 +294,11 @@ export class LampManager {
         const objects = [...entities.entries()].map(([id, entity]) => ({ id, kind: entity.getPrefab().lamp?.kind }));
         const plan = planLamps(lit, objects);
         for (const id of plan.remove) {
-            this.placed.get(id)?.visual.destroy();
+            const lamp = this.placed.get(id);
+            if (lamp) {
+                showBody(lamp);
+                lamp.visual.destroy();
+            }
             this.placed.delete(id);
         }
         if (this.placed.size === 0 && plan.create.length === 0) {
@@ -315,6 +321,7 @@ export class LampManager {
                 zoneId: zone.areaId,
                 brightness: 0,
                 lastUpdateAt: undefined,
+                bodyHidden: false,
             });
         }
 
@@ -434,6 +441,13 @@ export class LampManager {
             anyLit = true;
         }
         for (const placed of this.placed.values()) {
+            if (placed.kind === "disco" && placed.bodyHidden === this.editorOpen) {
+                if (this.editorOpen) showBody(placed);
+                else {
+                    placed.entity.setAlpha(0);
+                    placed.bodyHidden = true;
+                }
+            }
             const space = placed.jam && this.spaceNameOf(placed.jam);
             // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
             const lit = this.editorOpen || demoFrame !== undefined || space !== undefined;
@@ -538,8 +552,9 @@ export class LampManager {
             lamp.destroy();
         }
         this.demoLamps.length = 0;
-        for (const { visual } of this.placed.values()) {
-            visual.destroy();
+        for (const lamp of this.placed.values()) {
+            showBody(lamp);
+            lamp.visual.destroy();
         }
         this.placed.clear();
         this.zoneLights.destroy();
@@ -547,5 +562,12 @@ export class LampManager {
             read.spectrum.destroy();
         }
         this.music.clear();
+    }
+}
+
+function showBody(lamp: PlacedLamp): void {
+    if (lamp.bodyHidden) {
+        lamp.entity.setAlpha(1);
+        lamp.bodyHidden = false;
     }
 }

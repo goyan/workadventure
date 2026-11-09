@@ -197,7 +197,7 @@ class SpotLamp implements LampVisual {
 
 const DISCO_DOTS = 30;
 const DISCO_RAYS = 8;
-const MIRROR_BALL_PX = 34;
+const MIRROR_BALL_PX = 30;
 /** Radians per millisecond at rest, and what the music adds: about one turn in 8 s, twice as fast when it is loud. */
 const DISCO_SPIN = 0.0008;
 const DISCO_SPIN_LOUD = 0.0012;
@@ -264,7 +264,9 @@ class DiscoLamp implements LampVisual {
     }
 
     public setVisible(visible: boolean): void {
-        this.ball.setVisible(visible);
+        // The ball stays when the lamp is off: it is the object itself (its own image is a flat sprite), only its
+        // light goes out.
+        this.ball.setVisible(true);
         this.sheen.setVisible(visible);
         this.halo.setVisible(visible);
         this.rays.forEach((ray) => ray.setVisible(visible));
@@ -292,7 +294,7 @@ class DiscoLamp implements LampVisual {
         }
         const turn = (((this.spin / (2 * Math.PI)) % 1) + 1) % 1;
         const ballFrame = Math.floor(turn * MIRROR_BALL_FRAMES) % MIRROR_BALL_FRAMES;
-        this.ball.setFrame(ballFrame).setAlpha(this.brightness);
+        this.ball.setFrame(ballFrame);
         this.sheen
             .setFrame(ballFrame)
             .setTint(PALETTE[this.colourShift])

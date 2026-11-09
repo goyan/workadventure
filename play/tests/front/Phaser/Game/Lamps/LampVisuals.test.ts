@@ -156,6 +156,16 @@ describe("createLamp", () => {
         expect([...framesShown(true)]).toEqual([0]);
     });
 
+    it("keeps the mirror ball on the map when its light goes out", () => {
+        const { placement, images } = setup(true);
+        const lamp = createLamp("disco", placement);
+        lamp.update(FRAME, 0);
+        lamp.setVisible(false);
+        const ball = images.find((image) => image.texture === "lamp-mirror-ball");
+        expect(ball?.visible).toBe(true);
+        expect(images.filter((image) => image.visible)).toEqual([ball]);
+    });
+
     it("draws the body of a demo lamp and leaves it to the object for a lamp of the map", () => {
         const demo = setup(false, true);
         const mapLamp = setup(false, false);
