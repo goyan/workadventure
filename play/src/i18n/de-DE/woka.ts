@@ -59,6 +59,7 @@ const woka: DeepPartial<Translation["woka"]> = {
         coffee: "Kaffee trinken",
         sleep: "Schlafen",
         toilet: "Auf die Toilette gehen",
+        run: "Laufen",
     },
     picker: {
         title: "Wen möchtest du auswählen?",

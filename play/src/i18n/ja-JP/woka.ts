@@ -59,6 +59,7 @@ const woka: DeepPartial<Translation["woka"]> = {
         coffee: "コーヒーを飲む",
         sleep: "眠る",
         toilet: "トイレに行く",
+        run: "走る",
     },
     picker: {
         title: "誰を選択しますか？",

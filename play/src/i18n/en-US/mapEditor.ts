@@ -466,6 +466,7 @@ const mapEditor: BaseTranslation = {
         base: {
             beds: "Beds",
             toilets: "Toilets",
+            sport: "Sport",
             coffee: "Coffee",
             seats: "Seats",
             pools: "Pools",
@@ -483,6 +484,7 @@ const mapEditor: BaseTranslation = {
             coffee: "Drink coffee",
             sleep: "Sleep",
             toilet: "Use the toilet",
+            run: "Run",
 
             none: "None",
             sit: "Sit",

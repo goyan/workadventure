@@ -58,6 +58,7 @@ const woka: BaseTranslation = {
         coffee: "Beber café",
         sleep: "Dormir",
         toilet: "Ir ao banheiro",
+        run: "Correr",
     },
     picker: {
         title: "Quem você quer selecionar?",

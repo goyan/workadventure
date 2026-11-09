@@ -43,11 +43,26 @@ describe("ObjectCategories", () => {
         expect(getObjectInteraction(object(["Furniture"], "Big shelf"), undefined).interaction).toBe("none");
     });
 
+    it("reads an unchecked seat box as 'not a seat', not as 'no action'", () => {
+        expect(getObjectInteraction(object(["Misc"], "Tapis de course", { sittable: false }), undefined)).toEqual({
+            interaction: AvatarAction.Run,
+            trigger: "key",
+        });
+        expect(getObjectInteraction(object(["Sport"], "x", { sittable: false }), undefined).interaction).toBe(
+            AvatarAction.Run,
+        );
+        expect(getObjectInteraction(object(["Furniture"], "Chair", { sittable: false }), undefined).interaction).toBe(
+            "none",
+        );
+    });
+
     it("recognizes action objects and lets map categories assign or override actions", () => {
         for (const [name, action] of [
             ["Bed", AvatarAction.Sleep],
             ["Toilet", AvatarAction.Toilet],
             ["Coffee machine", AvatarAction.Coffee],
+            ["Tapis de course", AvatarAction.Run],
+            ["Treadmill", AvatarAction.Run],
         ] as const) {
             expect(getObjectInteraction(object(["Furniture"], name), undefined)).toEqual({
                 interaction: action,
@@ -56,6 +71,11 @@ describe("ObjectCategories", () => {
         }
         expect(getObjectInteraction(object(["Beds"]), undefined).interaction).toBe(AvatarAction.Sleep);
         expect(getObjectInteraction(object(["Toilets"]), undefined).interaction).toBe(AvatarAction.Toilet);
+        expect(getObjectInteraction(object(["Sport"]), undefined)).toEqual({
+            interaction: AvatarAction.Run,
+            trigger: "key",
+        });
+        expect(getObjectInteraction(object(["Furniture"], "Tapis"), undefined).interaction).toBe("none");
         expect(
             getObjectInteraction(object(["Dance floor"]), {
                 "dance floor": { interaction: AvatarAction.Dance, trigger: "auto" },

@@ -12,6 +12,7 @@ export const BASE_CATEGORIES: readonly ({ id: string } & CategorySettings)[] = [
     { id: "beds", interaction: AvatarAction.Sleep, trigger: "key" },
     { id: "toilets", interaction: AvatarAction.Toilet, trigger: "key" },
     { id: "coffee", interaction: AvatarAction.Coffee, trigger: "key" },
+    { id: "sport", interaction: AvatarAction.Run, trigger: "key" },
     { id: "rugs", interaction: "none", trigger: "auto", layer: "floor" },
     { id: "lights", interaction: "none", trigger: "auto", layer: "overhead" },
     { id: "plants", interaction: "none", trigger: "auto" },
@@ -42,7 +43,7 @@ export function getCategorySettings(
 }
 
 /**
- * What players do with an object, and how it starts. The object's own choice comes first (`sittable`), then its
+ * What players do with an object, and how it starts. The object's own seat box comes first (`sittable`), then its
  * category on this map, then what its name suggests (a chair, a couch…). Water always lets players swim.
  */
 export function getObjectInteraction(
@@ -51,13 +52,12 @@ export function getObjectInteraction(
 ): { interaction: ObjectInteraction; trigger: InteractionTrigger } {
     const settings = getCategorySettings(getEntityCategory(prefab), mapCategories);
     const trigger = settings?.trigger ?? "auto";
-    if (prefab.sittable !== undefined) {
-        return {
-            interaction: prefab.sittable ? "sit" : "none",
-            trigger: settings?.interaction === "sit" ? trigger : "auto",
-        };
+    if (prefab.sittable) {
+        return { interaction: "sit", trigger: settings?.interaction === "sit" ? trigger : "auto" };
     }
-    if (settings && settings.interaction !== "none") {
+    // An unchecked seat box only says the object is not a seat: a bed or a treadmill keeps its action.
+    const notSeat = prefab.sittable === false;
+    if (settings && settings.interaction !== "none" && !(notSeat && settings.interaction === "sit")) {
         return { interaction: settings.interaction, trigger };
     }
     if (prefab.water?.length) {
@@ -67,7 +67,9 @@ export function getObjectInteraction(
     if (/\b(beds?|lits?)\b/i.test(prefab.name)) return { interaction: AvatarAction.Sleep, trigger: "key" };
     if (/\b(coffee|café|cafeti[eè]re)\b/i.test(prefab.name))
         return { interaction: AvatarAction.Coffee, trigger: "key" };
-    if (isSeatObject(prefab)) {
+    if (/\b(treadmills?|tapis de course)\b/i.test(prefab.name))
+        return { interaction: AvatarAction.Run, trigger: "key" };
+    if (!notSeat && isSeatObject(prefab)) {
         return { interaction: "sit", trigger: "auto" };
     }
     return { interaction: "none", trigger: "auto" };
