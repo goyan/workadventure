@@ -77,3 +77,13 @@ export function lampSizeOf(properties: EntityDataProperties): { width: number; h
     }
     return undefined;
 }
+
+/** The flashes a second set for a strobe lamp in the editor, if one was. */
+export function lampStrobeHzOf(properties: EntityDataProperties): number | undefined {
+    for (const property of properties) {
+        if (property.type === "lampPropertyData") {
+            return property.strobeHz;
+        }
+    }
+    return undefined;
+}

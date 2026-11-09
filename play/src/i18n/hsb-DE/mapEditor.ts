@@ -333,6 +333,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Wulkosć wobłuka, kotryž tuta lampa wobswětla, w kašćikach. Bjez nastajenja wobswětla najmjeńšu zonu karty, kotraž ju wobsahuje, abo 12 kašćikow wokoło sebje zwonka wšěch zonow. Wona njepřekročuje tutu zonu.",
             width: "Šěrokosć",
             height: "Wysokosć",
+            strobeHz: "Błyski na sekundu",
+            strobeHzHint:
+                "Zwučene frekwency stroboskopow: 1 hač 12 na sekundu. Nad 3 widźa jenož hrajerjo, kotřiž su spěšne stroboskopy dowolili; druzy widźa 3.",
         },
         openFile: {
             label: "Dataju wočinić",

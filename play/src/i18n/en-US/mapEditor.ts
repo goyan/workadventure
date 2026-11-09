@@ -327,6 +327,9 @@ const mapEditor: BaseTranslation = {
                 "Size of the area this lamp lights, in tiles. Unset, it lights the smallest zone of the map that contains it, or 12 tiles around it outside any zone. It never goes beyond that zone.",
             width: "Width",
             height: "Height",
+            strobeHz: "Flashes per second",
+            strobeHzHint:
+                "Usual strobe rates: 1 to 12 per second. Above 3, only players who allowed fast strobes see it; the others see 3.",
         },
         openFile: {
             label: "Open file",

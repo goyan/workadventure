@@ -328,6 +328,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Kích thước vùng mà đèn này chiếu sáng, tính bằng ô. Nếu không đặt, đèn chiếu sáng vùng nhỏ nhất trên bản đồ chứa nó, hoặc 12 ô xung quanh khi ở ngoài mọi vùng. Không bao giờ vượt ra ngoài vùng đó.",
             width: "Chiều rộng",
             height: "Chiều cao",
+            strobeHz: "Số lần nháy mỗi giây",
+            strobeHzHint:
+                "Tần số thường gặp của đèn nháy: 1 đến 12 lần mỗi giây. Trên 3, chỉ người chơi đã cho phép đèn nháy nhanh mới thấy; những người khác thấy 3.",
         },
         openFile: {
             label: "Mở tệp",

@@ -132,4 +132,75 @@ describe("createLamp", () => {
         const visibleImages = (images: FakeImage[]) => images.filter((image) => image.visible).length;
         expect(visibleImages(demo.images)).toBeGreaterThan(visibleImages(mapLamp.images));
     });
+
+    describe("the strobe lamp", () => {
+        // The first image of a strobe is its body, the second the flash.
+        function flashOf(images: FakeImage[]): FakeImage {
+            return images[1];
+        }
+        const NO_BEAT: LampFrame = { bass: 0, mid: 0, treble: 0, beat: false };
+
+        it("flashes at its own rate whatever the music plays: no beat in the frame, it flashes all the same", () => {
+            const { images, placement } = setup(false);
+            const lamp = createLamp("strobe", { ...placement, strobeHz: () => 2 });
+            lamp.update(NO_BEAT, 0);
+            expect(flashOf(images).alpha).toBe(1);
+            lamp.update(NO_BEAT, 250);
+            expect(flashOf(images).alpha).toBe(0);
+            lamp.update(NO_BEAT, 500);
+            expect(flashOf(images).alpha).toBe(1);
+        });
+
+        it("does not flash more because the music has a beat: the beat is not what it follows", () => {
+            const { images, placement } = setup(false);
+            const lamp = createLamp("strobe", { ...placement, strobeHz: () => 2 });
+            lamp.update({ ...NO_BEAT, beat: true }, 250);
+            expect(flashOf(images).alpha).toBe(0);
+        });
+
+        it("follows the rate it is given at each image: a player who changes their settings sees it at once", () => {
+            let hz = 2;
+            const { images, placement } = setup(false);
+            const lamp = createLamp("strobe", { ...placement, strobeHz: () => hz });
+            lamp.update(NO_BEAT, 100);
+            expect(flashOf(images).alpha).toBe(0);
+            hz = 10;
+            // At 10 a second the period is 100 ms: 100 is the start of a flash.
+            lamp.update(NO_BEAT, 100);
+            expect(flashOf(images).alpha).toBe(1);
+        });
+
+        it("keeps a steady glow, never a flash, with motion reduced or no rate", () => {
+            const reduced = setup(false);
+            const lamp = createLamp("strobe", {
+                ...reduced.placement,
+                reducedMotion: () => true,
+                strobeHz: () => 2,
+            });
+            lamp.update(NO_BEAT, 0);
+            expect(flashOf(reduced.images).alpha).toBe(0.15);
+
+            const none = setup(false);
+            const steady = createLamp("strobe", { ...none.placement, strobeHz: () => 0 });
+            steady.update(NO_BEAT, 0);
+            expect(flashOf(none.images).alpha).toBe(0.15);
+        });
+
+        it("dims with the brightness of the lamp: the light dies away when the music stops", () => {
+            const { images, placement } = setup(false);
+            const lamp = createLamp("strobe", { ...placement, strobeHz: () => 2 });
+            lamp.setBrightness(0.5);
+            lamp.update(NO_BEAT, 0);
+            expect(flashOf(images).alpha).toBe(0.5);
+        });
+
+        it("uses a safe rate when nothing sets one", () => {
+            const { images, placement } = setup(false);
+            const lamp = createLamp("strobe", placement);
+            lamp.update(NO_BEAT, 0);
+            expect(flashOf(images).alpha).toBe(1);
+            lamp.update(NO_BEAT, 250);
+            expect(flashOf(images).alpha).toBe(0);
+        });
+    });
 });

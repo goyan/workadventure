@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Wettereffekte anzeigen (Regen, Schnee und Gewitterlicht)",
         lampDemo: "Demo-Lampen neben meinem Avatar anzeigen",
+        fastStrobes: "Schnelle Stroboskope erlauben (mehr als 3 Blitze pro Sekunde)",
+        fastStrobesWarning:
+            "Achtung: Wiederholtes Blitzen kann bei lichtempfindlichen Personen Anfälle auslösen. Ausgeschaltet siehst du nie mehr als 3 Blitze pro Sekunde.",
         night: {
             label: "Tag-Nacht-Zyklus",
             server: "Serverzeit",

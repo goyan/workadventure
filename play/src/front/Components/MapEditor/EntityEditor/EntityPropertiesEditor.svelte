@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { LAMP_LIGHT_DEFAULT_TILES } from "@workadventure/map-editor";
+    import { LAMP_LIGHT_DEFAULT_TILES, STROBE_DEFAULT_HZ } from "@workadventure/map-editor";
     import type { EntityDataProperties, EntityDataPropertiesKeys, EntityDataProperty } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { get } from "svelte/store";
@@ -262,6 +262,7 @@
                     type,
                     width: LAMP_LIGHT_DEFAULT_TILES,
                     height: LAMP_LIGHT_DEFAULT_TILES,
+                    strobeHz: STROBE_DEFAULT_HZ,
                 };
             default:
                 throw new Error(`Unknown property type ${type}`);
@@ -681,6 +682,7 @@
                         {:else if properties[i].type === "lampPropertyData"}
                             <LampPropertyEditor
                                 bind:property={properties[i]}
+                                kind={$mapEditorSelectedEntityStore.getPrefab().lamp?.kind}
                                 onclose={() => {
                                     onDeleteProperty(property.id);
                                 }}

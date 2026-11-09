@@ -337,6 +337,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Taille de la zone que cette lampe éclaire, en cases. Sans réglage, elle éclaire la plus petite zone de la carte qui la contient, ou 12 cases autour d'elle hors de toute zone. Elle ne dépasse jamais cette zone.",
             width: "Largeur",
             height: "Hauteur",
+            strobeHz: "Flashs par seconde",
+            strobeHzHint:
+                "Cadence habituelle des stroboscopes : de 1 à 12 par seconde. Au-delà de 3, seuls les joueurs qui ont autorisé les stroboscopes rapides la voient ; les autres voient 3.",
         },
         openFile: {
             label: "Ouvrir un fichier",

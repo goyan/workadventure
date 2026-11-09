@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Mostrar efectos del tiempo (lluvia, nieve y luz de tormenta)",
         lampDemo: "Mostrar las lámparas de demostración junto a mi avatar",
+        fastStrobes: "Permitir estroboscopios rápidos (más de 3 destellos por segundo)",
+        fastStrobesWarning:
+            "Atención: los destellos repetidos pueden provocar crisis en personas fotosensibles. Desactivado, nunca ves más de 3 destellos por segundo.",
         night: {
             label: "Ciclo día/noche",
             server: "Hora del servidor",

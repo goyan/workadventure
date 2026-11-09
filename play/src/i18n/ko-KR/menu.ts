@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "날씨 효과 표시 (비, 눈, 뇌우 빛)",
         lampDemo: "내 아바타 근처에 데모 조명 표시",
+        fastStrobes: "빠른 스트로보 허용(초당 3회 초과 점멸)",
+        fastStrobesWarning:
+            "주의: 반복적인 점멸은 광과민성이 있는 사람에게 발작을 일으킬 수 있습니다. 끄면 초당 3회를 넘는 점멸은 보이지 않습니다.",
         night: {
             label: "낮과 밤 주기",
             server: "서버 시간",

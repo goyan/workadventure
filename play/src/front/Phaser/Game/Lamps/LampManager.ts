@@ -10,6 +10,7 @@ import {
     type JamRoom,
 } from "../../../ListeningZone/ListeningZoneController";
 import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirectory";
+import { fastStrobesEnabledStore } from "../../../Stores/FastStrobesStore";
 import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { lightableAreas } from "../Night/NightLights";
@@ -27,7 +28,8 @@ import {
     type LampZone,
 } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
-import { lampSizeOf, lampSource, planLamps } from "./LampReconcile";
+import { lampSizeOf, lampSource, lampStrobeHzOf, planLamps } from "./LampReconcile";
+import { effectiveStrobeHz } from "./StrobeClock";
 import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
@@ -90,6 +92,7 @@ export class LampManager {
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribers: Unsubscriber[] = [];
     private editorOpen = false;
+    private fastStrobes = false;
     private lastReconcileAt: number | undefined;
 
     // What everyone shares, as last seen.
@@ -113,6 +116,7 @@ export class LampManager {
             }),
             // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
             lampDemoEnabledStore.subscribe((enabled) => this.setDemo(resolveLampDemo(options.demo, enabled))),
+            fastStrobesEnabledStore.subscribe((enabled) => (this.fastStrobes = enabled)),
             allJamRoomsStore.subscribe((rooms) => (this.rooms = rooms)),
             listeningByUserUuidStore.subscribe((listening) => (this.listeningByUuid = listening)),
             jamParticipantsCountStore.subscribe((counts) => (this.participants = counts)),
@@ -151,6 +155,7 @@ export class LampManager {
                     depth: LAMP_DEPTH,
                     reducedMotion: this.reducedMotion,
                     drawsBody: true,
+                    strobeHz: () => effectiveStrobeHz(undefined, { fastStrobes: this.fastStrobes }),
                 }),
             );
         });
@@ -218,6 +223,11 @@ export class LampManager {
             reducedMotion: this.reducedMotion,
             drawsBody: false,
             container: this.zoneLights.containerFor(zone),
+            // Read at each image: the lamp may be set again in the editor, the player may change their settings.
+            strobeHz: () =>
+                effectiveStrobeHz(lampStrobeHzOf(entity.getEntityData().properties), {
+                    fastStrobes: this.fastStrobes,
+                }),
         });
     }
 

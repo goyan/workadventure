@@ -329,6 +329,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Größe des Bereichs, den diese Lampe ausleuchtet, in Feldern. Ohne Einstellung leuchtet sie die kleinste Zone der Karte aus, die sie enthält, oder 12 Felder um sich herum außerhalb jeder Zone. Sie verlässt diese Zone nie.",
             width: "Breite",
             height: "Höhe",
+            strobeHz: "Blitze pro Sekunde",
+            strobeHzHint:
+                "Übliche Stroboskop-Frequenzen: 1 bis 12 pro Sekunde. Über 3 sehen sie nur Spieler, die schnelle Stroboskope erlaubt haben; die anderen sehen 3.",
         },
         openFile: {
             label: "Datei öffnen",

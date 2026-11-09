@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Wjedrowe efekty pokazaś",
         lampDemo: "Demo-lampy pśi mójom avatarje pokazaś",
+        fastStrobes: "Malsne stroboskopy dowóliś (wěcej ako 3 błysy na sekundu)",
+        fastStrobesWarning:
+            "Glědaj: wóspjetowane błyski mógu pśi swětłoćuśiwych luźach napady wuzwołaś. Wupóznany njewiźiš nigda wěcej ako 3 błysy na sekundu.",
         night: {
             label: "Cyklus dnja a nocy",
             server: "Cas serwera",

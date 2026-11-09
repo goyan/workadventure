@@ -33,6 +33,9 @@ const menu: BaseTranslation = {
         },
         weatherEffects: "Mostrar efeitos do clima (chuva, neve e luz da tempestade)",
         lampDemo: "Mostrar as lâmpadas de demonstração perto do meu avatar",
+        fastStrobes: "Permitir estroboscópios rápidos (mais de 3 flashes por segundo)",
+        fastStrobesWarning:
+            "Atenção: flashes repetidos podem causar crises em pessoas fotossensíveis. Desativado, você nunca vê mais de 3 flashes por segundo.",
         night: {
             label: "Ciclo dia/noite",
             server: "Hora do servidor",

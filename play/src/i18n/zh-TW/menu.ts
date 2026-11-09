@@ -34,6 +34,8 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "顯示天氣效果",
         lampDemo: "在我的頭像旁顯示示範燈",
+        fastStrobes: "允許快速頻閃（每秒超過 3 次閃爍）",
+        fastStrobesWarning: "注意：反覆閃爍可能誘發光敏感者癲癇發作。關閉時，你每秒最多看到 3 次閃爍。",
         night: {
             label: "日夜週期",
             server: "伺服器時間",

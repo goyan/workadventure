@@ -331,6 +331,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Tamaño de la zona que ilumina esta lámpara, en casillas. Sin ajuste, ilumina la zona más pequeña del mapa que la contiene, o 12 casillas a su alrededor fuera de toda zona. Nunca sale de esa zona.",
             width: "Ancho",
             height: "Alto",
+            strobeHz: "Destellos por segundo",
+            strobeHzHint:
+                "Cadencia habitual de los estroboscopios: de 1 a 12 por segundo. Por encima de 3, solo la ven los jugadores que han permitido los estroboscopios rápidos; los demás ven 3.",
         },
         openFile: {
             label: "Abrir archivo",

@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Mostra els efectes del temps",
         lampDemo: "Mostra les llums de demostració prop del meu avatar",
+        fastStrobes: "Permet els estroboscopis ràpids (més de 3 llampecs per segon)",
+        fastStrobesWarning:
+            "Atenció: els llampecs repetits poden provocar crisis en persones fotosensibles. Desactivat, mai no veus més de 3 llampecs per segon.",
         night: {
             label: "Cicle dia/nit",
             server: "Hora del servidor",

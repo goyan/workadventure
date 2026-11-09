@@ -336,6 +336,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Grootte van het gebied dat deze lamp verlicht, in tegels. Zonder instelling verlicht ze de kleinste zone van de kaart die haar bevat, of 12 tegels eromheen buiten elke zone. Ze gaat nooit voorbij die zone.",
             width: "Breedte",
             height: "Hoogte",
+            strobeHz: "Flitsen per seconde",
+            strobeHzHint:
+                "Gebruikelijke stroboscoopfrequenties: 1 tot 12 per seconde. Boven 3 zien alleen spelers die snelle stroboscopen hebben toegestaan dit; de anderen zien 3.",
         },
         openFile: {
             label: "Open bestand",

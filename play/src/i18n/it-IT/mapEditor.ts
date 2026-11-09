@@ -328,6 +328,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Dimensione dell'area illuminata da questa lampada, in caselle. Senza impostazione illumina la zona più piccola della mappa che la contiene, o 12 caselle intorno a sé fuori da ogni zona. Non supera mai quella zona.",
             width: "Larghezza",
             height: "Altezza",
+            strobeHz: "Lampi al secondo",
+            strobeHzHint:
+                "Frequenze abituali degli stroboscopi: da 1 a 12 al secondo. Oltre 3, la vedono solo i giocatori che hanno consentito gli stroboscopi veloci; gli altri ne vedono 3.",
         },
         openFile: {
             label: "Apri file",

@@ -14,6 +14,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                         description: label("desc"),
                         width: label("Width"),
                         height: label("Height"),
+                        strobeHz: label("Flashes per second"),
+                        strobeHzHint: label("hint"),
                     },
                 },
             },
@@ -32,11 +34,11 @@ describe("LampPropertyEditor", () => {
         target?.remove();
     });
 
-    function render(onchange = vi.fn(), onclose = vi.fn()) {
+    function render(onchange = vi.fn(), onclose = vi.fn(), kind?: string) {
         target = document.createElement("div");
         document.body.appendChild(target);
-        const property = { id: "lamp-1", type: "lampPropertyData" as const, width: 12, height: 12 };
-        component = mount(LampPropertyEditor, { target, props: { property, onchange, onclose } });
+        const property = { id: "lamp-1", type: "lampPropertyData" as const, width: 12, height: 12, strobeHz: 2 };
+        component = mount(LampPropertyEditor, { target, props: { property, kind, onchange, onclose } });
         flushSync();
         return { onchange, onclose, property };
     }
@@ -69,5 +71,39 @@ describe("LampPropertyEditor", () => {
         width.dispatchEvent(new Event("change", { bubbles: true }));
         flushSync();
         expect(onchange).toHaveBeenCalled();
+    });
+
+    describe("strobe rate", () => {
+        it("is offered for a strobe lamp only: no other lamp flashes", () => {
+            render(vi.fn(), vi.fn(), "spot");
+            expect(sliders()).toHaveLength(2);
+            expect(target.querySelector('[data-testid="strobe-presets"]')).toBeNull();
+        });
+
+        it("is a slider from half a flash to twelve a second for a strobe lamp", () => {
+            render(vi.fn(), vi.fn(), "strobe");
+            const rate = sliders()[2];
+            expect(sliders()).toHaveLength(3);
+            expect(rate.min).toBe("0.5");
+            expect(rate.max).toBe("12");
+            expect(rate.step).toBe("0.5");
+            expect(rate.value).toBe("2");
+        });
+
+        it("offers the usual rates of the strobes of a club as shortcuts", () => {
+            render(vi.fn(), vi.fn(), "strobe");
+            const presets = [...target.querySelectorAll('[data-testid^="strobe-preset-"]')].map((el) =>
+                el.textContent?.trim(),
+            );
+            expect(presets).toEqual(["1 Hz", "2 Hz", "3 Hz", "5 Hz", "8 Hz", "10 Hz", "12 Hz"]);
+        });
+
+        it("sets the rate when a shortcut is chosen, and tells the editor so that it is saved", () => {
+            const { onchange, property } = render(vi.fn(), vi.fn(), "strobe");
+            (target.querySelector('[data-testid="strobe-preset-8"]') as HTMLElement).click();
+            flushSync();
+            expect(property.strobeHz).toBe(8);
+            expect(onchange).toHaveBeenCalled();
+        });
     });
 });

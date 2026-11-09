@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "天気のエフェクトを表示（雨、雪、雷雨の光）",
         lampDemo: "アバターの近くにデモ用ランプを表示する",
+        fastStrobes: "高速ストロボを許可する（1秒間に3回を超える点滅）",
+        fastStrobesWarning:
+            "注意：繰り返しの点滅は、光に敏感な人に発作を引き起こすことがあります。オフの場合、1秒間に3回を超える点滅は表示されません。",
         night: {
             label: "昼夜の切り替え",
             server: "サーバーの時刻",

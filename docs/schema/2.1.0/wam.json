@@ -542,6 +542,12 @@
                           "minimum": 2,
                           "maximum": 60,
                           "default": 12
+                        },
+                        "strobeHz": {
+                          "type": "number",
+                          "minimum": 0.5,
+                          "maximum": 12,
+                          "default": 2
                         }
                       },
                       "required": [

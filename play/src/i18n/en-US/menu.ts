@@ -33,6 +33,9 @@ const menu: BaseTranslation = {
         },
         weatherEffects: "Show weather effects (rain, snow and storm light)",
         lampDemo: "Show the demo lamps next to my avatar",
+        fastStrobes: "Allow fast strobes (more than 3 flashes per second)",
+        fastStrobesWarning:
+            "Warning: repeated flashes can trigger seizures in photosensitive people. Off, you never see more than 3 flashes per second.",
         ambiance: {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",

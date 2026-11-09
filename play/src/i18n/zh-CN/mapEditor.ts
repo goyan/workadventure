@@ -324,6 +324,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "此灯照亮的区域大小（以格为单位）。未设置时照亮包含它的地图上最小的区域，在任何区域之外则照亮周围 12 格。不会超出该区域。",
             width: "宽度",
             height: "高度",
+            strobeHz: "每秒闪烁次数",
+            strobeHzHint:
+                "常见频闪灯的频率为每秒 1 至 12 次。超过 3 次时，只有允许快速频闪的玩家能看到该频率，其他玩家看到的是 3 次。",
         },
         openFile: {
             label: "打开文件",

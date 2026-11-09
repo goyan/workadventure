@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
+        fastStrobes: "Autoriser les stroboscopes rapides (au-delà de 3 flashs par seconde)",
+        fastStrobesWarning:
+            "Attention : des flashs répétés peuvent déclencher des crises chez les personnes photosensibles. Désactivé, vous ne voyez jamais plus de 3 flashs par seconde.",
         ambiance: {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",

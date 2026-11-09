@@ -34,6 +34,8 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "显示天气效果（雨、雪和雷暴亮光）",
         lampDemo: "在我的头像旁显示演示灯",
+        fastStrobes: "允许快速频闪（每秒超过 3 次闪烁）",
+        fastStrobesWarning: "注意：反复闪烁可能诱发光敏感人群癫痫发作。关闭时，你每秒最多看到 3 次闪烁。",
         night: {
             label: "昼夜周期",
             server: "服务器时间",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EntityDataProperty, LampPropertyData } from "../src";
+import { EntityDataProperty, LampPropertyData, STROBE_DEFAULT_HZ, STROBE_MAX_HZ, STROBE_MIN_HZ } from "../src";
 
 describe("LampPropertyData", () => {
     const base = { id: "lamp-1", type: "lampPropertyData" as const };
@@ -26,5 +26,26 @@ describe("LampPropertyData", () => {
     it("is a property an object of the map can carry", () => {
         const parsed = EntityDataProperty.parse({ ...base, width: 8, height: 8 });
         expect(parsed.type).toBe("lampPropertyData");
+    });
+
+    describe("strobe rate", () => {
+        it("flashes twice a second by default: about the beat of a dance floor", () => {
+            expect(LampPropertyData.parse(base).strobeHz).toBe(2);
+            expect(STROBE_DEFAULT_HZ).toBe(2);
+        });
+
+        it("keeps a rate within the range of the strobes of a club, from half a flash to twelve a second", () => {
+            expect(STROBE_MIN_HZ).toBe(0.5);
+            expect(STROBE_MAX_HZ).toBe(12);
+            expect(LampPropertyData.parse({ ...base, strobeHz: 0.5 }).strobeHz).toBe(0.5);
+            expect(LampPropertyData.parse({ ...base, strobeHz: 7.5 }).strobeHz).toBe(7.5);
+            expect(LampPropertyData.parse({ ...base, strobeHz: 12 }).strobeHz).toBe(12);
+        });
+
+        it("rejects a rate outside that range", () => {
+            expect(LampPropertyData.safeParse({ ...base, strobeHz: 0.2 }).success).toBe(false);
+            expect(LampPropertyData.safeParse({ ...base, strobeHz: 13 }).success).toBe(false);
+            expect(LampPropertyData.safeParse({ ...base, strobeHz: -1 }).success).toBe(false);
+        });
     });
 });

@@ -336,6 +336,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Tamanho da área que esta lâmpada ilumina, em casas. Sem ajuste, ilumina a menor zona do mapa que a contém, ou 12 casas ao redor dela fora de qualquer zona. Nunca ultrapassa essa zona.",
             width: "Largura",
             height: "Altura",
+            strobeHz: "Flashes por segundo",
+            strobeHzHint:
+                "Cadência habitual dos estroboscópios: de 1 a 12 por segundo. Acima de 3, só quem permitiu estroboscópios rápidos a vê; os outros veem 3.",
         },
         openFile: {
             label: "Abrir arquivo",

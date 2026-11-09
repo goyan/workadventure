@@ -213,6 +213,13 @@ export const GobeurPropertyData = PropertyBase.extend({
 export const LAMP_LIGHT_DEFAULT_TILES = 12;
 export const LAMP_LIGHT_MIN_TILES = 2;
 export const LAMP_LIGHT_MAX_TILES = 60;
+/**
+ * Flashes a second of a strobe lamp. The strobes of a club go from about 1 to 12 flashes a second (7 for the small
+ * ones, 10 for most, 12 for the strongest ones); 2 is about the beat of a dance floor.
+ */
+export const STROBE_MIN_HZ = 0.5;
+export const STROBE_MAX_HZ = 12;
+export const STROBE_DEFAULT_HZ = 2;
 
 /**
  * Where the light of a lamp (an object whose catalog entry says `lamp`) stays: a rectangle of this size around it, kept
@@ -223,6 +230,11 @@ export const LampPropertyData = PropertyBase.extend({
     type: z.literal("lampPropertyData"),
     width: z.number().int().min(LAMP_LIGHT_MIN_TILES).max(LAMP_LIGHT_MAX_TILES).default(LAMP_LIGHT_DEFAULT_TILES),
     height: z.number().int().min(LAMP_LIGHT_MIN_TILES).max(LAMP_LIGHT_MAX_TILES).default(LAMP_LIGHT_DEFAULT_TILES),
+    /**
+     * For a strobe lamp: flashes a second, whatever the music plays. Players see at most 3 a second unless they turned
+     * fast strobes on in their settings (photosensitivity).
+     */
+    strobeHz: z.number().min(STROBE_MIN_HZ).max(STROBE_MAX_HZ).default(STROBE_DEFAULT_HZ),
 });
 
 export const MatrixRoomPropertyData = PropertyBase.extend({

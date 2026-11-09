@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { lampSizeOf, lampSource, planLamps } from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
+import {
+    lampSizeOf,
+    lampSource,
+    lampStrobeHzOf,
+    planLamps,
+} from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
 
 describe("planLamps", () => {
     it("creates a lamp for each object of the map that has one", () => {
@@ -80,5 +85,17 @@ describe("lampSizeOf", () => {
     it("is undefined when no size was set: the light fills its zone", () => {
         expect(lampSizeOf([{ id: "a", type: "openWebsite" }] as never)).toBeUndefined();
         expect(lampSizeOf([])).toBeUndefined();
+    });
+});
+
+describe("lampStrobeHzOf", () => {
+    it("reads the flashes a second set for a strobe lamp", () => {
+        const properties = [{ id: "b", type: "lampPropertyData", width: 12, height: 12, strobeHz: 8 }] as never;
+        expect(lampStrobeHzOf(properties)).toBe(8);
+    });
+
+    it("is undefined when the lamp sets none: the clock then uses its default", () => {
+        expect(lampStrobeHzOf([])).toBeUndefined();
+        expect(lampStrobeHzOf([{ id: "a", type: "openWebsite" }] as never)).toBeUndefined();
     });
 });

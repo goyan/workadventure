@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Hiển thị hiệu ứng thời tiết",
         lampDemo: "Hiện đèn demo cạnh avatar của tôi",
+        fastStrobes: "Cho phép đèn nháy nhanh (hơn 3 lần nháy mỗi giây)",
+        fastStrobesWarning:
+            "Lưu ý: ánh sáng nháy lặp lại có thể gây co giật ở người nhạy cảm với ánh sáng. Khi tắt, bạn không bao giờ thấy quá 3 lần nháy mỗi giây.",
         night: {
             label: "Chu kỳ ngày/đêm",
             server: "Giờ máy chủ",

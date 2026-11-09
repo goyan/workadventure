@@ -1,6 +1,7 @@
 import * as Phaser from "phaser";
 import type { LampFrame } from "./LampSignal";
-import { flashAlpha, neonColor, spotAngle } from "./LampStyle";
+import { neonColor, spotAngle } from "./LampStyle";
+import { effectiveStrobeHz, strobeFlashAlpha } from "./StrobeClock";
 import { LAMP_BALL_TEXTURE, LAMP_BEAM_TEXTURE, LAMP_DISC_TEXTURE, LAMP_TUBE_TEXTURE } from "./LampTextures";
 
 /** One lamp on the map: drawn from the music at every image, and following the object it is lit from. */
@@ -34,6 +35,11 @@ export interface LampPlacement {
      * light of a room stays in the room. Without one, the images go straight on the scene (nothing clips them).
      */
     container?: Phaser.GameObjects.Container;
+    /**
+     * For a strobe lamp: the flashes a second this player sees, asked at each image (their settings can change); 0 or
+     * less for none (a steady glow). Without it, the default rate within the safe ceiling.
+     */
+    strobeHz?: () => number;
 }
 
 /** An image of a lamp, drawn in the container of its zone when it has one. */
@@ -202,7 +208,6 @@ class NeonLamp implements LampVisual {
 class StrobeLamp implements LampVisual {
     private readonly body: Phaser.GameObjects.Image;
     private readonly flash: Phaser.GameObjects.Image;
-    private lastBeatAt: number | undefined;
     private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
@@ -228,15 +233,11 @@ class StrobeLamp implements LampVisual {
         this.brightness = brightness;
     }
 
-    public update(frame: LampFrame, now: number): void {
-        if (frame.beat) {
-            this.lastBeatAt = now;
-        }
-        // The beat already comes at most three times a second (the ceiling is the signal's); with motion reduced, no
-        // flash at all, only a steady glow.
-        const alpha = this.placement.reducedMotion()
-            ? 0.15
-            : flashAlpha(this.lastBeatAt === undefined ? undefined : now - this.lastBeatAt);
+    public update(_frame: LampFrame, now: number): void {
+        // A clock, not the beat: the strobe flashes at its own rate whatever the music plays; the music only decides
+        // whether it is lit. With motion reduced, or the rate at 0, no flash at all, only a steady glow.
+        const hz = this.placement.strobeHz?.() ?? effectiveStrobeHz(undefined, { fastStrobes: false });
+        const alpha = this.placement.reducedMotion() || hz <= 0 ? 0.15 : strobeFlashAlpha(now, hz);
         this.flash.setAlpha(alpha * this.brightness);
     }
 

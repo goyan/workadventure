@@ -34,6 +34,9 @@ const menu: DeepPartial<Translation["menu"]> = {
         },
         weatherEffects: "Weereffecten tonen (regen, sneeuw en onweerlicht)",
         lampDemo: "Demolampen naast mijn avatar tonen",
+        fastStrobes: "Snelle stroboscopen toestaan (meer dan 3 flitsen per seconde)",
+        fastStrobesWarning:
+            "Let op: herhaalde flitsen kunnen aanvallen veroorzaken bij lichtgevoelige mensen. Uitgeschakeld zie je nooit meer dan 3 flitsen per seconde.",
         night: {
             label: "Dag-nachtcyclus",
             server: "Servertijd",

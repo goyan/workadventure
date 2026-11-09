@@ -334,6 +334,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Wjelikosć wobcerka, kótaryž toś ta lampa wobswětla, w kokulkach. Bźez nastajenja wobswětla nejmjeńšu conu kórty, kótaraž ju wopśimujo, abo 12 kokulkow wokoło sebje zwenka wšych conow. Wóna njepśekšaca toś tu conu.",
             width: "Šyrokosć",
             height: "Wusokosć",
+            strobeHz: "Błysy na sekundu",
+            strobeHzHint:
+                "Zwucone cęstosći stroboskopow: 1 do 12 na sekundu. Nad 3 jo wiźe jano gracarje, kótarež su malsne stroboskopy dowóliś; druge wiźe 3.",
         },
         openFile: {
             label: "Dataju wótcyniś",

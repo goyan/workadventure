@@ -19,6 +19,7 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
+    import { fastStrobesEnabledStore } from "../../Stores/FastStrobesStore";
     import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -353,6 +354,17 @@
             label={$LL.menu.settings.lampDemo()}
             labelPosition="right"
         />
+        <div class="flex flex-col gap-1">
+            <InputSwitch
+                id="fast-strobes-enabled"
+                bind:value={$fastStrobesEnabledStore}
+                label={$LL.menu.settings.fastStrobes()}
+                labelPosition="right"
+            />
+            <p class="m-0 text-xs text-white/60" data-testid="fast-strobes-warning">
+                {$LL.menu.settings.fastStrobesWarning()}
+            </p>
+        </div>
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
             <NightSettings />

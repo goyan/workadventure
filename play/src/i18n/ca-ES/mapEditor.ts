@@ -330,6 +330,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 "Mida de la zona que il·lumina aquesta llum, en caselles. Sense ajust, il·lumina la zona més petita del mapa que la conté, o 12 caselles al seu voltant fora de qualsevol zona. Mai surt d'aquesta zona.",
             width: "Amplada",
             height: "Alçada",
+            strobeHz: "Llampecs per segon",
+            strobeHzHint:
+                "Cadència habitual dels estroboscopis: d'1 a 12 per segon. Per sobre de 3, només la veuen els jugadors que han permès els estroboscopis ràpids; els altres en veuen 3.",
         },
         openFile: {
             label: "Obrir fitxer",
