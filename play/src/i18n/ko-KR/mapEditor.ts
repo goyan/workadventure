@@ -587,6 +587,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "왼쪽",
             right: "오른쪽",
             add: "방향 추가",
+            taken: "이미 사용됨",
         },
         customEntityEditorForm: {
             saving: "저장 중…",

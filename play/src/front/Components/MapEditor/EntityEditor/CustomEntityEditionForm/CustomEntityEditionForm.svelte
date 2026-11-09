@@ -31,6 +31,7 @@
         withCategory,
     } from "../../../../Utils/EntityCategory";
     import EntityEditionCollisionGrid from "./EntityEditionCollisionGrid.svelte";
+    import EntityViewChoice from "./EntityViewChoice.svelte";
     import EntityShapesOverlay from "./EntityShapesOverlay.svelte";
     import EntityShapeEditor from "./EntityShapeEditor.svelte";
     import EntityRectangleInputs from "./EntityRectangleInputs.svelte";
@@ -45,6 +46,8 @@
         profileOnly?: boolean;
         /** Shown in profile-only mode when the map already adjusts the object: back to the catalog settings. */
         resetProfile?: () => void;
+        /** Views the object already has (adding a view): they cannot be chosen again. */
+        takenViews?: string[];
     }
 
     let {
@@ -55,6 +58,7 @@
         applyEntityModifications = () => {},
         profileOnly = false,
         resetProfile = undefined,
+        takenViews = [],
     }: Props = $props();
 
     let {
@@ -180,13 +184,11 @@
 
     // Which side of the object the image shows: an object with several views can be turned once placed.
     let direction: string = $state((() => customEntity.direction)());
-    const viewOptions = $derived([
-        { value: "Down", label: $LL.mapEditor.entityEditor.views.front() },
-        { value: "Up", label: $LL.mapEditor.entityEditor.views.back() },
-        { value: "Left", label: $LL.mapEditor.entityEditor.views.left() },
-        { value: "Right", label: $LL.mapEditor.entityEditor.views.right() },
-    ]);
-    const canApply = $derived((!needsHitbox || hasHitbox) && (profileOnly || effectiveCategory !== ""));
+    const canApply = $derived(
+        (!needsHitbox || hasHitbox) &&
+            (profileOnly || effectiveCategory !== "") &&
+            !(isUploadForm && takenViews.includes(direction)),
+    );
 
     const depthOptions = {
         GROUND_LEVEL: "GroundLevel",
@@ -517,21 +519,7 @@
                 </div>
             {/if}
             {#if isUploadForm}
-                <div class="flex flex-col gap-1">
-                    <span class="retro-label">{$LL.mapEditor.entityEditor.views.label()}</span>
-                    <div class="retro-choices" role="radiogroup" data-testid="entityView">
-                        {#each viewOptions as option (option.value)}
-                            <button
-                                type="button"
-                                role="radio"
-                                aria-checked={direction === option.value}
-                                class="retro-choice"
-                                class:selected={direction === option.value}
-                                onclick={() => (direction = option.value)}>{option.label}</button
-                            >
-                        {/each}
-                    </div>
-                </div>
+                <EntityViewChoice value={direction} {takenViews} onChange={(view) => (direction = view)} />
             {/if}
         </section>
 
