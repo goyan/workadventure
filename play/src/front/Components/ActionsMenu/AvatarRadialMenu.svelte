@@ -295,7 +295,7 @@
     /* Up to three short lines under the name, so it stays inside its sector. */
     .wheel-detail {
         display: -webkit-box;
-        max-width: 80px;
+        max-width: 62px;
         overflow: hidden;
         -webkit-line-clamp: 3;
         line-clamp: 3;
