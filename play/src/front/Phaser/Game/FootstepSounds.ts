@@ -10,7 +10,7 @@ const MAX_DETUNE = 120;
 const MIN_VOLUME_RATIO = 0.7;
 /** A step on the side is heard on that side, never fully in one ear. */
 const MAX_PAN = 0.6;
-/** Maximum gain at 100%; the personal volume starts at 50% and distance further softens steps. */
+/** Maximum gain at 100%; the personal volume starts at 15% and distance further softens steps. */
 export const FOOTSTEP_MAX_VOLUME = 0.3;
 /** Keep nearby players audible at a very low level, independently of personal steps. */
 const OTHER_PLAYER_VOLUME_RATIO = 0.05;

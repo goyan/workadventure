@@ -8,6 +8,7 @@ import { currentPlayerLockableAreasStore } from "../../../Stores/CurrentPlayerAr
 import { knockRequestsStore } from "../../../Stores/KnockStore";
 import { requestedStatusStore } from "../../../Stores/MediaStore";
 import { personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
+import { environmentVolumeStore } from "../../../Stores/SoundEffectsStore";
 import { notifySystem } from "../../../Notification/SystemNotifier";
 import type { AreasManager } from "../GameMap/AreasManager";
 import type { GameScene } from "../GameScene";
@@ -262,7 +263,7 @@ export class KnockManager {
             if (!this.announced.has(request)) {
                 this.announced.add(request);
                 // Not GameScene.playSound: the knock must be heard even in "Do not disturb".
-                this.scene.sound.play(KNOCK_SOUND_KEY, { volume: 0.5 });
+                this.scene.sound.play(KNOCK_SOUND_KEY, { volume: 0.5 * get(environmentVolumeStore) });
                 // The card is in the page: no onClick, clicking the notification just focuses the tab.
                 notifySystem({
                     kind: "knock",

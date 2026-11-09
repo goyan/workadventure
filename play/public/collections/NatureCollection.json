@@ -950,10 +950,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-7.png",
+      "imagePath": "Nature/weather-nature-7-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-7-dry.png",
+        "summer": "Nature/weather-nature-7-dry.png",
+        "autumn": "Nature/weather-nature-7-dry.png",
+        "winter": "Nature/weather-nature-7-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 4,
+          "y": 23,
+          "width": 37,
+          "height": 13
+        }
+      ],
+      "depthOffset": -3
     },
     {
       "id": "Nature:nature-8:Default:Down",
@@ -961,10 +976,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-8.png",
+      "imagePath": "Nature/weather-nature-8-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-8-dry.png",
+        "summer": "Nature/weather-nature-8-dry.png",
+        "autumn": "Nature/weather-nature-8-dry.png",
+        "winter": "Nature/weather-nature-8-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 11,
+          "y": 31,
+          "width": 25,
+          "height": 8
+        }
+      ],
+      "depthOffset": -3
     },
     {
       "id": "Nature:nature-9:Default:Down",
@@ -972,10 +1002,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-9.png",
+      "imagePath": "Nature/weather-nature-9-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-9-dry.png",
+        "summer": "Nature/weather-nature-9-dry.png",
+        "autumn": "Nature/weather-nature-9-dry.png",
+        "winter": "Nature/weather-nature-9-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 32,
+          "width": 17,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:nature-10:Default:Down",
@@ -983,10 +1028,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-10.png",
+      "imagePath": "Nature/weather-nature-10-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-10-dry.png",
+        "summer": "Nature/weather-nature-10-dry.png",
+        "autumn": "Nature/weather-nature-10-dry.png",
+        "winter": "Nature/weather-nature-10-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 34,
+          "width": 21,
+          "height": 8
+        }
+      ],
+      "depthOffset": -5
     },
     {
       "id": "Nature:nature-11:Default:Down",
@@ -994,10 +1054,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-11.png",
+      "imagePath": "Nature/weather-nature-11-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-11-dry.png",
+        "summer": "Nature/weather-nature-11-dry.png",
+        "autumn": "Nature/weather-nature-11-dry.png",
+        "winter": "Nature/weather-nature-11-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 24,
+          "width": 16,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:nature-12:Default:Down",
@@ -1005,10 +1080,25 @@
       "tags": [
         "Nature"
       ],
-      "imagePath": "Nature/nature-12.png",
+      "imagePath": "Nature/weather-nature-12-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-nature-12-dry.png",
+        "summer": "Nature/weather-nature-12-dry.png",
+        "autumn": "Nature/weather-nature-12-dry.png",
+        "winter": "Nature/weather-nature-12-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 13,
+          "y": 30,
+          "width": 22,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:seasonal-1:Default:Down",
@@ -1496,159 +1586,354 @@
     },
     {
       "id": "Nature:snow-detail-1:Default:Down",
-      "name": "Décor enneigé 1",
+      "name": "Buisson rond",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-1.png",
+      "imagePath": "Nature/weather-snow-detail-1-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-1-dry.png",
+        "summer": "Nature/weather-snow-detail-1-dry.png",
+        "autumn": "Nature/weather-snow-detail-1-dry.png",
+        "winter": "Nature/weather-snow-detail-1-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 16,
+          "y": 38,
+          "width": 24,
+          "height": 10
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:snow-detail-2:Default:Down",
-      "name": "Décor enneigé 2",
+      "name": "Petit buisson rond",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-2.png",
+      "imagePath": "Nature/weather-snow-detail-2-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-2-dry.png",
+        "summer": "Nature/weather-snow-detail-2-dry.png",
+        "autumn": "Nature/weather-snow-detail-2-dry.png",
+        "winter": "Nature/weather-snow-detail-2-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 36,
+          "width": 19,
+          "height": 9
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:snow-detail-3:Default:Down",
-      "name": "Décor enneigé 3",
+      "name": "Buisson à baies",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-3.png",
+      "imagePath": "Nature/weather-snow-detail-3-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-3-dry.png",
+        "summer": "Nature/weather-snow-detail-3-dry.png",
+        "autumn": "Nature/weather-snow-detail-3-dry.png",
+        "winter": "Nature/weather-snow-detail-3-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 16,
+          "y": 39,
+          "width": 26,
+          "height": 10
+        }
+      ],
+      "depthOffset": -5
     },
     {
       "id": "Nature:snow-detail-4:Default:Down",
-      "name": "Décor enneigé 4",
+      "name": "Branches nues",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-4.png",
+      "imagePath": "Nature/weather-snow-detail-4-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-4-dry.png",
+        "summer": "Nature/weather-snow-detail-4-dry.png",
+        "autumn": "Nature/weather-snow-detail-4-dry.png",
+        "winter": "Nature/weather-snow-detail-4-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 5,
+          "y": 31,
+          "width": 32,
+          "height": 14
+        }
+      ],
+      "depthOffset": -3
     },
     {
       "id": "Nature:snow-detail-5:Default:Down",
-      "name": "Décor enneigé 5",
+      "name": "Petites branches nues",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-5.png",
+      "imagePath": "Nature/weather-snow-detail-5-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-5-dry.png",
+        "summer": "Nature/weather-snow-detail-5-dry.png",
+        "autumn": "Nature/weather-snow-detail-5-dry.png",
+        "winter": "Nature/weather-snow-detail-5-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 4,
+          "y": 25,
+          "width": 25,
+          "height": 13
+        }
+      ],
+      "depthOffset": -2
     },
     {
       "id": "Nature:snow-detail-6:Default:Down",
-      "name": "Décor enneigé 6",
+      "name": "Fleur",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-6.png",
+      "imagePath": "Nature/weather-snow-detail-6-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-6-dry.png",
+        "summer": "Nature/weather-snow-detail-6-dry.png",
+        "autumn": "Nature/weather-snow-detail-6-dry.png",
+        "winter": "Nature/weather-snow-detail-6-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 26,
+          "width": 14,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:snow-detail-7:Default:Down",
-      "name": "Décor enneigé 7",
+      "name": "Herbes",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-7.png",
+      "imagePath": "Nature/weather-snow-detail-7-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-7-dry.png",
+        "summer": "Nature/weather-snow-detail-7-dry.png",
+        "autumn": "Nature/weather-snow-detail-7-dry.png",
+        "winter": "Nature/weather-snow-detail-7-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 23,
+          "width": 14,
+          "height": 6
+        }
+      ],
+      "depthOffset": -5
     },
     {
       "id": "Nature:snow-detail-8:Default:Down",
-      "name": "Décor enneigé 8",
+      "name": "Petites herbes",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-8.png",
+      "imagePath": "Nature/weather-snow-detail-8-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-8-dry.png",
+        "summer": "Nature/weather-snow-detail-8-dry.png",
+        "autumn": "Nature/weather-snow-detail-8-dry.png",
+        "winter": "Nature/weather-snow-detail-8-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 22,
+          "width": 15,
+          "height": 5
+        }
+      ],
+      "depthOffset": -5
     },
     {
       "id": "Nature:snow-detail-9:Default:Down",
-      "name": "Décor enneigé 9",
+      "name": "Plante",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-9.png",
+      "imagePath": "Nature/weather-snow-detail-9-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-9-dry.png",
+        "summer": "Nature/weather-snow-detail-9-dry.png",
+        "autumn": "Nature/weather-snow-detail-9-dry.png",
+        "winter": "Nature/weather-snow-detail-9-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 27,
+          "width": 15,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
     },
     {
       "id": "Nature:snow-detail-10:Default:Down",
-      "name": "Décor enneigé 10",
+      "name": "Souche",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-10.png",
+      "imagePath": "Nature/weather-snow-detail-10-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-10-dry.png",
+        "summer": "Nature/weather-snow-detail-10-dry.png",
+        "autumn": "Nature/weather-snow-detail-10-dry.png",
+        "winter": "Nature/weather-snow-detail-10-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 4,
+          "y": 26,
+          "width": 33,
+          "height": 11
+        }
+      ],
+      "depthOffset": -3
     },
     {
       "id": "Nature:snow-detail-11:Default:Down",
-      "name": "Décor enneigé 11",
+      "name": "Tronc",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-11.png",
+      "imagePath": "Nature/weather-snow-detail-11-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-11-dry.png",
+        "summer": "Nature/weather-snow-detail-11-dry.png",
+        "autumn": "Nature/weather-snow-detail-11-dry.png",
+        "winter": "Nature/weather-snow-detail-11-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 6,
+          "y": 26,
+          "width": 43,
+          "height": 10
+        }
+      ],
+      "depthOffset": -2
     },
     {
       "id": "Nature:snow-detail-12:Default:Down",
-      "name": "Décor enneigé 12",
+      "name": "Rocher et pierre",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-12.png",
+      "imagePath": "Nature/weather-snow-detail-12-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-12-dry.png",
+        "summer": "Nature/weather-snow-detail-12-dry.png",
+        "autumn": "Nature/weather-snow-detail-12-dry.png",
+        "winter": "Nature/weather-snow-detail-12-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 34,
+          "width": 31,
+          "height": 6
+        }
+      ],
+      "depthOffset": -2
     },
     {
       "id": "Nature:snow-detail-13:Default:Down",
-      "name": "Décor enneigé 13",
+      "name": "Groupe de rochers",
       "tags": [
         "Nature",
         "Neige"
       ],
-      "imagePath": "Nature/snow-detail-13.png",
+      "imagePath": "Nature/weather-snow-detail-13-dry.png",
       "direction": "Down",
       "color": "Default",
-      "layer": "standing"
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-snow-detail-13-dry.png",
+        "summer": "Nature/weather-snow-detail-13-dry.png",
+        "autumn": "Nature/weather-snow-detail-13-dry.png",
+        "winter": "Nature/weather-snow-detail-13-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 32,
+          "width": 31,
+          "height": 7
+        }
+      ],
+      "depthOffset": -3
     },
     {
       "id": "Nature:grass-green-1:Default:Down",
@@ -2221,6 +2506,968 @@
         }
       ],
       "depthOffset": -27
+    },
+    {
+      "id": "Nature:detail-grass-1:Default:Down",
+      "name": "Herbes fleuries",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-1-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-1-dry.png",
+        "summer": "Nature/weather-detail-grass-1-dry.png",
+        "autumn": "Nature/weather-detail-grass-1-dry.png",
+        "winter": "Nature/weather-detail-grass-1-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 19,
+          "width": 14,
+          "height": 5
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-2:Default:Down",
+      "name": "Grandes herbes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-2-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-2-dry.png",
+        "summer": "Nature/weather-detail-grass-2-dry.png",
+        "autumn": "Nature/weather-detail-grass-2-dry.png",
+        "winter": "Nature/weather-detail-grass-2-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 28,
+          "width": 16,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-3:Default:Down",
+      "name": "Herbes hautes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-3-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-3-dry.png",
+        "summer": "Nature/weather-detail-grass-3-dry.png",
+        "autumn": "Nature/weather-detail-grass-3-dry.png",
+        "winter": "Nature/weather-detail-grass-3-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 14,
+          "y": 31,
+          "width": 23,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-4:Default:Down",
+      "name": "Touffe d’herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-4-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-4-dry.png",
+        "summer": "Nature/weather-detail-grass-4-dry.png",
+        "autumn": "Nature/weather-detail-grass-4-dry.png",
+        "winter": "Nature/weather-detail-grass-4-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 28,
+          "width": 19,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-5:Default:Down",
+      "name": "Touffe d’herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-5-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-5-dry.png",
+        "summer": "Nature/weather-detail-grass-5-dry.png",
+        "autumn": "Nature/weather-detail-grass-5-dry.png",
+        "winter": "Nature/weather-detail-grass-5-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 11,
+          "y": 30,
+          "width": 18,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-6:Default:Down",
+      "name": "Marguerites",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-6-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-6-dry.png",
+        "summer": "Nature/weather-detail-grass-6-dry.png",
+        "autumn": "Nature/weather-detail-grass-6-dry.png",
+        "winter": "Nature/weather-detail-grass-6-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 27,
+          "width": 15,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-7:Default:Down",
+      "name": "Fleurs jaunes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-7-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-7-dry.png",
+        "summer": "Nature/weather-detail-grass-7-dry.png",
+        "autumn": "Nature/weather-detail-grass-7-dry.png",
+        "winter": "Nature/weather-detail-grass-7-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 7,
+          "y": 26,
+          "width": 10,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-8:Default:Down",
+      "name": "Brins d’herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-8-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-8-dry.png",
+        "summer": "Nature/weather-detail-grass-8-dry.png",
+        "autumn": "Nature/weather-detail-grass-8-dry.png",
+        "winter": "Nature/weather-detail-grass-8-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 26,
+          "width": 15,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-9:Default:Down",
+      "name": "Petite herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-9-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-9-dry.png",
+        "summer": "Nature/weather-detail-grass-9-dry.png",
+        "autumn": "Nature/weather-detail-grass-9-dry.png",
+        "winter": "Nature/weather-detail-grass-9-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 6,
+          "y": 22,
+          "width": 10,
+          "height": 5
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-10:Default:Down",
+      "name": "Buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-10-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-10-dry.png",
+        "summer": "Nature/weather-detail-grass-10-dry.png",
+        "autumn": "Nature/weather-detail-grass-10-dry.png",
+        "winter": "Nature/weather-detail-grass-10-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 27,
+          "width": 15,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-11:Default:Down",
+      "name": "Petite plante",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-11-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-11-dry.png",
+        "summer": "Nature/weather-detail-grass-11-dry.png",
+        "autumn": "Nature/weather-detail-grass-11-dry.png",
+        "winter": "Nature/weather-detail-grass-11-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 6,
+          "y": 26,
+          "width": 10,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-grass-12:Default:Down",
+      "name": "Grand buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-grass-12-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-grass-12-dry.png",
+        "summer": "Nature/weather-detail-grass-12-dry.png",
+        "autumn": "Nature/weather-detail-grass-12-dry.png",
+        "winter": "Nature/weather-detail-grass-12-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 13,
+          "y": 29,
+          "width": 20,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-1:Default:Down",
+      "name": "Herbes à fleurs jaunes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-1-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-1-dry.png",
+        "summer": "Nature/weather-detail-flowers-1-dry.png",
+        "autumn": "Nature/weather-detail-flowers-1-dry.png",
+        "winter": "Nature/weather-detail-flowers-1-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 22,
+          "width": 16,
+          "height": 6
+        }
+      ],
+      "depthOffset": -8
+    },
+    {
+      "id": "Nature:detail-flowers-2:Default:Down",
+      "name": "Petite touffe d’herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-2-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-2-dry.png",
+        "summer": "Nature/weather-detail-flowers-2-dry.png",
+        "autumn": "Nature/weather-detail-flowers-2-dry.png",
+        "winter": "Nature/weather-detail-flowers-2-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 24,
+          "width": 14,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-3:Default:Down",
+      "name": "Brins d’herbe",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-3-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-3-dry.png",
+        "summer": "Nature/weather-detail-flowers-3-dry.png",
+        "autumn": "Nature/weather-detail-flowers-3-dry.png",
+        "winter": "Nature/weather-detail-flowers-3-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 26,
+          "width": 14,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-4:Default:Down",
+      "name": "Herbes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-4-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-4-dry.png",
+        "summer": "Nature/weather-detail-flowers-4-dry.png",
+        "autumn": "Nature/weather-detail-flowers-4-dry.png",
+        "winter": "Nature/weather-detail-flowers-4-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 14,
+          "y": 26,
+          "width": 23,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-5:Default:Down",
+      "name": "Herbes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-5-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-5-dry.png",
+        "summer": "Nature/weather-detail-flowers-5-dry.png",
+        "autumn": "Nature/weather-detail-flowers-5-dry.png",
+        "winter": "Nature/weather-detail-flowers-5-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 28,
+          "width": 17,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-6:Default:Down",
+      "name": "Herbes à fleurs violettes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-6-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-6-dry.png",
+        "summer": "Nature/weather-detail-flowers-6-dry.png",
+        "autumn": "Nature/weather-detail-flowers-6-dry.png",
+        "winter": "Nature/weather-detail-flowers-6-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 22,
+          "width": 15,
+          "height": 5
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-7:Default:Down",
+      "name": "Herbes à fleurs blanches",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-7-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-7-dry.png",
+        "summer": "Nature/weather-detail-flowers-7-dry.png",
+        "autumn": "Nature/weather-detail-flowers-7-dry.png",
+        "winter": "Nature/weather-detail-flowers-7-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 11,
+          "y": 23,
+          "width": 18,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-8:Default:Down",
+      "name": "Fleurs violettes",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-8-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-8-dry.png",
+        "summer": "Nature/weather-detail-flowers-8-dry.png",
+        "autumn": "Nature/weather-detail-flowers-8-dry.png",
+        "winter": "Nature/weather-detail-flowers-8-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 25,
+          "width": 16,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-9:Default:Down",
+      "name": "Fleurs multicolores",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-9-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-9-dry.png",
+        "summer": "Nature/weather-detail-flowers-9-dry.png",
+        "autumn": "Nature/weather-detail-flowers-9-dry.png",
+        "winter": "Nature/weather-detail-flowers-9-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 25,
+          "width": 14,
+          "height": 6
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-10:Default:Down",
+      "name": "Buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-10-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-10-dry.png",
+        "summer": "Nature/weather-detail-flowers-10-dry.png",
+        "autumn": "Nature/weather-detail-flowers-10-dry.png",
+        "winter": "Nature/weather-detail-flowers-10-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 32,
+          "width": 21,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-flowers-11:Default:Down",
+      "name": "Buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-flowers-11-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-flowers-11-dry.png",
+        "summer": "Nature/weather-detail-flowers-11-dry.png",
+        "autumn": "Nature/weather-detail-flowers-11-dry.png",
+        "winter": "Nature/weather-detail-flowers-11-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 33,
+          "width": 20,
+          "height": 8
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-rocks-1:Default:Down",
+      "name": "Gros rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-1-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-1-dry.png",
+        "summer": "Nature/weather-detail-rocks-1-dry.png",
+        "autumn": "Nature/weather-detail-rocks-1-dry.png",
+        "winter": "Nature/weather-detail-rocks-1-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 32,
+          "width": 31,
+          "height": 8
+        }
+      ],
+      "depthOffset": -2
+    },
+    {
+      "id": "Nature:detail-rocks-2:Default:Down",
+      "name": "Deux rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-2-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-2-dry.png",
+        "summer": "Nature/weather-detail-rocks-2-dry.png",
+        "autumn": "Nature/weather-detail-rocks-2-dry.png",
+        "winter": "Nature/weather-detail-rocks-2-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 33,
+          "width": 31,
+          "height": 7
+        }
+      ],
+      "depthOffset": -2
+    },
+    {
+      "id": "Nature:detail-rocks-3:Default:Down",
+      "name": "Petites pierres",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-3-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-3-dry.png",
+        "summer": "Nature/weather-detail-rocks-3-dry.png",
+        "autumn": "Nature/weather-detail-rocks-3-dry.png",
+        "winter": "Nature/weather-detail-rocks-3-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 31,
+          "width": 27,
+          "height": 8
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-rocks-4:Default:Down",
+      "name": "Rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-4-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-4-dry.png",
+        "summer": "Nature/weather-detail-rocks-4-dry.png",
+        "autumn": "Nature/weather-detail-rocks-4-dry.png",
+        "winter": "Nature/weather-detail-rocks-4-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 32,
+          "width": 31,
+          "height": 7
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-rocks-5:Default:Down",
+      "name": "Amas de rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-5-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-5-dry.png",
+        "summer": "Nature/weather-detail-rocks-5-dry.png",
+        "autumn": "Nature/weather-detail-rocks-5-dry.png",
+        "winter": "Nature/weather-detail-rocks-5-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 33,
+          "width": 31,
+          "height": 7
+        }
+      ],
+      "depthOffset": -2
+    },
+    {
+      "id": "Nature:detail-rocks-6:Default:Down",
+      "name": "Grande souche",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-6-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-6-dry.png",
+        "summer": "Nature/weather-detail-rocks-6-dry.png",
+        "autumn": "Nature/weather-detail-rocks-6-dry.png",
+        "winter": "Nature/weather-detail-rocks-6-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 6,
+          "y": 21,
+          "width": 33,
+          "height": 11
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-rocks-7:Default:Down",
+      "name": "Tronc et branche",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-7-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-7-dry.png",
+        "summer": "Nature/weather-detail-rocks-7-dry.png",
+        "autumn": "Nature/weather-detail-rocks-7-dry.png",
+        "winter": "Nature/weather-detail-rocks-7-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 22,
+          "width": 49,
+          "height": 10
+        }
+      ],
+      "depthOffset": -2
+    },
+    {
+      "id": "Nature:detail-rocks-8:Default:Down",
+      "name": "Branche",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-8-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-8-dry.png",
+        "summer": "Nature/weather-detail-rocks-8-dry.png",
+        "autumn": "Nature/weather-detail-rocks-8-dry.png",
+        "winter": "Nature/weather-detail-rocks-8-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 5,
+          "y": 19,
+          "width": 32,
+          "height": 9
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-rocks-9:Default:Down",
+      "name": "Buisson rond",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-rocks-9-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-rocks-9-dry.png",
+        "summer": "Nature/weather-detail-rocks-9-dry.png",
+        "autumn": "Nature/weather-detail-rocks-9-dry.png",
+        "winter": "Nature/weather-detail-rocks-9-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 12,
+          "y": 26,
+          "width": 21,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-snow-1:Default:Down",
+      "name": "Rocher",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-snow-1-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-snow-1-dry.png",
+        "summer": "Nature/weather-detail-snow-1-dry.png",
+        "autumn": "Nature/weather-detail-snow-1-dry.png",
+        "winter": "Nature/weather-detail-snow-1-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 10,
+          "y": 31,
+          "width": 28,
+          "height": 8
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-snow-2:Default:Down",
+      "name": "Petite pierre",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-snow-2-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-snow-2-dry.png",
+        "summer": "Nature/weather-detail-snow-2-dry.png",
+        "autumn": "Nature/weather-detail-snow-2-dry.png",
+        "winter": "Nature/weather-detail-snow-2-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 11,
+          "y": 31,
+          "width": 26,
+          "height": 7
+        }
+      ],
+      "depthOffset": -4
+    },
+    {
+      "id": "Nature:detail-snow-3:Default:Down",
+      "name": "Deux pierres",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-snow-3-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-snow-3-dry.png",
+        "summer": "Nature/weather-detail-snow-3-dry.png",
+        "autumn": "Nature/weather-detail-snow-3-dry.png",
+        "winter": "Nature/weather-detail-snow-3-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 32,
+          "width": 30,
+          "height": 8
+        }
+      ],
+      "depthOffset": -2
+    },
+    {
+      "id": "Nature:detail-snow-4:Default:Down",
+      "name": "Rochers",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-snow-4-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-snow-4-dry.png",
+        "summer": "Nature/weather-detail-snow-4-dry.png",
+        "autumn": "Nature/weather-detail-snow-4-dry.png",
+        "winter": "Nature/weather-detail-snow-4-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 9,
+          "y": 32,
+          "width": 31,
+          "height": 7
+        }
+      ],
+      "depthOffset": -3
+    },
+    {
+      "id": "Nature:detail-snow-5:Default:Down",
+      "name": "Petit buisson",
+      "tags": [
+        "Nature"
+      ],
+      "imagePath": "Nature/weather-detail-snow-5-dry.png",
+      "direction": "Down",
+      "color": "Default",
+      "layer": "standing",
+      "seasonal": {
+        "spring": "Nature/weather-detail-snow-5-dry.png",
+        "summer": "Nature/weather-detail-snow-5-dry.png",
+        "autumn": "Nature/weather-detail-snow-5-dry.png",
+        "winter": "Nature/weather-detail-snow-5-snow.png"
+      },
+      "collisionRectangles": [
+        {
+          "x": 8,
+          "y": 21,
+          "width": 14,
+          "height": 5
+        }
+      ],
+      "depthOffset": -4
     }
   ]
 }

@@ -37,15 +37,8 @@ export class EntitiesCollectionsManager {
             // entityVariants ordered by collectionName+name
             const entityVariants = new Map<string, EntityVariant>();
             for (const entityPrefab of $entitiesPrefabsStore) {
-                // Keep legacy Nature decorations resolvable on maps; the picker only offers trees.
-                if (
-                    entityPrefab.collectionName === "Nature" &&
-                    (entityPrefab.layer !== "standing" ||
-                        !/^Nature:(tree-|seasonal-|snow-tree-|snow-evergreen-|winter-auto-|nature-[1-6]:)/.test(
-                            entityPrefab.id,
-                        ))
-                )
-                    continue;
+                // Ground textures belong to the terrain tool; trees and small decorations belong to objects.
+                if (entityPrefab.collectionName === "Nature" && entityPrefab.layer !== "standing") continue;
                 // A resized copy belongs to the instance placed with it: the library only offers the original.
                 if (entityPrefab.type === "Custom" && isResizedVariant(entityPrefab)) continue;
                 const idOrGeneratedName =

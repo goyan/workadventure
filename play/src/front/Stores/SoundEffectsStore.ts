@@ -1,5 +1,13 @@
 import { get, writable, type Writable } from "svelte/store";
 
+const DEFAULT_VOLUME = 0.15;
+// Apply the quieter baseline once, including browsers that saved the previous volume.
+if (localStorage.getItem("soundEffectsVolumeBaseline") !== String(DEFAULT_VOLUME)) {
+    localStorage.setItem("footstepVolume", String(DEFAULT_VOLUME));
+    localStorage.setItem("environmentVolume", String(DEFAULT_VOLUME));
+    localStorage.setItem("soundEffectsVolumeBaseline", String(DEFAULT_VOLUME));
+}
+
 function createVolumeStore(key: string, defaultVolume: number): Writable<number> {
     const saved = localStorage.getItem(key);
     const initial = saved === null ? defaultVolume : Number(saved);
@@ -17,5 +25,5 @@ function createVolumeStore(key: string, defaultVolume: number): Writable<number>
     };
 }
 
-export const footstepVolumeStore = createVolumeStore("footstepVolume", 0.5);
-export const environmentVolumeStore = createVolumeStore("environmentVolume", 0.5);
+export const footstepVolumeStore = createVolumeStore("footstepVolume", DEFAULT_VOLUME);
+export const environmentVolumeStore = createVolumeStore("environmentVolume", DEFAULT_VOLUME);

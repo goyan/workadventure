@@ -60,3 +60,9 @@ export function readVehicleState(value: unknown): VehicleState {
         ...readVehicleColors(value),
     };
 }
+
+/** Arcade can separate a fast body on the far side of a thin obstacle once it crosses its midpoint. */
+export function vehiclePhysicsFps(walkingSpeed: number, body: { width: number; height: number }): number {
+    const maxStep = Math.min(body.width, body.height) / 2;
+    return Math.max(60, Math.ceil((walkingSpeed * 20 * VEHICLE_SPEED_FACTOR) / maxStep));
+}

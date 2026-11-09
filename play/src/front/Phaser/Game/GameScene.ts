@@ -1286,10 +1286,10 @@ export class GameScene extends DirtyScene {
         }
     }
 
-    public playSound(sound: string, volume: number = 0.2) {
+    public playSound(sound: string, volume: number = 0.2): void {
         if (!statusChanger.allowNotificationSound()) return;
         this.sound.play(sound, {
-            volume,
+            volume: volume * get(environmentVolumeStore),
         });
     }
 

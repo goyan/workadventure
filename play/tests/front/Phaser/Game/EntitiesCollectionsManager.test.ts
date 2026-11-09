@@ -7,7 +7,7 @@ import { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/Ma
 describe("EntitiesCollectionsManager reload", () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it("offers only trees from Nature while keeping placed ground and decorations resolvable", async () => {
+    it("offers Nature trees and decorations once while keeping ground textures out of the picker", async () => {
         vi.stubGlobal(
             "fetch",
             vi.fn(() => Promise.resolve(new Response(JSON.stringify(natureCollection)))),
@@ -17,11 +17,19 @@ describe("EntitiesCollectionsManager reload", () => {
 
         expect(await manager.getEntityPrefab("Nature", "Nature:grass-autumn-1:Default:Down")).toBeDefined();
         expect(await manager.getEntityPrefab("Nature", "Nature:nature-8:Default:Down")).toBeDefined();
-        const names = get(manager.getEntitiesPrefabsVariantStore()).map((variant) => variant.defaultPrefab.name);
-        expect(names).toHaveLength(58);
+        const variants = get(manager.getEntitiesPrefabsVariantStore());
+        const names = variants.map((variant) => variant.defaultPrefab.name);
         expect(names).toContain("Arbre saisonnier 1");
         expect(names).toContain("Palmier saisonnier");
-        expect(names.every((name) => /chêne|arbre|cerisier|sapin|cyprès|saule|palmier/i.test(name))).toBe(true);
+        expect(names).toEqual(expect.arrayContaining(["Rochers", "Souche", "Fleurs", "Herbes", "Tronc"]));
+        expect(names).not.toContain("Herbe d’automne 1");
+        const ids = variants.flatMap((variant) => variant.prefabIds);
+        expect(new Set(ids).size).toBe(ids.length);
+        expect(
+            ids.filter((id) =>
+                /^Nature:(tree-|seasonal-|snow-tree-|snow-evergreen-|winter-auto-|nature-[1-6]:)/.test(id),
+            ),
+        ).toHaveLength(58);
     });
 
     it("loads a newly uploaded resized image after reopening the map with an older cached catalog", async () => {
