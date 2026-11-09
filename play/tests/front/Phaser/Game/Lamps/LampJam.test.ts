@@ -5,6 +5,7 @@ import {
     jamOfSpaces,
     lampLightZone,
     resolveLampJam,
+    toLampZone,
     zoneOf,
     type LampJam,
     type LampZone,
@@ -323,5 +324,22 @@ describe("lampLightZone", () => {
         const sized = lampLightZone({ id: "a", source: inside, zones: [club], sizeInTiles: { width: 4, height: 4 } });
         expect(sized.areaId).toBe("lamp:a");
         expect(lampLightZone({ id: "a", source: inside, zones: [club] }).areaId).toBe("club");
+    });
+});
+
+describe("toLampZone", () => {
+    it("takes the rectangle of an area of the map, whatever the area is for", () => {
+        expect(toLampZone({ id: "meeting", x: 64, y: 96, width: 320, height: 256 })).toEqual({
+            areaId: "meeting",
+            x: 64,
+            y: 96,
+            width: 320,
+            height: 256,
+        });
+    });
+
+    it("lets an ordinary area keep the light of the lamps inside it: the room is where the lamp stands", () => {
+        const room = toLampZone({ id: "room", x: 0, y: 0, width: 400, height: 300 });
+        expect(lampLightZone({ id: "l", source: { x: 50, y: 50 }, zones: [room] })).toEqual(room);
     });
 });

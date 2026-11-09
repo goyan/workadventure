@@ -324,7 +324,7 @@ const mapEditor: BaseTranslation = {
         lamp: {
             label: "Light zone",
             description:
-                "Size of the area this lamp lights, in tiles. Unset, it lights its listening zone, or 12 tiles around it outside any zone. It never goes beyond its listening zone.",
+                "Size of the area this lamp lights, in tiles. Unset, it lights the smallest zone of the map that contains it, or 12 tiles around it outside any zone. It never goes beyond that zone.",
             width: "Width",
             height: "Height",
         },

@@ -325,7 +325,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "Zona di luce",
             description:
-                "Dimensione dell'area illuminata da questa lampada, in caselle. Senza impostazione illumina la sua zona di ascolto, o 12 caselle intorno a sé fuori da ogni zona. Non supera mai la sua zona di ascolto.",
+                "Dimensione dell'area illuminata da questa lampada, in caselle. Senza impostazione illumina la zona più piccola della mappa che la contiene, o 12 caselle intorno a sé fuori da ogni zona. Non supera mai quella zona.",
             width: "Larghezza",
             height: "Altezza",
         },

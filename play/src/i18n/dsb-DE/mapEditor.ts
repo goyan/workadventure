@@ -331,7 +331,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "Swětłowa cona",
             description:
-                "Wjelikosć wobcerka, kótaryž toś ta lampa wobswětla, w kokulkach. Bźez nastajenja wobswětla swóju słuchańsku conu abo 12 kokulkow wokoło sebje zwenka wšych conow. Wóna njepśekšaca swóju słuchańsku conu.",
+                "Wjelikosć wobcerka, kótaryž toś ta lampa wobswětla, w kokulkach. Bźez nastajenja wobswětla nejmjeńšu conu kórty, kótaraž ju wopśimujo, abo 12 kokulkow wokoło sebje zwenka wšych conow. Wóna njepśekšaca toś tu conu.",
             width: "Šyrokosć",
             height: "Wusokosć",
         },
