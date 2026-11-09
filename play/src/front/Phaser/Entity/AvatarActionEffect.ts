@@ -20,16 +20,23 @@ export class AvatarActionEffect {
         direction: PositionMessage_Direction,
     ): void {
         const beat = Math.sin((time / 600) * Math.PI * 2);
+        // Running in place: the walking frames, about twice as fast as walking, the body up when over the foot.
+        const stride = [0, 1, 2, 1][Math.floor(time / 90) % 4];
+        const bounce = action === AvatarAction.Run && stride === 1 ? 1 : 0;
         for (const sprite of sprites) {
             sprite.setPosition(
                 action === AvatarAction.Dance ? beat * 2 : 0,
-                (seated ? -4 : 0) - (action === AvatarAction.Dance ? Math.abs(beat) * 3 : 0),
+                (seated ? -4 : 0) - (action === AvatarAction.Dance ? Math.abs(beat) * 3 : 0) - bounce,
             );
             sprite.setAngle(action === AvatarAction.Sleep ? 90 : action === AvatarAction.Dance ? beat * 12 : 0);
             if (action === AvatarAction.Dance && !seated) {
                 sprite.anims.stop();
                 const step = [0, 1, 2, 1][Math.floor(time / 150) % 4];
                 sprite.setFrame(Math.max(0, SEATED_DIRECTIONS.indexOf(direction)) * 3 + step);
+            }
+            if (action === AvatarAction.Run) {
+                sprite.anims.stop();
+                sprite.setFrame(Math.max(0, SEATED_DIRECTIONS.indexOf(direction)) * 3 + stride);
             }
         }
         const graphics = this.graphics;

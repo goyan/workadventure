@@ -34,7 +34,7 @@ import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
 import { ThinkingCloud } from "./ThinkingCloud";
 import { SwimEffect } from "./SwimEffect";
-import { AvatarAction, readAvatarAction } from "./AvatarAction";
+import { AvatarAction, readAvatarAction, takesObjectPlace } from "./AvatarAction";
 import { AvatarActionEffect } from "./AvatarActionEffect";
 import { getSeatedTexture, SEATED_DIRECTIONS } from "./SeatedPose";
 import { Swimwear, readSwimwear, readSwimwearColor } from "./Swimwear";
@@ -578,10 +578,9 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
             const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
             const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
-            const actionObject =
-                this.avatarAction === AvatarAction.Sleep || this.avatarAction === AvatarAction.Toilet
-                    ? findActionableObject(this.scene, { x: this.x, y: feetY })
-                    : undefined;
+            const actionObject = takesObjectPlace(this.avatarAction)
+                ? findActionableObject(this.scene, { x: this.x, y: feetY })
+                : undefined;
             this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
         }
         return this.depthCache.depth;

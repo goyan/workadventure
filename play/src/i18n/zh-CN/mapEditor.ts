@@ -463,6 +463,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         base: {
             beds: "床",
             toilets: "厕所",
+            sport: "运动",
             coffee: "咖啡",
             seats: "Seats",
             pools: "Pools",
@@ -480,6 +481,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             coffee: "喝咖啡",
             sleep: "睡觉",
             toilet: "上厕所",
+            run: "跑步",
 
             none: "None",
             sit: "Sit",

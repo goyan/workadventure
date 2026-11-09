@@ -29,7 +29,12 @@ import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/P
 import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
 import { getPrefabCollisionRectangles } from "@wa/front/Utils/PrefabCollisionRectangles";
 import LL from "@wa/i18n/i18n-svelte";
-import { AvatarAction, AVATAR_ACTION_VARIABLE, readAvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
+import {
+    AvatarAction,
+    AVATAR_ACTION_VARIABLE,
+    readAvatarAction,
+    takesObjectPlace,
+} from "@wa/front/Phaser/Entity/AvatarAction";
 import { bodyBoxFromSprite, type BodyBox } from "@wa/front/Utils/BodyBox";
 import {
     readSwimwear,
@@ -271,7 +276,7 @@ export class Player extends Character {
         const activate = (): void => {
             this.actionPrompt.hide();
             this.ignoredActionObjectId = object.entityId;
-            if (object.action === AvatarAction.Sleep || object.action === AvatarAction.Toilet) {
+            if (takesObjectPlace(object.action)) {
                 this.seatEntityId = object.entityId;
                 this.isSlidingToSeat = true;
                 this.stop();
