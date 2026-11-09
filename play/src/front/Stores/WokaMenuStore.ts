@@ -26,6 +26,8 @@ export interface WokaMenuData {
     /** The local user's own avatar and status, with actions meant for them. */
     isSelf?: boolean;
     menuPosition?: { x: number; y: number };
+    /** A short explanation of the choices, shown in the center of the own-avatar wheel. */
+    hint?: string;
 }
 
 function createWokaMenuStore() {
@@ -43,8 +45,8 @@ function createWokaMenuStore() {
             });
         },
         /** The local user's own card, from a click on their own woka: what others see, without actions. */
-        openOwnCard: (wokaName: string, userUuid: string, menuPosition?: { x: number; y: number }) => {
-            set({ wokaName, actions: [], userId: -1, userUuid, isSelf: true, menuPosition });
+        openOwnCard: (wokaName: string, userUuid: string, menuPosition?: { x: number; y: number }, hint?: string) => {
+            set({ wokaName, actions: [], userId: -1, userUuid, isSelf: true, menuPosition, hint });
         },
         addAction: (action: WokaMenuAction) => {
             update((data) => {

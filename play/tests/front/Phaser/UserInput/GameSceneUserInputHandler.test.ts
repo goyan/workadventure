@@ -20,7 +20,7 @@ import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { wokaMenuStore, avatarActionsOpenStore } from "../../../../src/front/Stores/WokaMenuStore";
 import { AvatarAction } from "../../../../src/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
-import { setLocale } from "../../../../src/i18n/i18n-svelte";
+import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
@@ -290,6 +290,8 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             get(wokaMenuStore)
                 ?.actions.find(({ testId }) => testId === "avatar-swimwear")
                 ?.callback();
+            // The choice is worn in the water, not right away: the submenu says so.
+            expect(get(wokaMenuStore)?.hint).toBe(get(LL).woka.menu.swimwearHint());
             get(wokaMenuStore)
                 ?.actions.find(({ testId }) => testId === "avatar-swimwear-twoPiece")
                 ?.callback();

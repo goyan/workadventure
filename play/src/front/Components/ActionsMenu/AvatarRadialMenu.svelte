@@ -140,6 +140,7 @@
     {#snippet centerContent()}
         {#if $currentPlayerWokaStore}<img src={$currentPlayerWokaStore} alt="" />{/if}
         <span>{menu.wokaName}</span>
+        {#if menu.hint}<span class="wheel-hint">{menu.hint}</span>{/if}
     {/snippet}
     {#if profileAction}
         <button
@@ -290,5 +291,13 @@
         display: flex;
         font-size: 25px;
         line-height: 1;
+    }
+    .wheel-center .wheel-hint {
+        max-width: 92px;
+        white-space: normal;
+        text-align: center;
+        font-size: 9px;
+        line-height: 1.15;
+        color: var(--rt-muted);
     }
 </style>

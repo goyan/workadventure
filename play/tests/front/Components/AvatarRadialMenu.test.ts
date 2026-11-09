@@ -33,6 +33,7 @@ describe("own avatar wheel", () => {
                         userId: -1,
                         userUuid: "self",
                         isSelf: true,
+                        hint: "Worn in the water",
                         actions: [
                             { uuid: "profile", testId: "avatar-profile", actionName: "Profile", callback: profile },
                             {
@@ -55,6 +56,7 @@ describe("own avatar wheel", () => {
         expect(target.querySelector("canvas.wheel-pixels")).not.toBeNull();
         expect(context.fillRect.mock.calls.length).toBeGreaterThan(1000);
         expect(target.querySelector('[data-testid="avatar-action-dance"] [data-testid="pixel-icon"]')).not.toBeNull();
+        expect(center?.textContent).toContain("Worn in the water");
         center?.click();
         expect(profile).toHaveBeenCalledOnce();
     });

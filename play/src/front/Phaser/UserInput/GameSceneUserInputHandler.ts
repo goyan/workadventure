@@ -413,7 +413,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 icon: "swimwear",
                 testId: "avatar-swimwear",
                 callback: () => {
-                    wokaMenuStore.openOwnCard(player.playerName, uuid, position);
+                    wokaMenuStore.openOwnCard(player.playerName, uuid, position, get(LL).woka.menu.swimwearHint());
                     for (const style of Object.values(Swimwear)) {
                         wokaMenuStore.addAction({
                             actionName: get(LL).woka.swimwear[style](),
