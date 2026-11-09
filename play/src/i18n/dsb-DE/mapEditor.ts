@@ -589,6 +589,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "Nalěwo",
             right: "Napšawo",
             add: "Naglěd pśidaś",
+            taken: "južo wužywany",
         },
         customEntityEditorForm: {
             saving: "Składujo se…",

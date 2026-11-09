@@ -3,6 +3,7 @@ import { AvatarAction } from "../../../src/front/Phaser/Entity/AvatarAction";
 import {
     getCategorySettings,
     getObjectInteraction,
+    isTreadmillBelt,
     listMapCategories,
 } from "../../../src/front/Utils/ObjectCategories";
 
@@ -95,5 +96,13 @@ describe("ObjectCategories", () => {
                 .map(({ id, base }) => ({ id, base }))
                 .at(-1),
         ).toEqual({ id: "bancs", base: false });
+    });
+
+    it("treats an animated object you run on as a belt that only moves with a runner", () => {
+        const animation = { frameCount: 5, frameRate: 15 };
+        expect(isTreadmillBelt({ ...object(["Sport"]), animation }, undefined)).toBe(true);
+        expect(isTreadmillBelt({ ...object(["Misc"], "Tapis de course"), animation }, undefined)).toBe(true);
+        expect(isTreadmillBelt(object(["Sport"]), undefined)).toBe(false);
+        expect(isTreadmillBelt({ ...object(["Decoration"], "Aquarium"), animation }, undefined)).toBe(false);
     });
 });

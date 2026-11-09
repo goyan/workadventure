@@ -591,6 +591,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "Links",
             right: "Rechts",
             add: "Aanzicht toevoegen",
+            taken: "al gebruikt",
         },
         customEntityEditorForm: {
             saving: "Opslaan…",

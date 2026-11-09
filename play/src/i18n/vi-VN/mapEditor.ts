@@ -587,6 +587,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             left: "Trái",
             right: "Phải",
             add: "Thêm góc nhìn",
+            taken: "đã dùng",
         },
         customEntityEditorForm: {
             saving: "Đang lưu…",

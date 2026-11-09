@@ -55,15 +55,20 @@
         },
     );
 
-    /** The first view the object does not have yet: back, then left, then right. */
-    function getMissingView(viewOf: EntityPrefab): Direction {
+    /** The views the object already has: a new view cannot take one of them (it would hide its image). */
+    function getTakenViews(viewOf: EntityPrefab): string[] {
         const groupId = viewOf.variantOf ?? viewOf.id;
-        const existing = new Set(
+        return (
             get(gameManager.getCurrentGameScene().getEntitiesCollectionsManager().getEntitiesPrefabsVariantStore())
                 .find((variant) => variant.prefabIds.includes(groupId))
                 ?.getEntityPrefabsPositions(viewOf.color)
-                .map((prefab) => prefab.direction) ?? [viewOf.direction],
+                .map((prefab) => prefab.direction) ?? [viewOf.direction]
         );
+    }
+
+    /** The first view the object does not have yet: back, then left, then right. */
+    function getMissingView(viewOf: EntityPrefab): Direction {
+        const existing = new Set(getTakenViews(viewOf));
         return (
             [Direction.Up, Direction.Left, Direction.Right, Direction.Down].find((d) => !existing.has(d)) ??
             Direction.Up
@@ -163,6 +168,7 @@
         <CustomEntityEditionForm
             isUploadForm
             customEntity={customEntityToUpload}
+            takenViews={$entityUploadViewOfStore ? getTakenViews($entityUploadViewOfStore) : []}
             closeForm={initFileUpload}
             applyEntityModifications={(customModifiedEntity) =>
                 processFileToUpload(customModifiedEntity).catch((e) => console.error(e))}
