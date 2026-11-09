@@ -26,16 +26,20 @@ function setup(): {
 }
 
 describe("avatar action lifecycle", () => {
-    it("raises the cup from the hand towards the mouth, facing left or right, and follows the seat offset", () => {
+    it("shows a still cup above the name tag, seen from afar, whose steam alone moves", () => {
         const { effect, sprite, graphics } = setup();
         effect.update(AvatarAction.Coffee, 0, [sprite], false, PositionMessage_Direction.RIGHT);
-        expect(graphics.fillRect.mock.calls[0]).toEqual([5, 5, 7, 7]);
+        const cup = graphics.fillRect.mock.calls[0];
+        const steam = graphics.lineBetween.mock.calls.map((call) => [...call]);
+        expect(cup).toEqual([-6, -45, 11, 10]);
         graphics.fillRect.mockClear();
-        effect.update(AvatarAction.Coffee, 750, [sprite], false, PositionMessage_Direction.RIGHT);
-        expect(graphics.fillRect.mock.calls[0]).toEqual([2, -3, 7, 7]);
+        graphics.lineBetween.mockClear();
+        effect.update(AvatarAction.Coffee, 750, [sprite], false, PositionMessage_Direction.LEFT);
+        expect(graphics.fillRect.mock.calls[0]).toEqual(cup);
+        expect(graphics.lineBetween.mock.calls).not.toEqual(steam);
         graphics.fillRect.mockClear();
         effect.update(AvatarAction.Coffee, 750, [sprite], true, PositionMessage_Direction.LEFT);
-        expect(graphics.fillRect.mock.calls[0]).toEqual([-8, -7, 7, 7]);
+        expect(graphics.fillRect.mock.calls[0]).toEqual([-6, -49, 11, 10]);
     });
     it("animates every layer facing the requested direction and resets its transform when stopped", () => {
         const { effect, sprite, graphics } = setup();
