@@ -28,8 +28,19 @@ interface JamMusicCaptureDependencies {
     onPublisherRegistered?: (spaceName: string, callback: (publisher: JamMusicPublisher) => void) => () => void;
 }
 
+/** The music being shared, and the space of the Jam it goes to. */
+export interface SharedJamMusic {
+    spaceName: string;
+    stream: MediaStream;
+}
+
 export interface JamMusicCapture {
     readonly state: Readable<JamMusicCaptureState>;
+    /**
+     * The stream that is being shared, for whatever needs to look at the music the host plays (the lamps): the host
+     * does not receive their own stream back from the Jam.
+     */
+    readonly sharedMusic: Readable<SharedJamMusic | undefined>;
     /** Opens the input and shares it as the music of the Jam whose space is named. Replaces a running capture. */
     start(spaceName: string, deviceId: string, options?: { forbiddenDeviceIds?: readonly string[] }): Promise<void>;
     /** Stops sharing the music and releases the input: the microphone and the screens are not touched. */
@@ -56,6 +67,7 @@ export function createJamMusicCapture({
     onPublisherRegistered,
 }: JamMusicCaptureDependencies): JamMusicCapture {
     const state = writable<JamMusicCaptureState>({ status: "idle" });
+    const sharedMusic = writable<SharedJamMusic | undefined>(undefined);
     // Every start and stop takes a number: what comes back from a slower one is dropped, so an old capture never
     // comes back to life over a newer decision.
     let generation = 0;
@@ -70,6 +82,7 @@ export function createJamMusicCapture({
     async function release(): Promise<void> {
         const running = current;
         current = undefined;
+        sharedMusic.set(undefined);
         if (!running) {
             return;
         }
@@ -84,6 +97,7 @@ export function createJamMusicCapture({
 
     return {
         state,
+        sharedMusic,
 
         async start(spaceName, deviceId, options = {}) {
             const mine = ++generation;
@@ -176,6 +190,7 @@ export function createJamMusicCapture({
                 }
                 return;
             }
+            sharedMusic.set({ spaceName, stream });
             state.set({ status: "active", label: track.label });
         },
 

@@ -5,6 +5,10 @@ export const NEON_BASS_COLOR = 0xff2bd6;
 export const NEON_TREBLE_COLOR = 0x2be9ff;
 /** A flash fades in this long: short enough to read as a flash, with the beat ceiling keeping flashes apart. */
 export const FLASH_DURATION_MS = 140;
+/** A lamp lights up quickly when its Jam starts to play. */
+export const LAMP_FADE_IN_MS = 200;
+/** And dies away slowly when the music stops: the light falls, it is not cut. */
+export const LAMP_FADE_OUT_MS = 1500;
 /** A spot never swings further than this from the vertical, in radians. */
 const SPOT_MAX_ANGLE = 0.7;
 /** Radians per millisecond of the swing at speed 1: one full sweep to and fro in about 4 seconds. */
@@ -34,4 +38,12 @@ export function flashAlpha(sinceBeatMs: number | undefined): number {
         return 0;
     }
     return 1 - Math.max(0, sinceBeatMs) / FLASH_DURATION_MS;
+}
+
+/** How bright a lamp is after `deltaMs` more, going towards lit (1) or off (0): it picks up from where it was. */
+export function nextBrightness(current: number, lit: boolean, deltaMs: number): number {
+    if (deltaMs <= 0) {
+        return current;
+    }
+    return lit ? Math.min(1, current + deltaMs / LAMP_FADE_IN_MS) : Math.max(0, current - deltaMs / LAMP_FADE_OUT_MS);
 }

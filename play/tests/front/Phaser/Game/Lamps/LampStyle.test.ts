@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
     flashAlpha,
+    LAMP_FADE_IN_MS,
+    LAMP_FADE_OUT_MS,
+    nextBrightness,
     FLASH_DURATION_MS,
     neonColor,
     NEON_BASS_COLOR,
@@ -68,5 +71,34 @@ describe("flashAlpha", () => {
 
     it("is dark before any beat", () => {
         expect(flashAlpha(undefined)).toBe(0);
+    });
+});
+
+describe("nextBrightness", () => {
+    it("rises to full in a fraction of a second when the lamp lights up", () => {
+        expect(nextBrightness(0, true, LAMP_FADE_IN_MS)).toBe(1);
+        expect(nextBrightness(0, true, LAMP_FADE_IN_MS / 2)).toBeCloseTo(0.5, 5);
+    });
+
+    it("falls slowly, in about a second and a half, when the music stops: the light dies away", () => {
+        expect(nextBrightness(1, false, LAMP_FADE_OUT_MS)).toBe(0);
+        expect(nextBrightness(1, false, LAMP_FADE_OUT_MS / 2)).toBeCloseTo(0.5, 5);
+        expect(LAMP_FADE_OUT_MS).toBeGreaterThan(LAMP_FADE_IN_MS * 4);
+    });
+
+    it("never goes beyond 0 and 1", () => {
+        expect(nextBrightness(0.9, true, 10_000)).toBe(1);
+        expect(nextBrightness(0.1, false, 10_000)).toBe(0);
+    });
+
+    it("stays where it is when no time passed, or when it already is where it goes", () => {
+        expect(nextBrightness(0.4, true, 0)).toBe(0.4);
+        expect(nextBrightness(1, true, 500)).toBe(1);
+        expect(nextBrightness(0, false, 500)).toBe(0);
+    });
+
+    it("picks up from where it was: a lamp that flickers off and on again does not start over", () => {
+        const fallen = nextBrightness(1, false, LAMP_FADE_OUT_MS / 2);
+        expect(nextBrightness(fallen, true, LAMP_FADE_IN_MS / 4)).toBeGreaterThan(fallen);
     });
 });

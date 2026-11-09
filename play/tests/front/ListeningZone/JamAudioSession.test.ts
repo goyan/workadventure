@@ -28,7 +28,12 @@ function setup(overrides: Partial<JamAudioSessionDependencies> = {}) {
     const captureState = writable<JamMusicCaptureState>({ status: "idle" });
     const captureStart = vi.fn().mockResolvedValue(undefined);
     const captureStop = vi.fn().mockResolvedValue(undefined);
-    const capture: JamMusicCapture = { state: captureState, start: captureStart, stop: captureStop };
+    const capture: JamMusicCapture = {
+        state: captureState,
+        sharedMusic: writable(undefined),
+        start: captureStart,
+        stop: captureStop,
+    };
     const publisher: JamMusicPublisher = { publishJamMusic: vi.fn().mockResolvedValue(undefined) };
     const listening = writable(false);
     const deps: JamAudioSessionDependencies = {
@@ -134,6 +139,7 @@ describe("JamAudioSession", () => {
             const captureState = writable<JamMusicCaptureState>({ status: "idle" });
             const capture: JamMusicCapture = {
                 state: captureState,
+                sharedMusic: writable(undefined),
                 start: vi.fn().mockResolvedValue(undefined),
                 stop: vi.fn().mockResolvedValue(undefined),
             };
@@ -204,6 +210,7 @@ describe("JamAudioSession", () => {
             const captureState = writable<JamMusicCaptureState>({ status: "idle" });
             const capture: JamMusicCapture = {
                 state: captureState,
+                sharedMusic: writable(undefined),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "active", label: "BlackHole" });
                     return Promise.resolve();
@@ -255,6 +262,7 @@ describe("JamAudioSession", () => {
             const captureState = writable<JamMusicCaptureState>({ status: "idle" });
             const capture: JamMusicCapture = {
                 state: captureState,
+                sharedMusic: writable(undefined),
                 start: vi.fn().mockImplementation(() => {
                     captureState.set({ status: "error", reason: "denied" });
                     return Promise.resolve();

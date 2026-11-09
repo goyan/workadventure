@@ -236,4 +236,42 @@ describe("JamMusicCapture", () => {
             await vi.waitFor(() => expect(get(capture.state)).toEqual({ status: "error", reason: "unavailable" }));
         });
     });
+
+    describe("the music being shared", () => {
+        it("offers the stream that is shared, with the space of its Jam, once the music is out", async () => {
+            const stream = fakeStream();
+            getUserMedia.mockResolvedValue(stream);
+            expect(get(capture.sharedMusic)).toBeUndefined();
+
+            await capture.start(SPACE, "blackhole-id");
+
+            expect(get(capture.sharedMusic)).toEqual({ spaceName: SPACE, stream });
+        });
+
+        it("takes it back when the music stops", async () => {
+            await capture.start(SPACE, "blackhole-id");
+            await capture.stop();
+            expect(get(capture.sharedMusic)).toBeUndefined();
+        });
+
+        it("takes it back when the source goes away", async () => {
+            const stream = fakeStream();
+            getUserMedia.mockResolvedValue(stream);
+            await capture.start(SPACE, "blackhole-id");
+
+            stream.track.dispatchEvent(new Event("ended"));
+            await vi.waitFor(() => expect(get(capture.sharedMusic)).toBeUndefined());
+        });
+
+        it("never offers a stream that could not be shared", async () => {
+            getUserMedia.mockRejectedValue(domError("NotAllowedError"));
+            await capture.start(SPACE, "blackhole-id");
+            expect(get(capture.sharedMusic)).toBeUndefined();
+        });
+
+        it("never offers the stream of a microphone that was refused", async () => {
+            await capture.start(SPACE, "mic-id", { forbiddenDeviceIds: ["mic-id"] });
+            expect(get(capture.sharedMusic)).toBeUndefined();
+        });
+    });
 });
