@@ -1,10 +1,12 @@
 import type { Unsubscriber } from "svelte/store";
+import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
+import { resolveLampDemo } from "./LampDemo";
 import { lampSource, planLamps } from "./LampReconcile";
 import { syntheticSpectrum } from "./SyntheticBeat";
 import { createLamp, type LampKind, type LampVisual } from "./LampVisuals";
@@ -38,9 +40,11 @@ interface PlacedLamp {
 export class LampManager {
     private readonly demoLamps: LampVisual[] = [];
     private readonly placed = new Map<string, PlacedLamp>();
-    private readonly signal: LampSignalSource | undefined;
+    private signal: LampSignalSource | undefined;
+    private demo: { bpm: number } | undefined;
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribeEditor: Unsubscriber;
+    private readonly unsubscribeDemoSetting: Unsubscriber;
     private editorOpen = false;
     private lastReconcileAt: number | undefined;
 
@@ -50,11 +54,25 @@ export class LampManager {
     ) {
         ensureLampTextures(scene);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-        const demo = options.demo;
-        this.signal = demo ? new SpectrumSignalSource((now) => syntheticSpectrum(now, demo.bpm)) : undefined;
         this.unsubscribeEditor = mapEditorModeStore.subscribe((open) => {
             this.editorOpen = open;
         });
+        // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
+        this.unsubscribeDemoSetting = lampDemoEnabledStore.subscribe((enabled) => {
+            this.setDemo(resolveLampDemo(options.demo, enabled));
+        });
+    }
+
+    private setDemo(demo: { bpm: number } | undefined): void {
+        if (demo?.bpm === this.demo?.bpm) {
+            return;
+        }
+        this.demo = demo;
+        for (const lamp of this.demoLamps) {
+            lamp.destroy();
+        }
+        this.demoLamps.length = 0;
+        this.signal = demo ? new SpectrumSignalSource((now) => syntheticSpectrum(now, demo.bpm)) : undefined;
         if (demo) {
             this.spawnDemoLamps();
         }
@@ -131,6 +149,7 @@ export class LampManager {
 
     public destroy(): void {
         this.unsubscribeEditor();
+        this.unsubscribeDemoSetting();
         for (const lamp of this.demoLamps) {
             lamp.destroy();
         }

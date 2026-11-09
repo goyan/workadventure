@@ -18,6 +18,7 @@
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
@@ -344,6 +345,12 @@
             id="weather-effects-enabled"
             bind:value={$weatherEffectsEnabledStore}
             label={$LL.menu.settings.weatherEffects()}
+            labelPosition="right"
+        />
+        <InputSwitch
+            id="lamp-demo-enabled"
+            bind:value={$lampDemoEnabledStore}
+            label={$LL.menu.settings.lampDemo()}
             labelPosition="right"
         />
         <div class="flex flex-col gap-2">

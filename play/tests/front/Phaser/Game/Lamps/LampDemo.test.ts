@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseLampDemo } from "../../../../../src/front/Phaser/Game/Lamps/LampDemo";
+import { parseLampDemo, resolveLampDemo } from "../../../../../src/front/Phaser/Game/Lamps/LampDemo";
 
 describe("parseLampDemo", () => {
     it("is off by default", () => {
@@ -25,5 +25,20 @@ describe("parseLampDemo", () => {
     it("can be turned off", () => {
         expect(parseLampDemo("?lampDemo=0")).toBeUndefined();
         expect(parseLampDemo("?lampDemo=off")).toBeUndefined();
+    });
+});
+
+describe("resolveLampDemo", () => {
+    it("takes the tempo of the address when there is one, whatever the setting", () => {
+        expect(resolveLampDemo({ bpm: 96 }, false)).toEqual({ bpm: 96 });
+        expect(resolveLampDemo({ bpm: 96 }, true)).toEqual({ bpm: 96 });
+    });
+
+    it("shows the demo at 120 BPM when the user turned the setting on", () => {
+        expect(resolveLampDemo(undefined, true)).toEqual({ bpm: 120 });
+    });
+
+    it("shows no demo otherwise", () => {
+        expect(resolveLampDemo(undefined, false)).toBeUndefined();
     });
 });

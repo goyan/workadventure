@@ -32,6 +32,7 @@ const menu: BaseTranslation = {
             environment: "Environment volume (weather, doors and map audio)",
         },
         weatherEffects: "Show weather effects (rain, snow and storm light)",
+        lampDemo: "Show the demo lamps next to my avatar",
         ambiance: {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",

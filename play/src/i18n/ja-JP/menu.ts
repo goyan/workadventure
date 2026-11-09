@@ -33,6 +33,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "環境音の音量（天気、ドア、マップの音声）",
         },
         weatherEffects: "天気のエフェクトを表示（雨、雪、雷雨の光）",
+        lampDemo: "アバターの近くにデモ用ランプを表示する",
         night: {
             label: "昼夜の切り替え",
             server: "サーバーの時刻",

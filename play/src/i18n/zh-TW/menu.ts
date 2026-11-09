@@ -33,6 +33,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "環境音量（天氣、門和地圖音訊）",
         },
         weatherEffects: "顯示天氣效果",
+        lampDemo: "在我的頭像旁顯示示範燈",
         night: {
             label: "日夜週期",
             server: "伺服器時間",
