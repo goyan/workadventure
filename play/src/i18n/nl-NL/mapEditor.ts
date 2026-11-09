@@ -333,7 +333,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "Lichtzone",
             description:
-                "Grootte van het gebied dat deze lamp verlicht, in tegels. Zonder instelling verlicht ze haar luisterzone, of 12 tegels eromheen buiten elke zone. Ze gaat nooit voorbij haar luisterzone.",
+                "Grootte van het gebied dat deze lamp verlicht, in tegels. Zonder instelling verlicht ze de kleinste zone van de kaart die haar bevat, of 12 tegels eromheen buiten elke zone. Ze gaat nooit voorbij die zone.",
             width: "Breedte",
             height: "Hoogte",
         },

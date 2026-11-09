@@ -321,7 +321,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "光照區域",
             description:
-                "此燈照亮的區域大小（以格為單位）。未設定時照亮其聆聽區域，在任何區域之外則照亮周圍 12 格。不會超出其聆聽區域。",
+                "此燈照亮的區域大小（以格為單位）。未設定時照亮包含它的地圖上最小的區域，在任何區域之外則照亮周圍 12 格。不會超出該區域。",
             width: "寬度",
             height: "高度",
         },
