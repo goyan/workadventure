@@ -1,6 +1,7 @@
 import { derived, writable } from "svelte/store";
 import { v4 } from "uuid";
 import type { WorkAdventureComponent } from "../../types/component";
+import type { PixelIconName } from "../Components/ActionsMenu/PixelIcons";
 
 export type WokaMenuAction = {
     uuid?: string;
@@ -11,6 +12,8 @@ export type WokaMenuAction = {
     style?: "is-success" | "is-error" | "is-primary" | string;
     actionIcon?: string | WorkAdventureComponent;
     emoji?: string;
+    /** A pixel icon, shown instead of the emoji on the own-avatar wheel. */
+    icon?: PixelIconName;
     testId?: string;
 };
 

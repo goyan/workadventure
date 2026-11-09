@@ -16,6 +16,11 @@ afterEach(async () => {
 
 describe("own avatar wheel", () => {
     it("puts the profile in the center and keeps actions around it", () => {
+        // jsdom has no canvas: a fake 2D context records the pixels drawn.
+        const context = { clearRect: vi.fn(), fillRect: vi.fn(), fillStyle: "" };
+        vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+            context as unknown as CanvasRenderingContext2D,
+        );
         const profile = vi.fn();
         const target = document.createElement("div");
         document.body.append(target);
@@ -30,7 +35,13 @@ describe("own avatar wheel", () => {
                         isSelf: true,
                         actions: [
                             { uuid: "profile", testId: "avatar-profile", actionName: "Profile", callback: profile },
-                            { uuid: "dance", testId: "avatar-action-dance", actionName: "Dance", callback: vi.fn() },
+                            {
+                                uuid: "dance",
+                                testId: "avatar-action-dance",
+                                actionName: "Dance",
+                                icon: "dance",
+                                callback: vi.fn(),
+                            },
                             { uuid: "coffee", testId: "avatar-action-coffee", actionName: "Coffee", callback: vi.fn() },
                         ],
                     },
@@ -40,6 +51,10 @@ describe("own avatar wheel", () => {
         const center = target.querySelector<HTMLButtonElement>('[data-testid="avatar-profile"]');
         expect(center?.classList.contains("wheel-center")).toBe(true);
         expect(target.querySelectorAll(".wheel-action")).toHaveLength(2);
+        // The wheel is drawn in pixels; actions show their pixel icon, or their emoji when they have none.
+        expect(target.querySelector("canvas.wheel-pixels")).not.toBeNull();
+        expect(context.fillRect.mock.calls.length).toBeGreaterThan(1000);
+        expect(target.querySelector('[data-testid="avatar-action-dance"] [data-testid="pixel-icon"]')).not.toBeNull();
         center?.click();
         expect(profile).toHaveBeenCalledOnce();
     });
