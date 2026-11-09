@@ -33,6 +33,11 @@ export function proxyFiles(fileSystem: FileSystemInterface) {
             }
         }
 
-        fileSystem.serveStaticFile(virtualPath, res, next);
+        fileSystem.serveStaticFile(virtualPath, res, (err?: unknown) => {
+            // Not found here: the next routes (or the final 404) must not inherit the year-long cache set above,
+            // or a browser asking for an uploaded image a moment too early keeps its 404 for a year.
+            if (err === undefined) res.set("Cache-Control", "no-store");
+            next(err);
+        });
     };
 }
