@@ -330,6 +330,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             duration: "Duração (em segundos) ⏱️",
             infinityDuration: "Duração infinita ⏱️",
         },
+        lamp: {
+            label: "Zona de luz",
+            description:
+                "Tamanho da área que esta lâmpada ilumina, em casas. Sem ajuste, ilumina a sua zona de escuta, ou 12 casas ao redor dela fora de qualquer zona. Nunca ultrapassa a sua zona de escuta.",
+            width: "Largura",
+            height: "Altura",
+        },
         openFile: {
             label: "Abrir arquivo",
             description: "Abrir arquivo dentro do WorkAdventure.",

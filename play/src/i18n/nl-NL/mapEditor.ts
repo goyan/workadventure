@@ -330,6 +330,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Oneindige duur ⏱️",
             actionButtonLabel: "Zie infobubbel",
         },
+        lamp: {
+            label: "Lichtzone",
+            description:
+                "Grootte van het gebied dat deze lamp verlicht, in tegels. Zonder instelling verlicht ze haar luisterzone, of 12 tegels eromheen buiten elke zone. Ze gaat nooit voorbij haar luisterzone.",
+            width: "Breedte",
+            height: "Hoogte",
+        },
         openFile: {
             label: "Open bestand",
             description: "Open bestand binnen WorkAdventure.",

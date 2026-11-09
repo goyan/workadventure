@@ -325,6 +325,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Duración infinita ⏱️",
             actionButtonLabel: "Ver burbuja de información",
         },
+        lamp: {
+            label: "Zona de luz",
+            description:
+                "Tamaño de la zona que ilumina esta lámpara, en casillas. Sin ajuste, ilumina su zona de escucha, o 12 casillas a su alrededor fuera de toda zona. Nunca sale de su zona de escucha.",
+            width: "Ancho",
+            height: "Alto",
+        },
         openFile: {
             label: "Abrir archivo",
             description: "Abrir archivo dentro de WorkAdventure.",

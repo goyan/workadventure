@@ -318,6 +318,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "無限持續時間 ⏱️",
             actionButtonLabel: "查看資訊氣泡",
         },
+        lamp: {
+            label: "光照區域",
+            description:
+                "此燈照亮的區域大小（以格為單位）。未設定時照亮其聆聽區域，在任何區域之外則照亮周圍 12 格。不會超出其聆聽區域。",
+            width: "寬度",
+            height: "高度",
+        },
         openFile: {
             label: "開啟檔案",
             description: "在 WorkAdventure 內開啟檔案。",

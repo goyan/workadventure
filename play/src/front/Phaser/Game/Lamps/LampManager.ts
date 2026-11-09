@@ -16,17 +16,16 @@ import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import {
-    defaultLampZone,
     jamOfSpaces,
     lampJamsOf,
+    lampLightZone,
     resolveLampJam,
-    zoneOf,
     type LampJam,
     type LampJamChoice,
     type LampZone,
 } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
-import { lampSource, planLamps } from "./LampReconcile";
+import { lampSizeOf, lampSource, planLamps } from "./LampReconcile";
 import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
@@ -190,10 +189,17 @@ export class LampManager {
         ]);
     }
 
-    /** Where the light of a lamp stays: its listening zone, or a square around it when it stands in none. */
+    /**
+     * Where the light of a lamp stays: the size set for it in the editor, within its listening zone; else that zone,
+     * or a square around it when it stands in none (see lampLightZone).
+     */
     private clipZoneOf(id: string, entity: Entity, zones: readonly LampZone[]): LampZone {
-        const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
-        return zoneOf(source, zones) ?? defaultLampZone(id, source);
+        return lampLightZone({
+            id,
+            source: lampSource(entity, entity.getPrefab().lamp?.anchor),
+            zones,
+            sizeInTiles: lampSizeOf(entity.getEntityData().properties),
+        });
     }
 
     private buildVisual(kind: LampKind, entity: Entity, zone: LampZone): LampVisual {

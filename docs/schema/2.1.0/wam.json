@@ -440,7 +440,6 @@
                     },
                     {
                       "type": "object",
-                      "description": "Deprecated: the Gobeur mini-game was removed. Kept only so that existing maps keep loading; ignored by the front.",
                       "properties": {
                         "id": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
@@ -502,6 +501,47 @@
                           "minimum": 30,
                           "maximum": 3600,
                           "default": 180
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
+                        },
+                        "buttonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/buttonLabel"
+                        },
+                        "hideButtonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/hideButtonLabel"
+                        },
+                        "resourceUrl": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/resourceUrl"
+                        },
+                        "serverData": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/serverData"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "lampPropertyData"
+                        },
+                        "width": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 60,
+                          "default": 12
+                        },
+                        "height": {
+                          "type": "integer",
+                          "minimum": 2,
+                          "maximum": 60,
+                          "default": 12
                         }
                       },
                       "required": [
@@ -1413,7 +1453,8 @@
                       "dance",
                       "coffee",
                       "sleep",
-                      "toilet"
+                      "toilet",
+                      "run"
                     ]
                   },
                   "trigger": {

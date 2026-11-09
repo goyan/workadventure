@@ -35,6 +35,7 @@
         IconLockHash,
         IconLock,
         IconHeadphones,
+        IconLamp,
     } from "@wa-icons";
 
     interface Props {
@@ -409,6 +410,19 @@
         }}
         testId="addTooltipProperty"
         img={IconTooltip}
+    />
+{/if}
+{#if property === "lampPropertyData"}
+    <AddPropertyButton
+        headerText={$LL.mapEditor.properties.lamp.label()}
+        descriptionText={$LL.mapEditor.properties.lamp.description()}
+        style={`z-index: 205;${isActive ? "background-color: #4156f6;" : ""}`}
+        testId="lampPropertyData"
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        img={IconLamp}
     />
 {/if}
 {#if property === "openFile"}

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { LAMP_LIGHT_DEFAULT_TILES } from "@workadventure/map-editor";
     import type { EntityDataProperties, EntityDataPropertiesKeys, EntityDataProperty } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { get } from "svelte/store";
@@ -23,6 +24,7 @@
     import TextArea from "../../Input/TextArea.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
     import OpenFilePropertyEditor from "../PropertyEditor/OpenFilePropertyEditor.svelte";
+    import LampPropertyEditor from "../PropertyEditor/LampPropertyEditor.svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import Button from "../../UI/Button.svelte";
@@ -253,6 +255,13 @@
                     audioLink: "",
                     volume: 1,
                     playForAllUsers: true,
+                };
+            case "lampPropertyData":
+                return {
+                    id,
+                    type,
+                    width: LAMP_LIGHT_DEFAULT_TILES,
+                    height: LAMP_LIGHT_DEFAULT_TILES,
                 };
             default:
                 throw new Error(`Unknown property type ${type}`);
@@ -486,6 +495,17 @@
                 }}
             />
         </div>
+        <!-- A lamp (its catalog entry says so) can have the size of its light set, once. -->
+        {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && !properties.some((property) => property.type === "lampPropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="lampPropertyData"
+                    onclick={() => {
+                        onAddProperty("lampPropertyData");
+                    }}
+                />
+            </div>
+        {/if}
         <div class="properties-buttons flex flex-row flex-wrap m-2">
             <AddPropertyButtonWrapper
                 property="openWebsite"
@@ -653,6 +673,14 @@
                             <OpenWebsitePropertyEditor
                                 bind:property={properties[i]}
                                 triggerOptionActivated={false}
+                                onclose={() => {
+                                    onDeleteProperty(property.id);
+                                }}
+                                onchange={() => onUpdateProperty(properties[i])}
+                            />
+                        {:else if properties[i].type === "lampPropertyData"}
+                            <LampPropertyEditor
+                                bind:property={properties[i]}
                                 onclose={() => {
                                     onDeleteProperty(property.id);
                                 }}

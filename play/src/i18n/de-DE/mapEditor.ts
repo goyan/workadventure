@@ -323,6 +323,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Unbegrenzte Dauer ⏱️",
             actionButtonLabel: "Infobubble ansehen",
         },
+        lamp: {
+            label: "Lichtzone",
+            description:
+                "Größe des Bereichs, den diese Lampe ausleuchtet, in Feldern. Ohne Einstellung leuchtet sie ihre Hörzone aus, oder 12 Felder um sich herum außerhalb jeder Zone. Sie verlässt nie ihre Hörzone.",
+            width: "Breite",
+            height: "Höhe",
+        },
         openFile: {
             label: "Datei öffnen",
             description: "Datei in WorkAdventure öffnen.",

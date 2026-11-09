@@ -1,3 +1,4 @@
+import type { EntityDataProperties } from "@workadventure/map-editor";
 import type { LampKind } from "./LampVisuals";
 
 /** What the objects of the map say about lamps: their id, and the kind of lamp their catalog entry asks for (if any). */
@@ -65,4 +66,14 @@ export function lampSource(object: LampBounds, anchor: { x: number; y: number } 
     const scaleX = object.width > 0 ? object.displayWidth / object.width : 1;
     const scaleY = object.height > 0 ? object.displayHeight / object.height : 1;
     return { x: object.x + anchor.x * scaleX, y: object.y + anchor.y * scaleY };
+}
+
+/** The size of the light set for a lamp in the editor, in tiles, if one was. */
+export function lampSizeOf(properties: EntityDataProperties): { width: number; height: number } | undefined {
+    for (const property of properties) {
+        if (property.type === "lampPropertyData") {
+            return { width: property.width, height: property.height };
+        }
+    }
+    return undefined;
 }
