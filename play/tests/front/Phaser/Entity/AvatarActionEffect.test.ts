@@ -64,12 +64,14 @@ describe("avatar action lifecycle", () => {
 
     it("runs in place: steps through the walking frames of its direction, faster than a dance, with a small bounce", () => {
         const { effect, sprite } = setup();
+        const anims = mock<Phaser.Animations.AnimationState>();
+        sprite.anims = anims;
         const frames = [0, 90, 180, 270].map((time) => {
             effect.update(AvatarAction.Run, time, [sprite], false, PositionMessage_Direction.RIGHT);
             return sprite.setFrame.mock.calls.at(-1)?.[0];
         });
         expect(frames).toEqual([6, 7, 8, 7]);
-        expect(sprite.anims.stop.mock.calls.length).toBeGreaterThan(0);
+        expect(anims.stop.mock.calls.length).toBeGreaterThan(0);
         expect(sprite.setAngle.mock.calls.at(-1)).toEqual([0]);
         effect.update(AvatarAction.Run, 90, [sprite], false, PositionMessage_Direction.RIGHT);
         expect(sprite.setPosition.mock.calls.at(-1)).toEqual([0, -1]);
