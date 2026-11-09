@@ -32,6 +32,7 @@ const menu: BaseTranslation = {
             environment: "Volume do ambiente (clima, portas e áudio do mapa)",
         },
         weatherEffects: "Mostrar efeitos do clima (chuva, neve e luz da tempestade)",
+        lampDemo: "Mostrar as lâmpadas de demonstração perto do meu avatar",
         night: {
             label: "Ciclo dia/noite",
             server: "Hora do servidor",

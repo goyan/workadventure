@@ -33,6 +33,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "Volum de l’ambient (temps, portes i àudio del mapa)",
         },
         weatherEffects: "Mostra els efectes del temps",
+        lampDemo: "Mostra les llums de demostració prop del meu avatar",
         night: {
             label: "Cicle dia/nit",
             server: "Hora del servidor",

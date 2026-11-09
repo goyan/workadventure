@@ -33,6 +33,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "Głośnosć wokolnosći (wjedro, źurja a zwuk kórty)",
         },
         weatherEffects: "Wjedrowe efekty pokazaś",
+        lampDemo: "Demo-lampy pśi mójom avatarje pokazaś",
         night: {
             label: "Cyklus dnja a nocy",
             server: "Cas serwera",

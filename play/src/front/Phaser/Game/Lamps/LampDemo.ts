@@ -15,3 +15,11 @@ export function parseLampDemo(search: string): { bpm: number } | undefined {
     const bpm = Number(value);
     return { bpm: value !== "" && Number.isFinite(bpm) && bpm >= MIN_BPM && bpm <= MAX_BPM ? bpm : DEFAULT_BPM };
 }
+
+/** The demo to show: the tempo of the address when it has one, else the setting of the user (120 BPM), else none. */
+export function resolveLampDemo(
+    fromAddress: { bpm: number } | undefined,
+    enabled: boolean,
+): { bpm: number } | undefined {
+    return fromAddress ?? (enabled ? { bpm: DEFAULT_BPM } : undefined);
+}

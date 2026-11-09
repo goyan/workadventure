@@ -33,6 +33,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             environment: "환경음 볼륨 (날씨, 문, 지도 오디오)",
         },
         weatherEffects: "날씨 효과 표시 (비, 눈, 뇌우 빛)",
+        lampDemo: "내 아바타 근처에 데모 조명 표시",
         night: {
             label: "낮과 밤 주기",
             server: "서버 시간",
