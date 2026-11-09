@@ -123,8 +123,46 @@ export interface DesktopAppearance {
     font: UiFont;
 }
 
+/** Spotify's analysis at the local playback position, without transmitting audio. */
+export interface DesktopSpotifyMusicFrame {
+    uri: string;
+    beatStartMs: number;
+    intensity: number;
+    attack?: number;
+    brightness?: number;
+    barStartMs?: number;
+}
+
+export enum SpotifyPlaybackCommand {
+    Play = "play",
+    Pause = "pause",
+    Next = "next",
+    Previous = "previous",
+    Seek = "seek",
+    Volume = "volume",
+    Mute = "mute",
+    Shuffle = "shuffle",
+    Repeat = "repeat",
+}
+
+export interface SpotifyPlaybackRequest {
+    command: SpotifyPlaybackCommand;
+    value?: number;
+}
+
+export interface SpotifyPlaybackState {
+    track: { uri: string; title: string; artist: string; artworkUrl: string } | null;
+    playing: boolean;
+    positionMs: number;
+    durationMs: number;
+    volume: number;
+    shuffle: boolean;
+    repeat: 0 | 1 | 2;
+}
+
 export type WorkAdventureDesktopApi = {
     desktop: boolean;
+    watchSpotifyMusic?: (callback: (frame: DesktopSpotifyMusicFrame | null) => void) => () => void;
     /** Optional: direct controls in the desktop toolbar; existing web settings keep their places. */
     onEnvironmentRequest?: (callback: (request: DesktopEnvironmentRequest) => void) => void;
     reportEnvironment?: (state: DesktopEnvironmentState | null) => void;
@@ -164,6 +202,9 @@ export type WorkAdventureDesktopApi = {
     watchSpotifyQueue?: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => () => void;
     /** Re-read the host's playing context and queue when the Jukebox's file is opened. */
     refreshSpotifyQueue?: () => void;
+    /** Optional: controls the local Spotify player for the Jukebox creator. */
+    controlSpotifyPlayback?: (request: SpotifyPlaybackRequest) => void;
+    watchSpotifyPlayback?: (callback: (state: SpotifyPlaybackState | null) => void) => () => void;
     /** Optional: as a Jukebox's host, removes a track from the queue of this computer's Spotify. */
     dequeueOnSpotify?: (track: Pick<JukeboxTrack, "uri" | "uid">) => void;
     /** Optional: as a Jukebox's host, moves a queued track just before or just after another one. */

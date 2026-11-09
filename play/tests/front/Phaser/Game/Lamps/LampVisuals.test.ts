@@ -21,7 +21,7 @@ class FakeImage {
     setOrigin(): this {
         return this;
     }
-    setDisplaySize(): this {
+    setDisplaySize(_width?: number, _height?: number): this {
         return this;
     }
     setBlendMode(): this {
@@ -34,6 +34,9 @@ class FakeImage {
         return this;
     }
     setRotation(): this {
+        return this;
+    }
+    setFrame(_frame?: number): this {
         return this;
     }
     setAlpha(alpha: number): this {
@@ -121,6 +124,47 @@ describe("createLamp", () => {
             });
         });
     }
+
+    it("keeps the halo of a lamp inside its zone, so that the clip never cuts it into a square", () => {
+        const sizes: number[][] = [];
+        const { placement } = setup(true);
+        const scene = placement.scene as unknown as { add: { image: ReturnType<typeof vi.fn> } };
+        scene.add.image.mockImplementation((x: number, y: number, texture: string) => {
+            const image = new FakeImage(x, y, texture);
+            image.setDisplaySize = (width: number, height: number) => {
+                sizes.push([width, height]);
+                return image;
+            };
+            return image;
+        });
+        // The lamp stands 40 px from the left wall of a 3-tile zone.
+        createLamp("strobe", { ...placement, bounds: { x: 80, y: 40, width: 96, height: 96 } });
+        expect(sizes.at(-1)).toEqual([80, 80]);
+    });
+
+    it("turns the mirror ball with the music and stands still when motion is reduced", () => {
+        const framesShown = (reducedMotion: boolean): Set<number> => {
+            const { placement, images } = setup(true);
+            const lamp = createLamp("disco", { ...placement, reducedMotion: () => reducedMotion });
+            const ball = images.find((image) => image.texture === "lamp-mirror-ball");
+            const shown = new Set<number>();
+            if (ball) ball.setFrame = (frame: number) => (shown.add(frame), ball);
+            for (let now = 0; now <= 4000; now += 100) lamp.update({ ...FRAME, beat: false }, now);
+            return shown;
+        };
+        expect(framesShown(false).size).toBeGreaterThan(5);
+        expect([...framesShown(true)]).toEqual([0]);
+    });
+
+    it("keeps the mirror ball on the map when its light goes out", () => {
+        const { placement, images } = setup(true);
+        const lamp = createLamp("disco", placement);
+        lamp.update(FRAME, 0);
+        lamp.setVisible(false);
+        const ball = images.find((image) => image.texture === "lamp-mirror-ball");
+        expect(ball?.visible).toBe(true);
+        expect(images.filter((image) => image.visible)).toEqual([ball]);
+    });
 
     it("draws the body of a demo lamp and leaves it to the object for a lamp of the map", () => {
         const demo = setup(false, true);

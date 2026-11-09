@@ -1,6 +1,8 @@
-import type { AreaData } from "@workadventure/map-editor";
+import { isHomeJam, type AreaData } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
+import { joinedJamStore, type JoinedJam } from "../../../ListeningZone/ListeningZoneStore";
+import { spotifyTrackUri } from "../../../../common/SpotifyListening";
 import { jamAudioSession } from "../../../ListeningZone/GameJamAudioSession";
 import { jamMusicCapture, type SharedJamMusic } from "../../../ListeningZone/JamMusicCapture";
 import { jamMusicStreamsStore } from "../../../ListeningZone/JamMusicStore";
@@ -11,11 +13,14 @@ import {
 } from "../../../ListeningZone/ListeningZoneController";
 import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirectory";
 import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
+import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { lightableAreas } from "../Night/NightLights";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import type { GameScene } from "../GameScene";
+import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
 import {
     jamOfSpaces,
     lampJamsOf,
@@ -25,6 +30,7 @@ import {
     type LampJam,
     type LampJamChoice,
     type LampZone,
+    zoneOf,
 } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
 import { lampSizeOf, lampSource, planLamps } from "./LampReconcile";
@@ -33,9 +39,19 @@ import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
 import { StreamSpectrum } from "./StreamSpectrum";
-import { LampZoneLights } from "./LampZoneLights";
+import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
 import { syntheticSpectrum } from "./SyntheticBeat";
-import { createLamp, type LampKind, type LampVisual } from "./LampVisuals";
+import { createLamp, PALETTE, type LampKind, type LampVisual } from "./LampVisuals";
+
+/** What the lamps of one room do at this image: the room is lit and coloured from it. */
+interface RoomBeat {
+    zone: LampZone;
+    darkness: number;
+    beat: boolean;
+    bar: boolean;
+    bass: number;
+    level: number;
+}
 
 /** Above the night veil: lamps glow at night, and are a light touch by day. */
 const LAMP_DEPTH = DEPTH_NIGHT_INDEX + 100;
@@ -59,9 +75,13 @@ interface PlacedLamp {
     jam: LampJamChoice | undefined;
     /** What its light is kept in: its listening zone, or a square of its own when it stands in none. */
     zoneId: string;
+    /** The listening zone (room) it stands in: the room put out while it plays. */
+    room: LampZone | undefined;
     /** How bright it is, from 0 to 1: it rises quickly and dies away slowly (see nextBrightness). */
     brightness: number;
     lastUpdateAt: number | undefined;
+    /** A mirror ball draws its own turning body: the object's flat sprite is hidden under it (not in the editor). */
+    bodyHidden: boolean;
 }
 
 /** The music of a Jam being read: the stream it comes from, and what listens to it. */
@@ -90,7 +110,12 @@ export class LampManager {
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribers: Unsubscriber[] = [];
     private editorOpen = false;
+    private effectsEnabled = true;
     private lastReconcileAt: number | undefined;
+    /** The colour washing over each room on the beat, by area. */
+    private readonly roomWash = new Map<string, { colourIndex: number; pulse: number; lastAt: number }>();
+    /** The rooms last put out, by area id: the night veil is told only when that list changes. */
+    private partyKey = "";
 
     // What everyone shares, as last seen.
     private rooms: readonly JamRoom[] = [];
@@ -99,27 +124,61 @@ export class LampManager {
     private listeningSpace: string | undefined;
     private receivedStreams: ReadonlyMap<string, MediaStream> = new Map();
     private sharedMusic: SharedJamMusic | undefined;
+    private joined: JoinedJam | undefined;
+    private readonly spotifyMusic = new SpotifyMusicSignal();
+    private stopSpotifyMusic: (() => void) | undefined;
+
+    private watchJukeboxMusic(): void {
+        const joined = this.joined;
+        const home =
+            joined !== undefined &&
+            this.rooms.some(
+                (room) =>
+                    isHomeJam(room.jam) && room.zone.areaId === joined.areaId && room.jam.hostUuid === joined.hostUuid,
+            );
+        if (home && !this.stopSpotifyMusic) {
+            this.stopSpotifyMusic = window.WAD?.watchSpotifyMusic?.((frame) =>
+                this.spotifyMusic.set(frame, performance.now()),
+            );
+        } else if (!home && this.stopSpotifyMusic) {
+            this.stopSpotifyMusic();
+            this.stopSpotifyMusic = undefined;
+            this.spotifyMusic.set(null, performance.now());
+        }
+    }
 
     constructor(
         private readonly scene: GameScene,
         options: { demo?: { bpm: number } } = {},
     ) {
         ensureLampTextures(scene);
-        this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH);
+        // The room is darkened over its floor (and rugs), under the players and the furniture standing on it.
+        this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, FLOOR_OBJECT_DEPTH + 0.5);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-        this.unsubscribers.push(
+        this.unsubscribers = [
+            lampEffectsEnabledStore.subscribe((enabled) => {
+                this.effectsEnabled = enabled;
+                this.scene.markDirty();
+            }),
             mapEditorModeStore.subscribe((open) => {
                 this.editorOpen = open;
             }),
             // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
             lampDemoEnabledStore.subscribe((enabled) => this.setDemo(resolveLampDemo(options.demo, enabled))),
-            allJamRoomsStore.subscribe((rooms) => (this.rooms = rooms)),
+            allJamRoomsStore.subscribe((rooms) => {
+                this.rooms = rooms;
+                this.watchJukeboxMusic();
+            }),
+            joinedJamStore.subscribe((joined) => {
+                this.joined = joined;
+                this.watchJukeboxMusic();
+            }),
             listeningByUserUuidStore.subscribe((listening) => (this.listeningByUuid = listening)),
             jamParticipantsCountStore.subscribe((counts) => (this.participants = counts)),
             jamAudioSession.listeningSpaceName.subscribe((space) => (this.listeningSpace = space)),
             jamMusicStreamsStore.subscribe((streams) => (this.receivedStreams = streams)),
             jamMusicCapture.sharedMusic.subscribe((shared) => (this.sharedMusic = shared)),
-        );
+        ];
     }
 
     private reducedMotion = (): boolean => this.systemReducedMotion || this.editorOpen;
@@ -188,6 +247,16 @@ export class LampManager {
 
     /** The Jam the user hears, as a choice: the one they listen to, or, for a host, the one whose music they share. */
     private listenedJam(): LampJamChoice | undefined {
+        const joined = this.joined;
+        if (
+            joined &&
+            this.rooms.some(
+                (room) =>
+                    isHomeJam(room.jam) && room.zone.areaId === joined.areaId && room.jam.hostUuid === joined.hostUuid,
+            )
+        ) {
+            return { areaId: joined.areaId, hostUuid: joined.hostUuid };
+        }
         const rooms = this.rooms.map((room) => ({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid }));
         return jamOfSpaces(rooms, (choice) => this.spaceNameOf(choice), [
             this.listeningSpace,
@@ -218,6 +287,7 @@ export class LampManager {
             reducedMotion: this.reducedMotion,
             drawsBody: false,
             container: this.zoneLights.containerFor(zone),
+            bounds: zone,
         });
     }
 
@@ -230,7 +300,11 @@ export class LampManager {
         const objects = [...entities.entries()].map(([id, entity]) => ({ id, kind: entity.getPrefab().lamp?.kind }));
         const plan = planLamps(lit, objects);
         for (const id of plan.remove) {
-            this.placed.get(id)?.visual.destroy();
+            const lamp = this.placed.get(id);
+            if (lamp) {
+                showBody(lamp);
+                lamp.visual.destroy();
+            }
             this.placed.delete(id);
         }
         if (this.placed.size === 0 && plan.create.length === 0) {
@@ -251,9 +325,11 @@ export class LampManager {
                 visual: this.buildVisual(kind, entity, zone),
                 entity,
                 jam: undefined,
+                room: undefined,
                 zoneId: zone.areaId,
                 brightness: 0,
                 lastUpdateAt: undefined,
+                bodyHidden: false,
             });
         }
 
@@ -276,7 +352,11 @@ export class LampManager {
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
-            lamp.jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
+            const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
+            // The host turned the effects of their room off: off for everyone, the room keeps its own light.
+            lamp.jam = jam && !this.lightsOffIn(jam) ? jam : undefined;
+            // The room put out while it plays: the smallest area it stands in, as for its light.
+            lamp.room = zoneOf(source, areaZones);
         }
     }
 
@@ -295,7 +375,17 @@ export class LampManager {
             return cached;
         }
         const stream = this.streamOf(spaceName);
-        let frame = IDLE_FRAME;
+        const jukebox = this.rooms.find(
+            (room) =>
+                isHomeJam(room.jam) &&
+                this.spaceNameOf({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid }) === spaceName,
+        );
+        let frame = jukebox
+            ? this.spotifyMusic.read(
+                  spotifyTrackUri(this.listeningByUuid.get(jukebox.jam.hostUuid)?.trackUrl ?? ""),
+                  performance.now(),
+              )
+            : IDLE_FRAME;
         if (stream) {
             let read = this.music.get(spaceName);
             if (read?.stream !== stream) {
@@ -334,17 +424,40 @@ export class LampManager {
             this.dropUnusedMusic();
         }
         if (this.placed.size === 0 && this.demoLamps.length === 0) {
+            this.zoneLights.setAmbience([]);
+            this.setPartyRooms([]);
+            return;
+        }
+        if (!this.effectsEnabled) {
+            this.zoneLights.setAmbience([]);
+            this.setPartyRooms([]);
+            for (const lamp of this.demoLamps) {
+                lamp.setVisible(false);
+            }
+            for (const placed of this.placed.values()) {
+                placed.visual.setVisible(false);
+                placed.brightness = 0;
+                placed.lastUpdateAt = now;
+            }
             return;
         }
         this.frames.clear();
         const demoFrame = this.demoSignal?.read(now);
         let anyLit = false;
+        const rooms = new Map<string, RoomBeat>();
         for (const lamp of this.demoLamps) {
             lamp.setVisible(true);
             lamp.update(demoFrame ?? IDLE_FRAME, now);
             anyLit = true;
         }
         for (const placed of this.placed.values()) {
+            if (placed.kind === "disco" && placed.bodyHidden === this.editorOpen) {
+                if (this.editorOpen) showBody(placed);
+                else {
+                    placed.entity.setAlpha(0);
+                    placed.bodyHidden = true;
+                }
+            }
             const space = placed.jam && this.spaceNameOf(placed.jam);
             // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
             const lit = this.editorOpen || demoFrame !== undefined || space !== undefined;
@@ -368,14 +481,79 @@ export class LampManager {
             placed.visual.moveTo(source.x, source.y);
             placed.visual.setBrightness(placed.brightness);
             placed.visual.update(frame, now);
+            // A room whose lamps play is put out: only the lights, in time with the music, are left (not while editing).
+            if (placed.room && !this.editorOpen) {
+                const room = rooms.get(placed.room.areaId);
+                rooms.set(placed.room.areaId, {
+                    zone: placed.room,
+                    darkness: Math.max(room?.darkness ?? 0, placed.brightness),
+                    beat: (room?.beat ?? false) || frame.beat,
+                    bar: (room?.bar ?? false) || frame.bar === true,
+                    bass: Math.max(room?.bass ?? 0, frame.bass),
+                    level: Math.max(room?.level ?? 0, frame.mid, frame.treble),
+                });
+            }
         }
+        this.zoneLights.setAmbience(this.ambienceOf(rooms, now));
         if (anyLit) {
             // The scene is only drawn when something changed: lamps change at every image.
             this.scene.markDirty();
         }
     }
 
+    /** The darkness of each playing room, and the colour that floods it on each beat then fades. */
+    private ambienceOf(rooms: ReadonlyMap<string, RoomBeat>, now: number): RoomAmbience[] {
+        this.setPartyRooms([...rooms.values()].map(({ zone }) => zone));
+        for (const areaId of this.roomWash.keys()) {
+            if (!rooms.has(areaId)) this.roomWash.delete(areaId);
+        }
+        return [...rooms.entries()].map(([areaId, room]) => {
+            const previous = this.roomWash.get(areaId);
+            const delta = previous ? Math.min(100, now - previous.lastAt) : 0;
+            // Each beat moves to the next colour; a new bar jumps across the palette, a change of scene.
+            const step = room.bar ? 3 : room.beat ? 1 : 0;
+            const wash = {
+                colourIndex: ((previous?.colourIndex ?? -1) + Math.max(step, previous ? 0 : 1)) % PALETTE.length,
+                pulse: room.beat ? 1 : (previous?.pulse ?? 0) * Math.exp(-delta / 260),
+                lastAt: now,
+            };
+            this.roomWash.set(areaId, wash);
+            const flashes = !this.reducedMotion();
+            return {
+                zone: room.zone,
+                darkness: room.darkness,
+                wash: {
+                    colour: PALETTE[wash.colourIndex],
+                    // The room floods with colour on each bass punch, and stays faintly tinted in between.
+                    alpha:
+                        room.darkness *
+                        Math.min(0.45, 0.04 + 0.06 * room.level + (flashes ? 0.12 * wash.pulse + 0.3 * room.bass : 0)),
+                },
+            };
+        });
+    }
+
+    private lightsOffIn(choice: LampJamChoice): boolean {
+        return this.rooms.some(
+            (room) =>
+                room.zone.areaId === choice.areaId &&
+                room.jam.hostUuid === choice.hostUuid &&
+                room.jam.lightsOff === true,
+        );
+    }
+
+    private setPartyRooms(rooms: readonly LampZone[]): void {
+        const key = rooms.map((room) => room.areaId).join(",");
+        if (key === this.partyKey) {
+            return;
+        }
+        this.partyKey = key;
+        partyRoomsStore.set(rooms);
+    }
+
     public destroy(): void {
+        this.setPartyRooms([]);
+        this.stopSpotifyMusic?.();
         for (const unsubscribe of this.unsubscribers) {
             unsubscribe();
         }
@@ -384,8 +562,9 @@ export class LampManager {
             lamp.destroy();
         }
         this.demoLamps.length = 0;
-        for (const { visual } of this.placed.values()) {
-            visual.destroy();
+        for (const lamp of this.placed.values()) {
+            showBody(lamp);
+            lamp.visual.destroy();
         }
         this.placed.clear();
         this.zoneLights.destroy();
@@ -393,5 +572,12 @@ export class LampManager {
             read.spectrum.destroy();
         }
         this.music.clear();
+    }
+}
+
+function showBody(lamp: PlacedLamp): void {
+    if (lamp.bodyHidden) {
+        lamp.entity.setAlpha(1);
+        lamp.bodyHidden = false;
     }
 }

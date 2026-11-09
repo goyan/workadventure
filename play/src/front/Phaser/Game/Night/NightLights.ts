@@ -29,6 +29,16 @@ function isInArea(player: { x: number; y: number }, area: NightRect): boolean {
     return MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area);
 }
 
+/** Whether two rectangles overlap over at least half of the smaller one: the area is (mostly) that room. */
+export function coversMostly(area: NightRect, room: NightRect): boolean {
+    const width = Math.min(area.x + area.width, room.x + room.width) - Math.max(area.x, room.x);
+    const height = Math.min(area.y + area.height, room.y + room.height) - Math.max(area.y, room.y);
+    if (width <= 0 || height <= 0) {
+        return false;
+    }
+    return width * height >= 0.5 * Math.min(area.width * area.height, room.width * room.height);
+}
+
 /** Whether a player (raw sprite position) stands in one of these areas, by its feet. */
 export function isInLightableArea(player: { x: number; y: number }, areas: readonly NightRect[]): boolean {
     return areas.some((area) => isInArea(player, area));
@@ -47,7 +57,13 @@ export class NightLights {
      * Updates which areas are occupied at `now` and returns the areas with a non-zero intensity.
      * `players` are raw sprite positions; the feet offset of the areas (AREA_POSITION_OFFSET_Y) is applied here.
      */
-    public update(now: number, areas: readonly AreaData[], players: readonly { x: number; y: number }[]): LitArea[] {
+    public update(
+        now: number,
+        areas: readonly AreaData[],
+        players: readonly { x: number; y: number }[],
+        /** An area whose light is put out (a party in it): it fades to dark, occupied or not. */
+        putOut: (area: NightRect) => boolean = () => false,
+    ): LitArea[] {
         const dt = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
         const step = dt / NIGHT_FADE_MS;
@@ -56,7 +72,7 @@ export class NightLights {
         const present = new Set<string>();
         for (const area of areas) {
             present.add(area.id);
-            const occupied = players.some((player) => isInArea(player, area));
+            const occupied = !putOut(area) && players.some((player) => isInArea(player, area));
             let state = this.states.get(area.id);
             if (state === undefined) {
                 if (!occupied) {

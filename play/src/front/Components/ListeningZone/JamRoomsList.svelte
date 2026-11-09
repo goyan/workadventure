@@ -12,18 +12,22 @@
         leaveJam,
         localPlayerName,
         stopSharingJam,
+        updateOwnRoom,
         type JamRoom,
     } from "../../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { playersStore } from "../../Stores/PlayersStore";
+    import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
     import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
     import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
     import { requestedMicrophoneDeviceIdStore } from "../../Stores/MediaStore";
     import Button from "../UI/Button.svelte";
     import JamAudioControls from "./JamAudioControls.svelte";
+    import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
+    import LightEffectsToggle from "./LightEffectsToggle.svelte";
     import JukeboxQueue from "./JukeboxQueue.svelte";
 
     // A home Jam plays on the Spotify app of this computer, through the desktop app and the Spicetify extension.
@@ -87,6 +91,34 @@
                           ? $LL.spotify.listeningZone.homeJamOf({ name: hostName })
                           : $LL.spotify.listeningZone.jamOf({ name: hostName }))}
             </p>
+            <div class="ml-auto shrink-0">
+                {#if mine}
+                    <LightEffectsToggle
+                        on={room.jam.lightsOff !== true}
+                        label={room.jam.lightsOff
+                            ? $LL.spotify.listeningZone.lightsEnableForAll()
+                            : $LL.spotify.listeningZone.lightsDisableForAll()}
+                        onclick={() => updateOwnRoom({ lightsOff: room.jam.lightsOff !== true })}
+                        testid="jam-lights-toggle-all"
+                    />
+                {:else if room.jam.lightsOff && (joined || following)}
+                    <LightEffectsToggle
+                        on={false}
+                        disabled
+                        label={$LL.spotify.listeningZone.lightsOffByHost()}
+                        testid="jam-lights-off-by-host"
+                    />
+                {:else if joined || following}
+                    <LightEffectsToggle
+                        on={$lampEffectsEnabledStore}
+                        label={$lampEffectsEnabledStore
+                            ? $LL.spotify.listeningZone.lightsDisable()
+                            : $LL.spotify.listeningZone.lightsEnable()}
+                        onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
+                        testid="jam-lights-toggle"
+                    />
+                {/if}
+            </div>
         </div>
         {#if jam.title}
             <p class="m-0 truncate text-xs text-white/60">{$LL.spotify.listeningZone.hostedBy({ name: hostName })}</p>
@@ -101,6 +133,9 @@
                 : ""}
         </p>
         {#if home}
+            {#if mine}
+                <JukeboxPlaybackControls {room} available={canHomeJam} />
+            {/if}
             <button
                 type="button"
                 class="self-start rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80 hover:bg-white/20"

@@ -1,17 +1,23 @@
 import type { SpotifyListening } from "@workadventure/messages";
+import { listeningZoneJamKey } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { get } from "svelte/store";
 import type { JamRoom } from "../../../../src/front/ListeningZone/ListeningZoneController";
+import { SpotifyPlaybackCommand } from "../../../../src/front/Interfaces/DesktopAppInterfaces";
+import type { SpotifyPlaybackState } from "../../../../src/front/Interfaces/DesktopAppInterfaces";
 import { EMPTY_SPOTIFY_LISTENING } from "../../../../src/common/SpotifyListening";
 import { followedUserUuidStore, listenAlongAvailableStore } from "../../../../src/front/Spotify/ListeningFollower";
 import { joinedJamStore } from "../../../../src/front/ListeningZone/ListeningZoneStore";
+import { lampEffectsEnabledStore } from "../../../../src/front/Stores/LampEffectsStore";
 import JamRoomsList from "../../../../src/front/Components/ListeningZone/JamRoomsList.svelte";
 
 const mocks = vi.hoisted(() => ({
     setRooms: vi.fn<(rooms: JamRoom[]) => void>(),
     setListening: vi.fn<(listening: Map<string, SpotifyListening>) => void>(),
     join: vi.fn(),
+    playback: vi.fn(),
+    update: vi.fn(),
     local: false,
 }));
 vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () => {
@@ -27,6 +33,7 @@ vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () 
         leaveJam: mocks.join,
         stopSharingJam: mocks.join,
         localPlayerName: () => "Me",
+        updateOwnRoom: mocks.update,
     };
 });
 vi.mock("../../../../src/front/Spotify/SpotifyListeningDirectory", async () => {
@@ -52,6 +59,7 @@ vi.mock("../../../../src/front/Components/ListeningZone/JamAudioControls.svelte"
     default: (await import("../JamRoomsListStub.svelte")).default,
 }));
 vi.mock("../../../../src/front/Spotify/HomeJam", async () => ({
+    controlJukeboxPlayback: mocks.playback,
     jukeboxQueuesStore: (await import("svelte/store")).writable(new Map()),
 }));
 vi.mock("../../../../src/front/Components/ListeningZone/JukeboxQueue.svelte", async () => ({
@@ -75,6 +83,28 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                 stop: () => "Stop sharing",
                 stopHome: () => "Stop sharing",
                 queue: () => "Queue",
+                playbackPlay: () => "Play",
+                playbackPause: () => "Pause",
+                playbackNext: () => "Next track",
+                playbackPrevious: () => "Previous track",
+                playbackShuffle: () => "Shuffle",
+                playbackRepeatOff: () => "Repeat off",
+                playbackRepeatAll: () => "Repeat all",
+                playbackRepeatOne: () => "Repeat one",
+                playbackSeek: () => "Position",
+                lightsDisable: () => "Turn off lights for me",
+                lightsEnable: () => "Turn on lights for me",
+                lightsDisableForAll: () => "Turn off lights for everyone",
+                lightsEnableForAll: () => "Turn lights back on for everyone",
+                lightsOffByHost: () => "Lights off by the host",
+                playbackEmpty: () => "No track",
+                playbackDisconnected: () => "Connecting to Spotify",
+                audioMute: () => "Mute",
+                audioUnmute: () => "Unmute",
+                audioVolume: () => "Volume",
+                homeJamOf: () => "Jukebox of Host",
+                homeSilentNote: () => "Disconnected",
+                joinHomeSilent: () => "Join silently",
                 joinHome: () => "Join Jukebox",
             },
         },
@@ -92,7 +122,9 @@ function render(): void {
     });
 }
 beforeEach(() => {
+    lampEffectsEnabledStore.set(true);
     mocks.join.mockClear();
+    mocks.playback.mockClear();
     joinedJamStore.set(undefined);
     mocks.local = false;
     mocks.setRooms([room]);
@@ -111,6 +143,44 @@ beforeEach(() => {
     );
     followedUserUuidStore.set(undefined);
     listenAlongAvailableStore.set(false);
+});
+describe("personal light switch", () => {
+    it("lets a listener toggle lights without changing the Jam or Spotify playback", () => {
+        joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
+        if (!button) throw new Error("Missing light switch");
+        flushSync(() => button.click());
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+        expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
+        flushSync(() => button.click());
+        expect(get(lampEffectsEnabledStore)).toBe(true);
+        expect(mocks.join).not.toHaveBeenCalled();
+        expect(mocks.playback).not.toHaveBeenCalled();
+    });
+
+    it("lets the host turn the lights of their room off for everyone, next to its title", () => {
+        mocks.local = true;
+        mocks.update.mockClear();
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle-all"]');
+        if (!button) throw new Error("Missing host light switch");
+        expect(button.getAttribute("aria-label")).toBe("Turn off lights for everyone");
+        flushSync(() => button.click());
+        expect(mocks.update).toHaveBeenCalledWith({ lightsOff: true });
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
+    });
+
+    it("shows a guest that the host turned the lights off, without a switch of their own", () => {
+        mocks.setRooms([{ ...room, jam: { ...room.jam, lightsOff: true } }]);
+        joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
+        render();
+        const off = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-off-by-host"]');
+        expect(off?.disabled).toBe(true);
+        expect(off?.getAttribute("aria-label")).toBe("Lights off by the host");
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
+    });
 });
 afterEach(async () => {
     const mounted = component;
@@ -149,6 +219,126 @@ describe("classic Jam listening via extension", () => {
         mocks.local = true;
         render();
         expect(target.querySelector('[data-testid="listening-zone-listen-via-extension"]')).toBeNull();
+    });
+});
+
+describe("Jukebox playback controls", () => {
+    const homeRoom: JamRoom = { ...room, jam: { home: true, hostUuid: "host", hostName: "Host" } };
+    let reportPlayback: ((state: SpotifyPlaybackState | null) => void) | undefined;
+    const playback: SpotifyPlaybackState = {
+        track: { uri: "spotify:track:abc", title: "Song", artist: "Artist", artworkUrl: "" },
+        playing: false,
+        positionMs: 5000,
+        durationMs: 120000,
+        volume: 0.5,
+        shuffle: false,
+        repeat: 0,
+    };
+    beforeEach(() => {
+        mocks.setRooms([homeRoom]);
+        vi.stubGlobal("WAD", {
+            controlSpotifyPlayback: vi.fn(),
+            watchSpotifyPlayback: (callback: (state: SpotifyPlaybackState | null) => void) => {
+                reportPlayback = callback;
+                callback(playback);
+                return () => {
+                    reportPlayback = undefined;
+                };
+            },
+        });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+    it("shows play, pause and next only for the creator and routes each command", () => {
+        mocks.local = true;
+        listenAlongAvailableStore.set(true);
+        render();
+        for (const command of [
+            SpotifyPlaybackCommand.Play,
+            SpotifyPlaybackCommand.Pause,
+            SpotifyPlaybackCommand.Previous,
+            SpotifyPlaybackCommand.Next,
+            SpotifyPlaybackCommand.Shuffle,
+            SpotifyPlaybackCommand.Repeat,
+        ]) {
+            reportPlayback?.({ ...playback, playing: command === SpotifyPlaybackCommand.Pause });
+            flushSync();
+            const button = target.querySelector<HTMLButtonElement>(`[data-testid="jukebox-${command}"]`);
+            expect(button?.disabled).toBe(false);
+            button?.click();
+            expect(mocks.playback).toHaveBeenLastCalledWith(homeRoom, { command });
+        }
+    });
+    it("hides the controls for guests", () => {
+        listenAlongAvailableStore.set(true);
+        render();
+        expect(target.querySelector('[data-testid="jukebox-play"]')).toBeNull();
+        expect(target.querySelector('[data-testid="jukebox-pause"]')).toBeNull();
+        expect(target.querySelector('[data-testid="jukebox-next"]')).toBeNull();
+    });
+    it("renders Spotify metadata, seeks and adjusts volume, then cleans up its subscription", async () => {
+        mocks.local = true;
+        listenAlongAvailableStore.set(true);
+        render();
+        expect(target.textContent).toContain("Song");
+        expect(target.textContent).toContain("Artist");
+        for (const [id, value, command] of [
+            ["jukebox-seek", "30000", SpotifyPlaybackCommand.Seek],
+            ["jukebox-volume", "0.3", SpotifyPlaybackCommand.Volume],
+        ] as const) {
+            const input = target.querySelector<HTMLInputElement>(`[data-testid="${id}"]`);
+            if (!input) throw new Error("Missing player slider");
+            input.value = value;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+            expect(mocks.playback).toHaveBeenLastCalledWith(homeRoom, { command, value: Number(value) });
+        }
+        const mounted = component;
+        component = undefined;
+        if (mounted) await unmount(mounted);
+        expect(reportPlayback).toBeUndefined();
+    });
+    it("waits for a fresh playback snapshot after disconnect instead of sending commands from stale state", () => {
+        mocks.local = true;
+        listenAlongAvailableStore.set(true);
+        render();
+        reportPlayback?.(null);
+        flushSync();
+        expect(target.querySelector<HTMLButtonElement>('[data-testid="jukebox-play"]')?.disabled).toBe(true);
+        reportPlayback?.({ ...playback, playing: true, shuffle: true, repeat: 2 });
+        flushSync();
+        expect(target.querySelector<HTMLButtonElement>('[data-testid="jukebox-pause"]')?.disabled).toBe(false);
+        expect(target.querySelector('[data-testid="jukebox-shuffle"]')?.getAttribute("aria-pressed")).toBe("true");
+        expect(target.querySelector('[data-testid="jukebox-repeat"]')?.getAttribute("aria-label")).toBe("Repeat one");
+    });
+    it("shows the asked play state at once, until Spotify confirms it", () => {
+        mocks.local = true;
+        listenAlongAvailableStore.set(true);
+        render();
+        reportPlayback?.({ ...playback, playing: true });
+        flushSync();
+        target.querySelector<HTMLButtonElement>('[data-testid="jukebox-pause"]')?.click();
+        flushSync();
+        // Spotify still reports the old state: the button already shows what was asked, a second click resumes.
+        reportPlayback?.({ ...playback, playing: true });
+        flushSync();
+        expect(target.querySelector('[data-testid="jukebox-play"]')).not.toBeNull();
+        reportPlayback?.({ ...playback, playing: false });
+        flushSync();
+        expect(target.querySelector('[data-testid="jukebox-play"]')).not.toBeNull();
+        expect(mocks.playback).toHaveBeenCalledTimes(1);
+    });
+    it("disables commands when Spotify disconnects and restores them when it reconnects", () => {
+        mocks.local = true;
+        render();
+        const play = target.querySelector<HTMLButtonElement>('[data-testid="jukebox-play"]');
+        expect(play?.disabled).toBe(true);
+        play?.click();
+        expect(mocks.playback).not.toHaveBeenCalled();
+        listenAlongAvailableStore.set(true);
+        flushSync();
+        expect(play?.disabled).toBe(false);
+        listenAlongAvailableStore.set(false);
+        flushSync();
+        expect(play?.disabled).toBe(true);
     });
 });
 
