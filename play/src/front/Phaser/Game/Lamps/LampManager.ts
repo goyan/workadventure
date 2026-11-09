@@ -15,6 +15,7 @@ import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirec
 import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
+import { lightableAreas } from "../Night/NightLights";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
@@ -25,6 +26,7 @@ import {
     lampJamsOf,
     lampLightZone,
     resolveLampJam,
+    toLampZone,
     type LampJam,
     type LampJamChoice,
     type LampZone,
@@ -214,16 +216,20 @@ export class LampManager {
     }
 
     /** The listening zones of the map, with their rectangle: a lamp inside one belongs to it. */
-    private zones(): LampZone[] {
-        const areas: Iterable<AreaData> =
-            this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [];
-        const zones: LampZone[] = [];
-        for (const area of areas) {
-            if (area.properties.some((property) => property.type === LISTENING_ZONE_PROPERTY)) {
-                zones.push({ areaId: area.id, x: area.x, y: area.y, width: area.width, height: area.height });
-            }
-        }
-        return zones;
+    private areas(): AreaData[] {
+        const areas = this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [];
+        const map = this.scene.getGameMapFrontWrapper().getMap();
+        const mapWidth = (map.width ?? 0) * (map.tilewidth ?? 32);
+        const mapHeight = (map.height ?? 0) * (map.tileheight ?? 32);
+        // As for the night lights: an area that covers most of the map is not a room.
+        return lightableAreas(areas, mapWidth, mapHeight);
+    }
+
+    /** The listening zones of the map: the Jam a lamp follows comes from the one it stands in. */
+    private listeningZones(areas: readonly AreaData[]): LampZone[] {
+        return areas
+            .filter((area) => area.properties.some((property) => property.type === LISTENING_ZONE_PROPERTY))
+            .map(toLampZone);
     }
 
     private spaceNameOf(choice: LampJamChoice): string | undefined {
@@ -305,13 +311,15 @@ export class LampManager {
             this.zoneLights.sync(new Map());
             return;
         }
-        const zones = this.zones();
+        // The light of a lamp stays in the smallest area of the map it stands in, of whatever kind: that is the room.
+        const areas = this.areas();
+        const areaZones = areas.map(toLampZone);
         for (const { id, kind } of plan.create) {
             const entity = entities.get(id);
             if (!entity) {
                 continue;
             }
-            const zone = this.clipZoneOf(id, entity, zones);
+            const zone = this.clipZoneOf(id, entity, areaZones);
             this.placed.set(id, {
                 kind,
                 visual: this.buildVisual(kind, entity, zone),
@@ -328,7 +336,7 @@ export class LampManager {
         // A lamp that was moved into another zone (in the editor) draws in the container of that zone.
         const usedZones = new Map<string, LampZone>();
         for (const [id, lamp] of this.placed) {
-            const zone = this.clipZoneOf(id, lamp.entity, zones);
+            const zone = this.clipZoneOf(id, lamp.entity, areaZones);
             if (zone.areaId !== lamp.zoneId) {
                 lamp.visual.destroy();
                 lamp.visual = this.buildVisual(lamp.kind, lamp.entity, zone);
@@ -339,14 +347,16 @@ export class LampManager {
         this.zoneLights.sync(usedZones);
 
         // Which Jam each lamp follows: worked out the same way by every client, from what everyone shares.
+        const listeningZones = this.listeningZones(areas);
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants);
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
-            const jam = resolveLampJam({ source, zones, jams, listening });
+            const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
             // The host turned the effects of their room off: off for everyone, the room keeps its own light.
             lamp.jam = jam && !this.lightsOffIn(jam) ? jam : undefined;
-            lamp.room = zoneOf(source, zones);
+            // The room put out while it plays: the smallest area it stands in, as for its light.
+            lamp.room = zoneOf(source, areaZones);
         }
     }
 

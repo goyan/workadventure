@@ -26,6 +26,11 @@ export interface LampJamChoice {
     hostUuid: string;
 }
 
+/** The rectangle of an area of the map, as a zone for the lamps. */
+export function toLampZone(area: { id: string; x: number; y: number; width: number; height: number }): LampZone {
+    return { areaId: area.id, x: area.x, y: area.y, width: area.width, height: area.height };
+}
+
 function contains(zone: LampZone, point: { x: number; y: number }): boolean {
     return point.x >= zone.x && point.x <= zone.x + zone.width && point.y >= zone.y && point.y <= zone.y + zone.height;
 }

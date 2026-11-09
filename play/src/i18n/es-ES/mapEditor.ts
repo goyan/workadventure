@@ -328,7 +328,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "Zona de luz",
             description:
-                "Tamaño de la zona que ilumina esta lámpara, en casillas. Sin ajuste, ilumina su zona de escucha, o 12 casillas a su alrededor fuera de toda zona. Nunca sale de su zona de escucha.",
+                "Tamaño de la zona que ilumina esta lámpara, en casillas. Sin ajuste, ilumina la zona más pequeña del mapa que la contiene, o 12 casillas a su alrededor fuera de toda zona. Nunca sale de esa zona.",
             width: "Ancho",
             height: "Alto",
         },

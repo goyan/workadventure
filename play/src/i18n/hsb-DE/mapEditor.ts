@@ -330,7 +330,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         lamp: {
             label: "Swětłowa zona",
             description:
-                "Wulkosć wobłuka, kotryž tuta lampa wobswětla, w kašćikach. Bjez nastajenja wobswětla swoju słuchanu zonu abo 12 kašćikow wokoło sebje zwonka wšěch zonow. Wona njepřekročuje swoju słuchanu zonu.",
+                "Wulkosć wobłuka, kotryž tuta lampa wobswětla, w kašćikach. Bjez nastajenja wobswětla najmjeńšu zonu karty, kotraž ju wobsahuje, abo 12 kašćikow wokoło sebje zwonka wšěch zonow. Wona njepřekročuje tutu zonu.",
             width: "Šěrokosć",
             height: "Wysokosć",
         },
