@@ -157,7 +157,7 @@
         <div class="wheel-center">{@render centerContent()}</div>
     {/if}
     {#each actions as action, index (action.uuid)}
-        {@const center = point(97, (index * Math.PI * 2) / actions.length - Math.PI / 2)}
+        {@const center = point(104, (index * Math.PI * 2) / actions.length - Math.PI / 2)}
         <button
             bind:this={buttons[index]}
             class="wheel-action"
