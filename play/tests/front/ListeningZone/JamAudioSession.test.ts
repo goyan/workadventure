@@ -334,6 +334,33 @@ describe("JamAudioSession", () => {
             expect(leaveSpace).toHaveBeenCalledTimes(1);
         });
 
+        it("cancels listening when the guest leaves before the connection is ready", async () => {
+            const joined = deferred<{ getName: () => string }>();
+            const { session, joinSpace, leaveSpace, listening, space } = setup();
+            joinSpace.mockReturnValueOnce(joined.promise);
+            const starting = session.listen(jam);
+            const leaving = session.leave(jam);
+            joined.resolve(space);
+            await Promise.all([starting, leaving]);
+            expect(get(listening)).toBe(false);
+            expect(get(session.listeningSpaceName)).toBeUndefined();
+            expect(leaveSpace).toHaveBeenCalledWith(space);
+        });
+
+        it("cancels sharing when the host closes the room before the connection is ready", async () => {
+            const joined = deferred<{ getName: () => string }>();
+            const { session, joinSpace, leaveSpace, captureStart, space } = setup();
+            joinSpace.mockReturnValueOnce(joined.promise);
+            const starting = session.shareMusic(jam, "usb");
+            await vi.advanceTimersByTimeAsync(0);
+            const leaving = session.leave(jam);
+            joined.resolve(space);
+            await Promise.all([starting, leaving]);
+            expect(captureStart).not.toHaveBeenCalled();
+            expect(get(session.sharingSpaceName)).toBeUndefined();
+            expect(leaveSpace).toHaveBeenCalledWith(space);
+        });
+
         it("keeps listening to another Jam when the user leaves this one", async () => {
             const { session, leaveSpace } = setup();
             await session.listen(another);

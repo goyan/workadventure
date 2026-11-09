@@ -282,10 +282,11 @@ export function createJamAudioSession({
 
     async function leave(jam: JamAudioTarget): Promise<void> {
         const spaceName = buildJamSpaceName({ roomUrl: getRoomUrl(), ...jam });
-        if (get(listeningSpaceName) === spaceName) {
+        // Include an in-flight connection: leaving must cancel it before it can start playing or capturing.
+        if (listenLease?.spaceName === spaceName) {
             await stopListening();
         }
-        if (get(sharingSpaceName) === spaceName) {
+        if (shareLease?.spaceName === spaceName) {
             await stopSharingMusic();
         }
     }
