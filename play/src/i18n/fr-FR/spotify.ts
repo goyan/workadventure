@@ -57,6 +57,14 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         listenOnAppleMusic: "Écouter sur Apple Music",
     },
     listeningZone: {
+        kindLive: "Live",
+        kindLiveDescription:
+            "Diffusez directement une carte son USB ou une entrée audio virtuelle. Tout le monde écoute ici, sans Spotify.",
+        liveOf: "Live de {name}",
+        stopLive: "Terminer le Live",
+        audioLiveHint:
+            "Choisissez la carte son USB qui reçoit votre instrument, ou une entrée virtuelle. Gardez votre voix sur un micro séparé.",
+
         resetPosition: "Réinitialiser la position",
         listenViaExtension: "Écouter via l’extension",
         defaultName: "Zone d'écoute",

@@ -1,5 +1,6 @@
 import {
     isHomeJam,
+    isLiveJam,
     LISTENING_ZONE_JAM_VARIABLE,
     listeningZoneJamKey,
     type ListeningZoneJam,
@@ -120,6 +121,11 @@ export function startHomeJam(title = ""): void {
     openRoom((uuid, hostName) => ({ home: true, hostUuid: uuid, hostName, ...titled(title) }));
 }
 
+/** Opens a Live room: its host shares an audio input through the existing Jam media session. */
+export function startLiveJam(title = ""): void {
+    openRoom((uuid, hostName) => ({ live: true, hostUuid: uuid, hostName, ...titled(title) }));
+}
+
 /** Renames our room (an empty title names it after us again) or switches the DJ mode of our Jukebox. */
 export function updateOwnRoom(change: { title?: string; djMode?: boolean }): void {
     const own = get(ownJamRoomStore);
@@ -153,13 +159,15 @@ export function stopSharingJam(): void {
     leaveJam();
 }
 
-/** Joins a Spotify Jam room: its invite link opens in Spotify. Joining a room leaves the previous one. */
+/** Joins a Spotify or Live room. Only a Spotify Jam opens an invite link. */
 export function joinJam(room: JamRoom): void {
     if (isHomeJam(room.jam)) {
         return;
     }
     leaveJam();
-    window.open(room.jam.url, "_blank", "noopener,noreferrer");
+    if (!isLiveJam(room.jam)) {
+        window.open(room.jam.url, "_blank", "noopener,noreferrer");
+    }
     enterRoom(room);
 }
 

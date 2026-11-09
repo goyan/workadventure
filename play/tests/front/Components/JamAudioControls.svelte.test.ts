@@ -18,6 +18,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     audioStopShare: label("Stop audio"),
                     audioInput: label("Audio input"),
                     audioHint: label("hint"),
+                    audioLiveHint: label("USB sound card or virtual input"),
                     audioListen: label("Listen"),
                     audioStopListen: label("Stop listening"),
                     audioVolume: label("Volume"),
@@ -91,8 +92,11 @@ describe("JamAudioControls", () => {
         vi.restoreAllMocks();
     });
 
-    async function render(mine: boolean, micDeviceId: string | undefined = "mic") {
-        component = mount(JamAudioControls, { target, props: { jam, mine, session, micDeviceId, captureState } });
+    async function render(mine: boolean, micDeviceId: string | undefined = "mic", live = false, onListen?: () => void) {
+        component = mount(JamAudioControls, {
+            target,
+            props: { jam, mine, session, micDeviceId, captureState, live, onListen },
+        });
         flushSync();
         await vi.waitFor(() => expect(target.querySelector("[data-testid]")).not.toBeNull());
         flushSync();
@@ -100,6 +104,34 @@ describe("JamAudioControls", () => {
     // The tooltip listens on the element around the control, as the pointer enters or leaves it.
     const anchorOf = (control: HTMLElement) => control.closest<HTMLElement>('[role="presentation"]') as HTMLElement;
     const q = (id: string) => target.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+
+    describe("Live", () => {
+        it("streams the selected USB input through the existing music session", async () => {
+            vi.spyOn(navigator.mediaDevices, "enumerateDevices").mockResolvedValue([
+                { kind: "audioinput", deviceId: "usb", label: "USB Audio", groupId: "usb", toJSON: () => ({}) },
+                { kind: "audioinput", deviceId: "mic", label: "Micro", groupId: "mic", toJSON: () => ({}) },
+            ]);
+            await render(true, "mic", true);
+            await vi.waitFor(() => expect(target.querySelector('option[value="usb"]')).not.toBeNull());
+            flushSync();
+            expect(target.textContent).toContain("USB sound card or virtual input");
+            const select = q("jam-audio-input");
+            if (!(select instanceof HTMLSelectElement)) throw new Error("Expected input selector");
+            select.value = "usb";
+            select.dispatchEvent(new Event("change", { bubbles: true }));
+            flushSync();
+            q("jam-audio-share")?.click();
+            expect(shareMusic).toHaveBeenCalledWith(jam, "usb", { forbiddenDeviceIds: ["mic"] });
+        });
+
+        it("joins the Live room when a guest starts listening", async () => {
+            const joined = vi.fn();
+            await render(false, "mic", true, joined);
+            q("jam-audio-listen")?.click();
+            expect(joined).toHaveBeenCalledTimes(1);
+            expect(listen).toHaveBeenCalledWith(jam);
+        });
+    });
 
     describe("guest", () => {
         it("offers to listen, and listens to the Jam on click", async () => {

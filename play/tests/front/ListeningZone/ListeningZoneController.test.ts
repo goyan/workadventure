@@ -11,6 +11,7 @@ import {
     leaveListeningZone,
     shareJam,
     startHomeJam,
+    startLiveJam,
     stopSharingJam,
     syncJoinedJam,
     updateOwnRoom,
@@ -95,6 +96,32 @@ describe("Jam rooms", () => {
             { url: "https://spotify.link/mine", hostUuid: "me", hostName: "Me", title: "Vendredi rock" },
         ]);
         expect(get(joinedJamStore)).toMatchObject({ url: "https://spotify.link/mine", hostUuid: "me" });
+        unsubscribe();
+    });
+
+    it("opens a Live room without Spotify and preserves the other rooms", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(lounge, [homeJam]);
+        startLiveJam("Dub live");
+        expect(roomsOf(lounge)).toEqual([homeJam, { live: true, hostUuid: "me", hostName: "Me", title: "Dub live" }]);
+        expect(get(joinedJamStore)).toMatchObject({ url: "live:me", hostUuid: "me" });
+        expect(get(followedUserUuidStore)).toBeUndefined();
+        unsubscribe();
+    });
+
+    it("joins a Live room without opening Spotify, resumes it after reload and leaves it", () => {
+        const unsubscribe = syncJoinedJam();
+        const live = { live: true as const, hostUuid: "max", hostName: "Max" };
+        setRooms(lounge, [live]);
+        joinJam(room(lounge, live));
+        expect(get(joinedJamStore)).toMatchObject({ url: "live:max" });
+        expect(window.open).not.toHaveBeenCalled();
+        expect(get(followedUserUuidStore)).toBeUndefined();
+        joinedJamStore.set(undefined);
+        setRooms(lounge, [live]);
+        expect(get(joinedJamStore)).toMatchObject({ url: "live:max" });
+        leaveJam();
+        expect(get(joinedJamStore)).toBeUndefined();
         unsubscribe();
     });
 

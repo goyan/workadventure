@@ -54,6 +54,14 @@ const spotify: BaseTranslation = {
         listenOnAppleMusic: "Listen on Apple Music",
     },
     listeningZone: {
+        kindLive: "Live",
+        kindLiveDescription:
+            "Stream a USB sound card or virtual audio input directly. Everyone listens here, without Spotify.",
+        liveOf: "{name}'s Live",
+        stopLive: "End the Live",
+        audioLiveHint:
+            "Pick the USB sound card receiving your instrument, or a virtual input. Keep your voice on a separate microphone.",
+
         resetPosition: "Reset position",
         listenViaExtension: "Listen via extension",
         defaultName: "Listening zone",

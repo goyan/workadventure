@@ -45,6 +45,19 @@ describe("resolveJamSpaceAccess", () => {
         });
     });
 
+    it("allows a Live host to publish and its guest only to listen", async () => {
+        const live: ListeningZoneJam = { live: true, hostUuid: HOST, hostName: "Host" };
+        const liveDirectory = directory({ jams: [live] });
+        expect(await resolveJamSpaceAccess(spaceName, { uuid: HOST, playUri: ROOM }, liveDirectory)).toEqual({
+            kind: "jam",
+            canPublishMusic: true,
+        });
+        expect(await resolveJamSpaceAccess(spaceName, { uuid: GUEST, playUri: ROOM }, liveDirectory)).toEqual({
+            kind: "jam",
+            canPublishMusic: false,
+        });
+    });
+
     it("refuses a guest who names themselves host in the space name", async () => {
         const forged = buildJamSpaceName({ roomUrl: ROOM, areaId: "area-1", propertyId: "prop-1", hostUuid: GUEST });
 
