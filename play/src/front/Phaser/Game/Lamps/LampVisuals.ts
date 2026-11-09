@@ -38,7 +38,7 @@ export interface LampPlacement {
 
 /** An image of a lamp, drawn in the container of its zone when it has one. */
 function newImage(placement: LampPlacement, texture: string): Phaser.GameObjects.Image {
-    const image = newImage(placement, texture);
+    const image = placement.scene.add.image(placement.x, placement.y, texture);
     placement.container?.add(image);
     return image;
 }
