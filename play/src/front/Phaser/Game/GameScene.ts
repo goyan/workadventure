@@ -301,6 +301,8 @@ import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, type SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
+import { LampManager } from "./Lamps/LampManager";
+import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
@@ -453,6 +455,7 @@ export class GameScene extends DirtyScene {
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
     private nightManager: NightManager | undefined;
+    private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
     private seasonalThemeManager: SeasonalThemeManager | undefined;
@@ -1469,6 +1472,8 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.lampManager?.destroy();
+        this.lampManager = undefined;
         this.weatherManager?.destroy();
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
@@ -1729,6 +1734,7 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this.nightManager?.update(time);
+            this.lampManager?.update(time);
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
@@ -2811,6 +2817,10 @@ export class GameScene extends DirtyScene {
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);
+                // Prototype: `?lampDemo` shows the lamps, lit by a made-up beat. One set at a time.
+                this.lampManager?.destroy();
+                const lampDemo = parseLampDemo(window.location.search);
+                this.lampManager = lampDemo ? new LampManager(this, { demo: lampDemo }) : undefined;
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(
