@@ -3,6 +3,7 @@ import { Subject } from "rxjs";
 import { get, readable, writable } from "svelte/store";
 import { marked } from "marked";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
+import { environmentVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 
 const onVisitorAccepted = vi.fn();
 const linkDestroy = vi.fn();
@@ -143,6 +144,7 @@ describe("KnockManager", () => {
     let manager: KnockManager | undefined;
 
     beforeEach(() => {
+        environmentVolumeStore.set(0.15);
         vi.useFakeTimers();
         vi.setSystemTime(1_000_000);
         onVisitorAccepted.mockClear();
@@ -191,7 +193,7 @@ describe("KnockManager", () => {
         fake.receive({ kind: "request", areaId: "z", visitorUuid: "v", visitorName: "Alice", at: 0 });
 
         expect(get(knockRequestsStore)).toMatchObject([{ areaId: "z", visitorUuid: "v", visitorName: "Alice" }]);
-        expect(fake.soundPlay).toHaveBeenCalledWith(KNOCK_SOUND_KEY, expect.objectContaining({ volume: 0.5 }));
+        expect(fake.soundPlay).toHaveBeenCalledWith(KNOCK_SOUND_KEY, expect.objectContaining({ volume: 0.075 }));
 
         fake.tick();
         expect(fake.soundPlay).toHaveBeenCalledTimes(1);

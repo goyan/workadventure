@@ -8,6 +8,7 @@ import {
     VEHICLE_VARIABLE,
     VEHICLE_SPEED_FACTOR,
     readVehicleState,
+    vehiclePhysicsFps,
 } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
@@ -93,6 +94,7 @@ export class Player extends Character {
         super(Scene, x, y, texturesPromise, name, direction, moving, 1, true, companionTexturePromise, "me");
         //the current player model should be push away by other players to prevent conflict
         this.getBody().setImmovable(false);
+        this.scene.physics.world.setFPS(vehiclePhysicsFps(WOKA_SPEED, this.getBody()));
         this.destinationMarker = new WalkDestinationMarker(Scene);
         this.runSmokeTrail = new RunSmokeTrail(Scene);
         this.divePrompt = new InteractionPrompt(Scene, "water-dive", () => get(LL).trigger.swim());

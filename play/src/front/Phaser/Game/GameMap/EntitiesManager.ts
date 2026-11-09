@@ -227,7 +227,7 @@ export class EntitiesManager extends EventEmitter {
 
     /**
      * Follow shared weather each minute, and apply a live editor change immediately. The personal seasonal theme
-     * forces its season (autumn, or winter for Christmas), for this person only.
+     * colours nature for this person only; shared snow cover takes priority over autumn.
      */
     public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
@@ -242,13 +242,13 @@ export class EntitiesManager extends EventEmitter {
         this.lastConfiguredWeather = configured;
         this.lastForcedSeason = forcedSeason;
         this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
-        const season =
-            forcedSeason ??
-            treeSeasonAt(
-                serverDate,
-                weatherAtTime(configured, serverDate),
-                snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
-            );
+        const weatherSeason = treeSeasonAt(
+            serverDate,
+            weatherAtTime(configured, serverDate),
+            snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
+        );
+        // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
+        const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
         if (season === this.season) return;
         this.season = season;
         for (const entity of this.entities.values()) entity.setSeason(season);
