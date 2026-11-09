@@ -3,8 +3,10 @@ import type { LampFrame } from "./LampSignal";
 import { flashAlpha, neonColor, spotAngle } from "./LampStyle";
 import { LAMP_BALL_TEXTURE, LAMP_BEAM_TEXTURE, LAMP_DISC_TEXTURE, LAMP_TUBE_TEXTURE } from "./LampTextures";
 
-/** One lamp on the map: drawn from the music at every image. */
+/** One lamp on the map: drawn from the music at every image, and following the object it is lit from. */
 export interface LampVisual {
+    /** Moves the lamp: the object it belongs to was moved (in the editor, while it is being dragged). */
+    moveTo(x: number, y: number): void;
     update(frame: LampFrame, now: number): void;
     destroy(): void;
 }
@@ -16,8 +18,8 @@ export interface LampPlacement {
     x: number;
     y: number;
     depth: number;
-    /** Photosensitivity: no rotation, no flash, steady light only (prefers-reduced-motion). */
-    reducedMotion: boolean;
+    /** Photosensitivity: no rotation, no flash, steady light only. Asked at each image: the setting can change. */
+    reducedMotion: () => boolean;
 }
 
 /** The colours the spot and the discs go through, one step per beat. */
@@ -43,13 +45,17 @@ class SpotLamp implements LampVisual {
             .setDisplaySize(200, 330);
     }
 
+    public moveTo(x: number, y: number): void {
+        this.beam.setPosition(x, y);
+    }
+
     public update(frame: LampFrame, now: number): void {
         if (frame.beat) {
             this.colourIndex = (this.colourIndex + 1) % PALETTE.length;
         }
         this.level = followLevel(this.level, Math.max(frame.mid, frame.bass));
         this.beam
-            .setRotation(this.placement.reducedMotion ? 0 : spotAngle(now, 0.8 + frame.bass))
+            .setRotation(this.placement.reducedMotion() ? 0 : spotAngle(now, 0.8 + frame.bass))
             .setTint(PALETTE[this.colourIndex])
             .setAlpha(0.45 + 0.55 * this.level);
     }
@@ -60,15 +66,20 @@ class SpotLamp implements LampVisual {
 }
 
 const DISCO_DOTS = 7;
+const DISCO_RADIUS = 70;
 
 class DiscoLamp implements LampVisual {
     private readonly ball: Phaser.GameObjects.Image;
     private readonly dots: Phaser.GameObjects.Image[] = [];
+    private x: number;
+    private y: number;
     private angle = 0;
     private lastNow: number | undefined;
     private level = 0;
 
     constructor(private readonly placement: LampPlacement) {
+        this.x = placement.x;
+        this.y = placement.y;
         this.ball = placement.scene.add
             .image(placement.x, placement.y, LAMP_BALL_TEXTURE)
             .setDepth(placement.depth)
@@ -82,22 +93,27 @@ class DiscoLamp implements LampVisual {
         }
     }
 
+    public moveTo(x: number, y: number): void {
+        this.x = x;
+        this.y = y;
+        this.ball.setPosition(x, y);
+    }
+
     public update(frame: LampFrame, now: number): void {
         const delta = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
         this.level = followLevel(this.level, (frame.bass + frame.mid + frame.treble) / 3);
         // The spots on the floor turn faster as the music gets louder; they stand still when motion is reduced.
-        if (!this.placement.reducedMotion) {
+        if (!this.placement.reducedMotion()) {
             this.angle += delta * (0.0004 + 0.0025 * this.level);
         }
         this.ball.setAlpha(0.75 + 0.25 * frame.treble);
-        const radius = 70;
         this.dots.forEach((dot, index) => {
             const theta = this.angle + (index / DISCO_DOTS) * Math.PI * 2;
             // Seen from above at an angle: the circle is flattened.
             dot.setPosition(
-                this.placement.x + Math.cos(theta) * radius,
-                this.placement.y + 50 + Math.sin(theta) * radius * 0.5,
+                this.x + Math.cos(theta) * DISCO_RADIUS,
+                this.y + 50 + Math.sin(theta) * DISCO_RADIUS * 0.5,
             ).setAlpha(0.35 + 0.55 * this.level);
         });
     }
@@ -122,6 +138,11 @@ class NeonLamp implements LampVisual {
             placement.scene.add.image(placement.x, placement.y, LAMP_TUBE_TEXTURE),
             placement.depth + 1,
         ).setDisplaySize(96, 12);
+    }
+
+    public moveTo(x: number, y: number): void {
+        this.glow.setPosition(x, y);
+        this.tube.setPosition(x, y);
     }
 
     public update(frame: LampFrame): void {
@@ -155,13 +176,18 @@ class StrobeLamp implements LampVisual {
         ).setDisplaySize(140, 140);
     }
 
+    public moveTo(x: number, y: number): void {
+        this.body.setPosition(x, y);
+        this.flash.setPosition(x, y);
+    }
+
     public update(frame: LampFrame, now: number): void {
         if (frame.beat) {
             this.lastBeatAt = now;
         }
         // The beat already comes at most three times a second (the ceiling is the signal's); with motion reduced, no
         // flash at all, only a steady glow.
-        const alpha = this.placement.reducedMotion
+        const alpha = this.placement.reducedMotion()
             ? 0.15
             : flashAlpha(this.lastBeatAt === undefined ? undefined : now - this.lastBeatAt);
         this.flash.setAlpha(alpha);

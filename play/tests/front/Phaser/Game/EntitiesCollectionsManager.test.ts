@@ -107,6 +107,37 @@ describe("EntitiesCollectionsManager reload", () => {
         );
         expect((await manager.getEntityPrefab("animaux", "still"))?.wander).toBeUndefined();
     });
+    it("passes the lamp definition of an object through, and leaves the others without one", async () => {
+        const url = "https://beta.example/map-storage/infogene-lampes/lampes-entities.json";
+        const lamp: EntityRawPrefab = {
+            id: "disco-ball",
+            name: "Disco ball",
+            imagePath: "disco-ball.png",
+            direction: "Down",
+            tags: [],
+            color: "",
+            lamp: { kind: "disco", anchor: { x: 16, y: 20 } },
+        };
+        const plain: EntityRawPrefab = { ...lamp, id: "plain", lamp: undefined };
+        const catalog: EntityCollectionRaw = {
+            collectionName: "lampes",
+            collection: [lamp, plain],
+            tags: [],
+            version: "1.0",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(catalog)))),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url, type: "Default" }]);
+
+        expect((await manager.getEntityPrefab("lampes", "disco-ball"))?.lamp).toEqual({
+            kind: "disco",
+            anchor: { x: 16, y: 20 },
+        });
+        expect((await manager.getEntityPrefab("lampes", "plain"))?.lamp).toBeUndefined();
+    });
     it("resolves seasonal paths against the catalog URL", async () => {
         const url = "https://example.com/collections/NatureCollection.json";
         const seasonal = {

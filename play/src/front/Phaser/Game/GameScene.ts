@@ -2817,10 +2817,10 @@ export class GameScene extends DirtyScene {
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);
-                // Prototype: `?lampDemo` shows the lamps, lit by a made-up beat. One set at a time.
+                // The objects of the map that are lamps; `?lampDemo` lights them with a made-up beat. One set at a time.
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);
-                this.lampManager = lampDemo ? new LampManager(this, { demo: lampDemo }) : undefined;
+                this.lampManager = new LampManager(this, { demo: lampDemo });
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(

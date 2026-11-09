@@ -414,6 +414,19 @@ export const EntityRawPrefab = z.object({
      * Fail open like `seat`: an invalid value shows the entity as a plain image.
      */
     wander: z.object({ sheetPath: z.string() }).optional().catch(undefined),
+    /**
+     * When set, the entity is a lamp: a light that follows the music of a Jam wherever the entity is moved (a spot, a
+     * mirror ball, a neon, a strobe). `anchor` is the point the light comes from, in pixels from the top-left corner of
+     * the image (the centre of the image when absent). The WAM format is unchanged: this lives in the catalog only.
+     * Fail open like `wander`: an invalid value shows the entity as a plain image.
+     */
+    lamp: z
+        .object({
+            kind: z.enum(["spot", "disco", "neon", "strobe"]),
+            anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
+        })
+        .optional()
+        .catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
