@@ -3,10 +3,12 @@ import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
+import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
-import { isInLightableArea, lightableAreas, NightLights } from "./NightLights";
+import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
+import type { NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
@@ -31,6 +33,8 @@ export class NightManager {
     private readonly forcedMinutes: number | undefined;
     private readonly unsubscribeEditor: Unsubscriber;
     private readonly unsubscribeMode: Unsubscriber;
+    private readonly unsubscribeParty: Unsubscriber;
+    private partyRooms: readonly NightRect[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
     private mode = NightMode.Server;
@@ -49,6 +53,10 @@ export class NightManager {
                 this.readAreas();
             }
             this.editorOpen = open;
+        });
+        this.unsubscribeParty = partyRoomsStore.subscribe((rooms) => {
+            this.partyRooms = rooms;
+            this.scene.markDirty();
         });
         this.unsubscribeMode = nightModeStore.subscribe((mode) => {
             this.mode = mode;
@@ -88,11 +96,14 @@ export class NightManager {
         }
 
         const players = this.players();
-        const lit = this.lights.update(now, this.areas, players);
-        // No halo in a lit area: the area already lights the player.
+        const putOut = (area: NightRect): boolean => this.partyRooms.some((room) => coversMostly(area, room));
+        const lit = this.lights.update(now, this.areas, players, putOut);
+        // No halo in a lit area: the area already lights the player. In a room put out for a party, the player
+        // keeps their halo: they stay visible under the effects.
+        const lightingAreas = this.areas.filter((area) => !putOut(area));
         const halos = this.halos.update(
             now,
-            players.map((player) => ({ ...player, sheltered: isInLightableArea(player, this.areas) })),
+            players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
         );
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
@@ -133,6 +144,7 @@ export class NightManager {
         nightDateStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
+        this.unsubscribeParty();
         this.overlay.destroy();
     }
 

@@ -128,6 +128,9 @@ export interface DesktopSpotifyMusicFrame {
     uri: string;
     beatStartMs: number;
     intensity: number;
+    attack?: number;
+    brightness?: number;
+    barStartMs?: number;
 }
 
 export enum SpotifyPlaybackCommand {

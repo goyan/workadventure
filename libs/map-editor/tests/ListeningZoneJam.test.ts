@@ -129,3 +129,14 @@ describe("Live rooms", () => {
         expect(parseListeningZoneJams([{ ...live, live: false }])).toEqual([]);
     });
 });
+
+describe("lightsOff", () => {
+    it("keeps the host's choice for every kind of room, so that every listener reads it", () => {
+        const rooms: ListeningZoneJam[] = [
+            { ...jamOf("spotify"), lightsOff: true },
+            { home: true, hostUuid: "home", hostName: "Home", lightsOff: true },
+            { live: true, hostUuid: "live", hostName: "Live", lightsOff: false },
+        ];
+        expect(parseListeningZoneJams(JSON.stringify(rooms))).toEqual(rooms);
+    });
+});

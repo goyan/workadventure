@@ -29,12 +29,15 @@ export function isSpotifyJamUrl(value: string): boolean {
 /** The title its host gives a room; without one, the room is named after its host. */
 export const MAX_LISTENING_ZONE_JAM_TITLE_LENGTH = 60;
 const title = z.string().trim().min(1).max(MAX_LISTENING_ZONE_JAM_TITLE_LENGTH).optional();
+/** Set by the host: the light effects of the room are off for everyone, who sees the room as the map draws it. */
+const lightsOff = z.boolean().optional();
 
 const SpotifyJam = z.object({
     url: z.string().max(512).refine(isSpotifyJamUrl),
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
     title,
+    lightsOff,
 });
 
 /**
@@ -48,6 +51,7 @@ const HomeJam = z.object({
     title,
     // DJ mode: only the host removes tracks from the queue.
     djMode: z.boolean().optional(),
+    lightsOff,
 });
 
 /** Live music captured from a physical or virtual audio input, with no Spotify account or invite link. */
@@ -56,6 +60,7 @@ const LiveJam = z.object({
     hostUuid: z.string().min(1).max(256),
     hostName: z.string().max(256),
     title,
+    lightsOff,
 });
 
 export const ListeningZoneJam = z.union([HomeJam, LiveJam, SpotifyJam]);

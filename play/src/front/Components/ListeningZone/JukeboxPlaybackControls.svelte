@@ -11,10 +11,16 @@
 
     let { room, available }: { room: JamRoom; available: boolean } = $props();
     let playback = $state<SpotifyPlaybackState | null>(null);
+    /**
+     * The play state just asked for, shown at once: Spotify confirms it a moment later. Without it the button kept
+     * its old icon meanwhile, and a second click sent the opposite command.
+     */
+    let pending = $state<{ playing: boolean; until: number } | undefined>(undefined);
+    let playing = $derived(pending?.playing ?? playback?.playing ?? false);
     let ready = $derived(available && playback !== null && !!window.WAD?.controlSpotifyPlayback);
     let position = $derived(Math.min(playback?.positionMs ?? 0, playback?.durationMs ?? 0));
     let toggle: SpotifyPlaybackCommand.Play | SpotifyPlaybackCommand.Pause = $derived(
-        playback?.playing ? SpotifyPlaybackCommand.Pause : SpotifyPlaybackCommand.Play,
+        playing ? SpotifyPlaybackCommand.Pause : SpotifyPlaybackCommand.Play,
     );
     let commands = $derived([
         SpotifyPlaybackCommand.Shuffle,
@@ -46,11 +52,20 @@
     onMount(() =>
         window.WAD?.watchSpotifyPlayback?.((state) => {
             playback = state;
+            // Spotify reached the state asked for, or never will: its own report is the truth again.
+            if (pending && (state?.playing === pending.playing || Date.now() > pending.until)) pending = undefined;
         }),
     );
 
+    /** Spotify confirms a play or a pause within this delay, or the button shows its actual state again. */
+    const PENDING_MS = 2500;
+
     function command(action: SpotifyPlaybackCommand, value?: number): void {
-        if (ready) controlJukeboxPlayback(room, { command: action, ...(value === undefined ? {} : { value }) });
+        if (!ready) return;
+        if (action === SpotifyPlaybackCommand.Play || action === SpotifyPlaybackCommand.Pause) {
+            pending = { playing: action === SpotifyPlaybackCommand.Play, until: Date.now() + PENDING_MS };
+        }
+        controlJukeboxPlayback(room, { command: action, ...(value === undefined ? {} : { value }) });
     }
     function time(ms: number): string {
         const seconds = Math.floor(ms / 1000);

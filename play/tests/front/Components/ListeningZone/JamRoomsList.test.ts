@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     setListening: vi.fn<(listening: Map<string, SpotifyListening>) => void>(),
     join: vi.fn(),
     playback: vi.fn(),
+    update: vi.fn(),
     local: false,
 }));
 vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () => {
@@ -32,6 +33,7 @@ vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () 
         leaveJam: mocks.join,
         stopSharingJam: mocks.join,
         localPlayerName: () => "Me",
+        updateOwnRoom: mocks.update,
     };
 });
 vi.mock("../../../../src/front/Spotify/SpotifyListeningDirectory", async () => {
@@ -92,6 +94,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                 playbackSeek: () => "Position",
                 lightsDisable: () => "Turn off lights for me",
                 lightsEnable: () => "Turn on lights for me",
+                lightsDisableForAll: () => "Turn off lights for everyone",
+                lightsEnableForAll: () => "Turn lights back on for everyone",
+                lightsOffByHost: () => "Lights off by the host",
                 playbackEmpty: () => "No track",
                 playbackDisconnected: () => "Connecting to Spotify",
                 audioMute: () => "Mute",
@@ -148,11 +153,33 @@ describe("personal light switch", () => {
         flushSync(() => button.click());
         expect(get(lampEffectsEnabledStore)).toBe(false);
         expect(button.getAttribute("aria-pressed")).toBe("false");
-        expect(button.textContent).toContain("Turn on lights for me");
+        expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
         flushSync(() => button.click());
         expect(get(lampEffectsEnabledStore)).toBe(true);
         expect(mocks.join).not.toHaveBeenCalled();
         expect(mocks.playback).not.toHaveBeenCalled();
+    });
+
+    it("lets the host turn the lights of their room off for everyone, next to its title", () => {
+        mocks.local = true;
+        mocks.update.mockClear();
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle-all"]');
+        if (!button) throw new Error("Missing host light switch");
+        expect(button.getAttribute("aria-label")).toBe("Turn off lights for everyone");
+        flushSync(() => button.click());
+        expect(mocks.update).toHaveBeenCalledWith({ lightsOff: true });
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
+    });
+
+    it("shows a guest that the host turned the lights off, without a switch of their own", () => {
+        mocks.setRooms([{ ...room, jam: { ...room.jam, lightsOff: true } }]);
+        joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
+        render();
+        const off = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-off-by-host"]');
+        expect(off?.disabled).toBe(true);
+        expect(off?.getAttribute("aria-label")).toBe("Lights off by the host");
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
     });
 });
 afterEach(async () => {
@@ -281,6 +308,23 @@ describe("Jukebox playback controls", () => {
         expect(target.querySelector<HTMLButtonElement>('[data-testid="jukebox-pause"]')?.disabled).toBe(false);
         expect(target.querySelector('[data-testid="jukebox-shuffle"]')?.getAttribute("aria-pressed")).toBe("true");
         expect(target.querySelector('[data-testid="jukebox-repeat"]')?.getAttribute("aria-label")).toBe("Repeat one");
+    });
+    it("shows the asked play state at once, until Spotify confirms it", () => {
+        mocks.local = true;
+        listenAlongAvailableStore.set(true);
+        render();
+        reportPlayback?.({ ...playback, playing: true });
+        flushSync();
+        target.querySelector<HTMLButtonElement>('[data-testid="jukebox-pause"]')?.click();
+        flushSync();
+        // Spotify still reports the old state: the button already shows what was asked, a second click resumes.
+        reportPlayback?.({ ...playback, playing: true });
+        flushSync();
+        expect(target.querySelector('[data-testid="jukebox-play"]')).not.toBeNull();
+        reportPlayback?.({ ...playback, playing: false });
+        flushSync();
+        expect(target.querySelector('[data-testid="jukebox-play"]')).not.toBeNull();
+        expect(mocks.playback).toHaveBeenCalledTimes(1);
     });
     it("disables commands when Spotify disconnects and restores them when it reconnects", () => {
         mocks.local = true;

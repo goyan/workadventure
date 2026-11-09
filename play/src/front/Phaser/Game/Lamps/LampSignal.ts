@@ -14,6 +14,8 @@ export interface LampBands {
 /** What the lamps read at each image: the bands, and whether a beat just came (never above the flash ceiling). */
 export interface LampFrame extends LampBands {
     beat: boolean;
+    /** A beat that opens a bar (when the source knows bars): the lights change scene, not only colour. */
+    bar?: boolean;
 }
 
 /** Where the lamps read the music: a spectrum analysed from the Jam, or a synthetic one to try the visuals out. */

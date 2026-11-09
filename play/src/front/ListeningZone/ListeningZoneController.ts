@@ -126,8 +126,11 @@ export function startLiveJam(title = ""): void {
     openRoom((uuid, hostName) => ({ live: true, hostUuid: uuid, hostName, ...titled(title) }));
 }
 
-/** Renames our room (an empty title names it after us again) or switches the DJ mode of our Jukebox. */
-export function updateOwnRoom(change: { title?: string; djMode?: boolean }): void {
+/**
+ * Renames our room (an empty title names it after us again), switches the DJ mode of our Jukebox, or turns the light
+ * effects of our room off or on for everyone in it.
+ */
+export function updateOwnRoom(change: { title?: string; djMode?: boolean; lightsOff?: boolean }): void {
     const own = get(ownJamRoomStore);
     if (!own) {
         return;
@@ -137,6 +140,7 @@ export function updateOwnRoom(change: { title?: string; djMode?: boolean }): voi
         ...own.jam,
         ...(change.title !== undefined && { title: titled(change.title).title }),
         ...(change.djMode !== undefined && isHomeJam(own.jam) && { djMode: change.djMode }),
+        ...(change.lightsOff !== undefined && { lightsOff: change.lightsOff }),
     };
     const rooms = roomsInZone(get(allJamRoomsStore), own.zone).map((room) =>
         room.jam.hostUuid === own.jam.hostUuid ? jam : room.jam,
