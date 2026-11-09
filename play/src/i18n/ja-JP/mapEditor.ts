@@ -327,6 +327,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "無限の期間 ⏱️",
             actionButtonLabel: "情報バブルを見る",
         },
+        lamp: {
+            label: "ライトゾーン",
+            description:
+                "このランプが照らす範囲の大きさ（マス単位）。未設定の場合は、リスニングゾーン全体、またはゾーン外では周囲12マスを照らします。リスニングゾーンの外には出ません。",
+            width: "幅",
+            height: "高さ",
+        },
         openFile: {
             label: "ファイルを開く",
             description: "WorkAdventure 内でファイルを開く。",

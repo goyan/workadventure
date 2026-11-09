@@ -321,6 +321,13 @@ const mapEditor: BaseTranslation = {
             infinityDuration: "Infinite duration ⏱️",
             actionButtonLabel: "See info bubble",
         },
+        lamp: {
+            label: "Light zone",
+            description:
+                "Size of the area this lamp lights, in tiles. Unset, it lights its listening zone, or 12 tiles around it outside any zone. It never goes beyond its listening zone.",
+            width: "Width",
+            height: "Height",
+        },
         openFile: {
             label: "Open file",
             description: "Open file within WorkAdventure.",

@@ -325,6 +325,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "항상 표시 ⏱️",
             actionButtonLabel: "정보 버블 보기",
         },
+        lamp: {
+            label: "조명 영역",
+            description:
+                "이 램프가 비추는 영역의 크기(칸 단위). 설정하지 않으면 청취 영역 전체를, 영역 밖에서는 주위 12칸을 비춥니다. 청취 영역을 벗어나지 않습니다.",
+            width: "너비",
+            height: "높이",
+        },
         openFile: {
             label: "파일 열기",
             description: "파일을 WorkAdventure 안에서 바로 엽니다.",

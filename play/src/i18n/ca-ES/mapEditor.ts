@@ -324,6 +324,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Durada infinita ⏱️",
             actionButtonLabel: "Veure la bombolla d'informació",
         },
+        lamp: {
+            label: "Zona de llum",
+            description:
+                "Mida de la zona que il·lumina aquesta llum, en caselles. Sense ajust, il·lumina la seva zona d'escolta, o 12 caselles al seu voltant fora de qualsevol zona. Mai surt de la seva zona d'escolta.",
+            width: "Amplada",
+            height: "Alçada",
+        },
         openFile: {
             label: "Obrir fitxer",
             description: "Obrir un fitxer dins de WorkAdventure.",

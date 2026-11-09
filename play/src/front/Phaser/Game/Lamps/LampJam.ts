@@ -138,3 +138,37 @@ export function defaultLampZone(lampId: string, source: { x: number; y: number }
         height: DEFAULT_LIGHT_SIDE_PX,
     };
 }
+
+const TILE_PX = 32;
+
+function intersection(rect: LampZone, zone: LampZone): LampZone {
+    const x = Math.max(rect.x, zone.x);
+    const y = Math.max(rect.y, zone.y);
+    const right = Math.min(rect.x + rect.width, zone.x + zone.width);
+    const bottom = Math.min(rect.y + rect.height, zone.y + zone.height);
+    return { areaId: rect.areaId, x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
+}
+
+/**
+ * Where the light of a lamp stays.
+ *  - No size set: the listening zone it stands in (the lamps of a zone share its clip), or a square of 12 tiles around
+ *    it when it stands in no zone.
+ *  - A size set (in tiles, in the editor): a rectangle of that size centred on the lamp, of its own, and never beyond
+ *    the zone it stands in: the light of a room stays in the room, whatever the size.
+ */
+export function lampLightZone(input: {
+    id: string;
+    source: { x: number; y: number };
+    zones: readonly LampZone[];
+    sizeInTiles?: { width: number; height: number };
+}): LampZone {
+    const { id, source, zones, sizeInTiles } = input;
+    const zone = zoneOf(source, zones);
+    if (!sizeInTiles) {
+        return zone ?? defaultLampZone(id, source);
+    }
+    const width = sizeInTiles.width * TILE_PX;
+    const height = sizeInTiles.height * TILE_PX;
+    const rect: LampZone = { areaId: `lamp:${id}`, x: source.x - width / 2, y: source.y - height / 2, width, height };
+    return zone ? intersection(rect, zone) : rect;
+}

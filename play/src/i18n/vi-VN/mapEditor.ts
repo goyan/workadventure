@@ -322,6 +322,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Thời lượng vô hạn ⏱️",
             actionButtonLabel: "Xem bong bóng thông tin",
         },
+        lamp: {
+            label: "Vùng chiếu sáng",
+            description:
+                "Kích thước vùng mà đèn này chiếu sáng, tính bằng ô. Nếu không đặt, đèn chiếu sáng vùng nghe của nó, hoặc 12 ô xung quanh khi ở ngoài mọi vùng. Không bao giờ vượt ra ngoài vùng nghe.",
+            width: "Chiều rộng",
+            height: "Chiều cao",
+        },
         openFile: {
             label: "Mở tệp",
             description: "Mở tệp trong WorkAdventure.",

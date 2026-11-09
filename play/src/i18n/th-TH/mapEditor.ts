@@ -319,6 +319,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "แสดงตลอดเวลา ⏱️",
             actionButtonLabel: "ดูบับเบิลข้อมูล",
         },
+        lamp: {
+            label: "โซนแสง",
+            description:
+                "ขนาดพื้นที่ที่โคมไฟนี้ส่องสว่าง หน่วยเป็นช่อง หากไม่ตั้งค่า จะส่องสว่างโซนการฟังของโคมไฟ หรือ 12 ช่องรอบตัวเมื่ออยู่นอกทุกโซน และไม่เกินโซนการฟังของโคมไฟ",
+            width: "ความกว้าง",
+            height: "ความสูง",
+        },
         openFile: {
             label: "เปิดไฟล์",
             description: "เปิดไฟล์ภายใน WorkAdventure",

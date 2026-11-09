@@ -3,6 +3,7 @@ import {
     lampJamsOf,
     defaultLampZone,
     jamOfSpaces,
+    lampLightZone,
     resolveLampJam,
     zoneOf,
     type LampJam,
@@ -260,5 +261,67 @@ describe("defaultLampZone", () => {
 
     it("is one zone per lamp: two lamps never share a clip", () => {
         expect(defaultLampZone("a", { x: 0, y: 0 }).areaId).not.toBe(defaultLampZone("b", { x: 0, y: 0 }).areaId);
+    });
+});
+
+describe("lampLightZone", () => {
+    const inside = { x: 100, y: 100 };
+
+    it("fills its listening zone when no size is set: the light of a room stays in the room", () => {
+        expect(lampLightZone({ id: "l", source: inside, zones: [club] })).toEqual(club);
+    });
+
+    it("is a square of 12 tiles around the lamp when it stands in no zone and no size is set", () => {
+        expect(lampLightZone({ id: "l", source: outside, zones: [club] })).toEqual({
+            areaId: "lamp:l",
+            x: 308,
+            y: 308,
+            width: 384,
+            height: 384,
+        });
+    });
+
+    it("is the size set for the lamp, in tiles, centred on it, outside every zone", () => {
+        expect(
+            lampLightZone({ id: "l", source: outside, zones: [club], sizeInTiles: { width: 8, height: 4 } }),
+        ).toEqual({
+            areaId: "lamp:l",
+            x: 372,
+            y: 436,
+            width: 256,
+            height: 128,
+        });
+    });
+
+    it("is the size set for the lamp when it fits in its zone: a lamp lights part of a room", () => {
+        const zone = lampLightZone({
+            id: "l",
+            source: { x: 200, y: 150 },
+            zones: [club],
+            sizeInTiles: { width: 4, height: 4 },
+        });
+        expect(zone).toEqual({ areaId: "lamp:l", x: 136, y: 86, width: 128, height: 128 });
+    });
+
+    it("never leaves its zone, whatever the size set: the light of a room stays in the room", () => {
+        const zone = lampLightZone({ id: "l", source: inside, zones: [club], sizeInTiles: { width: 30, height: 30 } });
+        expect(zone).toEqual({ areaId: "lamp:l", x: 0, y: 0, width: 400, height: 300 });
+    });
+
+    it("is cut at the edge of its zone when the lamp stands near it", () => {
+        // 12 tiles around (390, 290): from 198 to 582 across, from 98 to 482 down; the zone ends at 400 and 300.
+        const zone = lampLightZone({
+            id: "l",
+            source: { x: 390, y: 290 },
+            zones: [club],
+            sizeInTiles: { width: 12, height: 12 },
+        });
+        expect(zone).toEqual({ areaId: "lamp:l", x: 198, y: 98, width: 202, height: 202 });
+    });
+
+    it("has one clip of its own once a size is set, so that two lamps of one zone do not share it", () => {
+        const sized = lampLightZone({ id: "a", source: inside, zones: [club], sizeInTiles: { width: 4, height: 4 } });
+        expect(sized.areaId).toBe("lamp:a");
+        expect(lampLightZone({ id: "a", source: inside, zones: [club] }).areaId).toBe("club");
     });
 });

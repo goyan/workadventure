@@ -331,6 +331,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Infini ⏱️",
             actionButtonLabel: "Voir l'info bulle",
         },
+        lamp: {
+            label: "Zone de lumière",
+            description:
+                "Taille de la zone que cette lampe éclaire, en cases. Sans réglage, elle éclaire sa zone d'écoute, ou 12 cases autour d'elle hors zone. Elle ne dépasse jamais sa zone d'écoute.",
+            width: "Largeur",
+            height: "Hauteur",
+        },
         openFile: {
             label: "Ouvrir un fichier",
             description: "Ouvrir un fichier dans l'application.",

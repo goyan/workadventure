@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lampSource, planLamps } from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
+import { lampSizeOf, lampSource, planLamps } from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
 
 describe("planLamps", () => {
     it("creates a lamp for each object of the map that has one", () => {
@@ -65,5 +65,20 @@ describe("lampSource", () => {
 
     it("does not divide by an image without size", () => {
         expect(lampSource({ ...object, width: 0, height: 0 }, { x: 16, y: 4 })).toEqual({ x: 116, y: 54 });
+    });
+});
+
+describe("lampSizeOf", () => {
+    it("reads the size of the light set for the lamp, in tiles", () => {
+        const properties = [
+            { id: "a", type: "openWebsite" },
+            { id: "b", type: "lampPropertyData", width: 20, height: 6 },
+        ] as never;
+        expect(lampSizeOf(properties)).toEqual({ width: 20, height: 6 });
+    });
+
+    it("is undefined when no size was set: the light fills its zone", () => {
+        expect(lampSizeOf([{ id: "a", type: "openWebsite" }] as never)).toBeUndefined();
+        expect(lampSizeOf([])).toBeUndefined();
     });
 });

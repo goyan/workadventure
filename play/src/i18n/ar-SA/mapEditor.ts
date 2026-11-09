@@ -323,6 +323,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "مدة غير محدودة ⏱️",
             actionButtonLabel: "عرض فقاعة المعلومات",
         },
+        lamp: {
+            label: "منطقة الضوء",
+            description:
+                "حجم المنطقة التي يضيئها هذا المصباح، بالمربعات. إن لم يُضبط، يضيء منطقة الاستماع الخاصة به، أو 12 مربعًا حوله خارج أي منطقة. لا يتجاوز منطقة الاستماع أبدًا.",
+            width: "العرض",
+            height: "الارتفاع",
+        },
         openFile: {
             label: "فتح ملف",
             description: "افتح ملفًا داخل WorkAdventure.",

@@ -328,6 +328,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Njewobgranicowany cas ⏱️",
             actionButtonLabel: "Info-bublinu wiźeś",
         },
+        lamp: {
+            label: "Swětłowa cona",
+            description:
+                "Wjelikosć wobcerka, kótaryž toś ta lampa wobswětla, w kokulkach. Bźez nastajenja wobswětla swóju słuchańsku conu abo 12 kokulkow wokoło sebje zwenka wšych conow. Wóna njepśekšaca swóju słuchańsku conu.",
+            width: "Šyrokosć",
+            height: "Wusokosć",
+        },
         openFile: {
             label: "Dataju wótcyniś",
             description: "Dataju w WorkAdventure wótcyniś.",

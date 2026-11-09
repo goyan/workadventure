@@ -209,6 +209,22 @@ export const GobeurPropertyData = PropertyBase.extend({
     durationSeconds: z.number().int().min(30).max(3600).default(180),
 });
 
+/** Size of the light of a lamp, in tiles. A lamp lights a square of this many tiles around itself by default. */
+export const LAMP_LIGHT_DEFAULT_TILES = 12;
+export const LAMP_LIGHT_MIN_TILES = 2;
+export const LAMP_LIGHT_MAX_TILES = 60;
+
+/**
+ * Where the light of a lamp (an object whose catalog entry says `lamp`) stays: a rectangle of this size around it, kept
+ * within the listening zone it stands in. Without this property the light fills its zone, or a square of 12 tiles
+ * outside every zone.
+ */
+export const LampPropertyData = PropertyBase.extend({
+    type: z.literal("lampPropertyData"),
+    width: z.number().int().min(LAMP_LIGHT_MIN_TILES).max(LAMP_LIGHT_MAX_TILES).default(LAMP_LIGHT_DEFAULT_TILES),
+    height: z.number().int().min(LAMP_LIGHT_MIN_TILES).max(LAMP_LIGHT_MAX_TILES).default(LAMP_LIGHT_DEFAULT_TILES),
+});
+
 export const MatrixRoomPropertyData = PropertyBase.extend({
     type: z.literal("matrixRoomPropertyData"),
     shouldOpenAutomatically: z.boolean(),
@@ -309,6 +325,7 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     EntityDescriptionPropertyData,
     LivekitRoomPropertyData,
     GobeurPropertyData,
+    LampPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -648,7 +665,8 @@ export type EntityDataPropertiesKeys =
     | "playAudio"
     | "openWebsite"
     | "openFile"
-    | "livekitRoomProperty";
+    | "livekitRoomProperty"
+    | "lampPropertyData";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;
@@ -680,6 +698,7 @@ export type PersonalAreaPropertyData = z.infer<typeof PersonalAreaPropertyData>;
 export type RecordingSettings = z.infer<typeof RecordingSettings>;
 export type GobeurLevel = z.infer<typeof GobeurLevel>;
 export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
+export type LampPropertyData = z.infer<typeof LampPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;
