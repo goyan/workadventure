@@ -18,6 +18,7 @@ import type { GameScene } from "../GameScene";
 import { lampJamsOf, resolveLampJam, type LampJam, type LampJamChoice, type LampZone } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
 import { lampSource, planLamps } from "./LampReconcile";
+import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
@@ -45,6 +46,9 @@ interface PlacedLamp {
     entity: Entity;
     /** The Jam this lamp follows now, by the rule of LampJam; undefined: off. */
     jam: LampJamChoice | undefined;
+    /** How bright it is, from 0 to 1: it rises quickly and dies away slowly (see nextBrightness). */
+    brightness: number;
+    lastUpdateAt: number | undefined;
 }
 
 /** The music of a Jam being read: the stream it comes from, and what listens to it. */
@@ -202,7 +206,7 @@ export class LampManager {
                 reducedMotion: this.reducedMotion,
                 drawsBody: false,
             });
-            this.placed.set(id, { kind, visual, entity, jam: undefined });
+            this.placed.set(id, { kind, visual, entity, jam: undefined, brightness: 0, lastUpdateAt: undefined });
         }
 
         if (this.placed.size === 0) {
@@ -285,18 +289,26 @@ export class LampManager {
         for (const placed of this.placed.values()) {
             const space = placed.jam && this.spaceNameOf(placed.jam);
             // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
-            const frame = this.editorOpen
-                ? EDITOR_FRAME
-                : (demoFrame ?? (space ? this.frameOfJam(space, now) : IDLE_FRAME));
             const lit = this.editorOpen || demoFrame !== undefined || space !== undefined;
-            placed.visual.setVisible(lit);
-            if (!lit) {
+            const elapsed = placed.lastUpdateAt === undefined ? 0 : now - placed.lastUpdateAt;
+            placed.lastUpdateAt = now;
+            placed.brightness = nextBrightness(placed.brightness, lit, elapsed);
+            // A lamp whose music stopped keeps drawing while its light dies away.
+            const visible = placed.brightness > 0;
+            placed.visual.setVisible(visible);
+            if (!visible) {
                 continue;
             }
             anyLit = true;
+            const frame = !lit
+                ? IDLE_FRAME
+                : this.editorOpen
+                  ? EDITOR_FRAME
+                  : (demoFrame ?? (space ? this.frameOfJam(space, now) : IDLE_FRAME));
             // At every image: the object may be dragged in the editor, and the light goes with it.
             const source = lampSource(placed.entity, placed.entity.getPrefab().lamp?.anchor);
             placed.visual.moveTo(source.x, source.y);
+            placed.visual.setBrightness(placed.brightness);
             placed.visual.update(frame, now);
         }
         if (anyLit) {

@@ -113,24 +113,34 @@ describe("resolveLampJam", () => {
             expect(choice).toEqual({ areaId: "lounge", hostUuid: "b" });
         });
 
-        it("follows the only Jam that plays on the map when the user listens to none", () => {
+        it("stays off when the user listens to no Jam, even if a single Jam plays on the map", () => {
             const choice = resolveLampJam({
                 source: outside,
                 zones: [club, lounge],
                 jams: [jam("club", "a", 1, false), jam("lounge", "b")],
                 listening: undefined,
             });
-            expect(choice).toEqual({ areaId: "lounge", hostUuid: "b" });
+            expect(choice).toBeUndefined();
         });
 
-        it("follows the most crowded of several Jams that play, when the user listens to none", () => {
+        it("stays off when the user listens to no Jam, even if several play: no crowd decides for a lamp that belongs to no zone", () => {
             const choice = resolveLampJam({
                 source: outside,
                 zones: [club, lounge],
                 jams: [jam("club", "a", 2), jam("lounge", "b", 6)],
                 listening: undefined,
             });
-            expect(choice).toEqual({ areaId: "lounge", hostUuid: "b" });
+            expect(choice).toBeUndefined();
+        });
+
+        it("stays off when the Jam the user listens to plays nothing, whatever the others do", () => {
+            const choice = resolveLampJam({
+                source: outside,
+                zones: [club, lounge],
+                jams: [jam("club", "a", 1, false), jam("lounge", "b", 6)],
+                listening: { areaId: "club", hostUuid: "a" },
+            });
+            expect(choice).toBeUndefined();
         });
 
         it("is off when nothing plays", () => {

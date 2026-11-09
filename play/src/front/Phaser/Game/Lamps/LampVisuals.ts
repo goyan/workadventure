@@ -9,6 +9,8 @@ export interface LampVisual {
     moveTo(x: number, y: number): void;
     /** A lamp whose Jam plays nothing is off: nothing is drawn, the object itself stays. */
     setVisible(visible: boolean): void;
+    /** How bright the lamp is, from 0 to 1: the light dies away when the music stops instead of being cut. */
+    setBrightness(brightness: number): void;
     update(frame: LampFrame, now: number): void;
     destroy(): void;
 }
@@ -44,6 +46,7 @@ function additive<T extends Phaser.GameObjects.Image>(image: T, depth: number): 
 class SpotLamp implements LampVisual {
     private readonly beam: Phaser.GameObjects.Image;
     private level = 0;
+    private brightness = 1;
     private colourIndex = 0;
 
     constructor(private readonly placement: LampPlacement) {
@@ -60,6 +63,10 @@ class SpotLamp implements LampVisual {
         this.beam.setVisible(visible);
     }
 
+    public setBrightness(brightness: number): void {
+        this.brightness = brightness;
+    }
+
     public update(frame: LampFrame, now: number): void {
         if (frame.beat) {
             this.colourIndex = (this.colourIndex + 1) % PALETTE.length;
@@ -68,7 +75,7 @@ class SpotLamp implements LampVisual {
         this.beam
             .setRotation(this.placement.reducedMotion() ? 0 : spotAngle(now, 0.8 + frame.bass))
             .setTint(PALETTE[this.colourIndex])
-            .setAlpha(0.45 + 0.55 * this.level);
+            .setAlpha((0.45 + 0.55 * this.level) * this.brightness);
     }
 
     public destroy(): void {
@@ -87,6 +94,7 @@ class DiscoLamp implements LampVisual {
     private angle = 0;
     private lastNow: number | undefined;
     private level = 0;
+    private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
         this.x = placement.x;
@@ -115,6 +123,10 @@ class DiscoLamp implements LampVisual {
         this.dots.forEach((dot) => dot.setVisible(visible));
     }
 
+    public setBrightness(brightness: number): void {
+        this.brightness = brightness;
+    }
+
     public update(frame: LampFrame, now: number): void {
         const delta = this.lastNow === undefined ? 0 : now - this.lastNow;
         this.lastNow = now;
@@ -123,14 +135,14 @@ class DiscoLamp implements LampVisual {
         if (!this.placement.reducedMotion()) {
             this.angle += delta * (0.0004 + 0.0025 * this.level);
         }
-        this.ball.setAlpha(0.75 + 0.25 * frame.treble);
+        this.ball.setAlpha((0.75 + 0.25 * frame.treble) * this.brightness);
         this.dots.forEach((dot, index) => {
             const theta = this.angle + (index / DISCO_DOTS) * Math.PI * 2;
             // Seen from above at an angle: the circle is flattened.
             dot.setPosition(
                 this.x + Math.cos(theta) * DISCO_RADIUS,
                 this.y + 50 + Math.sin(theta) * DISCO_RADIUS * 0.5,
-            ).setAlpha(0.35 + 0.55 * this.level);
+            ).setAlpha((0.35 + 0.55 * this.level) * this.brightness);
         });
     }
 
@@ -144,6 +156,7 @@ class NeonLamp implements LampVisual {
     private readonly glow: Phaser.GameObjects.Image;
     private readonly tube: Phaser.GameObjects.Image;
     private level = 0;
+    private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
         this.glow = additive(
@@ -166,11 +179,15 @@ class NeonLamp implements LampVisual {
         this.tube.setVisible(visible && this.placement.drawsBody);
     }
 
+    public setBrightness(brightness: number): void {
+        this.brightness = brightness;
+    }
+
     public update(frame: LampFrame): void {
         this.level = followLevel(this.level, Math.max(frame.bass, frame.mid, frame.treble));
         const colour = neonColor(frame);
-        this.tube.setTint(colour).setAlpha(0.75 + 0.25 * this.level);
-        this.glow.setTint(colour).setAlpha(0.25 + 0.6 * this.level);
+        this.tube.setTint(colour).setAlpha((0.75 + 0.25 * this.level) * this.brightness);
+        this.glow.setTint(colour).setAlpha((0.25 + 0.6 * this.level) * this.brightness);
     }
 
     public destroy(): void {
@@ -183,6 +200,7 @@ class StrobeLamp implements LampVisual {
     private readonly body: Phaser.GameObjects.Image;
     private readonly flash: Phaser.GameObjects.Image;
     private lastBeatAt: number | undefined;
+    private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
         this.body = placement.scene.add
@@ -207,6 +225,10 @@ class StrobeLamp implements LampVisual {
         this.flash.setVisible(visible);
     }
 
+    public setBrightness(brightness: number): void {
+        this.brightness = brightness;
+    }
+
     public update(frame: LampFrame, now: number): void {
         if (frame.beat) {
             this.lastBeatAt = now;
@@ -216,7 +238,7 @@ class StrobeLamp implements LampVisual {
         const alpha = this.placement.reducedMotion()
             ? 0.15
             : flashAlpha(this.lastBeatAt === undefined ? undefined : now - this.lastBeatAt);
-        this.flash.setAlpha(alpha);
+        this.flash.setAlpha(alpha * this.brightness);
     }
 
     public destroy(): void {

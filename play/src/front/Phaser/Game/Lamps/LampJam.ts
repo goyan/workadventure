@@ -44,8 +44,8 @@ function mostCrowded(jams: readonly LampJam[]): LampJam | undefined {
  *  1. A lamp inside a listening zone (the smallest one if they are nested) follows a Jam of that zone whose host plays:
  *     the one the user listens to if it is among them, else the most crowded. It belongs to its zone: with no Jam
  *     playing there, it is off, whatever the other zones do.
- *  2. A lamp outside every zone follows the Jam the user listens to; else the only Jam that plays; else the most
- *     crowded of those that play.
+ *  2. A lamp outside every zone follows the Jam the user listens to, if its host plays; with none, it is off: no
+ *     other Jam, however crowded or alone, decides for a lamp that belongs to no zone.
  *  3. Otherwise it is off (undefined).
  */
 export function resolveLampJam(input: {
@@ -69,9 +69,9 @@ export function resolveLampJam(input: {
     if (zone) {
         return pick(playing.filter((jam) => jam.areaId === zone.areaId));
     }
-    // Outside every zone: the listened Jam, else the one that plays alone, else the most crowded: all of it is `pick`,
-    // which prefers the listened one and otherwise the most crowded (the only one when there is a single Jam).
-    return pick(playing);
+    // Outside every zone: only the Jam the user listens to (and whose host plays) lights the lamp.
+    const listened = playing.find(isListened);
+    return listened && { areaId: listened.areaId, hostUuid: listened.hostUuid };
 }
 
 /**
