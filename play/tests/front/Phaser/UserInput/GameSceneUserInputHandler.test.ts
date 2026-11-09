@@ -283,6 +283,10 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 "avatar-swimwear",
             ]);
             expect(actions.filter(({ testId }) => testId !== "avatar-profile").every(({ icon }) => icon)).toBe(true);
+            // The swimsuit is worn in the water, not right away: its entry says so.
+            expect(actions.find(({ testId }) => testId === "avatar-swimwear")?.detail).toBe(
+                get(LL).woka.menu.swimwearDetail(),
+            );
             actions.find(({ testId }) => testId === "avatar-action-dance")?.callback();
             expect(setAvatarAction).toHaveBeenCalledWith(AvatarAction.Dance);
             expect(get(wokaMenuStore)).toBeUndefined();
@@ -290,8 +294,6 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             get(wokaMenuStore)
                 ?.actions.find(({ testId }) => testId === "avatar-swimwear")
                 ?.callback();
-            // The choice is worn in the water, not right away: the submenu says so.
-            expect(get(wokaMenuStore)?.hint).toBe(get(LL).woka.menu.swimwearHint());
             get(wokaMenuStore)
                 ?.actions.find(({ testId }) => testId === "avatar-swimwear-twoPiece")
                 ?.callback();

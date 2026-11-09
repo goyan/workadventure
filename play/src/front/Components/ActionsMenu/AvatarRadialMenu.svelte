@@ -140,7 +140,6 @@
     {#snippet centerContent()}
         {#if $currentPlayerWokaStore}<img src={$currentPlayerWokaStore} alt="" />{/if}
         <span>{menu.wokaName}</span>
-        {#if menu.hint}<span class="wheel-hint">{menu.hint}</span>{/if}
     {/snippet}
     {#if profileAction}
         <button
@@ -178,6 +177,7 @@
                     >{#if action.icon}<PixelIcon name={action.icon} size={32} />{:else}{action.emoji}{/if}</span
                 >
                 <span>{action.actionName}</span>
+                {#if action.detail}<span class="wheel-detail">{action.detail}</span>{/if}
             </span>
         </button>
     {/each}
@@ -292,10 +292,14 @@
         font-size: 25px;
         line-height: 1;
     }
-    .wheel-center .wheel-hint {
-        max-width: 92px;
-        white-space: normal;
-        text-align: center;
+    /* Up to three short lines under the name, so it stays inside its sector. */
+    .wheel-detail {
+        display: -webkit-box;
+        max-width: 80px;
+        overflow: hidden;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
         font-size: 9px;
         line-height: 1.15;
         color: var(--rt-muted);

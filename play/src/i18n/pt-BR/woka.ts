@@ -42,7 +42,7 @@ const woka: BaseTranslation = {
     menu: {
         changeOutfit: "Trocar de roupa",
         swimwear: "Banho",
-        swimwearHint: "Usado na água",
+        swimwearDetail: "(visível perto de uma piscina)",
         actions: "Ações do meu avatar",
         closeActions: "Fechar ações",
         profile: "Ver perfil",
