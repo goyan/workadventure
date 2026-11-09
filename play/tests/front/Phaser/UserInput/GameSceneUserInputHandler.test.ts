@@ -20,7 +20,7 @@ import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { wokaMenuStore, avatarActionsOpenStore } from "../../../../src/front/Stores/WokaMenuStore";
 import { AvatarAction } from "../../../../src/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
-import { setLocale } from "../../../../src/i18n/i18n-svelte";
+import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
@@ -268,6 +268,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             const setSwimwear = vi.fn();
             const self = Object.assign(Object.create(Player.prototype) as Player, {
                 playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
                 setAvatarAction,
                 setSwimwear,
             });
@@ -278,10 +279,14 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 "avatar-profile",
                 "avatar-action-dance",
                 "avatar-action-coffee",
-                "avatar-action-idle",
                 "avatar-change-outfit",
                 "avatar-swimwear",
             ]);
+            expect(actions.filter(({ testId }) => testId !== "avatar-profile").every(({ icon }) => icon)).toBe(true);
+            // The swimsuit is worn in the water, not right away: its entry says so.
+            expect(actions.find(({ testId }) => testId === "avatar-swimwear")?.detail).toBe(
+                get(LL).woka.menu.swimwearDetail(),
+            );
             actions.find(({ testId }) => testId === "avatar-action-dance")?.callback();
             expect(setAvatarAction).toHaveBeenCalledWith(AvatarAction.Dance);
             expect(get(wokaMenuStore)).toBeUndefined();
@@ -294,6 +299,18 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ?.callback();
             expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
             expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
+        it("offers no swimwear to a costume such as the duck, whose body has no swimwear poses", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["duck", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const testIds = (get(wokaMenuStore)?.actions ?? []).map(({ testId }) => testId);
+            expect(testIds).not.toContain("avatar-swimwear");
+            expect(testIds).toContain("avatar-change-outfit");
+            expect(testIds).toContain("avatar-action-dance");
         });
 
         it("offers a selected scooter only on the own human avatar and equips it permanently", () => {

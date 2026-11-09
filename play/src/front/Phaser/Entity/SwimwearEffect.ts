@@ -3,6 +3,7 @@ import type { GameScene } from "../Game/GameScene";
 import { getSwimwearTexture, loadSwimwearAssets } from "./Swimwear";
 import type { Swimwear, SwimwearAssets } from "./Swimwear";
 import { getSeatedTexture } from "./SeatedPose";
+import { isHumanAvatar } from "./MusicHeadphonesEffect";
 
 /** A temporary outfit; swimming still owns the bob and water line, and walking keeps its original frames. */
 export class SwimwearEffect {
@@ -32,7 +33,8 @@ export class SwimwearEffect {
         style: Swimwear,
         color?: string,
     ): void {
-        if (!active) {
+        // A costume such as the duck has no swimsuit: it stays as it is, without a human swimsuit drawn on it.
+        if (!active || !isHumanAvatar(sprites.keys())) {
             this.sprite?.setVisible(false);
             for (const [sprite, visible] of this.originalVisibility) sprite.setVisible(visible);
             this.originalVisibility.clear();

@@ -66,4 +66,20 @@ describe("native swimsuit binding", () => {
         effect.destroy();
         expect(outfit.destroy.mock.calls).toHaveLength(1);
     });
+
+    it("leaves a costume such as the duck as it is near and in the water: no human swimsuit on it", async () => {
+        const scene = mock<GameScene>();
+        const factory = mock<Phaser.GameObjects.GameObjectFactory>();
+        scene.add = factory;
+        const duck = mock<Phaser.GameObjects.Sprite>({ visible: true });
+        duck.texture = mock<Phaser.Textures.Texture>({ key: "duck" });
+        duck.frame = mock<Phaser.Textures.Frame>({ name: "1" });
+        const effect = new SwimwearEffect(scene, mock<Phaser.GameObjects.Container>());
+        await Promise.resolve();
+        effect.update(true, false, new Map([["duck", duck]]), Swimwear.Auto);
+        effect.update(true, true, new Map([["duck", duck]]), Swimwear.Auto);
+        expect(factory.sprite.mock.calls).toHaveLength(0);
+        expect(duck.setVisible.mock.calls).not.toContainEqual([false]);
+        effect.destroy();
+    });
 });

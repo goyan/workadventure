@@ -43,6 +43,7 @@ const woka: DeepPartial<Translation["woka"]> = {
     menu: {
         changeOutfit: "Cambia abiti",
         swimwear: "Bagno",
+        swimwearDetail: "(visibile vicino a una piscina)",
         actions: "Azioni del mio avatar",
         closeActions: "Chiudi azioni",
         profile: "Mostra profilo",

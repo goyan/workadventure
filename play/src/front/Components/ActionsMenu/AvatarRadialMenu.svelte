@@ -4,6 +4,8 @@
     import type { WokaMenuData } from "@wa/front/Stores/WokaMenuStore";
     import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore";
     import LL from "@wa/i18n/i18n-svelte";
+    import { WHEEL_GRID, wheelCell } from "./PixelWheel";
+    import PixelIcon from "./PixelIcon.svelte";
 
     let { menu }: { menu: WokaMenuData } = $props();
     const profileAction = $derived(menu.actions.find((action) => action.testId === "avatar-profile"));
@@ -21,17 +23,6 @@
         return { x: 150 + Math.cos(angle) * radius, y: 150 + Math.sin(angle) * radius };
     }
 
-    function sector(index: number): string {
-        const step = (Math.PI * 2) / actions.length;
-        const start = index * step - Math.PI / 2 - step / 2 + 0.025;
-        const end = start + step - 0.05;
-        const a = point(143, start);
-        const b = point(143, end);
-        const c = point(55, end);
-        const d = point(55, start);
-        return `M ${a.x} ${a.y} A 143 143 0 0 1 ${b.x} ${b.y} L ${c.x} ${c.y} A 55 55 0 0 0 ${d.x} ${d.y} Z`;
-    }
-
     function sectorPolygon(index: number): string {
         const step = (Math.PI * 2) / actions.length;
         const start = index * step - Math.PI / 2 - step / 2;
@@ -41,6 +32,64 @@
         ];
         return `polygon(${points.map((p) => `${p.x / 3}% ${p.y / 3}%`).join(",")})`;
     }
+
+    let wheelElement: HTMLDivElement | undefined = $state();
+    let canvas: HTMLCanvasElement | undefined = $state();
+
+    /** Draws the wheel cell by cell, in the colors of the interface theme; the selected sector lights up. */
+    function drawWheel(context: CanvasRenderingContext2D, style: CSSStyleDeclaration): void {
+        const color = (token: string) => style.getPropertyValue(token).trim();
+        const colors = {
+            sector: color("--rt-surface-raised"),
+            selected: color("--rt-accent"),
+            edge: color("--rt-bg-deep"),
+            selectedEdge: color("--rt-text"),
+            center: color("--rt-bg"),
+            centerEdge: color("--rt-line-strong"),
+            marker: color("--rt-highlight"),
+        };
+        const profileSelected = profileAction !== undefined && selected === actions.length;
+        context.clearRect(0, 0, WHEEL_GRID, WHEEL_GRID);
+        for (let y = 0; y < WHEEL_GRID; y++) {
+            for (let x = 0; x < WHEEL_GRID; x++) {
+                const cell = wheelCell(x, y, actions.length);
+                if (cell.kind === "empty") continue;
+                if (cell.kind === "gap") {
+                    context.fillStyle = colors.edge;
+                    context.fillRect(x, y, 1, 1);
+                    continue;
+                }
+                const lit = cell.kind === "center" ? profileSelected : selected === cell.index;
+                context.fillStyle = cell.edge
+                    ? lit
+                        ? colors.selectedEdge
+                        : cell.kind === "center"
+                          ? colors.centerEdge
+                          : colors.edge
+                    : lit
+                      ? colors.selected
+                      : cell.kind === "center"
+                        ? colors.center
+                        : colors.sector;
+                context.fillRect(x, y, 1, 1);
+            }
+        }
+        // The small square "pixel" of the selected choice, as in the rest of the interface, at the rim of its sector.
+        if (selected < actions.length) {
+            const angle = (selected * Math.PI * 2) / actions.length;
+            const markerX = Math.round(WHEEL_GRID / 2 + Math.sin(angle) * 43) - 1;
+            const markerY = Math.round(WHEEL_GRID / 2 - Math.cos(angle) * 43) - 1;
+            context.fillStyle = colors.marker;
+            context.fillRect(markerX, markerY, 2, 2);
+        }
+    }
+
+    $effect(() => {
+        const context = canvas?.getContext("2d");
+        if (!context || !wheelElement) return;
+        // Redrawn when the actions or the selection change (both are read while drawing).
+        drawWheel(context, getComputedStyle(wheelElement));
+    });
 
     function close(): void {
         wokaMenuStore.clear();
@@ -77,7 +126,8 @@
 
 <button class="wheel-dismiss" aria-label={$LL.woka.menu.closeActions()} onclick={close}></button>
 <div
-    class="avatar-wheel"
+    class="avatar-wheel retro-theme"
+    bind:this={wheelElement}
     style:left="{x}px"
     style:top="{y}px"
     style:width="{size}px"
@@ -86,23 +136,7 @@
     role="group"
     aria-label={$LL.woka.menu.actions()}
 >
-    <svg viewBox="0 0 300 300" aria-hidden="true">
-        <circle cx="150" cy="150" r="146" fill="#0b1426" fill-opacity="0.94" stroke="#577487" />
-        {#each actions as action, index (action.uuid)}
-            <path
-                d={sector(index)}
-                fill={selected === index ? "#256c72" : "#1b2b42"}
-                stroke={selected === index ? "#a5fff0" : "#496079"}
-            />
-        {/each}
-        <circle
-            cx="150"
-            cy="150"
-            r="49"
-            fill={profileAction && selected === actions.length ? "#256c72" : "#132033"}
-            stroke={profileAction && selected === actions.length ? "#a5fff0" : "#9ee7da"}
-        />
-    </svg>
+    <canvas class="wheel-pixels" bind:this={canvas} width={WHEEL_GRID} height={WHEEL_GRID} aria-hidden="true"></canvas>
     {#snippet centerContent()}
         {#if $currentPlayerWokaStore}<img src={$currentPlayerWokaStore} alt="" />{/if}
         <span>{menu.wokaName}</span>
@@ -123,7 +157,7 @@
         <div class="wheel-center">{@render centerContent()}</div>
     {/if}
     {#each actions as action, index (action.uuid)}
-        {@const center = point(97, (index * Math.PI * 2) / actions.length - Math.PI / 2)}
+        {@const center = point(104, (index * Math.PI * 2) / actions.length - Math.PI / 2)}
         <button
             bind:this={buttons[index]}
             class="wheel-action"
@@ -139,8 +173,11 @@
                 style:left="{(center.x / 300) * 100}%"
                 style:top="{(center.y / 300) * 100}%"
             >
-                <span class="wheel-icon" aria-hidden="true">{action.emoji}</span>
+                <span class="wheel-icon" aria-hidden="true"
+                    >{#if action.icon}<PixelIcon name={action.icon} size={32} />{:else}{action.emoji}{/if}</span
+                >
                 <span>{action.actionName}</span>
+                {#if action.detail}<span class="wheel-detail">{action.detail}</span>{/if}
             </span>
         </button>
     {/each}
@@ -160,20 +197,38 @@
         z-index: 71;
         transform: translate(-50%, -50%);
         pointer-events: auto;
-        filter: drop-shadow(0 8px 24px #0009);
+        filter: drop-shadow(0 6px 0 #0007);
     }
-    svg {
+    .avatar-wheel {
+        /* Only the theme's colors and font: not the frosted panel behind it, the wheel is round. */
+        background: transparent;
+        backdrop-filter: none;
+        border: 0;
+        font-family: var(--font-main);
+        animation: wheel-open 120ms steps(3, end);
+    }
+    @keyframes wheel-open {
+        from {
+            transform: translate(-50%, -50%) scale(0.7);
+        }
+        to {
+            transform: translate(-50%, -50%) scale(1);
+        }
+    }
+    .wheel-pixels {
         width: 100%;
         height: 100%;
+        image-rendering: pixelated;
     }
     .wheel-center {
         position: absolute;
         inset: 34%;
+        font-family: var(--font-main);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        color: #d0eae6;
+        color: var(--rt-text);
         font-size: 10px;
         pointer-events: none;
     }
@@ -186,7 +241,7 @@
         border-radius: 50%;
     }
     .wheel-profile:focus-visible {
-        outline: 2px solid #a5fff0;
+        outline: 2px solid var(--rt-highlight);
     }
     .wheel-center img {
         width: 45px;
@@ -207,10 +262,11 @@
         height: 100%;
         border: 0;
         padding: 0;
-        color: #dce8f6;
+        color: var(--rt-text);
         background: transparent;
         cursor: pointer;
         font: inherit;
+        font-family: var(--font-main);
         font-size: 11px;
         line-height: 1.25;
         text-align: center;
@@ -232,7 +288,20 @@
         text-decoration: underline;
     }
     .wheel-icon {
+        display: flex;
         font-size: 25px;
         line-height: 1;
+    }
+    /* Up to three short lines under the name, so it stays inside its sector. */
+    .wheel-detail {
+        display: -webkit-box;
+        max-width: 62px;
+        overflow: hidden;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        font-size: 9px;
+        line-height: 1.15;
+        color: var(--rt-muted);
     }
 </style>

@@ -353,11 +353,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             testId: "avatar-profile",
             callback: () => wokaMenuStore.openOwnCard(player.playerName, uuid),
         });
-        if (localUserStore.getVehicle() !== Vehicle.None && isHumanAvatar(player.sprites.keys())) {
+        // A costume such as the duck has no swimwear poses nor skateboard pose.
+        const human = isHumanAvatar(player.sprites.keys());
+        if (localUserStore.getVehicle() !== Vehicle.None && human) {
             const equipped = player.vehicleMode === VehicleMode.Always;
             wokaMenuStore.addAction({
                 actionName: equipped ? get(LL).woka.vehicle.dismount() : get(LL).woka.vehicle.mount(),
                 emoji: "🛹",
+                icon: "skateboard",
                 testId: "avatar-vehicle",
                 callback: () => {
                     player.equipVehicle(equipped ? VehicleMode.Off : VehicleMode.Always);
@@ -365,10 +368,12 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 },
             });
         }
-        for (const action of [AvatarAction.Dance, AvatarAction.Coffee, AvatarAction.Idle]) {
+        // No "stop": moving ends any action.
+        for (const action of [AvatarAction.Dance, AvatarAction.Coffee] as const) {
             wokaMenuStore.addAction({
                 actionName: get(LL).woka.actions[action](),
-                emoji: action === AvatarAction.Dance ? "🕺" : action === AvatarAction.Coffee ? "☕" : "⏹",
+                emoji: action === AvatarAction.Dance ? "🕺" : "☕",
+                icon: action === AvatarAction.Dance ? "dance" : "coffee",
                 testId: `avatar-action-${action}`,
                 callback: () => {
                     player.setAvatarAction(action);
@@ -379,6 +384,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         wokaMenuStore.addAction({
             actionName: get(LL).woka.menu.changeOutfit(),
             emoji: "👕",
+            icon: "outfit",
             testId: "avatar-change-outfit",
             callback: () => {
                 wokaMenuStore.clear();
@@ -400,25 +406,35 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                     .catch((error) => console.error("Could not open avatar customization", error));
             },
         });
-        wokaMenuStore.addAction({
-            actionName: get(LL).woka.menu.swimwear(),
-            emoji: "🩱",
-            testId: "avatar-swimwear",
-            callback: () => {
-                wokaMenuStore.openOwnCard(player.playerName, uuid, position);
-                for (const style of Object.values(Swimwear)) {
-                    wokaMenuStore.addAction({
-                        actionName: get(LL).woka.swimwear[style](),
-                        emoji: style === Swimwear.TwoPiece ? "👙" : style === Swimwear.Shorts ? "🩳" : "🩱",
-                        testId: `avatar-swimwear-${style}`,
-                        callback: () => {
-                            player.setSwimwear(style);
-                            wokaMenuStore.clear();
-                        },
-                    });
-                }
-            },
-        });
+        if (human) {
+            wokaMenuStore.addAction({
+                actionName: get(LL).woka.menu.swimwear(),
+                detail: get(LL).woka.menu.swimwearDetail(),
+                emoji: "🩱",
+                icon: "swimwear",
+                testId: "avatar-swimwear",
+                callback: () => {
+                    wokaMenuStore.openOwnCard(player.playerName, uuid, position);
+                    for (const style of Object.values(Swimwear)) {
+                        wokaMenuStore.addAction({
+                            actionName: get(LL).woka.swimwear[style](),
+                            emoji: style === Swimwear.TwoPiece ? "👙" : style === Swimwear.Shorts ? "🩳" : "🩱",
+                            icon:
+                                style === Swimwear.TwoPiece
+                                    ? "twoPiece"
+                                    : style === Swimwear.Shorts
+                                      ? "shorts"
+                                      : "onePiece",
+                            testId: `avatar-swimwear-${style}`,
+                            callback: () => {
+                                player.setSwimwear(style);
+                                wokaMenuStore.clear();
+                            },
+                        });
+                    }
+                },
+            });
+        }
     }
 
     public handlePointerDownEvent(pointer: Pointer, gameObjects: GameObject[]): void {
