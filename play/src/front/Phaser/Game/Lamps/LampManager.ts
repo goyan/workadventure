@@ -15,7 +15,16 @@ import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
-import { lampJamsOf, resolveLampJam, zoneOf, type LampJam, type LampJamChoice, type LampZone } from "./LampJam";
+import {
+    defaultLampZone,
+    jamOfSpaces,
+    lampJamsOf,
+    resolveLampJam,
+    zoneOf,
+    type LampJam,
+    type LampJamChoice,
+    type LampZone,
+} from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
 import { lampSource, planLamps } from "./LampReconcile";
 import { nextBrightness } from "./LampStyle";
@@ -47,8 +56,8 @@ interface PlacedLamp {
     entity: Entity;
     /** The Jam this lamp follows now, by the rule of LampJam; undefined: off. */
     jam: LampJamChoice | undefined;
-    /** The listening zone it stands in, which its light is kept in; undefined outside every zone. */
-    zoneId: string | undefined;
+    /** What its light is kept in: its listening zone, or a square of its own when it stands in none. */
+    zoneId: string;
     /** How bright it is, from 0 to 1: it rises quickly and dies away slowly (see nextBrightness). */
     brightness: number;
     lastUpdateAt: number | undefined;
@@ -172,21 +181,22 @@ export class LampManager {
             : undefined;
     }
 
-    /** The Jam the user listens to, as a choice: the one whose space they joined. */
+    /** The Jam the user hears, as a choice: the one they listen to, or, for a host, the one whose music they share. */
     private listenedJam(): LampJamChoice | undefined {
-        if (this.listeningSpace === undefined) {
-            return undefined;
-        }
-        for (const room of this.rooms) {
-            const choice = { areaId: room.zone.areaId, hostUuid: room.jam.hostUuid };
-            if (this.spaceNameOf(choice) === this.listeningSpace) {
-                return choice;
-            }
-        }
-        return undefined;
+        const rooms = this.rooms.map((room) => ({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid }));
+        return jamOfSpaces(rooms, (choice) => this.spaceNameOf(choice), [
+            this.listeningSpace,
+            this.sharedMusic?.spaceName,
+        ]);
     }
 
-    private buildVisual(kind: LampKind, entity: Entity, zone: LampZone | undefined): LampVisual {
+    /** Where the light of a lamp stays: its listening zone, or a square around it when it stands in none. */
+    private clipZoneOf(id: string, entity: Entity, zones: readonly LampZone[]): LampZone {
+        const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
+        return zoneOf(source, zones) ?? defaultLampZone(id, source);
+    }
+
+    private buildVisual(kind: LampKind, entity: Entity, zone: LampZone): LampVisual {
         const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
         return createLamp(kind, {
             scene: this.scene,
@@ -195,7 +205,7 @@ export class LampManager {
             depth: LAMP_DEPTH,
             reducedMotion: this.reducedMotion,
             drawsBody: false,
-            container: zone ? this.zoneLights.containerFor(zone) : undefined,
+            container: this.zoneLights.containerFor(zone),
         });
     }
 
@@ -221,13 +231,13 @@ export class LampManager {
             if (!entity) {
                 continue;
             }
-            const zone = zoneOf(lampSource(entity, entity.getPrefab().lamp?.anchor), zones);
+            const zone = this.clipZoneOf(id, entity, zones);
             this.placed.set(id, {
                 kind,
                 visual: this.buildVisual(kind, entity, zone),
                 entity,
                 jam: undefined,
-                zoneId: zone?.areaId,
+                zoneId: zone.areaId,
                 brightness: 0,
                 lastUpdateAt: undefined,
             });
@@ -235,16 +245,14 @@ export class LampManager {
 
         // A lamp that was moved into another zone (in the editor) draws in the container of that zone.
         const usedZones = new Map<string, LampZone>();
-        for (const lamp of this.placed.values()) {
-            const zone = zoneOf(lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor), zones);
-            if (zone?.areaId !== lamp.zoneId) {
+        for (const [id, lamp] of this.placed) {
+            const zone = this.clipZoneOf(id, lamp.entity, zones);
+            if (zone.areaId !== lamp.zoneId) {
                 lamp.visual.destroy();
                 lamp.visual = this.buildVisual(lamp.kind, lamp.entity, zone);
-                lamp.zoneId = zone?.areaId;
+                lamp.zoneId = zone.areaId;
             }
-            if (zone) {
-                usedZones.set(zone.areaId, zone);
-            }
+            usedZones.set(zone.areaId, zone);
         }
         this.zoneLights.sync(usedZones);
 

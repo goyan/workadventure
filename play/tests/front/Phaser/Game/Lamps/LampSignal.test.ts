@@ -93,6 +93,30 @@ describe("BeatDetector", () => {
         expect(lastSeconds.length).toBeLessThanOrEqual(17);
     });
 
+    // What the analyser of the browser gives for a drum loop at 120 BPM over a steady bass line, measured in Chromium
+    // (Web Audio, fftSize 1024, smoothing 0.5): the bass band sits around 0.68 between two kicks, within 0.02, and
+    // reaches about 0.94 on a kick. Louder or quieter bass lines move the floor (0.68 to 0.75) and keep the kick near 0.94.
+    const realBass = (time: number): number =>
+        0.68 + 0.26 * Math.exp(-(time % 500) / 60) + 0.02 * Math.sin(time * 0.037);
+
+    it("finds the kicks of music as the analyser of the browser gives it", () => {
+        const beats = run(realBass, 10_000).filter((time) => time >= 2000);
+        // 120 BPM: 2 a second, 16 kicks between 2 and 10 seconds (measured: every one is found).
+        expect(beats.length).toBeGreaterThanOrEqual(15);
+        expect(beats.length).toBeLessThanOrEqual(17);
+    });
+
+    it("finds nothing in a loud steady bass that only wobbles: no kick, no flash", () => {
+        const wobble = (time: number): number => 0.7 + 0.03 * Math.sin(time * 0.037) + 0.02 * Math.sin(time * 0.011);
+        expect(run(wobble, 10_000).filter((time) => time >= 2000)).toEqual([]);
+    });
+
+    it("finds nothing in a slow swell: the average follows a rise that takes seconds", () => {
+        // From 0.5 to 0.9 in 8 seconds.
+        const swell = (time: number): number => 0.5 + (0.4 * Math.min(time, 8000)) / 8000;
+        expect(run(swell, 8000).filter((time) => time >= 2000)).toEqual([]);
+    });
+
     it("finds nothing in silence", () => {
         expect(run(() => 0, 5000)).toEqual([]);
     });
