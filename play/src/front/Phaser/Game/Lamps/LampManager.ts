@@ -15,7 +15,7 @@ import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
-import { lampJamsOf, resolveLampJam, type LampJam, type LampJamChoice, type LampZone } from "./LampJam";
+import { lampJamsOf, resolveLampJam, zoneOf, type LampJam, type LampJamChoice, type LampZone } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
 import { lampSource, planLamps } from "./LampReconcile";
 import { nextBrightness } from "./LampStyle";
@@ -23,6 +23,7 @@ import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
 import { StreamSpectrum } from "./StreamSpectrum";
+import { LampZoneLights } from "./LampZoneLights";
 import { syntheticSpectrum } from "./SyntheticBeat";
 import { createLamp, type LampKind, type LampVisual } from "./LampVisuals";
 
@@ -46,6 +47,8 @@ interface PlacedLamp {
     entity: Entity;
     /** The Jam this lamp follows now, by the rule of LampJam; undefined: off. */
     jam: LampJamChoice | undefined;
+    /** The listening zone it stands in, which its light is kept in; undefined outside every zone. */
+    zoneId: string | undefined;
     /** How bright it is, from 0 to 1: it rises quickly and dies away slowly (see nextBrightness). */
     brightness: number;
     lastUpdateAt: number | undefined;
@@ -69,6 +72,8 @@ export class LampManager {
     private readonly demoLamps: LampVisual[] = [];
     private readonly placed = new Map<string, PlacedLamp>();
     private readonly music = new Map<string, ReadMusic>();
+    // The light of a room stays in the room: the lamps of a zone draw in one container, clipped to the zone.
+    private readonly zoneLights: LampZoneLights;
     private readonly frames = new Map<string, LampFrame>();
     private demoSignal: LampSignalSource | undefined;
     private demo: { bpm: number } | undefined;
@@ -90,6 +95,7 @@ export class LampManager {
         options: { demo?: { bpm: number } } = {},
     ) {
         ensureLampTextures(scene);
+        this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
         this.unsubscribers.push(
             mapEditorModeStore.subscribe((open) => {
@@ -180,6 +186,19 @@ export class LampManager {
         return undefined;
     }
 
+    private buildVisual(kind: LampKind, entity: Entity, zone: LampZone | undefined): LampVisual {
+        const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
+        return createLamp(kind, {
+            scene: this.scene,
+            x: source.x,
+            y: source.y,
+            depth: LAMP_DEPTH,
+            reducedMotion: this.reducedMotion,
+            drawsBody: false,
+            container: zone ? this.zoneLights.containerFor(zone) : undefined,
+        });
+    }
+
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
         const lit = new Map<string, LampKind>();
@@ -192,28 +211,44 @@ export class LampManager {
             this.placed.get(id)?.visual.destroy();
             this.placed.delete(id);
         }
+        if (this.placed.size === 0 && plan.create.length === 0) {
+            this.zoneLights.sync(new Map());
+            return;
+        }
+        const zones = this.zones();
         for (const { id, kind } of plan.create) {
             const entity = entities.get(id);
             if (!entity) {
                 continue;
             }
-            const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
-            const visual = createLamp(kind, {
-                scene: this.scene,
-                x: source.x,
-                y: source.y,
-                depth: LAMP_DEPTH,
-                reducedMotion: this.reducedMotion,
-                drawsBody: false,
+            const zone = zoneOf(lampSource(entity, entity.getPrefab().lamp?.anchor), zones);
+            this.placed.set(id, {
+                kind,
+                visual: this.buildVisual(kind, entity, zone),
+                entity,
+                jam: undefined,
+                zoneId: zone?.areaId,
+                brightness: 0,
+                lastUpdateAt: undefined,
             });
-            this.placed.set(id, { kind, visual, entity, jam: undefined, brightness: 0, lastUpdateAt: undefined });
         }
 
-        if (this.placed.size === 0) {
-            return;
+        // A lamp that was moved into another zone (in the editor) draws in the container of that zone.
+        const usedZones = new Map<string, LampZone>();
+        for (const lamp of this.placed.values()) {
+            const zone = zoneOf(lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor), zones);
+            if (zone?.areaId !== lamp.zoneId) {
+                lamp.visual.destroy();
+                lamp.visual = this.buildVisual(lamp.kind, lamp.entity, zone);
+                lamp.zoneId = zone?.areaId;
+            }
+            if (zone) {
+                usedZones.set(zone.areaId, zone);
+            }
         }
+        this.zoneLights.sync(usedZones);
+
         // Which Jam each lamp follows: worked out the same way by every client, from what everyone shares.
-        const zones = this.zones();
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants);
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
@@ -330,6 +365,7 @@ export class LampManager {
             visual.destroy();
         }
         this.placed.clear();
+        this.zoneLights.destroy();
         for (const read of this.music.values()) {
             read.spectrum.destroy();
         }

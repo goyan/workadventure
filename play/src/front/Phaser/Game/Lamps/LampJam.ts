@@ -31,6 +31,16 @@ function contains(zone: LampZone, point: { x: number; y: number }): boolean {
     return point.x >= zone.x && point.x <= zone.x + zone.width && point.y >= zone.y && point.y <= zone.y + zone.height;
 }
 
+/**
+ * The listening zone a lamp stands in (the smallest one when they are nested), or undefined outside every zone. The
+ * Jam it follows comes from it (see resolveLampJam) and its light stays within it.
+ */
+export function zoneOf(source: { x: number; y: number }, zones: readonly LampZone[]): LampZone | undefined {
+    return zones
+        .filter((candidate) => contains(candidate, source))
+        .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+}
+
 /** The most crowded Jam; on a tie the smallest host id, so that every client picks the same one. */
 function mostCrowded(jams: readonly LampJam[]): LampJam | undefined {
     return [...jams].sort(
@@ -63,9 +73,7 @@ export function resolveLampJam(input: {
         return chosen && { areaId: chosen.areaId, hostUuid: chosen.hostUuid };
     };
 
-    const zone = zones
-        .filter((candidate) => contains(candidate, source))
-        .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+    const zone = zoneOf(source, zones);
     if (zone) {
         return pick(playing.filter((jam) => jam.areaId === zone.areaId));
     }

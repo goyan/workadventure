@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     lampJamsOf,
     resolveLampJam,
+    zoneOf,
     type LampJam,
     type LampZone,
 } from "../../../../../src/front/Phaser/Game/Lamps/LampJam";
@@ -188,5 +189,26 @@ describe("lampJamsOf", () => {
 
     it("counts no one when nobody is known to take part", () => {
         expect(lampJamsOf([spotifyRoom("club", "a")], new Map(), new Map())[0].participants).toBe(0);
+    });
+});
+
+describe("zoneOf", () => {
+    it("finds the listening zone a lamp stands in: its light stays within", () => {
+        expect(zoneOf(inClub, [club, lounge])).toEqual(club);
+    });
+
+    it("is undefined for a lamp outside every zone: nothing to keep its light in", () => {
+        expect(zoneOf(outside, [club, lounge])).toBeUndefined();
+    });
+
+    it("takes the smallest zone when they are nested", () => {
+        const hall: LampZone = { areaId: "hall", x: 0, y: 0, width: 1000, height: 1000 };
+        expect(zoneOf(inClub, [hall, club])).toEqual(club);
+        expect(zoneOf(inClub, [club, hall])).toEqual(club);
+    });
+
+    it("counts the edge of a zone as inside", () => {
+        expect(zoneOf({ x: 400, y: 300 }, [club])).toEqual(club);
+        expect(zoneOf({ x: 401, y: 300 }, [club])).toBeUndefined();
     });
 });
