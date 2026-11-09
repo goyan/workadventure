@@ -56,10 +56,18 @@ export function bandsOf(spectrum: Uint8Array, sampleRate?: number): LampBands {
     };
 }
 
-/** A beat is a loudness well above the recent average; the average follows the music over about a second. */
+/**
+ * A beat is a loudness a clear step above the recent average; the average follows the music over about a second.
+ * The step is absolute, not a ratio: an analyser gives its loudness on a decibel scale, where the bass of music sits
+ * high and nearly steady (around 0.7 of the range) and a kick adds only about a tenth. A ratio of the average, fine on
+ * a made-up signal, is out of reach there. 0.07 is above the wobble of a steady bass and of the lag behind a swell,
+ * and below a kick.
+ */
 const AVERAGE_TIME_MS = 800;
-const RISE_RATIO = 1.3;
-const RISE_FLOOR = 0.05;
+/** Right after the start the average is only a first guess: it follows the music faster until it has settled. */
+const SETTLING_TIME_MS = 1500;
+const SETTLING_AVERAGE_TIME_MS = 200;
+const RISE_STEP = 0.07;
 /** The average needs this long to mean something: nothing fires before. */
 const WARM_UP_MS = 400;
 
@@ -76,14 +84,19 @@ export class BeatDetector {
     public update(now: number, energy: number): boolean {
         if (this.startedAt === undefined || this.lastTime === undefined) {
             this.startedAt = now;
+            // The average starts at what is playing, not at zero: from zero it takes seconds to catch up, and every
+            // step of that climb would read as a beat.
+            this.average = energy;
         } else {
-            const smoothing = 1 - Math.exp(-(now - this.lastTime) / AVERAGE_TIME_MS);
+            const settling = now - this.startedAt < SETTLING_TIME_MS;
+            const smoothing =
+                1 - Math.exp(-(now - this.lastTime) / (settling ? SETTLING_AVERAGE_TIME_MS : AVERAGE_TIME_MS));
             this.average += (energy - this.average) * smoothing;
         }
         this.lastTime = now;
 
         const warm = now - this.startedAt >= WARM_UP_MS;
-        const rising = energy > this.average * RISE_RATIO + RISE_FLOOR;
+        const rising = energy > this.average + RISE_STEP;
         const allowed = this.lastBeatAt === undefined || now - this.lastBeatAt >= LAMP_MIN_FLASH_INTERVAL_MS;
         if (warm && rising && allowed) {
             this.lastBeatAt = now;

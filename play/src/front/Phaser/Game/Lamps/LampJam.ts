@@ -31,6 +31,16 @@ function contains(zone: LampZone, point: { x: number; y: number }): boolean {
     return point.x >= zone.x && point.x <= zone.x + zone.width && point.y >= zone.y && point.y <= zone.y + zone.height;
 }
 
+/**
+ * The listening zone a lamp stands in (the smallest one when they are nested), or undefined outside every zone. The
+ * Jam it follows comes from it (see resolveLampJam) and its light stays within it.
+ */
+export function zoneOf(source: { x: number; y: number }, zones: readonly LampZone[]): LampZone | undefined {
+    return zones
+        .filter((candidate) => contains(candidate, source))
+        .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+}
+
 /** The most crowded Jam; on a tie the smallest host id, so that every client picks the same one. */
 function mostCrowded(jams: readonly LampJam[]): LampJam | undefined {
     return [...jams].sort(
@@ -63,9 +73,7 @@ export function resolveLampJam(input: {
         return chosen && { areaId: chosen.areaId, hostUuid: chosen.hostUuid };
     };
 
-    const zone = zones
-        .filter((candidate) => contains(candidate, source))
-        .sort((a, b) => a.width * a.height - b.width * b.height)[0];
+    const zone = zoneOf(source, zones);
     if (zone) {
         return pick(playing.filter((jam) => jam.areaId === zone.areaId));
     }
@@ -91,4 +99,42 @@ export function lampJamsOf(
             playing: isPlayingTrack(listeningByUserUuid.get(room.jam.hostUuid)),
             participants: participantsByHost.get(room.jam.hostUuid) ?? 0,
         }));
+}
+
+/**
+ * The Jam the user hears: the first of these spaces (the one they listen to, then the one whose music they share: a
+ * host hears their own Jam) that belongs to a Jam of the map.
+ */
+export function jamOfSpaces(
+    rooms: readonly LampJamChoice[],
+    spaceNameOf: (choice: LampJamChoice) => string | undefined,
+    spaces: readonly (string | undefined)[],
+): LampJamChoice | undefined {
+    for (const space of spaces) {
+        if (space === undefined) {
+            continue;
+        }
+        const room = rooms.find((candidate) => spaceNameOf(candidate) === space);
+        if (room) {
+            return { areaId: room.areaId, hostUuid: room.hostUuid };
+        }
+    }
+    return undefined;
+}
+
+/** Side of the square a lamp outside every zone lights: 12 tiles. */
+const DEFAULT_LIGHT_SIDE_PX = 384;
+
+/**
+ * Where the light of a lamp that stands in no listening zone stays: a square around it. Without it the light would
+ * wash over whatever is near, walls and rooms next door included. One per lamp, and it moves with the lamp.
+ */
+export function defaultLampZone(lampId: string, source: { x: number; y: number }): LampZone {
+    return {
+        areaId: `lamp:${lampId}`,
+        x: source.x - DEFAULT_LIGHT_SIDE_PX / 2,
+        y: source.y - DEFAULT_LIGHT_SIDE_PX / 2,
+        width: DEFAULT_LIGHT_SIDE_PX,
+        height: DEFAULT_LIGHT_SIDE_PX,
+    };
 }

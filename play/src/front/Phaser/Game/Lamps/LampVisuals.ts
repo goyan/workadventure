@@ -29,6 +29,18 @@ export interface LampPlacement {
      * object of the map does not: the object is the body, and only the light is drawn over it.
      */
     drawsBody: boolean;
+    /**
+     * Where the images of the lamp are drawn. The lamps of a zone share one, which clips what is in it to the zone: the
+     * light of a room stays in the room. Without one, the images go straight on the scene (nothing clips them).
+     */
+    container?: Phaser.GameObjects.Container;
+}
+
+/** An image of a lamp, drawn in the container of its zone when it has one. */
+function newImage(placement: LampPlacement, texture: string): Phaser.GameObjects.Image {
+    const image = newImage(placement, texture);
+    placement.container?.add(image);
+    return image;
 }
 
 /** The colours the spot and the discs go through, one step per beat. */
@@ -50,7 +62,7 @@ class SpotLamp implements LampVisual {
     private colourIndex = 0;
 
     constructor(private readonly placement: LampPlacement) {
-        this.beam = additive(placement.scene.add.image(placement.x, placement.y, LAMP_BEAM_TEXTURE), placement.depth)
+        this.beam = additive(newImage(placement, LAMP_BEAM_TEXTURE), placement.depth)
             .setOrigin(0.5, 0)
             .setDisplaySize(200, 330);
     }
@@ -99,13 +111,10 @@ class DiscoLamp implements LampVisual {
     constructor(private readonly placement: LampPlacement) {
         this.x = placement.x;
         this.y = placement.y;
-        this.ball = placement.scene.add
-            .image(placement.x, placement.y, LAMP_BALL_TEXTURE)
-            .setDepth(placement.depth)
-            .setDisplaySize(26, 26);
+        this.ball = newImage(placement, LAMP_BALL_TEXTURE).setDepth(placement.depth).setDisplaySize(26, 26);
         for (let index = 0; index < DISCO_DOTS; index++) {
             this.dots.push(
-                additive(placement.scene.add.image(placement.x, placement.y, LAMP_DISC_TEXTURE), placement.depth)
+                additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth)
                     .setDisplaySize(44, 44)
                     .setTint(PALETTE[index % PALETTE.length]),
             );
@@ -159,14 +168,8 @@ class NeonLamp implements LampVisual {
     private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
-        this.glow = additive(
-            placement.scene.add.image(placement.x, placement.y, LAMP_DISC_TEXTURE),
-            placement.depth,
-        ).setDisplaySize(180, 70);
-        this.tube = additive(
-            placement.scene.add.image(placement.x, placement.y, LAMP_TUBE_TEXTURE),
-            placement.depth + 1,
-        ).setDisplaySize(96, 12);
+        this.glow = additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth).setDisplaySize(180, 70);
+        this.tube = additive(newImage(placement, LAMP_TUBE_TEXTURE), placement.depth + 1).setDisplaySize(96, 12);
     }
 
     public moveTo(x: number, y: number): void {
@@ -203,16 +206,12 @@ class StrobeLamp implements LampVisual {
     private brightness = 1;
 
     constructor(private readonly placement: LampPlacement) {
-        this.body = placement.scene.add
-            .image(placement.x, placement.y, LAMP_BALL_TEXTURE)
+        this.body = newImage(placement, LAMP_BALL_TEXTURE)
             .setDepth(placement.depth)
             .setDisplaySize(18, 18)
             .setTint(0x888888);
         // The flash is small on purpose: the lamp, never the whole screen.
-        this.flash = additive(
-            placement.scene.add.image(placement.x, placement.y, LAMP_DISC_TEXTURE),
-            placement.depth + 1,
-        ).setDisplaySize(140, 140);
+        this.flash = additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth + 1).setDisplaySize(140, 140);
     }
 
     public moveTo(x: number, y: number): void {

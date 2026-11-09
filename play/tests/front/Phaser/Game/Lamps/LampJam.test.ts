@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
     lampJamsOf,
+    defaultLampZone,
+    jamOfSpaces,
     resolveLampJam,
+    zoneOf,
     type LampJam,
     type LampZone,
 } from "../../../../../src/front/Phaser/Game/Lamps/LampJam";
@@ -188,5 +191,74 @@ describe("lampJamsOf", () => {
 
     it("counts no one when nobody is known to take part", () => {
         expect(lampJamsOf([spotifyRoom("club", "a")], new Map(), new Map())[0].participants).toBe(0);
+    });
+});
+
+describe("zoneOf", () => {
+    it("finds the listening zone a lamp stands in: its light stays within", () => {
+        expect(zoneOf(inClub, [club, lounge])).toEqual(club);
+    });
+
+    it("is undefined for a lamp outside every zone: nothing to keep its light in", () => {
+        expect(zoneOf(outside, [club, lounge])).toBeUndefined();
+    });
+
+    it("takes the smallest zone when they are nested", () => {
+        const hall: LampZone = { areaId: "hall", x: 0, y: 0, width: 1000, height: 1000 };
+        expect(zoneOf(inClub, [hall, club])).toEqual(club);
+        expect(zoneOf(inClub, [club, hall])).toEqual(club);
+    });
+
+    it("counts the edge of a zone as inside", () => {
+        expect(zoneOf({ x: 400, y: 300 }, [club])).toEqual(club);
+        expect(zoneOf({ x: 401, y: 300 }, [club])).toBeUndefined();
+    });
+});
+
+describe("jamOfSpaces", () => {
+    const rooms = [
+        { areaId: "club", hostUuid: "a" },
+        { areaId: "club", hostUuid: "b" },
+    ];
+    const spaceNameOf = (choice: { areaId: string; hostUuid: string }) => `space:${choice.areaId}:${choice.hostUuid}`;
+
+    it("finds the Jam of the space the user listens to", () => {
+        expect(jamOfSpaces(rooms, spaceNameOf, ["space:club:b"])).toEqual({ areaId: "club", hostUuid: "b" });
+    });
+
+    it("finds the Jam whose music the user shares: a host hears their own Jam", () => {
+        expect(jamOfSpaces(rooms, spaceNameOf, [undefined, "space:club:a"])).toEqual({ areaId: "club", hostUuid: "a" });
+    });
+
+    it("prefers the first of the spaces, the one listened to", () => {
+        expect(jamOfSpaces(rooms, spaceNameOf, ["space:club:b", "space:club:a"])).toEqual({
+            areaId: "club",
+            hostUuid: "b",
+        });
+    });
+
+    it("is undefined when the user is in none of these spaces", () => {
+        expect(jamOfSpaces(rooms, spaceNameOf, [undefined, undefined])).toBeUndefined();
+        expect(jamOfSpaces(rooms, spaceNameOf, ["space:elsewhere:x"])).toBeUndefined();
+    });
+});
+
+describe("defaultLampZone", () => {
+    it("is a square around the lamp, 12 tiles wide, so that the light of a lamp outside every zone does not wash over the map", () => {
+        expect(defaultLampZone("lamp-1", { x: 500, y: 400 })).toEqual({
+            areaId: "lamp:lamp-1",
+            x: 308,
+            y: 208,
+            width: 384,
+            height: 384,
+        });
+    });
+
+    it("follows the lamp when it is moved", () => {
+        expect(defaultLampZone("lamp-1", { x: 100, y: 100 })).toMatchObject({ x: -92, y: -92 });
+    });
+
+    it("is one zone per lamp: two lamps never share a clip", () => {
+        expect(defaultLampZone("a", { x: 0, y: 0 }).areaId).not.toBe(defaultLampZone("b", { x: 0, y: 0 }).areaId);
     });
 });
