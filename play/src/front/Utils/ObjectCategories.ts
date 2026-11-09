@@ -75,6 +75,16 @@ export function getObjectInteraction(
     return { interaction: "none", trigger: "auto" };
 }
 
+/** An animated object players run on (a treadmill): its belt moves only while someone runs on it. */
+export function isTreadmillBelt(
+    prefab: Pick<EntityPrefab, "tags" | "name" | "sittable" | "water" | "animation">,
+    mapCategories: MapCategories,
+): boolean {
+    return (
+        prefab.animation !== undefined && getObjectInteraction(prefab, mapCategories).interaction === AvatarAction.Run
+    );
+}
+
 /** Every category of a map: the base ones, then those the map added, in the order of their names. */
 export function listMapCategories(
     mapCategories: MapCategories,

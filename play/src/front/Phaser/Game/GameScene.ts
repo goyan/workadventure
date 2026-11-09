@@ -252,6 +252,7 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { environmentVolumeStore, footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -459,6 +460,10 @@ export class GameScene extends DirtyScene {
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
+    /** Animated treadmills move their belt only while someone runs on them. */
+    public readonly treadmillBelts = new TreadmillBelts((entityId) =>
+        this.gameMapFrontWrapper?.getEntitiesManager().getEntities().get(entityId),
+    );
     private konamiCodeDetector: KonamiCodeDetector | undefined;
     private hasMovedThisFrame: boolean = false;
 

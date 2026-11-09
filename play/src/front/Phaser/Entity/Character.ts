@@ -582,6 +582,11 @@ export abstract class Character extends Container implements OutlineableInterfac
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;
             this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
+            // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
+            this.scene.treadmillBelts.setRunner(
+                this,
+                this.avatarAction === AvatarAction.Run ? actionObject?.entityId : undefined,
+            );
         }
         return this.depthCache.depth;
     }
@@ -851,6 +856,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     destroy(): void {
+        this.scene?.treadmillBelts.setRunner(this, undefined);
         this.usernameDisplay?.destroy();
         this.swimEffect?.destroy();
         this.swimwearEffect?.destroy();

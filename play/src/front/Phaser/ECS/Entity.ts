@@ -20,6 +20,7 @@ import { getImageCoWebsiteTitle, ImageCoWebsite, isImageCoWebsiteUrl } from "../
 import { SimpleCoWebsite } from "../../WebRtc/CoWebsite/SimpleCoWebsite";
 import { coWebsites } from "../../Stores/CoWebsiteStore";
 import type { ActivatableInterface } from "../Game/ActivatableInterface";
+import { isTreadmillBelt } from "../../Utils/ObjectCategories";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import {
@@ -60,6 +61,8 @@ export const DEFAULT_ACTIVABLE_RADIUS = 14;
 export class Entity extends Sprite implements ActivatableInterface, OutlineableInterface {
     public readonly activationRadius: number = DEFAULT_ACTIVABLE_RADIUS;
     private readonly outlineColorStore = createColorStore();
+    /** An animated treadmill: its belt moves only while someone runs on it. */
+    private treadmillBelt = false;
     private readonly outlineColorStoreUnsubscribe: Unsubscriber;
 
     private entityData: Required<WAMEntityData>;
@@ -138,7 +141,20 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (animationKey) {
             this.play(animationKey);
         }
+        const scene = this.scene as GameScene;
+        this.treadmillBelt =
+            animationKey !== undefined && isTreadmillBelt(this.prefab, scene.wamFile?.settings?.categories);
+        if (this.treadmillBelt) this.setBeltMoving(scene.treadmillBelts.isMoving(this.entityId));
         return this;
+    }
+
+    /** A treadmill shows its first image while nobody runs on it, and moves its belt while someone does. */
+    public setBeltMoving(moving: boolean): void {
+        const animation = this.anims.currentAnim;
+        if (!this.treadmillBelt || !animation) return;
+        if (moving) this.anims.resume();
+        else this.anims.pause(animation.frames[0]);
+        (this.scene as GameScene).markDirty();
     }
 
     public setSeason(season: Season): void {
