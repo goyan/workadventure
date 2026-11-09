@@ -2,6 +2,7 @@ import type { ListeningZoneJam } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import { get, writable } from "svelte/store";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { SpotifyPlaybackCommand } from "../../../src/front/Interfaces/DesktopAppInterfaces";
 import { EMPTY_SPOTIFY_LISTENING } from "../../../src/common/SpotifyListening";
 import type {
     JukeboxQueue,
@@ -12,6 +13,7 @@ import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneCont
 import type { JoinedJam, ListeningZone } from "../../../src/front/ListeningZone/ListeningZoneStore";
 import {
     addToJukebox,
+    controlJukeboxPlayback,
     HOME_JAM_QUEUE_EVENT,
     jukeboxQueuesStore,
     JUKEBOX_MOVE_EVENT,
@@ -70,6 +72,7 @@ function createHarness(localUuid: string, jam: ListeningZoneJam = homeJam) {
         dequeueOnSpotify: vi.fn(),
         moveInSpotifyQueue: vi.fn(),
         refreshSpotifyQueue: vi.fn(),
+        controlSpotifyPlayback: vi.fn(),
         watchSpotifyQueue: (callback: (queue: JukeboxQueue | JukeboxTrack[]) => void) => {
             onSpotifyQueue = callback;
             return () => (onSpotifyQueue = undefined);
@@ -115,6 +118,31 @@ it("refreshes the host's live Spotify snapshot when opening their own Jukebox qu
     requestJukeboxQueue("host");
     expect(host.desktop.refreshSpotifyQueue).toHaveBeenCalledOnce();
     host.stop();
+});
+
+it("only controls the creator's active Jukebox, never a guest's or a closed room", () => {
+    const room = { zone: ZONE, jam: homeJam };
+    const guest = createHarness("guest");
+    controlJukeboxPlayback(room, { command: SpotifyPlaybackCommand.Next });
+    expect(guest.desktop.controlSpotifyPlayback).not.toHaveBeenCalled();
+    expect(guest.send).not.toHaveBeenCalled();
+    guest.stop();
+    const host = createHarness("host");
+    for (const command of [SpotifyPlaybackCommand.Play, SpotifyPlaybackCommand.Pause, SpotifyPlaybackCommand.Next]) {
+        controlJukeboxPlayback(room, { command });
+        expect(host.desktop.controlSpotifyPlayback).toHaveBeenLastCalledWith({ command });
+    }
+    controlJukeboxPlayback({ ...room, zone: { ...ZONE, areaId: "other" } }, { command: SpotifyPlaybackCommand.Next });
+    controlJukeboxPlayback(
+        { ...room, jam: { url: "https://spotify.link/abc", hostUuid: "host", hostName: "Nat" } },
+        { command: SpotifyPlaybackCommand.Next },
+    );
+    host.rooms.set([]);
+    controlJukeboxPlayback(room, { command: SpotifyPlaybackCommand.Next });
+    expect(host.desktop.controlSpotifyPlayback).toHaveBeenCalledTimes(3);
+    host.stop();
+    controlJukeboxPlayback(room, { command: SpotifyPlaybackCommand.Next });
+    expect(host.desktop.controlSpotifyPlayback).toHaveBeenCalledTimes(3);
 });
 
 describe("Jukebox, as a guest", () => {

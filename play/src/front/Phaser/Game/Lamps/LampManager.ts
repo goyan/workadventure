@@ -1,6 +1,8 @@
-import type { AreaData } from "@workadventure/map-editor";
+import { isHomeJam, type AreaData } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
+import { joinedJamStore, type JoinedJam } from "../../../ListeningZone/ListeningZoneStore";
+import { spotifyTrackUri } from "../../../../common/SpotifyListening";
 import { jamAudioSession } from "../../../ListeningZone/GameJamAudioSession";
 import { jamMusicCapture, type SharedJamMusic } from "../../../ListeningZone/JamMusicCapture";
 import { jamMusicStreamsStore } from "../../../ListeningZone/JamMusicStore";
@@ -11,10 +13,12 @@ import {
 } from "../../../ListeningZone/ListeningZoneController";
 import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirectory";
 import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
+import { lampEffectsEnabledStore } from "../../../Stores/LampEffectsStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
+import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
 import {
     jamOfSpaces,
     lampJamsOf,
@@ -88,6 +92,7 @@ export class LampManager {
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribers: Unsubscriber[] = [];
     private editorOpen = false;
+    private effectsEnabled = true;
     private lastReconcileAt: number | undefined;
 
     // What everyone shares, as last seen.
@@ -97,6 +102,28 @@ export class LampManager {
     private listeningSpace: string | undefined;
     private receivedStreams: ReadonlyMap<string, MediaStream> = new Map();
     private sharedMusic: SharedJamMusic | undefined;
+    private joined: JoinedJam | undefined;
+    private readonly spotifyMusic = new SpotifyMusicSignal();
+    private stopSpotifyMusic: (() => void) | undefined;
+
+    private watchJukeboxMusic(): void {
+        const joined = this.joined;
+        const home =
+            joined !== undefined &&
+            this.rooms.some(
+                (room) =>
+                    isHomeJam(room.jam) && room.zone.areaId === joined.areaId && room.jam.hostUuid === joined.hostUuid,
+            );
+        if (home && !this.stopSpotifyMusic) {
+            this.stopSpotifyMusic = window.WAD?.watchSpotifyMusic?.((frame) =>
+                this.spotifyMusic.set(frame, performance.now()),
+            );
+        } else if (!home && this.stopSpotifyMusic) {
+            this.stopSpotifyMusic();
+            this.stopSpotifyMusic = undefined;
+            this.spotifyMusic.set(null, performance.now());
+        }
+    }
 
     constructor(
         private readonly scene: GameScene,
@@ -105,19 +132,30 @@ export class LampManager {
         ensureLampTextures(scene);
         this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-        this.unsubscribers.push(
+        this.unsubscribers = [
+            lampEffectsEnabledStore.subscribe((enabled) => {
+                this.effectsEnabled = enabled;
+                this.scene.markDirty();
+            }),
             mapEditorModeStore.subscribe((open) => {
                 this.editorOpen = open;
             }),
             // The demo follows the address (`?lampDemo`) and the setting of the menu, which can change while playing.
             lampDemoEnabledStore.subscribe((enabled) => this.setDemo(resolveLampDemo(options.demo, enabled))),
-            allJamRoomsStore.subscribe((rooms) => (this.rooms = rooms)),
+            allJamRoomsStore.subscribe((rooms) => {
+                this.rooms = rooms;
+                this.watchJukeboxMusic();
+            }),
+            joinedJamStore.subscribe((joined) => {
+                this.joined = joined;
+                this.watchJukeboxMusic();
+            }),
             listeningByUserUuidStore.subscribe((listening) => (this.listeningByUuid = listening)),
             jamParticipantsCountStore.subscribe((counts) => (this.participants = counts)),
             jamAudioSession.listeningSpaceName.subscribe((space) => (this.listeningSpace = space)),
             jamMusicStreamsStore.subscribe((streams) => (this.receivedStreams = streams)),
             jamMusicCapture.sharedMusic.subscribe((shared) => (this.sharedMusic = shared)),
-        );
+        ];
     }
 
     private reducedMotion = (): boolean => this.systemReducedMotion || this.editorOpen;
@@ -182,6 +220,16 @@ export class LampManager {
 
     /** The Jam the user hears, as a choice: the one they listen to, or, for a host, the one whose music they share. */
     private listenedJam(): LampJamChoice | undefined {
+        const joined = this.joined;
+        if (
+            joined &&
+            this.rooms.some(
+                (room) =>
+                    isHomeJam(room.jam) && room.zone.areaId === joined.areaId && room.jam.hostUuid === joined.hostUuid,
+            )
+        ) {
+            return { areaId: joined.areaId, hostUuid: joined.hostUuid };
+        }
         const rooms = this.rooms.map((room) => ({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid }));
         return jamOfSpaces(rooms, (choice) => this.spaceNameOf(choice), [
             this.listeningSpace,
@@ -286,7 +334,17 @@ export class LampManager {
             return cached;
         }
         const stream = this.streamOf(spaceName);
-        let frame = IDLE_FRAME;
+        const jukebox = this.rooms.find(
+            (room) =>
+                isHomeJam(room.jam) &&
+                this.spaceNameOf({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid }) === spaceName,
+        );
+        let frame = jukebox
+            ? this.spotifyMusic.read(
+                  spotifyTrackUri(this.listeningByUuid.get(jukebox.jam.hostUuid)?.trackUrl ?? ""),
+                  performance.now(),
+              )
+            : IDLE_FRAME;
         if (stream) {
             let read = this.music.get(spaceName);
             if (read?.stream !== stream) {
@@ -325,6 +383,17 @@ export class LampManager {
             this.dropUnusedMusic();
         }
         if (this.placed.size === 0 && this.demoLamps.length === 0) {
+            return;
+        }
+        if (!this.effectsEnabled) {
+            for (const lamp of this.demoLamps) {
+                lamp.setVisible(false);
+            }
+            for (const placed of this.placed.values()) {
+                placed.visual.setVisible(false);
+                placed.brightness = 0;
+                placed.lastUpdateAt = now;
+            }
             return;
         }
         this.frames.clear();
@@ -367,6 +436,7 @@ export class LampManager {
     }
 
     public destroy(): void {
+        this.stopSpotifyMusic?.();
         for (const unsubscribe of this.unsubscribers) {
             unsubscribe();
         }

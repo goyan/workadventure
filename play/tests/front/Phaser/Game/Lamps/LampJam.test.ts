@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import type { JamRoom } from "../../../../../src/front/ListeningZone/ListeningZoneController";
+import { EMPTY_SPOTIFY_LISTENING } from "../../../../../src/common/SpotifyListening";
 import {
     lampJamsOf,
     defaultLampZone,
@@ -165,20 +167,26 @@ describe("resolveLampJam", () => {
 });
 
 describe("lampJamsOf", () => {
-    const spotifyRoom = (areaId: string, hostUuid: string) =>
-        ({ zone: { areaId }, jam: { url: `https://open.spotify.com/jam/${hostUuid}`, hostUuid } }) as never;
-    const jukeboxRoom = (areaId: string, hostUuid: string) =>
-        ({ zone: { areaId }, jam: { home: true, hostUuid } }) as never;
-    const playingTrack = { trackTitle: "Time", artistName: "Pink Floyd" } as never;
-    const silent = { trackTitle: "", artistName: "" } as never;
+    const spotifyRoom = (areaId: string, hostUuid: string): JamRoom => ({
+        zone: { areaId, areaName: areaId, propertyId: "music" },
+        jam: { url: `https://open.spotify.com/jam/${hostUuid}`, hostUuid, hostName: hostUuid },
+    });
+    const jukeboxRoom = (areaId: string, hostUuid: string): JamRoom => ({
+        zone: { areaId, areaName: areaId, propertyId: "music" },
+        jam: { home: true, hostUuid, hostName: hostUuid },
+    });
+    const playingTrack = { ...EMPTY_SPOTIFY_LISTENING, trackTitle: "Time", artistName: "Pink Floyd" };
+    const silent = EMPTY_SPOTIFY_LISTENING;
 
     it("makes a candidate of each Spotify Jam, with whether its host plays and how many take part", () => {
         const jams = lampJamsOf([spotifyRoom("club", "a")], new Map([["a", playingTrack]]), new Map([["a", 4]]));
         expect(jams).toEqual([{ areaId: "club", hostUuid: "a", playing: true, participants: 4 }]);
     });
 
-    it("leaves out the Jukeboxes: their music does not travel through the media session", () => {
-        expect(lampJamsOf([jukeboxRoom("club", "a")], new Map([["a", playingTrack]]), new Map())).toEqual([]);
+    it("includes Jukeboxes so their lamps can follow the local Spotify analysis", () => {
+        expect(lampJamsOf([jukeboxRoom("club", "a")], new Map([["a", playingTrack]]), new Map())).toEqual([
+            { areaId: "club", hostUuid: "a", playing: true, participants: 0 },
+        ]);
     });
 
     it("says a Jam is not playing when its host plays nothing, or is not known", () => {

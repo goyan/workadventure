@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import type { LampFrame } from "./LampSignal";
-import { flashAlpha, neonColor, spotAngle } from "./LampStyle";
+import { flashAlpha, followLevel, mixColor, neonColor, spotAngle } from "./LampStyle";
 import { LAMP_BALL_TEXTURE, LAMP_BEAM_TEXTURE, LAMP_DISC_TEXTURE, LAMP_TUBE_TEXTURE } from "./LampTextures";
 
 /** One lamp on the map: drawn from the music at every image, and following the object it is lit from. */
@@ -44,12 +44,7 @@ function newImage(placement: LampPlacement, texture: string): Phaser.GameObjects
 }
 
 /** The colours the spot and the discs go through, one step per beat. */
-const PALETTE = [0xff3b6b, 0x3bd0ff, 0xffd23b, 0x6bff3b, 0xb36bff];
-
-/** A level that rises at once and falls slowly: lights stay lit between two notes. */
-function followLevel(current: number, target: number): number {
-    return target > current ? target : current + (target - current) * 0.12;
-}
+const PALETTE = [0x45dcff, 0xff55bb, 0xaa77ff, 0x638bff, 0x65efaa, 0xffc36b];
 
 function additive<T extends Phaser.GameObjects.Image>(image: T, depth: number): T {
     return image.setBlendMode(Phaser.BlendModes.ADD).setDepth(depth);
@@ -57,22 +52,44 @@ function additive<T extends Phaser.GameObjects.Image>(image: T, depth: number): 
 
 class SpotLamp implements LampVisual {
     private readonly beam: Phaser.GameObjects.Image;
+    private readonly core: Phaser.GameObjects.Image;
+    private readonly pool: Phaser.GameObjects.Image;
     private level = 0;
     private brightness = 1;
     private colourIndex = 0;
+    private colour = PALETTE[0];
+    private lastNow: number | undefined;
+    private sweepTime: number;
+    private x: number;
+    private y: number;
+    private pulse = 0;
 
     constructor(private readonly placement: LampPlacement) {
+        this.x = placement.x;
+        this.y = placement.y;
+        this.sweepTime = placement.x * 7 + placement.y * 11;
+        this.colourIndex = Math.floor(Math.abs(placement.x + placement.y) / 32) % PALETTE.length;
+        this.colour = PALETTE[this.colourIndex];
         this.beam = additive(newImage(placement, LAMP_BEAM_TEXTURE), placement.depth)
             .setOrigin(0.5, 0)
-            .setDisplaySize(200, 330);
+            .setDisplaySize(140, 260);
+        this.core = additive(newImage(placement, LAMP_BEAM_TEXTURE), placement.depth)
+            .setOrigin(0.5, 0)
+            .setDisplaySize(52, 260);
+        this.pool = additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth).setDisplaySize(180, 84);
     }
 
     public moveTo(x: number, y: number): void {
+        this.x = x;
+        this.y = y;
         this.beam.setPosition(x, y);
+        this.core.setPosition(x, y);
     }
 
     public setVisible(visible: boolean): void {
         this.beam.setVisible(visible);
+        this.core.setVisible(visible);
+        this.pool.setVisible(visible);
     }
 
     public setBrightness(brightness: number): void {
@@ -80,23 +97,40 @@ class SpotLamp implements LampVisual {
     }
 
     public update(frame: LampFrame, now: number): void {
+        const delta = this.lastNow === undefined ? 0 : Math.min(100, Math.max(0, now - this.lastNow));
+        this.lastNow = now;
         if (frame.beat) {
             this.colourIndex = (this.colourIndex + 1) % PALETTE.length;
+            this.pulse = 1;
         }
-        this.level = followLevel(this.level, Math.max(frame.mid, frame.bass));
+        this.pulse *= Math.exp(-delta / 240);
+        this.level = followLevel(this.level, Math.max(frame.mid, frame.bass), delta);
+        this.colour = mixColor(this.colour, PALETTE[this.colourIndex], 1 - Math.exp(-delta / 350));
+        if (!this.placement.reducedMotion()) this.sweepTime += delta * (0.35 + 0.45 * this.level);
+        const angle = this.placement.reducedMotion() ? 0 : spotAngle(this.sweepTime, 1);
         this.beam
-            .setRotation(this.placement.reducedMotion() ? 0 : spotAngle(now, 0.8 + frame.bass))
-            .setTint(PALETTE[this.colourIndex])
-            .setAlpha((0.45 + 0.55 * this.level) * this.brightness);
+            .setRotation(angle)
+            .setTint(this.colour)
+            .setAlpha(Math.min(1, 0.55 + 0.45 * this.level + 0.2 * this.pulse) * this.brightness);
+        this.core
+            .setRotation(angle)
+            .setTint(mixColor(this.colour, 0xffffff, 0.3))
+            .setAlpha((0.45 + 0.5 * this.level) * this.brightness);
+        this.pool
+            .setPosition(this.x - Math.sin(angle) * 230, this.y + Math.cos(angle) * 230)
+            .setTint(this.colour)
+            .setAlpha((0.65 + 0.35 * this.level) * this.brightness);
     }
 
     public destroy(): void {
         this.beam.destroy();
+        this.core.destroy();
+        this.pool.destroy();
     }
 }
 
-const DISCO_DOTS = 7;
-const DISCO_RADIUS = 70;
+const DISCO_DOTS = 18;
+const DISCO_RADIUS = 90;
 
 class DiscoLamp implements LampVisual {
     private readonly ball: Phaser.GameObjects.Image;
@@ -113,11 +147,12 @@ class DiscoLamp implements LampVisual {
         this.y = placement.y;
         this.ball = newImage(placement, LAMP_BALL_TEXTURE).setDepth(placement.depth).setDisplaySize(26, 26);
         for (let index = 0; index < DISCO_DOTS; index++) {
-            this.dots.push(
+            this.dots = [
+                ...this.dots,
                 additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth)
-                    .setDisplaySize(44, 44)
-                    .setTint(PALETTE[index % PALETTE.length]),
-            );
+                    .setDisplaySize(28 + (index % 3) * 8, 18 + (index % 3) * 5)
+                    .setTint(mixColor(PALETTE[index % PALETTE.length], 0xffffff, 0.15)),
+            ];
         }
     }
 
@@ -137,21 +172,21 @@ class DiscoLamp implements LampVisual {
     }
 
     public update(frame: LampFrame, now: number): void {
-        const delta = this.lastNow === undefined ? 0 : now - this.lastNow;
+        const delta = this.lastNow === undefined ? 0 : Math.min(100, Math.max(0, now - this.lastNow));
         this.lastNow = now;
-        this.level = followLevel(this.level, (frame.bass + frame.mid + frame.treble) / 3);
+        this.level = followLevel(this.level, (frame.bass + frame.mid + frame.treble) / 3, delta);
         // The spots on the floor turn faster as the music gets louder; they stand still when motion is reduced.
         if (!this.placement.reducedMotion()) {
-            this.angle += delta * (0.0004 + 0.0025 * this.level);
+            this.angle += delta * (0.00015 + 0.00045 * this.level);
         }
         this.ball.setAlpha((0.75 + 0.25 * frame.treble) * this.brightness);
         this.dots.forEach((dot, index) => {
-            const theta = this.angle + (index / DISCO_DOTS) * Math.PI * 2;
+            const theta = this.angle * (index % 2 === 0 ? 1 : -0.7) + (index / DISCO_DOTS) * Math.PI * 2;
+            const radius = DISCO_RADIUS * (0.45 + (index % 3) * 0.25);
             // Seen from above at an angle: the circle is flattened.
-            dot.setPosition(
-                this.x + Math.cos(theta) * DISCO_RADIUS,
-                this.y + 50 + Math.sin(theta) * DISCO_RADIUS * 0.5,
-            ).setAlpha((0.35 + 0.55 * this.level) * this.brightness);
+            dot.setPosition(this.x + Math.cos(theta) * radius, this.y + 45 + Math.sin(theta) * radius * 0.45).setAlpha(
+                (0.65 + 0.35 * this.level) * this.brightness,
+            );
         });
     }
 
@@ -166,9 +201,14 @@ class NeonLamp implements LampVisual {
     private readonly tube: Phaser.GameObjects.Image;
     private level = 0;
     private brightness = 1;
+    private lastNow: number | undefined;
+    private colour = PALETTE[0];
+    private colourIndex = 0;
 
     constructor(private readonly placement: LampPlacement) {
-        this.glow = additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth).setDisplaySize(180, 70);
+        this.colourIndex = Math.floor(Math.abs(placement.x + placement.y) / 32) % PALETTE.length;
+        this.colour = PALETTE[this.colourIndex];
+        this.glow = additive(newImage(placement, LAMP_DISC_TEXTURE), placement.depth).setDisplaySize(240, 96);
         this.tube = additive(newImage(placement, LAMP_TUBE_TEXTURE), placement.depth + 1).setDisplaySize(96, 12);
     }
 
@@ -186,11 +226,15 @@ class NeonLamp implements LampVisual {
         this.brightness = brightness;
     }
 
-    public update(frame: LampFrame): void {
-        this.level = followLevel(this.level, Math.max(frame.bass, frame.mid, frame.treble));
-        const colour = neonColor(frame);
-        this.tube.setTint(colour).setAlpha((0.75 + 0.25 * this.level) * this.brightness);
-        this.glow.setTint(colour).setAlpha((0.25 + 0.6 * this.level) * this.brightness);
+    public update(frame: LampFrame, now: number): void {
+        const delta = this.lastNow === undefined ? 0 : Math.min(100, Math.max(0, now - this.lastNow));
+        this.lastNow = now;
+        this.level = followLevel(this.level, Math.max(frame.bass, frame.mid, frame.treble), delta);
+        if (frame.beat) this.colourIndex = (this.colourIndex + 1) % PALETTE.length;
+        const targetColour = mixColor(PALETTE[this.colourIndex], neonColor(frame), 0.2);
+        this.colour = mixColor(this.colour, targetColour, 1 - Math.exp(-delta / 300));
+        this.tube.setTint(mixColor(this.colour, 0xffffff, 0.45)).setAlpha((0.65 + 0.25 * this.level) * this.brightness);
+        this.glow.setTint(this.colour).setAlpha((0.6 + 0.4 * this.level) * this.brightness);
     }
 
     public destroy(): void {

@@ -18,6 +18,20 @@ function mixChannel(from: number, to: number, ratio: number): number {
     return Math.round(from + (to - from) * ratio);
 }
 
+/** Smooth attack and release in milliseconds, independent of the rendering frame rate. */
+export function followLevel(current: number, target: number, deltaMs: number): number {
+    const responseMs = target > current ? 80 : 420;
+    return current + (target - current) * (1 - Math.exp(-Math.max(0, deltaMs) / responseMs));
+}
+
+export function mixColor(from: number, to: number, ratio: number): number {
+    const blend = Math.min(1, Math.max(0, ratio));
+    const red = mixChannel((from >> 16) & 0xff, (to >> 16) & 0xff, blend);
+    const green = mixChannel((from >> 8) & 0xff, (to >> 8) & 0xff, blend);
+    const blue = mixChannel(from & 0xff, to & 0xff, blend);
+    return (red << 16) | (green << 8) | blue;
+}
+
 export function neonColor(bands: LampBands): number {
     const total = bands.bass + bands.treble;
     const ratio = total === 0 ? 0 : bands.treble / total;
@@ -37,7 +51,8 @@ export function flashAlpha(sinceBeatMs: number | undefined): number {
     if (sinceBeatMs === undefined || sinceBeatMs >= FLASH_DURATION_MS) {
         return 0;
     }
-    return 1 - Math.max(0, sinceBeatMs) / FLASH_DURATION_MS;
+    const elapsed = Math.max(0, sinceBeatMs);
+    return Math.exp(-elapsed / 35) * (1 - elapsed / FLASH_DURATION_MS);
 }
 
 /** How bright a lamp is after `deltaMs` more, going towards lit (1) or off (0): it picks up from where it was. */

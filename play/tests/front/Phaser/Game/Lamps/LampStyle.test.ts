@@ -9,6 +9,8 @@ import {
     NEON_BASS_COLOR,
     NEON_TREBLE_COLOR,
     spotAngle,
+    followLevel,
+    mixColor,
 } from "../../../../../src/front/Phaser/Game/Lamps/LampStyle";
 
 describe("neonColor", () => {
@@ -33,6 +35,29 @@ describe("neonColor", () => {
             expect(channel).toBeGreaterThanOrEqual(low);
             expect(channel).toBeLessThanOrEqual(high);
         }
+    });
+});
+
+describe("smooth lighting", () => {
+    it("has the same envelope at 30 and 60 frames per second", () => {
+        const evolve = (frames: number): number => {
+            let level = 0;
+            for (let index = 0; index < frames; index++) level = followLevel(level, 1, 1000 / frames);
+            return level;
+        };
+        expect(evolve(30)).toBeCloseTo(evolve(60), 8);
+    });
+
+    it("rises faster than it fades and stays still without elapsed time", () => {
+        expect(followLevel(0, 1, 100)).toBeGreaterThan(1 - followLevel(1, 0, 100));
+        expect(followLevel(0.4, 1, 0)).toBe(0.4);
+        expect(followLevel(0.4, 1, -10)).toBe(0.4);
+    });
+
+    it("blends colours without jumping or exceeding either endpoint", () => {
+        expect(mixColor(0x000000, 0xffffff, 0.5)).toBe(0x808080);
+        expect(mixColor(0x123456, 0xffffff, -1)).toBe(0x123456);
+        expect(mixColor(0x123456, 0xffffff, 2)).toBe(0xffffff);
     });
 });
 

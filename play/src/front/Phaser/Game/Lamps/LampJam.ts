@@ -1,4 +1,3 @@
-import { isHomeJam } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import { isPlayingTrack } from "../../../../common/SpotifyListening";
 import type { JamRoom } from "../../../ListeningZone/ListeningZoneController";
@@ -12,7 +11,7 @@ export interface LampZone {
     height: number;
 }
 
-/** A Jam of the map (Spotify, not a Jukebox: only those carry music), as every client sees it. */
+/** A Jam of the map, as every client sees it. */
 export interface LampJam {
     areaId: string;
     hostUuid: string;
@@ -83,22 +82,19 @@ export function resolveLampJam(input: {
 }
 
 /**
- * The Jams of the map as candidates for the lamps: the Spotify ones (a Jukebox plays on each one's own Spotify, no music
- * travels through the media session), whether their host plays a track, and how many take part.
+ * The Jams of the map as candidates for the lamps: whether their host plays a track, and how many take part.
  */
 export function lampJamsOf(
     rooms: readonly JamRoom[],
     listeningByUserUuid: ReadonlyMap<string, SpotifyListening>,
     participantsByHost: ReadonlyMap<string, number>,
 ): LampJam[] {
-    return rooms
-        .filter((room) => !isHomeJam(room.jam))
-        .map((room) => ({
-            areaId: room.zone.areaId,
-            hostUuid: room.jam.hostUuid,
-            playing: isPlayingTrack(listeningByUserUuid.get(room.jam.hostUuid)),
-            participants: participantsByHost.get(room.jam.hostUuid) ?? 0,
-        }));
+    return rooms.map((room) => ({
+        areaId: room.zone.areaId,
+        hostUuid: room.jam.hostUuid,
+        playing: isPlayingTrack(listeningByUserUuid.get(room.jam.hostUuid)),
+        participants: participantsByHost.get(room.jam.hostUuid) ?? 0,
+    }));
 }
 
 /**

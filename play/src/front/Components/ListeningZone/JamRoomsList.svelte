@@ -18,12 +18,14 @@
     import { followedUserUuidStore, listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
     import { listeningByUserUuidStore } from "../../Spotify/SpotifyListeningDirectory";
     import { playersStore } from "../../Stores/PlayersStore";
+    import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
     import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
     import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
     import { requestedMicrophoneDeviceIdStore } from "../../Stores/MediaStore";
     import Button from "../UI/Button.svelte";
     import JamAudioControls from "./JamAudioControls.svelte";
+    import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
     import JukeboxQueue from "./JukeboxQueue.svelte";
 
     // A home Jam plays on the Spotify app of this computer, through the desktop app and the Spicetify extension.
@@ -101,6 +103,9 @@
                 : ""}
         </p>
         {#if home}
+            {#if mine}
+                <JukeboxPlaybackControls {room} available={canHomeJam} />
+            {/if}
             <button
                 type="button"
                 class="self-start rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80 hover:bg-white/20"
@@ -128,6 +133,19 @@
                 micDeviceId={$requestedMicrophoneDeviceIdStore}
                 captureState={jamMusicCaptureState}
             />
+        {/if}
+        {#if joined || mine || following}
+            <button
+                type="button"
+                class="self-start rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80 hover:bg-white/20"
+                aria-pressed={$lampEffectsEnabledStore}
+                onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
+                data-testid="jam-lights-toggle"
+            >
+                {$lampEffectsEnabledStore
+                    ? $LL.spotify.listeningZone.lightsDisable()
+                    : $LL.spotify.listeningZone.lightsEnable()}
+            </button>
         {/if}
         {#if mine}
             <Button

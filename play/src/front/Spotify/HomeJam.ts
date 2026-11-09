@@ -1,6 +1,7 @@
 import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
 import { derived, get, type Readable, type Unsubscriber, writable } from "svelte/store";
 import { z } from "zod";
+import type { SpotifyPlaybackRequest } from "../Interfaces/DesktopAppInterfaces";
 import type { JukeboxQueue, JukeboxTrack, WorkAdventureDesktopApi } from "../Interfaces/DesktopAppInterfaces";
 import type { JamRoom } from "../ListeningZone/ListeningZoneController";
 import type { JoinedJam } from "../ListeningZone/ListeningZoneStore";
@@ -73,12 +74,18 @@ export const jukeboxQueuesStore = writable<ReadonlyMap<string, JukeboxQueue>>(ne
 /** What the Jukebox views can do; set while the game runs. */
 let actions:
     | {
+          playback: (room: JamRoom, request: SpotifyPlaybackRequest) => void;
           request: (hostUuid: string) => void;
           add: (room: JamRoom, uri: string) => void;
           remove: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">) => void;
           move: (room: JamRoom, track: Pick<JukeboxTrack, "uri" | "uid">, placement: MovePlacement) => void;
       }
     | undefined;
+
+/** Only the creator can control their active Jukebox; guests never send playback commands to the host. */
+export function controlJukeboxPlayback(room: JamRoom, request: SpotifyPlaybackRequest): void {
+    actions?.playback(room, request);
+}
 
 /** Asks the host of a Jukebox for its queue, to show it. */
 export function requestJukeboxQueue(hostUuid: string): void {
@@ -214,6 +221,18 @@ export function startHomeJam(context: HomeJamContext): Unsubscriber {
     };
 
     actions = {
+        playback: (room, request) => {
+            const own = get(ownJukebox);
+            if (
+                !own ||
+                !isHomeJam(room.jam) ||
+                listeningZoneJamKey(own.jam) !== listeningZoneJamKey(room.jam) ||
+                own.zone.areaId !== room.zone.areaId ||
+                own.zone.propertyId !== room.zone.propertyId
+            )
+                return;
+            desktop?.controlSpotifyPlayback?.(request);
+        },
         request: (hostUuid) => {
             if (hostUuid !== context.localUuid()) sendTo(hostUuid, JUKEBOX_STATE_REQUEST_EVENT, {});
             else desktop?.refreshSpotifyQueue?.();

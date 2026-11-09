@@ -48,7 +48,7 @@ export function ensureLampTextures(scene: Phaser.Scene): void {
     const disc = 128;
     makeWhiteTexture(scene, LAMP_DISC_TEXTURE, disc, disc, (x, y) => {
         const t = Math.min(1, Math.hypot(x - disc / 2, y - disc / 2) / (disc / 2));
-        return 1 - smoothstep(0, 1, t);
+        return Math.exp(-2.5 * t * t) * (1 - smoothstep(0.75, 1, t));
     });
 
     // Beam: a cone from a point at the top middle, widening and fading as it goes down.
@@ -58,7 +58,7 @@ export function ensureLampTextures(scene: Phaser.Scene): void {
         const along = y / beamLength;
         const halfWidth = Math.max(0.5, (along * beamWidth) / 2);
         const across = Math.abs(x - beamWidth / 2) / halfWidth;
-        return across >= 1 ? 0 : (1 - across) ** 1.5 * (1 - along) ** 0.8;
+        return across >= 1 ? 0 : Math.exp(-4 * across * across) * (1 - smoothstep(0.7, 1, across)) * (1 - along) ** 1.2;
     });
 
     // Tube: a capsule with a bright core and a soft edge, for the neon.
