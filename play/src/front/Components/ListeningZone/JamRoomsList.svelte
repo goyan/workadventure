@@ -1,6 +1,6 @@
 <script lang="ts">
     import { SvelteSet } from "svelte/reactivity";
-    import { isHomeJam, listeningZoneJamKey } from "@workadventure/map-editor";
+    import { isHomeJam, isLiveJam, listeningZoneJamKey } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { isPlayingTrack, spotifyTrackUri } from "../../../common/SpotifyListening";
     import {
@@ -56,6 +56,7 @@
     {@const hostListening = $listeningByUserUuidStore.get(jam.hostUuid)}
     {@const hostTrack = isPlayingTrack(hostListening) ? hostListening : undefined}
     {@const home = isHomeJam(jam)}
+    {@const live = isLiveJam(jam)}
     {@const following = $followedUserUuidStore === jam.hostUuid}
     {@const mine = isLocalUser(jam.hostUuid)}
     {@const joined = $joinedJamStore?.url === listeningZoneJamKey(jam)}
@@ -72,19 +73,25 @@
                     ? 'bg-[#1ed760]/20 text-[#1ed760]'
                     : 'bg-white/10 text-white/70'}"
             >
-                {home ? $LL.spotify.listeningZone.kindHome() : $LL.spotify.listeningZone.kindSpotify()}
+                {live
+                    ? $LL.spotify.listeningZone.kindLive()
+                    : home
+                      ? $LL.spotify.listeningZone.kindHome()
+                      : $LL.spotify.listeningZone.kindSpotify()}
             </span>
             <p class="m-0 truncate text-sm font-bold text-white/95">
                 {jam.title ??
-                    (home
-                        ? $LL.spotify.listeningZone.homeJamOf({ name: hostName })
-                        : $LL.spotify.listeningZone.jamOf({ name: hostName }))}
+                    (live
+                        ? $LL.spotify.listeningZone.liveOf({ name: hostName })
+                        : home
+                          ? $LL.spotify.listeningZone.homeJamOf({ name: hostName })
+                          : $LL.spotify.listeningZone.jamOf({ name: hostName }))}
             </p>
         </div>
         {#if jam.title}
             <p class="m-0 truncate text-xs text-white/60">{$LL.spotify.listeningZone.hostedBy({ name: hostName })}</p>
         {/if}
-        {#if hostTrack}
+        {#if hostTrack && !live}
             <p class="m-0 truncate text-xs text-white/75">♫ {hostTrack.artistName} — {hostTrack.trackTitle}</p>
         {/if}
         <p class="m-0 truncate text-xs text-white/50">
@@ -111,10 +118,12 @@
             {/if}
         {/if}
         {#if !home}
-            <!-- The music of a Spotify Jam travels through the media session of the Jam: no Spotify Premium to hear it. -->
+            <!-- Spotify and Live rooms share their music through the same media session. -->
             <JamAudioControls
                 jam={{ areaId: room.zone.areaId, propertyId: room.zone.propertyId, hostUuid: jam.hostUuid }}
                 {mine}
+                {live}
+                onListen={live ? () => joinJam(room) : undefined}
                 session={jamAudioSession}
                 micDeviceId={$requestedMicrophoneDeviceIdStore}
                 captureState={jamMusicCaptureState}
@@ -130,9 +139,13 @@
                     stopSharingJam();
                 }}
             >
-                {home ? $LL.spotify.listeningZone.stopHome() : $LL.spotify.listeningZone.stop()}
+                {live
+                    ? $LL.spotify.listeningZone.stopLive()
+                    : home
+                      ? $LL.spotify.listeningZone.stopHome()
+                      : $LL.spotify.listeningZone.stop()}
             </Button>
-        {:else}
+        {:else if !live || joined}
             <!-- Without the desktop app, a Jukebox is joined without sound: to add, remove and move tracks. -->
             <Button
                 variant="success"
@@ -158,7 +171,7 @@
                           : $LL.spotify.listeningZone.joinHomeSilent()
                       : $LL.spotify.listeningZone.join()}
             </Button>
-            {#if !home && canHomeJam && (following || (hostTrack && spotifyTrackUri(hostTrack.trackUrl)))}
+            {#if !home && !live && canHomeJam && (following || (hostTrack && spotifyTrackUri(hostTrack.trackUrl)))}
                 <Button
                     variant="success"
                     appearance="border"

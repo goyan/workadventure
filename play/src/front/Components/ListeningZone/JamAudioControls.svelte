@@ -25,9 +25,13 @@
         /** The input the user speaks into: it is never offered, it would carry their voice and not the music. */
         micDeviceId: string | undefined;
         captureState: Readable<JamMusicCaptureState>;
+        /** Live rooms describe a physical or virtual source rather than Spotify. */
+        live?: boolean;
+        /** Marks a Live room joined when its audio is requested. */
+        onListen?: () => void;
     }
 
-    let { jam, mine, session, micDeviceId, captureState }: Props = $props();
+    let { jam, mine, session, micDeviceId, captureState, live = false, onListen }: Props = $props();
 
     // The session never changes for a given card: reading it once is what we want.
     // svelte-ignore state_referenced_locally
@@ -127,7 +131,9 @@
                 {/each}
             </select>
         </label>
-        <p class="m-0 text-xs text-white/50">{$LL.spotify.listeningZone.audioHint()}</p>
+        <p class="m-0 text-xs text-white/50">
+            {live ? $LL.spotify.listeningZone.audioLiveHint() : $LL.spotify.listeningZone.audioHint()}
+        </p>
         <Button
             variant="success"
             size="sm"
@@ -195,7 +201,15 @@
         </TooltipAbove>
     </div>
 {:else}
-    <Button variant="success" size="sm" onclick={() => report(session.listen(jam))} dataTestId="jam-audio-listen">
+    <Button
+        variant="success"
+        size="sm"
+        onclick={() => {
+            onListen?.();
+            report(session.listen(jam));
+        }}
+        dataTestId="jam-audio-listen"
+    >
         {$LL.spotify.listeningZone.audioListen()}
     </Button>
 {/if}

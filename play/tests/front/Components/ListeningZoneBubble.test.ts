@@ -4,12 +4,14 @@ import { readable, writable } from "svelte/store";
 
 const available = writable(false);
 const startHomeJam = vi.fn();
+const startLiveJam = vi.fn();
 vi.mock("../../../src/front/ListeningZone/ListeningZoneController", () => ({
     allJamRoomsStore: readable([]),
     canOpenJamStore: readable(true),
     ownJamRoomStore: readable(undefined),
     shareJam: vi.fn(),
     startHomeJam,
+    startLiveJam,
 }));
 vi.mock("../../../src/front/ListeningZone/ListeningZoneStore", () => ({
     currentListeningZoneStore: readable({ areaId: "a", propertyId: "p", areaName: "Lounge" }),
@@ -35,6 +37,8 @@ vi.mock("../../../src/i18n/i18n-svelte", () => ({
                     "chooseKind",
                     "kindSpotifyTitle",
                     "kindSpotifyDescription",
+                    "kindLive",
+                    "kindLiveDescription",
                     "kindHomeTitle",
                     "kindHomeDescription",
                     "cancel",
@@ -56,6 +60,7 @@ describe("Jukebox creation", () => {
     beforeEach(() => {
         available.set(false);
         startHomeJam.mockClear();
+        startLiveJam.mockClear();
         target = document.createElement("div");
         document.body.appendChild(target);
     });
@@ -74,6 +79,15 @@ describe("Jukebox creation", () => {
     function homeButton(): HTMLButtonElement | null {
         return target.querySelector('[data-testid="listening-zone-create-home"]');
     }
+    it("offers Live without Spotify or the desktop extension", () => {
+        createRoom();
+        const live = target.querySelector<HTMLButtonElement>('[data-testid="listening-zone-create-live"]');
+        expect(live).not.toBeNull();
+        expect(live?.disabled).toBe(false);
+        live?.click();
+        expect(startLiveJam).toHaveBeenCalledWith("");
+        expect(startHomeJam).not.toHaveBeenCalled();
+    });
     it("keeps Jukebox visible while detection is pending and enables it without reopening", () => {
         createRoom();
         expect(homeButton()).not.toBeNull();

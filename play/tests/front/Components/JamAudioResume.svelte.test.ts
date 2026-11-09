@@ -46,6 +46,20 @@ describe("JamAudioResume", () => {
         });
     });
 
+    it("resumes a Live room through the existing music session", () => {
+        render();
+        rooms.set([
+            {
+                zone: { areaId: "area", propertyId: "prop", areaName: "JAM" },
+                jam: { live: true, hostUuid: "max", hostName: "Max" },
+            },
+        ]);
+        flushSync();
+        expect(resume).toHaveBeenLastCalledWith([{ areaId: "area", propertyId: "prop", hostUuid: "max" }], {
+            micDeviceId: "mic",
+        });
+    });
+
     it("leaves the Jukeboxes out: their music is not carried by the media session", () => {
         render();
         rooms.set([room("h1"), room("h2", "home")]);

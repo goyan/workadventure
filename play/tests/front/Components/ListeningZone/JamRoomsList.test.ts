@@ -5,6 +5,7 @@ import { get } from "svelte/store";
 import type { JamRoom } from "../../../../src/front/ListeningZone/ListeningZoneController";
 import { EMPTY_SPOTIFY_LISTENING } from "../../../../src/common/SpotifyListening";
 import { followedUserUuidStore, listenAlongAvailableStore } from "../../../../src/front/Spotify/ListeningFollower";
+import { joinedJamStore } from "../../../../src/front/ListeningZone/ListeningZoneStore";
 import JamRoomsList from "../../../../src/front/Components/ListeningZone/JamRoomsList.svelte";
 
 const mocks = vi.hoisted(() => ({
@@ -62,6 +63,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
             card: { stopListeningAlong: () => "Stop listening" },
             listeningZone: {
                 kindSpotify: () => "Spotify",
+                kindLive: () => "Live",
+                liveOf: ({ name }: { name: string }) => `Live of ${name}`,
+                stopLive: () => "End the Live",
                 kindHome: () => "Jukebox",
                 hostedBy: () => "Host",
                 participants: () => "Participants",
@@ -89,6 +93,7 @@ function render(): void {
 }
 beforeEach(() => {
     mocks.join.mockClear();
+    joinedJamStore.set(undefined);
     mocks.local = false;
     mocks.setRooms([room]);
     mocks.setListening(
@@ -144,5 +149,30 @@ describe("classic Jam listening via extension", () => {
         mocks.local = true;
         render();
         expect(target.querySelector('[data-testid="listening-zone-listen-via-extension"]')).toBeNull();
+    });
+});
+
+describe("Live room", () => {
+    it("shows Live without a Spotify track, invite or extension action", () => {
+        mocks.setRooms([{ ...room, jam: { live: true, hostUuid: "host", hostName: "Host" } }]);
+        listenAlongAvailableStore.set(true);
+        render();
+        expect(target.textContent).toContain("Live of Host");
+        expect(target.textContent).not.toContain("Track");
+        expect(target.querySelector('[data-testid="listening-zone-join"]')).toBeNull();
+        expect(target.querySelector('[data-testid="listening-zone-listen-via-extension"]')).toBeNull();
+        expect(target.querySelector('[data-testid="jukebox-queue-toggle"]')).toBeNull();
+    });
+
+    it("lets a joined guest leave without following the host's Spotify", () => {
+        mocks.setRooms([{ ...room, jam: { live: true, hostUuid: "host", hostName: "Host" } }]);
+        joinedJamStore.set({ areaId: "area", areaName: "Music", hostUuid: "host", url: "live:host" });
+        listenAlongAvailableStore.set(true);
+        render();
+        expect(target.querySelector('[data-testid="listening-zone-listen-via-extension"]')).toBeNull();
+        const leave = target.querySelector<HTMLButtonElement>('[data-testid="listening-zone-join"]');
+        expect(leave?.textContent).toContain("Leave");
+        leave?.click();
+        expect(mocks.join).toHaveBeenCalledTimes(1);
     });
 });

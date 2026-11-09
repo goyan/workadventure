@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { isSpotifyJamUrl, MAX_LISTENING_ZONE_JAM_TITLE_LENGTH } from "@workadventure/map-editor";
+    import { isLiveJam, isSpotifyJamUrl, MAX_LISTENING_ZONE_JAM_TITLE_LENGTH } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import {
         allJamRoomsStore,
@@ -7,6 +7,7 @@
         ownJamRoomStore,
         shareJam,
         startHomeJam,
+        startLiveJam,
     } from "../../ListeningZone/ListeningZoneController";
     import { currentListeningZoneStore } from "../../ListeningZone/ListeningZoneStore";
     import { spotifyAccount } from "../../Spotify/SpotifyAccount";
@@ -64,6 +65,11 @@
     function openHomeJam(): void {
         if (!canHomeJam) return;
         startHomeJam(title);
+        cancelCreating();
+    }
+
+    function openLiveJam(): void {
+        startLiveJam(title);
         cancelCreating();
     }
 
@@ -159,6 +165,15 @@
                         </button>
                         <button
                             type="button"
+                            class="flex flex-col gap-0.5 rounded-lg border border-white/10 bg-white/5 p-2.5 text-start hover:bg-white/10"
+                            onclick={openLiveJam}
+                            data-testid="listening-zone-create-live"
+                        >
+                            <span class="text-sm font-bold text-white">{$LL.spotify.listeningZone.kindLive()}</span>
+                            <span class="text-xs text-white/60">{$LL.spotify.listeningZone.kindLiveDescription()}</span>
+                        </button>
+                        <button
+                            type="button"
                             class="flex flex-col gap-0.5 rounded-lg border border-[#1ed760]/40 bg-[#1ed760]/10 p-2.5 text-start enabled:hover:bg-[#1ed760]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!canHomeJam}
                             onclick={openHomeJam}
@@ -184,7 +199,7 @@
                 {/if}
             {/if}
 
-            {#if !$linked && !readsLocalPlayer}
+            {#if !$linked && !readsLocalPlayer && !isLiveJam($ownJamRoomStore?.jam)}
                 <button
                     type="button"
                     class="m-0 p-0 bg-transparent border-none text-xs text-white/60 underline text-start cursor-pointer"

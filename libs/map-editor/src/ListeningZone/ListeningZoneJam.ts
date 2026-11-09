@@ -50,18 +50,33 @@ const HomeJam = z.object({
     djMode: z.boolean().optional(),
 });
 
-export const ListeningZoneJam = z.union([HomeJam, SpotifyJam]);
+/** Live music captured from a physical or virtual audio input, with no Spotify account or invite link. */
+const LiveJam = z.object({
+    live: z.literal(true),
+    hostUuid: z.string().min(1).max(256),
+    hostName: z.string().max(256),
+    title,
+});
+
+export const ListeningZoneJam = z.union([HomeJam, LiveJam, SpotifyJam]);
 
 export type ListeningZoneJam = z.infer<typeof ListeningZoneJam>;
 export type HomeJam = z.infer<typeof HomeJam>;
+export type LiveJam = z.infer<typeof LiveJam>;
 
 export function isHomeJam(jam: ListeningZoneJam | null | undefined): jam is HomeJam {
     return jam !== null && jam !== undefined && "home" in jam;
 }
 
-/** Tells one Jam from another: its invite link, or its host for a home Jam. */
+export function isLiveJam(jam: ListeningZoneJam | null | undefined): jam is LiveJam {
+    return jam !== null && jam !== undefined && "live" in jam;
+}
+
+/** Tells one room from another: its Spotify invite link, or its kind and host. */
 export function listeningZoneJamKey(jam: ListeningZoneJam): string {
-    return isHomeJam(jam) ? `home:${jam.hostUuid}` : jam.url;
+    if (isHomeJam(jam)) return `home:${jam.hostUuid}`;
+    if (isLiveJam(jam)) return `live:${jam.hostUuid}`;
+    return jam.url;
 }
 
 /** Rooms a zone holds at most: each user opens one, and the list travels with every change. */

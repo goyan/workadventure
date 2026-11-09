@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     canUpdateListeningZoneJams,
     isHomeJam,
+    isLiveJam,
     isSpotifyJamUrl,
     listeningZoneJamKey,
     type ListeningZoneJam,
@@ -105,5 +106,26 @@ describe("room title", () => {
                 JSON.stringify([{ ...jamOf("alice"), title: "x".repeat(MAX_LISTENING_ZONE_JAM_TITLE_LENGTH + 1) }]),
             ),
         ).toBeNull();
+    });
+});
+
+describe("Live rooms", () => {
+    const live = { live: true, hostUuid: "max", hostName: "Max", title: "Dub live" };
+
+    it("accepts a Live room without a Spotify link and gives it its own key", () => {
+        const [parsed] = parseListeningZoneJams([live]);
+        expect(parsed).toEqual(live);
+        expect(isLiveJam(parsed)).toBe(true);
+        if (!parsed) throw new Error("Expected a Live room");
+        expect(isHomeJam(parsed)).toBe(false);
+        expect(listeningZoneJamKey(parsed)).toBe("live:max");
+        expect(parseListeningZoneJamsUpdate(JSON.stringify([live]))).toEqual([live]);
+    });
+
+    it("keeps the host-only update rules for Live rooms", () => {
+        const rooms = parseListeningZoneJams([live]);
+        expect(canUpdateListeningZoneJams([], rooms, "max")).toBe(true);
+        expect(canUpdateListeningZoneJams(rooms, [], "someone-else")).toBe(false);
+        expect(parseListeningZoneJams([{ ...live, live: false }])).toEqual([]);
     });
 });

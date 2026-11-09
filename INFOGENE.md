@@ -9,6 +9,21 @@ de déploiement sont dans le dépôt privé
 [workadventure-selfhost](https://github.com/goyan/workadventure-selfhost) : son accès
 est également nécessaire pour travailler sur ces éléments.
 
+## Salons Live
+
+Dans une zone d'écoute, « Ouvrir un salon » propose **Live** en plus du Jam Spotify
+et du Jukebox. L'hôte choisit une entrée audio physique (carte son USB) ou virtuelle,
+puis « Partager l'audio ». Les invités cliquent « Écouter l'audio » et règlent leur
+volume ici, sans Spotify ni extension. La capture et le transport stéréo réutilisent
+le partage audio des Jams ; le micro de conversation reste exclu du choix de source.
+« Terminer le Live » ferme le salon et arrête sa capture.
+
+Recette : sur un Mac, brancher un instrument via une carte USB, garder le micro de
+conversation séparé, ouvrir un Live et partager cette carte. Écouter depuis un
+second compte, vérifier volume/pause/arrêt, fermeture du panneau, départ du salon,
+débranchement USB et reprise après rechargement. Tester aussi une entrée virtuelle.
+Les salons Live nécessitent le back du fork, qui accepte ce nouveau type de salon.
+
 ## Panneau Jam déplaçable
 
 Le panneau Jam se déplace en faisant glisser son en-tête à la souris ou au toucher.
