@@ -32,13 +32,14 @@ CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
 ## Lumières des Jams
 
-La boule disco dans chaque carte de Jam coupe ou réactive les effets lumineux
+La boule disco avec un badge **personne** dans chaque carte de Jam coupe ou réactive les effets lumineux
 **pour moi**, y compris pour l'hôte et sans devoir rejoindre le salon. Ce choix
 s'applique aux lampes de la page, sans couper la musique ni changer l'affichage
 des collègues. Il est conservé pendant la session de page.
 
-L'hôte dispose séparément de **Couper les effets lumineux (pour tous)**, sous le
-compteur du salon. Les invités voient une indication lorsque l'hôte les a coupés ;
+L'hôte dispose d'une seconde boule avec un badge **groupe**, à côté de la première :
+**Couper les effets lumineux (pour tous)**. Les infobulles précisent les deux portées.
+Les invités voient une indication lorsque l'hôte les a coupés ;
 leur choix personnel reste disponible et s'applique quand l'hôte rallume.
 
 Recette : hôte et invité coupent chacun pour soi ; l'autre garde ses effets et

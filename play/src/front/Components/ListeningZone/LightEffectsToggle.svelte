@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { IconUser, IconUsers } from "../Icons";
     import TooltipAbove from "./TooltipAbove.svelte";
 
     let {
@@ -7,7 +8,15 @@
         onclick,
         testid,
         disabled = false,
-    }: { on: boolean; label: string; onclick?: () => void; testid: string; disabled?: boolean } = $props();
+        everyone = false,
+    }: {
+        on: boolean;
+        label: string;
+        onclick?: () => void;
+        testid: string;
+        disabled?: boolean;
+        everyone?: boolean;
+    } = $props();
 </script>
 
 <TooltipAbove {label}>
@@ -53,6 +62,16 @@
             </g>
             {#if !on}<path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />{/if}
         </svg>
+        <span
+            class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-white/60 bg-slate-900 text-white"
+            aria-hidden="true"
+        >
+            {#if everyone}
+                <IconUsers class="h-3 w-3" />
+            {:else}
+                <IconUser class="h-3 w-3" />
+            {/if}
+        </span>
     </button>
 </TooltipAbove>
 
