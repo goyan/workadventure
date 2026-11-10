@@ -29,6 +29,8 @@ import {
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
+import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -90,6 +92,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     private raisedHand = false;
     private listeningMusic = false;
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
+    private nerfEquipped = false;
+    private nerfGunEffect: NerfGunEffect | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -147,6 +151,12 @@ export abstract class Character extends Container implements OutlineableInterfac
         const showHeadphones = this.listeningMusic && !this.invisible && isHumanAvatar(this.sprites.keys());
         if (showHeadphones) this.musicHeadphonesEffect ??= new MusicHeadphonesEffect(this.scene, this);
         this.musicHeadphonesEffect?.update(showHeadphones, this.sprites.values().next().value);
+        this.nerfGunEffect?.update(
+            this.nerfEquipped && !this.invisible,
+            this._lastDirection,
+            this.seated,
+            this.getNerfHeading(),
+        );
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -607,6 +617,25 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.ridingVehicle && this.vehicleMoving;
     }
 
+    public setNerfEquipped(value: unknown): void {
+        this.nerfEquipped = value === true;
+        if (this.nerfEquipped) this.nerfGunEffect ??= new NerfGunEffect(this.scene, this);
+        this.nerfGunEffect?.update(
+            this.nerfEquipped && !this.invisible,
+            this._lastDirection,
+            this.seated,
+            this.getNerfHeading(),
+        );
+        this.scene.markDirty();
+    }
+
+    public getNerfHeading(): number {
+        const velocity = this.getBody().velocity;
+        return !this.seated && (velocity.x || velocity.y)
+            ? vehicleHeading(velocity.x, velocity.y)
+            : cardinalVehicleHeading(this._lastDirection);
+    }
+
     public setVehicle(value: unknown): void {
         const state = readVehicleState(value);
         if (
@@ -863,6 +892,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.avatarActionEffect?.destroy();
         this.vehicleEffect?.destroy();
         this.musicHeadphonesEffect?.destroy();
+        this.nerfGunEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

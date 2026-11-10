@@ -252,6 +252,7 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
@@ -306,6 +307,8 @@ import { LampManager } from "./Lamps/LampManager";
 import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
+import { NerfManager } from "./Nerf/NerfManager";
+import { NERF_EQUIPPED_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
@@ -462,6 +465,7 @@ export class GameScene extends DirtyScene {
     private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
+    private _nerfManager: NerfManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
     /** Animated treadmills move their belt only while someone runs on them. */
     public readonly treadmillBelts = new TreadmillBelts((entityId) =>
@@ -608,6 +612,7 @@ export class GameScene extends DirtyScene {
         this.load.audio(DOOR_SOUND_KEYS.open, DOOR_SOUND_URLS.open);
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
         this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
+        this.load.audio(NERF_SOUND_KEY, NERF_SOUND_URL);
         for (const { key, url } of [
             ...FOOTSTEP_SOUNDS,
             ...SKATEBOARD_SOUNDS,
@@ -1488,6 +1493,9 @@ export class GameScene extends DirtyScene {
         this._knockManager = undefined;
         this._waveManager?.destroy();
         this._waveManager = undefined;
+        this._nerfManager?.destroy();
+        this._nerfManager = undefined;
+        nerfEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
         this.wanderingCharactersManager?.destroy();
@@ -1738,6 +1746,7 @@ export class GameScene extends DirtyScene {
         }
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
+            this._nerfManager?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             desktopApi.reportEnvironment(time);
@@ -2001,6 +2010,7 @@ export class GameScene extends DirtyScene {
             character.setAvailabilityStatus(update.player.availabilityStatus);
         }
         character.setVehicle(update.player.variables.get(VEHICLE_VARIABLE));
+        character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
         character.setSwimwearColor(update.player.variables.get(SWIMWEAR_COLOR_VARIABLE));
@@ -2289,6 +2299,10 @@ export class GameScene extends DirtyScene {
 
     public get waveManager(): WaveManager | undefined {
         return this._waveManager;
+    }
+
+    public get nerfManager(): NerfManager | undefined {
+        return this._nerfManager;
     }
 
     public get coffeeManager(): CoffeeManager | undefined {
@@ -3091,6 +3105,8 @@ export class GameScene extends DirtyScene {
             this._room.id,
             this._room.group ?? undefined,
         );
+        this._nerfManager?.destroy();
+        this._nerfManager = new NerfManager(this);
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
         this.CurrentPlayer.setSwimwearColor(localUserStore.getSwimwearColor());
 
@@ -5143,6 +5159,9 @@ ${escapedMessage}
         player.updatePosition(addPlayerData.position);
         player.setVehicle(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(VEHICLE_VARIABLE),
+        );
+        player.setNerfEquipped(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(NERF_EQUIPPED_VARIABLE),
         );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),

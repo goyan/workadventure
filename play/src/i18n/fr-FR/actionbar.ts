@@ -9,6 +9,11 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     login: "Se connecter",
     //logout: "Se déconnecter",
     map: "Outils",
+    nerf: {
+        equip: "Équiper le Nerf",
+        unequip: "Ranger le Nerf",
+        help: "ESPACE : tirer dans la direction du déplacement, diagonales incluses, ou du regard à l'arrêt.",
+    },
     participantListPlaceholder: "Liste des participants",
     participantSendMessage: "Écrire un message",
     participantInviteUser: "Inviter un utilisateur",
