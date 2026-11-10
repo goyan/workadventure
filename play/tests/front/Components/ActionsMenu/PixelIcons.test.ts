@@ -21,6 +21,7 @@ describe("PixelIcons", () => {
                 "dance",
                 "door",
                 "footsteps",
+                "nerf",
                 "onePiece",
                 "outfit",
                 "shorts",

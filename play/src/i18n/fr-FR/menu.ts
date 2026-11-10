@@ -28,6 +28,7 @@ const menu: DeepPartial<Translation["menu"]> = {
     },
     settings: {
         soundEffects: {
+            nerf: "Nerf",
             title: "Sons",
             movement: "Déplacements",
             aroundMe: "Autour de moi",

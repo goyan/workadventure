@@ -35,6 +35,8 @@ export const footstepVolumeStore = createVolumeStore("footstepVolume", DEFAULT_V
 export const skateboardVolumeStore = createVolumeStore("skateboardVolume", DEFAULT_VOLUME, "footstepVolume");
 export const weatherVolumeStore = createVolumeStore("weatherVolume", DEFAULT_VOLUME, "environmentVolume");
 export const doorVolumeStore = createVolumeStore("doorVolume", DEFAULT_VOLUME, "environmentVolume");
+/** Foam-blaster pops, heard from the local player and nearby colleagues. */
+export const nerfVolumeStore = createVolumeStore("nerfVolume", DEFAULT_VOLUME, "environmentVolume");
 /** The audio zones placed on the map with the editor. */
 export const mapSoundsVolumeStore = createVolumeStore("mapSoundsVolume", DEFAULT_VOLUME, "environmentVolume");
 /** New message, wave, entering a bubble, meeting, knock on a door. */

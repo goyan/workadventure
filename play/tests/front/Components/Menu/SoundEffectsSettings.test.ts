@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
+import { get } from "svelte/store";
 import SoundEffectsSettings from "@wa/front/Components/Menu/SoundEffectsSettings.svelte";
-import { doorVolumeStore, weatherVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { doorVolumeStore, nerfVolumeStore, weatherVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { loadLocaleAsync } from "@wa/i18n/i18n-util.async";
 import { setLocale } from "@wa/i18n/i18n-svelte";
 
@@ -36,6 +37,7 @@ describe("SoundEffectsSettings", () => {
             "skateboard-volume",
             "weather-volume",
             "door-volume",
+            "nerf-volume",
             "map-sounds-volume",
             "notification-sound-volume",
         ]);
@@ -52,6 +54,7 @@ describe("SoundEffectsSettings", () => {
             "listen-skateboard",
             "listen-weather",
             "listen-doors",
+            "listen-nerf",
             "listen-notifications",
         ]);
         doorVolumeStore.set(0.4);
@@ -63,6 +66,18 @@ describe("SoundEffectsSettings", () => {
         const { target } = open();
         expect(target.textContent).toContain("Sounds placed on the map");
         expect(target.textContent).toContain("Areas and objects that play a sound");
+    });
+
+    it("previews the Nerf pop at its own chosen volume", () => {
+        const previous = get(nerfVolumeStore);
+        try {
+            nerfVolumeStore.set(0.4);
+            const { target, preview } = open();
+            flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="listen-nerf"]')?.click());
+            expect(preview.play).toHaveBeenCalledWith("nerf", 0.4);
+        } finally {
+            nerfVolumeStore.set(previous);
+        }
     });
 
     it("says a family is muted at volume 0", () => {

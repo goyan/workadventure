@@ -8,6 +8,7 @@ const KEYS = [
     "skateboardVolume",
     "weatherVolume",
     "doorVolume",
+    "nerfVolume",
     "mapSoundsVolume",
     "notificationSoundVolume",
 ];
@@ -32,6 +33,7 @@ describe("personal sound effect volumes", () => {
             first.skateboardVolumeStore,
             first.weatherVolumeStore,
             first.doorVolumeStore,
+            first.nerfVolumeStore,
             first.mapSoundsVolumeStore,
             first.notificationSoundVolumeStore,
         ]) {
@@ -63,6 +65,7 @@ describe("personal sound effect volumes", () => {
         const first = await load();
         expect(get(first.weatherVolumeStore)).toBe(0.4);
         expect(get(first.doorVolumeStore)).toBe(0.4);
+        expect(get(first.nerfVolumeStore)).toBe(0.4);
         expect(get(first.mapSoundsVolumeStore)).toBe(0.4);
         expect(get(first.notificationSoundVolumeStore)).toBe(0.4);
         expect(get(first.skateboardVolumeStore)).toBe(0.6);
@@ -75,6 +78,7 @@ describe("personal sound effect volumes", () => {
         first.skateboardVolumeStore.set(0.1);
         first.weatherVolumeStore.set(0);
         first.doorVolumeStore.set(0.9);
+        first.nerfVolumeStore.set(0.4);
         first.mapSoundsVolumeStore.set(0.3);
         first.notificationSoundVolumeStore.set(0.7);
         vi.resetModules();
@@ -83,6 +87,7 @@ describe("personal sound effect volumes", () => {
         expect(get(restored.skateboardVolumeStore)).toBe(0.1);
         expect(get(restored.weatherVolumeStore)).toBe(0);
         expect(get(restored.doorVolumeStore)).toBe(0.9);
+        expect(get(restored.nerfVolumeStore)).toBe(0.4);
         expect(get(restored.mapSoundsVolumeStore)).toBe(0.3);
         expect(get(restored.notificationSoundVolumeStore)).toBe(0.7);
     });
