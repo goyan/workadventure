@@ -3,7 +3,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import { get } from "svelte/store";
 import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
-import { environmentVolumeStore } from "../../../Stores/SoundEffectsStore";
+import { weatherVolumeStore } from "../../../Stores/SoundEffectsStore";
 
 export const WEATHER_SOUNDS = [
     { key: "audio-weather-night-rain", url: "/resources/objects/weather/night_rain.mp3" },
@@ -28,7 +28,7 @@ export class WeatherSounds {
     constructor(private readonly sound: Phaser.Sound.BaseSoundManager) {}
 
     public update(weather: WeatherType, serverDate: Date | undefined, editing: boolean, night = false): void {
-        const volume = editing || localUserStore.getBlockAudio() ? 0 : get(environmentVolumeStore);
+        const volume = editing || localUserStore.getBlockAudio() ? 0 : get(weatherVolumeStore);
         if (volume === 0) {
             this.ambient?.pause();
             this.thunder?.stop();

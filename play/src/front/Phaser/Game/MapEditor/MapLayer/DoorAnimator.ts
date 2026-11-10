@@ -25,7 +25,7 @@ const PATH_LOOKAHEAD = 4 * MAP_LAYER_TILE_SIZE;
 /** The set of doors is read again at this rhythm: doors are added and removed by the map editor. */
 const RESCAN_PERIOD_MS = 500;
 /** The recordings are loud: a door right next to the player plays at this volume, and fades out with the distance. */
-const DOOR_MAX_VOLUME = 0.3;
+export const DOOR_MAX_VOLUME = 0.3;
 /** Doors farther than this from the local player are silent. */
 const HEARING_DISTANCE = 10 * MAP_LAYER_TILE_SIZE;
 /** Someone who left a locked area keeps its doors open for them this long, so they can walk out through them. */

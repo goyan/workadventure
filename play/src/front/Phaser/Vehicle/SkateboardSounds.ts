@@ -1,6 +1,6 @@
 import type * as Phaser from "phaser";
 import { get } from "svelte/store";
-import { footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { skateboardVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 
 export const SKATEBOARD_SOUNDS = [
@@ -28,7 +28,7 @@ export class SkateboardSounds {
     constructor(private readonly manager: Phaser.Sound.BaseSoundManager) {}
 
     public update(character: SkatingCharacter, editing: boolean, time: number): void {
-        const volume = editing || localUserStore.getBlockAudio() ? 0 : get(footstepVolumeStore);
+        const volume = editing || localUserStore.getBlockAudio() ? 0 : get(skateboardVolumeStore);
         const moved = this.lastPosition
             ? Math.hypot(character.x - this.lastPosition.x, character.y - this.lastPosition.y)
             : 0;

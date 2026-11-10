@@ -19,7 +19,6 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
-    import { environmentVolumeStore, footstepVolumeStore } from "../../Stores/SoundEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -46,6 +45,7 @@
     import InputRadioBox from "../Input/InputRadioBox.svelte";
     import Select from "../Input/Select.svelte";
     import Chip from "../UI/Chip.svelte";
+    import SoundEffectsSettings from "./SoundEffectsSettings.svelte";
     import SpotifySettings from "./SpotifySettings.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import SettingsSection from "./SettingsSection.svelte";
@@ -363,24 +363,7 @@
         </div>
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">
-        <RangeSlider
-            id="footstep-volume"
-            label={$LL.menu.settings.soundEffects.footsteps()}
-            min={0}
-            max={1}
-            step={0.01}
-            bind:value={$footstepVolumeStore}
-            valueFormatter={(value) => String(Math.round(value * 100))}
-        />
-        <RangeSlider
-            id="environment-volume"
-            label={$LL.menu.settings.soundEffects.environment()}
-            min={0}
-            max={1}
-            step={0.01}
-            bind:value={$environmentVolumeStore}
-            valueFormatter={(value) => String(Math.round(value * 100))}
-        />
+        <SoundEffectsSettings />
     </SettingsSection>
     <SettingsSection title={$LL.menu.settings.font.label()} dataTestId="font-settings">
         <FontSettings />

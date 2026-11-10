@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockDeep } from "vitest-mock-extended";
 import { WeatherType } from "@workadventure/map-editor";
-import { environmentVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
+import { weatherVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 
 const { blockedAudio } = vi.hoisted(() => ({ blockedAudio: vi.fn(() => false) }));
 vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
@@ -11,7 +11,7 @@ const { WeatherSounds } = await import("../../../../../src/front/Phaser/Game/Wea
 
 afterEach(() => {
     vi.unstubAllGlobals();
-    environmentVolumeStore.set(1);
+    weatherVolumeStore.set(1);
     blockedAudio.mockReturnValue(false);
 });
 
@@ -54,14 +54,14 @@ describe("weather audio", () => {
         const { sounds, rain } = fixture();
         sounds.update(WeatherType.Rain, undefined, false);
         expect(rain.play.mock.calls).toHaveLength(1);
-        environmentVolumeStore.set(0.5);
+        weatherVolumeStore.set(0.5);
         sounds.update(WeatherType.Rain, undefined, false);
         expect(rain.volume).toBe(0.07);
         sounds.update(WeatherType.Rain, undefined, true);
-        environmentVolumeStore.set(0);
+        weatherVolumeStore.set(0);
         sounds.update(WeatherType.Rain, undefined, false);
         expect(rain.pause.mock.calls).toHaveLength(2);
-        environmentVolumeStore.set(1);
+        weatherVolumeStore.set(1);
         blockedAudio.mockReturnValue(true);
         sounds.update(WeatherType.Rain, undefined, false);
         expect(rain.pause.mock.calls).toHaveLength(3);
@@ -91,7 +91,7 @@ describe("weather audio", () => {
         sounds.update(WeatherType.Storm, new Date(25000), false);
         sounds.update(WeatherType.Storm, new Date(25040), false);
         expect(thunder.play.mock.calls).toHaveLength(1);
-        environmentVolumeStore.set(0.5);
+        weatherVolumeStore.set(0.5);
         sounds.update(WeatherType.Storm, new Date(26000), false);
         expect(thunder.setVolume.mock.lastCall).toEqual([0.15]);
         sounds.update(WeatherType.Rain, new Date(26040), false);
