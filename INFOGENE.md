@@ -18,7 +18,7 @@ la fléchette avec un petit éclat de mousse bleu/orange. Aucun score, dégât n
 **Ranger le Nerf** rend ESPACE aux interactions habituelles.
 
 Les tirs respectent les champs de saisie, les verrous de commandes et l'éditeur.
-Le son suit le volume d'ambiance et s'atténue avec la distance ; les impacts
+Le son a son réglage **Nerf** avec écoute dans Paramètres → Sons et s'atténue avec la distance ; les impacts
 respectent la préférence système de mouvement réduit. L'équipement n'est pas
 persisté après la sortie de salle.
 

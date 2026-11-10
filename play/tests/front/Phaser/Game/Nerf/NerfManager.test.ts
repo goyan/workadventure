@@ -16,7 +16,7 @@ import { NerfManager } from "../../../../../src/front/Phaser/Game/Nerf/NerfManag
 import { NERF_SHOT_EVENT, NERF_EQUIPPED_VARIABLE } from "../../../../../src/front/Phaser/Game/Nerf/NerfProtocol";
 import { nerfEquippedStore } from "../../../../../src/front/Stores/NerfStore";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
-import { environmentVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
+import { nerfVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 
 const getBlockAudio = vi.hoisted(() => vi.fn(() => false));
 vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
@@ -39,7 +39,7 @@ describe("NerfManager", () => {
         getBlockAudio.mockReturnValue(false);
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
-        environmentVolumeStore.set(1);
+        nerfVolumeStore.set(1);
         player = mock<Player>({ x: 100, y: 100, lastDirection: PositionMessage_Direction.RIGHT });
         player.getNerfHeading.mockReturnValue(6);
         player.getCollisionRectangle.mockReturnValue({ x: 92, y: 100, width: 16, height: 16 });
@@ -91,7 +91,7 @@ describe("NerfManager", () => {
         manager?.destroy();
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
-        environmentVolumeStore.set(0.15);
+        nerfVolumeStore.set(0.15);
         vi.restoreAllMocks();
     });
 
@@ -256,11 +256,11 @@ describe("NerfManager", () => {
         expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
     });
 
-    it("respects muted ambience and personal audio blocking", () => {
+    it("respects muted Nerf sounds and personal audio blocking", () => {
         manager.toggleEquipment();
-        environmentVolumeStore.set(0);
+        nerfVolumeStore.set(0);
         manager.fire();
-        environmentVolumeStore.set(1);
+        nerfVolumeStore.set(1);
         getBlockAudio.mockReturnValue(true);
         scene.time.now = 1300;
         manager.fire();

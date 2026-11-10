@@ -6,7 +6,7 @@ import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { nerfEquippedStore } from "../../../Stores/NerfStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { environmentVolumeStore } from "../../../Stores/SoundEffectsStore";
+import { nerfVolumeStore } from "../../../Stores/SoundEffectsStore";
 import { PathTileType } from "../../../Utils/PathfindingManager";
 import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import type { GameScene } from "../GameScene";
@@ -19,6 +19,7 @@ import {
     NERF_COOLDOWN_MS,
     NERF_EQUIPPED_VARIABLE,
     NERF_HEARING_DISTANCE,
+    NERF_MAX_VOLUME,
     NERF_RANGE,
     NERF_SHOT_EVENT,
     NERF_SOUND_KEY,
@@ -233,7 +234,7 @@ export class NerfManager {
         if (localUserStore.getBlockAudio() || this.scene.sound.locked) return;
         const listener = this.scene.CurrentPlayer;
         const closeness = Math.max(0, 1 - Math.hypot(shot.x - listener.x, shot.y - listener.y) / NERF_HEARING_DISTANCE);
-        const volume = get(environmentVolumeStore) * 0.7 * closeness * closeness;
+        const volume = get(nerfVolumeStore) * NERF_MAX_VOLUME * closeness * closeness;
         if (volume === 0) return;
         this.scene.sound.play(NERF_SOUND_KEY, {
             volume,

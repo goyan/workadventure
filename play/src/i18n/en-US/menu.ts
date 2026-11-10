@@ -27,6 +27,7 @@ const menu: BaseTranslation = {
     },
     settings: {
         soundEffects: {
+            nerf: "Nerf",
             title: "Sounds",
             movement: "Movement",
             aroundMe: "Around me",

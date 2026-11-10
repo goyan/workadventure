@@ -9,6 +9,7 @@
         doorVolumeStore,
         footstepVolumeStore,
         mapSoundsVolumeStore,
+        nerfVolumeStore,
         notificationSoundVolumeStore,
         skateboardVolumeStore,
         weatherVolumeStore,
@@ -74,6 +75,14 @@
                     store: doorVolumeStore,
                     value: $doorVolumeStore,
                     family: "doors",
+                },
+                {
+                    id: "nerf-volume",
+                    label: $LL.menu.settings.soundEffects.nerf(),
+                    icon: "nerf",
+                    store: nerfVolumeStore,
+                    value: $nerfVolumeStore,
+                    family: "nerf",
                 },
                 {
                     id: "map-sounds-volume",

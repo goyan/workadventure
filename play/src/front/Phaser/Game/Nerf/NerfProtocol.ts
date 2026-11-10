@@ -6,6 +6,7 @@ export const NERF_EQUIPPED_VARIABLE = "_nerfEquipped";
 export const NERF_SHOT_EVENT = "infogene.nerf.shot";
 export const NERF_SOUND_KEY = "audio-nerf-pop";
 export const NERF_SOUND_URL = "/resources/objects/nerf/pop.wav";
+export const NERF_MAX_VOLUME = 0.7;
 export const NERF_COOLDOWN_MS = 300;
 export const NERF_SPEED = 320;
 export const NERF_RANGE = 384;

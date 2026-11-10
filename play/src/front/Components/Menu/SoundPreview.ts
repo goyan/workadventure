@@ -1,8 +1,9 @@
 import { FOOTSTEP_MAX_VOLUME } from "../../Phaser/Game/FootstepSounds";
 import { DOOR_MAX_VOLUME, DOOR_SOUND_URLS } from "../../Phaser/Game/MapEditor/MapLayer/DoorAnimator";
+import { NERF_MAX_VOLUME, NERF_SOUND_URL } from "../../Phaser/Game/Nerf/NerfProtocol";
 
 /** The families of sound effects that have a typical sound to listen to (the map's own sounds have none). */
-export type PreviewedSoundFamily = "footsteps" | "skateboard" | "weather" | "doors" | "notifications";
+export type PreviewedSoundFamily = "footsteps" | "skateboard" | "weather" | "doors" | "nerf" | "notifications";
 
 /**
  * An example per family, at the loudness the game uses for it: the slider then sounds as it will in game.
@@ -17,6 +18,7 @@ export const SOUND_PREVIEWS: Record<
     // WeatherSounds plays the rain at 14 % of the weather volume.
     weather: { url: "/resources/objects/weather/rain.mp3", baseVolume: 0.14, durationMs: 3000 },
     doors: { url: DOOR_SOUND_URLS.open, baseVolume: DOOR_MAX_VOLUME },
+    nerf: { url: NERF_SOUND_URL, baseVolume: NERF_MAX_VOLUME },
     // GameScene.playSound plays notification sounds at 20 %.
     notifications: { url: "/resources/objects/new-message.mp3", baseVolume: 0.2 },
 };
