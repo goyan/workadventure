@@ -493,6 +493,10 @@ sous l'avatar et ne sont pas envoyées aux autres joueurs. Le déplacement au do
 
 ### Animation de course
 
+Courir avec Maj ne déclenche pas l'assise automatique quand on traverse ou touche un siège.
+L'assise automatique reste disponible en marchant ou en s'arrêtant, même si Maj reste maintenu ;
+les sièges configurés sur la touche d'interaction conservent leur fonctionnement.
+
 Quand le joueur court (Maj maintenu en se déplaçant, hors mode suivi), l'animation de marche de l'avatar est jouée deux fois plus vite
 (`RUN_ANIMATION_SPEED` dans `Phaser/Player/Animation.ts`, `timeScale` de l'animation dans `Character.playAnimation`). L'état est envoyé aux
 autres joueurs par le champ `running` de `PositionMessage` (le pusher et le back le relaient tel quel) : ils voient donc aussi l'avatar courir.
