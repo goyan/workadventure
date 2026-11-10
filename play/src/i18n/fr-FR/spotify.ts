@@ -85,7 +85,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         audioLiveHint:
             "Choisissez la carte son USB qui reçoit votre instrument, ou une entrée virtuelle. Gardez votre voix sur un micro séparé.",
 
-        resetPosition: "Réinitialiser la position",
         listenViaExtension: "Écouter via l’extension",
         defaultName: "Zone d'écoute",
         jamOf: "Jam de {name}",
@@ -114,6 +113,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         zoneFull: "Cette zone est pleine : 6 salons au plus.",
         titlePlaceholder: "Titre du salon (facultatif)",
         hostedBy: "Animé par {name}",
+        showDrawer: "Afficher les Jams",
+        hideDrawer: "Masquer les Jams",
         jamsButton: "{count} Jam{{s}}",
         roomsTitle: "Jams en cours",
         createHint: "Créez votre salon depuis une zone d'écoute.",

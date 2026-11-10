@@ -50,6 +50,7 @@
     import { sidePanelWidthStore } from "../Stores/SidePanelStore";
     import { jamAudioSession } from "../ListeningZone/GameJamAudioSession";
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
+    import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
     import { requestedMicrophoneDeviceIdStore } from "../Stores/MediaStore";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
@@ -87,10 +88,8 @@
     import PictureInPicture from "./Video/PictureInPicture.svelte";
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
-    import ListeningZoneBubble from "./ListeningZone/ListeningZoneBubble.svelte";
     import WorldClock from "./ActionsMenu/WorldClock.svelte";
-    import JamRoomsLauncher from "./ListeningZone/JamRoomsLauncher.svelte";
-    import DraggableJamPanel from "./ListeningZone/DraggableJamPanel.svelte";
+    import JamDrawer from "./ListeningZone/JamDrawer.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
     import Karaoke from "./ListeningZone/Karaoke.svelte";
     import JamAudioResume from "./ListeningZone/JamAudioResume.svelte";
@@ -110,7 +109,9 @@
 
     /** When false, the right-hand participant strip in highlight fullscreen is collapsed (toggle with the edge arrow). */
     let highlightParticipantCamerasListOpen = $state(true);
-    let jamPanelLayout = $state({ height: 0, moved: false });
+    /** The clock and the Jam drawer, on top of the side panel: its contents start below them. */
+    let jamDockHeight = $state(0);
+    const listeningSpaceName = jamAudioSession.listeningSpaceName;
     let jamSidePanel: HTMLDivElement | undefined = $state();
     let jamPanelAnchorTop = $state(0);
 
@@ -483,19 +484,14 @@
                 micDeviceId={requestedMicrophoneDeviceIdStore}
             />
             <!-- One Jam dock survives side-panel transitions and stays outside their scrolling container. -->
-            <div class="absolute right-2 z-[300] pointer-events-auto" style:top={`${jamPanelAnchorTop}px`}>
-                <WorldClock />
-            </div>
-            <DraggableJamPanel
-                anchorTop={jamPanelAnchorTop}
-                anchorRight={72}
-                onLayout={(layout) => (jamPanelLayout = layout)}
+            <div
+                class="absolute right-2 z-[300] flex flex-col items-end gap-2 pointer-events-none"
+                style:top={`${jamPanelAnchorTop}px`}
+                bind:offsetHeight={jamDockHeight}
             >
-                {#snippet children(onDragStart, onDragKeydown)}
-                    <ListeningZoneBubble {onDragStart} {onDragKeydown} />
-                    <JamRoomsLauncher {onDragStart} {onDragKeydown} />
-                {/snippet}
-            </DraggableJamPanel>
+                <div class="pointer-events-auto"><WorldClock /></div>
+                <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
+            </div>
 
             {#if $showRecordingList}
                 <RecordingsListModal />
@@ -552,8 +548,8 @@
                     transition:fly={{ x: 210, duration: 500 }}
                     class="absolute bottom-0 w-full h-fit max-h-[calc(100dvh-100px)] md:top-0 md:right-0 md:w-fit flex flex-col gap-2 items-end justify-start p-0 m-0 mr-3 overflow-y-auto no-scroll-bar"
                 >
-                    {#if !jamPanelLayout.moved && jamPanelLayout.height > 0}
-                        <div class="shrink-0" style:height={`${jamPanelLayout.height}px`}></div>
+                    {#if jamDockHeight > 0}
+                        <div class="shrink-0" style:height={`${jamDockHeight}px`}></div>
                     {/if}
                     {#if $requestVisitCardsStore}
                         <VisitCard visitCardUrl={$requestVisitCardsStore} />
