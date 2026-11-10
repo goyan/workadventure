@@ -458,6 +458,13 @@ describe("NerfManager", () => {
             expect(player.flashNerfHit.mock.calls).toHaveLength(0);
         });
 
+        it("clears the screen counter when the scene closes, for the next map", () => {
+            hitTimes(1);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 14, jailed: false });
+            manager.destroy();
+            expect(get(nerfHeartsStore)).toBeUndefined();
+        });
+
         it("keeps the hearts while the Nerf is put away", () => {
             const end = hitTimes(5);
             expect(get(nerfHeartsStore)).toEqual({ thirds: 10, jailed: false });

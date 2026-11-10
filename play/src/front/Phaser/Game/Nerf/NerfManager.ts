@@ -226,6 +226,8 @@ export class NerfManager {
         this.projectiles.clear();
         this.impacts.clear();
         this.lastShots.clear();
+        // The counter is outside the scene: a new map starts with the Nerf put away.
+        nerfHeartsStore.set(undefined);
         this.scene.markDirty();
     }
 
