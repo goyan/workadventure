@@ -1,34 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
-import JamRoomsLauncher from "../../../src/front/Components/ListeningZone/JamRoomsLauncher.svelte";
+import JamRoomsOverview from "../../../src/front/Components/ListeningZone/JamRoomsOverview.svelte";
 
-const { rooms, currentZone, panelOpen } = vi.hoisted(() => {
-    // vi.hoisted runs before the imports: the stores cannot come from "svelte/store" here, so they are tiny stand-ins.
-    function store<T>(value: T) {
-        const subscribers = new Set<(value: T) => void>();
-        return {
-            subscribe(run: (value: T) => void) {
-                subscribers.add(run);
-                run(value);
-                return () => subscribers.delete(run);
-            },
-            set(next: T) {
-                value = next;
-                subscribers.forEach((run) => run(value));
-            },
-            update(change: (value: T) => T) {
-                this.set(change(value));
-            },
-        };
-    }
-    return { rooms: store<unknown[]>([]), currentZone: store<unknown>(undefined), panelOpen: store(true) };
-});
-
-vi.mock("../../../src/front/ListeningZone/ListeningZoneController", () => ({ allJamRoomsStore: rooms }));
-vi.mock("../../../src/front/ListeningZone/ListeningZoneStore", () => ({
-    currentListeningZoneStore: currentZone,
-    jamRoomsPanelOpenStore: panelOpen,
-}));
 vi.mock("../../../src/front/Components/ListeningZone/JamRoomsList.svelte", async () => {
     const mod = (await import("./JamRoomsListStub.svelte")) as { default: unknown };
     return { default: mod.default };
@@ -40,7 +13,6 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
         LL: readable({
             spotify: {
                 listeningZone: {
-                    jamsButton: label("Jams"),
                     roomsTitle: label("Jams en cours"),
                     createHint: label("hint"),
                 },
@@ -49,7 +21,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
     };
 });
 
-describe("JamRoomsLauncher panel", () => {
+describe("JamRoomsOverview panel", () => {
     let target: HTMLElement;
     let component: ReturnType<typeof mount> | undefined;
 
@@ -61,10 +33,9 @@ describe("JamRoomsLauncher panel", () => {
     });
 
     it("never shows a horizontal scroll bar: on Windows it is always drawn, and cuts the card under it", () => {
-        rooms.set([{}]);
         target = document.createElement("div");
         document.body.appendChild(target);
-        component = mount(JamRoomsLauncher, { target });
+        component = mount(JamRoomsOverview, { target });
         flushSync();
         const panel = target.querySelector<HTMLElement>('[data-testid="jam-rooms-panel"]');
         expect(panel).not.toBeNull();

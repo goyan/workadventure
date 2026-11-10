@@ -62,7 +62,6 @@ const spotify: BaseTranslation = {
         audioLiveHint:
             "Pick the USB sound card receiving your instrument, or a virtual input. Keep your voice on a separate microphone.",
 
-        resetPosition: "Reset position",
         listenViaExtension: "Listen via extension",
         defaultName: "Listening zone",
         jamOf: "{name}'s Jam",
@@ -92,6 +91,8 @@ const spotify: BaseTranslation = {
         zoneFull: "This zone is full: 6 rooms at most.",
         titlePlaceholder: "Room title (optional)",
         hostedBy: "Hosted by {name}",
+        showDrawer: "Show the Jams",
+        hideDrawer: "Hide the Jams",
         jamsButton: "{count} Jam{{s}}",
         roomsTitle: "Jams on the map",
         createHint: "Open your own room from a listening zone.",
