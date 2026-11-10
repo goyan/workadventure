@@ -55,19 +55,21 @@ export interface BusyStatusState {
 }
 
 /**
- * The status the calendar sets, from the option, the meeting going on and the current status. Only an online user is
- * turned busy, and only the busy status the calendar set itself is given back: do not disturb, away, or a status the
- * user picked are never overridden. A status the user changes during a meeting is left alone until the next one.
+ * The status the calendar requests, from the option, the meeting going on and the status the user requested. The
+ * requested status is read, not the displayed one: a bubble or a hidden tab changes what is displayed without the
+ * user choosing anything. Only a user with no requested status is turned busy, and only the busy status the calendar
+ * set itself is given back: do not disturb, back in a moment, or a busy status the user picked are never overridden.
+ * A status the user changes during a meeting is left alone until the next one.
  */
 export function decideBusyStatus(input: {
     enabled: boolean;
     meetingId: string | undefined;
-    current: AvailabilityStatus;
+    requested: AvailabilityStatus | null;
     state: BusyStatusState;
 }): { change: AvailabilityStatus | undefined; state: BusyStatusState } {
-    const { enabled, meetingId, current, state } = input;
+    const { enabled, meetingId, requested, state } = input;
     if (state.setByCalendar) {
-        if (current !== AvailabilityStatus.BUSY) {
+        if (requested !== AvailabilityStatus.BUSY) {
             return { change: undefined, state: { setByCalendar: false, handledMeetingId: state.handledMeetingId } };
         }
         if (!enabled || meetingId === undefined) {
@@ -78,12 +80,7 @@ export function decideBusyStatus(input: {
         }
         return { change: undefined, state };
     }
-    if (
-        enabled &&
-        meetingId !== undefined &&
-        meetingId !== state.handledMeetingId &&
-        current === AvailabilityStatus.ONLINE
-    ) {
+    if (enabled && meetingId !== undefined && meetingId !== state.handledMeetingId && requested === null) {
         return { change: AvailabilityStatus.BUSY, state: { setByCalendar: true, handledMeetingId: meetingId } };
     }
     return { change: undefined, state };

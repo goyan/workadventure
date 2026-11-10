@@ -3,6 +3,7 @@ import { asError } from "catch-unknown";
 import { calendarWindow } from "@workadventure/shared-utils";
 import type { ExtensionModule, ExtensionModuleOptions } from "../../ExternalModule/ExtensionModule";
 import LL from "../../../i18n/i18n-svelte";
+import { requestedStatusStore } from "../../Stores/MediaStore";
 import type { CalendarApiEvent } from "../../../common/Calendar";
 import { fetchCalendarEvents } from "./CalendarApi";
 import { currentBusyMeetingId, decideBusyStatus, toCalendarEvents } from "./calendarEvents";
@@ -59,7 +60,7 @@ function updateStatus(): void {
     const decision = decideBusyStatus({
         enabled: get(busyOptionStore),
         meetingId: currentBusyMeetingId(lastEvents, new Date()),
-        current: get(options.workadventureStatusStore),
+        requested: get(requestedStatusStore),
         state: busyState,
     });
     busyState = decision.state;

@@ -99,10 +99,11 @@ describe("currentBusyMeeting", () => {
 
 describe("decideBusyStatus", () => {
     const idle = { setByCalendar: false, handledMeetingId: undefined };
-    const base = { enabled: true, meetingId: "m1", current: AvailabilityStatus.ONLINE, state: idle };
+    const base = { enabled: true, meetingId: "m1", requested: null, state: idle };
     const busyByCalendar = { setByCalendar: true, handledMeetingId: "m1" };
+    const busy = { ...base, requested: AvailabilityStatus.BUSY, state: busyByCalendar };
 
-    it("turns an online user busy when a meeting starts, and remembers it did", () => {
+    it("turns a user with no requested status busy when a meeting starts, and remembers it did", () => {
         expect(decideBusyStatus(base)).toEqual({ change: AvailabilityStatus.BUSY, state: busyByCalendar });
     });
 
@@ -111,41 +112,36 @@ describe("decideBusyStatus", () => {
         expect(decideBusyStatus({ ...base, meetingId: undefined })).toEqual({ change: undefined, state: idle });
     });
 
-    it("never overrides do not disturb, away or a status the user chose", () => {
-        for (const current of [
+    it("never overrides do not disturb, back in a moment or a busy status the user requested", () => {
+        for (const requested of [
             AvailabilityStatus.DO_NOT_DISTURB,
-            AvailabilityStatus.AWAY,
             AvailabilityStatus.BACK_IN_A_MOMENT,
             AvailabilityStatus.BUSY,
         ]) {
-            expect(decideBusyStatus({ ...base, current })).toEqual({ change: undefined, state: idle });
+            expect(decideBusyStatus({ ...base, requested })).toEqual({ change: undefined, state: idle });
         }
     });
 
     it("keeps the busy status it set while meetings go on, back to back included", () => {
-        const busy = { ...base, current: AvailabilityStatus.BUSY, state: busyByCalendar };
         expect(decideBusyStatus(busy)).toEqual({ change: undefined, state: busyByCalendar });
         expect(decideBusyStatus({ ...busy, meetingId: "m2" })).toEqual({ change: undefined, state: busyByCalendar });
     });
 
     it("puts the user back online at the end, only if it set the busy status itself", () => {
-        expect(
-            decideBusyStatus({
-                ...base,
-                meetingId: undefined,
-                current: AvailabilityStatus.BUSY,
-                state: busyByCalendar,
-            }),
-        ).toEqual({ change: AvailabilityStatus.ONLINE, state: { setByCalendar: false, handledMeetingId: "m1" } });
-        expect(decideBusyStatus({ ...base, meetingId: undefined, current: AvailabilityStatus.BUSY })).toEqual({
+        expect(decideBusyStatus({ ...busy, meetingId: undefined })).toEqual({
+            change: AvailabilityStatus.ONLINE,
+            state: { setByCalendar: false, handledMeetingId: "m1" },
+        });
+        expect(decideBusyStatus({ ...base, meetingId: undefined, requested: AvailabilityStatus.BUSY })).toEqual({
             change: undefined,
             state: idle,
         });
     });
 
-    it("lets the user take over: a status changed by hand is left alone for the rest of that meeting", () => {
+    it("lets the user take over: a status requested by hand is left alone for the rest of that meeting", () => {
         const tookOver = { setByCalendar: false, handledMeetingId: "m1" };
-        expect(decideBusyStatus({ ...base, current: AvailabilityStatus.ONLINE, state: busyByCalendar })).toEqual({
+        expect(decideBusyStatus({ ...busy, requested: null })).toEqual({ change: undefined, state: tookOver });
+        expect(decideBusyStatus({ ...busy, requested: AvailabilityStatus.DO_NOT_DISTURB })).toEqual({
             change: undefined,
             state: tookOver,
         });
@@ -158,8 +154,9 @@ describe("decideBusyStatus", () => {
     });
 
     it("gives the busy status back when the option is turned off during a meeting", () => {
-        expect(
-            decideBusyStatus({ ...base, enabled: false, current: AvailabilityStatus.BUSY, state: busyByCalendar }),
-        ).toEqual({ change: AvailabilityStatus.ONLINE, state: { setByCalendar: false, handledMeetingId: "m1" } });
+        expect(decideBusyStatus({ ...busy, enabled: false })).toEqual({
+            change: AvailabilityStatus.ONLINE,
+            state: { setByCalendar: false, handledMeetingId: "m1" },
+        });
     });
 });
