@@ -3,8 +3,8 @@ import { CategorySettings } from "../src";
 
 describe("Category settings", () => {
     it("accept skating on the objects of a category", () => {
-        expect(CategorySettings.parse({ interaction: "skate", trigger: "auto", layer: "floor" })).toEqual({
-            interaction: "skate",
+        expect(CategorySettings.parse({ interaction: "iceSkate", trigger: "auto", layer: "floor" })).toEqual({
+            interaction: "iceSkate",
             trigger: "auto",
             layer: "floor",
         });

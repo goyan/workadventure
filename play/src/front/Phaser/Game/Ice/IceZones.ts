@@ -26,7 +26,7 @@ let cache: { scene: Phaser.Scene; frame: number; rectangles: IceRectangle[] } | 
 export function iceRectanglesOf(objects: Iterable<PlacedObject>, categories: MapCategories): IceRectangle[] {
     const rectangles: IceRectangle[] = [];
     for (const object of objects) {
-        if (getObjectInteraction(object.getPrefab(), categories).interaction !== "skate") continue;
+        if (getObjectInteraction(object.getPrefab(), categories).interaction !== "iceSkate") continue;
         rectangles.push({ x: object.x, y: object.y, width: object.displayWidth, height: object.displayHeight });
     }
     return rectangles;

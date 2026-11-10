@@ -497,7 +497,7 @@ const mapEditor: BaseTranslation = {
             none: "None",
             sit: "Sit",
             swim: "Swim",
-            skate: "Skate",
+            iceSkate: "Ice skate",
         },
         triggers: {
             auto: "On contact",

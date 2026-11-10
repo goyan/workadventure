@@ -21,9 +21,9 @@ describe("IceZones", () => {
     });
 
     it("a map category set to skate is ice, a base category turned off is not", () => {
-        expect(iceRectanglesOf([placed(["glace"])], { glace: { interaction: "skate", trigger: "key" } })).toHaveLength(
-            1,
-        );
+        expect(
+            iceRectanglesOf([placed(["glace"])], { glace: { interaction: "iceSkate", trigger: "key" } }),
+        ).toHaveLength(1);
         expect(iceRectanglesOf([placed(["rinks"])], { rinks: { interaction: "none", trigger: "auto" } })).toEqual([]);
     });
 

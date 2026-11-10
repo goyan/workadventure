@@ -505,7 +505,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             none: "Aucune",
             sit: "S’asseoir",
             swim: "Nager",
-            skate: "Patiner",
+            iceSkate: "Patiner",
         },
         triggers: {
             auto: "Au contact",
