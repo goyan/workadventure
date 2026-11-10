@@ -26,6 +26,7 @@ import {
     isPointInWater,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
+import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -360,6 +361,18 @@ export abstract class Character extends Container implements OutlineableInterfac
         return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
     }
 
+    /**
+     * Whether the body of the character is on the ice of a rink (and not swimming): it glides there, for everyone.
+     * The position is enough, as for the water: nothing more is sent over the network.
+     */
+    protected isOnIceHere(): boolean {
+        if (!this.scene) return false;
+        return (
+            isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
+            !this.isSwimmingHere()
+        );
+    }
+
     /** Whether the character is drawn swimming (its body in the water), for everyone. */
     public isInWater(): boolean {
         return this.swimEffect?.isActive ?? false;
@@ -531,6 +544,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.invisible) return;
         this._lastDirection = direction;
         if (moving && this.avatarAction !== AvatarAction.Idle) this.setAvatarAction(AvatarAction.Idle);
+        // A skater glides standing still: no steps on the ice.
+        const walking = moving && !this.isOnIceHere();
         for (const [texture, sprite] of this.sprites.entries()) {
             if (this.ridingVehicle) {
                 sprite.anims.stop();
@@ -549,10 +564,10 @@ export abstract class Character extends Container implements OutlineableInterfac
                 return;
             }
             const directionStr = ProtobufClientUtils.toDirectionString(direction);
-            sprite.anims.timeScale = moving ? animationSpeed : 1;
-            if (moving && (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== directionStr)) {
+            sprite.anims.timeScale = walking ? animationSpeed : 1;
+            if (walking && (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== directionStr)) {
                 sprite.play(texture + "-" + directionStr + "-" + PlayerAnimationTypes.Walk, true);
-            } else if (!moving) {
+            } else if (!walking) {
                 sprite.anims.play(texture + "-" + directionStr + "-" + PlayerAnimationTypes.Idle, true);
             }
         }
