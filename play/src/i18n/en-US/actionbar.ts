@@ -83,6 +83,7 @@ const actionbar = {
         blurMiddle: "Middle blur",
         blurHigh: "High blur",
         images: "Images",
+        image: "Background image {index}",
     },
     help: {
         chat: {

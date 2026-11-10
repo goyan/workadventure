@@ -9,6 +9,7 @@ import {
     EntityPrefabRef,
 } from "@workadventure/map-editor";
 import type { EntityPrefab } from "@workadventure/map-editor";
+import { withNewPropertyIds } from "@workadventure/map-editor/src/Utils";
 import type { Observable } from "rxjs";
 import { Subject } from "rxjs";
 import type { Unsubscriber } from "svelte/store";
@@ -580,7 +581,7 @@ export class EntitiesManager extends EventEmitter {
         const eventData: CopyEntityEventData = {
             position: positionToPlaceCopyAt,
             prefabRef: entity.getEntityData().prefabRef,
-            properties: entity.getEntityData().properties,
+            properties: withNewPropertyIds(entity.getEntityData().properties ?? []),
             entityDimensions: { width: entity.width, height: entity.height },
         };
         this.emit(EntitiesManagerEvent.CopyEntity, eventData);

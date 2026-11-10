@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
 import LL from "../../i18n/i18n-svelte";
 import { raceTimeout } from "../Utils/PromiseUtils";
+import { decodeHtmlEntities } from "../Chat/decodeHtmlEntities";
 import type { NotificationWA } from "./Notification";
 import { defaultOptions } from "./Notification";
 
@@ -18,14 +19,18 @@ export class MessageNotification implements NotificationWA {
         private message: string,
         private chatRoomId: string,
         private chatRoomName: string,
+        private isMention = false,
         private options = defaultOptions,
     ) {}
 
     public async sendNotification() {
         const numberOfChar = 60;
-        const messageToDisplay =
-            this.message.length > numberOfChar ? this.message.slice(0, numberOfChar) + "..." : this.message;
-        const body = `${get(LL).notification.message({ name: this.userName })} : ${messageToDisplay}`;
+        const message = decodeHtmlEntities(this.message);
+        const messageToDisplay = message.length > numberOfChar ? message.slice(0, numberOfChar) + "..." : message;
+        const title = this.isMention
+            ? get(LL).notification.mention({ name: this.userName })
+            : get(LL).notification.message({ name: this.userName });
+        const body = `${title} : ${messageToDisplay}`;
 
         try {
             await raceTimeout(this.showServiceWorkerNotification(body), SERVICE_WORKER_NOTIFICATION_TIMEOUT_MS);
