@@ -37,6 +37,7 @@ import { MatrixRoomAreaController } from "./controllers/MatrixRoomAreaController
 import { LocalScriptController } from "./controllers/LocalScriptController";
 import { LivekitWebhookController } from "./controllers/LivekitWebhookController";
 import { analyticsEventsQueue } from "./services/AnalyticsEventsQueue";
+import { LyricsController } from "./controllers/LyricsController";
 
 class App {
     private readonly app: Application;
@@ -107,6 +108,7 @@ class App {
         new MapPatternController(this.app);
         new NpcRegisterController(this.app);
         new SpotifyCallbackController(this.app);
+        new LyricsController(this.app);
         new MatrixRoomAreaController(this.app);
 
         frontAssets.registerStaticRoutes(this.app);

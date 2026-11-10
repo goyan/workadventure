@@ -24,6 +24,7 @@
     import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
     import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
     import { requestedMicrophoneDeviceIdStore } from "../../Stores/MediaStore";
+    import { selectedKaraokeRoomStore } from "../../Karaoke/JamKaraoke";
     import Button from "../UI/Button.svelte";
     import JamAudioControls from "./JamAudioControls.svelte";
     import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
@@ -132,6 +133,15 @@
                 ? ` · ${room.zone.areaName}`
                 : ""}
         </p>
+        {#if !live}
+            <Button
+                variant="light"
+                appearance="border"
+                size="sm"
+                onclick={() => selectedKaraokeRoomStore.set(room)}
+                dataTestId="jam-karaoke-open">{$LL.spotify.karaoke.title()}</Button
+            >
+        {/if}
         {#if home}
             {#if mine}
                 <JukeboxPlaybackControls {room} available={canHomeJam} />

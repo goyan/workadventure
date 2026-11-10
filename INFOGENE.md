@@ -30,6 +30,34 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Paroles de karaoké
+
+Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,
+pour soi seulement. Les auditeurs de l'audio relayé n'ont besoin ni de compte
+Spotify ni d'invitation supplémentaire. Les salons Live sont exclus.
+
+Les paroles gratuites viennent de LRCLIB, puis de lyrics.ovh pour un repli sans
+synchronisation. Le morceau courant passe avant le préchargement du seul titre
+suivant connu ; la file peut changer. Les paroles suivent la position de l'hôte,
+conservent le morceau en pause et se recalibrent après une recherche. Le lecteur
+desktop fournit ses changements ; la Web API est relue toutes les cinq secondes.
+Un hôte avec un ancien front garde les métadonnées déjà partagées, avec leur
+précision de présence.
+
+Le réglage d'avance/retard compense le délai de l'audio relayé. Faire défiler les
+paroles suspend leur suivi ; **Suivre la lecture** le reprend. **Choisir une autre
+version** recherche un titre/artiste pour cet affichage uniquement. Une absence,
+un instrumental et une erreur ont des messages distincts ; un changement de
+morceau retire les anciennes paroles. Fermer le panneau conserve l'audio.
+La synchronisation se fait par ligne, selon la couverture de la source.
+Le réglage « Partager ce que j'écoute » de l'hôte reste respecté : le désactiver
+arrête la lecture des métadonnées et efface celles déjà annoncées.
+
+Recette : hôte et auditeur audio sans Spotify, morceau courant puis suivant,
+pause/reprise/recherche, file réordonnée et saut, lecture manuelle/reprise,
+réglage du délai, autre version et morceau introuvable, fermeture et saisie sans
+déplacement de l'avatar. Aucun compte fournisseur, dépendance ou protobuf ajouté.
+
 ## Compteur des Jams et écoute audio
 
 « Écouter l'audio » suffit pour apparaître parmi les participants d'un Jam Spotify :

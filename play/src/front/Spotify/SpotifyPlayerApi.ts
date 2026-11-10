@@ -23,23 +23,24 @@ export interface SpotifyTrack {
  * Only the fields we use. Episodes and ads come with `currently_playing_type` other than "track" (and no item
  * unless asked for): they are not shared.
  */
+export const SpotifyTrackItemSchema = z.object({
+    name: z.string(),
+    artists: z.array(z.object({ name: z.string() })),
+    external_urls: z.object({ spotify: z.string().optional() }),
+    duration_ms: z.number().positive().optional(),
+    album: z
+        .object({
+            name: z.string(),
+            images: z.array(z.object({ url: z.string(), width: z.number().nullable().optional() })),
+        })
+        .optional(),
+});
+
 const CurrentlyPlayingResponse = z.object({
     is_playing: z.boolean(),
     progress_ms: z.number().nullable().optional(),
     currently_playing_type: z.string(),
-    item: z
-        .object({
-            name: z.string(),
-            artists: z.array(z.object({ name: z.string() })),
-            external_urls: z.object({ spotify: z.string().optional() }),
-            album: z
-                .object({
-                    name: z.string(),
-                    images: z.array(z.object({ url: z.string(), width: z.number().nullable().optional() })),
-                })
-                .optional(),
-        })
-        .nullable(),
+    item: SpotifyTrackItemSchema.nullable(),
 });
 
 export type CurrentlyPlayingResult =
