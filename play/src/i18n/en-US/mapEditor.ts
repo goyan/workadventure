@@ -477,6 +477,7 @@ const mapEditor: BaseTranslation = {
             coffee: "Coffee",
             seats: "Seats",
             pools: "Pools",
+            rinks: "Ice rinks",
             rugs: "Rugs & floors",
             lights: "Lights",
             plants: "Plants",
@@ -496,6 +497,7 @@ const mapEditor: BaseTranslation = {
             none: "None",
             sit: "Sit",
             swim: "Swim",
+            iceSkate: "Ice skate",
         },
         triggers: {
             auto: "On contact",

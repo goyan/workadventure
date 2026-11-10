@@ -9,6 +9,7 @@ import { getEntityCategory, isSameCategory, isSeatObject } from "./EntityCategor
 export const BASE_CATEGORIES: readonly ({ id: string } & CategorySettings)[] = [
     { id: "seats", interaction: "sit", trigger: "auto" },
     { id: "pools", interaction: "swim", trigger: "key", layer: "floor" },
+    { id: "rinks", interaction: "iceSkate", trigger: "auto", layer: "floor" },
     { id: "beds", interaction: AvatarAction.Sleep, trigger: "key" },
     { id: "toilets", interaction: AvatarAction.Toilet, trigger: "key" },
     { id: "coffee", interaction: AvatarAction.Coffee, trigger: "key" },

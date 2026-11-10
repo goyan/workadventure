@@ -28,6 +28,7 @@ import { WalkDestinationMarker } from "@wa/front/Phaser/Components/WalkDestinati
 import { RunSmokeTrail } from "@wa/front/Phaser/Components/RunSmokeTrail";
 import { findDiveTarget, getWaterRectangles, intersectsWater } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { InteractionPrompt } from "@wa/front/Phaser/Game/Water/InteractionPrompt";
+import { iceStep, type Vector } from "@wa/front/Phaser/Game/Ice/IcePhysics";
 import { getPrefabCollisionRectangles } from "@wa/front/Utils/PrefabCollisionRectangles";
 import LL from "@wa/i18n/i18n-svelte";
 import {
@@ -170,7 +171,7 @@ export class Player extends Character {
         if (this.pathToFollow) {
             this.followPath(delta);
         } else {
-            this.inputStep(activeUserInputEvents, x, y);
+            this.inputStep(activeUserInputEvents, x, y, delta);
         }
     }
 
@@ -525,7 +526,7 @@ export class Player extends Character {
         );
     };
 
-    private inputStep(activeEvents: ActiveEventList, x: number, y: number) {
+    private inputStep(activeEvents: ActiveEventList, x: number, y: number, delta: number) {
         // Process input events
         if (activeEvents.get(UserInputEvent.MoveUp)) {
             y = y - 1;
@@ -553,6 +554,11 @@ export class Player extends Character {
         const moveAmount = speed * 20;
         x = x * moveAmount;
         y = y * moveAmount;
+
+        if (!followMode && this.vehicleMode === VehicleMode.Off && !this.isSeated() && this.isOnIceHere()) {
+            this.glideOnIce({ x, y }, speedUp, delta);
+            return;
+        }
 
         // Compute moving state
         const moving = x !== 0 || y !== 0;
@@ -592,6 +598,45 @@ export class Player extends Character {
         }
 
         // Update state
+        userMovingStore.set(moving);
+    }
+
+    /**
+     * On the ice, the avatar eases towards the velocity the keys ask for (`wanted`) and glides on once they are
+     * released (IcePhysics). It keeps telling the others it moves until it stops, without snapping to a tile.
+     */
+    private glideOnIce(wanted: Vector, speedUp: boolean, delta: number): void {
+        const body = this.getBody();
+        const velocity = iceStep(body.velocity, wanted, delta);
+        const moving = velocity.x !== 0 || velocity.y !== 0;
+        if (moving) {
+            const running = speedUp && (wanted.x !== 0 || wanted.y !== 0);
+            this.moveBy(velocity.x, velocity.y, running);
+            if (!this.isMoving) {
+                this.isMoving = true;
+                this.emit(startMovingEventName, { direction: this._lastDirection, x: this.x, y: this.y });
+            }
+            this.emit(hasMovedEventName, {
+                moving: true,
+                running,
+                direction: this._lastDirection,
+                x: this.x,
+                y: this.y,
+            });
+        } else {
+            body.setVelocity(0, 0);
+            if (get(userMovingStore)) {
+                this.isMoving = false;
+                this.stop();
+                this.emit(hasMovedEventName, {
+                    moving: false,
+                    running: false,
+                    direction: this._lastDirection,
+                    x: this.x,
+                    y: this.y,
+                });
+            }
+        }
         userMovingStore.set(moving);
     }
 
@@ -778,6 +823,8 @@ export class Player extends Character {
         body.updateFromGameObject();
         body.prev.copy(body.position);
         body.prevFrame.copy(body.position);
+        // Teleported onto the ice, the avatar arrives still: no glide carried over from where it was.
+        body.setVelocity(0, 0);
         this.finishFollowingPath(true);
         this.emit(hasMovedEventName, {
             moving: false,

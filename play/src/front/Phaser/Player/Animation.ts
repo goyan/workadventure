@@ -7,7 +7,12 @@
 export enum PlayerAnimationTypes {
     Walk = "walk",
     Idle = "idle",
+    /** On the ice: a long glide on each foot, with a quick step between the two. */
+    IceSkate = "iceSkate",
 }
+
+/** Frames per second of the skating animation: each glide holds its frame three times as long as the step. */
+export const ICE_SKATE_FRAME_RATE = 8;
 
 // Running plays the walking animation twice as fast
 export const RUN_ANIMATION_SPEED = 2;
@@ -77,6 +82,34 @@ export function getPlayerAnimations(name: string): AnimationData[] {
             frames: [10],
             frameRate: 10,
             repeat: 1,
+        },
+        {
+            key: `${name}-down-${PlayerAnimationTypes.IceSkate}`,
+            frameModel: name,
+            frames: [0, 0, 0, 1, 2, 2, 2, 1],
+            frameRate: ICE_SKATE_FRAME_RATE,
+            repeat: -1,
+        },
+        {
+            key: `${name}-left-${PlayerAnimationTypes.IceSkate}`,
+            frameModel: name,
+            frames: [3, 3, 3, 4, 5, 5, 5, 4],
+            frameRate: ICE_SKATE_FRAME_RATE,
+            repeat: -1,
+        },
+        {
+            key: `${name}-right-${PlayerAnimationTypes.IceSkate}`,
+            frameModel: name,
+            frames: [6, 6, 6, 7, 8, 8, 8, 7],
+            frameRate: ICE_SKATE_FRAME_RATE,
+            repeat: -1,
+        },
+        {
+            key: `${name}-up-${PlayerAnimationTypes.IceSkate}`,
+            frameModel: name,
+            frames: [9, 9, 9, 10, 11, 11, 11, 10],
+            frameRate: ICE_SKATE_FRAME_RATE,
+            repeat: -1,
         },
     ];
 }

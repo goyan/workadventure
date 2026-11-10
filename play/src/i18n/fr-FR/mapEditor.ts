@@ -485,6 +485,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             coffee: "Café",
             seats: "Sièges",
             pools: "Piscines",
+            rinks: "Patinoires",
             rugs: "Tapis et sols",
             lights: "Luminaires",
             plants: "Plantes",
@@ -504,6 +505,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             none: "Aucune",
             sit: "S’asseoir",
             swim: "Nager",
+            iceSkate: "Patiner",
         },
         triggers: {
             auto: "Au contact",
