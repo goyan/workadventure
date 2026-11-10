@@ -76,6 +76,51 @@ describe("EntitiesCollectionsManager reload", () => {
         expect(await afterReload.getEntityPrefab("custom entities", original.id)).toBeDefined();
     });
 
+    it("gives a resized copy saved without a display level the level and seat setting of its original", async () => {
+        const url = "https://example.com/map-storage/assets/entities/entities.json";
+        const original: EntityRawPrefab = {
+            id: "rink",
+            name: "Rink",
+            imagePath: "rink.png",
+            direction: "Down",
+            tags: ["Rinks"],
+            color: "",
+            layer: "floor",
+            sittable: false,
+        };
+        // Copies made before the resize kept these settings: they were sorted like furniture, over the players.
+        const oldCopy: EntityRawPrefab = {
+            ...original,
+            id: "old-copy",
+            imagePath: "old-copy.png",
+            tags: ["Rinks", "resized-from:rink:187x117"],
+            layer: undefined,
+            sittable: undefined,
+        };
+        const ownLevel: EntityRawPrefab = { ...oldCopy, id: "own-level", layer: "overhead", sittable: true };
+        const collection: EntityCollectionRaw = {
+            collectionName: "custom entities",
+            collection: [original, oldCopy, ownLevel],
+            tags: [],
+            version: "1.0",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(collection)))),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url, type: "Custom" }]);
+
+        expect(await manager.getEntityPrefab("custom entities", "old-copy")).toMatchObject({
+            layer: "floor",
+            sittable: false,
+        });
+        expect(await manager.getEntityPrefab("custom entities", "own-level")).toMatchObject({
+            layer: "overhead",
+            sittable: true,
+        });
+    });
+
     it("resolves wander.sheetPath against the catalog URL like imagePath", async () => {
         const url = "https://beta.example/map-storage/infogene-animaux/animaux-entities.json";
         const duck: EntityRawPrefab = {

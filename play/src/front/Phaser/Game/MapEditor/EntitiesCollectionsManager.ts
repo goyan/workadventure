@@ -13,7 +13,7 @@ import { asError } from "catch-unknown";
 import { withCategory } from "../../../Utils/EntityCategory";
 import { EntityVariant } from "./Entities/EntityVariant";
 import { takeUnseenEntities } from "./EntityCollectionUrls";
-import { isResizedVariant } from "./PlacedImageVariants";
+import { getResizedFrom, isResizedVariant, withOriginalSettings } from "./PlacedImageVariants";
 
 /** How long a collection of entities is waited for, in milliseconds. */
 const COLLECTION_FETCH_TIMEOUT_MS = 10_000;
@@ -162,6 +162,11 @@ export class EntitiesCollectionsManager {
                         this.basePrefabs.set(prefab.id, prefab);
                         const override = this.prefabOverrides[prefab.id];
                         return override ? applyPrefabOverride(prefab, override) : prefab;
+                    });
+                    const byId = new Map(this.currentCollection.collection.map((prefab) => [prefab.id, prefab]));
+                    this.currentCollection.collection = this.currentCollection.collection.map((prefab) => {
+                        const originalId = getResizedFrom(prefab);
+                        return originalId ? withOriginalSettings(prefab, byId.get(originalId)) : prefab;
                     });
                     this.entitiesPrefabsStore.set(this.currentCollection.collection);
 
