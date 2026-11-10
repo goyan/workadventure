@@ -125,6 +125,7 @@ beforeEach(() => {
     lampEffectsEnabledStore.set(true);
     mocks.join.mockClear();
     mocks.playback.mockClear();
+    mocks.update.mockClear();
     joinedJamStore.set(undefined);
     mocks.local = false;
     mocks.setRooms([room]);
@@ -158,28 +159,65 @@ describe("personal light switch", () => {
         expect(get(lampEffectsEnabledStore)).toBe(true);
         expect(mocks.join).not.toHaveBeenCalled();
         expect(mocks.playback).not.toHaveBeenCalled();
+        expect(mocks.update).not.toHaveBeenCalled();
     });
 
-    it("lets the host turn the lights of their room off for everyone, next to its title", () => {
+    it("lets the host turn lights off only for themselves while keeping the room lit", () => {
         mocks.local = true;
-        mocks.update.mockClear();
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
+        if (!button) throw new Error("Missing personal host light switch");
+        flushSync(() => button.click());
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
+        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')?.getAttribute("aria-pressed")).toBe(
+            "true",
+        );
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(mocks.join).not.toHaveBeenCalled();
+        expect(mocks.playback).not.toHaveBeenCalled();
+    });
+
+    it("lets the host separately turn the lights of their room off for everyone", () => {
+        mocks.local = true;
+        lampEffectsEnabledStore.set(false);
         render();
         const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle-all"]');
         if (!button) throw new Error("Missing host light switch");
         expect(button.getAttribute("aria-label")).toBe("Turn off lights for everyone");
         flushSync(() => button.click());
         expect(mocks.update).toHaveBeenCalledWith({ lightsOff: true });
-        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).not.toBeNull();
     });
 
-    it("shows a guest that the host turned the lights off, without a switch of their own", () => {
+    it("lets a guest choose their personal light preference even while the host has turned the room lights off", () => {
         mocks.setRooms([{ ...room, jam: { ...room.jam, lightsOff: true } }]);
         joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
         render();
-        const off = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-off-by-host"]');
-        expect(off?.disabled).toBe(true);
-        expect(off?.getAttribute("aria-label")).toBe("Lights off by the host");
-        expect(target.querySelector('[data-testid="jam-lights-toggle"]')).toBeNull();
+        expect(target.querySelector('[data-testid="jam-lights-off-by-host"]')?.textContent).toBe(
+            "Lights off by the host",
+        );
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
+        if (!button) throw new Error("Missing guest light switch");
+        flushSync(() => button.click());
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        flushSync(() => mocks.setRooms([room]));
+        expect(button.getAttribute("aria-pressed")).toBe("false");
+        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
+        expect(mocks.update).not.toHaveBeenCalled();
+    });
+
+    it("lets a guest turn lights off without joining the Jam", () => {
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
+        if (!button) throw new Error("Missing guest light switch");
+        flushSync(() => button.click());
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(get(joinedJamStore)).toBeUndefined();
+        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
+        expect(mocks.update).not.toHaveBeenCalled();
+        expect(mocks.join).not.toHaveBeenCalled();
     });
 });
 afterEach(async () => {
@@ -189,6 +227,7 @@ afterEach(async () => {
     target.replaceChildren();
     followedUserUuidStore.set(undefined);
     listenAlongAvailableStore.set(false);
+    lampEffectsEnabledStore.set(true);
 });
 describe("classic Jam listening via extension", () => {
     it("keeps the official join button without offering extension listening when disconnected", () => {
