@@ -150,7 +150,9 @@ export class Player extends Character {
             }
             this.standUp();
         } else if (!this.pathToFollow && state === "off" && this.vehicleMode === VehicleMode.Off) {
-            this.trySitDown();
+            this.trySitDown(
+                !activeUserInputEvents.get(UserInputEvent.SpeedUp) || !this.hasMovementInput(activeUserInputEvents),
+            );
             if (this.isSlidingToSeat) {
                 return;
             }
@@ -308,7 +310,7 @@ export class Player extends Character {
     /**
      * Sits on the free seat under the feet of the player: slides to its center, then faces the way of the seat.
      */
-    private trySitDown(): void {
+    private trySitDown(allowAutomaticSitting: boolean): void {
         const body = this.getBody();
         this.releaseSeatObjectWhenOut();
         const seat = findSeatUnderFeet(
@@ -340,7 +342,7 @@ export class Player extends Character {
             });
             return;
         }
-        this.slideToSeat(seat);
+        if (allowAutomaticSitting) this.slideToSeat(seat);
     }
 
     /**
