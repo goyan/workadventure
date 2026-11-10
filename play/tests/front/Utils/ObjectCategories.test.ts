@@ -105,4 +105,21 @@ describe("ObjectCategories", () => {
         expect(isTreadmillBelt(object(["Sport"]), undefined)).toBe(false);
         expect(isTreadmillBelt({ ...object(["Decoration"], "Aquarium"), animation }, undefined)).toBe(false);
     });
+
+    it("an object of the ice rinks category makes players skate", () => {
+        expect(getObjectInteraction(object(["rinks"], "patinoire.png"), undefined)).toEqual({
+            interaction: "skate",
+            trigger: "auto",
+        });
+    });
+
+    it("ice rinks lie on the floor", () => {
+        expect(getCategorySettings("rinks", undefined)?.layer).toBe("floor");
+    });
+
+    it("a map category may be set to skate", () => {
+        expect(
+            getObjectInteraction(object(["glace"]), { glace: { interaction: "skate", trigger: "auto" } }).interaction,
+        ).toBe("skate");
+    });
 });
