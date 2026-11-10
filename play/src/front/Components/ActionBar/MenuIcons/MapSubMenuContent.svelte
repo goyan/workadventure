@@ -20,7 +20,6 @@
     import ReleaseNotesModal from "../../Modal/ReleaseNotesModal.svelte";
     import UnclaimPersonalDeskModal from "./UnclaimPersonalDeskModal.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
-    import NerfMenuItem from "./NerfMenuItem.svelte";
     import { modals } from "@wa-modals";
     import { IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor, IconHistory } from "@wa-icons";
 
@@ -163,8 +162,6 @@
 >
     <IconHistory font-size="20" />
 </ActionBarButton>
-
-<NerfMenuItem />
 
 {#if $mapEditorMenuVisibleStore}
     <ActionBarButton
