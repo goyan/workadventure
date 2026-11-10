@@ -135,6 +135,31 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         startedAgo: "A commencé {ago}",
         noLink: "Pas de lien de réunion",
     },
+    outlookIcs: {
+        title: "Mes agendas Outlook",
+        explain:
+            "Collez le lien ICS d'un agenda publié depuis Outlook sur le web (Paramètres → Calendrier → Calendriers partagés → Publier un calendrier). Vous seul voyez vos événements.",
+        delay: "Outlook met à jour les agendas publiés avec un délai, souvent de plusieurs heures.",
+        label: "Nom",
+        labelPlaceholder: "Travail",
+        url: "Lien ICS",
+        add: "Ajouter",
+        remove: "Retirer {label}",
+        empty: "Aucun agenda pour l'instant",
+        busyOption: "Me passer « occupé » pendant mes réunions",
+        busyOptionHelp:
+            "Seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent ». Les autres ne voient que le statut.",
+        privateTitle: "Occupé",
+        failed: "Lecture impossible : {labels}",
+        errors: {
+            invalid: "Lien refusé : seul un lien de publication Outlook (.ics) est accepté.",
+            unreachable: "Ce lien ne répond pas : vérifiez que l'agenda est bien publié.",
+            quota: "5 agendas au maximum.",
+            "rate-limit": "Trop de demandes, réessayez dans une minute.",
+            "not-found": "Cet agenda n'existe plus.",
+            unavailable: "Agendas indisponibles pour le moment.",
+        },
+    },
     todoList: {
         title: "À faire",
         forToday: "Pour aujourd'hui",

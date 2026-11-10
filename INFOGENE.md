@@ -9,6 +9,24 @@ de déploiement sont dans le dépôt privé
 [workadventure-selfhost](https://github.com/goyan/workadventure-selfhost) : son accès
 est également nécessaire pour travailler sur ces éléments.
 
+## Agendas Outlook (ICS)
+
+Le panneau **Agenda** natif affiche les agendas Outlook de chacun : sous « Mes agendas Outlook », chaque
+utilisateur colle le lien ICS d'un agenda publié depuis Outlook sur le web (Paramètres → Calendrier →
+Calendriers partagés → Publier un calendrier), 5 au plus. Semaine à venir, réunion en cours, rappels et bouton
+**Rejoindre** pour les réunions Teams. Une option, désactivée par défaut, passe l'utilisateur « occupé » pendant
+ses réunions : seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent », et un statut
+changé à la main reste respecté jusqu'à la réunion suivante.
+
+Le module front `external-modules/infogene-calendar` (suivi avec `git add -f` : ce dossier est ignoré pour les
+modules privés d'upstream) n'est chargé que si l'Admin API l'annonce dans `/api/map` (`modules`). Le pusher
+relaie `/calendar/sources` et `/calendar/events` vers l'Admin API, l'utilisateur étant toujours celui du jeton.
+Seule l'Admin API garde les liens (chiffrés) et lit les ICS : hôtes Outlook uniquement, événements privés sans
+titre. Outlook met à jour les agendas publiés avec un délai, souvent de plusieurs heures.
+
+Recette : ajouter un lien publié, vérifier la semaine (récurrences, journées entières, fuseau), le bouton
+Rejoindre, un lien refusé, puis l'option « occupé » sur une réunion courte, avec et sans « ne pas déranger ».
+
 ## Nerf libre
 
 Cliquer sur son avatar, puis **Équiper le Nerf** dans la roue d'actions ;
