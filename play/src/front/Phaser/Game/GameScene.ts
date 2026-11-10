@@ -27,6 +27,7 @@ import {
     type EntityPrefabType,
     GameMap,
     GameMapProperties,
+    listeningZoneJamKey,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -218,8 +219,9 @@ import {
     listeningByUserUuidStore,
 } from "@wa/front/Spotify/SpotifyListeningDirectory";
 import { spotifySharingEnabledStore } from "@wa/front/Spotify/SpotifySettingsStore";
-import { joinedJamStore, listeningZoneNamesStore } from "@wa/front/ListeningZone/ListeningZoneStore";
+import { joinedJamStore, listeningZoneNamesStore, type JoinedJam } from "@wa/front/ListeningZone/ListeningZoneStore";
 import { allJamRoomsStore, syncJoinedJam } from "@wa/front/ListeningZone/ListeningZoneController";
+import { jamAudioSession } from "@wa/front/ListeningZone/GameJamAudioSession";
 import { startHomeJam } from "@wa/front/Spotify/HomeJam";
 import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "@wa/front/Stores/AdditionalItemsMenuStore";
@@ -2047,6 +2049,30 @@ export class GameScene extends DirtyScene {
             // Only while the local Spotify app really plays along: a follow paused without the extension does not count.
             derived([followedUserUuidStore, listenAlongAvailableStore], ([followed, available]) =>
                 available ? followed : undefined,
+            ),
+            // The confirmed audio session drives presence too: opening the Spotify invite is not required.
+            derived(
+                [allJamRoomsStore, jamAudioSession.listeningSpaceName],
+                ([rooms, spaceName]): JoinedJam | undefined => {
+                    const room =
+                        spaceName &&
+                        rooms.find(
+                            (candidate) =>
+                                jamAudioSession.spaceNameOf({
+                                    areaId: candidate.zone.areaId,
+                                    propertyId: candidate.zone.propertyId,
+                                    hostUuid: candidate.jam.hostUuid,
+                                }) === spaceName,
+                        );
+                    return room
+                        ? {
+                              areaId: room.zone.areaId,
+                              areaName: room.zone.areaName,
+                              hostUuid: room.jam.hostUuid,
+                              url: listeningZoneJamKey(room.jam),
+                          }
+                        : undefined;
+                },
             ),
         );
         return [

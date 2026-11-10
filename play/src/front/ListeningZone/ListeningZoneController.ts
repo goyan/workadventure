@@ -78,9 +78,14 @@ export const jamParticipantsCountStore: Readable<Map<string, number>> = derived(
     [allJamRoomsStore, listeningByUserUuidStore],
     ([rooms, listeningByUuid]) => {
         const zoneOfHost = new Map(rooms.map((room) => [room.jam.hostUuid, room.zone.areaId]));
-        const counts = new Map<string, number>();
-        for (const listening of listeningByUuid.values()) {
-            if (listening.jamHostUuid !== "" && zoneOfHost.get(listening.jamHostUuid) === listening.jamAreaId) {
+        // An open room always includes its host, even if they listen to another room or their presence has not arrived.
+        const counts = new Map(rooms.map((room) => [room.jam.hostUuid, 1]));
+        for (const [uuid, listening] of listeningByUuid) {
+            if (
+                listening.jamHostUuid !== "" &&
+                uuid !== listening.jamHostUuid &&
+                zoneOfHost.get(listening.jamHostUuid) === listening.jamAreaId
+            ) {
                 counts.set(listening.jamHostUuid, (counts.get(listening.jamHostUuid) ?? 0) + 1);
             }
         }

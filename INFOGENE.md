@@ -9,6 +9,21 @@ de déploiement sont dans le dépôt privé
 [workadventure-selfhost](https://github.com/goyan/workadventure-selfhost) : son accès
 est également nécessaire pour travailler sur ces éléments.
 
+## Compteur des Jams et écoute audio
+
+« Écouter l'audio » suffit pour apparaître parmi les participants d'un Jam Spotify :
+aucun compte Spotify, extension ni clic sur le lien d'invitation n'est nécessaire.
+L'appartenance est publiée une fois la session audio connectée, puis retirée à
+l'arrêt de cette écoute si aucun Jam n'a aussi été rejoint. Une personne présente
+par Spotify et par l'audio est comptée une fois. Un salon ouvert inclut toujours
+son hôte, même lorsque celui-ci écoute l'audio d'un autre salon.
+
+Recette : l'hôte ouvre un Jam Spotify et partage son audio ; un second compte
+clique seulement « Écouter l'audio ». Le compteur passe de 1 à 2 et la liste des
+utilisateurs nomme le Jam de l'auditeur. Arrêter cette écoute ramène le compteur
+à 1 ; la reprendre après rechargement le ramène à 2. Rejoindre aussi le même Jam
+par son invitation conserve 2. Vérifier également un salon Live et un Jukebox.
+
 ## Salons Live
 
 Dans une zone d'écoute, « Ouvrir un salon » propose **Live** en plus du Jam Spotify
