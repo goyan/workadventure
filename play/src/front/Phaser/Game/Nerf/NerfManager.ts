@@ -12,6 +12,7 @@ import { RectangleObstacles } from "../../../Utils/RectangleObstacles";
 import type { GameScene } from "../GameScene";
 import type { Character } from "../../Entity/Character";
 import { CHARACTER_BODY_HEIGHT } from "../../Entity/Character";
+import { Area } from "../../Entity/Area";
 import { NerfImpactEffect } from "./NerfImpactEffect";
 import {
     decodeNerfShot,
@@ -118,14 +119,16 @@ export class NerfManager {
         const wrapper = this.scene.getGameMapFrontWrapper();
         const grid = wrapper.getSharedCollisionGrid();
         const tile = wrapper.getTileDimensions();
-        // The same live static rectangles as the avatars, including thin walls and furniture off the tile grid.
+        // Areas have static bodies even when open: only walls and furniture are solid obstacles for darts.
         const obstacles = new RectangleObstacles(
-            Array.from(this.scene.physics.world.staticBodies, (body) => ({
-                x: body.x,
-                y: body.y,
-                width: body.width,
-                height: body.height,
-            })),
+            Array.from(this.scene.physics.world.staticBodies)
+                .filter((body) => !(body.gameObject instanceof Area))
+                .map((body) => ({
+                    x: body.x,
+                    y: body.y,
+                    width: body.width,
+                    height: body.height,
+                })),
             { offsetX: 0, offsetY: 0, width: 0, height: 0 },
         );
         const characters = new Map<number, Character>(this.scene.MapPlayersByKey);

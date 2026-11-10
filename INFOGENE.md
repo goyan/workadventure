@@ -15,6 +15,7 @@ est également nécessaire pour travailler sur ces éléments.
 Le tir suit le déplacement, diagonales incluses, ou le regard à l'arrêt. Le blaster
 et les tirs sont visibles par les collègues ; les murs, meubles et avatars arrêtent
 la fléchette avec un petit éclat de mousse bleu/orange. Aucun score, dégât ni mode jeu.
+Les zones de bureau ou de réunion laissent passer les tirs ; leurs murs et meubles restent des obstacles.
 **Ranger le Nerf** rend ESPACE aux interactions habituelles.
 
 Les tirs respectent les champs de saisie, les verrous de commandes et l'éditeur.

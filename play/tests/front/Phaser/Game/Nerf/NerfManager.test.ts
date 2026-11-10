@@ -17,10 +17,14 @@ import { NERF_SHOT_EVENT, NERF_EQUIPPED_VARIABLE } from "../../../../../src/fron
 import { nerfEquippedStore } from "../../../../../src/front/Stores/NerfStore";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
 import { nerfVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
+import { Area } from "../../../../../src/front/Phaser/Entity/Area";
 
 const getBlockAudio = vi.hoisted(() => vi.fn(() => false));
 vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
     localUserStore: { getBlockAudio },
+}));
+vi.mock("../../../../../src/front/Phaser/Game/GameManager", () => ({
+    gameManager: { getCurrentGameScene: vi.fn() },
 }));
 
 describe("NerfManager", () => {
@@ -62,6 +66,7 @@ describe("NerfManager", () => {
         scene.sound = sound;
         scene.physics = mock<Phaser.Physics.Arcade.ArcadePhysics>();
         scene.physics.world = mock<Phaser.Physics.Arcade.World>();
+        scene.physics.add = mock<Phaser.Physics.Arcade.Factory>();
         scene.physics.world.staticBodies = new Set<Phaser.Physics.Arcade.StaticBody>();
         connection = mock<RoomConnection>();
         Object.defineProperty(connection, "receivedEventMessageStream", { value: stream });
@@ -72,6 +77,7 @@ describe("NerfManager", () => {
         graphics = [];
         const factory = mock<Phaser.GameObjects.GameObjectFactory>();
         scene.add = factory;
+        factory.existing.mockImplementation((object) => object);
         factory.graphics.mockImplementation(() => {
             const graphic = new Phaser.GameObjects.Graphics(scene);
             graphics.push(graphic);
@@ -237,6 +243,52 @@ describe("NerfManager", () => {
         expect(graphics[1].x).toBeLessThan(176);
         manager.destroy();
         expect(graphics[1].scene).toBeUndefined();
+    });
+
+    it.each([64, 128])("flies through an open room starting at x=%s and impacts its avatar target", (roomX) => {
+        const area = new Area(
+            scene,
+            {
+                id: "office",
+                name: "Office",
+                x: roomX,
+                y: 64,
+                width: 160,
+                height: 160,
+                visible: true,
+                properties: [],
+            },
+            false,
+            connection,
+        );
+        const areaBody = mock<Phaser.Physics.Arcade.StaticBody>({
+            x: roomX,
+            y: 63,
+            width: 160,
+            height: 161,
+        });
+        areaBody.gameObject = area;
+        scene.physics.world.staticBodies.add(areaBody);
+        scene.MapPlayersByKey.set(
+            2,
+            mock<RemotePlayer>({
+                x: 180,
+                y: 100,
+                getCollisionRectangle: () => ({ x: 172, y: 100, width: 16, height: 16 }),
+            }),
+        );
+        manager.toggleEquipment();
+        manager.fire();
+        manager.update(1100);
+        expect(graphics).toHaveLength(1);
+        expect(graphics[0].scene).toBe(scene);
+        expect(graphics[0].x).toBeGreaterThan(128);
+        manager.update(1400);
+        expect(graphics[0].scene).toBeUndefined();
+        expect(graphics).toHaveLength(2);
+        expect(graphics[1].x).toBeGreaterThanOrEqual(172);
+        expect(graphics[1].x).toBeLessThan(176);
+        area.destroy();
     });
 
     it("cannot shoot past a thin wall that the barrel overlaps", () => {
