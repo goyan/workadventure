@@ -24,7 +24,13 @@ const state = {
     positionMs: 1000,
     positionAt: 10_000,
 };
-function harness(options: { localUuid?: string; desktop?: JamKaraokeContext["desktop"] } = {}) {
+function harness(
+    options: {
+        localUuid?: string;
+        desktop?: JamKaraokeContext["desktop"];
+        sharingEnabled?: JamKaraokeContext["sharingEnabled"];
+    } = {},
+) {
     const rooms = writable([room]);
     let receive: ((name: string, data: unknown, senderId: number | undefined) => void) | undefined;
     const send = vi.fn();
@@ -42,6 +48,7 @@ function harness(options: { localUuid?: string; desktop?: JamKaraokeContext["des
             };
         },
         desktop: options.desktop,
+        sharingEnabled: options.sharingEnabled,
     });
     return {
         rooms,
@@ -58,6 +65,38 @@ afterEach(() => {
 });
 
 describe("Jam karaoke", () => {
+    it("respects the host's sharing preference and clears already shared metadata when disabled", () => {
+        const enabled = writable(false);
+        let notify: ((state: SpotifyPlaybackState | null) => void) | undefined;
+        const stopWatching = vi.fn();
+        const watchSpotifyPlayback = vi.fn((callback: (state: SpotifyPlaybackState | null) => void) => {
+            notify = callback;
+            return stopWatching;
+        });
+        const game = harness({ localUuid: "host", sharingEnabled: enabled, desktop: { watchSpotifyPlayback } });
+        expect(watchSpotifyPlayback).not.toHaveBeenCalled();
+        enabled.set(true);
+        expect(watchSpotifyPlayback).toHaveBeenCalledOnce();
+        notify?.({
+            track: { uri: "spotify:track:test", title: "Test song", artist: "Test artist", artworkUrl: "" },
+            playing: true,
+            positionMs: 1000,
+            durationMs: 200_000,
+            volume: 50,
+            shuffle: false,
+            repeat: 0,
+        });
+        expect(get(karaokeStatesStore).get("host")?.track?.title).toBe("Test song");
+        enabled.set(false);
+        expect(stopWatching).toHaveBeenCalledOnce();
+        expect(get(karaokeStatesStore).get("host")?.track).toBeNull();
+        expect(game.send).toHaveBeenLastCalledWith(
+            JAM_KARAOKE_STATE_EVENT,
+            expect.objectContaining({ track: null, next: null, playing: false }),
+            [],
+        );
+        game.stop();
+    });
     it("shares desktop pauses and seeks, answers guests with a snapshot and stops watching at room end", () => {
         vi.useFakeTimers();
         vi.setSystemTime(10_000);

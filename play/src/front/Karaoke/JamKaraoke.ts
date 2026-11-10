@@ -1,6 +1,6 @@
 import { isHomeJam, isLiveJam, listeningZoneJamKey } from "@workadventure/map-editor";
-import { derived, get, writable } from "svelte/store";
-import type { Unsubscriber } from "svelte/store";
+import { derived, get, readable, writable } from "svelte/store";
+import type { Readable, Unsubscriber } from "svelte/store";
 import { z } from "zod";
 import debug from "debug";
 import { LyricsTrackSchema } from "../../common/Lyrics";
@@ -58,6 +58,7 @@ export interface JamKaraokeContext extends Pick<
     "rooms" | "listeningByUserUuid" | "localUuid" | "userByUuid" | "userById" | "send" | "onEvent" | "now"
 > {
     desktop?: Pick<NonNullable<HomeJamContext["desktop"]>, "watchSpotifyPlayback" | "watchSpotifyQueue">;
+    sharingEnabled?: Readable<boolean>;
     account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied">;
 }
 
@@ -259,8 +260,14 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         }
     });
 
-    const unsubscribeRooms = context.rooms.subscribe((rooms) => {
-        const nextOwn = rooms.find((room) => !isLiveJam(room.jam) && room.jam.hostUuid === context.localUuid());
+    const unsubscribeRooms = derived(
+        [context.rooms, context.sharingEnabled ?? readable(true)],
+        (values) => values,
+    ).subscribe(([rooms, enabled]) => {
+        const nextOwn = enabled
+            ? rooms.find((room) => !isLiveJam(room.jam) && room.jam.hostUuid === context.localUuid())
+            : undefined;
+        if (own && !enabled) publish({ track: null, next: null, playing: false, positionMs: 0, positionAt: 0 });
         if ((!own && nextOwn) || (own && (!nextOwn || !sameRoom(own, identity(nextOwn))))) {
             stopHost();
             own = nextOwn;

@@ -2127,7 +2127,11 @@ export class GameScene extends DirtyScene {
             desktop: window.WAD,
         };
         const stopHomeJam = startHomeJam(context);
-        const stopKaraoke = startJamKaraoke({ ...context, account: spotifyAccount });
+        const stopKaraoke = startJamKaraoke({
+            ...context,
+            account: spotifyAccount,
+            sharingEnabled: spotifySharingEnabledStore,
+        });
         return () => {
             stopHomeJam();
             stopKaraoke();

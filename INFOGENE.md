@@ -50,6 +50,8 @@ version** recherche un titre/artiste pour cet affichage uniquement. Une absence,
 un instrumental et une erreur ont des messages distincts ; un changement de
 morceau retire les anciennes paroles. Fermer le panneau conserve l'audio.
 La synchronisation se fait par ligne, selon la couverture de la source.
+Le réglage « Partager ce que j'écoute » de l'hôte reste respecté : le désactiver
+arrête la lecture des métadonnées et efface celles déjà annoncées.
 
 Recette : hôte et auditeur audio sans Spotify, morceau courant puis suivant,
 pause/reprise/recherche, file réordonnée et saut, lecture manuelle/reprise,
