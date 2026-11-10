@@ -68,6 +68,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     private readonly pointerCapture: MapDragPointerCapture;
     private readonly panShortcut: MapPanShortcut;
     private readonly spaceKey: Phaser.Input.Keyboard.Key | undefined;
+    private nerfSpacePressed = false;
+    private readonly spaceListeners = new Map<() => void, () => void>();
 
     constructor(gameScene: GameScene) {
         this.gameScene = gameScene;
@@ -94,6 +96,10 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         gameScene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.pointerCapture.destroy();
             this.panShortcut.destroy();
+            for (const listener of this.spaceListeners.values()) {
+                this.gameScene.input.keyboard?.removeListener("keyup-SPACE", listener);
+            }
+            this.spaceListeners.clear();
         });
     }
 
@@ -512,8 +518,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
     }
     public handleKeyDownEvent(event: KeyboardEvent): KeyboardEvent {
+        if (event.code === "Space" && !event.repeat) this.nerfSpacePressed = false;
         const hasExecutedCommand = this.gameScene.getMapEditorModeManager()?.handleKeyDownEvent(event);
         if (hasExecutedCommand) {
+            return event;
+        }
+
+        if (event.code === "Space" && this.gameScene.nerfManager?.isEquipped && !get(mapEditorModeStore)) {
+            if (!isKeyFromInteractiveElement(event) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+                event.preventDefault();
+                this.nerfSpacePressed = true;
+                if (!event.repeat) this.gameScene.nerfManager.fire();
+            }
             return event;
         }
 
@@ -624,6 +640,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             }
             // SPACE
             case " ": {
+                const shotPressed = this.nerfSpacePressed;
+                if (shotPressed || this.gameScene.nerfManager?.isEquipped) break;
                 if (isKeyFromInteractiveElement(event)) break;
                 this.handleActivableEntity();
                 break;
@@ -655,11 +673,19 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
     }
 
     public addSpaceEventListener(callback: () => void): void {
-        this.gameScene.input.keyboard?.addListener("keyup-SPACE", callback);
+        const previous = this.spaceListeners.get(callback);
+        if (previous) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", previous);
+        const listener = (): void => {
+            if (!this.nerfSpacePressed && !this.gameScene.nerfManager?.isEquipped) callback();
+        };
+        this.spaceListeners.set(callback, listener);
+        this.gameScene.input.keyboard?.addListener("keyup-SPACE", listener);
         this.gameScene.getActivatablesManager().disableSelectingByDistance();
     }
     public removeSpaceEventListener(callback: () => void): void {
-        this.gameScene.input.keyboard?.removeListener("keyup-SPACE", callback);
+        const listener = this.spaceListeners.get(callback);
+        if (listener) this.gameScene.input.keyboard?.removeListener("keyup-SPACE", listener);
+        this.spaceListeners.delete(callback);
         this.gameScene.getActivatablesManager().enableSelectingByDistance();
     }
 }

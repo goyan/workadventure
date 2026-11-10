@@ -7,6 +7,11 @@ const actionbar = {
     close: "Close",
     login: "Login",
     map: "Tools",
+    nerf: {
+        equip: "Equip the Nerf",
+        unequip: "Put away the Nerf",
+        help: "SPACE: fire in the direction you move, including diagonals, or the direction you face when stopped.",
+    },
     participantListPlaceholder: "Participants list",
     participantSendMessage: "Send a message",
     participantInviteUser: "Invite a user",
