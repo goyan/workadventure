@@ -81,6 +81,7 @@
                     icon: "dance",
                     store: mapSoundsVolumeStore,
                     value: $mapSoundsVolumeStore,
+                    hint: $LL.menu.settings.soundEffects.mapSoundsHint(),
                 },
             ],
         },

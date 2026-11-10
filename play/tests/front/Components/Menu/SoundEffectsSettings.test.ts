@@ -59,6 +59,12 @@ describe("SoundEffectsSettings", () => {
         expect(preview.play).toHaveBeenCalledWith("doors", 0.4);
     });
 
+    it("explains the sounds placed on the map", () => {
+        const { target } = open();
+        expect(target.textContent).toContain("Sounds placed on the map");
+        expect(target.textContent).toContain("Areas and objects that play a sound");
+    });
+
     it("says a family is muted at volume 0", () => {
         weatherVolumeStore.set(0);
         const { target } = open();
@@ -66,7 +72,7 @@ describe("SoundEffectsSettings", () => {
             label.textContent?.replace(/\s+/g, " ").trim(),
         );
         expect(labels).toContain("Weather : Muted");
-        expect(labels).toContain("Footsteps : 15 %");
+        expect(labels).toContain("Footsteps and swimming : 15 %");
         weatherVolumeStore.set(0.15);
     });
 });
