@@ -39,7 +39,7 @@ import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
 import { TexturesHelper } from "../Helpers/TexturesHelper";
-import { getLayerDepth } from "./EntityLayerDepth";
+import { getLayerDepth, stackableDepths } from "./EntityLayerDepth";
 
 import Sprite = Phaser.GameObjects.Sprite;
 import Graphics = Phaser.GameObjects.Graphics;
@@ -428,9 +428,14 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
 
     /** Depths of the images this one overlaps. The floors stay under everything: no object goes below them. */
     private getStackableDepths(): number[] {
-        return this.getOverlappingEntities()
-            .filter((entity) => parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor")
-            .map((entity) => entity.depth);
+        return stackableDepths(
+            this.prefab.layer,
+            this.getOverlappingEntities()
+                .filter(
+                    (entity) => parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor",
+                )
+                .map((entity) => ({ layer: entity.prefab.layer, depth: entity.depth })),
+        );
     }
 
     /** How many images the object can still be moved over (`up`) or under (`down`) with its manual stacking. */

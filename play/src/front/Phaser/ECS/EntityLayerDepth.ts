@@ -17,3 +17,16 @@ export function getLayerDepth(layer: Exclude<EntityLayer, "standing">, footY: nu
     // Maps are far smaller than 1e6 px: the fraction stays under `span`.
     return base + (Math.max(0, footY) / 1_000_000) * span;
 }
+
+/**
+ * Depths of the overlapping images the manual stacking of the editor moves an object over or under. A floor or overhead
+ * object is only stacked among the objects of its level: raised over a wall, a rink would leave the floor and hide the
+ * players. A standing object is stacked with everything it overlaps.
+ */
+export function stackableDepths(
+    layer: EntityLayer | undefined,
+    neighbours: Iterable<{ layer: EntityLayer | undefined; depth: number }>,
+): number[] {
+    const fixedLevel = layer === "floor" || layer === "overhead";
+    return [...neighbours].filter((n) => !fixedLevel || n.layer === layer).map((n) => n.depth);
+}
