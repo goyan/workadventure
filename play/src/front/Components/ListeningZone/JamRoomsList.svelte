@@ -24,7 +24,7 @@
     import { jamAudioSession } from "../../ListeningZone/GameJamAudioSession";
     import { jamMusicCapture } from "../../ListeningZone/JamMusicCapture";
     import { requestedMicrophoneDeviceIdStore } from "../../Stores/MediaStore";
-    import { selectedKaraokeRoomStore } from "../../Karaoke/JamKaraoke";
+    import { toggleKaraokeRoom } from "../../Karaoke/JamKaraoke";
     import Button from "../UI/Button.svelte";
     import JamAudioControls from "./JamAudioControls.svelte";
     import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
@@ -140,7 +140,7 @@
                 variant="light"
                 appearance="border"
                 size="sm"
-                onclick={() => selectedKaraokeRoomStore.set(room)}
+                onclick={() => toggleKaraokeRoom(room)}
                 dataTestId="jam-karaoke-open">{$LL.spotify.karaoke.title()}</Button
             >
         {/if}

@@ -235,7 +235,7 @@ afterEach(async () => {
 });
 describe("Karaoke", () => {
     it.each([room, { ...room, jam: { home: true, hostUuid: "host", hostName: "Host" } } satisfies JamRoom])(
-        "opens the selected Spotify or Jukebox room without changing playback or membership",
+        "toggles the selected Spotify or Jukebox room without changing playback or membership",
         (selectedRoom) => {
             mocks.setRooms([selectedRoom]);
             render();
@@ -243,11 +243,43 @@ describe("Karaoke", () => {
             if (!button) throw new Error("Missing Karaoke action");
             flushSync(() => button.click());
             expect(get(selectedKaraokeRoomStore)).toEqual(selectedRoom);
+            flushSync(() => button.click());
+            expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+            flushSync(() => button.click());
+            expect(get(selectedKaraokeRoomStore)).toEqual(selectedRoom);
             expect(mocks.join).not.toHaveBeenCalled();
             expect(mocks.playback).not.toHaveBeenCalled();
             expect(get(followedUserUuidStore)).toBeUndefined();
         },
     );
+    it("closes the same room after its metadata changes", () => {
+        render();
+        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
+        if (!button) throw new Error("Missing Karaoke action");
+        flushSync(() => button.click());
+        flushSync(() => mocks.setRooms([{ ...room, jam: { ...room.jam, title: "Updated title" } }]));
+        flushSync(() => button.click());
+        expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+    });
+    it("switches to another room instead of closing the panel", () => {
+        const otherRoom: JamRoom = {
+            ...room,
+            jam: { home: true, hostUuid: "other-host", hostName: "Other host" },
+        };
+        mocks.setRooms([room, otherRoom]);
+        render();
+        const [first, second] = target.querySelectorAll<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
+        if (!first || !second) throw new Error("Missing Karaoke actions");
+        flushSync(() => first.click());
+        expect(get(selectedKaraokeRoomStore)).toEqual(room);
+        flushSync(() => second.click());
+        expect(get(selectedKaraokeRoomStore)).toEqual(otherRoom);
+        flushSync(() => second.click());
+        expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+        expect(mocks.join).not.toHaveBeenCalled();
+        expect(mocks.playback).not.toHaveBeenCalled();
+        expect(get(followedUserUuidStore)).toBeUndefined();
+    });
 });
 describe("classic Jam listening via extension", () => {
     it("keeps the official join button without offering extension listening when disconnected", () => {

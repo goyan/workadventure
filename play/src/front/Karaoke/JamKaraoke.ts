@@ -43,6 +43,10 @@ function sameRoom(room: JamRoom, other: z.infer<typeof RoomIdentity>): boolean {
     return own.areaId === other.areaId && own.propertyId === other.propertyId && own.jamKey === other.jamKey;
 }
 
+export function toggleKaraokeRoom(room: JamRoom): void {
+    selectedKaraokeRoomStore.update((selected) => (selected && sameRoom(selected, identity(room)) ? undefined : room));
+}
+
 export function karaokePositionMs(state: KaraokePlayback, now: number, offsetMs = 0): number {
     const position = state.playing
         ? currentPositionMs(

@@ -50,6 +50,8 @@ pour soi conserve ce choix.
 Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,
 pour soi seulement. Les auditeurs de l'audio relayé n'ont besoin ni de compte
 Spotify ni d'invitation supplémentaire. Les salons Live sont exclus.
+Cliquer à nouveau sur **Karaoké** ferme le panneau ; cliquer sur celui d'un autre
+Jam change la source des paroles.
 
 Les paroles gratuites viennent de LRCLIB, puis de lyrics.ovh pour un repli sans
 synchronisation. Le morceau courant passe avant le préchargement du seul titre
