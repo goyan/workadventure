@@ -74,6 +74,7 @@
     import PrivateMessageNotification from "./PrivateMessage/PrivateMessageNotification.svelte";
     import KnockRequests from "./Knock/KnockRequests.svelte";
     import WaveCards from "./Wave/WaveCards.svelte";
+    import NerfHearts from "./Nerf/NerfHearts.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
@@ -454,6 +455,9 @@
             {#if $showLimitRoomModalStore}
                 <LimitRoomModal />
             {/if}
+
+            <!-- The hearts of the local player while they carry a Nerf, top left under the chat buttons. -->
+            <NerfHearts />
 
             <!-- Toast stack, below the action bar, with the meeting reminders and the host-side raised-hands dock
                  stacked under it so nothing covers anything else's buttons (the dock self-gates on
