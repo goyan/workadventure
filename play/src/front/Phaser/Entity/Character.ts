@@ -32,6 +32,8 @@ import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects"
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
+import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
+import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
@@ -96,6 +98,9 @@ export abstract class Character extends Container implements OutlineableInterfac
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
+    /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
+    private nerfHearts: number | undefined;
+    private nerfHeartsEffect: NerfHeartsEffect | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -162,6 +167,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.seated,
             this.getNerfHeading(),
         );
+        this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -671,6 +677,13 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    public setNerfHearts(value: unknown): void {
+        this.nerfHearts = decodeNerfHearts(value);
+        if (this.nerfHearts !== undefined) this.nerfHeartsEffect ??= new NerfHeartsEffect(this.scene, this);
+        this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.scene.markDirty();
+    }
+
     public isNerfEquipped(): boolean {
         return this.nerfEquipped;
     }
@@ -939,6 +952,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.vehicleEffect?.destroy();
         this.musicHeadphonesEffect?.destroy();
         this.nerfGunEffect?.destroy();
+        this.nerfHeartsEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {
