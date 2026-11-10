@@ -38,7 +38,6 @@ import { asError } from "catch-unknown";
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
 import { VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
-import { soundPlayingStore } from "@wa/front/Stores/SoundPlayingStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
 import { mediaManager } from "@wa/front/WebRtc/MediaManager";
@@ -61,7 +60,6 @@ import {
     MAX_PER_GROUP,
     POSITION_DELAY,
     PUBLIC_MAP_STORAGE_PREFIX,
-    UPLOADER_URL,
     WOKA_SPEED,
 } from "@wa/front/Enum/EnvironmentVariable";
 import { Room } from "@wa/front/Connection/Room";
@@ -249,7 +247,7 @@ import { DarkenOutsideAreaEffect } from "@wa/front/Phaser/Components/DarkenOutsi
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "@wa/front/Stores/PersonalDeskStore";
 import { areaPropertyVariablesManagerStore } from "@wa/front/Stores/AreaPropertyVariablesStore";
 import { ApplicationManager } from "@wa/front/Chat/Applications/ApplicationManager";
-import { audioPlaybackStore } from "@wa/front/Stores/AudioPlaybackStore";
+import { audioPlaybackStore, handleSuspendedAudioContext } from "@wa/front/Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
@@ -2908,28 +2906,36 @@ export class GameScene extends DirtyScene {
 
                 const context = audioContextManager.getContext();
 
-                let previousState: AudioContextState | undefined;
+                // Whether the context ever ran, not whether it ran just before: two output switches in a row make
+                // Chrome report "suspended" several times in a row, and leave the context suspended.
+                let hasRun = false;
                 const onStateChange = () => {
                     const state = context.state;
-                    const wasRunning = previousState === "running";
-                    previousState = state;
 
                     // Note: some browsers (Vivaldi / Brave) will start in "running" state directly despite
                     // no user activation and this will not stop them from blocking WebRTC sound afterwards.
                     if (state === "suspended") {
                         audioInterruptedStore.setInterrupted(false);
-                        const outputSwitch = wasRunning ? pendingSinkRequests(context) : undefined;
+                        const outputSwitch = hasRun ? pendingSinkRequests(context) : undefined;
                         if (outputSwitch) {
                             // Chrome suspends a running context while it switches the audio output, and resumes it
                             // after. Not blocked playback: flagging it sets the SOUND_BLOCKED status, which leaves the
                             // bubble. Resumed here too, in case the switch failed half way.
                             outputSwitch.then(() => context.resume()).catch((e) => console.error(e));
                         } else {
-                            this.unregisterAudioContextPlaybackRetry = audioPlaybackStore.register(() => {
-                                context.resume().catch((e) => console.error(e));
+                            // Without the User Activation API (Safari < 16.4), a context that already ran had one.
+                            const hasBeenActive =
+                                "userActivation" in navigator ? navigator.userActivation.hasBeenActive : hasRun;
+                            handleSuspendedAudioContext(context, hasBeenActive, () => {
+                                // ??=: a second "suspended" in a row must not replace the registration, or the first
+                                // one could never be removed and the status would stay SOUND_BLOCKED until a reload.
+                                this.unregisterAudioContextPlaybackRetry ??= audioPlaybackStore.register(() => {
+                                    context.resume().catch((e) => console.error(e));
+                                });
                             });
                         }
                     } else if (state === "running") {
+                        hasRun = true;
                         this.unregisterAudioContextPlaybackRetry?.();
                         this.unregisterAudioContextPlaybackRetry = undefined;
                         audioInterruptedStore.setInterrupted(false);
@@ -5305,14 +5311,12 @@ ${escapedMessage}
     }
 
     /**
-     * Displays a message sent by an admin: a text or an audio message.
+     * Displays a text message sent by an admin. Audio messages are no longer supported and are ignored.
      */
     private showUserMessage({ type, message }: SendUserMessage) {
         if (type === "message") {
             textMessageStore.addMessage(message);
             this.playSound("new-message", 0.2);
-        } else if (type === "audio") {
-            soundPlayingStore.playSound(UPLOADER_URL + message);
         }
     }
 
