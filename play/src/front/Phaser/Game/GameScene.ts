@@ -267,6 +267,7 @@ import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapL
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
+import { takesSteps } from "./Ice/Steps";
 import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
@@ -1560,10 +1561,10 @@ export class GameScene extends DirtyScene {
         return this.outdoorTracker?.grid;
     }
 
-    /** Feet of the players who leave footprints: everyone but the riders. */
+    /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
     private seasonalWalkers(): WalkerSample[] {
         const walkers: WalkerSample[] = [];
-        if (!this.CurrentPlayer.isRidingVehicle()) {
+        if (takesSteps(this.CurrentPlayer)) {
             walkers.push({
                 id: "local",
                 x: this.CurrentPlayer.x,
@@ -1572,7 +1573,7 @@ export class GameScene extends DirtyScene {
             });
         }
         for (const player of this.MapPlayersByKey.values()) {
-            if (player.isRidingVehicle()) continue;
+            if (!takesSteps(player)) continue;
             walkers.push({
                 id: String(player.userId),
                 x: player.x,
@@ -1630,9 +1631,9 @@ export class GameScene extends DirtyScene {
             swimming: this.CurrentPlayer.isSwimming() || this.CurrentPlayer.isInWater(),
         };
         const characters = [
-            ...(this.CurrentPlayer.isRidingVehicle() ? [] : [listener]),
+            ...(takesSteps(this.CurrentPlayer) ? [listener] : []),
             ...Array.from(this.MapPlayersByKey.values())
-                .filter((player) => !player.isRidingVehicle())
+                .filter((player) => takesSteps(player))
                 .map((player) => ({
                     id: String(player.userId),
                     x: player.x,

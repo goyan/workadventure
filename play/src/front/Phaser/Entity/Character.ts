@@ -373,6 +373,11 @@ export abstract class Character extends Container implements OutlineableInterfac
         );
     }
 
+    /** Whether the character glides on the ice of a rink, as everyone sees it. */
+    public isOnIce(): boolean {
+        return this.isOnIceHere();
+    }
+
     /** Whether the character is drawn swimming (its body in the water), for everyone. */
     public isInWater(): boolean {
         return this.swimEffect?.isActive ?? false;
