@@ -27,6 +27,7 @@ import {
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
+import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -125,6 +126,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     private avatarAction = AvatarAction.Idle;
     private avatarActionEffect: AvatarActionEffect | undefined;
     private depthCache: { x: number; y: number; depth: number } | undefined;
+    /** The current lean of a skater, in radians: towards the foot it glides on. */
+    private skateLean = 0;
     private readonly syncDisplayPositionWithPhysics = (): void => {
         this.setDepthIfNeeded(this.computeDepth());
         this.updateUsernameDisplayPosition();
@@ -138,6 +141,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             );
             if (this.avatarAction !== AvatarAction.Idle) this.scene.markDirty();
         }
+        this.updateSkateLean();
         this.updateSwimEffect();
         if (this.ridingVehicle) this.vehicleEffect ??= new VehicleEffect(this.scene, this);
         this.vehicleEffect?.update(
@@ -373,6 +377,23 @@ export abstract class Character extends Container implements OutlineableInterfac
         );
     }
 
+    /**
+     * A skater leans towards the foot it glides on, in time with its feet; it stands straight again once it stops
+     * skating. The lean is left alone otherwise: the avatar actions (sleep, dance) turn the sprites too.
+     */
+    private updateSkateLean(): void {
+        const sprite = this.sprites.values().next().value;
+        const skating =
+            sprite?.anims?.isPlaying === true &&
+            sprite.anims.currentAnim?.key.endsWith("-" + PlayerAnimationTypes.IceSkate) === true;
+        if (!skating && this.skateLean === 0) return;
+        const target = skating && sprite ? skateLean(Number(sprite.frame.name)) : 0;
+        this.skateLean = stepLean(this.skateLean, target, this.scene.game.loop.delta);
+        if (!skating && Math.abs(this.skateLean) < 0.001) this.skateLean = 0;
+        for (const each of this.sprites.values()) each.setRotation(this.skateLean);
+        this.scene.markDirty();
+    }
+
     /** Whether the character glides on the ice of a rink, as everyone sees it. */
     public isOnIce(): boolean {
         return this.isOnIceHere();
@@ -549,8 +570,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.invisible) return;
         this._lastDirection = direction;
         if (moving && this.avatarAction !== AvatarAction.Idle) this.setAvatarAction(AvatarAction.Idle);
-        // A skater glides standing still: no steps on the ice.
-        const walking = moving && !this.isOnIceHere();
+        // On the ice, a moving character skates: a long glide on each foot instead of steps.
+        const animationType = moveAnimationType(moving, this.isOnIceHere());
         for (const [texture, sprite] of this.sprites.entries()) {
             if (this.ridingVehicle) {
                 sprite.anims.stop();
@@ -569,10 +590,11 @@ export abstract class Character extends Container implements OutlineableInterfac
                 return;
             }
             const directionStr = ProtobufClientUtils.toDirectionString(direction);
-            sprite.anims.timeScale = walking ? animationSpeed : 1;
-            if (walking && (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== directionStr)) {
-                sprite.play(texture + "-" + directionStr + "-" + PlayerAnimationTypes.Walk, true);
-            } else if (!walking) {
+            const moves = animationType !== PlayerAnimationTypes.Idle;
+            sprite.anims.timeScale = moves ? animationSpeed : 1;
+            if (moves && (!sprite.anims.currentAnim || sprite.anims.currentAnim.key !== directionStr)) {
+                sprite.play(texture + "-" + directionStr + "-" + animationType, true);
+            } else if (!moves) {
                 sprite.anims.play(texture + "-" + directionStr + "-" + PlayerAnimationTypes.Idle, true);
             }
         }
