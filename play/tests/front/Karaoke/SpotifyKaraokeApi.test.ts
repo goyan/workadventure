@@ -38,4 +38,16 @@ describe("Spotify karaoke metadata", () => {
         expect(parseKaraokeQueue({ queue: [] })).toBeUndefined();
         expect(parseKaraokeQueue({ queue: [{ type: "episode" }] })).toBeUndefined();
     });
+    it("uses the same Spotify recording identity in the queue and the playing track", () => {
+        const recording = { ...item, external_urls: { spotify: "https://open.spotify.com/track/test" } };
+        const queued = parseKaraokeQueue({ queue: [recording] });
+        const current = parseKaraokePlayback({
+            is_playing: true,
+            progress_ms: 0,
+            currently_playing_type: "track",
+            item: recording,
+        });
+        expect(queued?.uri).toBe("spotify:track:test");
+        expect(current?.track?.uri).toBe(queued?.uri);
+    });
 });

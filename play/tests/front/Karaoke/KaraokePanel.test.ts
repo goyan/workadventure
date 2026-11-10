@@ -54,13 +54,13 @@ vi.mock("../../../src/front/Stores/UserInputStore", async () => {
     return { karaokeInputFocusStore: writable(false) };
 });
 
-const initial: KaraokePlayback = {
+const initial = {
     track: { title: "Test song", artist: "Test artist" },
     next: null,
     positionMs: 1000,
     positionAt: 10_000,
     playing: true,
-};
+} satisfies KaraokePlayback;
 const found: LyricsResult = {
     status: "found",
     instrumental: false,
@@ -75,8 +75,7 @@ let request: ReturnType<typeof vi.fn<(track: unknown, signal: AbortSignal) => Pr
 const onclose = vi.fn();
 
 async function settle(): Promise<void> {
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     flushSync();
 }
 
@@ -113,6 +112,42 @@ afterEach(async () => {
 });
 
 describe("KaraokePanel", () => {
+    it("shows the prefetched next recording in the same render that playback announces it", async () => {
+        await settle();
+        const forecast = { title: "Next song", artist: "Test artist", uri: "spotify:track:next" };
+        request.mockResolvedValueOnce({ ...found, syncedLyrics: "[00:00.00]Next opening" });
+        flushSync(() => playback.set({ ...initial, next: forecast }));
+        await settle();
+        expect(request).toHaveBeenCalledTimes(2);
+        flushSync(() =>
+            playback.set({
+                ...initial,
+                track: { ...forecast, album: "Test edition", durationMs: 200_000 },
+                positionMs: 0,
+                next: null,
+            }),
+        );
+        expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("Next opening");
+        expect(target.textContent).not.toContain("Loading");
+        expect(request).toHaveBeenCalledTimes(2);
+    });
+
+    it("loads a new recording URI even when its title and artist stay identical", async () => {
+        await settle();
+        flushSync(() => playback.set({ ...initial, track: { ...initial.track, uri: "spotify:track:studio" } }));
+        await settle();
+        request.mockResolvedValueOnce({ ...found, syncedLyrics: "[00:00.00]Live opening" });
+        flushSync(() =>
+            playback.set({
+                ...initial,
+                track: { ...initial.track, uri: "spotify:track:live" },
+                positionMs: 0,
+            }),
+        );
+        await settle();
+        expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("Live opening");
+    });
+
     it("highlights by playback time, freezes on pause and follows a seek without new lyric requests", async () => {
         await settle();
         expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("First");
