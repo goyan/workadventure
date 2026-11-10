@@ -186,6 +186,19 @@ describe("Persisted placed image resize", () => {
         expect(f.permissions.canEdit.mock.calls[0]).toEqual([{ x: 96, y: 96 }, 128, 64, false]);
     });
 
+    it("keeps the display level, the seat setting and the scaled water of the original", async () => {
+        const f = fixture();
+        f.prefab.layer = "floor";
+        f.prefab.sittable = false;
+        f.prefab.water = [{ x: 16, y: 8, width: 32, height: 16 }];
+        await resizePlacedImage(f.scene, f.entity, { width: 128, height: 64 }, new AbortController().signal);
+        expect(f.connection.emitMapEditorUploadEntity.mock.calls[0][1]).toMatchObject({
+            layer: "floor",
+            sittable: false,
+            water: [{ x: 32, y: 16, width: 64, height: 32 }],
+        });
+    });
+
     it("does not replace the image before the server confirms the upload", async () => {
         const f = fixture();
         let rejectUpload: (() => void) | undefined;

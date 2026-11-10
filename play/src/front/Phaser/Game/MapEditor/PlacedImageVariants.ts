@@ -33,3 +33,12 @@ export function isResizedVariant(prefab: Pick<EntityPrefab, "tags">): boolean {
 export function resizedVariantName(originalName: string, size: EntityDimensions): string {
     return `${originalName} (${size.width}×${size.height})`;
 }
+
+/**
+ * A resized copy saved without the display level or the seat setting of its original (copies made before they were
+ * carried over) takes them from the original: a rink copy stays under the players.
+ */
+export function withOriginalSettings(copy: EntityPrefab, original: EntityPrefab | undefined): EntityPrefab {
+    if (!original || (copy.layer !== undefined && copy.sittable !== undefined)) return copy;
+    return { ...copy, layer: copy.layer ?? original.layer, sittable: copy.sittable ?? original.sittable };
+}

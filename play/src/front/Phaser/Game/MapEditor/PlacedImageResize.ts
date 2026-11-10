@@ -1,4 +1,4 @@
-import type { EntityDimensions, EntityPrefab } from "@workadventure/map-editor";
+import type { CollisionRectangle, EntityDimensions, EntityPrefab } from "@workadventure/map-editor";
 import { CustomEntityDirection } from "@workadventure/messages";
 import { filter, firstValueFrom, fromEvent, takeUntil, timeout } from "rxjs";
 import { v4 as uuid } from "uuid";
@@ -55,6 +55,23 @@ export function resizeImageCollisionGrid(
         }),
     );
     return result;
+}
+
+/** Scales rectangles in pixels (the water of a pool) from the original size to the new one. */
+export function resizeImageRectangles(
+    rectangles: CollisionRectangle[] | undefined,
+    source: EntityDimensions,
+    target: EntityDimensions,
+): CollisionRectangle[] | undefined {
+    if (!rectangles) return undefined;
+    const sx = target.width / source.width;
+    const sy = target.height / source.height;
+    return rectangles.map((r) => ({
+        x: Math.round(r.x * sx),
+        y: Math.round(r.y * sy),
+        width: Math.max(1, Math.round(r.width * sx)),
+        height: Math.max(1, Math.round(r.height * sy)),
+    }));
 }
 
 function canResizeImage(
@@ -202,11 +219,12 @@ interface PreparedResize {
     canvas: HTMLCanvasElement;
     collisionGrid: number[][] | undefined;
     depthOffset: number;
+    water: CollisionRectangle[] | undefined;
 }
 
 /**
- * Draws the original image at the new size (every frame of an animated strip alike), and scales its collision grid and
- * depth offset from the original size.
+ * Draws the original image at the new size (every frame of an animated strip alike), and scales its collision grid,
+ * depth offset and water from the original size.
  */
 async function drawResizedImage(
     original: EntityPrefab,
@@ -236,6 +254,7 @@ async function drawResizedImage(
         canvas,
         collisionGrid: resizeImageCollisionGrid(original.collisionGrid, source, size),
         depthOffset: Math.round((original.depthOffset ?? 0) * (size.height / source.height)),
+        water: resizeImageRectangles(original.water, source, size),
     };
 }
 
@@ -250,7 +269,7 @@ async function uploadResizedImage(
     const connection = scene.connection;
     const manager = scene.getMapEditorModeManager();
     if (!prepared || !connection || !manager) throw new Error("The map editor is not available");
-    const { canvas, collisionGrid, depthOffset } = prepared;
+    const { canvas, collisionGrid, depthOffset, water } = prepared;
     const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not encode image"))), "image/png");
     });
@@ -270,6 +289,11 @@ async function uploadResizedImage(
             depthOffset,
             color: original.color,
             animation: original.animation,
+            // The copy is drawn and used like the original: a rink or a rug stays under the players, a pool keeps
+            // its water, a seat its setting.
+            layer: original.layer,
+            water,
+            sittable: original.sittable,
         },
         scene.getGameMapFrontWrapper().getEntitiesManager(),
         collections,
