@@ -1,9 +1,12 @@
 import { PositionMessage_Direction } from "@workadventure/messages";
 import { z } from "zod";
 import { cardinalVehicleHeading, VEHICLE_DIRECTIONS } from "../../Vehicle/VehicleFrames";
+import { NERF_MAX_THIRDS } from "./NerfHearts";
 
 export const NERF_EQUIPPED_VARIABLE = "_nerfEquipped";
 export const NERF_SHOT_EVENT = "infogene.nerf.shot";
+/** Thirds of heart left (0 to 15), public and not saved, unset while the Nerf is put away. */
+export const NERF_HEARTS_VARIABLE = "_nerfHearts";
 export const NERF_SOUND_KEY = "audio-nerf-pop";
 export const NERF_SOUND_URL = "/resources/objects/nerf/pop.wav";
 export const NERF_MAX_VOLUME = 0.7;
@@ -31,6 +34,14 @@ const shotSchema = z.object({
 });
 
 export type NerfShot = z.infer<typeof shotSchema>;
+
+const heartsSchema = z.number().int().min(0).max(NERF_MAX_THIRDS);
+
+/** The thirds of heart another player publishes; undefined when unset or invalid. */
+export function decodeNerfHearts(value: unknown): number | undefined {
+    const parsed = heartsSchema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+}
 
 export function decodeNerfShot(name: string, data: unknown): NerfShot | undefined {
     if (name !== NERF_SHOT_EVENT) return undefined;
