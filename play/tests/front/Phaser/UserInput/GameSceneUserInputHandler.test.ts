@@ -21,6 +21,8 @@ import { wokaMenuStore, avatarActionsOpenStore } from "../../../../src/front/Sto
 import { AvatarAction } from "../../../../src/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
+import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
+import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
 
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
@@ -99,6 +101,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
     afterEach(() => {
         wokaMenuStore.clear();
+        nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
         vi.restoreAllMocks();
     });
@@ -277,6 +280,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             const actions = get(wokaMenuStore)?.actions ?? [];
             expect(actions.map(({ testId }) => testId)).toEqual([
                 "avatar-profile",
+                "avatar-nerf",
                 "avatar-action-dance",
                 "avatar-action-coffee",
                 "avatar-change-outfit",
@@ -299,6 +303,30 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
                 ?.callback();
             expect(setSwimwear).toHaveBeenCalledWith(Swimwear.TwoPiece);
             expect(get(avatarActionsOpenStore)).toBe(false);
+        });
+
+        it.each([false, true])("toggles the Nerf from the own-avatar wheel when equipped is %s", (equipped) => {
+            nerfEquippedStore.set(equipped);
+            const nerfManager = mock<NerfManager>();
+            nerfManager.toggleEquipment.mockImplementation(() => nerfEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "nerfManager", { configurable: true, value: nerfManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const action = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-nerf");
+            expect(action?.actionName).toBe(
+                equipped ? get(LL).actionbar.nerf.unequip() : get(LL).actionbar.nerf.equip(),
+            );
+            action?.callback();
+            expect(nerfManager.toggleEquipment.mock.calls).toHaveLength(1);
+            expect(get(nerfEquippedStore)).toBe(!equipped);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-nerf")?.actionName).toBe(
+                equipped ? get(LL).actionbar.nerf.equip() : get(LL).actionbar.nerf.unequip(),
+            );
         });
 
         it("offers no swimwear to a costume such as the duck, whose body has no swimwear poses", () => {

@@ -20,6 +20,7 @@ import LL from "@wa/i18n/i18n-svelte";
 import { followRoleStore, followStateStore, followUsersStore } from "@wa/front/Stores/FollowStore";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
+import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
@@ -291,6 +292,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             emoji: "👤",
             testId: "avatar-profile",
             callback: () => wokaMenuStore.openOwnCard(player.playerName, uuid),
+        });
+        wokaMenuStore.addAction({
+            actionName: get(nerfEquippedStore) ? get(LL).actionbar.nerf.unequip() : get(LL).actionbar.nerf.equip(),
+            icon: "nerf",
+            testId: "avatar-nerf",
+            callback: () => {
+                this.gameScene.nerfManager?.toggleEquipment();
+                wokaMenuStore.clear();
+            },
         });
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());

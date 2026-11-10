@@ -11,7 +11,9 @@ est également nécessaire pour travailler sur ces éléments.
 
 ## Nerf libre
 
-**Outils → Équiper le Nerf**, puis **ESPACE** pour tirer une fléchette avec un pop.
+Cliquer sur son avatar, puis **Équiper le Nerf** dans la roue d'actions ;
+**Ranger le Nerf** apparaît au même endroit une fois équipé. Le menu **Outils**
+propose également ces actions. **ESPACE** tire une fléchette avec un pop.
 Le tir suit le déplacement, diagonales incluses, ou le regard à l'arrêt. Le blaster
 et les tirs sont visibles par les collègues ; les murs, meubles et avatars arrêtent
 la fléchette avec un petit éclat de mousse bleu/orange. Aucun score, dégât ni mode jeu.
