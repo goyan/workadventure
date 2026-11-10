@@ -671,6 +671,10 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    public isNerfEquipped(): boolean {
+        return this.nerfEquipped;
+    }
+
     public getNerfHeading(): number {
         const velocity = this.getBody().velocity;
         return !this.seated && (velocity.x || velocity.y)
