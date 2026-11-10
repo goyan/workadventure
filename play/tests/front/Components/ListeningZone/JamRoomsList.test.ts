@@ -10,6 +10,7 @@ import { EMPTY_SPOTIFY_LISTENING } from "../../../../src/common/SpotifyListening
 import { followedUserUuidStore, listenAlongAvailableStore } from "../../../../src/front/Spotify/ListeningFollower";
 import { joinedJamStore } from "../../../../src/front/ListeningZone/ListeningZoneStore";
 import { lampEffectsEnabledStore } from "../../../../src/front/Stores/LampEffectsStore";
+import { selectedKaraokeRoomStore } from "../../../../src/front/Karaoke/JamKaraoke";
 import JamRoomsList from "../../../../src/front/Components/ListeningZone/JamRoomsList.svelte";
 
 const mocks = vi.hoisted(() => ({
@@ -68,6 +69,7 @@ vi.mock("../../../../src/front/Components/ListeningZone/JukeboxQueue.svelte", as
 vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
     LL: (await import("svelte/store")).readable({
         spotify: {
+            karaoke: { title: () => "Karaoke" },
             card: { stopListeningAlong: () => "Stop listening" },
             listeningZone: {
                 kindSpotify: () => "Spotify",
@@ -144,6 +146,7 @@ beforeEach(() => {
     );
     followedUserUuidStore.set(undefined);
     listenAlongAvailableStore.set(false);
+    selectedKaraokeRoomStore.set(undefined);
 });
 describe("personal light switch", () => {
     it("lets a listener toggle lights without changing the Jam or Spotify playback", () => {
@@ -228,6 +231,23 @@ afterEach(async () => {
     followedUserUuidStore.set(undefined);
     listenAlongAvailableStore.set(false);
     lampEffectsEnabledStore.set(true);
+    selectedKaraokeRoomStore.set(undefined);
+});
+describe("Karaoke", () => {
+    it.each([room, { ...room, jam: { home: true, hostUuid: "host", hostName: "Host" } } satisfies JamRoom])(
+        "opens the selected Spotify or Jukebox room without changing playback or membership",
+        (selectedRoom) => {
+            mocks.setRooms([selectedRoom]);
+            render();
+            const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-karaoke-open"]');
+            if (!button) throw new Error("Missing Karaoke action");
+            flushSync(() => button.click());
+            expect(get(selectedKaraokeRoomStore)).toEqual(selectedRoom);
+            expect(mocks.join).not.toHaveBeenCalled();
+            expect(mocks.playback).not.toHaveBeenCalled();
+            expect(get(followedUserUuidStore)).toBeUndefined();
+        },
+    );
 });
 describe("classic Jam listening via extension", () => {
     it("keeps the official join button without offering extension listening when disconnected", () => {
@@ -391,6 +411,7 @@ describe("Live room", () => {
         expect(target.querySelector('[data-testid="listening-zone-join"]')).toBeNull();
         expect(target.querySelector('[data-testid="listening-zone-listen-via-extension"]')).toBeNull();
         expect(target.querySelector('[data-testid="jukebox-queue-toggle"]')).toBeNull();
+        expect(target.querySelector('[data-testid="jam-karaoke-open"]')).toBeNull();
     });
 
     it("lets a joined guest leave without following the host's Spotify", () => {

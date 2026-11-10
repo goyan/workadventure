@@ -7,6 +7,7 @@ import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInpu
 import { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
 import { releaseNotesVisibleStore } from "../../../../src/front/Stores/ReleaseNotesStore";
+import { karaokeInputFocusStore } from "../../../../src/front/Stores/UserInputStore";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
@@ -100,6 +101,7 @@ describe("UserInputManager wheel and Nerf events", () => {
     });
 
     afterEach(() => {
+        karaokeInputFocusStore.set(false);
         releaseNotesVisibleStore.set(false);
         manager.destroy();
         mapEditorModeStore.set(false);
@@ -167,6 +169,22 @@ describe("UserInputManager wheel and Nerf events", () => {
         manager.restoreControls("errorScreen");
         press();
         expect(nerf.fire.mock.calls).toEqual([[]]);
+    });
+
+    it("blocks actual Phaser SPACE events while karaoke has focus and preserves another control lock on close", () => {
+        const press = (): void => {
+            scene.input.keyboard?.emit("keydown", new KeyboardEvent("keydown", { key: " ", code: "Space" }));
+        };
+        karaokeInputFocusStore.set(true);
+        press();
+        expect(nerf.fire.mock.calls).toHaveLength(0);
+        manager.disableControls("errorScreen");
+        karaokeInputFocusStore.set(false);
+        press();
+        expect(nerf.fire.mock.calls).toHaveLength(0);
+        manager.restoreControls("errorScreen");
+        press();
+        expect(nerf.fire.mock.calls).toHaveLength(1);
     });
 
     it("suppresses object SPACE invitations while equipped, then restores and removes their listeners", () => {

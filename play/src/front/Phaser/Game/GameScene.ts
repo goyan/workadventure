@@ -221,6 +221,8 @@ import { joinedJamStore, listeningZoneNamesStore, type JoinedJam } from "@wa/fro
 import { allJamRoomsStore, syncJoinedJam } from "@wa/front/ListeningZone/ListeningZoneController";
 import { jamAudioSession } from "@wa/front/ListeningZone/GameJamAudioSession";
 import { startHomeJam } from "@wa/front/Spotify/HomeJam";
+import type { HomeJamContext } from "@wa/front/Spotify/HomeJam";
+import { startJamKaraoke } from "@wa/front/Karaoke/JamKaraoke";
 import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "@wa/front/Stores/AdditionalItemsMenuStore";
 import { popupStore } from "@wa/front/Stores/PopupStore";
@@ -2098,7 +2100,7 @@ export class GameScene extends DirtyScene {
         if (!connection) {
             return () => undefined;
         }
-        return startHomeJam({
+        const context: HomeJamContext = {
             rooms: allJamRoomsStore,
             joined: joinedJamStore,
             listeningByUserUuid: listeningByUserUuidStore,
@@ -2123,7 +2125,17 @@ export class GameScene extends DirtyScene {
                 return () => subscription.unsubscribe();
             },
             desktop: window.WAD,
+        };
+        const stopHomeJam = startHomeJam(context);
+        const stopKaraoke = startJamKaraoke({
+            ...context,
+            account: spotifyAccount,
+            sharingEnabled: spotifySharingEnabledStore,
         });
+        return () => {
+            stopHomeJam();
+            stopKaraoke();
+        };
     }
 
     private updateListeningWokas(listeningByUuid: ListeningByUserUuid): void {

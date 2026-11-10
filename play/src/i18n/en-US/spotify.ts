@@ -1,6 +1,26 @@
 import type { BaseTranslation } from "../i18n-types";
 
 const spotify: BaseTranslation = {
+    karaoke: {
+        title: "Karaoke",
+        close: "Close lyrics",
+        loading: "Looking for lyrics…",
+        error: "Lyrics are temporarily unavailable. Try again in a moment.",
+        retry: "Try again",
+        instrumental: "Instrumental track — no lyrics.",
+        missing: "No lyrics found for this recording. You can try another title or artist.",
+        noTrack: "The host has not shared a track yet. You can choose a title to read its lyrics.",
+        noPosition: "Playback position is unknown: scroll through the lyrics manually.",
+        paused: "Playback paused",
+        unsynced: "These lyrics have no timing: scroll through them manually.",
+        follow: "Follow playback",
+        offset: "Lyrics timing",
+        source: "Lyrics: {name:string}",
+        choose: "Choose another recording",
+        trackTitle: "Track title",
+        artist: "Artist",
+        search: "Find lyrics",
+    },
     settings: {
         title: "Spotify",
         description: "Link your Spotify account to show your colleagues what you are listening to.",

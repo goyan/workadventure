@@ -91,6 +91,7 @@
     import WorldClock from "./ActionsMenu/WorldClock.svelte";
     import JamDrawer from "./ListeningZone/JamDrawer.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
+    import Karaoke from "./ListeningZone/Karaoke.svelte";
     import JamAudioResume from "./ListeningZone/JamAudioResume.svelte";
     import ExplorerMenu from "./ActionsMenu/ExplorerMenu.svelte";
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
@@ -475,6 +476,7 @@
             </div>
             <!-- The music of the Jam listened to plays here, whatever the panel shows: closing it must not mute it. -->
             <JamAudioPlayback listeningSpaceName={jamAudioSession.listeningSpaceName} />
+            <Karaoke />
             <!-- What the user listened to or shared before a restart or a reload is picked up as its Jam comes back. -->
             <JamAudioResume
                 session={jamAudioSession}

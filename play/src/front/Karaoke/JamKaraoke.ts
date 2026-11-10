@@ -1,0 +1,333 @@
+import { isHomeJam, isLiveJam, listeningZoneJamKey } from "@workadventure/map-editor";
+import { derived, get, readable, writable } from "svelte/store";
+import type { Readable, Unsubscriber } from "svelte/store";
+import { z } from "zod";
+import debug from "debug";
+import { LyricsTrackSchema } from "../../common/Lyrics";
+import type { LyricsTrack } from "../../common/Lyrics";
+import { currentPositionMs, EMPTY_SPOTIFY_LISTENING } from "../../common/SpotifyListening";
+import type { JamRoom } from "../ListeningZone/ListeningZoneController";
+import type { HomeJamContext } from "../Spotify/HomeJam";
+import { jukeboxQueuesStore } from "../Spotify/HomeJam";
+import type { SpotifyAccount } from "../Spotify/SpotifyAccount";
+import { fetchSpotifyKaraoke, parseKaraokePlayback, parseKaraokeQueue } from "./SpotifyKaraokeApi";
+
+const logger = debug("karaoke");
+export const JAM_KARAOKE_STATE_EVENT = "workadventure.jam-karaoke-state";
+export const JAM_KARAOKE_REQUEST_EVENT = "workadventure.jam-karaoke-request";
+
+const RoomIdentity = z.object({
+    areaId: z.string().min(1).max(200),
+    propertyId: z.string().min(1).max(200),
+    jamKey: z.string().min(1).max(2048),
+});
+const PlaybackState = z.object({
+    track: LyricsTrackSchema.nullable(),
+    next: LyricsTrackSchema.nullable(),
+    playing: z.boolean(),
+    positionMs: z.number().finite().nonnegative().max(86_400_000),
+    positionAt: z.number().finite().nonnegative(),
+});
+const StateMessage = RoomIdentity.merge(PlaybackState);
+export type KaraokePlayback = z.infer<typeof PlaybackState>;
+
+export const karaokeStatesStore = writable<ReadonlyMap<string, z.infer<typeof StateMessage>>>(new Map());
+export const selectedKaraokeRoomStore = writable<JamRoom | undefined>(undefined);
+
+function identity(room: JamRoom): z.infer<typeof RoomIdentity> {
+    return { areaId: room.zone.areaId, propertyId: room.zone.propertyId, jamKey: listeningZoneJamKey(room.jam) };
+}
+
+function sameRoom(room: JamRoom, other: z.infer<typeof RoomIdentity>): boolean {
+    const own = identity(room);
+    return own.areaId === other.areaId && own.propertyId === other.propertyId && own.jamKey === other.jamKey;
+}
+
+export function karaokePositionMs(state: KaraokePlayback, now: number, offsetMs = 0): number {
+    const position = state.playing
+        ? currentPositionMs(
+              { ...EMPTY_SPOTIFY_LISTENING, positionMs: state.positionMs, positionAt: state.positionAt },
+              now,
+          )
+        : state.positionMs;
+    return Math.min(state.track?.durationMs ?? Infinity, Math.max(0, (position ?? state.positionMs) + offsetMs));
+}
+
+export interface JamKaraokeContext extends Pick<
+    HomeJamContext,
+    "rooms" | "listeningByUserUuid" | "localUuid" | "userByUuid" | "userById" | "send" | "onEvent" | "now"
+> {
+    desktop?: Pick<NonNullable<HomeJamContext["desktop"]>, "watchSpotifyPlayback" | "watchSpotifyQueue">;
+    sharingEnabled?: Readable<boolean>;
+    account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied">;
+}
+
+/** Room-scoped metadata for Spotify/Jukebox audio listeners, authenticated by the server's event sender. */
+export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
+    const now = context.now ?? Date.now;
+    let own: JamRoom | undefined;
+    let state: KaraokePlayback = { track: null, next: null, playing: false, positionMs: 0, positionAt: 0 };
+    let stopPlayback: Unsubscriber | undefined;
+    let stopQueue: Unsubscriber | undefined;
+    let pollController: AbortController | undefined;
+    let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let hasPlayer = false;
+    let desktopPlaying = false;
+    let lastPublished: KaraokePlayback | undefined;
+    let hostGeneration = 0;
+    let lastRequest = "";
+    const requestTimes = new Map<number, number>();
+
+    const publish = (next: KaraokePlayback): void => {
+        if (!own) return;
+        const changed =
+            !lastPublished ||
+            JSON.stringify({ ...next, positionMs: 0, positionAt: 0 }) !==
+                JSON.stringify({ ...lastPublished, positionMs: 0, positionAt: 0 }) ||
+            Math.abs(karaokePositionMs(lastPublished, next.positionAt) - next.positionMs) >= 500;
+        state = next;
+        const room = own;
+        karaokeStatesStore.update((states) => new Map(states).set(room.jam.hostUuid, { ...identity(room), ...next }));
+        if (changed) {
+            lastPublished = next;
+            context.send(JAM_KARAOKE_STATE_EVENT, { ...identity(own), ...next }, []);
+        }
+    };
+
+    const setNext = (next: LyricsTrack | undefined): void => {
+        const parsed = LyricsTrackSchema.safeParse(next);
+        publish({ ...state, next: parsed.success ? parsed.data : null });
+    };
+    const setQueue = (queue: { tracks: LyricsTrack[]; upcoming: LyricsTrack[] }): void =>
+        setNext(queue.tracks[0] ?? queue.upcoming[0]);
+
+    const publishListening = (): void => {
+        if (!own || hasPlayer) return;
+        const host = get(context.listeningByUserUuid).get(own.jam.hostUuid);
+        const parsed = LyricsTrackSchema.safeParse({
+            title: host?.trackTitle,
+            artist: host?.artistName,
+            album: host?.albumName,
+        });
+        publish({
+            ...state,
+            track: parsed.success ? parsed.data : null,
+            playing: parsed.success,
+            positionMs: host?.positionMs ?? 0,
+            positionAt: host?.positionAt ?? 0,
+        });
+    };
+
+    const stopHost = (): void => {
+        hostGeneration++;
+        stopPlayback?.();
+        stopQueue?.();
+        stopPlayback = undefined;
+        stopQueue = undefined;
+        pollController?.abort();
+        clearTimeout(pollTimer);
+        pollTimer = undefined;
+        hasPlayer = false;
+        desktopPlaying = false;
+        lastPublished = undefined;
+        state = { track: null, next: null, playing: false, positionMs: 0, positionAt: 0 };
+    };
+
+    const readEndpoint = async (
+        token: string,
+        controller: AbortController,
+        endpoint: "currently-playing" | "queue",
+    ): Promise<number> => {
+        if (
+            controller.signal.aborted ||
+            (context.account && !get(context.account.linked)) ||
+            (endpoint === "currently-playing" && desktopPlaying)
+        )
+            return 5000;
+        if (endpoint === "queue" && (stopQueue || (own && isHomeJam(own.jam) && context.desktop?.watchSpotifyQueue)))
+            return 5000;
+        const response = await fetchSpotifyKaraoke(token, endpoint, controller.signal);
+        if (controller.signal.aborted || (context.account && !get(context.account.linked))) return 5000;
+        if (response.status === 401) {
+            context.account?.expireAccessToken();
+            return 30_000;
+        }
+        if (response.status === 403) {
+            context.account?.reportAccessDenied();
+            return 300_000;
+        }
+        if (response.status === 429) {
+            return Math.max(5000, Number(response.headers.get("Retry-After")) * 1000 || 60_000);
+        }
+        if (endpoint === "currently-playing" && response.status === 204 && !desktopPlaying) {
+            hasPlayer = true;
+            publish({ ...state, track: null, playing: false, positionMs: 0, positionAt: now() });
+        } else if (response.ok) {
+            const json: unknown = await response.json();
+            if (controller.signal.aborted) return 5000;
+            if (endpoint === "currently-playing" && !desktopPlaying) {
+                const playback = parseKaraokePlayback(json);
+                if (playback) {
+                    hasPlayer = true;
+                    publish({ ...state, ...playback, positionAt: now() });
+                }
+            } else if (endpoint === "queue") {
+                setNext(parseKaraokeQueue(json));
+            }
+        }
+        return 5000;
+    };
+
+    const poll = async (controller: AbortController): Promise<void> => {
+        const refresh = async (): Promise<number> => {
+            if (!context.account || !get(context.account.linked)) return 5000;
+            const token = await context.account.getAccessToken();
+            if (!token || controller.signal.aborted) return 5000;
+            const playbackDelay = await readEndpoint(token, controller, "currently-playing");
+            if (playbackDelay !== 5000) return playbackDelay;
+            return readEndpoint(token, controller, "queue");
+        };
+        const delayMs = await refresh().catch((error: unknown) => {
+            if (!controller.signal.aborted) logger("Playback refresh failed", { error });
+            return 5000;
+        });
+        if (!controller.signal.aborted) {
+            pollTimer = setTimeout(() => {
+                poll(controller).catch((error) => logger("Playback polling stopped", { error }));
+            }, delayMs);
+        }
+    };
+
+    const startHost = (): void => {
+        const generation = hostGeneration;
+        stopPlayback = context.desktop?.watchSpotifyPlayback?.((playback) => {
+            if (!own || generation !== hostGeneration) return;
+            desktopPlaying = playback?.track !== null && playback?.track !== undefined;
+            if (!playback) {
+                hasPlayer = false;
+                publish({ ...state, track: null, playing: false, positionMs: 0, positionAt: now() });
+                return;
+            }
+            const parsed = LyricsTrackSchema.safeParse({
+                title: playback.track?.title,
+                artist: playback.track?.artist,
+                durationMs: playback.durationMs || undefined,
+            });
+            hasPlayer = true;
+            const listening = get(context.listeningByUserUuid).get(context.localUuid() ?? "");
+            const album = listening?.trackTitle === playback.track?.title ? listening?.albumName : undefined;
+            publish({
+                ...state,
+                track: parsed.success ? { ...parsed.data, ...(album ? { album } : {}) } : null,
+                playing: playback.playing,
+                positionMs: playback.positionMs,
+                positionAt: now(),
+            });
+        });
+        if (own && !isHomeJam(own.jam)) {
+            stopQueue = context.desktop?.watchSpotifyQueue?.((queue) => {
+                if (!own || generation !== hostGeneration) return;
+                const entries = Array.isArray(queue) ? { tracks: queue, upcoming: [] } : queue;
+                setQueue(entries);
+            });
+        }
+        pollController = new AbortController();
+        poll(pollController).catch((error) => logger("Playback polling stopped", { error }));
+        publishListening();
+    };
+
+    const unsubscribeEvents = context.onEvent((name, data, senderId) => {
+        if (senderId === undefined) return;
+        if (name === JAM_KARAOKE_STATE_EVENT) {
+            const sender = context.userById(senderId);
+            const parsed = StateMessage.safeParse(data);
+            if (!sender || !parsed.success) return;
+            const room = get(context.rooms).find(
+                (room) => !isLiveJam(room.jam) && room.jam.hostUuid === sender.uuid && sameRoom(room, parsed.data),
+            );
+            if (!room) return;
+            karaokeStatesStore.update((states) => new Map(states).set(sender.uuid, parsed.data));
+        } else if (name === JAM_KARAOKE_REQUEST_EVENT && own) {
+            const parsed = RoomIdentity.safeParse(data);
+            if (!parsed.success || !sameRoom(own, parsed.data) || !context.userById(senderId)) return;
+            if (now() - (requestTimes.get(senderId) ?? -Infinity) < 2000) return;
+            for (const [id, at] of requestTimes) {
+                if (now() - at > 60_000) requestTimes.delete(id);
+            }
+            if (requestTimes.size >= 4096) return;
+            requestTimes.set(senderId, now());
+            context.send(JAM_KARAOKE_STATE_EVENT, { ...identity(own), ...state }, [senderId]);
+        }
+    });
+
+    const unsubscribeRooms = derived(
+        [context.rooms, context.sharingEnabled ?? readable(true)],
+        (values) => values,
+    ).subscribe(([rooms, enabled]) => {
+        const nextOwn = enabled
+            ? rooms.find((room) => !isLiveJam(room.jam) && room.jam.hostUuid === context.localUuid())
+            : undefined;
+        if (own && !enabled) publish({ track: null, next: null, playing: false, positionMs: 0, positionAt: 0 });
+        if ((!own && nextOwn) || (own && (!nextOwn || !sameRoom(own, identity(nextOwn))))) {
+            stopHost();
+            own = nextOwn;
+            if (own) startHost();
+        }
+        karaokeStatesStore.update(
+            (states) =>
+                new Map(
+                    [...states].filter(([uuid, state]) =>
+                        rooms.some(
+                            (room) => !isLiveJam(room.jam) && room.jam.hostUuid === uuid && sameRoom(room, state),
+                        ),
+                    ),
+                ),
+        );
+    });
+    const unsubscribeListening = context.listeningByUserUuid.subscribe(publishListening);
+    const unsubscribeAccount = context.account?.linked.subscribe((linked) => {
+        if (!linked && !desktopPlaying) {
+            hasPlayer = false;
+            publishListening();
+        }
+    });
+    const unsubscribeQueues = jukeboxQueuesStore.subscribe((queues) => {
+        if (own && isHomeJam(own.jam)) {
+            const queue = queues.get(own.jam.hostUuid);
+            setNext(queue?.tracks[0] ?? queue?.upcoming[0]);
+        }
+    });
+    const unsubscribeSelected = derived([context.rooms, selectedKaraokeRoomStore], (values) => values).subscribe(
+        ([rooms, selected]) => {
+            if (!selected) {
+                lastRequest = "";
+                return;
+            }
+            const room = rooms.find((room) => !isLiveJam(room.jam) && sameRoom(room, identity(selected)));
+            if (!room) {
+                selectedKaraokeRoomStore.set(undefined);
+                return;
+            }
+            if (selected !== room) selectedKaraokeRoomStore.set(room);
+            const key = JSON.stringify(identity(room));
+            if (lastRequest === key) return;
+            lastRequest = key;
+            const host = context.userByUuid(room.jam.hostUuid);
+            if (host && room.jam.hostUuid !== context.localUuid()) {
+                context.send(JAM_KARAOKE_REQUEST_EVENT, identity(room), [host.id]);
+            }
+        },
+    );
+
+    return () => {
+        unsubscribeEvents();
+        unsubscribeRooms();
+        unsubscribeListening();
+        unsubscribeAccount?.();
+        unsubscribeQueues();
+        unsubscribeSelected();
+        stopHost();
+        selectedKaraokeRoomStore.set(undefined);
+        karaokeStatesStore.set(new Map());
+    };
+}
