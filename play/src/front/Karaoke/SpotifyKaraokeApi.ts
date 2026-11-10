@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LyricsTrackSchema } from "../../common/Lyrics";
 import type { LyricsTrack } from "../../common/Lyrics";
+import { spotifyTrackUri } from "../../common/SpotifyListening";
 import { SpotifyTrackItemSchema } from "../Spotify/SpotifyPlayerApi";
 
 const Playback = z.object({
@@ -17,6 +18,7 @@ function lyricsTrack(item: z.infer<typeof SpotifyTrackItemSchema>): LyricsTrack 
         artist: item.artists.map((artist) => artist.name).join(", "),
         album: item.album?.name,
         durationMs: item.duration_ms,
+        uri: spotifyTrackUri(item.external_urls.spotify ?? ""),
     });
     return track.success ? track.data : undefined;
 }

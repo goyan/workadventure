@@ -29,6 +29,7 @@ function harness(
         localUuid?: string;
         desktop?: JamKaraokeContext["desktop"];
         sharingEnabled?: JamKaraokeContext["sharingEnabled"];
+        account?: JamKaraokeContext["account"];
     } = {},
 ) {
     const rooms = writable([room]);
@@ -49,6 +50,7 @@ function harness(
         },
         desktop: options.desktop,
         sharingEnabled: options.sharingEnabled,
+        account: options.account,
     });
     return {
         rooms,
@@ -62,9 +64,99 @@ afterEach(() => {
     selectedKaraokeRoomStore.set(undefined);
     karaokeStatesStore.set(new Map());
     vi.useRealTimers();
+    vi.unstubAllGlobals();
 });
 
 describe("Jam karaoke", () => {
+    it("applies a queue rate limit to playback polling too, until Retry-After expires", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(10_000);
+        const current = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+        vi.stubGlobal("fetch", (url: string) =>
+            url.endsWith("/queue")
+                ? Promise.resolve(new Response(null, { status: 429, headers: { "Retry-After": "10" } }))
+                : current(),
+        );
+        const game = harness({
+            localUuid: "host",
+            account: {
+                linked: writable(true),
+                getAccessToken: vi.fn().mockResolvedValue("test-token"),
+                expireAccessToken: vi.fn(),
+                reportAccessDenied: vi.fn(),
+            },
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(current).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(current).toHaveBeenCalledTimes(2);
+        game.stop();
+    });
+
+    it("keeps polling the current track while a queue request is still waiting", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(10_000);
+        let finishQueue: ((response: Response) => void) | undefined;
+        let title = "First song";
+        const fetchFn = vi.fn((url: string) =>
+            url.endsWith("/queue")
+                ? new Promise<Response>((resolve) => {
+                      finishQueue = resolve;
+                  })
+                : Promise.resolve(
+                      Response.json({
+                          is_playing: true,
+                          progress_ms: 0,
+                          currently_playing_type: "track",
+                          item: { name: title, artists: [{ name: "Test artist" }], external_urls: {} },
+                      }),
+                  ),
+        );
+        vi.stubGlobal("fetch", fetchFn);
+        const game = harness({
+            localUuid: "host",
+            account: {
+                linked: writable(true),
+                getAccessToken: vi.fn().mockResolvedValue("test-token"),
+                expireAccessToken: vi.fn(),
+                reportAccessDenied: vi.fn(),
+            },
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(finishQueue).toBeDefined();
+        title = "Next song";
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(get(karaokeStatesStore).get("host")?.track?.title).toBe("Next song");
+        expect(fetchFn.mock.calls.filter(([url]) => url.endsWith("/queue"))).toHaveLength(1);
+        game.stop();
+        finishQueue?.(Response.json({ queue: [] }));
+        await vi.advanceTimersByTimeAsync(0);
+    });
+
+    it("continues current playback polling when the optional queue scope is denied", async () => {
+        vi.useFakeTimers();
+        const current = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+        vi.stubGlobal("fetch", (url: string) =>
+            url.endsWith("/queue") ? Promise.resolve(new Response(null, { status: 403 })) : current(),
+        );
+        const denied = vi.fn();
+        const game = harness({
+            localUuid: "host",
+            account: {
+                linked: writable(true),
+                getAccessToken: vi.fn().mockResolvedValue("test-token"),
+                expireAccessToken: vi.fn(),
+                reportAccessDenied: denied,
+            },
+        });
+        await vi.advanceTimersByTimeAsync(0);
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(current).toHaveBeenCalledTimes(2);
+        expect(denied).not.toHaveBeenCalled();
+        game.stop();
+    });
+
     it("respects the host's sharing preference and clears already shared metadata when disabled", () => {
         const enabled = writable(false);
         let notify: ((state: SpotifyPlaybackState | null) => void) | undefined;

@@ -2,7 +2,7 @@
     import { onDestroy, onMount, untrack } from "svelte";
     import * as Sentry from "@sentry/svelte";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { LyricsTrackSchema, lyricsTrackKey } from "../../../common/Lyrics";
+    import { LyricsTrackSchema, lyricsRecordingKey } from "../../../common/Lyrics";
     import type { LyricsTrack } from "../../../common/Lyrics";
     import { activeLyricIndex, parseLrc } from "../../Karaoke/Lrc";
     import { fetchLyrics } from "../../Karaoke/LyricsApi";
@@ -40,9 +40,12 @@
     let previousTrackKey: string | undefined;
     let requestedKey = "";
     let track = $derived(override ?? playback.track ?? undefined);
-    let currentKey = $derived(playback.track ? lyricsTrackKey(playback.track) : "");
+    let currentKey = $derived(playback.track ? lyricsRecordingKey(playback.track) : "");
     let lookupKey = $derived(
-        JSON.stringify([track ? lyricsTrackKey(track) : "", playback.next ? lyricsTrackKey(playback.next) : ""]),
+        JSON.stringify([
+            track ? lyricsRecordingKey(track) : "",
+            playback.next ? lyricsRecordingKey(playback.next) : "",
+        ]),
     );
     let result = $derived($loadState.status === "ready" ? $loadState.lyrics : undefined);
     let found = $derived(result?.status === "found" ? result : undefined);

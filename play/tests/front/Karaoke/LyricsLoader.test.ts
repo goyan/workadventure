@@ -15,6 +15,54 @@ const found: LyricsResult = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("LyricsLoader", () => {
+    it("shows prefetched lyrics immediately when the same recording gains album and duration at playback", async () => {
+        const forecast = { ...next, uri: "spotify:track:next" };
+        const playing = { ...forecast, album: "Test edition", durationMs: 200_000 };
+        const request = vi.fn().mockResolvedValue(found);
+        const loader = new LyricsLoader(request);
+        await loader.load(first, forecast);
+        const transition = loader.load(playing);
+        expect(get(loader.state)).toEqual({ status: "ready", track: playing, lyrics: found });
+        await transition;
+        expect(request).toHaveBeenCalledTimes(2);
+        loader.destroy();
+    });
+
+    it("promotes an in-flight forecast without aborting or restarting its lookup", async () => {
+        let finish: ((lyrics: LyricsResult) => void) | undefined;
+        let forecastSignal: AbortSignal | undefined;
+        const request = vi
+            .fn()
+            .mockResolvedValueOnce(found)
+            .mockImplementationOnce(
+                (_track, signal: AbortSignal) =>
+                    new Promise<LyricsResult>((resolve) => {
+                        forecastSignal = signal;
+                        finish = resolve;
+                    }),
+            )
+            .mockResolvedValue(found);
+        const loader = new LyricsLoader(request);
+        const loading = loader.load(first, next);
+        await vi.waitFor(() => expect(finish).toBeDefined());
+        const transition = loader.load(next);
+        expect(forecastSignal?.aborted).toBe(false);
+        finish?.(found);
+        await Promise.all([loading, transition]);
+        expect(get(loader.state)).toEqual({ status: "ready", track: next, lyrics: found });
+        expect(request).toHaveBeenCalledTimes(2);
+        loader.destroy();
+    });
+
+    it("keeps different recordings with identical labels separate", async () => {
+        const request = vi.fn().mockResolvedValue(found);
+        const loader = new LyricsLoader(request);
+        await loader.load({ ...next, uri: "spotify:track:studio" });
+        await loader.load({ ...next, uri: "spotify:track:live" });
+        expect(request).toHaveBeenCalledTimes(2);
+        loader.destroy();
+    });
+
     it("keeps the current lyrics visible while a changed queue preloads another successor", async () => {
         const loader = new LyricsLoader(vi.fn().mockResolvedValue(found));
         await loader.load(first, next);

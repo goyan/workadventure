@@ -65,6 +65,10 @@ version** recherche un titre/artiste pour cet affichage uniquement. Une absence,
 un instrumental et une erreur ont des messages distincts ; un changement de
 morceau retire les anciennes paroles. Fermer le panneau conserve l'audio.
 La synchronisation se fait par ligne, selon la couverture de la source.
+Les paroles du titre suivant déjà chargées s'affichent dès que l'hôte annonce
+sa lecture, même si l'album et la durée arrivent seulement à ce moment.
+Une recherche en cours du suivant est conservée à la transition. Côté navigateur,
+une lecture lente de la file Spotify ne retarde plus le suivi du morceau courant.
 Le réglage « Partager ce que j'écoute » de l'hôte reste respecté : le désactiver
 arrête la lecture des métadonnées et efface celles déjà annoncées.
 

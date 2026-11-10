@@ -5,7 +5,7 @@ import { z } from "zod";
 import debug from "debug";
 import { LyricsTrackSchema } from "../../common/Lyrics";
 import type { LyricsTrack } from "../../common/Lyrics";
-import { currentPositionMs, EMPTY_SPOTIFY_LISTENING } from "../../common/SpotifyListening";
+import { currentPositionMs, EMPTY_SPOTIFY_LISTENING, spotifyTrackUri } from "../../common/SpotifyListening";
 import type { JamRoom } from "../ListeningZone/ListeningZoneController";
 import type { HomeJamContext } from "../Spotify/HomeJam";
 import { jukeboxQueuesStore } from "../Spotify/HomeJam";
@@ -71,12 +71,19 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     let stopQueue: Unsubscriber | undefined;
     let pollController: AbortController | undefined;
     let pollTimer: ReturnType<typeof setTimeout> | undefined;
+    let queueRequest: Promise<void> | undefined;
+    let queueNextRequestAt = 0;
+    let spotifyBlockedUntil = 0;
     let hasPlayer = false;
     let desktopPlaying = false;
     let lastPublished: KaraokePlayback | undefined;
     let hostGeneration = 0;
     let lastRequest = "";
     const requestTimes = new Map<number, number>();
+    const blockSpotify = (delayMs: number): number => {
+        spotifyBlockedUntil = Math.max(spotifyBlockedUntil, now() + delayMs);
+        return spotifyBlockedUntil - now();
+    };
 
     const publish = (next: KaraokePlayback): void => {
         if (!own) return;
@@ -108,6 +115,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             title: host?.trackTitle,
             artist: host?.artistName,
             album: host?.albumName,
+            uri: host ? spotifyTrackUri(host.trackUrl) : undefined,
         });
         publish({
             ...state,
@@ -127,6 +135,9 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         pollController?.abort();
         clearTimeout(pollTimer);
         pollTimer = undefined;
+        queueRequest = undefined;
+        queueNextRequestAt = 0;
+        spotifyBlockedUntil = 0;
         hasPlayer = false;
         desktopPlaying = false;
         lastPublished = undefined;
@@ -146,6 +157,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             return 5000;
         if (endpoint === "queue" && (stopQueue || (own && isHomeJam(own.jam) && context.desktop?.watchSpotifyQueue)))
             return 5000;
+        if (spotifyBlockedUntil > now()) return Math.max(5000, spotifyBlockedUntil - now());
         const response = await fetchSpotifyKaraoke(token, endpoint, controller.signal);
         if (controller.signal.aborted || (context.account && !get(context.account.linked))) return 5000;
         if (response.status === 401) {
@@ -153,11 +165,13 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             return 30_000;
         }
         if (response.status === 403) {
-            context.account?.reportAccessDenied();
+            // The queue needs an additional scope: its refusal must not suspend allowed playback reads.
+            if (endpoint === "currently-playing") context.account?.reportAccessDenied();
             return 300_000;
         }
         if (response.status === 429) {
-            return Math.max(5000, Number(response.headers.get("Retry-After")) * 1000 || 60_000);
+            const delayMs = Math.max(5000, Number(response.headers.get("Retry-After")) * 1000 || 60_000);
+            return blockSpotify(delayMs);
         }
         if (endpoint === "currently-playing" && response.status === 204 && !desktopPlaying) {
             hasPlayer = true;
@@ -185,7 +199,22 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             if (!token || controller.signal.aborted) return 5000;
             const playbackDelay = await readEndpoint(token, controller, "currently-playing");
             if (playbackDelay !== 5000) return playbackDelay;
-            return readEndpoint(token, controller, "queue");
+            if (!queueRequest && !controller.signal.aborted && now() >= queueNextRequestAt) {
+                const generation = hostGeneration;
+                // One queue lookup may run beside playback; a slow forecast never holds the current track.
+                queueRequest = readEndpoint(token, controller, "queue")
+                    .then((delayMs) => {
+                        if (generation === hostGeneration) queueNextRequestAt = now() + delayMs;
+                    })
+                    .catch((error: unknown) => {
+                        if (!controller.signal.aborted) logger("Queue refresh failed", { error });
+                        if (generation === hostGeneration) queueNextRequestAt = now() + 5000;
+                    })
+                    .finally(() => {
+                        if (generation === hostGeneration) queueRequest = undefined;
+                    });
+            }
+            return playbackDelay;
         };
         const delayMs = await refresh().catch((error: unknown) => {
             if (!controller.signal.aborted) logger("Playback refresh failed", { error });
@@ -212,6 +241,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
                 title: playback.track?.title,
                 artist: playback.track?.artist,
                 durationMs: playback.durationMs || undefined,
+                uri: playback.track?.uri,
             });
             hasPlayer = true;
             const listening = get(context.listeningByUserUuid).get(context.localUuid() ?? "");
