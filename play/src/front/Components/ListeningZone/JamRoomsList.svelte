@@ -93,32 +93,14 @@
                           : $LL.spotify.listeningZone.jamOf({ name: hostName }))}
             </p>
             <div class="ml-auto shrink-0">
-                {#if mine}
-                    <LightEffectsToggle
-                        on={room.jam.lightsOff !== true}
-                        label={room.jam.lightsOff
-                            ? $LL.spotify.listeningZone.lightsEnableForAll()
-                            : $LL.spotify.listeningZone.lightsDisableForAll()}
-                        onclick={() => updateOwnRoom({ lightsOff: room.jam.lightsOff !== true })}
-                        testid="jam-lights-toggle-all"
-                    />
-                {:else if room.jam.lightsOff && (joined || following)}
-                    <LightEffectsToggle
-                        on={false}
-                        disabled
-                        label={$LL.spotify.listeningZone.lightsOffByHost()}
-                        testid="jam-lights-off-by-host"
-                    />
-                {:else if joined || following}
-                    <LightEffectsToggle
-                        on={$lampEffectsEnabledStore}
-                        label={$lampEffectsEnabledStore
-                            ? $LL.spotify.listeningZone.lightsDisable()
-                            : $LL.spotify.listeningZone.lightsEnable()}
-                        onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
-                        testid="jam-lights-toggle"
-                    />
-                {/if}
+                <LightEffectsToggle
+                    on={$lampEffectsEnabledStore}
+                    label={$lampEffectsEnabledStore
+                        ? $LL.spotify.listeningZone.lightsDisable()
+                        : $LL.spotify.listeningZone.lightsEnable()}
+                    onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
+                    testid="jam-lights-toggle"
+                />
             </div>
         </div>
         {#if jam.title}
@@ -133,6 +115,26 @@
                 ? ` · ${room.zone.areaName}`
                 : ""}
         </p>
+        {#if mine}
+            <button
+                type="button"
+                class="self-start rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/80 hover:bg-white/20"
+                aria-pressed={room.jam.lightsOff !== true}
+                aria-label={room.jam.lightsOff
+                    ? $LL.spotify.listeningZone.lightsEnableForAll()
+                    : $LL.spotify.listeningZone.lightsDisableForAll()}
+                onclick={() => updateOwnRoom({ lightsOff: room.jam.lightsOff !== true })}
+                data-testid="jam-lights-toggle-all"
+            >
+                {room.jam.lightsOff
+                    ? $LL.spotify.listeningZone.lightsEnableForAll()
+                    : $LL.spotify.listeningZone.lightsDisableForAll()}
+            </button>
+        {:else if room.jam.lightsOff}
+            <p class="m-0 text-xs text-white/50" data-testid="jam-lights-off-by-host">
+                {$LL.spotify.listeningZone.lightsOffByHost()}
+            </p>
+        {/if}
         {#if !live}
             <Button
                 variant="light"

@@ -30,6 +30,21 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Lumières des Jams
+
+La boule disco dans chaque carte de Jam coupe ou réactive les effets lumineux
+**pour moi**, y compris pour l'hôte et sans devoir rejoindre le salon. Ce choix
+s'applique aux lampes de la page, sans couper la musique ni changer l'affichage
+des collègues. Il est conservé pendant la session de page.
+
+L'hôte dispose séparément de **Couper les effets lumineux (pour tous)**, sous le
+compteur du salon. Les invités voient une indication lorsque l'hôte les a coupés ;
+leur choix personnel reste disponible et s'applique quand l'hôte rallume.
+
+Recette : hôte et invité coupent chacun pour soi ; l'autre garde ses effets et
+l'audio continue. L'hôte coupe puis rallume pour tous ; un invité qui avait coupé
+pour soi conserve ce choix.
+
 ## Paroles de karaoké
 
 Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,
