@@ -52,6 +52,11 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
         cancel: () => "Cancel",
         mapEditor: () => "Edit map",
         globalMessage: () => "Global message",
+        nerf: {
+            equip: () => "Equip the Nerf",
+            unequip: () => "Put away the Nerf",
+            help: () => "SPACE: fire",
+        },
     };
     return {
         LL: readable({
@@ -148,7 +153,7 @@ describe("personal desk release confirmation", () => {
         });
         const labels = [...target.querySelectorAll("button")].map((button) => button.textContent?.trim());
         // Weather lives in the editor (Configure the room), day/night in Settings, exploring in the floating explorer.
-        expect(labels).toEqual(["News", "Edit map", "Global message", "Walk", "Release"]);
+        expect(labels).toEqual(["News", "Equip the Nerf", "Edit map", "Global message", "Walk", "Release"]);
     });
     it("opens without releasing and confirms the current owned desk once", async () => {
         const confirm = openConfirmation();
