@@ -311,7 +311,14 @@ import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
-import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
+import {
+    NERF_EQUIPPED_VARIABLE,
+    NERF_HEARTS_VARIABLE,
+    NERF_OUCH_SOUND_KEY,
+    NERF_OUCH_SOUND_URL,
+    NERF_SOUND_KEY,
+    NERF_SOUND_URL,
+} from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
@@ -616,6 +623,7 @@ export class GameScene extends DirtyScene {
         this.load.audio(DOOR_SOUND_KEYS.close, DOOR_SOUND_URLS.close);
         this.load.audio(KNOCK_SOUND_KEY, KNOCK_SOUND_URL);
         this.load.audio(NERF_SOUND_KEY, NERF_SOUND_URL);
+        this.load.audio(NERF_OUCH_SOUND_KEY, NERF_OUCH_SOUND_URL);
         for (const { key, url } of [
             ...FOOTSTEP_SOUNDS,
             ...SKATEBOARD_SOUNDS,

@@ -56,6 +56,9 @@ import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
+/** Red of the flash shown when a Nerf dart takes a third of a heart, and its length. */
+const NERF_HIT_TINT = 0xff8080;
+const NERF_HIT_FLASH_MS = 150;
 /**
  * Clickable area of a woka: its drawn body (a 32x32 frame centered on the character), slightly narrowed to the
  * visible silhouette. Hit coordinates are relative to the container's top-left corner, i.e. shifted by its display
@@ -101,6 +104,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
     private nerfHearts: number | undefined;
     private nerfHeartsEffect: NerfHeartsEffect | undefined;
+    /** Pending end of the red flash of a Nerf hit, with the tints to put back. */
+    private nerfFlash: { timer: Phaser.Time.TimerEvent; tints: Map<Sprite, number> } | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -684,6 +689,23 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    /** A short red flash when a Nerf dart takes a third of a heart: once, no blinking (fine with reduced motion). */
+    public flashNerfHit(): void {
+        const tints =
+            this.nerfFlash?.tints ?? new Map([...this.sprites.values()].map((sprite) => [sprite, sprite.tintTopLeft]));
+        this.nerfFlash?.timer.remove();
+        for (const sprite of this.sprites.values()) sprite.setTint(NERF_HIT_TINT);
+        this.nerfFlash = {
+            tints,
+            timer: this.scene.time.delayedCall(NERF_HIT_FLASH_MS, () => {
+                for (const [sprite, tint] of tints) if (sprite.active) sprite.setTint(tint);
+                this.nerfFlash = undefined;
+                this.scene.markDirty();
+            }),
+        };
+        this.scene.markDirty();
+    }
+
     public isNerfEquipped(): boolean {
         return this.nerfEquipped;
     }
@@ -953,6 +975,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.musicHeadphonesEffect?.destroy();
         this.nerfGunEffect?.destroy();
         this.nerfHeartsEffect?.destroy();
+        this.nerfFlash?.timer.remove();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

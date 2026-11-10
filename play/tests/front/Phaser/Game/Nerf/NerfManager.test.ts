@@ -17,6 +17,7 @@ import {
     NERF_SHOT_EVENT,
     NERF_EQUIPPED_VARIABLE,
     NERF_HEARTS_VARIABLE,
+    NERF_OUCH_SOUND_KEY,
 } from "../../../../../src/front/Phaser/Game/Nerf/NerfProtocol";
 import { nerfEquippedStore, nerfHeartsStore } from "../../../../../src/front/Stores/NerfStore";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
@@ -432,6 +433,29 @@ describe("NerfManager", () => {
             hitTimes(15);
             expect(player.teleportTo.mock.calls).toEqual([]);
             expect(get(nerfHeartsStore)).toEqual({ thirds: 15, jailed: false });
+        });
+
+        const ouches = () => sound.play.mock.calls.filter(([key]) => key === NERF_OUCH_SOUND_KEY);
+
+        it("flashes the avatar and says ouch when a dart takes a third", () => {
+            nerfVolumeStore.set(0.5);
+            hitTimes(1);
+            expect(ouches()).toEqual([[NERF_OUCH_SOUND_KEY, { volume: 0.35 }]]);
+            expect(player.flashNerfHit.mock.calls).toHaveLength(1);
+        });
+
+        it("still flashes, silently, when the player blocked the sounds", () => {
+            getBlockAudio.mockReturnValue(true);
+            hitTimes(1);
+            expect(ouches()).toEqual([]);
+            expect(player.flashNerfHit.mock.calls).toHaveLength(1);
+        });
+
+        it("neither flashes nor says ouch for a dart that does not count", () => {
+            shooter().isNerfEquipped.mockReturnValue(false);
+            hitTimes(1);
+            expect(ouches()).toEqual([]);
+            expect(player.flashNerfHit.mock.calls).toHaveLength(0);
         });
 
         it("keeps the hearts while the Nerf is put away", () => {

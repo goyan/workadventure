@@ -24,6 +24,7 @@ import {
     NERF_HEARTS_VARIABLE,
     NERF_HEARING_DISTANCE,
     NERF_MAX_VOLUME,
+    NERF_OUCH_SOUND_KEY,
     NERF_RANGE,
     NERF_SHOT_EVENT,
     NERF_SOUND_KEY,
@@ -281,6 +282,8 @@ export class NerfManager {
         if (!this.hearts) return;
         const { state, eliminated } = hit(this.hearts, time);
         this.hearts = state;
+        this.scene.CurrentPlayer.flashNerfHit();
+        this.playOuch();
         if (!eliminated) return;
         if (prison) {
             const center = zoneCenter(prison);
@@ -304,6 +307,13 @@ export class NerfManager {
             persist: false,
             scope: "room",
         });
+    }
+
+    /** The player's own "ouch": at the Nerf volume, not faded with the distance. */
+    private playOuch(): void {
+        if (localUserStore.getBlockAudio() || this.scene.sound.locked) return;
+        const volume = get(nerfVolumeStore) * NERF_MAX_VOLUME;
+        if (volume > 0) this.scene.sound.play(NERF_OUCH_SOUND_KEY, { volume });
     }
 
     private playPop(shot: NerfShot): void {
