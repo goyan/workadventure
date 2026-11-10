@@ -2,6 +2,26 @@ import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
 const spotify: DeepPartial<Translation["spotify"]> = {
+    karaoke: {
+        title: "Karaoké",
+        close: "Fermer les paroles",
+        loading: "Recherche des paroles…",
+        error: "Les paroles sont momentanément indisponibles. Réessayez dans un instant.",
+        retry: "Réessayer",
+        instrumental: "Morceau instrumental — sans paroles.",
+        missing: "Aucune parole trouvée pour cette version. Essayez un autre titre ou artiste.",
+        noTrack: "L’hôte n’a pas encore partagé de morceau. Vous pouvez choisir un titre pour lire ses paroles.",
+        noPosition: "La position de lecture est inconnue : faites défiler les paroles à la main.",
+        paused: "Lecture en pause",
+        unsynced: "Ces paroles ne sont pas synchronisées : faites-les défiler à la main.",
+        follow: "Suivre la lecture",
+        offset: "Avance ou retard des paroles",
+        source: "Paroles : {name}",
+        choose: "Choisir une autre version",
+        trackTitle: "Titre du morceau",
+        artist: "Artiste",
+        search: "Chercher les paroles",
+    },
     settings: {
         title: "Spotify",
         description: "Liez votre compte Spotify pour montrer à vos collègues ce que vous écoutez.",

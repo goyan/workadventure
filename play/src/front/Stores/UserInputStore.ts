@@ -8,6 +8,7 @@ import { releaseNotesVisibleStore } from "./ReleaseNotesStore";
 import { avatarActionsOpenStore } from "./WokaMenuStore";
 
 export const inputFormFocusStore = writable(false);
+export const karaokeInputFocusStore = writable(false);
 
 export const mapExplorerSearchinputFocusStore = writable(false);
 
@@ -23,6 +24,7 @@ export const enableUserInputsStore = derived(
         mapDeletedPromptStore,
         releaseNotesVisibleStore,
         avatarActionsOpenStore,
+        karaokeInputFocusStore,
     ],
     ([
         $menuInputFocusStore,
@@ -34,6 +36,7 @@ export const enableUserInputsStore = derived(
         $mapDeletedPromptStore,
         $releaseNotesVisibleStore,
         $avatarActionsOpenStore,
+        $karaokeInputFocusStore,
     ]) => {
         return (
             !$menuInputFocusStore &&
@@ -44,7 +47,8 @@ export const enableUserInputsStore = derived(
             !$refreshPromptStore &&
             !$mapDeletedPromptStore &&
             !$releaseNotesVisibleStore &&
-            !$avatarActionsOpenStore
+            !$avatarActionsOpenStore &&
+            !$karaokeInputFocusStore
         );
     },
 );
