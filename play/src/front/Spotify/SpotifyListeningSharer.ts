@@ -45,12 +45,14 @@ export class SpotifyListeningSharer {
         private readonly localPlayer: LocalSpotifyPlayer | undefined = undefined,
         /** The user whose tracks this Spotify plays along with, published so that others can count listeners. */
         listeningAlong: Readable<string | undefined> = readable(undefined),
+        /** The Jam whose relayed audio is actually connected, even without joining through Spotify. */
+        audioJam: Readable<JoinedJam | undefined> = readable(undefined),
     ) {
         this.unsubscriber = derived(
-            [account.linked, sharingEnabled, joinedJam, listeningAlong],
+            [account.linked, sharingEnabled, joinedJam, listeningAlong, audioJam],
             (values) => values,
-        ).subscribe(([linked, enabled, jam, along]) => {
-            this.jam = jam;
+        ).subscribe(([linked, enabled, jam, along, audio]) => {
+            this.jam = audio ?? jam;
             this.listeningAlongUuid = along;
             // The local player needs no account: sharing is enough.
             this.readLocalPlayer(enabled && localPlayer !== undefined);

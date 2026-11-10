@@ -1,9 +1,11 @@
 import type { ListeningZoneJam } from "@workadventure/map-editor";
+import type { SpotifyListening } from "@workadventure/messages";
 import { get, writable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { localUserStore } from "../../../src/front/Connection/LocalUserStore";
 import {
     allJamRoomsStore,
+    jamParticipantsCountStore,
     type JamRoom,
     joinHomeJam,
     joinJam,
@@ -24,6 +26,15 @@ import {
 import type { AreaPropertyVariablesManager } from "../../../src/front/Phaser/Game/AreaPropertyVariablesManager";
 import { followedUserUuidStore } from "../../../src/front/Spotify/ListeningFollower";
 import { areaPropertyVariablesManagerStore } from "../../../src/front/Stores/AreaPropertyVariablesStore";
+import { EMPTY_SPOTIFY_LISTENING } from "../../../src/common/SpotifyListening";
+
+const listening = vi.hoisted(() => ({ set: vi.fn<(value: Map<string, SpotifyListening>) => void>() }));
+vi.mock("../../../src/front/Spotify/SpotifyListeningDirectory", async () => {
+    const { writable } = await import("svelte/store");
+    const store = writable(new Map<string, SpotifyListening>());
+    listening.set.mockImplementation(store.set);
+    return { listeningByUserUuidStore: store };
+});
 
 const lounge = { areaId: "lounge", propertyId: "listening", areaName: "Lounge" };
 const patio = { areaId: "patio", propertyId: "listening", areaName: "Patio" };
@@ -70,6 +81,7 @@ describe("Jam rooms", () => {
         currentListeningZoneStore.set(lounge);
         joinedJamStore.set(undefined);
         followedUserUuidStore.set(undefined);
+        listening.set(new Map());
     });
 
     afterEach(() => {
@@ -83,6 +95,39 @@ describe("Jam rooms", () => {
         setRooms(patio, [homeJam]);
 
         expect(get(allJamRoomsStore)).toEqual([room(lounge, spotifyJam), room(patio, homeJam)]);
+    });
+
+    it("counts the host once even before their listening presence arrives", () => {
+        setRooms(lounge, [spotifyJam]);
+        expect(get(jamParticipantsCountStore).get("dj")).toBe(1);
+        listening.set(new Map([["dj", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj" }]]));
+        expect(get(jamParticipantsCountStore).get("dj")).toBe(1);
+    });
+
+    it("counts a guest's published audio membership once and removes it when listening stops", () => {
+        setRooms(lounge, [spotifyJam]);
+        listening.set(
+            new Map([
+                ["dj", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj" }],
+                ["guest", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj" }],
+                ["elsewhere", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "patio", jamHostUuid: "dj" }],
+            ]),
+        );
+        expect(get(jamParticipantsCountStore).get("dj")).toBe(2);
+        listening.set(new Map([["dj", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "lounge", jamHostUuid: "dj" }]]));
+        expect(get(jamParticipantsCountStore).get("dj")).toBe(1);
+    });
+
+    it("keeps a host counted in their own room while they hear another host's audio", () => {
+        setRooms(lounge, [spotifyJam]);
+        setRooms(patio, [homeJam]);
+        listening.set(new Map([["dj", { ...EMPTY_SPOTIFY_LISTENING, jamAreaId: "patio", jamHostUuid: "nat" }]]));
+        expect(get(jamParticipantsCountStore)).toEqual(
+            new Map([
+                ["dj", 1],
+                ["nat", 2],
+            ]),
+        );
     });
 
     it("opens our room, titled, with the session name, and puts us in it", () => {

@@ -16,6 +16,7 @@ function createHarness(options: { linked?: boolean; sharing?: boolean } = {}) {
     const linked = writable(options.linked ?? true);
     const sharing = writable(options.sharing ?? true);
     const joinedJam = writable<JoinedJam | undefined>(undefined);
+    const audioJam = writable<JoinedJam | undefined>(undefined);
     const listeningAlong = writable<string | undefined>(undefined);
     const published: SpotifyListening[] = [];
     const expireAccessToken = vi.fn();
@@ -31,6 +32,7 @@ function createHarness(options: { linked?: boolean; sharing?: boolean } = {}) {
         POLL_MS,
         undefined,
         listeningAlong,
+        audioJam,
     );
 
     return {
@@ -38,6 +40,7 @@ function createHarness(options: { linked?: boolean; sharing?: boolean } = {}) {
         linked,
         sharing,
         joinedJam,
+        audioJam,
         listeningAlong,
         published,
         fetchTrack,
@@ -53,6 +56,55 @@ describe("SpotifyListeningSharer", () => {
 
     afterEach(() => {
         vi.useRealTimers();
+    });
+
+    it("publishes an audio-only guest without a Spotify account or track sharing, then removes them on stop", () => {
+        const { sharer, audioJam, published, fetchTrack } = createHarness({ linked: false, sharing: false });
+        audioJam.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/jig", hostUuid: "host" });
+
+        expect(published.at(-1)).toMatchObject({
+            jamAreaId: "lounge",
+            jamAreaName: "Lounge",
+            jamHostUuid: "host",
+            trackTitle: "",
+        });
+        expect(fetchTrack).not.toHaveBeenCalled();
+
+        audioJam.set(undefined);
+        expect(published.at(-1)).toMatchObject({ jamAreaId: "", jamHostUuid: "" });
+        sharer.destroy();
+    });
+
+    it("publishes one membership when Spotify and relayed audio are joined to the same Jam", () => {
+        const { sharer, joinedJam, audioJam, published } = createHarness({ linked: false, sharing: false });
+        const jam = { areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/jig", hostUuid: "host" };
+        joinedJam.set(jam);
+        expect(published).toHaveLength(1);
+
+        audioJam.set(jam);
+        expect(published).toHaveLength(1);
+        audioJam.set(undefined);
+        expect(published).toHaveLength(1);
+        expect(published.at(-1)?.jamHostUuid).toBe("host");
+        sharer.destroy();
+    });
+
+    it("reports the Jam actually heard, and keeps the joined Jukebox when relayed audio stops", () => {
+        const { sharer, joinedJam, audioJam, published } = createHarness({ linked: false, sharing: false });
+        joinedJam.set({ areaId: "patio", areaName: "Patio", url: "home:dj", hostUuid: "dj" });
+        audioJam.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/jig", hostUuid: "host" });
+        expect(published.at(-1)?.jamHostUuid).toBe("host");
+
+        audioJam.set(undefined);
+        expect(published.at(-1)).toMatchObject({ jamAreaId: "patio", jamHostUuid: "dj" });
+        sharer.destroy();
+    });
+
+    it("stops publishing changes to the audio membership when destroyed", () => {
+        const { sharer, audioJam, published } = createHarness({ linked: false, sharing: false });
+        sharer.destroy();
+        audioJam.set({ areaId: "lounge", areaName: "Lounge", url: "https://spotify.link/jig", hostUuid: "host" });
+        expect(published).toHaveLength(0);
     });
 
     it("publishes the playing track, then polls again", async () => {
