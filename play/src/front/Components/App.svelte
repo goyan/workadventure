@@ -34,6 +34,8 @@
     import { FileListener } from "../Phaser/FileUpload/FileListener";
     import { isStructuredCloneSupported } from "../Utils/BrowserCompatibility";
     import { gameSceneIsLoadedStore } from "../Stores/GameSceneStore";
+    import { installGameKeyFocusGuard } from "../Utils/GameKeyFocusGuard";
+    import { gameManager } from "../Phaser/Game/GameManager";
     import GameOverlay from "./GameOverlay.svelte";
     import CoWebsitesContainer from "./EmbedScreens/CoWebsitesContainer.svelte";
     import BrowserNotSupported from "./BrowserNotSupported/BrowserNotSupported.svelte";
@@ -258,7 +260,21 @@
 
     let canvasSizeUnsubscriber: Unsubscriber;
     let stopBootPump: (() => void) | undefined;
+    let uninstallGameKeyFocusGuard: (() => void) | undefined;
+
+    /** False before the game scene exists, and while a menu or a text field takes the keyboard. */
+    function gameListensToKeyboard(): boolean {
+        if (!$gameSceneIsLoadedStore) return false;
+        try {
+            return gameManager.getCurrentGameScene().userInputManager?.isControlsEnabled ?? false;
+        } catch {
+            return false;
+        }
+    }
+
     onMount(() => {
+        // Space and Enter go to the game, not to a toolbar button last clicked with the mouse.
+        uninstallGameKeyFocusGuard = installGameKeyFocusGuard(window, { gameListens: gameListensToKeyboard });
         canvasSizeUnsubscriber = canvasSize.subscribe(({ width, height }) => {
             if (width < 1 || height < 1) {
                 return;
@@ -271,6 +287,7 @@
     onDestroy(() => {
         canvasSizeUnsubscriber?.();
         stopBootPump?.();
+        uninstallGameKeyFocusGuard?.();
         if (canvas && handleCanvasClick) {
             canvas.removeEventListener("click", handleCanvasClick);
         }

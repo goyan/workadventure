@@ -138,7 +138,10 @@
 <svelte:window onkeydown={onKeyDown} />
 
 <!-- TODO HUGO : REMOVE !important -->
+<!-- A dialog: the focus guard leaves Space and Enter to its buttons (GameKeyFocusGuard). -->
 <div
+    role="dialog"
+    aria-label={$LL.menu.title()}
     class="h-3/4 top-0 flex-col gap-3 @md/main-layout:flex-row [@media(min-height:953px)]/main-layout:h-3/4 w-11/12 @2xl:max-w-screen-2xl close-window pointer-events-auto absolute flex right-0 left-0 bottom-0 z-[900] m-auto overflow-hidden font-main"
     transition:fly={{ y: 1000, duration: 150 }}
     onblur={closeMenu}
