@@ -2,11 +2,11 @@ import type * as Phaser from "phaser";
 import { describe, it, expect, beforeEach } from "vitest";
 import { mockDeep, mock } from "vitest-mock-extended";
 import { SkateboardSounds, SKATEBOARD_SOUNDS, type SkatingCharacter } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
-import { footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { skateboardVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 
 beforeEach(() => {
     localStorage.clear();
-    footstepVolumeStore.set(0.5);
+    skateboardVolumeStore.set(0.5);
 });
 function setup(): {
     effect: SkateboardSounds;
@@ -91,11 +91,11 @@ describe("personal skateboard rolling audio", () => {
         effect.update(skater(0), false, 0);
         effect.update(skater(1), false, 0);
         expect(sound.setVolume.mock.lastCall).toEqual([0.5]);
-        footstepVolumeStore.set(1);
+        skateboardVolumeStore.set(1);
         effect.update(skater(2), false, 0);
         expect(sound.setVolume.mock.lastCall).toEqual([1]);
         effect.update(skater(3), true, 0);
-        footstepVolumeStore.set(0);
+        skateboardVolumeStore.set(0);
         effect.update(skater(4), false, 0);
         expect(manager.add.mock.calls).toHaveLength(1);
         expect(sound.destroy.mock.calls).toHaveLength(1);

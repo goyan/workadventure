@@ -251,7 +251,7 @@ import { audioPlaybackStore, handleSuspendedAudioContext } from "@wa/front/Store
 import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
-import { environmentVolumeStore, footstepVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
@@ -1297,7 +1297,7 @@ export class GameScene extends DirtyScene {
     public playSound(sound: string, volume: number = 0.2): void {
         if (!statusChanger.allowNotificationSound()) return;
         this.sound.play(sound, {
-            volume: volume * get(environmentVolumeStore),
+            volume: volume * get(notificationSoundVolumeStore),
         });
     }
 
@@ -1654,7 +1654,7 @@ export class GameScene extends DirtyScene {
             () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
             (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
             (key, volume) => {
-                volume *= get(environmentVolumeStore);
+                volume *= get(doorVolumeStore);
                 if (volume > 0) this.sound.play(key, { volume });
             },
             () => this.markDirty(),

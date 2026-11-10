@@ -13,9 +13,22 @@ describe("PixelIcons", () => {
         }
     });
 
-    it("has an icon for each action of the wheel", () => {
+    it("has an icon for each action of the wheel and each family of sound effects", () => {
         expect(Object.keys(PIXEL_ICONS).sort()).toEqual(
-            ["coffee", "dance", "onePiece", "outfit", "shorts", "skateboard", "swimwear", "twoPiece"].sort(),
+            [
+                "bell",
+                "coffee",
+                "dance",
+                "door",
+                "footsteps",
+                "onePiece",
+                "outfit",
+                "shorts",
+                "skateboard",
+                "swimwear",
+                "twoPiece",
+                "weather",
+            ].sort(),
         );
     });
 });

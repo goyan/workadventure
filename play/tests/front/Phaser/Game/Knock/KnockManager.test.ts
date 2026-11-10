@@ -3,7 +3,7 @@ import { Subject } from "rxjs";
 import { get, readable, writable } from "svelte/store";
 import { marked } from "marked";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
-import { environmentVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
+import { notificationSoundVolumeStore, weatherVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 
 const onVisitorAccepted = vi.fn();
 const linkDestroy = vi.fn();
@@ -144,7 +144,8 @@ describe("KnockManager", () => {
     let manager: KnockManager | undefined;
 
     beforeEach(() => {
-        environmentVolumeStore.set(0.15);
+        notificationSoundVolumeStore.set(0.15);
+        weatherVolumeStore.set(1);
         vi.useFakeTimers();
         vi.setSystemTime(1_000_000);
         onVisitorAccepted.mockClear();
