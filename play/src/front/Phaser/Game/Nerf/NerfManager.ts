@@ -24,6 +24,7 @@ import {
     NERF_HEARTS_VARIABLE,
     NERF_HEARING_DISTANCE,
     NERF_MAX_VOLUME,
+    NERF_MUZZLE_LENGTH,
     NERF_RANGE,
     NERF_SHOT_EVENT,
     NERF_SOUND_KEY,
@@ -251,8 +252,8 @@ export class NerfManager {
         if (this.projectiles.size >= MAX_PROJECTILES) return false;
         this.lastShots.set(senderId, now);
         const pose = nerfGunPose(shot.direction, shot.heading);
-        const x = shot.x + pose.x + pose.dx * 14;
-        const y = shot.y + pose.y + pose.dy * 14 - (shot.seated ? 4 : 0);
+        const x = shot.x + pose.x + pose.dx * NERF_MUZZLE_LENGTH;
+        const y = shot.y + pose.y + pose.dy * NERF_MUZZLE_LENGTH - (shot.seated ? 4 : 0);
         const sprite = this.scene.add.graphics();
         sprite.fillStyle(0x208edd).fillRect(-4, -1, 7, 3);
         sprite.fillStyle(0xff8d24).fillRect(3, -1, 3, 3);

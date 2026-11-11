@@ -11,10 +11,11 @@ export class NerfGunEffect {
         private readonly container: Phaser.GameObjects.Container,
     ) {
         this.gun = scene.add.graphics();
-        this.gun.fillStyle(0x25354a).fillRect(-3, -4, 17, 8).fillRect(-1, 3, 5, 6);
-        this.gun.fillStyle(0x198bd1).fillRect(-2, -3, 10, 6).fillRect(0, 3, 3, 5);
-        this.gun.fillStyle(0xff8d24).fillRect(8, -3, 5, 6).fillRect(1, -5, 5, 2);
-        this.gun.fillStyle(0xb9e8f4).fillRect(-1, -2, 6, 1);
+        // A toy blaster about 11 × 6 px held by its grip (the origin), barrel towards +x: small next to a 32 px avatar.
+        this.gun.fillStyle(0x25354a).fillRect(-2, -3, 13, 5).fillRect(-1, 1, 4, 4);
+        this.gun.fillStyle(0x198bd1).fillRect(-1, -2, 8, 3).fillRect(0, 1, 2, 3);
+        this.gun.fillStyle(0xff8d24).fillRect(7, -2, 3, 3).fillRect(1, -4, 3, 1);
+        this.gun.fillStyle(0xb9e8f4).fillRect(0, -2, 4, 1);
         this.gun.setVisible(false);
         container.add(this.gun);
     }

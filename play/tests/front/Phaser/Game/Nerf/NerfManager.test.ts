@@ -142,10 +142,13 @@ describe("NerfManager", () => {
                 undefined,
             ],
         ]);
+        // The dart leaves the muzzle of the blaster held in the hand: 5 px aside, 5 px lower, 10 px of barrel.
+        expect(graphics[0].x).toBe(115);
+        expect(graphics[0].y).toBe(105);
         const startX = graphics[0].x;
         manager.update(1100);
         expect(graphics[0].x).toBeGreaterThan(startX);
-        expect(graphics[0].y).toBe(99);
+        expect(graphics[0].y).toBe(105);
         stream.next({
             name: NERF_SHOT_EVENT,
             data: { x: 100, y: 100, direction: PositionMessage_Direction.RIGHT },

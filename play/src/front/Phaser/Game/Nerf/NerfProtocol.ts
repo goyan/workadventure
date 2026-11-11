@@ -14,6 +14,8 @@ export const NERF_COOLDOWN_MS = 300;
 export const NERF_SPEED = 320;
 export const NERF_RANGE = 384;
 export const NERF_HEARING_DISTANCE = 256;
+/** From the grip to the end of the barrel: the dart leaves there. */
+export const NERF_MUZZLE_LENGTH = 10;
 
 const shotSchema = z.object({
     x: z.number().finite(),
@@ -64,8 +66,9 @@ export function nerfGunPose(
     const dy = Math.round(Math.cos((heading * Math.PI) / 4));
     const length = Math.hypot(dx, dy);
     return {
-        x: direction === PositionMessage_Direction.LEFT ? -7 : 7,
-        y: direction === PositionMessage_Direction.UP ? -9 : direction === PositionMessage_Direction.DOWN ? 1 : -1,
+        // The grip sits in the hand, at the side the avatar faces, low on the body.
+        x: direction === PositionMessage_Direction.LEFT ? -5 : 5,
+        y: direction === PositionMessage_Direction.UP ? -3 : direction === PositionMessage_Direction.DOWN ? 7 : 5,
         dx: dx / length,
         dy: dy / length,
         angle: Math.atan2(dy, dx),
