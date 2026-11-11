@@ -9,7 +9,7 @@ export const LAMP_SOFT_RECT_TEXTURE = "lamp-soft-rect";
 export const LAMP_SOFT_EDGE_PX = 24;
 
 /** Draws a white texture, pixel by pixel, from its opacity at each texel (0 to 1): no asset to ship. */
-function makeWhiteTexture(
+export function makeWhiteTexture(
     scene: Phaser.Scene,
     key: string,
     width: number,
