@@ -32,6 +32,10 @@ import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects"
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
+import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
+import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
+import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
+import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
@@ -54,6 +58,8 @@ import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
+/** The system asks for less motion: a Nerf hit flashes once instead of blinking. */
+const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 /**
  * Clickable area of a woka: its drawn body (a 32x32 frame centered on the character), slightly narrowed to the
  * visible silhouette. Hit coordinates are relative to the container's top-left corner, i.e. shifted by its display
@@ -96,6 +102,11 @@ export abstract class Character extends Container implements OutlineableInterfac
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
+    /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
+    private nerfHearts: number | undefined;
+    private nerfHeartsEffect: NerfHeartsEffect | undefined;
+    /** Red blink of a Nerf hit: when it started, and the tint and opacity of each sprite to put back. */
+    private nerfBlink: { start: number; saved: Map<Sprite, { tint: number; alpha: number }> } | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -162,6 +173,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.seated,
             this.getNerfHeading(),
         );
+        this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.updateNerfBlink();
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -671,6 +684,43 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    public setNerfHearts(value: unknown): void {
+        const previous = this.nerfHearts;
+        this.nerfHearts = decodeNerfHearts(value);
+        if (heartsDropped(previous, this.nerfHearts)) this.flashNerfHit();
+        if (this.nerfHearts !== undefined) this.nerfHeartsEffect ??= new NerfHeartsEffect(this.scene, this);
+        this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.scene.markDirty();
+    }
+
+    /** Blinks red and see-through after a Nerf hit (see NerfBlink), for the local player and the others alike. */
+    public flashNerfHit(): void {
+        const saved =
+            this.nerfBlink?.saved ??
+            new Map(
+                [...this.sprites.values()].map((sprite) => [sprite, { tint: sprite.tintTopLeft, alpha: sprite.alpha }]),
+            );
+        this.nerfBlink = { start: this.scene.time.now, saved };
+        this.scene.markDirty();
+    }
+
+    private updateNerfBlink(): void {
+        if (!this.nerfBlink) return;
+        const { start, saved } = this.nerfBlink;
+        const tinted = nerfBlinkTinted(this.scene.time.now - start, REDUCED_MOTION);
+        for (const [sprite, original] of saved) {
+            if (!sprite.active) continue;
+            if (tinted) sprite.setTint(NERF_BLINK_TINT).setAlpha(NERF_BLINK_ALPHA);
+            else sprite.setTint(original.tint).setAlpha(original.alpha);
+        }
+        if (tinted === undefined) this.nerfBlink = undefined;
+        this.scene.markDirty();
+    }
+
+    public isNerfEquipped(): boolean {
+        return this.nerfEquipped;
+    }
+
     public getNerfHeading(): number {
         const velocity = this.getBody().velocity;
         return !this.seated && (velocity.x || velocity.y)
@@ -935,6 +985,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.vehicleEffect?.destroy();
         this.musicHeadphonesEffect?.destroy();
         this.nerfGunEffect?.destroy();
+        this.nerfHeartsEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {

@@ -311,7 +311,7 @@ import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
-import { NERF_EQUIPPED_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
+import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
 import { uiWebsiteManager } from "./UI/UIWebsiteManager";
@@ -2014,6 +2014,7 @@ export class GameScene extends DirtyScene {
         }
         character.setVehicle(update.player.variables.get(VEHICLE_VARIABLE));
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
+        character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
         character.setSwimwearColor(update.player.variables.get(SWIMWEAR_COLOR_VARIABLE));
@@ -5175,6 +5176,9 @@ ${escapedMessage}
         );
         player.setNerfEquipped(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(NERF_EQUIPPED_VARIABLE),
+        );
+        player.setNerfHearts(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(NERF_HEARTS_VARIABLE),
         );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),

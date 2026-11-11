@@ -1,9 +1,12 @@
 import { PositionMessage_Direction } from "@workadventure/messages";
 import { z } from "zod";
 import { cardinalVehicleHeading, VEHICLE_DIRECTIONS } from "../../Vehicle/VehicleFrames";
+import { NERF_MAX_THIRDS } from "./NerfHearts";
 
 export const NERF_EQUIPPED_VARIABLE = "_nerfEquipped";
 export const NERF_SHOT_EVENT = "infogene.nerf.shot";
+/** Thirds of heart left (0 to 15), public and not saved, unset while the Nerf is put away. */
+export const NERF_HEARTS_VARIABLE = "_nerfHearts";
 export const NERF_SOUND_KEY = "audio-nerf-pop";
 export const NERF_SOUND_URL = "/resources/objects/nerf/pop.wav";
 export const NERF_MAX_VOLUME = 0.7;
@@ -11,6 +14,8 @@ export const NERF_COOLDOWN_MS = 300;
 export const NERF_SPEED = 320;
 export const NERF_RANGE = 384;
 export const NERF_HEARING_DISTANCE = 256;
+/** From the grip to the end of the barrel: the dart leaves there. */
+export const NERF_MUZZLE_LENGTH = 10;
 
 const shotSchema = z.object({
     x: z.number().finite(),
@@ -31,6 +36,14 @@ const shotSchema = z.object({
 });
 
 export type NerfShot = z.infer<typeof shotSchema>;
+
+const heartsSchema = z.number().int().min(0).max(NERF_MAX_THIRDS);
+
+/** The thirds of heart another player publishes; undefined when unset or invalid. */
+export function decodeNerfHearts(value: unknown): number | undefined {
+    const parsed = heartsSchema.safeParse(value);
+    return parsed.success ? parsed.data : undefined;
+}
 
 export function decodeNerfShot(name: string, data: unknown): NerfShot | undefined {
     if (name !== NERF_SHOT_EVENT) return undefined;
@@ -53,8 +66,9 @@ export function nerfGunPose(
     const dy = Math.round(Math.cos((heading * Math.PI) / 4));
     const length = Math.hypot(dx, dy);
     return {
-        x: direction === PositionMessage_Direction.LEFT ? -7 : 7,
-        y: direction === PositionMessage_Direction.UP ? -9 : direction === PositionMessage_Direction.DOWN ? 1 : -1,
+        // The grip sits in the hand, at the side the avatar faces, low on the body.
+        x: direction === PositionMessage_Direction.LEFT ? -5 : 5,
+        y: direction === PositionMessage_Direction.UP ? -3 : direction === PositionMessage_Direction.DOWN ? 7 : 5,
         dx: dx / length,
         dy: dy / length,
         angle: Math.atan2(dy, dx),

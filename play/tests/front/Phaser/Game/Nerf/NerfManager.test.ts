@@ -13,8 +13,13 @@ import type { RemotePlayer } from "../../../../../src/front/Phaser/Entity/Remote
 import type { PlayerVariablesManager } from "../../../../../src/front/Phaser/Game/PlayerVariablesManager";
 import type { UserInputManager } from "../../../../../src/front/Phaser/UserInput/UserInputManager";
 import { NerfManager } from "../../../../../src/front/Phaser/Game/Nerf/NerfManager";
-import { NERF_SHOT_EVENT, NERF_EQUIPPED_VARIABLE } from "../../../../../src/front/Phaser/Game/Nerf/NerfProtocol";
-import { nerfEquippedStore } from "../../../../../src/front/Stores/NerfStore";
+import {
+    NERF_SHOT_EVENT,
+    NERF_EQUIPPED_VARIABLE,
+    NERF_HEARTS_VARIABLE,
+    NERF_SOUND_KEY,
+} from "../../../../../src/front/Phaser/Game/Nerf/NerfProtocol";
+import { nerfEquippedStore, nerfHeartsStore } from "../../../../../src/front/Stores/NerfStore";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
 import { nerfVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 import { Area } from "../../../../../src/front/Phaser/Entity/Area";
@@ -105,11 +110,9 @@ describe("NerfManager", () => {
         manager.toggleEquipment();
         expect(get(nerfEquippedStore)).toBe(true);
         expect(player.setNerfEquipped.mock.calls.at(-1)).toEqual([true]);
-        expect(variables.setVariableFromApp.mock.calls.at(-1)).toEqual([
-            NERF_EQUIPPED_VARIABLE,
-            true,
-            { public: true, persist: false, scope: "room" },
-        ]);
+        expect(
+            variables.setVariableFromApp.mock.calls.filter(([name]) => name === NERF_EQUIPPED_VARIABLE).at(-1),
+        ).toEqual([NERF_EQUIPPED_VARIABLE, true, { public: true, persist: false, scope: "room" }]);
         manager.toggleEquipment();
         expect(get(nerfEquippedStore)).toBe(false);
         expect(player.setNerfEquipped.mock.calls.at(-1)).toEqual([false]);
@@ -139,10 +142,13 @@ describe("NerfManager", () => {
                 undefined,
             ],
         ]);
+        // The dart leaves the muzzle of the blaster held in the hand: 5 px aside, 5 px lower, 10 px of barrel.
+        expect(graphics[0].x).toBe(115);
+        expect(graphics[0].y).toBe(105);
         const startX = graphics[0].x;
         manager.update(1100);
         expect(graphics[0].x).toBeGreaterThan(startX);
-        expect(graphics[0].y).toBe(99);
+        expect(graphics[0].y).toBe(105);
         stream.next({
             name: NERF_SHOT_EVENT,
             data: { x: 100, y: 100, direction: PositionMessage_Direction.RIGHT },
@@ -334,5 +340,161 @@ describe("NerfManager", () => {
         expect(graphics).toHaveLength(1);
         expect(graphics[0].scene).toBeUndefined();
         expect(player.setNerfEquipped.mock.calls.length).toBe(calls);
+    });
+    describe("hearts", () => {
+        const prison = { name: "Prison des régressions", x: 3488, y: 32, width: 640, height: 352 };
+        const shooter = () => scene.MapPlayersByKey.get(2) as ReturnType<typeof mock<RemotePlayer>>;
+        const published = () =>
+            variables.setVariableFromApp.mock.calls
+                .filter(([name]) => name === NERF_HEARTS_VARIABLE)
+                .map(([, value]) => value);
+
+        /** A colleague's dart flying left from `from` towards the local player, at `time`. */
+        function remoteShot(time: number, from = { x: 140, y: 100 }): void {
+            scene.time.now = time;
+            stream.next({
+                name: NERF_SHOT_EVENT,
+                data: { ...from, direction: PositionMessage_Direction.LEFT },
+                senderId: 2,
+            });
+        }
+
+        /** `count` darts that each reach the local player, 300 ms apart from `start`. */
+        function hitTimes(count: number, start = 1000): number {
+            let time = start;
+            for (let i = 0; i < count; i++) {
+                time = start + i * 300;
+                remoteShot(time);
+                manager.update(time + 200);
+            }
+            return time + 200;
+        }
+
+        beforeEach(() => {
+            shooter().isNerfEquipped.mockReturnValue(true);
+            scene.wamFile = { areas: [] } as unknown as GameScene["wamFile"];
+            manager.toggleEquipment();
+        });
+
+        it("starts with five hearts and loses a third to an equipped colleague's dart", () => {
+            expect(published()).toEqual([15]);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 15, jailed: false });
+            hitTimes(1);
+            expect(published()).toEqual([15, 14]);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 14, jailed: false });
+        });
+
+        it("ignores a shooter whose Nerf is put away or not known yet", () => {
+            shooter().isNerfEquipped.mockReturnValue(false);
+            hitTimes(1);
+            shooter().isNerfEquipped.mockReturnValue(undefined as unknown as boolean);
+            hitTimes(1, 2000);
+            expect(published()).toEqual([15]);
+        });
+
+        it("ignores darts when the local player has put the Nerf away", () => {
+            manager.toggleEquipment();
+            hitTimes(1);
+            expect(published()).toEqual([15, undefined]);
+        });
+
+        it("ignores darts fired from the prison and darts reaching a player in the prison", () => {
+            scene.wamFile = {
+                areas: [{ ...prison, x: 120, y: 60, width: 60, height: 80 }],
+            } as unknown as GameScene["wamFile"];
+            hitTimes(1);
+            scene.wamFile = {
+                areas: [{ ...prison, x: 60, y: 60, width: 60, height: 80 }],
+            } as unknown as GameScene["wamFile"];
+            hitTimes(1, 2000);
+            expect(published()).toEqual([15]);
+        });
+
+        it("takes two thirds for two darts landing in the same frame", () => {
+            remoteShot(1000);
+            remoteShot(1300);
+            manager.update(1450);
+            expect(published()).toEqual([15, 13]);
+        });
+
+        it("sends an eliminated player to the middle of the prison, and gives five hearts back on the way out", () => {
+            scene.wamFile = { areas: [prison] } as unknown as GameScene["wamFile"];
+            const end = hitTimes(15);
+            expect(player.teleportTo.mock.calls).toEqual([[3808, 208]]);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 0, jailed: true });
+            player.x = 3808;
+            player.y = 208;
+            manager.update(end + 5000);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 0, jailed: true });
+            player.x = 3400;
+            manager.update(end + 5100);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 15, jailed: false });
+            expect(published().at(-1)).toBe(15);
+        });
+
+        it("gives five hearts back at once on a map without a prison", () => {
+            hitTimes(15);
+            expect(player.teleportTo.mock.calls).toEqual([]);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 15, jailed: false });
+        });
+
+        const otherSounds = () => sound.play.mock.calls.filter(([key]) => key !== NERF_SOUND_KEY);
+
+        it("makes the avatar blink when a dart takes a third, without any sound but the shot", () => {
+            hitTimes(1);
+            expect(player.flashNerfHit.mock.calls).toHaveLength(1);
+            expect(otherSounds()).toEqual([]);
+        });
+
+        it("pushes the avatar along the dart on each hit, but not on the one that sends it to prison", () => {
+            scene.wamFile = { areas: [prison] } as unknown as GameScene["wamFile"];
+            hitTimes(1);
+            expect(player.knockBack.mock.calls).toHaveLength(1);
+            const [dx, dy] = player.knockBack.mock.calls[0];
+            expect(dx).toBeCloseTo(-1);
+            expect(dy).toBeCloseTo(0);
+            hitTimes(14, 2000);
+            expect(player.knockBack.mock.calls).toHaveLength(14);
+            expect(player.teleportTo.mock.calls).toHaveLength(1);
+        });
+
+        it("does not blink for a dart that does not count", () => {
+            shooter().isNerfEquipped.mockReturnValue(false);
+            hitTimes(1);
+            expect(player.flashNerfHit.mock.calls).toHaveLength(0);
+        });
+
+        it("clears the screen counter when the scene closes, for the next map", () => {
+            hitTimes(1);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 14, jailed: false });
+            manager.destroy();
+            expect(get(nerfHeartsStore)).toBeUndefined();
+        });
+
+        it("drops the darts whose flight ended while the tab was paused, instead of landing them all on return", () => {
+            remoteShot(1000);
+            manager.update(6000);
+            expect(published()).toEqual([15]);
+            expect(manager["projectiles"].size).toBe(0);
+            expect(manager["impacts"].size).toBe(0);
+        });
+
+        it("still lands a dart after a slow frame", () => {
+            remoteShot(1000);
+            manager.update(1700);
+            expect(published()).toEqual([15, 14]);
+        });
+
+        it("keeps the hearts while the Nerf is put away", () => {
+            const end = hitTimes(5);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 10, jailed: false });
+            manager.toggleEquipment();
+            expect(get(nerfHeartsStore)).toBeUndefined();
+            expect(published().at(-1)).toBeUndefined();
+            scene.time.now = end + 1000;
+            manager.toggleEquipment();
+            expect(published().at(-1)).toBe(10);
+            expect(get(nerfHeartsStore)).toEqual({ thirds: 10, jailed: false });
+        });
     });
 });

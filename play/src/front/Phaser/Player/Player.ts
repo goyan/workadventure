@@ -45,6 +45,7 @@ import {
     SWIMWEAR_COLOR_VARIABLE,
 } from "@wa/front/Phaser/Entity/Swimwear";
 import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
+import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
@@ -116,12 +117,50 @@ export class Player extends Character {
 
     /** Whether the last movement was a run (Shift or a double-click path). */
     private lastRunning = false;
+    /** A Nerf hit pushing the avatar back: until when, and at which velocity. */
+    private knockback: { until: number; vx: number; vy: number } | undefined;
 
     public isRunning(): boolean {
         return this.lastRunning;
     }
 
+    /**
+     * Pushes the avatar back along a Nerf dart that hit it (`dx`, `dy`: the dart's direction, of length 1), even when
+     * it stands still. The walls stop it as any move; it keeps facing the same way.
+     */
+    public knockBack(dx: number, dy: number): void {
+        if (this.isSlidingToSeat) return;
+        if (this.isSeated()) this.standUp();
+        this.finishFollowingPath(true);
+        const speed = (NERF_KNOCKBACK_PX * 1000) / NERF_KNOCKBACK_MS;
+        this.knockback = { until: this.scene.time.now + NERF_KNOCKBACK_MS, vx: dx * speed, vy: dy * speed };
+    }
+
+    /** Pushed back by a Nerf hit: the keys are ignored until the push ends. Returns whether the avatar is pushed. */
+    private knockBackStep(): boolean {
+        if (!this.knockback) return false;
+        const body = this.getBody();
+        if (this.scene.time.now >= this.knockback.until) {
+            this.knockback = undefined;
+            // On the ice the avatar glides on from the push; elsewhere it stops where the push ends.
+            if (!this.isOnIceHere()) body.setVelocity(0, 0);
+            return false;
+        }
+        body.setVelocity(this.knockback.vx, this.knockback.vy);
+        this.isMoving = true;
+        userMovingStore.set(true);
+        this.emit(hasMovedEventName, {
+            moving: true,
+            running: false,
+            direction: this._lastDirection,
+            x: this.x,
+            y: this.y,
+        });
+        return true;
+    }
+
     public moveUser(delta: number, activeUserInputEvents: ActiveEventList): void {
+        if (this.knockBackStep()) return;
         this.updateSwimming();
         if (this.swimming || get(followStateStore) !== "off") this.equipVehicle(VehicleMode.Off);
         if (activeUserInputEvents.get(UserInputEvent.VehicleSprint) && this.vehicleMode !== VehicleMode.Always)

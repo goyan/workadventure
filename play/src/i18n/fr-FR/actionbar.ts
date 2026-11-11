@@ -13,6 +13,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         equip: "Équiper le Nerf",
         unequip: "Ranger le Nerf",
         help: "ESPACE : tirer dans la direction du déplacement, diagonales incluses, ou du regard à l'arrêt.",
+        hearts: {
+            label: "{hearts} cœurs et {thirds} tiers",
+            jailed: "En prison — sortez à pied pour revenir",
+        },
     },
     participantListPlaceholder: "Liste des participants",
     participantSendMessage: "Écrire un message",
