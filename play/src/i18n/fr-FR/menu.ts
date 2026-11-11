@@ -45,6 +45,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             muted: "Coupé",
         },
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
+        lampEffects: "Effets lumineux des lampes et des pistes de danse",
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
         ambiance: {
             title: "Ambiance",

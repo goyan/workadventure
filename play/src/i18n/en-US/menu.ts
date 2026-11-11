@@ -44,6 +44,7 @@ const menu: BaseTranslation = {
             muted: "Muted",
         },
         weatherEffects: "Show weather effects (rain, snow and storm light)",
+        lampEffects: "Light effects of lamps and dance floors",
         lampDemo: "Show the demo lamps next to my avatar",
         ambiance: {
             title: "Ambiance",

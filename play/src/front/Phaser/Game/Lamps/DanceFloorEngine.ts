@@ -24,6 +24,8 @@ export interface DanceFloorInput {
     music: DanceFloorMusic | undefined;
     /** Photosensitivity: a slow floor, without a flash; the beats are ignored. */
     reducedMotion: boolean;
+    /** The user turned the light effects off for themselves: every tile fades out and the floor stays still. */
+    off?: boolean;
 }
 
 /** Without music a pattern moves one step in this long. */
@@ -192,7 +194,8 @@ export class DanceFloorEngine {
         const delta = this.lastNow === undefined ? 0 : Math.min(100, Math.max(0, now - this.lastNow));
         this.lastNow = now;
         this.reduced = reducedMotion;
-        const music = reducedMotion ? undefined : input.music;
+        const off = input.off === true;
+        const music = reducedMotion || off ? undefined : input.music;
 
         let first: FloorPattern;
         let second: FloorPattern;
@@ -234,9 +237,9 @@ export class DanceFloorEngine {
         for (let row = 0; row < rows; row++) {
             for (let col = 0; col < cols; col++) {
                 const tile = row * cols + col;
-                let wanted = firstWeight > 0 ? first.at(col, row, this.grid, phase) : undefined;
+                let wanted = !off && firstWeight > 0 ? first.at(col, row, this.grid, phase) : undefined;
                 let level = wanted ? wanted.level * firstWeight : 0;
-                if (secondWeight > 0) {
+                if (!off && secondWeight > 0) {
                     const other = second.at(col, row, this.grid, phase);
                     if (other.level * secondWeight > level || !wanted) {
                         level = other.level * secondWeight;
@@ -260,6 +263,8 @@ export class DanceFloorEngine {
 
                 const shown = this.levels[tile];
                 this.levels[tile] = shown + (level - shown) * (level > shown ? rise : fall);
+                // Off: once dark, a tile is at rest for good, so that nothing on the floor moves any more.
+                if (off && this.levels[tile] < DARK_LEVEL) this.levels[tile] = 0;
 
                 const colour = DANCE_FLOOR_COLOURS[wanted?.colour ?? 0];
                 if (level > 0) {

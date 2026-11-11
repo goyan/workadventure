@@ -19,6 +19,7 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
+    import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -345,6 +346,12 @@
             id="weather-effects-enabled"
             bind:value={$weatherEffectsEnabledStore}
             label={$LL.menu.settings.weatherEffects()}
+            labelPosition="right"
+        />
+        <InputSwitch
+            id="lamp-effects-enabled"
+            bind:value={$lampEffectsEnabledStore}
+            label={$LL.menu.settings.lampEffects()}
             labelPosition="right"
         />
         <InputSwitch
