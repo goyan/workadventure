@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>fr.infogene.wa-companion</string>
+    <key>CFBundleName</key>
+    <string>Compagnon WorkAdventure</string>
+    <key>CFBundleExecutable</key>
+    <string>InfogeneCompanion</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Lire vos réunions pour les afficher dans WorkAdventure (titre, horaires, lien Teams).</string>
+</dict>
+</plist>
