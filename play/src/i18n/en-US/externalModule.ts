@@ -139,6 +139,10 @@ const externalModule: BaseTranslation = {
         copyHint:
             "Copy this token now, it will not be shown again. Run the command in Terminal: it will ask for the token.",
         done: "Copied",
+        copy: "Copy",
+        copied: "Copied ✓",
+        tokenLabel: "Token",
+        commandLabel: "Terminal command",
         remove: "Revoke {label}",
         lastUsed: "Last upload: {date}",
         neverUsed: "Never used",
