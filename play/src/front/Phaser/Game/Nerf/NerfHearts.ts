@@ -71,3 +71,8 @@ export function heartFill(thirds: number, index: number): 0 | 1 | 2 | 3 {
     const fill = Math.max(0, Math.min(NERF_THIRDS_PER_HEART, thirds - index * NERF_THIRDS_PER_HEART));
     return fill as 0 | 1 | 2 | 3;
 }
+
+/** Whether the thirds another player publishes went down: they were hit, and their avatar blinks. */
+export function heartsDropped(previous: number | undefined, next: number | undefined): boolean {
+    return previous !== undefined && next !== undefined && next < previous;
+}

@@ -3,6 +3,7 @@ import {
     countsAsHit,
     fullHearts,
     heartFill,
+    heartsDropped,
     hit,
     release,
     thirdsAt,
@@ -74,5 +75,14 @@ describe("NerfHearts", () => {
         expect(countsAsHit({ ...fair, targetInPrison: true })).toBe(false);
         expect(countsAsHit({ ...fair, shooterEquipped: false })).toBe(false);
         expect(countsAsHit({ ...fair, shotFromPrison: true })).toBe(false);
+    });
+
+    it("tells when the hearts another player publishes go down", () => {
+        expect(heartsDropped(15, 14)).toBe(true);
+        expect(heartsDropped(1, 0)).toBe(true);
+        expect(heartsDropped(14, 15)).toBe(false);
+        expect(heartsDropped(14, 14)).toBe(false);
+        expect(heartsDropped(undefined, 14)).toBe(false);
+        expect(heartsDropped(14, undefined)).toBe(false);
     });
 });

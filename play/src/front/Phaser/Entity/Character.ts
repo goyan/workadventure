@@ -34,6 +34,8 @@ import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle"
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
+import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
+import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
@@ -56,9 +58,8 @@ import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
 const playerNameY = -18;
-/** Red of the flash shown when a Nerf dart takes a third of a heart, and its length. */
-const NERF_HIT_TINT = 0xff8080;
-const NERF_HIT_FLASH_MS = 150;
+/** The system asks for less motion: a Nerf hit flashes once instead of blinking. */
+const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 /**
  * Clickable area of a woka: its drawn body (a 32x32 frame centered on the character), slightly narrowed to the
  * visible silhouette. Hit coordinates are relative to the container's top-left corner, i.e. shifted by its display
@@ -104,8 +105,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
     private nerfHearts: number | undefined;
     private nerfHeartsEffect: NerfHeartsEffect | undefined;
-    /** Pending end of the red flash of a Nerf hit, with the tints to put back. */
-    private nerfFlash: { timer: Phaser.Time.TimerEvent; tints: Map<Sprite, number> } | undefined;
+    /** Red blink of a Nerf hit: when it started, and the tint and opacity of each sprite to put back. */
+    private nerfBlink: { start: number; saved: Map<Sprite, { tint: number; alpha: number }> } | undefined;
     public readonly playerName: string;
     public sprites: Map<string, Sprite>;
     protected _lastDirection: PositionMessage_Direction = PositionMessage_Direction.DOWN;
@@ -173,6 +174,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.getNerfHeading(),
         );
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
+        this.updateNerfBlink();
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -683,26 +685,35 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     public setNerfHearts(value: unknown): void {
+        const previous = this.nerfHearts;
         this.nerfHearts = decodeNerfHearts(value);
+        if (heartsDropped(previous, this.nerfHearts)) this.flashNerfHit();
         if (this.nerfHearts !== undefined) this.nerfHeartsEffect ??= new NerfHeartsEffect(this.scene, this);
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
         this.scene.markDirty();
     }
 
-    /** A short red flash when a Nerf dart takes a third of a heart: once, no blinking (fine with reduced motion). */
+    /** Blinks red and see-through after a Nerf hit (see NerfBlink), for the local player and the others alike. */
     public flashNerfHit(): void {
-        const tints =
-            this.nerfFlash?.tints ?? new Map([...this.sprites.values()].map((sprite) => [sprite, sprite.tintTopLeft]));
-        this.nerfFlash?.timer.remove();
-        for (const sprite of this.sprites.values()) sprite.setTint(NERF_HIT_TINT);
-        this.nerfFlash = {
-            tints,
-            timer: this.scene.time.delayedCall(NERF_HIT_FLASH_MS, () => {
-                for (const [sprite, tint] of tints) if (sprite.active) sprite.setTint(tint);
-                this.nerfFlash = undefined;
-                this.scene.markDirty();
-            }),
-        };
+        const saved =
+            this.nerfBlink?.saved ??
+            new Map(
+                [...this.sprites.values()].map((sprite) => [sprite, { tint: sprite.tintTopLeft, alpha: sprite.alpha }]),
+            );
+        this.nerfBlink = { start: this.scene.time.now, saved };
+        this.scene.markDirty();
+    }
+
+    private updateNerfBlink(): void {
+        if (!this.nerfBlink) return;
+        const { start, saved } = this.nerfBlink;
+        const tinted = nerfBlinkTinted(this.scene.time.now - start, REDUCED_MOTION);
+        for (const [sprite, original] of saved) {
+            if (!sprite.active) continue;
+            if (tinted) sprite.setTint(NERF_BLINK_TINT).setAlpha(NERF_BLINK_ALPHA);
+            else sprite.setTint(original.tint).setAlpha(original.alpha);
+        }
+        if (tinted === undefined) this.nerfBlink = undefined;
         this.scene.markDirty();
     }
 
@@ -975,7 +986,6 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.musicHeadphonesEffect?.destroy();
         this.nerfGunEffect?.destroy();
         this.nerfHeartsEffect?.destroy();
-        this.nerfFlash?.timer.remove();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {
