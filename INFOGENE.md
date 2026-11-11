@@ -19,7 +19,10 @@ ses réunions : seulement depuis « en ligne », jamais par-dessus « ne pas dé
 changé à la main reste respecté jusqu'à la réunion suivante.
 
 Le module front `external-modules/infogene-calendar` (suivi avec `git add -f` : ce dossier est ignoré pour les
-modules privés d'upstream) n'est chargé que si l'Admin API l'annonce dans `/api/map` (`modules`). Le pusher
+modules privés d'upstream) n'est chargé que si l'Admin API l'annonce dans `/api/map` (`modules`). La scène
+retrouve le module par son dossier (`ExternalModuleFactories.ts`), quelle que soit la forme des clés que Vite
+donne au `import.meta.glob` : la recherche par clé relative ne trouvait rien depuis le passage du motif à
+l'alias `@wa/front`, et le module n'était jamais chargé. Le pusher
 relaie `/calendar/sources` et `/calendar/events` vers l'Admin API, l'utilisateur étant toujours celui du jeton.
 Seule l'Admin API garde les liens (chiffrés) et lit les ICS : hôtes Outlook uniquement, événements privés sans
 titre. Outlook met à jour les agendas publiés avec un délai, souvent de plusieurs heures.

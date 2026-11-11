@@ -201,6 +201,7 @@ import { calendarEventsStore, isActivatedStore as isCalendarActiveStore } from "
 import { isActivatedStore as isTodoListActiveStore, todoListsStore } from "@wa/front/Stores/TodoListStore";
 import { externalSvelteComponentService } from "@wa/front/Stores/Utils/externalSvelteComponentService";
 import type { ExtensionModule } from "@wa/front/ExternalModule/ExtensionModule";
+import { findExternalModuleFactory } from "@wa/front/Phaser/Game/ExternalModuleFactories";
 import type { SpaceInterface } from "@wa/front/Space/SpaceInterface";
 import { spotifyAccount } from "@wa/front/Spotify/SpotifyAccount";
 import { desktopSpotifyPlayer } from "@wa/front/Spotify/LocalSpotifyPlayer";
@@ -3254,14 +3255,12 @@ export class GameScene extends DirtyScene {
 
     private initExtensionModule() {
         if (this._room.modules) {
-            const externalModules = import.meta.glob("@wa/front/external-modules/*/index.ts");
-
             for (const moduleName of this._room.modules) {
-                const moduleFactory = externalModules[`../../external-modules/${moduleName}/index.ts`];
+                const moduleFactory = findExternalModuleFactory(moduleName);
 
                 if (!moduleFactory) {
                     console.warn(`Unable to find module "${moduleName}" inside external modules`);
-                    return;
+                    continue;
                 }
                 (async () => {
                     const extensionModule = (await moduleFactory()) as { default: ExtensionModule };
