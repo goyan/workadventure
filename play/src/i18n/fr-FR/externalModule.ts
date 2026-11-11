@@ -112,6 +112,7 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
             "Vous êtes déjà connecté, veuillez cliquer sur le bouton pour vous déconnecter et vous reconnecter.",
     },
     calendar: {
+        goToMeeting: "Y aller",
         title: "Vos prochaines réunions",
         joinMeeting: "Cliquez ici pour rejoindre la réunion",
         joinMeetingInWorkAdventure: "Cliquez ici pour rejoindre la réunion dans WorkAdventure",

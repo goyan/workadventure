@@ -1,6 +1,7 @@
 import { asError } from "catch-unknown";
 import type { z } from "zod";
-import { CompanionTokenList, CreatedCompanionToken } from "../../../common/MacCompanion";
+import { CompanionTokenList, CreatedCompanionToken, MeetingRoomClaim, MeetingRoomList } from "../../../common/MacCompanion";
+import type { MeetingRoomClaimInput } from "../../../common/MacCompanion";
 import { localUserStore } from "../../Connection/LocalUserStore";
 import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
 
@@ -60,4 +61,15 @@ export async function deleteCompanionToken(id: string, signal?: AbortSignal): Pr
 /** The command a colleague runs in Terminal; the token is typed when the script asks, never in the command line. */
 export function companionInstallCommand(origin: string): string {
     return `bash <(curl -fsSL ${INSTALL_SCRIPT_URL}) --url ${origin}`;
+}
+
+/** The room of one of the user's meetings on this map (`areaId: null`: every room is taken). */
+export async function claimMeetingRoom(input: MeetingRoomClaimInput, signal?: AbortSignal): Promise<MeetingRoomClaim> {
+    return parse(await request("/meeting-rooms/claim", { method: "POST", body: input, signal }), MeetingRoomClaim);
+}
+
+/** The taken rooms of a map, as every player sees them: room, title, end. */
+export async function listMeetingRooms(mapUrl: string, signal?: AbortSignal): Promise<MeetingRoomList> {
+    const response = await request(`/meeting-rooms?mapUrl=${encodeURIComponent(mapUrl)}`, { method: "GET", signal });
+    return parse(response, MeetingRoomList);
 }

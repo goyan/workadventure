@@ -2,6 +2,7 @@ import type { CalendarEventInterface } from "@workadventure/shared-utils";
 import { describe, expect, it } from "vitest";
 
 import {
+    canGoToMeeting,
     dueReminders,
     REMINDER_LEAD_MS,
     REMINDER_LINGER_MS,
@@ -67,5 +68,23 @@ describe("dueReminders", () => {
             NOW,
         );
         expect(ids(due)).toEqual(["a", "b", "c"]);
+    });
+
+    it("reminds as early as the calendar's own alarm asks", () => {
+        const withAlarm = event("alarm", 15 * MINUTE, { resource: { alarmMinutesBefore: 15 } });
+        const tooEarly = event("too-early", 16 * MINUTE, { resource: { alarmMinutesBefore: 15 } });
+
+        expect(ids(dueReminders([withAlarm, tooEarly], new Set(), NOW))).toEqual(["alarm"]);
+    });
+});
+
+describe("canGoToMeeting", () => {
+    it("offers to go to the meeting only for a meeting with a Teams room key, once the module handles it", () => {
+        const goTo = () => undefined;
+        const withKey = event("mac", MINUTE, { resource: { meetingKey: "a".repeat(64) } });
+
+        expect(canGoToMeeting(withKey, goTo)).toBe(true);
+        expect(canGoToMeeting(event("ics", MINUTE), goTo)).toBe(false);
+        expect(canGoToMeeting(withKey, undefined)).toBe(false);
     });
 });

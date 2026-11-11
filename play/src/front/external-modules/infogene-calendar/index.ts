@@ -15,6 +15,7 @@ import {
     saveBusyState,
 } from "./calendarModuleState";
 import CalendarSourcesSettings from "./CalendarSourcesSettings.svelte";
+import { startMeetingRooms } from "./meetingRoomsRuntime";
 
 /** Outlook publishes calendars every few hours at best: reading them every 5 minutes is plenty. */
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
@@ -28,6 +29,7 @@ let abortController: AbortController | undefined;
 let refreshTimer: ReturnType<typeof setInterval> | undefined;
 let statusTimer: ReturnType<typeof setInterval> | undefined;
 let unsubscribeBusyOption: (() => void) | undefined;
+let stopMeetingRooms: (() => void) | undefined;
 let lastEvents: CalendarApiEvent[] = [];
 /** No status decision before the first events: after a reload during a meeting, "no meeting" would be wrong. */
 let eventsLoaded = false;
@@ -96,6 +98,7 @@ const infogeneCalendarModule: ExtensionModule = {
         statusTimer = setInterval(updateStatus, STATUS_INTERVAL_MS);
         // Turning the option off during a meeting gives the busy status back at once.
         unsubscribeBusyOption = busyOptionStore.subscribe(() => updateStatus());
+        stopMeetingRooms = startMeetingRooms();
     },
 
     destroy() {
@@ -104,6 +107,8 @@ const infogeneCalendarModule: ExtensionModule = {
         if (refreshTimer) clearInterval(refreshTimer);
         if (statusTimer) clearInterval(statusTimer);
         unsubscribeBusyOption?.();
+        stopMeetingRooms?.();
+        stopMeetingRooms = undefined;
         options?.externalSvelteComponent.removeComponentFromZone("calendarButton", SETTINGS_KEY);
         refreshTimer = undefined;
         statusTimer = undefined;

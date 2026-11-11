@@ -6,6 +6,12 @@ import { byStart, isLong } from "./agenda";
 /** How long before it starts a meeting gets its reminder. */
 export const REMINDER_LEAD_MS = 5 * 60 * 1000;
 
+/** The calendar's own alarm when it gives one (Mac companion), else REMINDER_LEAD_MS. */
+export function reminderLeadMs(event: CalendarEventInterface): number {
+    const minutes = event.resource?.alarmMinutesBefore;
+    return minutes !== undefined ? minutes * 60 * 1000 : REMINDER_LEAD_MS;
+}
+
 /** How long after its start the reminder stays: long enough for whoever arrives late to still join. */
 export const REMINDER_LINGER_MS = 10 * 60 * 1000;
 
@@ -39,12 +45,31 @@ export function dueReminders(
                 !event.allDay &&
                 !isLong(event) &&
                 !dismissed.has(event.id) &&
-                event.start.getTime() - REMINDER_LEAD_MS <= time &&
+                event.start.getTime() - reminderLeadMs(event) <= time &&
                 time < event.start.getTime() + REMINDER_LINGER_MS &&
                 time < event.end.getTime(),
         )
         .sort(byStart)
         .slice(0, MAX_REMINDERS);
+}
+
+/**
+ * Whether the reminder offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
+ * knows the rooms registered how to go there.
+ */
+export function canGoToMeeting(
+    event: CalendarEventInterface,
+    goTo: ((event: CalendarEventInterface) => void) | undefined,
+): boolean {
+    return goTo !== undefined && event.resource?.meetingKey !== undefined;
+}
+
+/** Shows a settled reminder again (the user walked into a Teams room during that meeting). */
+export function remindAgain(event: CalendarEventInterface): void {
+    if (!dismissed.delete(event.id)) return;
+    calendarRemindersStore.update((reminders) =>
+        reminders.some((reminder) => reminder.id === event.id) ? reminders : [...reminders, event],
+    );
 }
 
 export function dismissReminder(event: CalendarEventInterface): void {
