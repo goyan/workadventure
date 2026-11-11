@@ -39,6 +39,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     empty: text("No calendar"),
                     busyOption: text("Busy in meetings"),
                     busyOptionHelp: text("Help"),
+                    manage: text("Manage"),
+                    closeSettings: text("Close"),
                     failed: ({ labels }: { labels: string }) => `Cannot read: ${labels}`,
                     errors: {
                         invalid: text("Refused"),
@@ -81,6 +83,13 @@ function fill(selector: string, value: string): void {
     input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function toggleSettings(): void {
+    const button = target.querySelector<HTMLButtonElement>("button[aria-expanded]");
+    if (!button) throw new Error("No settings toggle");
+    button.click();
+    flushSync();
+}
+
 function submit(): void {
     target.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 }
@@ -106,13 +115,45 @@ afterEach(async () => {
 });
 
 describe("CalendarSourcesSettings", () => {
+    it("folds the settings into one line once the user has calendars", () => {
+        expect(target.querySelector("form")).toBeNull();
+        expect(target.textContent).not.toContain("Paste a link");
+        expect(target.textContent).toContain("Infogene");
+        expect(target.querySelector("button[aria-expanded]")?.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("opens and closes the settings on demand", () => {
+        toggleSettings();
+        expect(target.querySelector("form")).not.toBeNull();
+        expect(target.querySelector("button[aria-expanded]")?.getAttribute("aria-expanded")).toBe("true");
+
+        toggleSettings();
+        expect(target.querySelector("form")).toBeNull();
+    });
+
+    it("shows the settings at once when the user has no calendar yet", async () => {
+        mocks.list.mockResolvedValue([]);
+        const newcomerTarget = document.createElement("div");
+        document.body.appendChild(newcomerTarget);
+        const newcomer = mount(CalendarSourcesSettings, { target: newcomerTarget });
+        try {
+            await vi.waitFor(() => expect(newcomerTarget.textContent).toContain("No calendar"));
+            expect(newcomerTarget.querySelector("form")).not.toBeNull();
+        } finally {
+            await unmount(newcomer);
+            newcomerTarget.remove();
+        }
+    });
+
     it("lists the calendars of the user by label and host, never by link", () => {
+        toggleSettings();
         expect(target.textContent).toContain("Infogene");
         expect(target.textContent).toContain("outlook.office365.com");
         expect(target.textContent).not.toContain("calendar.ics");
     });
 
     it("adds a calendar, empties the form and refreshes the agenda", async () => {
+        toggleSettings();
         fill('input[type="text"]', "Infogene");
         fill('input[type="url"]', link);
         submit();
@@ -124,6 +165,7 @@ describe("CalendarSourcesSettings", () => {
     });
 
     it("keeps the link and says why when the calendar cannot be read", async () => {
+        toggleSettings();
         mocks.add.mockRejectedValue(new CalendarApiError("unreachable"));
         fill('input[type="text"]', "Infogene");
         fill('input[type="url"]', link);
@@ -134,6 +176,7 @@ describe("CalendarSourcesSettings", () => {
     });
 
     it("removes a calendar and refreshes the agenda", async () => {
+        toggleSettings();
         mocks.list.mockResolvedValue([]);
         target.querySelector<HTMLButtonElement>('button[aria-label="Remove Infogene"]')?.click();
         await vi.waitFor(() => expect(calendarRefresh.request).toHaveBeenCalledOnce());
@@ -149,6 +192,7 @@ describe("CalendarSourcesSettings", () => {
     });
 
     it("stops the avatar keys while the user types", () => {
+        toggleSettings();
         const input = target.querySelector<HTMLInputElement>('input[type="url"]');
         input?.dispatchEvent(new FocusEvent("focus"));
         expect(get(inputFormFocusStore)).toBe(true);

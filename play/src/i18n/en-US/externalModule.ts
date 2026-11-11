@@ -143,6 +143,8 @@ const externalModule: BaseTranslation = {
         empty: "No calendar yet",
         busyOption: "Set me busy during my meetings",
         busyOptionHelp: "Only from online, and never over do not disturb or away. Others only see the status.",
+        manage: "Manage",
+        closeSettings: "Close",
         privateTitle: "Busy",
         failed: "Cannot read: {labels}",
         errors: {

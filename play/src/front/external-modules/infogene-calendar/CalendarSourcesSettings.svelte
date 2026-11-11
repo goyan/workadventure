@@ -25,6 +25,10 @@
     let busy = $state(false);
     let error: CalendarApiErrorCode | undefined = $state(undefined);
     let busyOption = $state($busyOptionStore);
+    let loaded = $state(false);
+    /** Chosen by the user; until then, the settings are open only for a user without any calendar yet. */
+    let expanded: boolean | undefined = $state(undefined);
+    const open = $derived(expanded ?? (loaded && $calendarSourcesStore.length === 0));
 
     // Requests still running when the panel closes are cancelled: their answer has nowhere to go.
     const abortController = new AbortController();
@@ -40,7 +44,11 @@
     }
 
     onMount(() => {
-        reload().catch(fail);
+        reload()
+            .then(() => {
+                loaded = true;
+            })
+            .catch(fail);
     });
 
     /** One change at a time: the form is disabled until it ends, then the list and the agenda are read again. */
@@ -81,7 +89,35 @@
 </script>
 
 <section class="mt-3 flex w-full flex-col gap-2 rounded-md bg-contrast/40 p-3 text-sm">
-    <h4 class="m-0 text-base normal-case">{$LL.externalModule.outlookIcs.title()}</h4>
+    <div class="flex items-center justify-between gap-2">
+        <h4 class="m-0 min-w-0 truncate text-base normal-case">
+            {$LL.externalModule.outlookIcs.title()}
+            {#if !open && $calendarSourcesStore.length > 0}
+                <span class="text-sm font-normal text-contrast-200">
+                    · {$calendarSourcesStore.map((source) => source.label).join(", ")}
+                </span>
+            {/if}
+        </h4>
+        <Button
+            variant="secondary"
+            appearance="ghost"
+            size="xs"
+            aria-expanded={open}
+            aria-controls="infogene-calendar-settings"
+            onclick={() => (expanded = !open)}
+        >
+            {open ? $LL.externalModule.outlookIcs.closeSettings() : $LL.externalModule.outlookIcs.manage()}
+        </Button>
+    </div>
+
+    {#if $failedCalendarsStore.length > 0}
+        <p class="m-0 text-warning">
+            {$LL.externalModule.outlookIcs.failed({ labels: $failedCalendarsStore.join(", ") })}
+        </p>
+    {/if}
+
+    {#if open}
+    <div id="infogene-calendar-settings" class="flex flex-col gap-2">
     <p class="m-0 text-contrast-200">{$LL.externalModule.outlookIcs.explain()}</p>
 
     {#if $calendarSourcesStore.length === 0}
@@ -109,12 +145,6 @@
                 </li>
             {/each}
         </ul>
-    {/if}
-
-    {#if $failedCalendarsStore.length > 0}
-        <p class="m-0 text-warning">
-            {$LL.externalModule.outlookIcs.failed({ labels: $failedCalendarsStore.join(", ") })}
-        </p>
     {/if}
 
     <form class="flex flex-col gap-2" onsubmit={add}>
@@ -167,4 +197,6 @@
             <span class="text-xs text-contrast-200">{$LL.externalModule.outlookIcs.busyOptionHelp()}</span>
         {/snippet}
     </InputSwitch>
+    </div>
+    {/if}
 </section>
