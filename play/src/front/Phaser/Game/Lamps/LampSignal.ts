@@ -18,6 +18,11 @@ export interface LampFrame extends LampBands {
     bar?: boolean;
 }
 
+/** Nothing sounds and no beat comes: a Jam this user does not hear, or a source that has no data (yet). */
+export function isSilentFrame(frame: LampFrame): boolean {
+    return !frame.beat && frame.bass === 0 && frame.mid === 0 && frame.treble === 0;
+}
+
 /** Where the lamps read the music: a spectrum analysed from the Jam, or a synthetic one to try the visuals out. */
 export interface LampSignalSource {
     read(now: number): LampFrame;

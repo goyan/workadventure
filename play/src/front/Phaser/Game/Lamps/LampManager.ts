@@ -39,7 +39,7 @@ import { danceFloorGrid, danceFloorSeed, type FloorGrid } from "./DanceFloorPatt
 import { DanceFloorVisual } from "./DanceFloorVisual";
 import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
-import { SpectrumSignalSource } from "./LampSignal";
+import { isSilentFrame, SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
@@ -99,7 +99,12 @@ interface PlacedFloor {
     grid: FloorGrid;
     /** The Jam this floor follows now, by the rule of LampJam; undefined: it goes through its patterns by itself. */
     jam: LampJamChoice | undefined;
+    /** When the floor last heard its music: a short silence does not send it back to its own patterns. */
+    heardAt: number | undefined;
 }
+
+/** A silence of the music this long, and the floor goes back to its own patterns. */
+const FLOOR_SILENCE_MS = 2000;
 
 /** The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor). */
 function lightKindOf(entity: Entity): LampKind | undefined {
@@ -409,6 +414,7 @@ export class LampManager {
                     engine: undefined,
                     grid: { cols: 0, rows: 0 },
                     jam: undefined,
+                    heardAt: undefined,
                 });
             }
         }
@@ -471,10 +477,15 @@ export class LampManager {
                 !this.effectsEnabled || this.editorOpen
                     ? undefined
                     : (demoFrame ?? (space ? this.frameOfJam(space, now) : undefined));
+            // A Jam this user does not hear, or a source without data, gives silence: the floor keeps its own patterns.
+            if (frame && !isSilentFrame(frame)) {
+                floor.heardAt = now;
+            } else if (!frame || (floor.heardAt !== undefined && now - floor.heardAt >= FLOOR_SILENCE_MS)) {
+                floor.heardAt = undefined;
+            }
             floor.engine.update({
                 now: clock,
-                // IDLE_FRAME: a Jam this user does not hear. The floor keeps its own patterns.
-                music: frame && frame !== IDLE_FRAME ? { beat: frame.beat, bass: frame.bass } : undefined,
+                music: frame && floor.heardAt !== undefined ? { beat: frame.beat, bass: frame.bass } : undefined,
                 reducedMotion: this.reducedMotion(),
             });
             floor.visual.draw(floor.engine);

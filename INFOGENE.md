@@ -92,12 +92,12 @@ L'objet **Piste de danse** (éditeur, section **Lampes**) est un sol de dalles c
 dalle par case. Une partie des dalles s'allume en cyan, violet ou magenta, avec des fondus.
 
 - **Sans musique**, la piste enchaîne ses motifs (groupes de dalles, vagues, ondes depuis le centre, damier, pluie,
-  spirale, balayages), un nouveau toutes les 10 à 20 secondes avec une transition douce. Le motif vient de l'horloge :
-  tous les joueurs voient la même piste au même moment.
+  spirale, balayages), un nouveau toutes les 10 à 20 secondes avec une transition douce. Le motif vient de l'horloge du
+  poste : deux joueurs dont l'horloge est à l'heure voient la même piste au même moment (non recetté à deux postes).
 - **Quand un Jam joue** (le Jam est choisi par la position, comme pour les lampes : celui de la zone d'écoute où se
   trouve le milieu de la piste), chaque battement avance le motif d'un pas et fait briller la piste, et le motif change
   tous les 16 battements. La piste d'un Jam que l'on n'entend pas, ou dont les effets sont coupés (pour soi ou par
-  l'hôte), garde son animation sans musique.
+  l'hôte), garde son animation sans musique ; un silence de moins de deux secondes ne l'y renvoie pas.
 - **Photosensibilité** : une dalle s'allume au plus trois fois par seconde et un battement n'est pris qu'au plus trois
   fois par seconde (WCAG 2.3.1), quels que soient la musique et le motif. Avec la préférence système de mouvement
   réduit, la piste est quatre fois plus lente, sans éclat sur les battements, avec des fondus de plus d'une seconde.

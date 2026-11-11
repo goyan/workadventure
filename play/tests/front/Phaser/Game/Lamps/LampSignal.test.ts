@@ -4,6 +4,7 @@ import {
     bandsOf,
     LAMP_MIN_FLASH_INTERVAL_MS,
     SpectrumSignalSource,
+    isSilentFrame,
 } from "../../../../../src/front/Phaser/Game/Lamps/LampSignal";
 
 describe("bandsOf", () => {
@@ -163,5 +164,18 @@ describe("SpectrumSignalSource", () => {
         for (let index = 1; index < beats.length; index++) {
             expect(beats[index] - beats[index - 1]).toBeGreaterThanOrEqual(LAMP_MIN_FLASH_INTERVAL_MS - 1);
         }
+    });
+});
+
+describe("isSilentFrame", () => {
+    it("is silent when nothing sounds and no beat comes: a Jam this user does not hear, a source without data", () => {
+        expect(isSilentFrame({ bass: 0, mid: 0, treble: 0, beat: false })).toBe(true);
+    });
+
+    it("is not silent as soon as a band sounds or a beat comes", () => {
+        expect(isSilentFrame({ bass: 0.2, mid: 0, treble: 0, beat: false })).toBe(false);
+        expect(isSilentFrame({ bass: 0, mid: 0.1, treble: 0, beat: false })).toBe(false);
+        expect(isSilentFrame({ bass: 0, mid: 0, treble: 0.1, beat: false })).toBe(false);
+        expect(isSilentFrame({ bass: 0, mid: 0, treble: 0, beat: true })).toBe(false);
     });
 });
