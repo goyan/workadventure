@@ -52,6 +52,12 @@ export const CalendarApiEvent = z.object({
      */
     availability: z.enum(["busy", "tentative", "away", "elsewhere"]).optional(),
     calendar: z.string().optional(),
+    /** A meeting uploaded by the Mac companion: the key of its Teams meeting room and how early it reminds. */
+    meetingKey: z
+        .string()
+        .regex(/^[0-9a-f]{64}$/)
+        .optional(),
+    alarmMinutesBefore: z.number().int().min(0).max(1440).optional(),
 });
 export type CalendarApiEvent = z.infer<typeof CalendarApiEvent>;
 export type CalendarAvailability = NonNullable<CalendarApiEvent["availability"]>;

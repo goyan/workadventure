@@ -32,6 +32,7 @@ import { UserController } from "./controllers/UserController";
 import { MapCreationController } from "./controllers/MapCreationController";
 import { MapPatternController } from "./controllers/MapPatternController";
 import { CalendarController } from "./controllers/CalendarController";
+import { MacCompanionController } from "./controllers/MacCompanionController";
 import { NpcRegisterController } from "./controllers/NpcRegisterController";
 import { SpotifyCallbackController } from "./controllers/SpotifyCallbackController";
 import { MatrixRoomAreaController } from "./controllers/MatrixRoomAreaController";
@@ -108,6 +109,7 @@ class App {
         new MapCreationController(this.app);
         new MapPatternController(this.app);
         new CalendarController(this.app);
+        new MacCompanionController(this.app);
         new NpcRegisterController(this.app);
         new SpotifyCallbackController(this.app);
         new LyricsController(this.app);
