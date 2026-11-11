@@ -145,6 +145,12 @@ const externalModule: BaseTranslation = {
         busyOptionHelp: "Only from online, and never over do not disturb or away. Others only see the status.",
         manage: "Manage",
         closeSettings: "Close",
+        availability: {
+            busy: "{calendar} meeting",
+            tentative: "{calendar} meeting (tentative)",
+            away: "Away · {calendar}",
+            elsewhere: "Working elsewhere · {calendar}",
+        },
         privateTitle: "Busy",
         failed: "Cannot read: {labels}",
         errors: {

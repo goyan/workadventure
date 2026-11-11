@@ -151,6 +151,12 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
             "Seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent ». Les autres ne voient que le statut.",
         manage: "Gérer",
         closeSettings: "Fermer",
+        availability: {
+            busy: "Réunion {calendar}",
+            tentative: "Réunion {calendar} (provisoire)",
+            away: "Absent · {calendar}",
+            elsewhere: "Travail ailleurs · {calendar}",
+        },
         privateTitle: "Occupé",
         failed: "Lecture impossible : {labels}",
         errors: {

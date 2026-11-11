@@ -46,8 +46,15 @@ export const CalendarApiEvent = z.object({
         .url()
         .refine((url) => url.startsWith("https://"))
         .optional(),
+    /**
+     * A slot of a calendar published with availability only: Outlook gives its status alone (its title is that
+     * status, "Provisoire"...). Named after `calendar`, the name the user gave the calendar.
+     */
+    availability: z.enum(["busy", "tentative", "away", "elsewhere"]).optional(),
+    calendar: z.string().optional(),
 });
 export type CalendarApiEvent = z.infer<typeof CalendarApiEvent>;
+export type CalendarAvailability = NonNullable<CalendarApiEvent["availability"]>;
 
 /** The events of all the calendars of the user, and the calendars that could not be read this time. */
 export const CalendarEvents = z.object({
