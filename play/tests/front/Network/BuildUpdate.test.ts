@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { watchForBuildUpdate } from "../../../src/front/Network/BuildUpdate";
+import {
+    findNewerBuild,
+    rememberUpdateForReload,
+    takeUpdateAfterReload,
+    watchForBuildUpdate,
+} from "../../../src/front/Network/BuildUpdate";
 import { getNewReleaseNotes } from "../../../src/common/ReleaseNotes";
 import type { ReleaseNote } from "../../../src/common/ReleaseNotes";
 
@@ -156,5 +161,68 @@ describe("build update notification", () => {
 
         expect(onUpdate).not.toHaveBeenCalled();
         expect(fetchMock).toHaveBeenCalledOnce();
+    });
+});
+
+describe("check after a lost connection", () => {
+    const loadedVersion = "a".repeat(64);
+    const fetchMock = vi.fn<typeof fetch>();
+    const note: ReleaseNote = {
+        id: "d".repeat(40),
+        date: "2026-11-11T14:53:00+01:00",
+        author: "Hervé Meunier",
+        type: "feat",
+        description: "réglages des agendas Outlook repliés une fois configurés",
+    };
+
+    beforeEach(() => {
+        vi.stubGlobal("fetch", fetchMock);
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        fetchMock.mockReset();
+        sessionStorage.clear();
+    });
+
+    it("gives the release notes of the build the server now serves", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: "b".repeat(64), releaseNotes: [note] })));
+
+        await expect(findNewerBuild(loadedVersion)).resolves.toEqual([note]);
+        expect(fetchMock).toHaveBeenCalledWith(
+            expect.objectContaining({ pathname: "/build-version" }),
+            expect.objectContaining({ cache: "no-store" }),
+        );
+    });
+
+    it("keeps the page when the server still serves its build", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: loadedVersion, releaseNotes: [note] })));
+
+        await expect(findNewerBuild(loadedVersion)).resolves.toBeUndefined();
+    });
+
+    it("keeps the page when the version cannot be read", async () => {
+        fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+        await expect(findNewerBuild(loadedVersion)).resolves.toBeUndefined();
+
+        fetchMock.mockResolvedValueOnce(new Response("Bad gateway", { status: 502 }));
+        await expect(findNewerBuild(loadedVersion)).resolves.toBeUndefined();
+
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ version: "not-a-build" })));
+        await expect(findNewerBuild(loadedVersion)).resolves.toBeUndefined();
+    });
+
+    it("hands the changes over to the reloaded page, once", () => {
+        rememberUpdateForReload([note]);
+
+        expect(takeUpdateAfterReload()).toEqual([note]);
+        expect(takeUpdateAfterReload()).toBeUndefined();
+    });
+
+    it("shows nothing after an ordinary page load", () => {
+        expect(takeUpdateAfterReload()).toBeUndefined();
+
+        sessionStorage.setItem("wa-build-update-notes", "{not json");
+        expect(takeUpdateAfterReload()).toBeUndefined();
     });
 });
