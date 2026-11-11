@@ -33,10 +33,13 @@ import {
     zoneOf,
 } from "./LampJam";
 import { resolveLampDemo } from "./LampDemo";
-import { lampSizeOf, lampSource, planLamps } from "./LampReconcile";
+import { danceFloorBounds, lampSizeOf, lampSource, planLamps } from "./LampReconcile";
+import { DanceFloorEngine } from "./DanceFloorEngine";
+import { danceFloorGrid, danceFloorSeed, type FloorGrid } from "./DanceFloorPatterns";
+import { DanceFloorVisual } from "./DanceFloorVisual";
 import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
-import { SpectrumSignalSource } from "./LampSignal";
+import { isSilentFrame, SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
@@ -55,6 +58,10 @@ interface RoomBeat {
 
 /** Above the night veil: lamps glow at night, and are a light touch by day. */
 const LAMP_DEPTH = DEPTH_NIGHT_INDEX + 100;
+/** Where a playing room is darkened: over its floor (and rugs), under the players and the furniture standing on it. */
+const ROOM_SHADE_DEPTH = FLOOR_OBJECT_DEPTH + 0.5;
+/** A dance floor shines in the dark: over the darkness of its room, still under the players. */
+const DANCE_FLOOR_DEPTH = ROOM_SHADE_DEPTH + 0.1;
 const DEMO_KINDS: LampKind[] = ["spot", "disco", "neon", "strobe"];
 /** Tiles are 32 px: the demo lamps stand three tiles above the player, a lamp every three tiles. */
 const DEMO_SPACING_PX = 96;
@@ -84,6 +91,31 @@ interface PlacedLamp {
     bodyHidden: boolean;
 }
 
+/** A dance floor of the map: tiles that light up in patterns, on the music of its Jam when one plays. */
+interface PlacedFloor {
+    entity: Entity;
+    visual: DanceFloorVisual;
+    engine: DanceFloorEngine | undefined;
+    grid: FloorGrid;
+    /** The Jam this floor follows now, by the rule of LampJam; undefined: it goes through its patterns by itself. */
+    jam: LampJamChoice | undefined;
+    /** When the floor last heard its music: a short silence does not send it back to its own patterns. */
+    heardAt: number | undefined;
+}
+
+/** A silence of the music this long, and the floor goes back to its own patterns. */
+const FLOOR_SILENCE_MS = 2000;
+
+/** The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor). */
+function lightKindOf(entity: Entity): LampKind | undefined {
+    const kind = entity.getPrefab().lamp?.kind;
+    return kind === "dancefloor" ? undefined : kind;
+}
+
+function isDanceFloor(entity: Entity): boolean {
+    return entity.getPrefab().lamp?.kind === "dancefloor";
+}
+
 /** The music of a Jam being read: the stream it comes from, and what listens to it. */
 interface ReadMusic {
     stream: MediaStream;
@@ -97,10 +129,14 @@ interface ReadMusic {
  * and what the user listens to (see LampJam); it moves with the music of that Jam when the user hears it (a guest
  * reads the stream they receive, the host the one they share), and is off when its Jam plays nothing. `?lampDemo` and
  * the setting of the menu light every lamp with a made-up beat instead, and put one lamp of each kind near the player.
+ *
+ * A dance floor (`lamp.kind: "dancefloor"`) is kept here too, for the music it shares with the lamps, but lives another
+ * life: it never goes out (see updateFloors).
  */
 export class LampManager {
     private readonly demoLamps: LampVisual[] = [];
     private readonly placed = new Map<string, PlacedLamp>();
+    private readonly floors = new Map<string, PlacedFloor>();
     private readonly music = new Map<string, ReadMusic>();
     // The light of a room stays in the room: the lamps of a zone draw in one container, clipped to the zone.
     private readonly zoneLights: LampZoneLights;
@@ -152,8 +188,7 @@ export class LampManager {
         options: { demo?: { bpm: number } } = {},
     ) {
         ensureLampTextures(scene);
-        // The room is darkened over its floor (and rugs), under the players and the furniture standing on it.
-        this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, FLOOR_OBJECT_DEPTH + 0.5);
+        this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, ROOM_SHADE_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
         this.unsubscribers = [
             lampEffectsEnabledStore.subscribe((enabled) => {
@@ -293,11 +328,12 @@ export class LampManager {
 
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
+        this.reconcileFloors(entities);
         const lit = new Map<string, LampKind>();
         for (const [id, lamp] of this.placed) {
             lit.set(id, lamp.kind);
         }
-        const objects = [...entities.entries()].map(([id, entity]) => ({ id, kind: entity.getPrefab().lamp?.kind }));
+        const objects = [...entities.entries()].map(([id, entity]) => ({ id, kind: lightKindOf(entity) }));
         const plan = planLamps(lit, objects);
         for (const id of plan.remove) {
             const lamp = this.placed.get(id);
@@ -360,6 +396,104 @@ export class LampManager {
         }
     }
 
+    /** The dance floors of the map: one per object that is one, and the Jam each follows. */
+    private reconcileFloors(entities: ReadonlyMap<string, Entity>): void {
+        for (const [id, floor] of this.floors) {
+            // An object can be replaced under the same id (an undo, a model changed): the floor is the one of the
+            // object that is there now.
+            if (entities.get(id) !== floor.entity || !isDanceFloor(floor.entity)) {
+                floor.visual.destroy();
+                this.floors.delete(id);
+            }
+        }
+        for (const [id, entity] of entities) {
+            if (isDanceFloor(entity) && !this.floors.has(id)) {
+                this.floors.set(id, {
+                    entity,
+                    visual: new DanceFloorVisual(this.scene, id, DANCE_FLOOR_DEPTH),
+                    engine: undefined,
+                    grid: { cols: 0, rows: 0 },
+                    jam: undefined,
+                    heardAt: undefined,
+                });
+            }
+        }
+        if (this.floors.size === 0) {
+            return;
+        }
+        // The same rule as the lamps, from the middle of the floor: every client follows the same Jam.
+        const listeningZones = this.listeningZones(this.areas());
+        const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants);
+        const listening = this.listenedJam();
+        for (const floor of this.floors.values()) {
+            const bounds = this.floorBounds(floor.entity);
+            const source = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+            const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
+            floor.jam = jam && !this.lightsOffIn(jam) ? jam : undefined;
+        }
+    }
+
+    private floorBounds(entity: Entity): { x: number; y: number; width: number; height: number } {
+        return danceFloorBounds(entity, lampSizeOf(entity.getEntityData().properties));
+    }
+
+    /**
+     * Draws the dance floors. A floor never stops: without music (no Jam, effects turned off, a Jam this user does not
+     * hear) it goes through its patterns along the clock, the same for everyone. Returns whether one was drawn.
+     */
+    private updateFloors(now: number, demoFrame: LampFrame | undefined): boolean {
+        if (this.floors.size === 0) {
+            return false;
+        }
+        const view = this.scene.cameras.main.worldView;
+        const clock = Date.now();
+        let drawn = false;
+        for (const [id, floor] of this.floors) {
+            const { entity } = floor;
+            const bounds = this.floorBounds(entity);
+            // The object is the floor: it takes its size, so that it is selected, dragged and outlined as a whole.
+            if (entity.displayWidth !== bounds.width || entity.displayHeight !== bounds.height) {
+                entity.setDisplaySize(bounds.width, bounds.height);
+            }
+            const grid = danceFloorGrid(bounds);
+            if (!floor.engine || grid.cols !== floor.grid.cols || grid.rows !== floor.grid.rows) {
+                floor.grid = grid;
+                floor.engine = new DanceFloorEngine(grid, danceFloorSeed(id));
+            }
+            floor.visual.setBounds(bounds, grid);
+            floor.visual.setVisible(entity.visible);
+            floor.visual.setAlpha(entity.alpha);
+            // Out of the screen: nothing to draw, and the next image picks the pattern up from the clock.
+            const onScreen =
+                bounds.x < view.right &&
+                bounds.x + bounds.width > view.x &&
+                bounds.y < view.bottom &&
+                bounds.y + bounds.height > view.y;
+            if (!entity.visible || !onScreen) {
+                continue;
+            }
+            const space = floor.jam && this.spaceNameOf(floor.jam);
+            const frame =
+                !this.effectsEnabled || this.editorOpen
+                    ? undefined
+                    : (demoFrame ?? (space ? this.frameOfJam(space, now) : undefined));
+            // A Jam this user does not hear, or a source without data, gives silence: the floor keeps its own patterns.
+            if (frame && !isSilentFrame(frame)) {
+                floor.heardAt = now;
+            } else if (!frame || (floor.heardAt !== undefined && now - floor.heardAt >= FLOOR_SILENCE_MS)) {
+                floor.heardAt = undefined;
+            }
+            floor.engine.update({
+                now: clock,
+                music: frame && floor.heardAt !== undefined ? { beat: frame.beat, bass: frame.bass } : undefined,
+                reducedMotion: this.reducedMotion(),
+            });
+            floor.visual.draw(floor.engine);
+            drawn = true;
+        }
+        return drawn;
+    }
+
     /** The stream of the music of a Jam that this user hears: the one received, or the one the host shares. */
     private streamOf(spaceName: string): MediaStream | undefined {
         if (this.sharedMusic?.spaceName === spaceName) {
@@ -403,8 +537,8 @@ export class LampManager {
     /** Lets go of the streams nobody follows any more. */
     private dropUnusedMusic(): void {
         const wanted = new Set<string>();
-        for (const lamp of this.placed.values()) {
-            const space = lamp.jam && this.spaceNameOf(lamp.jam);
+        for (const follower of [...this.placed.values(), ...this.floors.values()]) {
+            const space = follower.jam && this.spaceNameOf(follower.jam);
             if (space) {
                 wanted.add(space);
             }
@@ -422,6 +556,12 @@ export class LampManager {
             this.lastReconcileAt = now;
             this.reconcile();
             this.dropUnusedMusic();
+        }
+        this.frames.clear();
+        const demoFrame = this.demoSignal?.read(now);
+        if (this.updateFloors(now, demoFrame)) {
+            // The scene is only drawn when something changed: a floor on the screen changes at every image.
+            this.scene.markDirty();
         }
         if (this.placed.size === 0 && this.demoLamps.length === 0) {
             this.zoneLights.setAmbience([]);
@@ -441,8 +581,6 @@ export class LampManager {
             }
             return;
         }
-        this.frames.clear();
-        const demoFrame = this.demoSignal?.read(now);
         let anyLit = false;
         const rooms = new Map<string, RoomBeat>();
         for (const lamp of this.demoLamps) {
@@ -567,6 +705,10 @@ export class LampManager {
             lamp.visual.destroy();
         }
         this.placed.clear();
+        for (const floor of this.floors.values()) {
+            floor.visual.destroy();
+        }
+        this.floors.clear();
         this.zoneLights.destroy();
         for (const read of this.music.values()) {
             read.spectrum.destroy();

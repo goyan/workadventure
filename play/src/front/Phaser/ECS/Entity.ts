@@ -470,6 +470,20 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         this.emit(EntityEvent.Updated, this.appendId({ properties: this.entityData.properties }));
     }
 
+    /**
+     * Sets the property of this type (added when the entity has none) and, when a position is given, moves the
+     * entity, in one update: a single step to undo.
+     */
+    public setProperty(property: EntityDataProperty, position?: { x: number; y: number }): void {
+        const index = this.entityData.properties.findIndex((existing) => existing.type === property.type);
+        // A new list: the one in place is also the map's, which the update reads to know what an undo brings back.
+        this.entityData.properties =
+            index === -1
+                ? [...this.entityData.properties, property]
+                : this.entityData.properties.map((existing, at) => (at === index ? property : existing));
+        this.emit(EntityEvent.Updated, this.appendId({ properties: this.entityData.properties, ...position }));
+    }
+
     public setEntityName(name: string): void {
         this.entityData.name = name;
         this.emit(EntityEvent.Updated, this.appendId({ name }));

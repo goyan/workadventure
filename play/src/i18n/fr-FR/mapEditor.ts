@@ -338,6 +338,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             width: "Largeur",
             height: "Hauteur",
         },
+        danceFloor: {
+            label: "Taille de la piste",
+            description: "En cases. Tirez un coin de la piste sur la carte, ou réglez sa largeur et sa hauteur ici.",
+        },
         openFile: {
             label: "Ouvrir un fichier",
             description: "Ouvrir un fichier dans l'application.",

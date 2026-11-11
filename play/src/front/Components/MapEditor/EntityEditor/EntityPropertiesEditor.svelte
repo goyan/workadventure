@@ -32,6 +32,7 @@
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
     import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
+    import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import CustomEntityEditionForm from "./CustomEntityEditionForm/CustomEntityEditionForm.svelte";
     import { confirmCustomEntityDeletion } from "./ConfirmCustomEntityDeletion";
@@ -495,8 +496,9 @@
                 }}
             />
         </div>
-        <!-- A lamp (its catalog entry says so) can have the size of its light set, once. -->
-        {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && !properties.some((property) => property.type === "lampPropertyData")}
+        <!-- A lamp (its catalog entry says so) can have the size of its light set, once. A dance floor has its own
+             size editor (see DanceFloorSizeEditor). -->
+        {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "dancefloor" && !properties.some((property) => property.type === "lampPropertyData")}
             <div class="properties-buttons flex flex-row m-2">
                 <AddPropertyButtonWrapper
                     property="lampPropertyData"
@@ -609,6 +611,11 @@
                 <PlacedImageSizeEditor entity={$mapEditorSelectedEntityStore} />
             {/key}
         {/if}
+        {#if $mapEditorSelectedEntityStore.getPrefab().lamp?.kind === "dancefloor" && $mapEditorSelectedEntityStore.visible}
+            {#key $mapEditorSelectedEntityStore.entityId}
+                <DanceFloorSizeEditor entity={$mapEditorSelectedEntityStore} />
+            {/key}
+        {/if}
         {#if $mapEditorSelectedEntityStore.visible}
             {#if canEditModel($mapEditorSelectedEntityStore.getPrefab())}
                 <Button
@@ -681,13 +688,15 @@
                                 onchange={() => onUpdateProperty(properties[i])}
                             />
                         {:else if properties[i].type === "lampPropertyData"}
-                            <LampPropertyEditor
-                                bind:property={properties[i]}
-                                onclose={() => {
-                                    onDeleteProperty(property.id);
-                                }}
-                                onchange={() => onUpdateProperty(properties[i])}
-                            />
+                            {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor"}
+                                <LampPropertyEditor
+                                    bind:property={properties[i]}
+                                    onclose={() => {
+                                        onDeleteProperty(property.id);
+                                    }}
+                                    onchange={() => onUpdateProperty(properties[i])}
+                                />
+                            {/if}
                         {:else if properties[i].type === "openFile"}
                             <OpenFilePropertyEditor
                                 bind:property={properties[i]}

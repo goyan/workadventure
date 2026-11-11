@@ -443,12 +443,14 @@ export const EntityRawPrefab = z.object({
     /**
      * When set, the entity is a lamp: a light that follows the music of a Jam wherever the entity is moved (a spot, a
      * mirror ball, a neon, a strobe). `anchor` is the point the light comes from, in pixels from the top-left corner of
-     * the image (the centre of the image when absent). The WAM format is unchanged: this lives in the catalog only.
+     * the image (the centre of the image when absent). A `dancefloor` is a floor of tiles that light up in patterns,
+     * with or without music, over the size set for it in the editor (`lampPropertyData`), from its top-left corner.
+     * The WAM format is unchanged: this lives in the catalog only.
      * Fail open like `wander`: an invalid value shows the entity as a plain image.
      */
     lamp: z
         .object({
-            kind: z.enum(["spot", "disco", "neon", "strobe"]),
+            kind: z.enum(["spot", "disco", "neon", "strobe", "dancefloor"]),
             anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
         })
         .optional()

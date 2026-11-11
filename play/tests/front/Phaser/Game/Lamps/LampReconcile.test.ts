@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { lampSizeOf, lampSource, planLamps } from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
+import {
+    danceFloorBounds,
+    danceFloorTiles,
+    lampSizeOf,
+    lampSource,
+    planLamps,
+} from "../../../../../src/front/Phaser/Game/Lamps/LampReconcile";
 
 describe("planLamps", () => {
     it("creates a lamp for each object of the map that has one", () => {
@@ -80,5 +86,38 @@ describe("lampSizeOf", () => {
     it("is undefined when no size was set: the light fills its zone", () => {
         expect(lampSizeOf([{ id: "a", type: "openWebsite" }] as never)).toBeUndefined();
         expect(lampSizeOf([])).toBeUndefined();
+    });
+});
+
+describe("danceFloorBounds", () => {
+    const object = { x: 320, y: 96, displayWidth: 128, displayHeight: 128, width: 128, height: 128 };
+
+    it("covers the object itself when no size was set: the tiles of its image", () => {
+        expect(danceFloorBounds(object, undefined)).toEqual({ x: 320, y: 96, width: 128, height: 128 });
+    });
+
+    it("covers the size set in the editor, in tiles of 32 px, from the top-left corner of the object", () => {
+        expect(danceFloorBounds(object, { width: 12, height: 8 })).toEqual({ x: 320, y: 96, width: 384, height: 256 });
+    });
+
+    it("follows the object when it is moved", () => {
+        expect(danceFloorBounds({ ...object, x: 64, y: 32 }, { width: 3, height: 2 })).toEqual({
+            x: 64,
+            y: 32,
+            width: 96,
+            height: 64,
+        });
+    });
+});
+
+describe("danceFloorTiles", () => {
+    it("counts a size in pixels in whole tiles", () => {
+        expect(danceFloorTiles({ width: 384, height: 256 })).toEqual({ width: 12, height: 8 });
+        expect(danceFloorTiles({ width: 270, height: 150 })).toEqual({ width: 8, height: 5 });
+    });
+
+    it("stays within what the size of a lamp can be: 2 to 60 tiles", () => {
+        expect(danceFloorTiles({ width: 1, height: 40 })).toEqual({ width: 2, height: 2 });
+        expect(danceFloorTiles({ width: 4096, height: 1920 })).toEqual({ width: 60, height: 60 });
     });
 });

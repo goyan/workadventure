@@ -17,6 +17,12 @@ describe("EntityRawPrefab lamp", () => {
         }
     });
 
+    it("keeps a dance floor: tiles that light up under the players", () => {
+        expect(EntityRawPrefab.parse({ ...prefabMinimal, lamp: { kind: "dancefloor" } }).lamp).toEqual({
+            kind: "dancefloor",
+        });
+    });
+
     it("keeps the point the light comes from, in pixels from the top-left corner of the image", () => {
         const parsed = EntityRawPrefab.parse({ ...prefabMinimal, lamp: { kind: "spot", anchor: { x: 16, y: 4 } } });
         expect(parsed.lamp).toEqual({ kind: "spot", anchor: { x: 16, y: 4 } });

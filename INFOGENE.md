@@ -86,6 +86,38 @@ Recette : hôte et invité coupent chacun pour soi ; l'autre garde ses effets et
 l'audio continue. L'hôte coupe puis rallume pour tous ; un invité qui avait coupé
 pour soi conserve ce choix.
 
+## Piste de danse
+
+L'objet **Piste de danse** (éditeur, section **Lampes**) est un sol de dalles carrées sombres aux joints néon, une
+dalle par case. Une partie des dalles s'allume en cyan, violet ou magenta, avec des fondus.
+
+- **Sans musique**, la piste enchaîne ses motifs (groupes de dalles, vagues, ondes depuis le centre, damier, pluie,
+  spirale, balayages), un nouveau toutes les 10 à 20 secondes avec une transition douce. Le motif vient de l'horloge du
+  poste : deux joueurs dont l'horloge est à l'heure voient la même piste au même moment (non recetté à deux postes).
+- **Quand un Jam joue** (le Jam est choisi par la position, comme pour les lampes : celui de la zone d'écoute où se
+  trouve le milieu de la piste), chaque battement avance le motif d'un pas et fait briller la piste, et le motif change
+  tous les 16 battements. La piste d'un Jam que l'on n'entend pas, ou dont les effets sont coupés (pour soi ou par
+  l'hôte), garde son animation sans musique ; un silence de moins de deux secondes ne l'y renvoie pas.
+- **Photosensibilité** : une dalle s'allume au plus trois fois par seconde et un battement n'est pris qu'au plus trois
+  fois par seconde (WCAG 2.3.1), quels que soient la musique et le motif. Avec la préférence système de mouvement
+  réduit, la piste est quatre fois plus lente, sans éclat sur les battements, avec des fondus de plus d'une seconde.
+- **Taille** : sélectionner la piste dans l'éditeur affiche **Taille de la piste** (largeur et hauteur en cases, de 2 à
+  60) et quatre poignées aux coins, qui vont de case en case. La taille est portée par la propriété existante
+  `lampPropertyData` : le format des cartes est inchangé. L'effet couvre exactement l'objet et le suit quand on le
+  déplace. Sans réglage, la piste fait la taille de son image (4 × 4 cases).
+- La piste est dessinée au sol, sous les avatars et les meubles, et au-dessus de l'obscurité d'une pièce dont les
+  lampes jouent. Elle recouvre un tapis posé au même endroit. La nuit, elle reste sous le voile de nuit d'une pièce
+  vide.
+
+Code : `play/src/front/Phaser/Game/Lamps/DanceFloor*.ts` (motifs et moteur sans Phaser, testés ; rendu : une texture
+d'un pixel par dalle étirée sur la piste, joints répétés, halo additif), entrée de catalogue
+`lamp: { kind: "dancefloor" }` avec `layer: "floor"`. Un front plus ancien ignore ce genre : l'objet s'affiche comme
+une simple image.
+
+Recette : poser la piste, l'étirer par une poignée puis par les curseurs, annuler, la déplacer ; fermer l'éditeur et
+regarder les motifs s'enchaîner ; `?lampDemo` (ou un Jam dans la zone) pour les battements ; mouvement réduit du
+système pour la version lente.
+
 ## Paroles de karaoké
 
 Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,

@@ -12,7 +12,7 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-function fixture(keepProportions = true) {
+function fixture(keepProportions = true, options?: ConstructorParameters<typeof PlacedImageResizeHandles>[6]) {
     const scene = mock<GameScene>();
     const systems = mock<Phaser.Scenes.Systems>();
     systems.game = mock<Phaser.Game>();
@@ -92,6 +92,7 @@ function fixture(keepProportions = true) {
         () => busy,
         onPreview,
         onResize,
+        options,
     );
     controllers.push(controller);
     const pointer = mock<Phaser.Input.Pointer>({ id: 0, x: 600, y: 400 });
@@ -254,5 +255,55 @@ describe("Direct placed image resizing", () => {
         expect(f.scene.input.listenerCount(Phaser.Input.Events.POINTER_UP_OUTSIDE)).toBe(0);
         expect(f.keyboardEvents.listenerCount(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN)).toBe(0);
         expect(f.squares.every((square) => !square.scene)).toBe(true);
+    });
+});
+
+describe("Resizing an object shown at another size than its image (a dance floor)", () => {
+    const tiles = {
+        size: () => ({ width: 320, height: 160 }),
+        constrain: (size: { width: number; height: number }) => ({
+            width: Math.round(size.width / 32) * 32,
+            height: Math.round(size.height / 32) * 32,
+        }),
+    };
+
+    it("starts from the size it is given and keeps only the sizes the caller allows", () => {
+        const f = fixture(false, tiles);
+        // The pointer is at 450, 300 on the map: 250 by 150 from the top-left corner, which stays where it is.
+        f.pointer.x = 700;
+        f.pointer.y = 500;
+        f.squares[3].emit(Phaser.Input.Events.DRAG_START, f.pointer);
+        f.squares[3].emit(Phaser.Input.Events.DRAG, f.pointer);
+        expect(f.preview.setDisplaySize.mock.calls.at(-1)).toEqual([256, 160]);
+        expect(f.onPreview).toHaveBeenLastCalledWith({ width: 256, height: 160 });
+        f.squares[3].emit(Phaser.Input.Events.DRAG_END, f.pointer);
+        expect(f.onResize).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ x: 200, y: 150, width: 256, height: 160 }),
+        );
+    });
+
+    it("keeps the opposite corner of the size it is given, not of the image", () => {
+        const f = fixture(false, tiles);
+        // The bottom-right corner is at 520, 310; the pointer at 250, 150 on the map.
+        f.pointer.x = 300;
+        f.pointer.y = 200;
+        f.squares[0].emit(Phaser.Input.Events.DRAG_START, f.pointer);
+        f.squares[0].emit(Phaser.Input.Events.DRAG, f.pointer);
+        f.squares[0].emit(Phaser.Input.Events.DRAG_END, f.pointer);
+        expect(f.onResize).toHaveBeenCalledExactlyOnceWith(
+            expect.objectContaining({ x: 264, y: 150, width: 256, height: 160 }),
+        );
+    });
+});
+
+describe("Resizing with the outline alone", () => {
+    it("leaves the object as it is drawn while a corner is dragged: only the outline shows the new size", () => {
+        const f = fixture(false, { outlineOnly: true });
+        f.squares[3].emit(Phaser.Input.Events.DRAG_START, f.pointer);
+        f.squares[3].emit(Phaser.Input.Events.DRAG, f.pointer);
+        expect(f.entity.alpha).toBe(0.8);
+        expect(f.preview.setVisible.mock.calls).not.toContainEqual([true]);
+        f.squares[3].emit(Phaser.Input.Events.DRAG_END, f.pointer);
+        expect(f.onResize).toHaveBeenCalledOnce();
     });
 });
