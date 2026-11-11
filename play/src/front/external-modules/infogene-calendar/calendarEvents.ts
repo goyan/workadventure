@@ -37,6 +37,21 @@ export function toCalendarEvents(
     return result;
 }
 
+/**
+ * The events to keep after a refresh: the events read this time, plus the previous events of the calendars that could
+ * not be read (an Outlook timeout must not end a meeting, nor empty that calendar in the panel). An event id starts with
+ * the id of its calendar and a colon.
+ */
+export function mergeRefreshedEvents(
+    previous: readonly CalendarApiEvent[],
+    events: readonly CalendarApiEvent[],
+    failedCalendarIds: readonly string[],
+): CalendarApiEvent[] {
+    const failedPrefixes = failedCalendarIds.map((id) => `${id}:`);
+    const keptFromFailed = previous.filter((event) => failedPrefixes.some((prefix) => event.id.startsWith(prefix)));
+    return [...events, ...keptFromFailed];
+}
+
 /** The busy meeting going on at `now` (end excluded), if any. A free slot or an all-day event does not count. */
 export function currentBusyMeetingId(events: readonly CalendarApiEvent[], now: Date): string | undefined {
     return events.find((event) => {
