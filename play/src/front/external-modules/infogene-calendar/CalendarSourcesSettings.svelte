@@ -18,6 +18,7 @@
         calendarSourcesStore,
         failedCalendarsStore,
     } from "./calendarModuleState";
+    import CompanionSettings from "./CompanionSettings.svelte";
     import { IconTrash } from "@wa-icons";
 
     let label = $state("");
@@ -197,6 +198,7 @@
             <span class="text-xs text-contrast-200">{$LL.externalModule.outlookIcs.busyOptionHelp()}</span>
         {/snippet}
     </InputSwitch>
+    <CompanionSettings />
     </div>
     {/if}
 </section>

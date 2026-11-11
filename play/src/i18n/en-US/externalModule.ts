@@ -107,6 +107,7 @@ const externalModule: BaseTranslation = {
             "You are already connected, please click on the button to logout and reconnect.",
     },
     calendar: {
+        goToMeeting: "Go there",
         title: "Your upcoming meetings",
         joinMeeting: "Click here to join the meeting",
         joinMeetingInWorkAdventure: "Click here to join the meeting in WorkAdventure",
@@ -129,6 +130,19 @@ const externalModule: BaseTranslation = {
         startsNow: "Starting now",
         startedAgo: "Started {ago}",
         noLink: "No meeting link",
+    },
+    companion: {
+        title: "Mac companion",
+        explain:
+            "Reads your meetings in your Mac's Calendar (Exchange account) to show them here with their Join button and take you to a Teams room.",
+        create: "Create a token",
+        copyHint:
+            "Copy this token now, it will not be shown again. Run the command in Terminal: it will ask for the token.",
+        done: "Copied",
+        remove: "Revoke {label}",
+        lastUsed: "Last upload: {date}",
+        neverUsed: "Never used",
+        error: "Companion unavailable for now.",
     },
     outlookIcs: {
         title: "My Outlook calendars",

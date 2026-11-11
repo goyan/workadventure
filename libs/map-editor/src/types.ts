@@ -196,6 +196,14 @@ export const PersonalAreaPropertyData = PropertyBase.extend({
     ownerId: z.string().nullable(), //Proto handle null here. If something goes wrong with personal area, this may be the issue
 });
 
+/**
+ * A room where the guests of the same Teams meeting gather (Mac companion): the meeting runs in the Teams app, so the
+ * area is silent for WorkAdventure, and the title of the meeting is shown on it while the meeting lasts.
+ */
+export const TeamsMeetingRoomPropertyData = PropertyBase.extend({
+    type: z.literal("teamsMeetingRoomPropertyData"),
+});
+
 // DEPRECATED: the Gobeur mini-game was removed. This property (and its level) is kept only so that existing maps
 // (e.g. the beta entry map) still parse; the front ignores it and the map editor no longer offers it.
 export const GobeurLevel = z.enum(["beginner", "intermediate", "hard"]);
@@ -295,6 +303,7 @@ export const AreaDataProperty = z.discriminatedUnion("type", [
     MaxUsersInAreaPropertyData,
     LockableAreaPropertyData,
     ListeningZonePropertyData,
+    TeamsMeetingRoomPropertyData,
 ]);
 
 export const AreaDataProperties = z.array(AreaDataProperty);
@@ -705,6 +714,7 @@ export type EntityDescriptionPropertyData = z.infer<typeof EntityDescriptionProp
 export type AreaDescriptionPropertyData = z.infer<typeof AreaDescriptionPropertyData>;
 export type RestrictedRightsPropertyData = z.infer<typeof RestrictedRightsPropertyData>;
 export type PersonalAreaPropertyData = z.infer<typeof PersonalAreaPropertyData>;
+export type TeamsMeetingRoomPropertyData = z.infer<typeof TeamsMeetingRoomPropertyData>;
 export type RecordingSettings = z.infer<typeof RecordingSettings>;
 export type GobeurLevel = z.infer<typeof GobeurLevel>;
 export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;

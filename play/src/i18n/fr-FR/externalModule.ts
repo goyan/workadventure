@@ -112,6 +112,7 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
             "Vous êtes déjà connecté, veuillez cliquer sur le bouton pour vous déconnecter et vous reconnecter.",
     },
     calendar: {
+        goToMeeting: "Y aller",
         title: "Vos prochaines réunions",
         joinMeeting: "Cliquez ici pour rejoindre la réunion",
         joinMeetingInWorkAdventure: "Cliquez ici pour rejoindre la réunion dans WorkAdventure",
@@ -134,6 +135,19 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         startsNow: "Commence maintenant",
         startedAgo: "A commencé {ago}",
         noLink: "Pas de lien de réunion",
+    },
+    companion: {
+        title: "Compagnon Mac",
+        explain:
+            "Lit vos réunions dans le Calendrier de votre Mac (compte Exchange) pour les afficher ici avec leur bouton Rejoindre et vous emmener dans une salle Teams.",
+        create: "Créer un jeton",
+        copyHint:
+            "Copiez ce jeton maintenant, il ne sera plus affiché. Lancez la commande dans le Terminal : elle vous demandera le jeton.",
+        done: "C'est copié",
+        remove: "Révoquer {label}",
+        lastUsed: "Dernier envoi : {date}",
+        neverUsed: "Jamais utilisé",
+        error: "Compagnon indisponible pour le moment.",
     },
     outlookIcs: {
         title: "Mes agendas Outlook",

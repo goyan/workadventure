@@ -434,6 +434,8 @@ export class AreasPropertiesListener {
                 this.enterMeetingArea(property, areaData.id);
                 break;
             }
+            // A Teams meeting room is silent: the Teams app carries the meeting, WorkAdventure would echo it.
+            case "teamsMeetingRoomPropertyData":
             case "silent": {
                 this.handleSilentPropertyOnEnter();
                 break;
@@ -601,6 +603,7 @@ export class AreasPropertiesListener {
                 break;
             }
             case "silent":
+            case "teamsMeetingRoomPropertyData":
             default: {
                 break;
             }
@@ -639,6 +642,8 @@ export class AreasPropertiesListener {
                 this.leaveMeetingArea(property);
                 break;
             }
+            // A Teams meeting room is silent: the Teams app carries the meeting, WorkAdventure would echo it.
+            case "teamsMeetingRoomPropertyData":
             case "silent": {
                 this.handleSilentPropertyOnLeave();
                 break;

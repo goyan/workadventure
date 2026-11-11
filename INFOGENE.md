@@ -32,6 +32,23 @@ l'utilisateur reste « occupé ».
 Recette : ajouter un lien publié, vérifier la semaine (récurrences, journées entières, fuseau), le bouton
 Rejoindre, un lien refusé, puis l'option « occupé » sur une réunion courte, avec et sans « ne pas déranger ».
 
+## Compagnon Mac et salles de réunion Teams
+
+Un petit programme macOS (`tools/infogene-companion/`, EventKit) lit les réunions du Calendrier du Mac (comptes
+Exchange compris, donc l'agenda Emeria complet que sa publication ICS ne donne pas) et les dépose toutes les deux
+minutes avec un jeton personnel créé dans le panneau Agenda (**Gérer** → **Compagnon Mac**, affiché une fois,
+révocable). Le pusher relaie `PUT /companion/meetings` (jeton en `Bearer`, 64 Ko, 30/min) et les routes authentifiées
+des jetons et des salles vers l'Admin API, qui garde les réunions chiffrées et les ajoute aux événements (`mac:…`,
+clé de salle = empreinte du lien Teams, avance d'alarme). Fichiers `MacCompanion*` : `Companion*` désigne déjà les
+compagnons animaux d'upstream.
+
+La propriété de zone `teamsMeetingRoomPropertyData` (« Salle de réunion Teams ») marque les salles ; elle est muette
+comme `silent`. Le rappel d'une réunion à clé propose **Y aller** : l'appli Teams s'ouvre dans le clic (`msteams:`),
+puis la salle est demandée (déjà prise par la réunion, sinon la première libre) et l'avatar y marche. Le titre des
+salles prises s'affiche au-dessus d'elles (« Réunion privée » le cas échéant) ; entrer à pied dans une salle pendant
+sa réunion réaffiche le rappel. Coupé tant que l'Admin API n'a pas `COMPANION_ENABLED=true`. Guide : repo d'infra,
+`docs/compagnon-mac.md`.
+
 ## Nerf libre
 
 Cliquer sur son avatar, puis **Équiper le Nerf** dans la roue d'actions ;
