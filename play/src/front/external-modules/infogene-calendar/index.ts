@@ -6,7 +6,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { requestedStatusStore } from "../../Stores/MediaStore";
 import type { CalendarApiEvent } from "../../../common/Calendar";
 import { fetchCalendarEvents } from "./CalendarApi";
-import { currentBusyMeetingId, decideBusyStatus, toCalendarEvents } from "./calendarEvents";
+import { currentBusyMeetingId, decideBusyStatus, mergeRefreshedEvents, toCalendarEvents } from "./calendarEvents";
 import {
     busyOptionStore,
     calendarRefresh,
@@ -41,10 +41,14 @@ async function refresh(): Promise<void> {
     try {
         const { events, failed } = await fetchCalendarEvents(from, to, signal);
         if (signal.aborted) return;
-        lastEvents = events;
+        lastEvents = mergeRefreshedEvents(
+            lastEvents,
+            events,
+            failed.map((calendar) => calendar.id),
+        );
         eventsLoaded = true;
         failedCalendarsStore.set(failed.map((calendar) => calendar.label));
-        const calendarEvents = toCalendarEvents(events, get(LL).externalModule.outlookIcs.privateTitle());
+        const calendarEvents = toCalendarEvents(lastEvents, get(LL).externalModule.outlookIcs.privateTitle());
         moduleOptions.calendarEventsStoreUpdate?.(() => calendarEvents);
     } catch (e) {
         if (signal.aborted) return;

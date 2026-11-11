@@ -25,7 +25,9 @@ donne au `import.meta.glob` : la recherche par clé relative ne trouvait rien de
 l'alias `@wa/front`, et le module n'était jamais chargé. Le pusher
 relaie `/calendar/sources` et `/calendar/events` vers l'Admin API, l'utilisateur étant toujours celui du jeton.
 Seule l'Admin API garde les liens (chiffrés) et lit les ICS : hôtes Outlook uniquement, événements privés sans
-titre. Outlook met à jour les agendas publiés avec un délai, souvent de plusieurs heures.
+titre. Outlook met à jour les agendas publiés avec un délai, souvent de plusieurs heures. Un agenda qu'Outlook
+n'a pas servi à un rafraîchissement garde ses événements précédents : sa réunion en cours ne s'arrête pas et
+l'utilisateur reste « occupé ».
 
 Recette : ajouter un lien publié, vérifier la semaine (récurrences, journées entières, fuseau), le bouton
 Rejoindre, un lien refusé, puis l'option « occupé » sur une réunion courte, avec et sans « ne pas déranger ».

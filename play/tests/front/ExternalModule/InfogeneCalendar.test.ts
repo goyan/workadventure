@@ -4,6 +4,7 @@ import type { CalendarApiEvent } from "../../../src/common/Calendar";
 import {
     decideBusyStatus,
     currentBusyMeetingId,
+    mergeRefreshedEvents,
     toCalendarEvents,
 } from "../../../src/front/external-modules/infogene-calendar/calendarEvents";
 
@@ -46,6 +47,36 @@ const doctor: CalendarApiEvent = {
     private: true,
     joinUrl: undefined,
 };
+
+describe("mergeRefreshedEvents", () => {
+    const otherCalendarMeeting: CalendarApiEvent = {
+        ...meeting,
+        id: "s2:point:2026-11-19T15:00:00.000Z",
+        start: "2026-11-19T15:00:00.000Z",
+        end: "2026-11-19T16:00:00.000Z",
+    };
+
+    it("keeps the meeting of a calendar that could not be read this time, so the user stays busy", () => {
+        const kept = mergeRefreshedEvents([meeting, otherCalendarMeeting], [otherCalendarMeeting], ["s1"]);
+
+        expect(kept.map((event) => event.id)).toEqual([otherCalendarMeeting.id, meeting.id]);
+        expect(currentBusyMeetingId(kept, new Date("2026-11-19T13:30:00.000Z"))).toBe(meeting.id);
+    });
+
+    it("replaces the events of a calendar read again: a cancelled meeting goes away", () => {
+        const kept = mergeRefreshedEvents([meeting, lunch], [lunch], []);
+
+        expect(kept).toEqual([lunch]);
+    });
+
+    it("keeps only the events of the failed calendar, not of a calendar whose id starts the same", () => {
+        const tenthCalendarMeeting: CalendarApiEvent = { ...meeting, id: "s10:revue:2026-11-19T13:00:00.000Z" };
+
+        const kept = mergeRefreshedEvents([meeting, tenthCalendarMeeting], [], ["s1"]);
+
+        expect(kept).toEqual([meeting]);
+    });
+});
 
 describe("toCalendarEvents", () => {
     const events = toCalendarEvents([meeting, leave, lunch, doctor], "Occupé");

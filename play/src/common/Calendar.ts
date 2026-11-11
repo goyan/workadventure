@@ -30,6 +30,7 @@ export type CalendarSourceInput = z.infer<typeof CalendarSourceInput>;
  * ISO instants. A private event comes without its title or description.
  */
 export const CalendarApiEvent = z.object({
+    /** "<calendar id>:<uid>:<start>": the browser keeps the events of a calendar that failed by this prefix. */
     id: z.string(),
     title: z.string(),
     description: z.string(),
