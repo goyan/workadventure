@@ -27,6 +27,8 @@ export interface Seat {
     depth: number;
     /** Where the feet of the seated character are. */
     feet: { x: number; y: number };
+    /** The image of the object: a double-click anywhere on it aims at its seats. */
+    image?: { x: number; y: number; width: number; height: number };
 }
 
 function toPositionDirection(direction: string): PositionMessage_Direction {
@@ -73,6 +75,7 @@ function computeSeats(scene: GameScene): Seat[] {
         const direction = toPositionDirection(prefab.direction);
         const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -1 : 1);
         const { interaction, trigger } = getObjectInteraction(prefab, categories);
+        const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
         if (prefab.seat) {
             // A hitbox added to a catalog chair keeps the feet off its seat tile: touching the object is enough then.
             const reach = getHitboxReach(entity, width);
@@ -85,10 +88,13 @@ function computeSeats(scene: GameScene): Seat[] {
                     reach,
                     trigger: interaction === "sit" ? trigger : "auto",
                     feet: { x: entity.x + tile.x * width, y: entity.y + tile.y * height },
+                    image,
                 });
             });
         } else if (interaction === "sit") {
-            seats.push(...deduceSeats(entityId, entity, direction, depth, width, trigger));
+            seats.push(
+                ...deduceSeats(entityId, entity, direction, depth, width, trigger).map((seat) => ({ ...seat, image })),
+            );
         }
     }
     return seats;
@@ -185,6 +191,37 @@ export function findSeatUnderFeet(
         if (!nearest || distance < nearest.distance) nearest = { seat, distance };
     }
     return nearest?.seat;
+}
+
+/**
+ * The seat a click at `point` aims at: among the seats whose object image contains the point and that `accept`
+ * takes, the one nearest to the point (a couch has several places, a chair is clicked on its backrest as well as on
+ * its seat); else the seat under the point as if feet stood there.
+ */
+export function findSeatAtPoint(
+    scene: GameScene,
+    point: { x: number; y: number },
+    accept: (seat: Seat) => boolean = () => true,
+): Seat | undefined {
+    let nearest: { seat: Seat; distance: number } | undefined;
+    for (const seat of getSeats(scene)) {
+        const image = seat.image;
+        if (
+            !image ||
+            point.x < image.x ||
+            point.x > image.x + image.width ||
+            point.y < image.y ||
+            point.y > image.y + image.height ||
+            !accept(seat)
+        ) {
+            continue;
+        }
+        const distance = Math.hypot(seat.feet.x - point.x, seat.feet.y - point.y);
+        if (!nearest || distance < nearest.distance) nearest = { seat, distance };
+    }
+    if (nearest) return nearest.seat;
+    const underPoint = findSeatUnderFeet(scene, point);
+    return underPoint && accept(underPoint) ? underPoint : undefined;
 }
 
 /**

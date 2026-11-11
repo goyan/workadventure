@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 import * as Sentry from "@sentry/svelte";
 import { getTileCenter } from "@wa/front/Phaser/Player/TileSnap";
 import { Player } from "@wa/front/Phaser/Player/Player";
+import { findSeatAtPoint, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
 import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
 import type { UserInputHandlerInterface } from "@wa/front/Interfaces/UserInputHandlerInterface";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
@@ -210,9 +211,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
-        // A double-click ends at the center of the targeted tile, like the avatar does when it stops.
+        // A double-click on a free seat (anywhere on the image of its object) runs there and sits: the only seat a
+        // run sits on, since running does not pull the player onto the seats on its way.
+        const seat = isDoubleClick
+            ? findSeatAtPoint(this.gameScene, worldPoint, (candidate) => !isSeatTaken(this.gameScene, candidate))
+            : undefined;
+        // Otherwise a double-click ends at the center of the targeted tile, like the avatar does when it stops.
         const target =
-            isDoubleClick && ENABLE_TILE_SNAP ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint;
+            seat?.feet ??
+            (isDoubleClick && ENABLE_TILE_SNAP ? this.getTileCenterOf(worldPoint.x, worldPoint.y) : worldPoint);
         // Keep the avatar and the spot the user pointed at in view while walking there.
         const walk = cameraManager.startWalkFraming({ x: target.x, y: target.y });
         this.gameScene
@@ -224,9 +231,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 true,
                 isDoubleClick ? WOKA_SPEED * 2.5 : undefined,
             )
-            .catch((reason) => {
-                console.warn(reason);
-            })
+            .then(
+                (result) => {
+                    if (result.cancelled) return;
+                    if (seat) this.gameScene.CurrentPlayer.sitOnSeat(seat.id);
+                    else if (isDoubleClick) this.gameScene.CurrentPlayer.stayStandingHere();
+                },
+                (reason) => {
+                    // Already on the tile of the seat: there is no path to walk, the seat is right there.
+                    if (seat) this.gameScene.CurrentPlayer.sitOnSeat(seat.id);
+                    else console.warn(reason);
+                },
+            )
             .finally(() => cameraManager.endWalkFraming(walk));
     }
 

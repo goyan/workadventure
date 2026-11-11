@@ -23,6 +23,8 @@ import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
+import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
+import type { Seat } from "../../../../src/front/Phaser/Player/Seat";
 
 const tileSnap = vi.hoisted(() => ({ enabled: false }));
 vi.mock("../../../../src/front/Enum/EnvironmentVariable", async (importOriginal) => ({
@@ -44,6 +46,7 @@ vi.mock("../../../../src/front/Connection/LocalUserStore", () => ({
 }));
 vi.mock("../../../../src/front/Chat/Stores/ChatStore", () => ({}));
 vi.mock("../../../../src/front/Components/PopUp/SayPopUp.svelte", () => ({ default: vi.fn() }));
+vi.mock("../../../../src/front/Phaser/Player/Seat", () => ({ findSeatAtPoint: vi.fn(), isSeatTaken: vi.fn() }));
 
 describe("GameSceneUserInputHandler pointer navigation", () => {
     const camera = mock<Phaser.Cameras.Scene2D.Camera>();
@@ -51,6 +54,15 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
     const activatablesManager = mock<ActivatablesManager>();
     let scene: ReturnType<typeof mock<GameScene>>;
     let handler: GameSceneUserInputHandler;
+    let currentPlayer: { sitOnSeat: ReturnType<typeof vi.fn>; stayStandingHere: ReturnType<typeof vi.fn> };
+    const chair: Seat = {
+        id: "chair:0",
+        entityId: "chair",
+        feet: { x: 496, y: 650 },
+        direction: 0,
+        depth: 0,
+        trigger: "auto",
+    };
 
     function pointer(button = 0, detail = 2): ReturnType<typeof mock<Phaser.Input.Pointer>> {
         const result = mock<Phaser.Input.Pointer>({
@@ -96,6 +108,9 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             mock<GameMapFrontWrapper>({ getTileDimensions: () => ({ width: 32, height: 32 }) }),
         );
         scene.moveTo.mockResolvedValue({ x: 480, y: 640, cancelled: false });
+        currentPlayer = { sitOnSeat: vi.fn(), stayStandingHere: vi.fn() };
+        Object.defineProperty(scene, "CurrentPlayer", { configurable: true, value: currentPlayer });
+        vi.mocked(findSeatAtPoint).mockReturnValue(undefined);
         handler = new GameSceneUserInputHandler(scene);
     });
 
@@ -127,6 +142,56 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
         handler.handlePointerUpEvent(pointer(2, 1), []);
 
         expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, undefined]]);
+    });
+
+    it("runs to a seat under a double left-click, then sits on it", async () => {
+        vi.mocked(findSeatAtPoint).mockReturnValue(chair);
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[chair.feet, true, WOKA_SPEED * 2.5]]);
+        await vi.waitFor(() => expect(currentPlayer.sitOnSeat).toHaveBeenCalledWith("chair:0"));
+        expect(currentPlayer.stayStandingHere).not.toHaveBeenCalled();
+    });
+
+    it("looks for the seat under the clicked point itself, even when tile snapping is enabled", () => {
+        tileSnap.enabled = true;
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        expect(vi.mocked(findSeatAtPoint).mock.calls[0]?.[1]).toEqual({ x: 480, y: 640 });
+    });
+
+    it("still sits when the player already stands on the seat tile (no path to walk)", async () => {
+        vi.mocked(findSeatAtPoint).mockReturnValue(chair);
+        scene.moveTo.mockRejectedValue(new Error("No path found"));
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        await vi.waitFor(() => expect(currentPlayer.sitOnSeat).toHaveBeenCalledWith("chair:0"));
+    });
+
+    it("does not sit when the run to the seat is cancelled", async () => {
+        vi.mocked(findSeatAtPoint).mockReturnValue(chair);
+        scene.moveTo.mockResolvedValue({ x: 300, y: 300, cancelled: true });
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        await vi.waitFor(() => expect(cameraManager.endWalkFraming.mock.calls.length).toBeGreaterThan(0));
+        expect(currentPlayer.sitOnSeat).not.toHaveBeenCalled();
+    });
+
+    it("ends a double-click run on the floor standing, even against a seat", async () => {
+        handler.handlePointerUpEvent(pointer(0, 2), []);
+
+        await vi.waitFor(() => expect(currentPlayer.stayStandingHere).toHaveBeenCalledOnce());
+        expect(currentPlayer.sitOnSeat).not.toHaveBeenCalled();
+    });
+
+    it("never aims at a seat with a right-click", async () => {
+        vi.mocked(findSeatAtPoint).mockReturnValue(chair);
+        handler.handlePointerUpEvent(pointer(2, 1), []);
+
+        expect(scene.moveTo.mock.calls).toEqual([[{ x: 480, y: 640 }, true, undefined]]);
+        await vi.waitFor(() => expect(cameraManager.endWalkFraming.mock.calls.length).toBeGreaterThan(0));
+        expect(currentPlayer.sitOnSeat).not.toHaveBeenCalled();
+        expect(currentPlayer.stayStandingHere).not.toHaveBeenCalled();
     });
 
     it("does not start navigation after a single left-click", () => {
