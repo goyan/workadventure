@@ -291,14 +291,15 @@ export class NerfManager {
             shooterEquipped: this.scene.MapPlayersByKey.get(projectile.senderId)?.isNerfEquipped() === true,
             shotFromPrison: isInZone(prison, { x: projectile.originX, y: projectile.originY }),
         });
-        if (counts && this.hearts) this.applyHit(prison, time);
+        if (counts && this.hearts) this.applyHit(prison, time, projectile);
     }
 
-    private applyHit(prison: NerfZone | undefined, time: number): void {
+    private applyHit(prison: NerfZone | undefined, time: number, projectile: Projectile): void {
         if (!this.hearts) return;
         const { state, eliminated } = hit(this.hearts, time);
         this.hearts = state;
         this.scene.CurrentPlayer.flashNerfHit();
+        if (!eliminated) this.scene.CurrentPlayer.knockBack(projectile.dx, projectile.dy);
         if (!eliminated) return;
         if (prison) {
             const center = zoneCenter(prison);

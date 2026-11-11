@@ -1,3 +1,7 @@
+/** A player hit by a Nerf dart is pushed back this far along the dart, in this time (keys ignored meanwhile). */
+export const NERF_KNOCKBACK_PX = 24;
+export const NERF_KNOCKBACK_MS = 150;
+
 /** A player hit by a Nerf dart blinks red and see-through for this long, for everyone. */
 export const NERF_BLINK_MS = 600;
 /** It switches between red and normal at this rhythm. */

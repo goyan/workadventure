@@ -443,6 +443,18 @@ describe("NerfManager", () => {
             expect(otherSounds()).toEqual([]);
         });
 
+        it("pushes the avatar along the dart on each hit, but not on the one that sends it to prison", () => {
+            scene.wamFile = { areas: [prison] } as unknown as GameScene["wamFile"];
+            hitTimes(1);
+            expect(player.knockBack.mock.calls).toHaveLength(1);
+            const [dx, dy] = player.knockBack.mock.calls[0];
+            expect(dx).toBeCloseTo(-1);
+            expect(dy).toBeCloseTo(0);
+            hitTimes(14, 2000);
+            expect(player.knockBack.mock.calls).toHaveLength(14);
+            expect(player.teleportTo.mock.calls).toHaveLength(1);
+        });
+
         it("does not blink for a dart that does not count", () => {
             shooter().isNerfEquipped.mockReturnValue(false);
             hitTimes(1);
