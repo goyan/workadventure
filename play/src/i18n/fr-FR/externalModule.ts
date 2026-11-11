@@ -149,6 +149,8 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         busyOption: "Me passer « occupé » pendant mes réunions",
         busyOptionHelp:
             "Seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent ». Les autres ne voient que le statut.",
+        manage: "Gérer",
+        closeSettings: "Fermer",
         privateTitle: "Occupé",
         failed: "Lecture impossible : {labels}",
         errors: {
