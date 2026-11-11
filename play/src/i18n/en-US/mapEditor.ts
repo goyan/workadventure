@@ -328,6 +328,10 @@ const mapEditor: BaseTranslation = {
             width: "Width",
             height: "Height",
         },
+        danceFloor: {
+            label: "Size of the dance floor",
+            description: "In tiles. Drag a corner of the floor on the map, or set its width and height here.",
+        },
         openFile: {
             label: "Open file",
             description: "Open file within WorkAdventure.",

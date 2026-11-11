@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     danceFloorBounds,
+    danceFloorTiles,
     lampSizeOf,
     lampSource,
     planLamps,
@@ -106,5 +107,17 @@ describe("danceFloorBounds", () => {
             width: 96,
             height: 64,
         });
+    });
+});
+
+describe("danceFloorTiles", () => {
+    it("counts a size in pixels in whole tiles", () => {
+        expect(danceFloorTiles({ width: 384, height: 256 })).toEqual({ width: 12, height: 8 });
+        expect(danceFloorTiles({ width: 270, height: 150 })).toEqual({ width: 8, height: 5 });
+    });
+
+    it("stays within what the size of a lamp can be: 2 to 60 tiles", () => {
+        expect(danceFloorTiles({ width: 1, height: 40 })).toEqual({ width: 2, height: 2 });
+        expect(danceFloorTiles({ width: 4096, height: 1920 })).toEqual({ width: 60, height: 60 });
     });
 });

@@ -1,4 +1,4 @@
-import type { EntityDataProperties } from "@workadventure/map-editor";
+import { LAMP_LIGHT_MAX_TILES, LAMP_LIGHT_MIN_TILES, type EntityDataProperties } from "@workadventure/map-editor";
 import { DANCE_FLOOR_TILE_PX } from "./DanceFloorPatterns";
 import type { LampKind } from "./LampVisuals";
 
@@ -93,4 +93,11 @@ export function danceFloorBounds(
         width: sizeInTiles ? sizeInTiles.width * DANCE_FLOOR_TILE_PX : object.width,
         height: sizeInTiles ? sizeInTiles.height * DANCE_FLOOR_TILE_PX : object.height,
     };
+}
+
+/** A size in pixels as the size of a dance floor, in whole tiles, within what the size of a lamp can be. */
+export function danceFloorTiles(size: { width: number; height: number }): { width: number; height: number } {
+    const tiles = (pixels: number): number =>
+        Math.min(LAMP_LIGHT_MAX_TILES, Math.max(LAMP_LIGHT_MIN_TILES, Math.round(pixels / DANCE_FLOOR_TILE_PX)));
+    return { width: tiles(size.width), height: tiles(size.height) };
 }

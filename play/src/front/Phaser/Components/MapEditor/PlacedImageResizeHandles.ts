@@ -7,6 +7,15 @@ import { MAX_PLACED_IMAGE_DIMENSION } from "../../Game/MapEditor/PlacedImageResi
 import { isPointerInsideCanvas } from "../../Game/MapEditor/MapEditorPointer";
 import { SizeAlteringSquarePosition } from "./SizeAlteringSquare";
 
+export interface ResizeHandlesOptions {
+    /** The size the object is shown at, when it is not the size of its image (a dance floor). */
+    size?: () => EntityDimensions;
+    /** Brings a size being dragged to one the object can take (whole tiles, a minimum and a maximum). */
+    constrain?: (size: EntityDimensions) => EntityDimensions;
+    /** The object stays as it is drawn while a corner is dragged (it draws itself): only the outline moves. */
+    outlineOnly?: boolean;
+}
+
 /** A local preview only: the native resize command commits once, on release. */
 export class PlacedImageResizeHandles {
     private readonly handles: { corner: SizeAlteringSquarePosition; square: Phaser.GameObjects.Rectangle }[] = [];
@@ -27,6 +36,7 @@ export class PlacedImageResizeHandles {
         private readonly busy: () => boolean,
         private readonly onPreview: (size: EntityDimensions) => void,
         private readonly onResize: (bounds: Phaser.Geom.Rectangle) => void,
+        private readonly options: ResizeHandlesOptions = {},
     ) {
         this.previousTopOnly = scene.input.topOnly;
         // Phaser collects draggables before dispatching pointerdown. Limit that list to the top handle.
@@ -75,8 +85,10 @@ export class PlacedImageResizeHandles {
                     original: Phaser.Geom.Rectangle.Clone(this.bounds),
                     alpha: this.entity.alpha,
                 };
-                this.entity.setAlpha(0);
-                this.preview.setVisible(true);
+                if (!this.options.outlineOnly) {
+                    this.entity.setAlpha(0);
+                    this.preview.setVisible(true);
+                }
                 this.refresh();
             });
             square.on(Phaser.Input.Events.DRAG, this.move);
@@ -112,7 +124,8 @@ export class PlacedImageResizeHandles {
     };
 
     private getEntityBounds(): Phaser.Geom.Rectangle {
-        return new Phaser.Geom.Rectangle(this.entity.x, this.entity.y, this.entity.width, this.entity.height);
+        const size = this.options.size?.() ?? this.entity;
+        return new Phaser.Geom.Rectangle(this.entity.x, this.entity.y, size.width, size.height);
     }
 
     private readonly move = (pointer: Phaser.Input.Pointer): void => {
@@ -145,8 +158,10 @@ export class PlacedImageResizeHandles {
             width = source.width * scale;
             height = source.height * scale;
         }
-        width = Math.round(width);
-        height = Math.round(height);
+        ({ width, height } = this.options.constrain?.({ width, height }) ?? {
+            width: Math.round(width),
+            height: Math.round(height),
+        });
         this.bounds.setTo(left ? anchorX - width : anchorX, top ? anchorY - height : anchorY, width, height);
         this.onPreview({ width, height });
         this.refresh();

@@ -42,6 +42,7 @@ export class DanceFloorVisual {
     private tilesPixels: ImageData | undefined;
     private haloPixels: ImageData | undefined;
     private boundsKey = "";
+    private alpha = 1;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -126,7 +127,18 @@ export class DanceFloorVisual {
         this.haloTexture.getContext().putImageData(this.haloPixels, 0, 0);
         this.haloTexture.refresh();
         // The joints glow with the floor: a little brighter on each beat.
-        this.joints.setAlpha(0.45 + 0.55 * engine.glow);
+        this.joints.setAlpha((0.45 + 0.55 * engine.glow) * this.alpha);
+    }
+
+    /** As see-through as its object: the map editor fades the objects that the tool in use does not touch. */
+    public setAlpha(alpha: number): void {
+        if (alpha === this.alpha) {
+            return;
+        }
+        this.alpha = alpha;
+        this.tiles.setAlpha(alpha);
+        this.bevel.setAlpha(alpha);
+        this.halo.setAlpha(HALO_ALPHA * alpha);
     }
 
     public setVisible(visible: boolean): void {

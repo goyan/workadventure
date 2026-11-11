@@ -456,6 +456,7 @@ export class LampManager {
             }
             floor.visual.setBounds(bounds, grid);
             floor.visual.setVisible(entity.visible);
+            floor.visual.setAlpha(entity.alpha);
             // Out of the screen: nothing to draw, and the next image picks the pattern up from the clock.
             const onScreen =
                 bounds.x < view.right &&
