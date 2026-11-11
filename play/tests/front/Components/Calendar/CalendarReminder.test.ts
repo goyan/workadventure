@@ -78,6 +78,16 @@ describe("dueReminders", () => {
     });
 });
 
+describe("dueReminders, reminder shown again", () => {
+    it("keeps a reminder shown again (walking into the meeting's room) until the meeting ends", () => {
+        const started = event("started", -20 * MINUTE);
+
+        expect(ids(dueReminders([started], new Set(), NOW))).toEqual([]);
+        expect(ids(dueReminders([started], new Set(), NOW, new Set(["started"])))).toEqual(["started"]);
+        expect(ids(dueReminders([started], new Set(), started.end, new Set(["started"])))).toEqual([]);
+    });
+});
+
 describe("canGoToMeeting", () => {
     it("offers to go to the meeting only for a meeting with a Teams room key, once the module handles it", () => {
         const goTo = () => undefined;
