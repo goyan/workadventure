@@ -51,6 +51,14 @@ describe("build update notification", () => {
         expect(onUpdate).not.toHaveBeenCalled();
     });
 
+    it("keeps the changes it found for the next reload, automatic or by the Refresh button", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: deployedVersion, releaseNotes: [note] })));
+        stop = watchForBuildUpdate(loadedVersion, onUpdate);
+        await settle();
+
+        expect(takeUpdateAfterReload()).toEqual([note]);
+    });
+
     it("detects a deployment that already happened before the first check", async () => {
         fetchMock.mockResolvedValue(new Response(JSON.stringify({ version: deployedVersion })));
         stop = watchForBuildUpdate(loadedVersion, onUpdate);

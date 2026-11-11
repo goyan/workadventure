@@ -26,6 +26,9 @@ const CHECK_INTERVAL_MS = 30 * 1000;
  */
 const dismissed = new Set<string>();
 
+/** Reminders shown again by remindAgain: they stay until their meeting ends. Same lifetime as `dismissed`. */
+const shownAgain = new Set<string>();
+
 /** The reminder cards on screen, earliest meeting first. */
 export const calendarRemindersStore = writable<CalendarEventInterface[]>([]);
 
@@ -37,6 +40,8 @@ export function dueReminders(
     events: Iterable<CalendarEventInterface>,
     dismissed: ReadonlySet<string>,
     now: Date,
+    /** Reminders shown again on purpose (see remindAgain): due until their meeting ends. */
+    shownAgain: ReadonlySet<string> = new Set(),
 ): CalendarEventInterface[] {
     const time = now.getTime();
     return [...events]
@@ -45,8 +50,9 @@ export function dueReminders(
                 !event.allDay &&
                 !isLong(event) &&
                 !dismissed.has(event.id) &&
-                event.start.getTime() - reminderLeadMs(event) <= time &&
-                time < event.start.getTime() + REMINDER_LINGER_MS &&
+                (shownAgain.has(event.id) ||
+                    (event.start.getTime() - reminderLeadMs(event) <= time &&
+                        time < event.start.getTime() + REMINDER_LINGER_MS)) &&
                 time < event.end.getTime(),
         )
         .sort(byStart)
@@ -54,19 +60,22 @@ export function dueReminders(
 }
 
 /**
- * Whether the reminder offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
+ * Whether the reminder or the agenda offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
  * knows the rooms registered how to go there.
  */
 export function canGoToMeeting(
     event: CalendarEventInterface,
     goTo: ((event: CalendarEventInterface) => void) | undefined,
+    now: Date = new Date(),
 ): boolean {
-    return goTo !== undefined && event.resource?.meetingKey !== undefined;
+    // Until the meeting ends: a guest arriving late still finds the room.
+    return goTo !== undefined && event.resource?.meetingKey !== undefined && now < event.end;
 }
 
 /** Shows a settled reminder again (the user walked into a Teams room during that meeting). */
 export function remindAgain(event: CalendarEventInterface): void {
-    if (!dismissed.delete(event.id)) return;
+    dismissed.delete(event.id);
+    shownAgain.add(event.id);
     calendarRemindersStore.update((reminders) =>
         reminders.some((reminder) => reminder.id === event.id) ? reminders : [...reminders, event],
     );
@@ -74,6 +83,7 @@ export function remindAgain(event: CalendarEventInterface): void {
 
 export function dismissReminder(event: CalendarEventInterface): void {
     dismissed.add(event.id);
+    shownAgain.delete(event.id);
     calendarRemindersStore.update((reminders) => reminders.filter((reminder) => reminder.id !== event.id));
 }
 
@@ -82,7 +92,7 @@ export function dismissReminder(event: CalendarEventInterface): void {
  */
 export function startCalendarReminders(): () => void {
     const check = () =>
-        calendarRemindersStore.set(dueReminders(get(calendarEventsStore).values(), dismissed, new Date()));
+        calendarRemindersStore.set(dueReminders(get(calendarEventsStore).values(), dismissed, new Date(), shownAgain));
 
     const interval = setInterval(check, CHECK_INTERVAL_MS);
     // A refresh can bring a meeting into the window, or take a cancelled or moved one out of it.

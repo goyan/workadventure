@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asError } from "catch-unknown";
 import { abortAny } from "@workadventure/shared-utils/src/Abort/AbortAny";
 import { abortTimeout } from "@workadventure/shared-utils/src/Abort/AbortTimeout";
-import { ReleaseNotes } from "../../common/ReleaseNotes";
+import { ReleaseNotes, getNewReleaseNotes, releaseNotes } from "../../common/ReleaseNotes";
 import type { ReleaseNote } from "../../common/ReleaseNotes";
 import { PUSHER_URL } from "../Enum/EnvironmentVariable";
 
@@ -90,7 +90,11 @@ export function watchForBuildUpdate(currentVersion: string, onUpdate: (notes: Re
             if (!controller.signal.aborted && served !== undefined && served.version !== currentVersion) {
                 stop();
                 const notes = ReleaseNotes.safeParse(served.releaseNotes);
-                onUpdate(notes.success ? notes.data : []);
+                const found = notes.success ? notes.data : [];
+                // The page may reload before the user reads the prompt (a deployment cuts the connection): the
+                // reloaded page still tells what changed.
+                rememberUpdateForReload(getNewReleaseNotes(found, releaseNotes));
+                onUpdate(found);
             }
         } catch (error) {
             // Deployment downtime and offline clients should simply retry on the next check.

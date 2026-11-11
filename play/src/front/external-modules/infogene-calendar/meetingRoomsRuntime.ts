@@ -38,7 +38,7 @@ export function startMeetingRooms(): () => void {
     const labels = new Map<string, Phaser.GameObjects.Text>();
     let lastRoomId: string | undefined;
     let rooms: MeetingRoom[] = [];
-    /** Meetings the player went to with "Go there": walking into their room does not remind them again. */
+    /** Meetings the player just went to with "Go there": arriving in their room does not remind them again. */
     const joined = new Set<string>();
     const abortController = new AbortController();
 
@@ -101,7 +101,11 @@ export function startMeetingRooms(): () => void {
         const room = roomAt({ x: player.x, y: player.y }, sceneAreas(scene));
         if (room?.id === lastRoomId) return;
         lastRoomId = room?.id;
-        if (!room) return;
+        // Out of every room: "Go there" only kept the arrival it caused quiet; coming back reminds again.
+        if (!room) {
+            joined.clear();
+            return;
+        }
         const meeting = meetingToOpenOnEntry(
             get(calendarEventsStore).values(),
             new Date(),

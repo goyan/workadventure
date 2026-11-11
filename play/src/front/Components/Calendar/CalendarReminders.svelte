@@ -1,13 +1,14 @@
 <script lang="ts">
     import type { CalendarEventInterface } from "@workadventure/shared-utils";
     import { fly } from "svelte/transition";
-    import { goToMeetingStore, isCalendarVisibleStore } from "../../Stores/CalendarStore";
+    import { isCalendarVisibleStore } from "../../Stores/CalendarStore";
     import { isTodoListVisibleStore } from "../../Stores/TodoListStore";
     import Button from "../UI/Button.svelte";
     import LL from "../../../i18n/i18n-svelte";
     import { formatTimeAgo, formatTimeUntil, meetingPlace } from "./agenda";
-    import { calendarRemindersStore, canGoToMeeting, dismissReminder } from "./CalendarReminder";
+    import { calendarRemindersStore, dismissReminder } from "./CalendarReminder";
     import CalendarJoinButton from "./CalendarJoinButton.svelte";
+    import CalendarGoToMeetingButton from "./CalendarGoToMeetingButton.svelte";
     import { IconCalendar, IconMapPin, IconVideo, IconX } from "@wa-icons";
 
     // "in 4 minutes" goes stale: refresh it twice a minute.
@@ -83,18 +84,7 @@
                 </Button>
                 <CalendarJoinButton {event} prominent class="m-0 w-full" onjoin={() => dismissReminder(event)} />
             </div>
-            {#if canGoToMeeting(event, $goToMeetingStore)}
-                <Button
-                    variant="secondary"
-                    class="m-0 w-full"
-                    onclick={() => {
-                        $goToMeetingStore?.(event);
-                        dismissReminder(event);
-                    }}
-                >
-                    {$LL.externalModule.calendar.goToMeeting()}
-                </Button>
-            {/if}
+            <CalendarGoToMeetingButton {event} class="m-0 w-full" ongo={() => dismissReminder(event)} />
         </section>
     {/each}
 </div>
