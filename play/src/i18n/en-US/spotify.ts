@@ -15,6 +15,8 @@ const spotify: BaseTranslation = {
         unsynced: "These lyrics have no timing: scroll through them manually.",
         follow: "Follow playback",
         offset: "Lyrics timing",
+        offsetReset: "Reset timing",
+        next: "Up next",
         source: "Lyrics: {name:string}",
         choose: "Choose another recording",
         trackTitle: "Track title",
