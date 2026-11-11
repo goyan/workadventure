@@ -597,6 +597,12 @@ Pendant un trajet calculé, les colliders des murs de la couche carte ne repouss
 sinon le recouvrement d'1 px des rectangles de 18 px faisait saccader). Le clavier garde toutes ses collisions.
 L'anneau de destination est dessiné au-dessus des sols de la couche carte.
 Un double-clic au-delà des limites de la carte, sur le décor extérieur, est ignoré.
+**Sièges** : la course ne s'assoit sur aucun siège en route, ni sur celui contre lequel elle s'arrête
+(`Player.stayStandingHere`). Un double-clic **sur un siège libre** — n'importe où sur l'image de l'objet, place la plus
+proche du clic pour un canapé, place libre voisine si celle-ci est prise (`Seat.findSeatAtPoint`) — court jusqu'à lui
+puis s'y assoit (`Player.sitOnSeat`, qui reprend la glissade habituelle) : siège à touche d'interaction compris, siège
+qu'on vient de quitter ou autre place du même canapé aussi, véhicule rangé. Pas d'assise si la course est annulée, en mode
+suivi, à la nage, ou si elle s'arrête à plus d'une case et demie du siège.
 Une touche de déplacement reprend le contrôle de l'avatar. Un clic simple garde
 l'activation des objets, le glisser garde le pan de caméra et le clic droit garde
 son déplacement habituel. Le double-clic ne lance pas de déplacement dans l'éditeur

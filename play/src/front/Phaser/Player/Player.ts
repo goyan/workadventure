@@ -49,7 +49,7 @@ import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
-import { findSeatUnderFeet, isSeatTaken } from "./Seat";
+import { findSeatOfCharacter, findSeatUnderFeet, getSeats, isSeatTaken } from "./Seat";
 import { findActionableObject } from "./ActionableObjects";
 
 /** Water set to dive on contact: the body center this close to it makes the player dive. */
@@ -62,6 +62,9 @@ const SWIM_SPEED_FACTOR = 0.6;
 export const hasMovedEventName = "hasMoved";
 export const startMovingEventName = "startMoving";
 export const requestEmoteEventName = "requestEmote";
+
+/** How far from its seat (in tiles) a run aimed at it may end and still slide onto it. */
+const SEAT_RUN_REACH_TILES = 1.5;
 
 export class Player extends Character {
     private readonly unsubscribeVisibilityStore: Unsubscriber;
@@ -351,13 +354,8 @@ export class Player extends Character {
      * Sits on the free seat under the feet of the player: slides to its center, then faces the way of the seat.
      */
     private trySitDown(allowAutomaticSitting: boolean): void {
-        const body = this.getBody();
         this.releaseSeatObjectWhenOut();
-        const seat = findSeatUnderFeet(
-            this.scene,
-            { x: this.x, y: this.y + body.height / 2 + body.offset.y },
-            this.getBodyBox(),
-        );
+        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
         }
@@ -383,6 +381,53 @@ export class Player extends Character {
             return;
         }
         if (allowAutomaticSitting) this.slideToSeat(seat);
+    }
+
+    private getFeet(): { x: number; y: number } {
+        const body = this.getBody();
+        return { x: this.x, y: this.y + body.height / 2 + body.offset.y };
+    }
+
+    /**
+     * Sits on the seat a double-click aimed at, once the run there ended: the click asked for it, so an
+     * interaction-key seat, the seat just left or another place of the same couch are sat on too, and a vehicle is
+     * put away. Returns whether the player sits (or slides) onto it. The run stops next to a seat whose object blocks
+     * its tile: the seat must be within reach.
+     */
+    public sitOnSeat(seatId: string): boolean {
+        const seat = getSeats(this.scene).find((candidate) => candidate.id === seatId);
+        if (!seat) return false;
+        if (this.isSeated() && findSeatOfCharacter(this.scene, this)?.id === seat.id) return true;
+        if (
+            this.isSlidingToSeat ||
+            this.swimming ||
+            this.isInWater() ||
+            get(followStateStore) !== "off" ||
+            isSeatTaken(this.scene, seat)
+        ) {
+            return false;
+        }
+        const feet = this.getFeet();
+        const { width } = this.scene.getGameMapFrontWrapper().getTileDimensions();
+        if (Math.hypot(seat.feet.x - feet.x, seat.feet.y - feet.y) > width * SEAT_RUN_REACH_TILES) return false;
+        if (this.vehicleMode !== VehicleMode.Off) this.equipVehicle(VehicleMode.Off);
+        this.ignoredSeatId = undefined;
+        this.ignoredSeatEntityId = undefined;
+        this.sitPrompt.hide();
+        this.slideToSeat(seat);
+        return true;
+    }
+
+    /**
+     * After a double-click run that did not aim at a seat: the player stays standing where it ended, even against a
+     * seat, until it walks away from it (running does not pull the player onto seats).
+     */
+    public stayStandingHere(): void {
+        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
+        if (!seat) return;
+        this.ignoredSeatId = seat.id;
+        this.ignoredSeatEntityId = seat.entityId;
+        this.sitPrompt.hide();
     }
 
     /**
