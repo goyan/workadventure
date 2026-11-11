@@ -465,6 +465,20 @@ describe("NerfManager", () => {
             expect(get(nerfHeartsStore)).toBeUndefined();
         });
 
+        it("drops the darts whose flight ended while the tab was paused, instead of landing them all on return", () => {
+            remoteShot(1000);
+            manager.update(6000);
+            expect(published()).toEqual([15]);
+            expect(manager["projectiles"].size).toBe(0);
+            expect(manager["impacts"].size).toBe(0);
+        });
+
+        it("still lands a dart after a slow frame", () => {
+            remoteShot(1000);
+            manager.update(1700);
+            expect(published()).toEqual([15, 14]);
+        });
+
         it("keeps the hearts while the Nerf is put away", () => {
             const end = hitTimes(5);
             expect(get(nerfHeartsStore)).toEqual({ thirds: 10, jailed: false });

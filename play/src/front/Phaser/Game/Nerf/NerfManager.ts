@@ -34,6 +34,10 @@ import {
 
 const debug = Debug("front:nerf");
 const MAX_PROJECTILES = 64;
+/** Longest flight of a dart. */
+const FLIGHT_MS = (NERF_RANGE / NERF_SPEED) * 1000;
+/** A longer gap between two frames means the tab was hidden: the game was paused, not slow. */
+const PAUSED_GAP_MS = 500;
 
 interface Projectile {
     sprite: Phaser.GameObjects.Graphics;
@@ -44,6 +48,8 @@ interface Projectile {
     dx: number;
     dy: number;
     bornAt: number;
+    /** Last frame that moved the dart (its birth before the first one). */
+    lastAt: number;
     senderId: number;
     /** Where the shooter stood: a shot fired from the prison hurts nobody. */
     originX: number;
@@ -169,6 +175,14 @@ export class NerfManager {
             };
         });
         for (const projectile of this.projectiles) {
+            // Back from a hidden tab: the darts that would have landed meanwhile are dropped, not landed all at once
+            // (an absent player is out of the game).
+            if (time - projectile.lastAt > PAUSED_GAP_MS && time - projectile.bornAt >= FLIGHT_MS) {
+                projectile.sprite.destroy();
+                this.projectiles.delete(projectile);
+                continue;
+            }
+            projectile.lastAt = time;
             const distance = Math.min(NERF_RANGE, (Math.max(0, time - projectile.bornAt) * NERF_SPEED) / 1000);
             const next = {
                 x: projectile.startX + projectile.dx * distance,
@@ -254,6 +268,7 @@ export class NerfManager {
             dx: pose.dx,
             dy: pose.dy,
             bornAt: now,
+            lastAt: now,
             senderId,
             originX: shot.x,
             originY: shot.y,
