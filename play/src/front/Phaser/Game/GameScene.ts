@@ -202,6 +202,8 @@ import { isActivatedStore as isTodoListActiveStore, todoListsStore } from "@wa/f
 import { externalSvelteComponentService } from "@wa/front/Stores/Utils/externalSvelteComponentService";
 import type { ExtensionModule } from "@wa/front/ExternalModule/ExtensionModule";
 import { findExternalModuleFactory } from "@wa/front/Phaser/Game/ExternalModuleFactories";
+import { findNewerBuild, getLoadedBuildVersion, rememberUpdateForReload } from "@wa/front/Network/BuildUpdate";
+import { getNewReleaseNotes, releaseNotes } from "@wa/common/ReleaseNotes";
 import type { SpaceInterface } from "@wa/front/Space/SpaceInterface";
 import { spotifyAccount } from "@wa/front/Spotify/SpotifyAccount";
 import { desktopSpotifyPlayer } from "@wa/front/Spotify/LocalSpotifyPlayer";
@@ -2617,7 +2619,19 @@ export class GameScene extends DirtyScene {
                     console.info("Player disconnected from server. Waiting for pusher ping.");
                     connectionManager
                         .waitForPusherPing()
-                        .then(() => {
+                        .then(async () => {
+                            // A deployment restarts the pusher: load its new build now, in this same interruption,
+                            // rather than reconnecting the old page and asking for a refresh a minute later.
+                            const loadedVersion = getLoadedBuildVersion();
+                            const servedNotes =
+                                loadedVersion === undefined ? undefined : await findNewerBuild(loadedVersion);
+                            if (servedNotes !== undefined) {
+                                console.info("Pusher reachable again with a new build. Reloading the page.");
+                                // The reloaded page tells the user what changed.
+                                rememberUpdateForReload(getNewReleaseNotes(servedNotes, releaseNotes));
+                                window.location.reload();
+                                return;
+                            }
                             console.info("Pusher reachable again. Reloading scene.");
                             this.cleanupClosingScene();
                             this.createSuccessorGameScene(true, true);
