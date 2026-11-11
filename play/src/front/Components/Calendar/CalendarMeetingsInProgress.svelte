@@ -3,6 +3,7 @@
     import LL from "../../../i18n/i18n-svelte";
     import { formatTime } from "./agenda";
     import CalendarJoinButton from "./CalendarJoinButton.svelte";
+    import CalendarGoToMeetingButton from "./CalendarGoToMeetingButton.svelte";
 
     interface Props {
         /** At least two meetings running at the same time. */
@@ -28,7 +29,10 @@
                     <span class="truncate font-title text-lg leading-tight">{event.title}</span>
                     <span class="text-sm text-contrast-200">{formatTime(event.start)} – {formatTime(event.end)}</span>
                 </span>
-                <CalendarJoinButton {event} labelled />
+                <span class="flex items-center gap-1">
+                    <CalendarGoToMeetingButton {event} />
+                    <CalendarJoinButton {event} labelled />
+                </span>
             </li>
         {/each}
     </ul>

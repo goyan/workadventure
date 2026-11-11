@@ -4,6 +4,7 @@
     import { formatDayName, formatTime, formatTimeUntil, startOfDay } from "./agenda";
     import { REMINDER_LEAD_MS } from "./CalendarReminder";
     import CalendarJoinButton from "./CalendarJoinButton.svelte";
+    import CalendarGoToMeetingButton from "./CalendarGoToMeetingButton.svelte";
     import { IconAlertTriangle, IconBell } from "@wa-icons";
 
     interface Props {
@@ -57,4 +58,5 @@
     {/if}
 
     <CalendarJoinButton {event} prominent class="w-full" />
+    <CalendarGoToMeetingButton {event} class="w-full" />
 </section>

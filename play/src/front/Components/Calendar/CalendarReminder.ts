@@ -54,14 +54,16 @@ export function dueReminders(
 }
 
 /**
- * Whether the reminder offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
+ * Whether the reminder or the agenda offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
  * knows the rooms registered how to go there.
  */
 export function canGoToMeeting(
     event: CalendarEventInterface,
     goTo: ((event: CalendarEventInterface) => void) | undefined,
+    now: Date = new Date(),
 ): boolean {
-    return goTo !== undefined && event.resource?.meetingKey !== undefined;
+    // Until the meeting ends: a guest arriving late still finds the room.
+    return goTo !== undefined && event.resource?.meetingKey !== undefined && now < event.end;
 }
 
 /** Shows a settled reminder again (the user walked into a Teams room during that meeting). */

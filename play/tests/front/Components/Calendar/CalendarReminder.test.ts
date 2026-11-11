@@ -83,8 +83,16 @@ describe("canGoToMeeting", () => {
         const goTo = () => undefined;
         const withKey = event("mac", MINUTE, { resource: { meetingKey: "a".repeat(64) } });
 
-        expect(canGoToMeeting(withKey, goTo)).toBe(true);
-        expect(canGoToMeeting(event("ics", MINUTE), goTo)).toBe(false);
-        expect(canGoToMeeting(withKey, undefined)).toBe(false);
+        expect(canGoToMeeting(withKey, goTo, NOW)).toBe(true);
+        expect(canGoToMeeting(event("ics", MINUTE), goTo, NOW)).toBe(false);
+        expect(canGoToMeeting(withKey, undefined, NOW)).toBe(false);
+    });
+
+    it("keeps offering to go to the meeting until it ends, then stops", () => {
+        const goTo = () => undefined;
+        const started = event("started", -20 * MINUTE, { resource: { meetingKey: "a".repeat(64) } });
+
+        expect(canGoToMeeting(started, goTo, NOW)).toBe(true);
+        expect(canGoToMeeting(started, goTo, new Date(started.end.getTime()))).toBe(false);
     });
 });
