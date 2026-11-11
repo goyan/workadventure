@@ -81,6 +81,21 @@ describe("mergeRefreshedEvents", () => {
 const availabilityTitle = (availability: string, calendar: string) => `${calendar} · ${availability}`;
 
 describe("toCalendarEvents", () => {
+    it("keeps the meeting room key and the reminder lead of a meeting from the Mac", () => {
+        const fromMac: CalendarApiEvent = {
+            ...meeting,
+            id: "mac:daily:2026-11-19T13:00:00.000Z",
+            meetingKey: "a".repeat(64),
+            alarmMinutesBefore: 15,
+        };
+
+        const event = toCalendarEvents([fromMac], "Occupé", availabilityTitle).get(fromMac.id);
+
+        expect(event?.resource?.meetingKey).toBe("a".repeat(64));
+        expect(event?.resource?.alarmMinutesBefore).toBe(15);
+        expect(event?.resource?.onlineMeeting?.joinUrl).toBe(meeting.joinUrl);
+    });
+
     it("names a slot of an availability-only calendar after its calendar and status, not Outlook's label", () => {
         const slot: CalendarApiEvent = {
             ...meeting,

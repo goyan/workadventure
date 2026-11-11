@@ -20,6 +20,10 @@ export interface CalendarEventInterface {
              */
             isWorkAdventure?: boolean;
         };
+        /** A meeting read on the user's Mac (Infogene companion): the key of its Teams meeting room. */
+        meetingKey?: string;
+        /** How many minutes before its start the meeting reminds, when its calendar says so. */
+        alarmMinutesBefore?: number;
     };
 }
 

@@ -37,7 +37,17 @@ export function toCalendarEvents(
             start,
             end,
             allDay: event.allDay,
-            ...(event.joinUrl ? { resource: { onlineMeeting: { joinUrl: event.joinUrl } } } : {}),
+            ...(event.joinUrl || event.meetingKey || event.alarmMinutesBefore !== undefined
+                ? {
+                      resource: {
+                          ...(event.joinUrl ? { onlineMeeting: { joinUrl: event.joinUrl } } : {}),
+                          ...(event.meetingKey ? { meetingKey: event.meetingKey } : {}),
+                          ...(event.alarmMinutesBefore !== undefined
+                              ? { alarmMinutesBefore: event.alarmMinutesBefore }
+                              : {}),
+                      },
+                  }
+                : {}),
         });
     }
     return result;

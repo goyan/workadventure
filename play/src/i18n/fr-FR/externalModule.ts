@@ -135,6 +135,19 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         startedAgo: "A commencé {ago}",
         noLink: "Pas de lien de réunion",
     },
+    companion: {
+        title: "Compagnon Mac",
+        explain:
+            "Lit vos réunions dans le Calendrier de votre Mac (compte Exchange) pour les afficher ici avec leur bouton Rejoindre et vous emmener dans une salle Teams.",
+        create: "Créer un jeton",
+        copyHint:
+            "Copiez ce jeton maintenant, il ne sera plus affiché. Lancez la commande dans le Terminal : elle vous demandera le jeton.",
+        done: "C'est copié",
+        remove: "Révoquer {label}",
+        lastUsed: "Dernier envoi : {date}",
+        neverUsed: "Jamais utilisé",
+        error: "Compagnon indisponible pour le moment.",
+    },
     outlookIcs: {
         title: "Mes agendas Outlook",
         explain:
