@@ -144,6 +144,10 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         copyHint:
             "Copiez ce jeton maintenant, il ne sera plus affiché. Lancez la commande dans le Terminal : elle vous demandera le jeton.",
         done: "C'est copié",
+        copy: "Copier",
+        copied: "Copié ✓",
+        tokenLabel: "Jeton",
+        commandLabel: "Commande Terminal",
         remove: "Révoquer {label}",
         lastUsed: "Dernier envoi : {date}",
         neverUsed: "Jamais utilisé",

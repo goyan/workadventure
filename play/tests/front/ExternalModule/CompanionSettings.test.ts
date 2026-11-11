@@ -21,6 +21,10 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     create: text("Create a token"),
                     copyHint: text("Copy it now"),
                     done: text("Done"),
+                    copy: text("Copy"),
+                    copied: text("Copied"),
+                    tokenLabel: text("Token"),
+                    commandLabel: text("Command"),
                     remove: ({ label }: { label: string }) => `Remove ${label}`,
                     lastUsed: ({ date }: { date: string }) => `Last used ${date}`,
                     neverUsed: text("Never used"),
@@ -49,6 +53,17 @@ async function settle(): Promise<void> {
 
 function button(text: string): HTMLButtonElement | undefined {
     return [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === text);
+}
+
+function copyButton(label: string): HTMLButtonElement | null {
+    return target.querySelector<HTMLButtonElement>(`button[aria-label="Copy ${label}"]`);
+}
+
+async function createToken(): Promise<void> {
+    component = mount(CompanionSettings, { target });
+    await vi.waitFor(() => expect(button("Create a token")).toBeDefined());
+    button("Create a token")?.click();
+    await vi.waitFor(() => expect(target.textContent).toContain("wac_secret"));
 }
 
 beforeEach(() => {
@@ -106,5 +121,31 @@ describe("CompanionSettings", () => {
         target.querySelector<HTMLButtonElement>('button[aria-label="Remove MacBook"]')?.click();
         await vi.waitFor(() => expect(mocks.remove).toHaveBeenCalledWith(token.id, expect.any(AbortSignal)));
         await vi.waitFor(() => expect(target.textContent).not.toContain("MacBook"));
+    });
+
+    it("copies the token and the command with their own buttons, and says so", async () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.assign(navigator, { clipboard: { writeText } });
+        await createToken();
+
+        copyButton("Token")?.click();
+        await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("wac_secret"));
+        await vi.waitFor(() => expect(copyButton("Token")?.textContent).toContain("Copied"));
+        expect(copyButton("Command")?.textContent).toContain("Copy");
+
+        copyButton("Command")?.click();
+        await vi.waitFor(() =>
+            expect(writeText).toHaveBeenLastCalledWith(
+                `bash <(curl -fsSL https://example/install.sh) --url ${window.location.origin}`,
+            ),
+        );
+    });
+
+    it("selects the value when the clipboard refuses, so that Cmd+C still works", async () => {
+        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+        await createToken();
+
+        copyButton("Token")?.click();
+        await vi.waitFor(() => expect(window.getSelection()?.toString()).toBe("wac_secret"));
     });
 });

@@ -56,12 +56,64 @@
         });
     }
 
+    /** The value whose copy button last worked: its button says so for a moment. */
+    let copied = $state<"token" | "command" | undefined>(undefined);
+    let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+    onDestroy(() => clearTimeout(copiedTimer));
+    const valueElements: Partial<Record<"token" | "command", HTMLElement>> = $state({});
+
+    /** Selects the whole value: what the user copies by hand when the clipboard is refused. */
+    function selectValue(which: "token" | "command"): void {
+        const element = valueElements[which];
+        const selection = window.getSelection();
+        if (!element || !selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    }
+
+    function copy(which: "token" | "command", value: string): void {
+        navigator.clipboard
+            .writeText(value)
+            .then(() => {
+                copied = which;
+                clearTimeout(copiedTimer);
+                copiedTimer = setTimeout(() => (copied = undefined), 2000);
+            })
+            .catch(() => selectValue(which));
+    }
+
     function lastUse(token: CompanionToken): string {
         return token.lastUsedAt
             ? $LL.externalModule.companion.lastUsed({ date: new Date(token.lastUsedAt).toLocaleString() })
             : $LL.externalModule.companion.neverUsed();
     }
 </script>
+
+<!-- A value to copy: one click on it selects it all, its button copies it and says so. -->
+{#snippet copyRow(which: "token" | "command", label: string, value: string)}
+    <div class="flex flex-col gap-1">
+        <span class="text-xxs font-bold uppercase tracking-wide text-contrast-200">{label}</span>
+        <div class="flex items-stretch gap-1">
+            <code
+                bind:this={valueElements[which]}
+                class="min-w-0 flex-1 select-all break-all rounded border border-solid border-white/20 bg-black/40 px-2 py-1 font-mono selection:bg-secondary/60"
+                >{value}</code
+            >
+            <Button
+                variant={copied === which ? "success" : "light"}
+                appearance="border"
+                size="xs"
+                class="m-0 shrink-0"
+                aria-label={`${$LL.externalModule.companion.copy()} ${label}`}
+                onclick={() => copy(which, value)}
+            >
+                {copied === which ? $LL.externalModule.companion.copied() : $LL.externalModule.companion.copy()}
+            </Button>
+        </div>
+    </div>
+{/snippet}
 
 {#if enabled}
     <div class="flex flex-col gap-2 border-t border-white/10 pt-2">
@@ -92,8 +144,12 @@
         {#if createdToken}
             <div class="flex flex-col gap-1 rounded bg-contrast/60 p-2 text-xs">
                 <span>{$LL.externalModule.companion.copyHint()}</span>
-                <code class="select-text break-all">{createdToken}</code>
-                <code class="select-text break-all">{companionInstallCommand(window.location.origin)}</code>
+                {@render copyRow("token", $LL.externalModule.companion.tokenLabel(), createdToken)}
+                {@render copyRow(
+                    "command",
+                    $LL.externalModule.companion.commandLabel(),
+                    companionInstallCommand(window.location.origin),
+                )}
                 <Button variant="secondary" size="xs" onclick={() => (createdToken = undefined)}>
                     {$LL.externalModule.companion.done()}
                 </Button>
