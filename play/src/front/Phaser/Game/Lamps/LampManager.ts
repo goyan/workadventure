@@ -487,6 +487,7 @@ export class LampManager {
                 now: clock,
                 music: frame && floor.heardAt !== undefined ? { beat: frame.beat, bass: frame.bass } : undefined,
                 reducedMotion: this.reducedMotion(),
+                off: !this.effectsEnabled,
             });
             floor.visual.draw(floor.engine);
             drawn = true;

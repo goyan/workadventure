@@ -25,6 +25,7 @@ function run(options: {
     from?: number;
     durationMs: number;
     reducedMotion?: boolean;
+    off?: boolean;
     music?: (now: number, index: number) => DanceFloorMusic | undefined;
 }): Run {
     const engine = options.engine ?? new DanceFloorEngine(GRID, 1);
@@ -33,7 +34,12 @@ function run(options: {
     const from = options.from ?? START;
     for (let index = 0; index * FRAME_MS <= options.durationMs; index++) {
         const now = from + index * FRAME_MS;
-        engine.update({ now, music: options.music?.(now, index), reducedMotion: options.reducedMotion ?? false });
+        engine.update({
+            now,
+            music: options.music?.(now, index),
+            reducedMotion: options.reducedMotion ?? false,
+            off: options.off,
+        });
         levels.push(engine.levels.slice());
         times.push(now);
     }
@@ -312,5 +318,18 @@ describe("what is drawn", () => {
             }
         }
         expect(lit).toBeGreaterThan(0);
+    });
+
+    it("goes dark and stays still while the user has turned the light effects off", () => {
+        const engine = new DanceFloorEngine(GRID, 1);
+        run({ engine, durationMs: 3000 });
+        const music = (_now: number, index: number): DanceFloorMusic => ({ beat: index % 30 === 0, bass: 0.8 });
+        const { levels } = run({ engine, from: START + 3016, durationMs: 4000, off: true, music });
+
+        const settled = levels.slice(Math.round(1500 / FRAME_MS));
+        for (const frame of settled) {
+            expect(Math.max(...frame)).toBeLessThan(0.02);
+        }
+        expect(settled[settled.length - 1]).toEqual(settled[0]);
     });
 });
