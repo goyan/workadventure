@@ -45,7 +45,7 @@
 
 <div class="calendar select-text flex">
     <div
-        class="sidebar p-3 h-full bg-contrast/80 backdrop-blur w-96 max-md:w-screen"
+        class="sidebar p-3 h-full overflow-y-auto bg-contrast/80 backdrop-blur w-96 max-md:w-screen"
         in:fly={{ x: 100, duration: 250, delay: 200 }}
         out:fly={{ x: 100, duration: 200 }}
         {@attach blocker}
@@ -74,7 +74,8 @@
             <Button variant="secondary" onclick={goToLoginPage}>{$LL.menu.profile.login()}</Button>
         {/if}
         {#if get(externalSvelteComponentService.getComponentsByZone("calendarButton")).size > 0}
-            <div class="flex flex-col items-center justify-center">
+            <!-- Module settings can be taller than the screen: they scroll on their own, the agenda stays below. -->
+            <div class="settings flex shrink-0 flex-col items-center overflow-y-auto">
                 <ExternalComponents zone="calendarButton" />
             </div>
         {/if}
@@ -161,6 +162,10 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
+        }
+
+        .settings {
+            max-height: 60%;
         }
 
         /* A week of day chips scrolls sideways, without a scrollbar: the chip cut at the edge shows there is more. */
