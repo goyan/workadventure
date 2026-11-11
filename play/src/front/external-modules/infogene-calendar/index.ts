@@ -48,7 +48,10 @@ async function refresh(): Promise<void> {
         );
         eventsLoaded = true;
         failedCalendarsStore.set(failed.map((calendar) => calendar.label));
-        const calendarEvents = toCalendarEvents(lastEvents, get(LL).externalModule.outlookIcs.privateTitle());
+        const texts = get(LL).externalModule.outlookIcs;
+        const calendarEvents = toCalendarEvents(lastEvents, texts.privateTitle(), (availability, calendar) =>
+            texts.availability[availability]({ calendar }),
+        );
         moduleOptions.calendarEventsStoreUpdate?.(() => calendarEvents);
     } catch (e) {
         if (signal.aborted) return;

@@ -78,8 +78,24 @@ describe("mergeRefreshedEvents", () => {
     });
 });
 
+const availabilityTitle = (availability: string, calendar: string) => `${calendar} · ${availability}`;
+
 describe("toCalendarEvents", () => {
-    const events = toCalendarEvents([meeting, leave, lunch, doctor], "Occupé");
+    it("names a slot of an availability-only calendar after its calendar and status, not Outlook's label", () => {
+        const slot: CalendarApiEvent = {
+            ...meeting,
+            id: "s2:slot:2026-11-17T08:15:00.000Z",
+            title: "Provisoire",
+            description: "",
+            joinUrl: undefined,
+            availability: "tentative",
+            calendar: "Emeria",
+        };
+
+        expect(toCalendarEvents([slot], "Occupé", availabilityTitle).get(slot.id)?.title).toBe("Emeria · tentative");
+    });
+
+    const events = toCalendarEvents([meeting, leave, lunch, doctor], "Occupé", availabilityTitle);
 
     it("keys the events by id and turns the instants into dates", () => {
         expect([...events.keys()]).toEqual([meeting.id, leave.id, lunch.id, doctor.id]);
@@ -109,7 +125,7 @@ describe("toCalendarEvents", () => {
     });
 
     it("drops an event whose dates cannot be read", () => {
-        expect(toCalendarEvents([{ ...meeting, start: "plus tard" }], "Occupé").size).toBe(0);
+        expect(toCalendarEvents([{ ...meeting, start: "plus tard" }], "Occupé", availabilityTitle).size).toBe(0);
     });
 });
 

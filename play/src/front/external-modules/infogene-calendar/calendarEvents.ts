@@ -1,6 +1,6 @@
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
 import { AvailabilityStatus } from "@workadventure/messages";
-import type { CalendarApiEvent } from "../../../common/Calendar";
+import type { CalendarApiEvent, CalendarAvailability } from "../../../common/Calendar";
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -13,11 +13,13 @@ function parseDate(value: string): Date | undefined {
 
 /**
  * The events of the native agenda panel, keyed by id. A private event comes without a title: it is named with
- * `privateTitle`. An event whose dates cannot be read is dropped.
+ * `privateTitle`. A slot of an availability-only calendar is named with `availabilityTitle`, from its status and its
+ * calendar. An event whose dates cannot be read is dropped.
  */
 export function toCalendarEvents(
     events: readonly CalendarApiEvent[],
     privateTitle: string,
+    availabilityTitle: (availability: CalendarAvailability, calendar: string) => string,
 ): Map<string, CalendarEventInterface> {
     const result = new Map<string, CalendarEventInterface>();
     for (const event of events) {
@@ -26,7 +28,11 @@ export function toCalendarEvents(
         if (!start || !end) continue;
         result.set(event.id, {
             id: event.id,
-            title: event.private ? privateTitle : event.title,
+            title: event.private
+                ? privateTitle
+                : event.availability
+                  ? availabilityTitle(event.availability, event.calendar ?? "")
+                  : event.title,
             description: event.description,
             start,
             end,
