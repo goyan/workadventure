@@ -17,8 +17,11 @@ import {
 import CalendarSourcesSettings from "./CalendarSourcesSettings.svelte";
 import { startMeetingRooms } from "./meetingRoomsRuntime";
 
-/** Outlook publishes calendars every few hours at best: reading them every 5 minutes is plenty. */
-const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * Read every minute: the Mac companion uploads the meetings every two minutes. Cheap for the published Outlook calendars
+ * too, which the Admin API keeps 15 minutes in cache.
+ */
+const REFRESH_INTERVAL_MS = 60 * 1000;
 /** The status follows the meetings to the half minute. */
 const STATUS_INTERVAL_MS = 30 * 1000;
 const SETTINGS_KEY = "infogene-calendar-sources";
