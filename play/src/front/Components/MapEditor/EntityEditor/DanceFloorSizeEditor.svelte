@@ -11,10 +11,12 @@
     import RangeSlider from "../../Input/RangeSlider.svelte";
 
     let { entity }: { entity: Entity } = $props();
+    // The floor this editor was opened for: the handles outlive the selection by an image, when the prop is gone.
+    const floor = (() => entity)();
 
     /** The size of the floor as it is saved, in tiles. */
     function savedTiles(): { width: number; height: number } {
-        return danceFloorTiles(danceFloorBounds(entity, lampSizeOf(entity.getProperties())));
+        return danceFloorTiles(danceFloorBounds(floor, lampSizeOf(floor.getProperties())));
     }
 
     let width = $state(savedTiles().width);
@@ -26,24 +28,24 @@
         const fits = scene
             .getGameMapFrontWrapper()
             .canEntityBePlacedOnMap(
-                position ?? { x: entity.x, y: entity.y },
+                position ?? { x: floor.x, y: floor.y },
                 width * DANCE_FLOOR_TILE_PX,
                 height * DANCE_FLOOR_TILE_PX,
                 undefined,
-                entity.getOldPosition(),
+                floor.getOldPosition(),
             );
-        if (!entity.canEdit || !fits) {
+        if (!floor.canEdit || !fits) {
             ({ width, height } = savedTiles());
             return;
         }
-        const existing = entity.getProperties().find((property) => property.type === "lampPropertyData");
-        entity.setProperty({ id: existing?.id ?? uuid(), type: "lampPropertyData", width, height }, position);
+        const existing = floor.getProperties().find((property) => property.type === "lampPropertyData");
+        floor.setProperty({ id: existing?.id ?? uuid(), type: "lampPropertyData", width, height }, position);
     }
 
     onMount(() => {
         const handles = new PlacedImageResizeHandles(
             gameManager.getCurrentGameScene(),
-            entity,
+            floor,
             () => false,
             () => false,
             (size) => {
@@ -56,7 +58,7 @@
             {
                 // The floor goes on moving under the outline of its new size: a stretched image would hide it.
                 outlineOnly: true,
-                size: () => danceFloorBounds(entity, lampSizeOf(entity.getProperties())),
+                size: () => danceFloorBounds(floor, lampSizeOf(floor.getProperties())),
                 // A corner is dragged from tile to tile.
                 constrain: (size) => {
                     const tiles = danceFloorTiles(size);
@@ -74,7 +76,7 @@
     <RangeSlider
         label={$LL.mapEditor.properties.lamp.width()}
         unit=""
-        id="dance-floor-width-{entity.entityId}"
+        id="dance-floor-width-{floor.entityId}"
         min={LAMP_LIGHT_MIN_TILES}
         max={LAMP_LIGHT_MAX_TILES}
         step={1}
@@ -85,7 +87,7 @@
     <RangeSlider
         label={$LL.mapEditor.properties.lamp.height()}
         unit=""
-        id="dance-floor-height-{entity.entityId}"
+        id="dance-floor-height-{floor.entityId}"
         min={LAMP_LIGHT_MIN_TILES}
         max={LAMP_LIGHT_MAX_TILES}
         step={1}
