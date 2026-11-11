@@ -35,6 +35,7 @@
         IconLockHash,
         IconLock,
         IconHeadphones,
+        IconCalendar,
         IconLamp,
     } from "@wa-icons";
 
@@ -490,6 +491,19 @@
         }}
         testId="listeningZonePropertyData"
         img={IconHeadphones}
+    />
+{/if}
+{#if property === "teamsMeetingRoomPropertyData"}
+    <AddPropertyButton
+        headerText={$LL.mapEditor.properties.teamsMeetingRoomPropertyData.label()}
+        descriptionText={$LL.mapEditor.properties.teamsMeetingRoomPropertyData.description()}
+        style={`z-index: 175;${isActive ? "background-color: #4156f6;" : ""}`}
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        testId="teamsMeetingRoomPropertyData"
+        img={IconCalendar}
     />
 {/if}
 {#each applicationManager.applications as app, index (`my-own-app-${index}`)}

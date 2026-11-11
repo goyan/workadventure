@@ -43,6 +43,7 @@
     import MaxUsersInAreaPropertyEditor from "../PropertyEditor/MaxUsersInAreaPropertyEditor.svelte";
     import LockableAreaPropertyEditor from "../PropertyEditor/LockableAreaPropertyEditor.svelte";
     import ListeningZonePropertyEditor from "../PropertyEditor/ListeningZonePropertyEditor.svelte";
+    import TeamsMeetingRoomPropertyEditor from "../PropertyEditor/TeamsMeetingRoomPropertyEditor.svelte";
     import { getAreaMapEditors, hasMeetingProperty } from "../../../Rules/MeetingRules";
 
     let properties: AreaDataProperties = $state([]);
@@ -67,6 +68,7 @@
     let hasMaxUsersInAreaProperty: boolean = $state(false);
     let hasLockableAreaProperty: boolean = $state(false);
     let hasListeningZoneProperty: boolean = $state(false);
+    let hasTeamsMeetingRoomProperty: boolean = $state(false);
 
     const applicationManager = gameManager.getCurrentGameScene().applicationManager;
 
@@ -408,6 +410,11 @@
                     id,
                     type,
                 };
+            case "teamsMeetingRoomPropertyData":
+                return {
+                    id,
+                    type,
+                };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -535,6 +542,7 @@
         hasMaxUsersInAreaProperty = hasProperty("maxUsersInAreaPropertyData");
         hasLockableAreaProperty = hasProperty("lockableAreaPropertyData");
         hasListeningZoneProperty = hasProperty("listeningZonePropertyData");
+        hasTeamsMeetingRoomProperty = hasProperty("teamsMeetingRoomPropertyData");
     }
 
     function openKlaxoonActivityPicker(app: AreaDataProperty) {
@@ -724,6 +732,14 @@
                     property="listeningZonePropertyData"
                     onclick={() => {
                         onAddProperty("listeningZonePropertyData");
+                    }}
+                />
+            {/if}
+            {#if !hasTeamsMeetingRoomProperty}
+                <AddPropertyButtonWrapper
+                    property="teamsMeetingRoomPropertyData"
+                    onclick={() => {
+                        onAddProperty("teamsMeetingRoomPropertyData");
                     }}
                 />
             {/if}
@@ -1074,6 +1090,12 @@
                             />
                         {:else if property.type === "listeningZonePropertyData"}
                             <ListeningZonePropertyEditor
+                                onclose={() => {
+                                    onDeleteProperty(property.id);
+                                }}
+                            />
+                        {:else if property.type === "teamsMeetingRoomPropertyData"}
+                            <TeamsMeetingRoomPropertyEditor
                                 onclose={() => {
                                     onDeleteProperty(property.id);
                                 }}

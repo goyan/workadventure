@@ -380,6 +380,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description: "Définir le nombre maximum d'utilisateurs dans la zone.",
             placeholder: "Vide = pas de limite, 0 = fermé",
         },
+        teamsMeetingRoomPropertyData: {
+            label: "Salle de réunion Teams",
+            description: "Les invités d'une même réunion Teams s'y retrouvent ; le son de WorkAdventure y est coupé.",
+        },
         listeningZonePropertyData: {
             label: "Zone d'écoute",
             description: "Permet de partager une Jam Spotify que tout le monde dans la zone peut rejoindre.",

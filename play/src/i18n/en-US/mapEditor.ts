@@ -370,6 +370,10 @@ const mapEditor: BaseTranslation = {
             description: "Set the maximum number of users in the area.",
             placeholder: "Empty = no limit, 0 = closed",
         },
+        teamsMeetingRoomPropertyData: {
+            label: "Teams meeting room",
+            description: "Guests of the same Teams meeting gather here; WorkAdventure's sound is muted inside.",
+        },
         listeningZonePropertyData: {
             label: "Listening zone",
             description: "Lets people share a Spotify Jam that everyone in the zone can join.",
