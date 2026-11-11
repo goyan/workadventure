@@ -64,6 +64,49 @@ export interface JamKaraokeContext extends Pick<
     desktop?: Pick<NonNullable<HomeJamContext["desktop"]>, "watchSpotifyPlayback" | "watchSpotifyQueue">;
     sharingEnabled?: Readable<boolean>;
     account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied">;
+    /** Where the open karaoke is remembered across a reload of the page (the tab's session storage by default). */
+    memory?: KaraokeMemory;
+}
+
+export interface KaraokeMemory {
+    read(): string | null;
+    write(value: string | null): void;
+}
+
+const KARAOKE_MEMORY_KEY = "wa-jam-karaoke-open";
+/**
+ * After a reload, or when its Jam vanishes for a moment, the karaoke opens again only if the Jam is back within this
+ * long: never out of the blue later.
+ */
+const KARAOKE_RESTORE_MS = 60_000;
+
+/** The tab's session storage: it outlives the reload of a redeploy, and is forgotten with the tab. */
+const sessionKaraokeMemory: KaraokeMemory = {
+    read: () => {
+        try {
+            return sessionStorage.getItem(KARAOKE_MEMORY_KEY);
+        } catch {
+            return null;
+        }
+    },
+    write: (value) => {
+        try {
+            if (value === null) sessionStorage.removeItem(KARAOKE_MEMORY_KEY);
+            else sessionStorage.setItem(KARAOKE_MEMORY_KEY, value);
+        } catch {
+            // Storage refused (private browsing): the karaoke just does not come back after a reload.
+        }
+    },
+};
+
+function rememberedRoom(raw: string | null): z.infer<typeof RoomIdentity> | undefined {
+    if (!raw) return undefined;
+    try {
+        const parsed = RoomIdentity.safeParse(JSON.parse(raw));
+        return parsed.success ? parsed.data : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 /** Room-scoped metadata for Spotify/Jukebox audio listeners, authenticated by the server's event sender. */
@@ -331,19 +374,39 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             setNext(queue?.tracks[0] ?? queue?.upcoming[0]);
         }
     });
+    // The karaoke that was open when the page reloaded (a redeploy): it opens again once its Jam is back.
+    const memory = context.memory ?? sessionKaraokeMemory;
+    let pending = rememberedRoom(memory.read());
+    let pendingSince = now();
     const unsubscribeSelected = derived([context.rooms, selectedKaraokeRoomStore], (values) => values).subscribe(
         ([rooms, selected]) => {
             if (!selected) {
                 lastRequest = "";
+                if (pending && now() - pendingSince <= KARAOKE_RESTORE_MS) {
+                    const remembered = pending;
+                    const back = rooms.find((room) => !isLiveJam(room.jam) && sameRoom(room, remembered));
+                    if (back) {
+                        pending = undefined;
+                        selectedKaraokeRoomStore.set(back);
+                    }
+                    return;
+                }
+                pending = undefined;
+                memory.write(null);
                 return;
             }
+            pending = undefined;
             const room = rooms.find((room) => !isLiveJam(room.jam) && sameRoom(room, identity(selected)));
             if (!room) {
+                // Gone for now (its host reconnects, the server restarts): wait for it a moment, remembered.
+                pending = identity(selected);
+                pendingSince = now();
                 selectedKaraokeRoomStore.set(undefined);
                 return;
             }
             if (selected !== room) selectedKaraokeRoomStore.set(room);
             const key = JSON.stringify(identity(room));
+            memory.write(key);
             if (lastRequest === key) return;
             lastRequest = key;
             const host = context.userByUuid(room.jam.hostUuid);

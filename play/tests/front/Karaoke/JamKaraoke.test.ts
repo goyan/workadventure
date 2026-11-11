@@ -30,9 +30,12 @@ function harness(
         desktop?: JamKaraokeContext["desktop"];
         sharingEnabled?: JamKaraokeContext["sharingEnabled"];
         account?: JamKaraokeContext["account"];
+        memory?: JamKaraokeContext["memory"];
+        now?: () => number;
+        rooms?: JamRoom[];
     } = {},
 ) {
-    const rooms = writable([room]);
+    const rooms = writable(options.rooms ?? [room]);
     let receive: ((name: string, data: unknown, senderId: number | undefined) => void) | undefined;
     const send = vi.fn();
     const stop = startJamKaraoke({
@@ -51,6 +54,8 @@ function harness(
         desktop: options.desktop,
         sharingEnabled: options.sharingEnabled,
         account: options.account,
+        memory: options.memory ?? fakeMemory(),
+        now: options.now,
     });
     return {
         rooms,
@@ -58,6 +63,12 @@ function harness(
         send,
         receive: (name: string, data: unknown, senderId: number) => receive?.(name, data, senderId),
     };
+}
+
+/** A tab's session storage for the karaoke: what was open before the page reloaded. */
+function fakeMemory(initial: string | null = null) {
+    let value = initial;
+    return { read: () => value, write: vi.fn((next: string | null) => (value = next)), current: () => value };
 }
 
 afterEach(() => {
@@ -319,6 +330,66 @@ describe("Jam karaoke", () => {
         selectedKaraokeRoomStore.set(live);
         expect(get(selectedKaraokeRoomStore)).toBeUndefined();
         expect(game.send).not.toHaveBeenCalled();
+        game.stop();
+    });
+
+    it("remembers in the tab the Jam whose karaoke is open, and forgets it once closed", () => {
+        const memory = fakeMemory();
+        const game = harness({ memory });
+
+        selectedKaraokeRoomStore.set(room);
+        expect(memory.current()).toBe(JSON.stringify({ areaId: "area", propertyId: "property", jamKey: "home:host" }));
+
+        selectedKaraokeRoomStore.set(undefined);
+        expect(memory.current()).toBeNull();
+        game.stop();
+    });
+
+    it("opens the karaoke again on the same Jam after the page reloads, once the Jam is back", () => {
+        let time = 50_000;
+        const memory = fakeMemory(JSON.stringify({ areaId: "area", propertyId: "property", jamKey: "home:host" }));
+        const game = harness({ memory, now: () => time, rooms: [] });
+        expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+
+        time += 5_000;
+        game.rooms.set([room]);
+
+        expect(get(selectedKaraokeRoomStore)).toEqual(room);
+        expect(game.send).toHaveBeenCalledWith(
+            JAM_KARAOKE_REQUEST_EVENT,
+            { areaId: "area", propertyId: "property", jamKey: "home:host" },
+            [1],
+        );
+        game.stop();
+    });
+
+    it("does not open a karaoke out of the blue: the Jam must be back within a minute of the reload", () => {
+        let time = 50_000;
+        const memory = fakeMemory(JSON.stringify({ areaId: "area", propertyId: "property", jamKey: "home:host" }));
+        const game = harness({ memory, now: () => time, rooms: [] });
+
+        time += 61_000;
+        game.rooms.set([room]);
+
+        expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+        expect(memory.current()).toBeNull();
+        game.stop();
+    });
+
+    it("waits a minute for a Jam that vanishes (its host reconnects), then opens its karaoke again", () => {
+        let time = 50_000;
+        const memory = fakeMemory();
+        const game = harness({ memory, now: () => time });
+        selectedKaraokeRoomStore.set(room);
+
+        time += 120_000;
+        game.rooms.set([]);
+        expect(get(selectedKaraokeRoomStore)).toBeUndefined();
+        expect(memory.current()).not.toBeNull();
+
+        time += 10_000;
+        game.rooms.set([room]);
+        expect(get(selectedKaraokeRoomStore)).toEqual(room);
         game.stop();
     });
 });
