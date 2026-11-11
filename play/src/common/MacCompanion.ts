@@ -35,8 +35,30 @@ export type MeetingRoomClaimInput = z.infer<typeof MeetingRoomClaimInput>;
 export const MeetingRoomClaim = z.object({ areaId: z.string().nullable() });
 export type MeetingRoomClaim = z.infer<typeof MeetingRoomClaim>;
 
-/** What every player of the map sees of a taken room: never the meeting link or key. */
-export const MeetingRoom = z.object({ areaId: z.string(), title: z.string(), endsAt: z.string() });
+interface SharedMeetingRoom {
+    areaId: string;
+    title: string;
+    endsAt: string;
+    mine: boolean;
+    meetingKey?: string;
+}
+
+/**
+ * What every player of the map sees of a taken room: never the meeting link. Only the room's guests get `mine` and
+ * the meeting key, to recognize their room when they walk in.
+ */
+export const MeetingRoom = z
+    .object({
+        areaId: z.string(),
+        title: z.string(),
+        endsAt: z.string(),
+        mine: z.boolean().default(false),
+        meetingKey: MeetingKey.optional(),
+    })
+    // The key of a room that is not the player's never reaches them, whatever the server sends.
+    .transform(
+        ({ meetingKey, ...room }): SharedMeetingRoom => (room.mine && meetingKey ? { ...room, meetingKey } : room),
+    );
 export type MeetingRoom = z.infer<typeof MeetingRoom>;
 
 export const MeetingRoomList = z.object({ rooms: z.array(MeetingRoom) });

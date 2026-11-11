@@ -11,6 +11,10 @@ struct CalendarItem {
     let location: String?
     /// Offsets of the event's alarms relative to its start, in seconds (negative: before).
     let alarmOffsets: [TimeInterval]
+    /// False for a slot marked free: it does not make the user busy in the game.
+    let busy: Bool
+    /// The user declined the invitation: not sent.
+    let declined: Bool
 }
 
 /// A meeting as the game server expects it (`PUT /companion/meetings`).
@@ -22,6 +26,8 @@ struct CompanionMeeting: Encodable {
     let allDay: Bool
     /// EventKit does not tell whether an Exchange event is private.
     let `private`: Bool
+    /// Only sent when false (the server's default is busy).
+    let busy: Bool?
     let joinUrl: String?
     let alarmMinutesBefore: Int?
 }
@@ -40,7 +46,7 @@ func companionMeetings(_ items: [CalendarItem], now: Date) -> [CompanionMeeting]
     let from = now.addingTimeInterval(-pastWindow)
     let to = now.addingTimeInterval(futureWindow)
     return items
-        .filter { $0.end > from && $0.start < to }
+        .filter { $0.end > from && $0.start < to && !$0.declined }
         .sorted { $0.start < $1.start }
         .map { item in
             let firstAlarm = item.alarmOffsets.filter { $0 <= 0 }.max()
@@ -51,6 +57,7 @@ func companionMeetings(_ items: [CalendarItem], now: Date) -> [CompanionMeeting]
                 end: instantFormatter.string(from: item.end),
                 allDay: item.allDay,
                 private: false,
+                busy: item.busy ? nil : false,
                 joinUrl: teamsLink(in: item.notes) ?? teamsLink(in: item.location),
                 alarmMinutesBefore: firstAlarm.map { min(Int((-$0 / 60).rounded()), 1440) }
             )

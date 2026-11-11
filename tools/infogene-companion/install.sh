@@ -22,6 +22,8 @@ case "$url" in
     *) echo "Indiquez l'adresse du jeu : --url https://wa-beta.goyan.fr" >&2; exit 2 ;;
 esac
 command -v swiftc >/dev/null || { echo "Installez les outils en ligne de commande : xcode-select --install" >&2; exit 1; }
+macos_major="$(sw_vers -productVersion | cut -d. -f1)"
+[ "$macos_major" -ge 14 ] || { echo "macOS 14 (Sonoma) ou plus récent est nécessaire." >&2; exit 1; }
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -41,15 +43,21 @@ echo
 case "$token" in wac_*) ;; *) echo "Ce n'est pas un jeton du compagnon (wac_…)." >&2; exit 1 ;; esac
 
 echo "Compilation…"
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$HOME/Library/LaunchAgents"
-cp "$work/Info.plist" "$APP/Contents/Info.plist"
+# Built aside first: a failed build never removes a working installation.
+built="$work/InfogeneCompanion.app"
+mkdir -p "$built/Contents/MacOS"
+cp "$work/Info.plist" "$built/Contents/Info.plist"
 swiftc -O "$work/Sources/TeamsLink.swift" "$work/Sources/Meetings.swift" "$work/Sources/main.swift" \
-    -o "$APP/Contents/MacOS/InfogeneCompanion"
-codesign --force --sign - "$APP" >/dev/null
+    -o "$built/Contents/MacOS/InfogeneCompanion"
+codesign --force --sign - "$built" >/dev/null
 
-security add-generic-password -U -s infogene-wa-companion -a "$USER" -w "$token"
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+mkdir -p "$SUPPORT" "$HOME/Library/LaunchAgents"
+rm -rf "$APP"
+mv "$built" "$APP"
+
+# Through security's own prompt (stdin), so that the token never shows in the list of processes.
+printf 'add-generic-password -U -s infogene-wa-companion -a "%s" -w "%s"\n' "$USER" "$token" | security -i >/dev/null
 printf '{"url":"%s"}\n' "$url" > "$SUPPORT/config.json"
 
 echo "macOS va demander l'accès à vos calendriers : acceptez."

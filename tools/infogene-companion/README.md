@@ -15,8 +15,9 @@ Il faut les outils en ligne de commande d'Apple (`xcode-select --install`).
 
 ## Ce qui est envoyé
 
-Pour les réunions de l'heure écoulée et des 36 heures à venir : titre, début, fin, journée entière, lien Teams et
-avance de l'alarme. Rien d'autre (ni participants, ni description). Le jeton est gardé dans le Trousseau ; aucun
+Pour les réunions des **agendas Exchange** (iCloud, abonnements et anniversaires restent sur le Mac) de l'heure
+écoulée et des 36 heures à venir, invitations déclinées exclues : titre, début, fin, journée entière, libre ou occupé,
+lien Teams et avance de l'alarme. macOS 14 ou plus récent. Rien d'autre (ni participants, ni description). Le jeton est gardé dans le Trousseau ; aucun
 identifiant Exchange ne quitte le Mac. Le titre d'une réunion s'affiche sur sa salle pour tous les joueurs quand un
 invité y va par « Y aller ».
 

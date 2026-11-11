@@ -6,7 +6,6 @@ import {
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomsOfMap,
-    teamsAppUrl,
 } from "../../../src/front/external-modules/infogene-calendar/meetingRooms";
 
 const key = "a".repeat(64);
@@ -27,19 +26,12 @@ function area(id: string, x: number, teams = true): AreaData {
 
 const daily: CalendarEventInterface = {
     id: "mac:daily:2026-11-17T09:15:00.000Z",
-    title: "Daily Produit - Team Indigo",
+    title: "Daily standup",
     description: "",
     start: new Date("2026-11-17T09:15:00.000Z"),
     end: new Date("2026-11-17T09:45:00.000Z"),
     resource: { onlineMeeting: { joinUrl }, meetingKey: key },
 };
-
-describe("teamsAppUrl", () => {
-    it("opens the Teams app on the same meeting", () => {
-        expect(teamsAppUrl(joinUrl)).toBe("msteams:/l/meetup-join/19%3ameeting_abc%40thread.v2/0?context=%7b%7d");
-        expect(teamsAppUrl("https://teams.microsoft.com/meet/123?p=x")).toBe("msteams:/meet/123?p=x");
-    });
-});
 
 describe("roomsOfMap", () => {
     it("keeps the Teams meeting rooms, in the order of the map", () => {
@@ -67,9 +59,10 @@ describe("goToMeeting", () => {
         const d = deps("r2");
         const going = goToMeeting(daily, d);
 
-        // Synchronously, in the click: the browser blocks a later opening.
+        // Synchronously, in the click: the browser blocks a later opening. The https link opens in a new tab (Teams
+        // launcher): navigating the game window to msteams: would unload the page and close the game connection.
         expect(d.calls[0]).toBe("open");
-        expect(d.openUrl).toHaveBeenCalledWith(teamsAppUrl(joinUrl));
+        expect(d.openUrl).toHaveBeenCalledWith(joinUrl);
         await going;
         expect(d.calls).toEqual(["open", "claim"]);
     });
@@ -107,9 +100,9 @@ describe("meetingRoomLabels", () => {
     it("puts the title of each taken room above it, private meetings included as the server names them", () => {
         const labels = meetingRoomLabels(
             [
-                { areaId: "r1", title: "Daily", endsAt: "2026-11-17T10:00:00.000Z" },
-                { areaId: "r2", title: "Réunion privée", endsAt: "2026-11-17T10:00:00.000Z" },
-                { areaId: "gone", title: "Ancienne", endsAt: "2026-11-17T10:00:00.000Z" },
+                { areaId: "r1", title: "Daily", endsAt: "2026-11-17T10:00:00.000Z", mine: false },
+                { areaId: "r2", title: "Réunion privée", endsAt: "2026-11-17T10:00:00.000Z", mine: false },
+                { areaId: "gone", title: "Ancienne", endsAt: "2026-11-17T10:00:00.000Z", mine: false },
             ],
             [area("r1", 0), area("r2", 400)],
         );
@@ -119,18 +112,43 @@ describe("meetingRoomLabels", () => {
             { areaId: "r2", x: 448, y: 100, text: "Réunion privée" },
         ]);
     });
+
+    it("never writes on an area that is not a Teams meeting room", () => {
+        const labels = meetingRoomLabels(
+            [{ areaId: "hall", title: "Fabriquée", endsAt: "2026-11-17T10:00:00.000Z", mine: false }],
+            [area("hall", 0, false)],
+        );
+
+        expect(labels).toEqual([]);
+    });
 });
 
 describe("meetingToOpenOnEntry", () => {
-    it("offers the meeting in progress, or starting within its reminder lead", () => {
-        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:20:00.000Z"))?.id).toBe(daily.id);
-        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:12:00.000Z"))?.id).toBe(daily.id);
-        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:00:00.000Z"))).toBeUndefined();
-        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:45:00.000Z"))).toBeUndefined();
+    const mine = {
+        areaId: "r1",
+        title: "Daily standup",
+        endsAt: "2026-11-17T10:00:00.000Z",
+        mine: true,
+        meetingKey: key,
+    };
+    const during = new Date("2026-11-17T09:20:00.000Z");
+
+    it("offers the player's own meeting when they walk into its room", () => {
+        expect(meetingToOpenOnEntry([daily], during, mine, new Set())?.id).toBe(daily.id);
+        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:12:00.000Z"), mine, new Set())?.id).toBe(daily.id);
     });
 
-    it("ignores a meeting without a Teams room key", () => {
-        const withoutKey = { ...daily, resource: { onlineMeeting: { joinUrl } } };
-        expect(meetingToOpenOnEntry([withoutKey], new Date("2026-11-17T09:20:00.000Z"))).toBeUndefined();
+    it("offers nothing in a room taken by another meeting, or free", () => {
+        const other = { ...mine, mine: false, meetingKey: undefined };
+        expect(meetingToOpenOnEntry([daily], during, other, new Set())).toBeUndefined();
+        expect(meetingToOpenOnEntry([daily], during, undefined, new Set())).toBeUndefined();
+    });
+
+    it("does not offer again a meeting the player already went to with Go there", () => {
+        expect(meetingToOpenOnEntry([daily], during, mine, new Set([daily.id]))).toBeUndefined();
+    });
+
+    it("offers nothing once the meeting is over", () => {
+        expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:45:00.000Z"), mine, new Set())).toBeUndefined();
     });
 });

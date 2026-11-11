@@ -23,8 +23,8 @@ check(teamsLink(in: "Join: https://teams.microsoft.com/meet/123456789?p=abcd the
 check(teamsLink(in: "https://zoom.us/j/1") == nil, "ignores another link")
 check(teamsLink(in: nil) == nil, "no notes, no link")
 
-func item(_ uid: String, start: String, end: String, title: String = "Daily", notes: String? = nil, alarms: [TimeInterval] = [], allDay: Bool = false) -> CalendarItem {
-    CalendarItem(uid: uid, title: title, start: iso.date(from: start)!, end: iso.date(from: end)!, allDay: allDay, notes: notes, location: nil, alarmOffsets: alarms)
+func item(_ uid: String, start: String, end: String, title: String = "Daily", notes: String? = nil, alarms: [TimeInterval] = [], allDay: Bool = false, busy: Bool = true, declined: Bool = false) -> CalendarItem {
+    CalendarItem(uid: uid, title: title, start: iso.date(from: start)!, end: iso.date(from: end)!, allDay: allDay, notes: notes, location: nil, alarmOffsets: alarms, busy: busy, declined: declined)
 }
 
 let items = [
@@ -44,6 +44,16 @@ check(payload.hasPrefix("{\"meetings\":["), "payload shape { meetings: [...] }")
 
 let dayOff = companionMeetings([item("off", start: "2026-11-17T00:00:00Z", end: "2026-11-18T00:00:00Z", allDay: true)], now: now)
 check(dayOff.first?.allDay == true, "keeps an all-day event as all-day")
+
+let marked = companionMeetings([
+    item("free", start: "2026-11-17T12:00:00Z", end: "2026-11-17T13:00:00Z", busy: false),
+    item("declined", start: "2026-11-17T14:00:00Z", end: "2026-11-17T15:00:00Z", declined: true),
+], now: now)
+check(marked.map(\.uid) == ["free"], "drops an invitation the user declined")
+check(marked.first?.busy == false, "tells a slot marked free")
+let freePayload = String(data: try! meetingsPayload(marked), encoding: .utf8)!
+check(freePayload.contains("\"busy\":false"), "sends busy:false for a free slot")
+check(!payload.contains("\"busy\""), "omits busy for a busy meeting (the server's default)")
 
 if failures > 0 {
     print("\(failures) failure(s)")

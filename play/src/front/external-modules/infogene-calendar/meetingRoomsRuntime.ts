@@ -8,6 +8,8 @@ import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { calendarEventsStore, goToMeetingStore } from "../../Stores/CalendarStore";
 import { calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
+import { scriptUtils } from "../../Api/ScriptUtils";
+import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
 import { goToMeeting, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
 
@@ -35,25 +37,33 @@ function currentScene(): GameScene | undefined {
 export function startMeetingRooms(): () => void {
     const labels = new Map<string, Phaser.GameObjects.Text>();
     let lastRoomId: string | undefined;
+    let rooms: MeetingRoom[] = [];
+    /** Meetings the player went to with "Go there": walking into their room does not remind them again. */
+    const joined = new Set<string>();
     const abortController = new AbortController();
 
     goToMeetingStore.set((event) => {
         const scene = currentScene();
         if (!scene) return;
+        joined.add(event.id);
         goToMeeting(event, {
-            openUrl: (url) => window.open(url, "_self"),
+            // A new tab, as the agenda's Join button: the game window must never navigate away.
+            openUrl: (url) => scriptUtils.openTab(url),
             claim: (input) => claimMeetingRoom(input, abortController.signal),
             walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5).then(() => undefined),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
-        }).catch((e: unknown) => console.warn("Cannot go to the meeting room", asError(e).message));
+        })
+            .then(() => refreshLabels())
+            .catch((e: unknown) => console.warn("Cannot go to the meeting room", asError(e).message));
     });
 
     const refreshLabels = () => {
         const scene = currentScene();
         if (!scene) return;
         listMeetingRooms(scene.roomUrl, abortController.signal)
-            .then(({ rooms }) => {
+            .then((list) => {
+                rooms = list.rooms;
                 const wanted = meetingRoomLabels(rooms, sceneAreas(scene));
                 for (const [areaId, text] of labels) {
                     if (!wanted.some((label) => label.areaId === areaId)) {
@@ -92,7 +102,12 @@ export function startMeetingRooms(): () => void {
         if (room?.id === lastRoomId) return;
         lastRoomId = room?.id;
         if (!room) return;
-        const meeting = meetingToOpenOnEntry(get(calendarEventsStore).values(), new Date());
+        const meeting = meetingToOpenOnEntry(
+            get(calendarEventsStore).values(),
+            new Date(),
+            rooms.find((candidate) => candidate.areaId === room.id),
+            joined,
+        );
         if (meeting) remindAgain(meeting);
     };
 

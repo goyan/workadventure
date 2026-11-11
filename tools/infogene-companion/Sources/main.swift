@@ -49,13 +49,17 @@ func requestAccess(_ store: EKEventStore) -> Bool {
 }
 
 func calendarItems(_ store: EKEventStore, now: Date) -> [CalendarItem] {
+    // Exchange calendars only: personal (iCloud), subscribed and birthday calendars stay on the Mac.
+    let exchange = store.calendars(for: .event).filter { $0.source.sourceType == .exchange }
+    guard !exchange.isEmpty else { return [] }
     let predicate = store.predicateForEvents(
-        withStart: now.addingTimeInterval(-60 * 60), end: now.addingTimeInterval(36 * 60 * 60), calendars: nil
+        withStart: now.addingTimeInterval(-60 * 60), end: now.addingTimeInterval(36 * 60 * 60), calendars: exchange
     )
     return store.events(matching: predicate)
         .filter { $0.status != .canceled }
         .map { event in
-            CalendarItem(
+            let me = event.attendees?.first { $0.isCurrentUser }
+            return CalendarItem(
                 uid: event.calendarItemExternalIdentifier ?? event.eventIdentifier ?? UUID().uuidString,
                 title: event.title ?? "",
                 start: event.startDate,
@@ -63,7 +67,9 @@ func calendarItems(_ store: EKEventStore, now: Date) -> [CalendarItem] {
                 allDay: event.isAllDay,
                 notes: event.notes,
                 location: event.location,
-                alarmOffsets: (event.alarms ?? []).filter { $0.absoluteDate == nil }.map(\.relativeOffset)
+                alarmOffsets: (event.alarms ?? []).filter { $0.absoluteDate == nil }.map(\.relativeOffset),
+                busy: event.availability != .free,
+                declined: me?.participantStatus == .declined
             )
         }
 }

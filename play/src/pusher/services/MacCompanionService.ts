@@ -25,6 +25,7 @@ export type MacCompanionErrorCode =
     | "forbidden"
     | "disabled"
     | "too-large"
+    | "too-early"
     | "rate-limit"
     | "unavailable";
 
@@ -175,16 +176,19 @@ export class MacCompanionService {
                 throw new MacCompanionError("forbidden", "The user is not invited to this meeting");
             case 404:
                 throw new MacCompanionError("disabled", "The Mac companion is disabled");
+            case 409:
+                throw new MacCompanionError("too-early", "The meeting does not start soon enough, or is over");
             default:
                 throw this.unexpectedStatus(response.status);
         }
     }
 
-    public async listRooms(mapUrl: string): Promise<MeetingRoomList> {
+    /** `userIdentifier`: the player asking, so that the Admin API tells them which room is theirs. */
+    public async listRooms(userIdentifier: string, mapUrl: string): Promise<MeetingRoomList> {
         const response = await this.callAdminApi(() =>
             this.http.get(`${this.config.adminApiUrl}/api/meeting-rooms`, {
                 ...this.requestOptions(),
-                params: { mapUrl },
+                params: { userIdentifier, mapUrl },
             }),
         );
         if (response.status === 404) throw new MacCompanionError("disabled", "The Mac companion is disabled");

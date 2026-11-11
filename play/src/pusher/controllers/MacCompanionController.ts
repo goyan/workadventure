@@ -19,6 +19,7 @@ const HTTP_STATUS_BY_ERROR: Record<MacCompanionErrorCode, number> = {
     disabled: 404,
     quota: 409,
     "too-large": 413,
+    "too-early": 409,
     "rate-limit": 429,
     unavailable: 502,
 };
@@ -97,8 +98,8 @@ export class MacCompanionController extends BaseHttpController {
             if (query === undefined) {
                 return;
             }
-            await this.forUser(res, async (service) => {
-                res.json(await service.listRooms(query.mapUrl));
+            await this.forUser(res, async (service, userIdentifier) => {
+                res.json(await service.listRooms(userIdentifier, query.mapUrl));
             });
         });
     }

@@ -103,16 +103,16 @@ describe("MacCompanionService tokens", () => {
             delete: { status: 204 },
         });
 
-        expect(await service.listTokens("herve@infogene.fr")).toEqual({ tokens: [token] });
-        expect(await service.createToken("herve@infogene.fr", { label: "MacBook" })).toEqual({
+        expect(await service.listTokens("alice@example.com")).toEqual({ tokens: [token] });
+        expect(await service.createToken("alice@example.com", { label: "MacBook" })).toEqual({
             ...token,
             token: companionToken,
         });
-        await service.deleteToken("herve@infogene.fr", token.id);
+        await service.deleteToken("alice@example.com", token.id);
 
-        expect(http.post.mock.calls[0]?.[1]).toEqual({ userIdentifier: "herve@infogene.fr", label: "MacBook" });
+        expect(http.post.mock.calls[0]?.[1]).toEqual({ userIdentifier: "alice@example.com", label: "MacBook" });
         expect(http.delete.mock.calls[0]?.[1]).toEqual(
-            expect.objectContaining({ params: { userIdentifier: "herve@infogene.fr" } }),
+            expect.objectContaining({ params: { userIdentifier: "alice@example.com" } }),
         );
     });
 
@@ -128,8 +128,8 @@ describe("MacCompanionService meeting rooms", () => {
     it("claims a room for the authenticated user, whatever user the body names", async () => {
         const { service, http } = createService({ post: { status: 200, data: { areaId: "r1" } } });
 
-        const claim = await service.claimRoom("herve@infogene.fr", {
-            userIdentifier: "someone@else.fr",
+        const claim = await service.claimRoom("alice@example.com", {
+            userIdentifier: "mallory@example.com",
             mapUrl: "/~/goyan/office.wam",
             meetingKey,
             roomAreaIds: ["r1", "r2"],
@@ -137,7 +137,7 @@ describe("MacCompanionService meeting rooms", () => {
 
         expect(claim).toEqual({ areaId: "r1" });
         expect(http.post.mock.calls[0]?.[1]).toEqual({
-            userIdentifier: "herve@infogene.fr",
+            userIdentifier: "alice@example.com",
             mapUrl: "/~/goyan/office.wam",
             meetingKey,
             roomAreaIds: ["r1", "r2"],
@@ -149,6 +149,34 @@ describe("MacCompanionService meeting rooms", () => {
 
         expect(await errorCodeOf(service.claimRoom("u", { mapUrl: "/m", meetingKey, roomAreaIds: ["r1"] }))).toBe(
             "forbidden",
+        );
+    });
+
+    it("asks the rooms for the authenticated user, so that they recognize theirs", async () => {
+        const { service, http } = createService({
+            get: {
+                status: 200,
+                data: {
+                    rooms: [
+                        { areaId: "r1", title: "Daily", endsAt: "2026-11-11T16:15:00.000Z", mine: true, meetingKey },
+                    ],
+                },
+            },
+        });
+
+        expect(await service.listRooms("alice@example.com", "/~/goyan/office.wam")).toEqual({
+            rooms: [{ areaId: "r1", title: "Daily", endsAt: "2026-11-11T16:15:00.000Z", mine: true, meetingKey }],
+        });
+        expect(http.get.mock.calls[0]?.[1]).toEqual(
+            expect.objectContaining({ params: { userIdentifier: "alice@example.com", mapUrl: "/~/goyan/office.wam" } }),
+        );
+    });
+
+    it("tells a claim too early or too late apart", async () => {
+        const { service } = createService({ post: { status: 409, data: { error: "too-early" } } });
+
+        expect(await errorCodeOf(service.claimRoom("u", { mapUrl: "/m", meetingKey, roomAreaIds: ["r1"] }))).toBe(
+            "too-early",
         );
     });
 
@@ -170,8 +198,8 @@ describe("MacCompanionService meeting rooms", () => {
             },
         });
 
-        expect(await service.listRooms("/~/goyan/office.wam")).toEqual({
-            rooms: [{ areaId: "r1", title: "Daily", endsAt: "2026-11-11T16:15:00.000Z" }],
+        expect(await service.listRooms("alice@example.com", "/~/goyan/office.wam")).toEqual({
+            rooms: [{ areaId: "r1", title: "Daily", endsAt: "2026-11-11T16:15:00.000Z", mine: false }],
         });
     });
 });
