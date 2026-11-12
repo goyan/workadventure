@@ -140,15 +140,19 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   lumière. Elle n'est pas pilotée par script pour l'instant ; elle relit sa propriété à chaque image, ce qui le
   permettra.
 - **Format** : les réglages sont dans une nouvelle propriété d'objet `rgbLampPropertyData` (`color`, `radius`,
-  `direction`, `angle`), dans le WAM : tous les joueurs voient la même lampe. `map-storage` doit être à la même version
-  que le front pour l'accepter. Un front plus ancien ignore le genre `rgb` : l'objet s'affiche comme une simple image.
+  `direction`, `angle`), dans le WAM : tous les joueurs voient la même lampe. Les trois images (`play`, `back`,
+  `map-storage`) lisent le WAM avec le même schéma : elles doivent toutes connaître cette propriété, et une carte où une
+  lampe a été réglée n'est plus lisible par une image plus ancienne (à savoir avant un retour arrière). Tant qu'aucune
+  lampe n'est réglée, rien n'est écrit dans la carte. Un front plus ancien ignore le genre `rgb` du catalogue : l'objet
+  s'affiche comme une simple image.
 
 Code : `play/src/front/Phaser/Game/Lamps/RgbLamp*.ts`. Le calcul est sans Phaser et testé : segments d'obstacles
 (`RgbLampObstacles`), polygone éclairé par lancer de rayons découpé par le cône (`RgbLampGeometry`). Rendu : une
 texture par lampe (dégradé découpé par le polygone, un texel pour quatre pixels de carte, ce qui adoucit le bord des
 ombres), en fusion additive, redessinée seulement quand la lampe, ses réglages ou un obstacle dans sa portée changent.
-Mesure hors navigateur : 20 lampes de 10 cases recalculées ensemble en 4 ms sur une carte de bureaux, 27 ms sur un
-damier de murs (le pire cas) ; rien par image tant que rien ne change.
+Mesure hors navigateur (calcul seul, sans le dessin des textures) : 20 lampes de 10 cases recalculées ensemble en 4 à
+6 ms sur une carte de bureaux, 50 ms environ sur une carte de piliers isolés, une case sur deux (le pire cas, une
+fois) ; rien par image tant que rien ne change.
 
 Recette : poser la lampe près d'un mur, d'une porte de l'outil Carte et d'un meuble haut ; tirer la poignée du bout,
 puis les losanges ; changer la couleur ; annuler ; déplacer la lampe et le meuble ; ouvrir la porte en la traversant ;
