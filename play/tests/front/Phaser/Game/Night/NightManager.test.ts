@@ -117,6 +117,55 @@ describe("personal night clock choice", () => {
         expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
     });
 
+    it("follows the sun of Paris: day at 21:00 in June, night at 21:00 in November", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        // 21:00 in Paris (CEST), before the sunset of 21:57.
+        const summerEvening = Date.parse("2026-06-21T19:00:00Z");
+        vi.setSystemTime(summerEvening);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: summerEvening }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(draw).not.toHaveBeenCalled();
+        expect(manager.isNight()).toBe(false);
+        manager.destroy();
+
+        // 21:00 in Paris (CET), long after the civil dusk of 17:48.
+        const autumnEvening = Date.parse("2026-11-12T20:00:00Z");
+        vi.setSystemTime(autumnEvening);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: autumnEvening }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+        expect(manager.isNight()).toBe(true);
+    });
+
+    it("reads the computer's own date and time as Paris time for the sun", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-06-21T12:00:00Z"));
+        // The computer shows 21:30 on 21 June: before the sunset of Paris, day.
+        vi.spyOn(Date.prototype, "getFullYear").mockReturnValue(2026);
+        vi.spyOn(Date.prototype, "getMonth").mockReturnValue(5);
+        vi.spyOn(Date.prototype, "getDate").mockReturnValue(21);
+        vi.spyOn(Date.prototype, "getHours").mockReturnValue(21);
+        vi.spyOn(Date.prototype, "getMinutes").mockReturnValue(30);
+        vi.spyOn(Date.prototype, "getSeconds").mockReturnValue(0);
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: Date.now() }))));
+        nightModeStore.set(NightMode.Computer);
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(manager.isNight()).toBe(false);
+        // At 23:00, past the civil dusk of 22:40: night.
+        vi.spyOn(Date.prototype, "getHours").mockReturnValue(23);
+        vi.spyOn(Date.prototype, "getMinutes").mockReturnValue(0);
+        manager.update(2000);
+        expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+    });
+
     it("pierces the veil with the lights of the RGB lamps, and draws it again when one changes shape", async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date("2026-01-15T20:00:00Z"));

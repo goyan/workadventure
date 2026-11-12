@@ -7,7 +7,7 @@ import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
-import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
+import { nightOpacityAt, parisCalendarDay, parisWallClockToInstant, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -16,7 +16,7 @@ import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
 
-/** The clock only moves the veil during dusk and dawn, by minutes: once a second is plenty. */
+/** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
 
 /**
@@ -89,14 +89,8 @@ export class NightManager {
             this.lastClockAt = now;
             const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
             nightDateStore.set(date);
-            const minutes =
-                this.forcedMinutes ??
-                (date
-                    ? this.mode === NightMode.Computer
-                        ? date.getHours() * 60 + date.getMinutes()
-                        : parisMinutes(date)
-                    : undefined);
-            this.opacity = minutes === undefined ? 0 : nightOpacityAtMinutes(minutes);
+            const sunAt = this.sunInstant(date);
+            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -167,6 +161,23 @@ export class NightManager {
         this.unsubscribeLamps();
         this.unsubscribeTorches();
         this.overlay.destroy();
+    }
+
+    /**
+     * The instant whose sun of Paris lights the map. Server: the server's instant. Computer: the date and time shown
+     * by the computer, in its own time zone, read as if they were Paris time (a computer showing 22:00 sees the
+     * night of Paris at 22:00 that day). `?nightAt=HH:MM` (development): that Paris time, on today's date in Paris.
+     */
+    private sunInstant(date: Date | undefined): Date | undefined {
+        if (this.forcedMinutes !== undefined) {
+            const { year, month, day } = parisCalendarDay(date ?? new Date());
+            return parisWallClockToInstant(year, month, day, this.forcedMinutes);
+        }
+        if (date === undefined || this.mode !== NightMode.Computer) {
+            return date;
+        }
+        const minutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+        return parisWallClockToInstant(date.getFullYear(), date.getMonth() + 1, date.getDate(), minutes);
     }
 
     private readAreas(): void {
