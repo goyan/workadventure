@@ -1,41 +1,124 @@
 /** Darkness of the night veil once night has fully fallen. */
 export const NIGHT_MAX_OPACITY = 0.6;
 
-// All thresholds are minutes since midnight, Paris time.
-const DAWN_START = 7 * 60; // veil starts fading out
-const DAWN_END = 7 * 60 + 30; // veil is gone
-const DUSK_START = 18 * 60 + 30; // veil starts fading in
-const DUSK_END = 19 * 60; // veil is at full darkness
+// The night follows the real sun of Paris, for everybody, as the clock does.
+const PARIS_LATITUDE = 48.8566;
+const PARIS_LONGITUDE = 2.3522;
+// Geometric elevations of the sun's centre. Sunrise and sunset: the upper limb on the horizon, with the standard
+// refraction (34′) and the sun's semi-diameter (16′) already counted. Civil twilight: 6° below the horizon.
+const SUNSET_ELEVATION = -0.833;
+const CIVIL_TWILIGHT_ELEVATION = -6;
 
 const NIGHT_AT_PATTERN = /^(\d{1,2}):(\d{2})$/;
 
-const parisFormatter = new Intl.DateTimeFormat("en-GB", {
+const parisWallClockFormatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Paris",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hourCycle: "h23",
 });
 
-/** Minutes since midnight in Paris for this instant. */
-export function parisMinutes(date: Date): number {
-    const parts = parisFormatter.formatToParts(date);
-    const hours = Number(parts.find((part) => part.type === "hour")?.value);
-    const minutes = Number(parts.find((part) => part.type === "minute")?.value);
-    return hours * 60 + minutes;
+function parisParts(date: Date): Record<"year" | "month" | "day" | "hour" | "minute" | "second", number> {
+    const parts = parisWallClockFormatter.formatToParts(date);
+    const part = (type: Intl.DateTimeFormatPartTypes): number => Number(parts.find((p) => p.type === type)?.value);
+    return {
+        year: part("year"),
+        month: part("month"),
+        day: part("day"),
+        hour: part("hour"),
+        minute: part("minute"),
+        second: part("second"),
+    };
 }
 
-/** Darkness of the night veil for minutes since midnight (0 = day, NIGHT_MAX_OPACITY = night). */
-export function nightOpacityAtMinutes(minutes: number): number {
-    if (minutes >= DAWN_END && minutes <= DUSK_START) {
+/** Calendar date in Paris for this instant (month from 1 to 12). */
+export function parisCalendarDay(date: Date): { year: number; month: number; day: number } {
+    const { year, month, day } = parisParts(date);
+    return { year, month, day };
+}
+
+/** Offset of Paris time from UTC at this instant, in milliseconds (1 h in winter, 2 h in summer). */
+function parisOffset(epoch: number): number {
+    const p = parisParts(new Date(epoch));
+    const wallClock = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    return wallClock - Math.floor(epoch / 1000) * 1000;
+}
+
+/**
+ * The instant at which Paris clocks show this date (month from 1 to 12) and these minutes since midnight. A time
+ * skipped when the clocks go forward gives an instant an hour off, a time seen twice when they go back gives the
+ * first one: both are in the middle of the night.
+ */
+export function parisWallClockToInstant(year: number, month: number, day: number, minutes: number): Date {
+    const wallClock = Date.UTC(year, month - 1, day) + minutes * 60_000;
+    let epoch = wallClock - parisOffset(wallClock);
+    // The offset may differ once moved to the real instant (near a clock change): correct once.
+    epoch = wallClock - parisOffset(epoch);
+    return new Date(epoch);
+}
+
+const DEG = Math.PI / 180;
+
+/**
+ * Geometric elevation of the sun's centre above the horizon of Paris, in degrees, without refraction. Solar position
+ * equations of the NOAA (Jean Meeus, "Astronomical Algorithms"), accurate to well under a minute of time for sunrise
+ * and sunset: a few trigonometric functions, cheap enough to be called every second.
+ */
+export function sunElevationInParis(date: Date): number {
+    const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
+    const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
+
+    const meanLongitude = (280.46646 + t * (36_000.76983 + t * 0.0003032)) % 360;
+    const meanAnomaly = 357.52911 + t * (35_999.05029 - 0.0001537 * t);
+    const eccentricity = 0.016708634 - t * (0.000042037 + 0.0000001267 * t);
+    const center =
+        Math.sin(meanAnomaly * DEG) * (1.914602 - t * (0.004817 + 0.000014 * t)) +
+        Math.sin(2 * meanAnomaly * DEG) * (0.019993 - 0.000101 * t) +
+        Math.sin(3 * meanAnomaly * DEG) * 0.000289;
+    const omega = 125.04 - 1934.136 * t;
+    const apparentLongitude = meanLongitude + center - 0.00569 - 0.00478 * Math.sin(omega * DEG);
+    const meanObliquity = 23 + (26 + (21.448 - t * (46.815 + t * (0.00059 - t * 0.001813))) / 60) / 60;
+    const obliquity = meanObliquity + 0.00256 * Math.cos(omega * DEG);
+    const declination = Math.asin(Math.sin(obliquity * DEG) * Math.sin(apparentLongitude * DEG));
+
+    // Equation of time, in minutes.
+    const y = Math.tan((obliquity / 2) * DEG) ** 2;
+    const equationOfTime =
+        (4 / DEG) *
+        (y * Math.sin(2 * meanLongitude * DEG) -
+            2 * eccentricity * Math.sin(meanAnomaly * DEG) +
+            4 * eccentricity * y * Math.sin(meanAnomaly * DEG) * Math.cos(2 * meanLongitude * DEG) -
+            0.5 * y * y * Math.sin(4 * meanLongitude * DEG) -
+            1.25 * eccentricity * eccentricity * Math.sin(2 * meanAnomaly * DEG));
+
+    const utcMinutes = (((date.getTime() / 60_000) % 1440) + 1440) % 1440;
+    const trueSolarMinutes = utcMinutes + equationOfTime + 4 * PARIS_LONGITUDE;
+    const hourAngle = (trueSolarMinutes / 4 - 180) * DEG;
+
+    const latitude = PARIS_LATITUDE * DEG;
+    const cosZenith =
+        Math.sin(latitude) * Math.sin(declination) + Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle);
+    return 90 - Math.acos(Math.min(1, Math.max(-1, cosZenith))) / DEG;
+}
+
+/**
+ * Darkness of the night veil at this instant (0 = day, NIGHT_MAX_OPACITY = night), on the sun of Paris: none while
+ * the sun is up, darkening from sunset to the end of the civil dusk, full until the civil dawn, fading out until
+ * sunrise. The ramp is linear in the sun's elevation, which is almost linear in time over those 30 to 40 minutes.
+ */
+export function nightOpacityAt(date: Date): number {
+    const elevation = sunElevationInParis(date);
+    if (elevation >= SUNSET_ELEVATION) {
         return 0;
     }
-    if (minutes > DUSK_START && minutes < DUSK_END) {
-        return ((minutes - DUSK_START) / (DUSK_END - DUSK_START)) * NIGHT_MAX_OPACITY;
+    if (elevation <= CIVIL_TWILIGHT_ELEVATION) {
+        return NIGHT_MAX_OPACITY;
     }
-    if (minutes > DAWN_START && minutes < DAWN_END) {
-        return ((DAWN_END - minutes) / (DAWN_END - DAWN_START)) * NIGHT_MAX_OPACITY;
-    }
-    return NIGHT_MAX_OPACITY;
+    return ((SUNSET_ELEVATION - elevation) / (SUNSET_ELEVATION - CIVIL_TWILIGHT_ELEVATION)) * NIGHT_MAX_OPACITY;
 }
 
 /**
