@@ -61,13 +61,21 @@ export function getSolidRectangles(placement: Placement, prefab: HitboxPrefab, c
 }
 
 /**
+ * Everything that blocks on the object, relative to its top-left corner, wherever it is placed: the declared
+ * rectangles, else the blocking cells of its grid.
+ */
+export function getBlockingRectangles(prefab: HitboxPrefab, cellSize: number): CollisionRectangle[] {
+    return prefab.collisionRectangles?.length
+        ? prefab.collisionRectangles
+        : gridRectangles(prefab.collisionGrid, cellSize);
+}
+
+/**
  * The box around everything that blocks on the object (declared rectangles, else the blocking cells of its grid),
  * relative to its top-left corner, wherever it is placed: what a player touches when walking up to it.
  */
 export function getHitboxBounds(prefab: HitboxPrefab, cellSize: number): CollisionRectangle | undefined {
-    const rectangles = prefab.collisionRectangles?.length
-        ? prefab.collisionRectangles
-        : gridRectangles(prefab.collisionGrid, cellSize);
+    const rectangles = getBlockingRectangles(prefab, cellSize);
     if (rectangles.length === 0) {
         return undefined;
     }
