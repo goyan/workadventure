@@ -5226,6 +5226,11 @@ ${escapedMessage}
         }
     }
 
+    /** Whether the door of the map layer this object is a piece of is open now (see DoorAnimator). */
+    public isDoorOpen(entityId: string): boolean {
+        return this.doorAnimator?.isDoorOpen(entityId) ?? false;
+    }
+
     private subscribeToGameMapChanged(): void {
         this.gameMapChangedSubscription?.unsubscribe();
         this.gameMapChangedSubscription = this.gameMapFrontWrapper

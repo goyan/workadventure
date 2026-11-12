@@ -4,6 +4,7 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
+import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
@@ -34,7 +35,9 @@ export class NightManager {
     private readonly unsubscribeEditor: Unsubscriber;
     private readonly unsubscribeMode: Unsubscriber;
     private readonly unsubscribeParty: Unsubscriber;
+    private readonly unsubscribeLamps: Unsubscriber;
     private partyRooms: readonly NightRect[] = [];
+    private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
     private mode = NightMode.Server;
@@ -56,6 +59,10 @@ export class NightManager {
         });
         this.unsubscribeParty = partyRoomsStore.subscribe((rooms) => {
             this.partyRooms = rooms;
+            this.scene.markDirty();
+        });
+        this.unsubscribeLamps = rgbLampLightsStore.subscribe((lamps) => {
+            this.lamps = lamps;
             this.scene.markDirty();
         });
         this.unsubscribeMode = nightModeStore.subscribe((mode) => {
@@ -119,6 +126,7 @@ export class NightManager {
             },
             lit,
             halos,
+            lamps: this.lamps,
             fading: this.lights.isFading() || this.halos.isAnimating(),
         };
 
@@ -145,6 +153,7 @@ export class NightManager {
         this.unsubscribeEditor();
         this.unsubscribeMode();
         this.unsubscribeParty();
+        this.unsubscribeLamps();
         this.overlay.destroy();
     }
 

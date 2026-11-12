@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     blockingCellSegments,
+    lightFalloff,
     litPolygon,
     rectangleSegments,
     segmentsNearLight,
@@ -229,5 +230,23 @@ describe("segmentsNearLight", () => {
         const outside: Segment = { ax: 101, ay: -500, bx: 101, by: 500 };
         const beyondCorner: Segment = { ax: 80, ay: 80, bx: 200, by: 80 };
         expect(segmentsNearLight([touching, crossing, outside, beyondCorner], light)).toEqual([touching, crossing]);
+    });
+});
+
+describe("lightFalloff", () => {
+    it("is full at the lamp and nothing at the end of its reach, fading all the way", () => {
+        expect(lightFalloff(0)).toBe(1);
+        expect(lightFalloff(1)).toBe(0);
+        let previous = 1;
+        for (let step = 1; step <= 10; step++) {
+            const value = lightFalloff(step / 10);
+            expect(value).toBeLessThan(previous);
+            previous = value;
+        }
+    });
+
+    it("stays within 0 and 1 out of the reach", () => {
+        expect(lightFalloff(-0.5)).toBe(1);
+        expect(lightFalloff(1.5)).toBe(0);
     });
 });

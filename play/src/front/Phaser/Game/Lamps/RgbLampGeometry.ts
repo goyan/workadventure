@@ -190,3 +190,12 @@ export function litPolygon(light: LightCone, segments: readonly Segment[]): Poin
     }
     return polygon;
 }
+
+/**
+ * How strong the light is at a distance from the lamp, from 0 (at the lamp) to 1 (the end of its reach): full at the
+ * lamp, nothing at the end, with no visible ring where it stops.
+ */
+export function lightFalloff(distance: number): number {
+    const t = Math.min(1, Math.max(0, distance));
+    return (1 - t * t) ** 2;
+}

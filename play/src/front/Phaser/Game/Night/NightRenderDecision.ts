@@ -1,3 +1,4 @@
+import type { RgbLampLight } from "../../../Stores/RgbLampStore";
 import type { Halo } from "./NightHalos";
 import type { LitArea } from "./NightLights";
 
@@ -18,6 +19,8 @@ export interface NightFrame {
     view: NightView;
     lit: readonly LitArea[];
     halos: readonly Halo[];
+    /** The lights of the RGB lamps: the veil is pierced with their shape (see NightOverlay). */
+    lamps: readonly RgbLampLight[];
     /** An area is fading or a halo is moving or changing radius: the veil changes again next frame. */
     fading: boolean;
 }
@@ -59,6 +62,23 @@ function sameHalos(a: readonly Halo[], b: readonly Halo[]): boolean {
     });
 }
 
+function sameLamps(a: readonly RgbLampLight[], b: readonly RgbLampLight[]): boolean {
+    if (a.length !== b.length) {
+        return false;
+    }
+    return a.every((lamp, index) => {
+        const other = b[index];
+        return (
+            lamp.id === other.id &&
+            lamp.revision === other.revision &&
+            lamp.x === other.x &&
+            lamp.y === other.y &&
+            lamp.size === other.size &&
+            lamp.textureKey === other.textureKey
+        );
+    });
+}
+
 /**
  * What to do with the night veil this frame: "hidden" (day, map editor open, or night turned off),
  * "keep" (nothing changed since `previous`, the texture already shows the right thing), or "draw".
@@ -74,7 +94,8 @@ export function nightRenderAction(frame: NightFrame, previous: NightFrame | unde
         frame.opacity !== previous.opacity ||
         !sameView(frame.view, previous.view) ||
         !sameLit(frame.lit, previous.lit) ||
-        !sameHalos(frame.halos, previous.halos)
+        !sameHalos(frame.halos, previous.halos) ||
+        !sameLamps(frame.lamps, previous.lamps)
     ) {
         return "draw";
     }

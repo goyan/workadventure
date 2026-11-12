@@ -132,6 +132,8 @@ export class GameMapFrontWrapper {
     private collisionGridDirty = true;
     private sharedCollisionGrid: number[][] = [];
     private sharedCollisionGridDirty = true;
+    private mapCollisionGrid: number[][] = [];
+    private mapCollisionGridDirty = true;
     private areasCollisionLayerDirty = true;
     private perLayerCollisionGridCache: Map<number, (0 | 1 | 2 | 3)[][]> = new Map<number, (0 | 1 | 2 | 3)[][]>();
     private dirtyLayerIndices: Set<number> = new Set<number>();
@@ -616,6 +618,7 @@ export class GameMapFrontWrapper {
         }
         this.collisionGridDirty = true;
         this.sharedCollisionGridDirty = true;
+        this.mapCollisionGridDirty = true;
         this.placementCollisionGrid = undefined;
     }
 
@@ -670,10 +673,27 @@ export class GameMapFrontWrapper {
     }
 
     /**
+     * The collisions of the tiles of the map alone: its walls, without the objects placed on it (a low table blocks the
+     * players, not the light of a lamp) nor the areas that collide for the current player. The same array is returned as
+     * long as its content does not change: a change is seen by comparing references.
+     */
+    public getMapCollisionGrid(): number[][] {
+        if (this.mapCollisionGridDirty) {
+            this.mapCollisionGridDirty = false;
+            const grid = this.composeCollisionGrid(false, false);
+            if (!sameGrids(grid, this.mapCollisionGrid)) {
+                this.mapCollisionGrid = grid;
+            }
+        }
+        return this.mapCollisionGrid;
+    }
+
+    /**
      * Merges the collisions of the layers into a new grid.
      * @param includeAreasCollisions Whether the areas that collide for the current player are part of it
+     * @param includeEntitiesCollisions Whether the collision grids of the objects placed on the map are part of it
      */
-    private composeCollisionGrid(includeAreasCollisions: boolean): number[][] {
+    private composeCollisionGrid(includeAreasCollisions: boolean, includeEntitiesCollisions = true): number[][] {
         const map = this.gameMap.getMap();
         // initialize collision grid to write on
         if (map.height === undefined || map.width === undefined) {
@@ -683,6 +703,9 @@ export class GameMapFrontWrapper {
         // go through all tilemap layers on map. Maintain order
         for (const layer of this.phaserLayers) {
             if (layer === this.areasCollisionLayer && !includeAreasCollisions) {
+                continue;
+            }
+            if (layer === this.entitiesCollisionLayer && !includeEntitiesCollisions) {
                 continue;
             }
             if (!layer.visible && layer !== this.entitiesCollisionLayer && layer !== this.areasCollisionLayer) {
