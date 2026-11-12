@@ -332,6 +332,15 @@ const mapEditor: BaseTranslation = {
             label: "Size of the dance floor",
             description: "In tiles. Drag a corner of the floor on the map, or set its width and height here.",
         },
+        rgbLamp: {
+            label: "Light of the lamp",
+            description:
+                "On the map, drag the handle at the tip of the cone to turn the light and set its reach, and the two diamonds to open or close it. Walls and tall furniture stop the light.",
+            color: "Colour",
+            radius: "Reach (tiles)",
+            angle: "Opening",
+            direction: "Direction",
+        },
         openFile: {
             label: "Open file",
             description: "Open file within WorkAdventure.",

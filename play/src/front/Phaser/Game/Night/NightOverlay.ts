@@ -91,6 +91,8 @@ export class NightOverlay {
     private readonly brushes: Phaser.GameObjects.NineSlice[] = [];
     // Same for the halos: one disc per halo drawn this frame.
     private readonly discs: Phaser.GameObjects.Image[] = [];
+    // And for the RGB lamps: one image per lamp, showing the texture its light is drawn in.
+    private readonly lampLights: Phaser.GameObjects.Image[] = [];
     private textureWidth = 0;
     private textureHeight = 0;
 
@@ -169,6 +171,27 @@ export class NightOverlay {
             this.texture.erase(disc);
         }
 
+        // An RGB lamp lights the same by day and by night: the veil is pierced with the very shape of its light,
+        // shadows included (the texture is drawn by RgbLampVisual).
+        let lampsUsed = 0;
+        for (const lamp of frame.lamps) {
+            if (
+                lamp.x + lamp.size <= view.x ||
+                lamp.y + lamp.size <= view.y ||
+                lamp.x >= view.x + view.width ||
+                lamp.y >= view.y + view.height ||
+                !this.scene.textures.exists(lamp.textureKey)
+            ) {
+                continue;
+            }
+            const light = this.lampLight(lampsUsed++);
+            light
+                .setTexture(lamp.textureKey)
+                .setDisplaySize(lamp.size * zoom, lamp.size * zoom)
+                .setPosition((lamp.x - view.x) * zoom, (lamp.y - view.y) * zoom);
+            this.texture.erase(light);
+        }
+
         this.texture.render();
         this.texture.setVisible(true);
     }
@@ -187,6 +210,10 @@ export class NightOverlay {
             disc.destroy();
         }
         this.discs.length = 0;
+        for (const light of this.lampLights) {
+            light.destroy();
+        }
+        this.lampLights.length = 0;
         // The soft brush textures stay in the texture manager: they are small and reused by the next scene.
     }
 
@@ -211,6 +238,16 @@ export class NightOverlay {
             this.brushes[index] = brush;
         }
         return brush;
+    }
+
+    private lampLight(index: number): Phaser.GameObjects.Image {
+        let light = this.lampLights[index];
+        if (light === undefined) {
+            // Not added to the display list either: only drawn into the veil.
+            light = new Phaser.GameObjects.Image(this.scene, 0, 0, "__DEFAULT").setOrigin(0, 0);
+            this.lampLights[index] = light;
+        }
+        return light;
     }
 
     private disc(index: number): Phaser.GameObjects.Image {

@@ -233,6 +233,37 @@ export const LampPropertyData = PropertyBase.extend({
     height: z.number().int().min(LAMP_LIGHT_MIN_TILES).max(LAMP_LIGHT_MAX_TILES).default(LAMP_LIGHT_DEFAULT_TILES),
 });
 
+/** An RGB lamp (an object whose catalog entry says `lamp.kind: "rgb"`): reach in tiles, opening and direction in degrees. */
+export const RGB_LAMP_DEFAULT_COLOR = "#ffd9a0";
+export const RGB_LAMP_DEFAULT_RADIUS_TILES = 6;
+export const RGB_LAMP_MIN_RADIUS_TILES = 1;
+export const RGB_LAMP_MAX_RADIUS_TILES = 20;
+/** Degrees, clockwise on the screen from the east: 90 shines downwards. */
+export const RGB_LAMP_DEFAULT_DIRECTION = 90;
+export const RGB_LAMP_MIN_ANGLE = 10;
+export const RGB_LAMP_MAX_ANGLE = 360;
+
+/**
+ * The light of an RGB lamp: a cone of the colour `color`, `radius` tiles long, `angle` degrees wide (360: a full disc)
+ * around `direction`. The walls and the tall objects (`castsShadow`) stop it. Without this property the lamp shines
+ * with these defaults. Its own property, not `lampPropertyData`: that one is a rectangle in tiles (the zone of a music
+ * lamp, the size of a dance floor) and stays as it is.
+ */
+export const RgbLampPropertyData = PropertyBase.extend({
+    type: z.literal("rgbLampPropertyData"),
+    color: z
+        .string()
+        .regex(/^#[0-9a-fA-F]{6}$/)
+        .default(RGB_LAMP_DEFAULT_COLOR),
+    radius: z
+        .number()
+        .min(RGB_LAMP_MIN_RADIUS_TILES)
+        .max(RGB_LAMP_MAX_RADIUS_TILES)
+        .default(RGB_LAMP_DEFAULT_RADIUS_TILES),
+    direction: z.number().min(0).lt(360).default(RGB_LAMP_DEFAULT_DIRECTION),
+    angle: z.number().min(RGB_LAMP_MIN_ANGLE).max(RGB_LAMP_MAX_ANGLE).default(RGB_LAMP_MAX_ANGLE),
+});
+
 export const MatrixRoomPropertyData = PropertyBase.extend({
     type: z.literal("matrixRoomPropertyData"),
     shouldOpenAutomatically: z.boolean(),
@@ -335,6 +366,7 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     LivekitRoomPropertyData,
     GobeurPropertyData,
     LampPropertyData,
+    RgbLampPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -445,16 +477,24 @@ export const EntityRawPrefab = z.object({
      * mirror ball, a neon, a strobe). `anchor` is the point the light comes from, in pixels from the top-left corner of
      * the image (the centre of the image when absent). A `dancefloor` is a floor of tiles that light up in patterns,
      * with or without music, over the size set for it in the editor (`lampPropertyData`), from its top-left corner.
+     * An `rgb` lamp is a steady light of a chosen colour, stopped by the walls and the tall objects, set in the editor
+     * (`rgbLampPropertyData`); it does not follow the music.
      * The WAM format is unchanged: this lives in the catalog only.
      * Fail open like `wander`: an invalid value shows the entity as a plain image.
      */
     lamp: z
         .object({
-            kind: z.enum(["spot", "disco", "neon", "strobe", "dancefloor"]),
+            kind: z.enum(["spot", "disco", "neon", "strobe", "dancefloor", "rgb"]),
             anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
         })
         .optional()
         .catch(undefined),
+    /**
+     * A tall object (a cupboard, a partition): it stops the light of the RGB lamps and casts a shadow, over its
+     * `collisionRectangles`, else the blocking cells of its `collisionGrid`. A low object (a table) lets the light
+     * pass. Fail open like `collisionRectangles`.
+     */
+    castsShadow: z.boolean().optional().catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
@@ -721,6 +761,7 @@ export type RecordingSettings = z.infer<typeof RecordingSettings>;
 export type GobeurLevel = z.infer<typeof GobeurLevel>;
 export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
 export type LampPropertyData = z.infer<typeof LampPropertyData>;
+export type RgbLampPropertyData = z.infer<typeof RgbLampPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;

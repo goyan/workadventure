@@ -549,6 +549,58 @@
                         "type"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
+                        },
+                        "buttonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/buttonLabel"
+                        },
+                        "hideButtonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/hideButtonLabel"
+                        },
+                        "resourceUrl": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/resourceUrl"
+                        },
+                        "serverData": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/serverData"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "rgbLampPropertyData"
+                        },
+                        "color": {
+                          "type": "string",
+                          "pattern": "^#[0-9a-fA-F]{6}$",
+                          "default": "#ffd9a0"
+                        },
+                        "radius": {
+                          "type": "number",
+                          "minimum": 1,
+                          "maximum": 20,
+                          "default": 6
+                        },
+                        "direction": {
+                          "type": "number",
+                          "minimum": 0,
+                          "exclusiveMaximum": 360,
+                          "default": 90
+                        },
+                        "angle": {
+                          "type": "number",
+                          "minimum": 10,
+                          "maximum": 360,
+                          "default": 360
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }

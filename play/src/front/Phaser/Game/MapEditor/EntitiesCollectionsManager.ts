@@ -146,6 +146,7 @@ export class EntitiesCollectionsManager {
                                     ? { sheetPath: new URL(entity.wander.sheetPath, url).toString() }
                                     : undefined,
                                 lamp: entity.lamp,
+                                castsShadow: entity.castsShadow,
                                 type: entity.type,
                                 ownerId: entity.ownerId,
                             });

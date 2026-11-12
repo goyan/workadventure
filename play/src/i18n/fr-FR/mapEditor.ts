@@ -342,6 +342,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             label: "Taille de la piste",
             description: "En cases. Tirez un coin de la piste sur la carte, ou réglez sa largeur et sa hauteur ici.",
         },
+        rgbLamp: {
+            label: "Lumière de la lampe",
+            description:
+                "Sur la carte, tirez la poignée au bout du cône pour orienter la lumière et régler sa portée, et les deux losanges pour l'ouvrir ou la refermer. Les murs et les meubles hauts arrêtent la lumière.",
+            color: "Couleur",
+            radius: "Portée (cases)",
+            angle: "Ouverture",
+            direction: "Direction",
+        },
         openFile: {
             label: "Ouvrir un fichier",
             description: "Ouvrir un fichier dans l'application.",

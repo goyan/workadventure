@@ -43,6 +43,7 @@ import { isSilentFrame, SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
+import { RgbLamps } from "./RgbLamps";
 import { syntheticSpectrum } from "./SyntheticBeat";
 import { createLamp, PALETTE, type LampKind, type LampVisual } from "./LampVisuals";
 
@@ -106,10 +107,13 @@ interface PlacedFloor {
 /** A silence of the music this long, and the floor goes back to its own patterns. */
 const FLOOR_SILENCE_MS = 2000;
 
-/** The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor). */
+/**
+ * The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor), and so has
+ * an RGB lamp, which does not follow the music.
+ */
 function lightKindOf(entity: Entity): LampKind | undefined {
     const kind = entity.getPrefab().lamp?.kind;
-    return kind === "dancefloor" ? undefined : kind;
+    return kind === "dancefloor" || kind === "rgb" ? undefined : kind;
 }
 
 function isDanceFloor(entity: Entity): boolean {
@@ -141,6 +145,8 @@ export class LampManager {
     // The light of a room stays in the room: the lamps of a zone draw in one container, clipped to the zone.
     private readonly zoneLights: LampZoneLights;
     private readonly frames = new Map<string, LampFrame>();
+    // The RGB lamps live their own life (see RgbLamps): a steady light with shadows, that no music moves.
+    private readonly rgbLamps: RgbLamps;
     private demoSignal: LampSignalSource | undefined;
     private demo: { bpm: number } | undefined;
     private readonly systemReducedMotion: boolean;
@@ -189,6 +195,7 @@ export class LampManager {
     ) {
         ensureLampTextures(scene);
         this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, ROOM_SHADE_DEPTH);
+        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
         this.unsubscribers = [
             lampEffectsEnabledStore.subscribe((enabled) => {
@@ -329,6 +336,7 @@ export class LampManager {
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
         this.reconcileFloors(entities);
+        this.rgbLamps.reconcile(entities);
         const lit = new Map<string, LampKind>();
         for (const [id, lamp] of this.placed) {
             lit.set(id, lamp.kind);
@@ -559,6 +567,9 @@ export class LampManager {
             this.dropUnusedMusic();
         }
         this.frames.clear();
+        // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
+        // (it is a steady light, not an effect).
+        this.rgbLamps.update();
         const demoFrame = this.demoSignal?.read(now);
         if (this.updateFloors(now, demoFrame)) {
             // The scene is only drawn when something changed: a floor on the screen changes at every image.
@@ -710,6 +721,7 @@ export class LampManager {
             floor.visual.destroy();
         }
         this.floors.clear();
+        this.rgbLamps.destroy();
         this.zoneLights.destroy();
         for (const read of this.music.values()) {
             read.spectrum.destroy();

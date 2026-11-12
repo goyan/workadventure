@@ -10,6 +10,7 @@ function frame(overrides: Partial<NightFrame> = {}): NightFrame {
         view: { x: 100, y: 200, width: 800, height: 600, zoom: 2 },
         lit: [{ id: "office", x: 0, y: 0, width: 64, height: 64, intensity: 1 }],
         halos: [{ id: "local", x: 32, y: 32, radius: 48 }],
+        lamps: [{ id: "lamp", x: 10, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1 }],
         fading: false,
         ...overrides,
     };
@@ -115,5 +116,21 @@ describe("nightRenderAction", () => {
         expect(nightRenderAction(frame(), frame({ editorOpen: true }))).toBe("draw");
         expect(nightRenderAction(frame(), frame({ opacity: 0 }))).toBe("draw");
         expect(nightRenderAction(frame(), frame({ disabled: true }))).toBe("draw");
+    });
+
+    it("draws when the shape of the light of an RGB lamp changed, though it did not move", () => {
+        const reshaped = frame({
+            lamps: [{ id: "lamp", x: 10, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 2 }],
+        });
+        expect(nightRenderAction(reshaped, frame())).toBe("draw");
+    });
+
+    it("draws when an RGB lamp moved, appeared or went away", () => {
+        const moved = frame({
+            lamps: [{ id: "lamp", x: 11, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1 }],
+        });
+        expect(nightRenderAction(moved, frame())).toBe("draw");
+        expect(nightRenderAction(frame({ lamps: [] }), frame())).toBe("draw");
+        expect(nightRenderAction(frame(), frame({ lamps: [] }))).toBe("draw");
     });
 });
