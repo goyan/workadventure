@@ -946,9 +946,15 @@ Limites :
 
 ### Mode nuit
 
-Par défaut, la carte suit l'heure du serveur convertie en heure de Paris (`Europe/Paris`, quel que soit le fuseau ou le réglage
-de l'horloge du poste) : jour de 7 h 30 à 18 h 30,
-crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'à 7 h 30. La nuit, un voile bleu nuit
+Par défaut, la carte suit l'heure du serveur et **le vrai soleil de Paris** (48,8566° N, 2,3522° E, le même pour tout le
+monde, quel que soit le fuseau ou le réglage de l'horloge du poste) : le voile commence au coucher du soleil (élévation
+−0,833°) et est complet à la fin du crépuscule civil (−6°) ; le matin, il reste complet jusqu'au début de l'aube civile
+(−6°) et disparaît au lever (−0,833°). Entre les deux, l'opacité suit l'élévation du soleil (presque linéaire en temps sur
+ces 30 à 40 minutes). Le 12 novembre 2026, par exemple : voile de 17 h 14 à 17 h 48, nuit complète jusqu'à 7 h 20, jour à
+7 h 55 ; au solstice d'été, coucher à 21 h 58 et nuit à 22 h 41. La position du soleil est calculée dans le navigateur
+(équations solaires de la NOAA, `sunElevationInParis` dans `NightClock.ts`), sans service ni dépendance, une fois par
+seconde ; les tests la comparent aux tables publiées de timeanddate.com (équinoxe, solstices, jours des changements
+d'heure) à ±2 min. La nuit, un voile bleu nuit
 (`0x0b1030`, opacité 0,6) couvre la carte, les avatars et les animaux ; bulles, noms et interface restent au-dessus
 (`DEPTH_NIGHT_INDEX = 1_040_000`).
 
@@ -958,9 +964,11 @@ crépuscule progressif jusqu'à 19 h, nuit jusqu'à 7 h, aube progressive jusqu'
 - **Halo** : chaque joueur porte une lumière, 1,5 case à l'arrêt, 3 cases en marche (transition linéaire) ; il
   s'éteint dans une pièce allumée et revient en sortant. Pas de halo pour les animaux.
 - **Choix personnel** dans Paramètres → Thème → Cycle jour/nuit : heure du serveur (défaut), heure de mon ordinateur
-  (horloge et fuseau du poste), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
+  (horloge et fuseau du poste : la date et l'heure affichées par le poste sont lues comme une heure de Paris, puis
+  éclairées par le soleil de Paris de ce jour-là ; un poste qui affiche 22 h voit la nuit de Paris à 22 h), ou désactivé. La clé `nightMode` est mémorisée ; l’ancienne préférence `disableNight` est conservée.
 - **Pas de nuit** en mode édition ou lorsque le cycle est désactivé.
-- **Recette locale** : `?nightAt=21:00` force l'heure, seulement en développement (`import.meta.env.DEV`).
+- **Recette locale** : `?nightAt=21:00` force l'heure de Paris du jour courant (soleil de ce jour), seulement en
+  développement (`import.meta.env.DEV`).
 
 L’horloge du mode nuit se synchronise via `/server-time` sans cache au démarrage, toutes les cinq minutes et au retour
 dans la fenêtre. Entre deux réponses elle avance avec l’horloge monotone du navigateur ; un changement de l’heure du
