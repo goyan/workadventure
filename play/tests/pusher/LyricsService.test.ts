@@ -159,6 +159,7 @@ describe("LyricsService", () => {
                     ),
             );
             expect(await new LyricsService(fetchFn).get(bonamassa)).toEqual(plainResult);
+            expect(fetchFn).toHaveBeenCalledTimes(2);
         });
 
         it.each([
