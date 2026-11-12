@@ -79,20 +79,28 @@ describe("goToMeeting", () => {
         expect(d.walkTo).toHaveBeenCalledWith({ x: 448, y: 132 });
     });
 
-    it("only opens Teams when every room is taken", async () => {
+    it("only opens Teams when every room is taken, and says so", async () => {
         const d = deps(null);
-        await goToMeeting(daily, d);
+        const outcome = await goToMeeting(daily, d);
 
         expect(d.walkTo).not.toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: "rooms-full" });
     });
 
     it("only opens Teams on a map without any Teams room", async () => {
         const d = deps("r1", [area("hall", 0, false)]);
-        await goToMeeting(daily, d);
+        const outcome = await goToMeeting(daily, d);
 
         expect(d.openUrl).toHaveBeenCalled();
         expect(d.claim).not.toHaveBeenCalled();
         expect(d.walkTo).not.toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: "teams-only" });
+    });
+
+    it("reports the walk to the room it got", async () => {
+        const outcome = await goToMeeting(daily, deps("r2"));
+
+        expect(outcome).toEqual({ kind: "walking" });
     });
 });
 
