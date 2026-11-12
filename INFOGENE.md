@@ -91,12 +91,18 @@ reste possible).
   corps est sous le chapeau du mur, mais c'est la pièce nord qu'il éclaire. La lumière ne traverse jamais un mur
   (positions limites calculées d'après les collisions du catalogue, pas observées en jeu).
 - **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
-  100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées par seconde (photosensibilité, WCAG 2.3.1) ;
-  la forme et la portée restent fixes (une portée qui varie ferait bouger le bord des ombres sur les murs). La petite
-  flamme dans la main suit la même onde. Préférence système de mouvement réduit : lumière et flamme fixes.
+  100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées
+  par seconde (photosensibilité, WCAG 2.3.1) ; la forme et la portée de la lumière restent fixes : son polygone part de la flamme sans tenir compte de son
+  mouvement (un halo qui bouge ferait glisser le bord des ombres sur les murs).
+- **Flamme dans la main** : elle ondule, 30 images par seconde, sur son propre pas (indépendant des 15 pas de la
+  lumière, sans recalcul du polygone) : sa pointe penche de 1,8 px au plus, sa hauteur varie de 13 % et sa largeur de
+  10 % (sommes d'ondes de 1,7 à 4,4 Hz sans mesure commune, décalées par porteur : deux flammes ne battent pas
+  ensemble) ; une braise d'un pixel monte toutes les 1,7 s et s'éteint en fondu (0,7 s). C'est la forme qui bouge,
+  pas la luminosité. La scène est redessinée 30 fois par seconde tant qu'une flamme est à l'écran.
+- **Mouvement réduit** (préférence système) : lumière, flamme et braise fixes.
 - **Coût** : la forme d'une lumière n'est recalculée que si la flamme a bougé d'au moins un pixel ou qu'un obstacle a
   changé dans sa portée (porteur immobile : rien) ; au plus quatre porteurs sont recalculés par image, le joueur local
-  en premier. Le scintillement redessine la scène 15 fois par seconde tant qu'une torche est à l'écran. Dans
+  en premier. Le scintillement et la flamme redessinent la scène (pas la lumière) tant qu'une torche est à l'écran. Dans
   l'éditeur, les lumières des torches sont éteintes pour soi (la flamme reste dans la main, comme le blaster ; la
   variable n'est pas modifiée).
 

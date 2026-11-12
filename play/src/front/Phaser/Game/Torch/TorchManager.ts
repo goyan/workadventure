@@ -6,6 +6,7 @@ import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import { toggleHandTool } from "./HandTools";
 import { torchFlicker, torchFlickerPhase, torchFlickerStep } from "./TorchFlicker";
+import { TORCH_FLAME_FRAMES_PER_SECOND, torchFlameShape, torchFlameStep } from "./TorchFlameShape";
 import { TORCH_EQUIPPED_VARIABLE } from "./TorchProtocol";
 import { Torches, type TorchBearer } from "./Torches";
 
@@ -24,6 +25,8 @@ const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").m
 export class TorchManager {
     private readonly equipmentUnsubscribe: Unsubscriber;
     private readonly torches: Torches;
+    /** The step of the flames last rendered (see torchFlameStep). */
+    private flameStep: number | undefined;
 
     constructor(private readonly scene: GameScene) {
         this.torches = new Torches(scene, TORCH_DEPTH);
@@ -48,11 +51,23 @@ export class TorchManager {
 
     public update(time: number): void {
         const step = torchFlickerStep(time);
+        // The flames in the hands move 30 times a second, on their own clock: their light is not drawn again for it.
+        const flameStep = torchFlameStep(time);
+        const flameTime = (flameStep * 1000) / TORCH_FLAME_FRAMES_PER_SECOND;
+        const view = this.scene.cameras.main.worldView;
+        let flameSeen = false;
         const bearers: TorchBearer[] = [];
         const add = (id: string, character: Character, local: boolean): void => {
             if (!character.isTorchLit()) return;
-            const intensity = torchFlicker(step, torchFlickerPhase(id), REDUCED_MOTION);
-            character.setTorchIntensity(intensity);
+            const phase = torchFlickerPhase(id);
+            const intensity = torchFlicker(step, phase, REDUCED_MOTION);
+            character.setTorchFlame(torchFlameShape(flameTime, phase, REDUCED_MOTION));
+            // A flame is a few pixels around the avatar: the margin of a tile is plenty.
+            flameSeen ||=
+                character.x > view.x - 32 &&
+                character.y > view.y - 32 &&
+                character.x < view.x + view.width + 32 &&
+                character.y < view.y + view.height + 32;
             bearers.push({
                 id,
                 x: character.x,
@@ -66,6 +81,11 @@ export class TorchManager {
         add(LOCAL_ID, this.scene.CurrentPlayer, true);
         for (const [key, player] of this.scene.MapPlayersByKey) add(String(key), player, false);
         this.torches.update(time, bearers, get(mapEditorModeStore));
+        // The scene is only rendered when asked: a flame on the screen asks for it at each of its steps.
+        if (flameSeen && !REDUCED_MOTION && flameStep !== this.flameStep) {
+            this.flameStep = flameStep;
+            this.scene.markDirty();
+        }
     }
 
     public destroy(): void {

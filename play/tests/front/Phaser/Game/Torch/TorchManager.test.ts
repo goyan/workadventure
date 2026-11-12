@@ -29,6 +29,7 @@ vi.mock("../../../../../src/front/Phaser/Game/GameManager", () => ({
 const { TorchManager } = await import("../../../../../src/front/Phaser/Game/Torch/TorchManager");
 const { TORCH_EQUIPPED_VARIABLE } = await import("../../../../../src/front/Phaser/Game/Torch/TorchProtocol");
 const { torchFlicker, torchFlickerPhase } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlicker");
+const { torchFlameShape } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlameShape");
 const { torchEquippedStore } = await import("../../../../../src/front/Stores/TorchStore");
 const { nerfEquippedStore } = await import("../../../../../src/front/Stores/NerfStore");
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
@@ -59,6 +60,9 @@ describe("TorchManager", () => {
         scene.MapPlayersByKey.set(2, remote);
         scene.MapPlayersByKey.set(3, mock<RemotePlayer>({ isTorchLit: () => false }));
         scene.time = mock<Phaser.Time.Clock>({ now: 1000 });
+        Object.defineProperty(scene, "cameras", {
+            value: { main: { worldView: { x: 0, y: 0, width: 1000, height: 1000 } } },
+        });
         scene.getPlayerVariablesManager.mockReturnValue(variables);
         manager = new TorchManager(scene);
     });
@@ -115,11 +119,29 @@ describe("TorchManager", () => {
         // The flicker steps every 1000 / 15 ms: 1010 ms and 1060 ms are in the step that starts at 1000 ms.
         const expected = torchFlicker(1000, torchFlickerPhase("2"), false);
         expect(bearers[1].intensity).toBe(expected);
-        expect(remote.setTorchIntensity.mock.calls.at(-1)).toEqual([expected]);
+        expect(remote.setTorchFlame.mock.calls.at(-1)).toEqual([torchFlameShape(1000, torchFlickerPhase("2"), false)]);
         manager.update(1060);
         expect(updates[1].bearers[1].intensity).toBe(expected);
         manager.update(1070);
         expect(updates[2].bearers[1].intensity).toBe(torchFlicker(1000 + 1000 / 15, torchFlickerPhase("2"), false));
+    });
+
+    it("renders the scene 30 times a second for a flame on the screen, without drawing its light again", () => {
+        manager.update(1000);
+        expect(scene.markDirty.mock.calls).toHaveLength(1);
+        // Same step of the flame (1000 to 1033 ms): nothing more to render.
+        manager.update(1020);
+        expect(scene.markDirty.mock.calls).toHaveLength(1);
+        manager.update(1040);
+        expect(scene.markDirty.mock.calls).toHaveLength(2);
+        expect(remote.setTorchFlame.mock.calls.at(-1)).toEqual([
+            torchFlameShape((31 * 1000) / 30, torchFlickerPhase("2"), false),
+        ]);
+
+        // Out of the screen: the flame is not looked at.
+        Object.assign(remote, { x: 5000, y: 5000 });
+        manager.update(1080);
+        expect(scene.markDirty.mock.calls).toHaveLength(2);
     });
 
     it("tells the torches when the map editor is open", () => {

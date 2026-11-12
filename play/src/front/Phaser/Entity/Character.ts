@@ -35,6 +35,7 @@ import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
 import { decodeTorchEquipped } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
+import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShape";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
@@ -106,8 +107,8 @@ export abstract class Character extends Container implements OutlineableInterfac
     private nerfGunEffect: NerfGunEffect | undefined;
     private torchEquipped = false;
     private torchFlameEffect: TorchFlameEffect | undefined;
-    /** How bright the torch is now, set by the TorchManager (see torchFlicker). */
-    private torchIntensity = 1;
+    /** The shape of the flame now, set by the TorchManager (see torchFlameShape). */
+    private torchFlame: TorchFlameShape = { sway: 0, height: 1, width: 1, ember: undefined };
     /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
     private nerfHearts: number | undefined;
     private nerfHeartsEffect: NerfHeartsEffect | undefined;
@@ -181,7 +182,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         );
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
         this.updateNerfBlink();
-        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchIntensity);
+        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchFlame);
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -727,7 +728,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     public setTorchEquipped(value: unknown): void {
         this.torchEquipped = decodeTorchEquipped(value);
         if (this.torchEquipped) this.torchFlameEffect ??= new TorchFlameEffect(this.scene, this);
-        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchIntensity);
+        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchFlame);
         this.scene.markDirty();
     }
 
@@ -736,8 +737,8 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.torchEquipped && !this.invisible;
     }
 
-    public setTorchIntensity(intensity: number): void {
-        this.torchIntensity = intensity;
+    public setTorchFlame(shape: TorchFlameShape): void {
+        this.torchFlame = shape;
     }
 
     public isNerfEquipped(): boolean {
