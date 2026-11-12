@@ -350,6 +350,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             radius: "Portée (cases)",
             angle: "Ouverture",
             direction: "Direction",
+            rotation: "Tourner comme un gyrophare",
+            rotationSpeed: "Vitesse",
+            rotationSpeedUnit: "tr/min",
+            rotationSense: "Sens de rotation",
+            rotationClockwise: "Sens horaire",
+            rotationCounterclockwise: "Sens anti-horaire",
+            rotationHint:
+                "Tous les joueurs voient le faisceau au même endroit au même moment. La direction est celle du faisceau au début de chaque tour. Il reste fixe tant que l'éditeur est ouvert, et pour les joueurs qui ont coupé les effets lumineux ou demandé moins d'animations.",
+            rotationFullCircle:
+                "Une lampe qui éclaire tout autour (ouverture de 360°) ne peut pas tourner : réduisez son ouverture.",
         },
         openFile: {
             label: "Ouvrir un fichier",

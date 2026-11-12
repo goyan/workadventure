@@ -89,16 +89,23 @@ const lamp = (id: string, x: number, y: number) => entity(id, x, y, prefab({ lam
 /** A map of 40 by 40 free tiles. */
 const freeGrid = (): number[][] => Array.from({ length: 40 }, () => Array.from({ length: 40 }, () => 0));
 
+/** What the lamps are given in place of the clock of the server and of the preference of the system. */
+const clock = { now: 0 };
+let reducedMotion = false;
+
 function setup(grid = freeGrid()) {
     const scene = mockDeep<GameScene>();
+    // The camera shows the whole map of 40 by 40 tiles, unless a test moves it.
+    const worldView = { x: 0, y: 0, width: 1280, height: 1280 };
+    Object.assign(scene, { cameras: { main: { worldView } } });
     const wrapper = mockDeep<ReturnType<GameScene["getGameMapFrontWrapper"]>>();
     const state = { grid, openDoors: new Set<string>() };
     wrapper.getMapCollisionGrid.mockImplementation(() => state.grid);
     wrapper.getMap.mockReturnValue({ tilewidth: 32, tileheight: 32 } as ReturnType<typeof wrapper.getMap>);
     scene.getGameMapFrontWrapper.mockReturnValue(wrapper);
     scene.isDoorOpen.mockImplementation((id: string) => state.openDoors.has(id));
-    const lamps = new RgbLamps(scene, 5);
-    return { scene, state, lamps };
+    const lamps = new RgbLamps(scene, 5, { now: () => clock.now, reducedMotion });
+    return { scene, state, lamps, worldView };
 }
 
 let current: InstanceType<typeof RgbLamps> | undefined;
@@ -107,15 +114,17 @@ afterEach(() => {
     current = undefined;
     visuals.length = 0;
     rgbLampPreviewStore.set(undefined);
+    clock.now = 0;
+    reducedMotion = false;
 });
 
 function start(entities: Entity[], grid?: number[][]) {
     const context = setup(grid);
     current = context.lamps;
     const map = new Map(entities.map((object) => [object.entityId, object]));
-    const tick = (): void => {
+    const tick = (editorOpen = false): void => {
         context.lamps.reconcile(map);
-        context.lamps.update();
+        context.lamps.update(editorOpen);
     };
     tick();
     return { ...context, map, tick };
@@ -289,5 +298,185 @@ describe("RgbLamps", () => {
         lamps.destroy();
         expect(visuals[0].destroyed).toBe(true);
         expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+});
+
+describe("RgbLamps that turn like a rotating beacon", () => {
+    /** 30 turns a minute: a quarter turn every 500 ms, clockwise; 90 degrees wide, downwards at every whole turn. */
+    const turningProperty = (overrides: Record<string, unknown> = {}): EntityDataProperties => [
+        {
+            id: "p",
+            type: "rgbLampPropertyData",
+            color: "#ff0000",
+            radius: 6,
+            direction: 90,
+            angle: 90,
+            rotation: true,
+            rotationSpeed: 30,
+            ...overrides,
+        },
+    ];
+    const turningLamp = (id: string, x: number, y: number, overrides: Record<string, unknown> = {}) => {
+        const made = lamp(id, x, y);
+        made.fake.properties = turningProperty(overrides);
+        return made;
+    };
+
+    it("turns with the clock: the beam points where it was set at every whole turn, a quarter turn later 500 ms on", () => {
+        const { lamps } = start([turningLamp("a", 624, 624).entity]);
+        expect(visuals[0].draws[0].light.direction).toBe(90);
+        // South of the lamp: lit; west of it: dark.
+        expect(isLit(visuals[0].draws[0].polygon, { x: 640, y: 760 })).toBe(true);
+        expect(isLit(visuals[0].draws[0].polygon, { x: 520, y: 640 })).toBe(false);
+        clock.now = 500;
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(2);
+        expect(visuals[0].draws[1].light.direction).toBeCloseTo(180, 6);
+        expect(isLit(visuals[0].draws[1].polygon, { x: 640, y: 760 })).toBe(false);
+        expect(isLit(visuals[0].draws[1].polygon, { x: 520, y: 640 })).toBe(true);
+        clock.now = 2000;
+        lamps.update();
+        expect(visuals[0].draws[2].light.direction).toBeCloseTo(90, 6);
+    });
+
+    it("keeps the shadows as it turns: the walls of the map stop the beam in every direction", () => {
+        const grid = freeGrid();
+        // A wall two tiles west of the lamp.
+        for (let y = 18; y <= 22; y++) grid[y][17] = 1;
+        const { lamps } = start([turningLamp("a", 624, 624).entity], grid);
+        clock.now = 500;
+        lamps.update();
+        const west = visuals[0].draws[1].polygon;
+        expect(isLit(west, { x: 600, y: 640 })).toBe(true);
+        expect(isLit(west, { x: 500, y: 640 })).toBe(false);
+    });
+
+    it("is not drawn again while the clock gives the same beam", () => {
+        const { lamps, scene } = start([turningLamp("a", 624, 624).entity]);
+        scene.markDirty.mockClear();
+        lamps.update();
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(1);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+    });
+
+    it("tells the night veil each new beam, and asks for the scene to be drawn", () => {
+        const { lamps, scene } = start([turningLamp("a", 624, 624).entity]);
+        const [first] = get(rgbLampLightsStore);
+        scene.markDirty.mockClear();
+        clock.now = 300;
+        lamps.update();
+        const [second] = get(rgbLampLightsStore);
+        expect(second.revision).not.toBe(first.revision);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("stands still at the direction that was set with reduced motion", () => {
+        reducedMotion = true;
+        const { lamps, scene } = start([turningLamp("a", 624, 624).entity]);
+        scene.markDirty.mockClear();
+        for (const now of [300, 700, 1300]) {
+            clock.now = now;
+            lamps.update();
+        }
+        expect(visuals[0].draws).toHaveLength(1);
+        expect(visuals[0].draws[0].light.direction).toBe(90);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+    });
+
+    it("stands still at the direction that was set while the map editor is open, and turns again once it is closed", () => {
+        const { lamps } = start([turningLamp("a", 624, 624).entity]);
+        clock.now = 500;
+        lamps.update(true);
+        clock.now = 900;
+        lamps.update(true);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBe(90);
+        const whileOpen = visuals[0].draws.length;
+        lamps.update(true);
+        expect(visuals[0].draws).toHaveLength(whileOpen);
+        lamps.update(false);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBeCloseTo(252, 6);
+    });
+
+    it("stands still at the direction that was set while the light effects are off for me, and turns again in step with the clock once they are back on", () => {
+        const { lamps, scene } = start([turningLamp("a", 624, 624).entity]);
+        clock.now = 500;
+        lamps.update(false, false);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBe(90);
+        const whileOff = visuals[0].draws.length;
+        scene.markDirty.mockClear();
+        clock.now = 900;
+        lamps.update(false, false);
+        expect(visuals[0].draws).toHaveLength(whileOff);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+        lamps.update(false, true);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBeCloseTo(252, 6);
+    });
+
+    it("does not turn a lamp that shines all around, nor one whose rotation is off", () => {
+        const { lamps } = start([
+            turningLamp("round", 624, 624, { angle: 360 }).entity,
+            turningLamp("off", 200, 200, { rotation: false }).entity,
+        ]);
+        for (const now of [300, 700, 1300]) {
+            clock.now = now;
+            lamps.update();
+        }
+        expect(visuals.map((visual) => visual.draws.length)).toEqual([1, 1]);
+    });
+
+    it("turns the other way, at the speed that was set", () => {
+        const { lamps } = start([turningLamp("a", 624, 624, { rotationClockwise: false, rotationSpeed: 60 }).entity]);
+        clock.now = 250;
+        lamps.update();
+        expect(visuals[0].draws[1].light.direction).toBeCloseTo(0, 6);
+    });
+
+    it("is not drawn again as it turns while it is out of the screen, and catches up when it comes back", () => {
+        const { lamps, worldView } = start([turningLamp("a", 624, 624).entity]);
+        worldView.x = 5000;
+        clock.now = 500;
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(1);
+        worldView.x = 0;
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(2);
+        expect(visuals[0].draws[1].light.direction).toBeCloseTo(180, 6);
+    });
+
+    it("draws at most 4 turning lamps in one image, those that waited the longest first", () => {
+        const lampsOnScreen = Array.from({ length: 6 }, (_, index) => turningLamp(`l${index}`, 100 + index * 160, 600));
+        const { lamps } = start(lampsOnScreen.map((made) => made.entity));
+        expect(visuals.map((visual) => visual.draws.length)).toEqual([1, 1, 1, 1, 1, 1]);
+        clock.now = 100;
+        lamps.update();
+        expect(visuals.map((visual) => visual.draws.length)).toEqual([2, 2, 2, 2, 1, 1]);
+        clock.now = 200;
+        lamps.update();
+        expect(visuals.map((visual) => visual.draws.length)).toEqual([3, 3, 2, 2, 2, 2]);
+    });
+
+    it("draws its first beam at once, whatever the budget, and again when it is set or moved", () => {
+        const many = Array.from({ length: 6 }, (_, index) => turningLamp(`l${index}`, 100 + index * 160, 600));
+        const { lamps } = start(many.map((made) => made.entity));
+        many[5].fake.properties = turningProperty({ color: "#00ff00" });
+        many[4].fake.x += 32;
+        lamps.update();
+        expect(visuals[5].draws.at(-1)?.colour).toBe(0x00ff00);
+        expect(visuals[4].draws.at(-1)?.light.x).toBe(many[4].fake.x + 16);
+    });
+
+    it("stops turning when its rotation is turned off, back at the direction that was set", () => {
+        const { fake, entity: object } = turningLamp("a", 624, 624);
+        const { lamps } = start([object]);
+        clock.now = 500;
+        lamps.update();
+        fake.properties = turningProperty({ rotation: false });
+        lamps.update();
+        expect(visuals[0].draws.at(-1)?.light.direction).toBe(90);
+        clock.now = 900;
+        lamps.update();
+        expect(visuals[0].draws.at(-1)?.light.direction).toBe(90);
+        expect(visuals[0].draws).toHaveLength(3);
     });
 });

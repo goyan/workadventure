@@ -199,3 +199,62 @@ export function lightFalloff(distance: number): number {
     const t = Math.min(1, Math.max(0, distance));
     return (1 - t * t) ** 2;
 }
+
+/** Where the ray from the light at `angle` (radians) crosses the side from a to b; the closer end when it does not. */
+function rayOnSide(light: Point, angle: number, a: Point, b: Point): Point {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const ex = b.x - a.x;
+    const ey = b.y - a.y;
+    const cross = dx * ey - dy * ex;
+    const ox = a.x - light.x;
+    const oy = a.y - light.y;
+    const along = Math.abs(cross) < 1e-12 ? -1 : (ox * ey - oy * ex) / cross;
+    if (along < 0) {
+        const closer = Math.hypot(ox, oy) <= Math.hypot(b.x - light.x, b.y - light.y) ? a : b;
+        return { x: closer.x, y: closer.y };
+    }
+    return { x: light.x + dx * along, y: light.y + dy * along };
+}
+
+/**
+ * The part of a full turn of light (litPolygon with an angle of 360) that a cone lights: the same polygon as
+ * litPolygon(cone), shadows included, without casting a single ray. A turning lamp casts its full turn once, when the
+ * lamp or an obstacle moves, then cuts its cone out of it as it turns, at every image. The full turn is seen whole
+ * from the light, its points in the order of their angle: the cone keeps the points between its two edges, and adds
+ * where each edge crosses the side of the full turn it falls on.
+ */
+export function coneOfLitPolygon(fullTurn: readonly Point[], cone: LightCone): readonly Point[] {
+    if (cone.angle >= 360 || fullTurn.length < 3) {
+        return fullTurn;
+    }
+    const turn = 2 * Math.PI;
+    const span = (cone.angle * Math.PI) / 180;
+    const start = (cone.direction * Math.PI) / 180 - span / 2;
+    // The angle of each point from the first edge of the cone, from 0 to a full turn.
+    const from = fullTurn.map((point) => {
+        const angle = Math.atan2(point.y - cone.y, point.x - cone.x) - start;
+        return angle - turn * Math.floor(angle / turn);
+    });
+    // The first point past the first edge: the points come in the order of their angle, from there on.
+    let first = 0;
+    for (let index = 1; index < from.length; index++) {
+        if (from[index] < from[first]) {
+            first = index;
+        }
+    }
+    const count = fullTurn.length;
+    const at = (index: number): Point => fullTurn[(index + count) % count];
+    const polygon: Point[] = [{ x: cone.x, y: cone.y }, rayOnSide(cone, start, at(first - 1), at(first))];
+    let last = first - 1;
+    for (let step = 0; step < count; step++) {
+        const index = (first + step) % count;
+        if (from[index] > span) {
+            break;
+        }
+        polygon.push({ x: fullTurn[index].x, y: fullTurn[index].y });
+        last = first + step;
+    }
+    polygon.push(rayOnSide(cone, start + span, at(last), at(last + 1)));
+    return polygon;
+}

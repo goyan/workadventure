@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { EntityDataProperty, EntityRawPrefab, RgbLampPropertyData } from "../src";
+import {
+    EntityDataProperty,
+    EntityRawPrefab,
+    RGB_LAMP_DEFAULT_ROTATION_SPEED,
+    RGB_LAMP_MAX_ROTATION_SPEED,
+    RGB_LAMP_MIN_ROTATION_SPEED,
+    RgbLampPropertyData,
+} from "../src";
 
 describe("RgbLampPropertyData", () => {
     const base = { id: "rgb-1", type: "rgbLampPropertyData" as const };
@@ -62,5 +69,44 @@ describe("catalog entry of an RGB lamp and of a tall piece of furniture", () => 
 
     it("fails open: an invalid castsShadow leaves the object as a plain one", () => {
         expect(EntityRawPrefab.parse({ ...prefab, castsShadow: "yes" }).castsShadow).toBeUndefined();
+    });
+});
+
+describe("rotation of an RGB lamp", () => {
+    const base = { id: "rgb-1", type: "rgbLampPropertyData" as const };
+
+    it("fails open: a lamp saved without the rotation fields stays a still lamp", () => {
+        const parsed = RgbLampPropertyData.parse(base);
+        expect(parsed.rotation).toBeUndefined();
+        expect(parsed.rotationSpeed).toBeUndefined();
+        expect(parsed.rotationClockwise).toBeUndefined();
+    });
+
+    it("keeps the rotation, its speed in turns a minute and its sense that were set", () => {
+        const parsed = RgbLampPropertyData.parse({
+            ...base,
+            rotation: true,
+            rotationSpeed: 120,
+            rotationClockwise: false,
+        });
+        expect(parsed).toMatchObject({ rotation: true, rotationSpeed: 120, rotationClockwise: false });
+    });
+
+    it("drops a rotation field that is not valid instead of refusing the whole map", () => {
+        for (const rotationSpeed of [9, 121, "fast"]) {
+            const parsed = RgbLampPropertyData.safeParse({ ...base, rotation: true, rotationSpeed });
+            expect(parsed.success).toBe(true);
+            expect(parsed.data?.rotationSpeed).toBeUndefined();
+            expect(parsed.data?.rotation).toBe(true);
+        }
+        const parsed = RgbLampPropertyData.parse({ ...base, rotation: "yes", rotationClockwise: 1 });
+        expect(parsed.rotation).toBeUndefined();
+        expect(parsed.rotationClockwise).toBeUndefined();
+    });
+
+    it("is never faster than 2 turns a second: a single beam passes a still observer at most 2 times a second (WCAG 2.3.1: 3 flashes)", () => {
+        expect(RGB_LAMP_MAX_ROTATION_SPEED / 60).toBeLessThanOrEqual(2);
+        expect(RGB_LAMP_MIN_ROTATION_SPEED).toBe(10);
+        expect(RGB_LAMP_DEFAULT_ROTATION_SPEED).toBe(30);
     });
 });

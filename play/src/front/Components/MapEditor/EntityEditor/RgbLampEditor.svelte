@@ -2,10 +2,13 @@
     import { onMount } from "svelte";
     import { v4 as uuid } from "uuid";
     import {
+        RGB_LAMP_DEFAULT_ROTATION_SPEED,
         RGB_LAMP_MAX_ANGLE,
         RGB_LAMP_MAX_RADIUS_TILES,
+        RGB_LAMP_MAX_ROTATION_SPEED,
         RGB_LAMP_MIN_ANGLE,
         RGB_LAMP_MIN_RADIUS_TILES,
+        RGB_LAMP_MIN_ROTATION_SPEED,
     } from "@workadventure/map-editor";
     import LL from "../../../../i18n/i18n-svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
@@ -18,6 +21,8 @@
     } from "../../../Phaser/Game/Lamps/RgbLampSettings";
     import { rgbLampPreviewStore } from "../../../Stores/RgbLampStore";
     import Input from "../../Input/Input.svelte";
+    import InputRadio from "../../Input/InputRadio.svelte";
+    import InputSwitch from "../../Input/InputSwitch.svelte";
     import RangeSlider from "../../Input/RangeSlider.svelte";
 
     let { entity }: { entity: Entity } = $props();
@@ -31,22 +36,46 @@
     let radius = $state(saved().radius);
     let direction = $state(saved().direction);
     let angle = $state(saved().angle);
+    let rotation = $state(saved().rotation ?? false);
+    let rotationSpeed = $state(saved().rotationSpeed ?? RGB_LAMP_DEFAULT_ROTATION_SPEED);
+    let rotationClockwise = $state(saved().rotationClockwise ?? true);
+    // A lamp that shines all around shows nothing when it turns: its rotation cannot be set.
+    const fullCircle = $derived(angle >= RGB_LAMP_MAX_ANGLE);
 
-    const shown = (): RgbLampSettings => ({ color, radius, direction, angle });
+    /**
+     * The settings shown here. The rotation is only written once it was set: a lamp that never turned keeps the
+     * property it had (an older map-storage would drop the rotation fields of the map, without refusing it).
+     */
+    function settingsOf(
+        values: RgbLampSettings & { rotation: boolean; rotationSpeed: number; rotationClockwise: boolean },
+    ) {
+        const { rotation, rotationSpeed, rotationClockwise, ...still } = values;
+        const rotationSet = rotation || rotationSpeed !== RGB_LAMP_DEFAULT_ROTATION_SPEED || !rotationClockwise;
+        return rotationSet ? { ...still, rotation, rotationSpeed, rotationClockwise } : still;
+    }
+
+    const shown = (): RgbLampSettings =>
+        settingsOf({ color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise });
 
     function show(settings: RgbLampSettings): void {
         ({ color, radius, direction, angle } = settings);
+        rotation = settings.rotation ?? false;
+        rotationSpeed = settings.rotationSpeed ?? RGB_LAMP_DEFAULT_ROTATION_SPEED;
+        rotationClockwise = settings.rotationClockwise ?? true;
     }
 
     // What is being set here is shown on the map before it is saved: the lamp draws it, shadows included.
     $effect(() => {
-        const settings = { color, radius, direction, angle };
+        const settings = settingsOf({ color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise });
         const kept = saved();
         const same =
             settings.color === kept.color &&
             settings.radius === kept.radius &&
             settings.direction === kept.direction &&
-            settings.angle === kept.angle;
+            settings.angle === kept.angle &&
+            rotation === (kept.rotation ?? false) &&
+            rotationSpeed === (kept.rotationSpeed ?? RGB_LAMP_DEFAULT_ROTATION_SPEED) &&
+            rotationClockwise === (kept.rotationClockwise ?? true);
         rgbLampPreviewStore.set(same ? undefined : { entityId: lamp.entityId, settings });
     });
 
@@ -124,4 +153,46 @@
         bind:value={direction}
         buttonShape="square"
     />
+    <!-- A disabled fieldset disables the native inputs inside: a greyed control sends no change, and saves nothing. -->
+    <fieldset class="flex flex-col gap-2" class:opacity-50={fullCircle} disabled={fullCircle}>
+        <InputSwitch
+            id="rgb-lamp-rotation-{lamp.entityId}"
+            label={$LL.mapEditor.properties.rgbLamp.rotation()}
+            bind:value={rotation}
+        />
+        <fieldset class="flex flex-col gap-1" class:opacity-50={!rotation} disabled={!rotation}>
+            <legend class="sr-only">{$LL.mapEditor.properties.rgbLamp.rotationSense()}</legend>
+            <RangeSlider
+                label={$LL.mapEditor.properties.rgbLamp.rotationSpeed()}
+                unit={$LL.mapEditor.properties.rgbLamp.rotationSpeedUnit()}
+                id="rgb-lamp-rotation-speed-{lamp.entityId}"
+                min={RGB_LAMP_MIN_ROTATION_SPEED}
+                max={RGB_LAMP_MAX_ROTATION_SPEED}
+                step={5}
+                bind:value={rotationSpeed}
+                buttonShape="square"
+            />
+            <div class="flex flex-wrap">
+                <InputRadio
+                    id="rgb-lamp-rotation-clockwise-{lamp.entityId}"
+                    name="rgb-lamp-rotation-sense-{lamp.entityId}"
+                    label={$LL.mapEditor.properties.rgbLamp.rotationClockwise()}
+                    value={true}
+                    bind:group={rotationClockwise}
+                />
+                <InputRadio
+                    id="rgb-lamp-rotation-counterclockwise-{lamp.entityId}"
+                    name="rgb-lamp-rotation-sense-{lamp.entityId}"
+                    label={$LL.mapEditor.properties.rgbLamp.rotationCounterclockwise()}
+                    value={false}
+                    bind:group={rotationClockwise}
+                />
+            </div>
+        </fieldset>
+    </fieldset>
+    {#if fullCircle}
+        <p class="m-0 text-sm text-white/70">{$LL.mapEditor.properties.rgbLamp.rotationFullCircle()}</p>
+    {:else if rotation}
+        <p class="m-0 text-sm text-white/70">{$LL.mapEditor.properties.rgbLamp.rotationHint()}</p>
+    {/if}
 </fieldset>

@@ -594,6 +594,17 @@
                           "minimum": 10,
                           "maximum": 360,
                           "default": 360
+                        },
+                        "rotation": {
+                          "type": "boolean"
+                        },
+                        "rotationSpeed": {
+                          "type": "number",
+                          "minimum": 10,
+                          "maximum": 120
+                        },
+                        "rotationClockwise": {
+                          "type": "boolean"
                         }
                       },
                       "required": [

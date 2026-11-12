@@ -182,7 +182,8 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   `castsShadow: true` (leurs `collisionRectangles`, sinon les cases de leur `collisionGrid`). Les autres objets (une
   table basse) et les avatars ne font pas d'ombre. Une lampe posée sur un mur ou sur un meuble haut éclaire quand même.
 - **Jour et nuit** : la lampe éclaire tout le temps, sans musique, et même quand les effets lumineux des Jams sont
-  coupés (ce n'est pas un effet : rien ne clignote ni ne bouge). La nuit, le voile est percé de la forme exacte de sa
+  coupés (ce n'est pas un effet de Jam : rien ne clignote ; seule une lampe réglée en rotation bouge, et elle se fige
+  quand on coupe ses effets lumineux, voir plus bas). La nuit, le voile est percé de la forme exacte de sa
   lumière. Elle n'est pas pilotée par script pour l'instant ; elle relit sa propriété à chaque image, ce qui le
   permettra.
 - **Format** : les réglages sont dans une nouvelle propriété d'objet `rgbLampPropertyData` (`color`, `radius`,
@@ -191,6 +192,42 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   lampe a été réglée n'est plus lisible par une image plus ancienne (à savoir avant un retour arrière). Tant qu'aucune
   lampe n'est réglée, rien n'est écrit dans la carte. Un front plus ancien ignore le genre `rgb` du catalogue : l'objet
   s'affiche comme une simple image.
+
+- **Rotation (gyrophare)** : dans **Lumière de la lampe**, l'interrupteur **Tourner comme un gyrophare** fait tourner le
+  faisceau, à une **vitesse** de 10 à 120 tours par minute (30 par défaut, par pas de 5), en **sens horaire** ou
+  **anti-horaire**. Les ombres tournent avec lui et le voile de nuit suit le faisceau. L'angle vient de l'horloge, sans
+  aucun message réseau : à chaque tour entier depuis l'époque Unix (1er janvier 1970 UTC), le faisceau pointe vers la
+  **direction** réglée, qui sert donc de phase ; tous les joueurs voient le même faisceau au même moment. L'horloge est
+  celle du serveur (`/server-time`, comme la nuit), demandée seulement quand une lampe tourne ; en attendant sa réponse,
+  celle du poste (le faisceau saute une fois à la réponse). Le faisceau reste **fixe** à sa direction pour les joueurs
+  qui ont demandé moins d'animations (préférence système) ou coupé leurs effets lumineux **pour soi** (Paramètres →
+  Ambiance, ou la boule « pour moi » d'un Jam : `lampEffectsEnabledStore`) ; rallumés, il reprend là où l'horloge
+  le place, en phase avec les autres (la coupure « pour tous » de l'hôte d'un Jam ne le fige pas), et **tant que l'éditeur est ouvert** pour soi : la poignée
+  du bout reste sur le faisceau et règle la phase sans ambiguïté (fermer l'éditeur pour voir tourner). Une lampe à 360°
+  d'ouverture ne peut pas tourner (rien ne changerait à l'écran) : le réglage est grisé, avec l'explication.
+  **Photosensibilité** : un seul faisceau passe sur un observateur immobile au plus 2 fois par seconde (120 tr/min),
+  sous les 3 flashs par seconde de WCAG 2.3.1 (testé au cône le plus étroit, 10°). Limite : **deux lampes** à
+  120 tr/min qui balaient le même endroit y passent 4 fois par seconde (au-dessus du seuil) ; rien ne l'empêche
+  aujourd'hui (plafond à 90 tr/min, ou décalage des lampes voisines, à décider). Format : trois champs facultatifs
+  de `rgbLampPropertyData` (`rotation`, `rotationSpeed`, `rotationClockwise`) ; absents, la lampe est fixe ; une valeur
+  invalide est ignorée sans refuser la carte ; rien n'est écrit sur une lampe qui n'a jamais tourné. Une image plus
+  ancienne (`play`, `back`, `map-storage` de la PR #199) **ne refuse pas** une carte qui les porte : elle retire ces
+  champs à la lecture (Zod, vérifié par un test du schéma), la lampe y est fixe ; un `map-storage` ancien qui
+  réécrit la carte peut donc les effacer (non vérifié). Déployer les trois
+  images ensemble. Coût : le tour complet de lumière (lancer de rayons, ombres comprises) n'est calculé qu'au réglage,
+  au déplacement ou quand un obstacle change dans sa portée (une porte de l'outil Carte qui s'ouvre au passage de
+  quelqu'un compte : hors budget, 7 à 8 fois plus cher que le cône étroit d'une lampe fixe) ; à chaque pas, le faisceau est découpé dans ce tour
+  (`coneOfLitPolygon`, sans rayon), puis la texture est redessinée. Seules les lampes à l'écran sont redessinées,
+  dès 1° de mouvement (même à 10 tr/min, presque à chaque image), au plus 4 par image (les plus anciennes d'abord :
+  au-delà de 4 lampes à l'écran, chacune avance moins souvent, par sauts plus grands), soit au plus 240 dessins de
+  texture par seconde à 60 images par seconde. Mesure hors navigateur, 10 lampes, calcul seul : découpage 0,03 à
+  0,1 ms par pas pour les 10 sur une carte de bureaux (6 à 20 cases), 0,8 ms sur des piliers une case sur deux à
+  20 cases ; le tour complet coûte 0,5 ms (bureaux, 6 cases) à 5 ms (bureaux 20 cases, ou piliers
+  6 cases) pour les 10, et 330 ms sur les piliers à 20 cases (pire cas). Le dessin de la texture (dégradé sur
+  (2 × portée en px / 4)² texels, 37 Ko à 6 cases, 400 Ko à 20 cases, envoyés au GPU à chaque pas : au plus
+  9 Mo/s à 6 cases, 98 Mo/s à 20 cases) et la recomposition du voile de nuit à chaque pas ne sont pas mesurés. Le
+  tour complet des piliers à 20 cases (330 ms pour 10 lampes) fait une saccade visible : acceptable sur des bureaux,
+  pas sur ce pire cas.
 
 Code : `play/src/front/Phaser/Game/Lamps/RgbLamp*.ts`. Le calcul est sans Phaser et testé : segments d'obstacles
 (`RgbLampObstacles`), polygone éclairé par lancer de rayons découpé par le cône (`RgbLampGeometry`). Rendu : une
@@ -203,6 +240,10 @@ fois) ; rien par image tant que rien ne change.
 Recette : poser la lampe près d'un mur, d'une porte de l'outil Carte et d'un meuble haut ; tirer la poignée du bout,
 puis les losanges ; changer la couleur ; annuler ; déplacer la lampe et le meuble ; ouvrir la porte en la traversant ;
 regarder de nuit (`?nightAt=22:00` en dev).
+Rotation (code `RgbLampRotation.ts`, `coneOfLitPolygon`) : activer la rotation, fermer l'éditeur, comparer deux postes
+côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouverture ; sens anti-horaire ; près d'un mur et
+d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
+débit d'images.
 
 ## Paroles de karaoké
 
