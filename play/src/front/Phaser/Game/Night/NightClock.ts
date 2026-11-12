@@ -11,13 +11,6 @@ const CIVIL_TWILIGHT_ELEVATION = -6;
 
 const NIGHT_AT_PATTERN = /^(\d{1,2}):(\d{2})$/;
 
-const parisFormatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Paris",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-});
-
 const parisWallClockFormatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Paris",
     year: "numeric",
@@ -40,14 +33,6 @@ function parisParts(date: Date): Record<"year" | "month" | "day" | "hour" | "min
         minute: part("minute"),
         second: part("second"),
     };
-}
-
-/** Minutes since midnight in Paris for this instant. */
-export function parisMinutes(date: Date): number {
-    const parts = parisFormatter.formatToParts(date);
-    const hours = Number(parts.find((part) => part.type === "hour")?.value);
-    const minutes = Number(parts.find((part) => part.type === "minute")?.value);
-    return hours * 60 + minutes;
 }
 
 /** Calendar date in Paris for this instant (month from 1 to 12). */

@@ -3,7 +3,6 @@ import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
     parisCalendarDay,
-    parisMinutes,
     parisWallClockToInstant,
     parseNightAt,
     sunElevationInParis,
@@ -114,16 +113,6 @@ describe("parisCalendarDay", () => {
     it("gives the date of Paris, not the UTC one", () => {
         expect(parisCalendarDay(new Date("2026-11-12T23:30:00Z"))).toEqual({ year: 2026, month: 11, day: 13 });
         expect(parisCalendarDay(new Date("2026-11-12T22:30:00Z"))).toEqual({ year: 2026, month: 11, day: 12 });
-    });
-});
-
-describe("parisMinutes", () => {
-    it("uses UTC+1 in winter", () => {
-        expect(parisMinutes(new Date("2026-01-15T18:00:00Z"))).toBe(19 * 60);
-    });
-
-    it("uses UTC+2 in summer", () => {
-        expect(parisMinutes(new Date("2026-07-15T17:00:00Z"))).toBe(19 * 60);
     });
 });
 
