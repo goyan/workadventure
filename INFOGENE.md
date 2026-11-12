@@ -85,10 +85,13 @@ reste possible).
 - **Lumière** : orange chaud, 5,5 cases autour de la flamme, de jour comme de nuit ; la nuit, le voile est percé de la
   forme exacte de la lumière (comme la lampe RGB). Elle est arrêtée par les mêmes obstacles que la lampe RGB : cases
   bloquantes, murs de l'outil Carte (porte fermée), objets `castsShadow` ; ni les avatars ni les objets bas ne font
-  d'ombre. La lumière part de la flamme, dans la main ; si la flamme passe au-dessus d'un mur (avatar collé à un mur),
-  elle part du point du corps le plus proche de la flamme encore du bon côté : la lumière ne traverse jamais un mur.
+  d'ombre. La lumière part de la flamme, dans la main ; si la flamme passe au-dessus d'un obstacle (avatar collé à un
+  mur), elle part juste avant l'obstacle, du côté du corps. Pour un mur horizontal de l'outil Carte, le côté est
+  celui du pied du mur (collision de 6 px en bas de la façade) où se tient l'avatar : collé au mur par le nord, son
+  corps est sous le chapeau du mur, mais c'est la pièce nord qu'il éclaire. La lumière ne traverse jamais un mur
+  (positions limites calculées d'après les collisions du catalogue, pas observées en jeu).
 - **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
-  100 %), sans alternance brusque ni plus de trois variations marquées par seconde (photosensibilité, WCAG 2.3.1) ;
+  100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées par seconde (photosensibilité, WCAG 2.3.1) ;
   la forme et la portée restent fixes (une portée qui varie ferait bouger le bord des ombres sur les murs). La petite
   flamme dans la main suit la même onde. Préférence système de mouvement réduit : lumière et flamme fixes.
 - **Coût** : la forme d'une lumière n'est recalculée que si la flamme a bougé d'au moins un pixel ou qu'un obstacle a

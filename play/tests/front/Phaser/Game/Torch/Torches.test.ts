@@ -176,6 +176,33 @@ describe("Torches", () => {
         expect(isLit(visuals[0].draws[0].polygon, { x: 645, y: 780 })).toBe(false);
     });
 
+    it("keeps each bearer's light on its own side of a wall of the map layer", () => {
+        const { state, torches } = setup();
+        for (let column = 10; column < 30; column++) {
+            state.entities.set(
+                `wall-${column}`,
+                entity(
+                    `wall-${column}`,
+                    column * 32,
+                    22 * 32,
+                    prefab({ collectionName: "Carte Murs", id: "Carte Murs:facade-blanc-mid:Default:Down" }),
+                ),
+            );
+        }
+        // As close to the wall as the body allows, north (sprite centre at 714) and south (at 736) of it.
+        torches.update(
+            0,
+            [bearer("north", 640, 714), bearer("south", 800, 736, { direction: PositionMessage_Direction.UP })],
+            false,
+        );
+        const north = visuals.find(({ id }) => id === "torch:north")?.draws[0].polygon ?? [];
+        const south = visuals.find(({ id }) => id === "torch:south")?.draws[0].polygon ?? [];
+        expect(isLit(north, { x: 645, y: 650 })).toBe(true);
+        expect(isLit(north, { x: 645, y: 780 })).toBe(false);
+        expect(isLit(south, { x: 805, y: 780 })).toBe(true);
+        expect(isLit(south, { x: 805, y: 650 })).toBe(false);
+    });
+
     it("draws at most four lights per image, the local player's first, and catches up on the next images", () => {
         const { torches } = setup();
         const others = Array.from({ length: 6 }, (_, index) => bearer(String(index), 100 + index * 100, 300));

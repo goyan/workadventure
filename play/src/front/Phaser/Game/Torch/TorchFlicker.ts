@@ -29,6 +29,14 @@ export function torchFlicker(timeMs: number, phase: number, reducedMotion: boole
     return TORCH_FLICKER_MIN + ((1 - TORCH_FLICKER_MIN) * (wave + 1)) / 2;
 }
 
+/** The flicker moves 15 times a second: soft enough to look alive, and the scene is not rendered at every image. */
+export const TORCH_FLICKER_STEPS_PER_SECOND = 15;
+
+/** The start of the flicker step a time falls in: the torches are lit with the flicker of that time. */
+export function torchFlickerStep(timeMs: number): number {
+    return (Math.floor((timeMs * TORCH_FLICKER_STEPS_PER_SECOND) / 1000) * 1000) / TORCH_FLICKER_STEPS_PER_SECOND;
+}
+
 /** A phase from 0 to 1 that stays the same for an id: each bearer's torch flickers in its own way. */
 export function torchFlickerPhase(id: string): number {
     let hash = 0;

@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { TORCH_FLICKER_MIN, torchFlicker } from "../../../../../src/front/Phaser/Game/Torch/TorchFlicker";
+import {
+    TORCH_FLICKER_MIN,
+    torchFlicker,
+    torchFlickerStep,
+} from "../../../../../src/front/Phaser/Game/Torch/TorchFlicker";
 
-/** Ten seconds sampled at 60 images per second. */
+/** Ten seconds at 60 images per second, the flicker moving by steps as in the game (see TorchManager). */
 const samples = (phase: number, reducedMotion = false): number[] =>
-    Array.from({ length: 600 }, (_, frame) => torchFlicker((frame * 1000) / 60, phase, reducedMotion));
+    Array.from({ length: 600 }, (_, frame) =>
+        torchFlicker(torchFlickerStep((frame * 1000) / 60), phase, reducedMotion),
+    );
 
 describe("torchFlicker", () => {
     it("stays between the dimmest flame and the full light", () => {
@@ -21,16 +27,26 @@ describe("torchFlicker", () => {
         expect(Math.max(...values) - Math.min(...values)).toBeGreaterThan(0.05);
     });
 
-    it("never changes abruptly from one image to the next", () => {
-        const values = samples(0.5);
-        for (let index = 1; index < values.length; index++) {
-            expect(Math.abs(values[index] - values[index - 1])).toBeLessThan(0.02);
+    it("moves by steps 15 times a second", () => {
+        expect(torchFlickerStep(0)).toBe(0);
+        expect(torchFlickerStep(1010)).toBe(1000);
+        expect(torchFlickerStep(1060)).toBe(1000);
+        expect(torchFlickerStep(1070)).toBeCloseTo(1000 + 1000 / 15);
+    });
+
+    it("never changes abruptly from one image to the next: under 3 % of the light", () => {
+        for (const phase of [0, 0.5]) {
+            const values = samples(phase);
+            for (let index = 1; index < values.length; index++) {
+                expect(Math.abs(values[index] - values[index - 1])).toBeLessThan(0.03);
+            }
         }
     });
 
     it("has at most three marked variations per second (photosensitivity)", () => {
         for (const phase of [0, 0.25, 0.6]) {
-            const values = samples(phase);
+            // The steps hold a value for a few images: only the changes are looked at.
+            const values = samples(phase).filter((value, index, all) => index === 0 || value !== all[index - 1]);
             // A marked variation: a turn of the curve that follows a change of at least 0.02 since the previous turn.
             let turns = 0;
             let lastTurn = values[0];

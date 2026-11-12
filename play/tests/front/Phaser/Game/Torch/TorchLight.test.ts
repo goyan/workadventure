@@ -66,14 +66,29 @@ describe("torchLightShape", () => {
         expect(isLit(polygon, { x: 640, y: 700 })).toBe(true);
     });
 
-    it("does not leak through a thin wall of the map layer either", () => {
-        const wall = { ax: 0, ay: 712, bx: 1280, by: 712 };
+    // A horizontal wall of the map layer on grid line 22: drawn on the tile row 704-736, its cap (where it stops the
+    // light) at 710, its collision the foot of the wall, 730-736 (see build_map_layer_prefabs, FOOTPRINT). The avatars
+    // stand as close as their 16 px body allows: north, the sprite centre at 714 (body 714-730); south, at 736.
+    const wall = { ax: 0, ay: 710, bx: 1280, by: 710 };
+
+    it.each([PositionMessage_Direction.DOWN, PositionMessage_Direction.UP])(
+        "lights the room of an avatar standing north of a thin wall, not the room behind it (facing %s)",
+        (direction) => {
+            const { light, polygon } = torchLightShape(bearer(640, 714, direction), obstacles({ walls: [wall] }));
+            expect(light.y).toBeLessThan(710);
+            expect(isLit(polygon, { x: 640, y: 650 })).toBe(true);
+            expect(isLit(polygon, { x: 640, y: 780 })).toBe(false);
+        },
+    );
+
+    it("lights the room of an avatar standing south of a thin wall, and the face of the wall, not the room behind", () => {
         const { polygon } = torchLightShape(
-            bearer(640, 716, PositionMessage_Direction.UP),
+            bearer(640, 736, PositionMessage_Direction.UP),
             obstacles({ walls: [wall] }),
         );
-        expect(isLit(polygon, { x: 640, y: 680 })).toBe(false);
-        expect(isLit(polygon, { x: 640, y: 760 })).toBe(true);
+        expect(isLit(polygon, { x: 640, y: 780 })).toBe(true);
+        expect(isLit(polygon, { x: 640, y: 720 })).toBe(true);
+        expect(isLit(polygon, { x: 640, y: 650 })).toBe(false);
     });
 
     it("is stopped by a tall object, and does not shine out of one the flame is held into", () => {

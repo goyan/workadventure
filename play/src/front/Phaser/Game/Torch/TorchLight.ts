@@ -2,10 +2,17 @@ import type { PositionMessage_Direction } from "@workadventure/messages";
 import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
 import { litPolygon, segmentsNearLight, type LightCone, type Point, type Segment } from "../Lamps/RgbLampGeometry";
 import { obstacleSegments, type LightObstacles } from "../Lamps/RgbLampObstacles";
+import { FACADE_HEIGHT, WALL_HALF } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { TORCH_RADIUS_TILES, torchFlamePose } from "./TorchProtocol";
 
 /** Pulled back from a wall the flame reaches over, in map pixels: the light starts just on the avatar's side. */
 const WALL_MARGIN_PX = 0.5;
+/**
+ * A horizontal wall of the map layer stops the light on its cap (see wallSegments), but the avatars on each side are
+ * kept apart by its foot: a band 6 px high at the bottom of the facade (FOOTPRINT, tools/build_map_layer_prefabs.mjs).
+ * Its middle, from the cap: the line that tells on which side of the wall an avatar stands.
+ */
+const WALL_FOOT_BELOW_CAP_PX = FACADE_HEIGHT - 3 - WALL_HALF;
 
 /** Who holds a torch, and how. */
 export interface TorchHolder {
@@ -61,6 +68,27 @@ export function torchLightOrigin(anchor: Point, flame: Point, segments: readonly
     return { x: anchor.x + dx * back, y: anchor.y + dy * back };
 }
 
+/**
+ * Keeps the light on the side of each horizontal wall of the map layer where the avatar stands. An avatar north of a
+ * wall stands right over its foot, under its cap: its body is south of the cap and its flame can be too, though the
+ * room it lights is the northern one. Only the walls above or under the light are looked at.
+ */
+export function keepOnHolderSide(origin: Point, anchor: Point, horizontalWalls: readonly Segment[]): Point {
+    let y = origin.y;
+    for (const wall of horizontalWalls) {
+        if (origin.x < Math.min(wall.ax, wall.bx) || origin.x > Math.max(wall.ax, wall.bx)) {
+            continue;
+        }
+        const north = anchor.y < wall.ay + WALL_FOOT_BELOW_CAP_PX;
+        if (north && y >= wall.ay) {
+            y = wall.ay - WALL_MARGIN_PX;
+        } else if (!north && y <= wall.ay) {
+            y = wall.ay + WALL_MARGIN_PX;
+        }
+    }
+    return { x: origin.x, y };
+}
+
 /** The light of a torch, the polygon it reaches (shadows included), and the segments that stop it. */
 export function torchLightShape(
     holder: TorchHolder,
@@ -71,12 +99,19 @@ export function torchLightShape(
     const anchor = torchAnchor(holder);
     const radius = TORCH_RADIUS_TILES * obstacles.tileSize;
     // Read around the body, which stands in no wall: the cell or tall object the flame may reach into is kept.
-    const segments = obstacleSegments(
-        { x: anchor.x, y: anchor.y, radius: radius + Math.hypot(flame.x - anchor.x, flame.y - anchor.y) },
-        obstacles,
+    const reach = { x: anchor.x, y: anchor.y, radius: radius + Math.hypot(flame.x - anchor.x, flame.y - anchor.y) };
+    // The horizontal walls of the map layer have a side of their own (see keepOnHolderSide); the others, the vertical
+    // walls included (their collision keeps the body 9 px or more away from their line), stop the way to the flame.
+    const horizontalWalls = segmentsNearLight(
+        obstacles.walls.filter((wall) => wall.ay === wall.by),
+        reach,
     );
-    const origin = torchLightOrigin(anchor, flame, segments);
+    const others = obstacleSegments(reach, {
+        ...obstacles,
+        walls: obstacles.walls.filter((wall) => wall.ay !== wall.by),
+    });
+    const origin = keepOnHolderSide(torchLightOrigin(anchor, flame, others), anchor, horizontalWalls);
     const light = { x: origin.x, y: origin.y, radius, direction: 90, angle: 360 };
-    const near = segmentsNearLight(segments, light);
+    const near = segmentsNearLight([...others, ...horizontalWalls], light);
     return { light, polygon: litPolygon(light, near), segments: near };
 }

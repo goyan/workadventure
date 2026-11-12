@@ -5,14 +5,12 @@ import type { Character } from "../../Entity/Character";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import { toggleHandTool } from "./HandTools";
-import { torchFlicker, torchFlickerPhase } from "./TorchFlicker";
+import { torchFlicker, torchFlickerPhase, torchFlickerStep } from "./TorchFlicker";
 import { TORCH_EQUIPPED_VARIABLE } from "./TorchProtocol";
 import { Torches, type TorchBearer } from "./Torches";
 
 /** With the lights of the RGB lamps (see LampManager): above the night veil, which they pierce. */
 const TORCH_DEPTH = DEPTH_NIGHT_INDEX + 100;
-/** The flicker moves 15 times a second: soft enough to look alive, and the scene is not rendered at every image. */
-const FLICKER_STEPS_PER_SECOND = 15;
 /** The id of the local player among the bearers (the others go by their numeric key). */
 const LOCAL_ID = "me";
 
@@ -49,7 +47,7 @@ export class TorchManager {
     }
 
     public update(time: number): void {
-        const step = (Math.floor((time * FLICKER_STEPS_PER_SECOND) / 1000) * 1000) / FLICKER_STEPS_PER_SECOND;
+        const step = torchFlickerStep(time);
         const bearers: TorchBearer[] = [];
         const add = (id: string, character: Character, local: boolean): void => {
             if (!character.isTorchLit()) return;
