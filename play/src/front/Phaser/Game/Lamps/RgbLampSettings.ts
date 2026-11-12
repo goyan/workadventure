@@ -20,6 +20,12 @@ export interface RgbLampSettings {
     direction: number;
     /** Opening of the cone, in degrees; 360: all around. */
     angle: number;
+    /** The lamp turns like a rotating beacon (see rgbLampBeamDirection); absent: it stands still. */
+    rotation?: boolean;
+    /** Turns a minute; absent: RGB_LAMP_DEFAULT_ROTATION_SPEED. */
+    rotationSpeed?: number;
+    /** Absent: clockwise on the screen. */
+    rotationClockwise?: boolean;
 }
 
 export const RGB_LAMP_PROPERTY = "rgbLampPropertyData";
@@ -33,8 +39,8 @@ const RADIUS_STEP_TILES = 0.5;
 export function rgbLampSettingsOf(properties: EntityDataProperties): RgbLampSettings {
     for (const property of properties) {
         if (property.type === RGB_LAMP_PROPERTY) {
-            const { color, radius, direction, angle } = property;
-            return { color, radius, direction, angle };
+            const { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise } = property;
+            return { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise };
         }
     }
     return {

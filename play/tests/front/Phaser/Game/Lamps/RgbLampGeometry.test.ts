@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     blockingCellSegments,
+    coneOfLitPolygon,
     lightFalloff,
     litPolygon,
     rectangleSegments,
@@ -235,5 +236,76 @@ describe("lightFalloff", () => {
     it("stays within 0 and 1 out of the reach", () => {
         expect(lightFalloff(-0.5)).toBe(1);
         expect(lightFalloff(1.5)).toBe(0);
+    });
+});
+
+describe("coneOfLitPolygon", () => {
+    /** A small office: walls, a corner, a pillar, a door frame, all near a lamp at (0, 0) of reach 200. */
+    const office: Segment[] = [
+        { ax: -200, ay: 60, bx: 200, by: 60 },
+        { ax: 80, ay: -200, bx: 80, by: 20 },
+        { ax: 80, ay: 20, bx: 140, by: 20 },
+        ...rectangleSegments({ x: -70, y: -50, width: 20, height: 20 }),
+        { ax: -150, ay: -100, bx: -150, by: 40 },
+        { ax: -30, ay: -120, bx: 30, by: -120 },
+    ];
+    const light: LightCone = { x: 0, y: 0, radius: 200, direction: 0, angle: 360 };
+
+    /** How many of the points around the lamp are lit by one polygon and not by the other. */
+    function mismatch(a: readonly { x: number; y: number }[], b: readonly { x: number; y: number }[]): number {
+        let different = 0;
+        let total = 0;
+        for (let x = -200; x <= 200; x += 4) {
+            for (let y = -200; y <= 200; y += 4) {
+                total++;
+                if (isLit(a, { x: x + 0.37, y: y + 0.21 }) !== isLit(b, { x: x + 0.37, y: y + 0.21 })) {
+                    different++;
+                }
+            }
+        }
+        return different / total;
+    }
+
+    it("lights what the cone cast on its own lights, in every direction and opening, across the jump of the angles", () => {
+        const full = litPolygon(light, office);
+        for (const angle of [10, 45, 90, 200, 359]) {
+            for (let direction = 0; direction < 360; direction += 7) {
+                const cone = { ...light, direction, angle };
+                const clipped = coneOfLitPolygon(full, cone);
+                // Only the round edge differs: a chord between two points of the full turn instead of an arc.
+                expect(mismatch(clipped, litPolygon(cone, office))).toBeLessThan(0.002);
+            }
+        }
+    });
+
+    it("starts at the lamp and keeps the shadows of the full turn", () => {
+        const full = litPolygon(light, office);
+        const cone = { ...light, direction: 90, angle: 60 };
+        const clipped = coneOfLitPolygon(full, cone);
+        expect(clipped[0]).toEqual({ x: 0, y: 0 });
+        // Beyond the wall at y = 60, straight down: dark; before it: lit.
+        expect(isLit(clipped, { x: 0, y: 40 })).toBe(true);
+        expect(isLit(clipped, { x: 0, y: 100 })).toBe(false);
+        // Out of the cone: dark, though the full turn lights it.
+        expect(isLit(clipped, { x: 40, y: -10 })).toBe(false);
+        expect(isLit(full, { x: 40, y: -10 })).toBe(true);
+    });
+
+    it("gives the full turn back when the cone is a full turn", () => {
+        const full = litPolygon(light, office);
+        expect(coneOfLitPolygon(full, { ...light, angle: 360 })).toBe(full);
+    });
+
+    it("works away from the origin of the map", () => {
+        const moved = office.map((s) => ({ ax: s.ax + 500, ay: s.ay + 300, bx: s.bx + 500, by: s.by + 300 }));
+        const there = { ...light, x: 500, y: 300 };
+        const full = litPolygon(there, moved);
+        const cone = { ...there, direction: 200, angle: 50 };
+        expect(
+            mismatch(
+                coneOfLitPolygon(full, cone).map((p) => ({ x: p.x - 500, y: p.y - 300 })),
+                litPolygon(cone, moved).map((p) => ({ x: p.x - 500, y: p.y - 300 })),
+            ),
+        ).toBeLessThan(0.002);
     });
 });
