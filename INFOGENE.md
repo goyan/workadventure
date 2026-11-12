@@ -120,6 +120,40 @@ Recette : poser la piste, l'étirer par une poignée puis par les curseurs, annu
 regarder les motifs s'enchaîner ; `?lampDemo` (ou un Jam dans la zone) pour les battements ; mouvement réduit du
 système pour la version lente.
 
+
+## Lampe RGB à ombres portées
+
+L'objet **Lampe RGB** (éditeur, section **Lampes**, entrée de catalogue `lamp: { kind: "rgb" }`) éclaire un cône d'une
+couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent une ombre derrière eux.
+
+- **Réglages** : sélectionner la lampe dans l'éditeur affiche **Lumière de la lampe** : couleur, portée (1 à 20 cases),
+  ouverture (10° à 360° ; 360° éclaire tout autour) et direction. Sur la carte, la poignée carrée au bout du cône
+  oriente la lumière et règle sa portée d'un seul geste, les deux losanges l'ouvrent ou la referment. La lumière, ombres
+  comprises, suit le geste ; l'enregistrement se fait au relâchement (un seul pas à annuler). Sans réglage : blanc
+  chaud, 6 cases, tout autour.
+- **Ce qui arrête la lumière** : les cases bloquantes des calques de la carte, les murs de l'outil Carte (une porte
+  fermée arrête la lumière, une porte ouverte la laisse passer) et les objets dont l'entrée de catalogue porte
+  `castsShadow: true` (leurs `collisionRectangles`, sinon les cases de leur `collisionGrid`). Les autres objets (une
+  table basse) et les avatars ne font pas d'ombre. Une lampe posée sur un mur ou sur un meuble haut éclaire quand même.
+- **Jour et nuit** : la lampe éclaire tout le temps, sans musique, et même quand les effets lumineux des Jams sont
+  coupés (ce n'est pas un effet : rien ne clignote ni ne bouge). La nuit, le voile est percé de la forme exacte de sa
+  lumière. Elle n'est pas pilotée par script pour l'instant ; elle relit sa propriété à chaque image, ce qui le
+  permettra.
+- **Format** : les réglages sont dans une nouvelle propriété d'objet `rgbLampPropertyData` (`color`, `radius`,
+  `direction`, `angle`), dans le WAM : tous les joueurs voient la même lampe. `map-storage` doit être à la même version
+  que le front pour l'accepter. Un front plus ancien ignore le genre `rgb` : l'objet s'affiche comme une simple image.
+
+Code : `play/src/front/Phaser/Game/Lamps/RgbLamp*.ts`. Le calcul est sans Phaser et testé : segments d'obstacles
+(`RgbLampObstacles`), polygone éclairé par lancer de rayons découpé par le cône (`RgbLampGeometry`). Rendu : une
+texture par lampe (dégradé découpé par le polygone, un texel pour quatre pixels de carte, ce qui adoucit le bord des
+ombres), en fusion additive, redessinée seulement quand la lampe, ses réglages ou un obstacle dans sa portée changent.
+Mesure hors navigateur : 20 lampes de 10 cases recalculées ensemble en 4 ms sur une carte de bureaux, 27 ms sur un
+damier de murs (le pire cas) ; rien par image tant que rien ne change.
+
+Recette : poser la lampe près d'un mur, d'une porte de l'outil Carte et d'un meuble haut ; tirer la poignée du bout,
+puis les losanges ; changer la couleur ; annuler ; déplacer la lampe et le meuble ; ouvrir la porte en la traversant ;
+regarder de nuit (`?nightAt=22:00` en dev).
+
 ## Paroles de karaoké
 
 Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,
