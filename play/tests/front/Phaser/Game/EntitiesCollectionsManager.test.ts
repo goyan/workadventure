@@ -183,6 +183,34 @@ describe("EntitiesCollectionsManager reload", () => {
         });
         expect((await manager.getEntityPrefab("lampes", "plain"))?.lamp).toBeUndefined();
     });
+    it("passes the mark of a tall object that casts a shadow through, and leaves the others without one", async () => {
+        const url = "https://beta.example/map-storage/bureau/bureau-entities.json";
+        const cupboard: EntityRawPrefab = {
+            id: "cupboard",
+            name: "Cupboard",
+            imagePath: "cupboard.png",
+            direction: "Down",
+            tags: [],
+            color: "",
+            castsShadow: true,
+        };
+        const table: EntityRawPrefab = { ...cupboard, id: "table", castsShadow: undefined };
+        const catalog: EntityCollectionRaw = {
+            collectionName: "bureau",
+            collection: [cupboard, table],
+            tags: [],
+            version: "1.0",
+        };
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(() => Promise.resolve(new Response(JSON.stringify(catalog)))),
+        );
+        const manager = new EntitiesCollectionsManager();
+        manager.loadCollections([{ url, type: "Default" }]);
+
+        expect((await manager.getEntityPrefab("bureau", "cupboard"))?.castsShadow).toBe(true);
+        expect((await manager.getEntityPrefab("bureau", "table"))?.castsShadow).toBeUndefined();
+    });
     it("resolves seasonal paths against the catalog URL", async () => {
         const url = "https://example.com/collections/NatureCollection.json";
         const seasonal = {
