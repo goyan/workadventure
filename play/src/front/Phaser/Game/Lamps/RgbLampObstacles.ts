@@ -1,6 +1,8 @@
 import type { EntityPrefab } from "@workadventure/map-editor";
+import { MathUtils } from "@workadventure/math-utils";
 import { getBlockingRectangles } from "../../../Utils/EntityHitbox";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
+import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import { MAP_LAYER_TILE_SIZE, WALL_HALF } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { doorEdges, type DoorRef, type MapLayerModel, type WallEdgeRef } from "../MapEditor/MapLayer/MapLayerModel";
 import {
@@ -10,13 +12,6 @@ import {
     type LightDisc,
     type Segment,
 } from "./RgbLampGeometry";
-
-interface Rectangle {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-}
 
 /**
  * Where a wall of the map layer stops the light: on the middle of its cap, the band drawn on the top of the wall. The
@@ -58,7 +53,7 @@ export function shadowRectangles(
     prefab: Partial<Pick<EntityPrefab, "castsShadow" | "collisionRectangles" | "collisionGrid" | "wander">>,
     topLeft: { x: number; y: number },
     cellSize: number,
-): Rectangle[] {
+): ObstacleRectangle[] {
     if (prefab.castsShadow !== true || prefab.wander) {
         return [];
     }
@@ -73,7 +68,7 @@ export interface LightObstacles {
     /** The walls of the map layer (see wallSegments). */
     walls: readonly Segment[];
     /** The tall objects (see shadowRectangles). */
-    rectangles: readonly Rectangle[];
+    rectangles: readonly ObstacleRectangle[];
 }
 
 /**
@@ -81,15 +76,7 @@ export interface LightObstacles {
  * out (a lamp put on a cupboard still shines), as is the cell of the grid it stands in.
  */
 export function obstacleSegments(light: LightDisc, obstacles: LightObstacles): Segment[] {
-    const around = obstacles.rectangles.filter(
-        (rectangle) =>
-            !(
-                light.x >= rectangle.x &&
-                light.x <= rectangle.x + rectangle.width &&
-                light.y >= rectangle.y &&
-                light.y <= rectangle.y + rectangle.height
-            ),
-    );
+    const around = obstacles.rectangles.filter((rectangle) => !MathUtils.isOverlappingWithRectangle(light, rectangle));
     return segmentsNearLight(
         [
             ...blockingCellSegments(obstacles.grid, obstacles.tileSize, light),

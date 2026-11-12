@@ -5,6 +5,7 @@ import type { EntityDataProperties, EntityPrefab } from "@workadventure/map-edit
 import type { Entity } from "../../../../../src/front/Phaser/ECS/Entity";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 import type { LightCone, Point } from "../../../../../src/front/Phaser/Game/Lamps/RgbLampGeometry";
+import { isLit } from "./LightTestUtils";
 
 interface FakeVisual {
     id: string;
@@ -38,18 +39,6 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
 
 const { RgbLamps } = await import("../../../../../src/front/Phaser/Game/Lamps/RgbLamps");
 const { rgbLampLightsStore, rgbLampPreviewStore } = await import("../../../../../src/front/Stores/RgbLampStore");
-
-function isLit(polygon: readonly Point[], point: Point): boolean {
-    let inside = false;
-    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        const a = polygon[i];
-        const b = polygon[j];
-        if (a.y > point.y !== b.y > point.y && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) {
-            inside = !inside;
-        }
-    }
-    return inside;
-}
 
 const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
     id: "prefab",
@@ -262,11 +251,14 @@ describe("RgbLamps", () => {
     });
 
     it("goes out with its object, and with an object that is no longer a lamp", () => {
-        const { map, tick } = start([lamp("a", 624, 624).entity]);
+        const { map, tick, scene } = start([lamp("a", 624, 624).entity]);
+        scene.markDirty.mockClear();
         map.delete("a");
         tick();
         expect(visuals[0].destroyed).toBe(true);
         expect(get(rgbLampLightsStore)).toEqual([]);
+        // The scene is only drawn when asked: the light must leave the screen now.
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
     });
 
     it("is hidden with its object", () => {

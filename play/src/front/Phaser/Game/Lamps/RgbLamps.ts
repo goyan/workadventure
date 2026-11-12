@@ -1,5 +1,6 @@
 import type { Unsubscriber } from "svelte/store";
 import { rgbLampLightsStore, rgbLampPreviewStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
+import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
 import {
@@ -32,7 +33,7 @@ interface PlacedRgbLamp {
 /** A tall object and what it stops the light with. */
 interface ShadowCaster {
     entityId: string;
-    rectangle: { x: number; y: number; width: number; height: number };
+    rectangle: ObstacleRectangle;
 }
 
 function isRgbLamp(entity: Entity): boolean {
@@ -101,6 +102,8 @@ export class RgbLamps {
         }
         if (removed) {
             this.publish();
+            // The scene is only drawn when something changed: the light must leave the screen now.
+            this.scene.markDirty();
         }
         if (this.lamps.size > 0) {
             this.readObstacles(entities);
