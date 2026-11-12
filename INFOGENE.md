@@ -586,21 +586,25 @@ Un test d'interface vérifie leur présence sans vidéo ni spinner après 30 sec
 Concerne uniquement les zones portant la propriété « démarrer une réunion » (`livekitRoomProperty`).
 Seul dans la zone, le joueur n'est pas en réunion : il garde son statut habituel (présent, absent…),
 le choisit librement et peut former une bulle, sans espace, chat, son ni flux de réunion.
-La réunion démarre dès qu'un autre joueur est dans la zone et s'arrête quand il n'y a plus personne d'autre.
-Un joueur qui entre là où quelqu'un se trouve déjà démarre la réunion tout de suite.
+La réunion démarre dès qu'un autre joueur est dans la zone. Une fois démarrée, elle ne s'arrête que quand le joueur
+quitte la zone, même s'il y reste seul. Un joueur qui entre là où quelqu'un se trouve déjà démarre la réunion tout de suite.
 
 `MeetingAreaPresence.ts` suit les zones de réunion du joueur et enchaîne démarrages et arrêts (un arrêt
-n'en devance jamais le démarrage). `AreasPropertiesListener` vérifie la présence toutes les 500 ms tant que
-le joueur est dans une telle zone, avec la même règle que pour le joueur local (`isPlayerInsideArea`), d'après
-la **position des avatars**, jamais la caméra : un joueur distant connu dans la zone compte ; connu hors de la zone, il
-est parti ; vu dans la zone puis plus connu (le pusher n'envoie que les joueurs autour de la vue, et la caméra a pu
-s'éloigner), il compte tant qu'il est membre de l'espace de la réunion, qu'il quitte en sortant de la zone
-(`playersStillInMeetingArea`). Déplacer la caméra ne coupe donc pas l'appel. Les NPC (`npc:<id>`) ne comptent pas. Aucun changement du protocole ou du back : le statut « en réunion » exclut
+n'en devance jamais le démarrage). `AreasPropertiesListener` vérifie toutes les 500 ms, tant que le joueur est dans une
+telle zone, si un autre joueur s'y trouve, avec la même règle que pour le joueur local (`isPlayerInsideArea`). Les NPC
+(`npc:<id>`) ne comptent pas.
+
+Pourquoi l'arrêt ne dépend pas des autres : le front ne connaît que les joueurs autour de la caméra (le pusher ne lui
+envoie que ceux-là). Déplacer la caméra vide cette liste, même si personne ne bouge. Une règle « arrêter quand il n'y
+a plus personne » coupait donc l'appel à chaque mouvement de caméra (constaté en beta, Dancefloor, novembre 2026). L'espace de la
+réunion ne sert pas non plus de témoin : il ne reçoit ses membres que si quelqu'un est abonné à `usersStore`, et un
+client peut ne pas avoir rejoint la réunion. Aucun changement du protocole ou du back : le statut « en réunion » exclut
 toujours des bulles une fois la réunion démarrée.
 
 Recette en beta : entrer seul dans une zone de réunion et changer de statut ; en réunion à deux, éloigner la caméra
 de la zone sans bouger son woka (l'appel continue) ; faire entrer un second joueur
-(réunion des deux côtés, en moins d'une seconde) ; le faire sortir (réunion quittée, statut d'avant).
+(réunion des deux côtés, en moins d'une seconde) ; le faire sortir (l'appel continue pour celui qui reste) ; sortir
+soi-même (réunion quittée, statut d'avant).
 
 ### Une session par compte et par salle
 

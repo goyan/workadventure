@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-    MeetingAreaPresence,
-    playersStillInMeetingArea,
-} from "../../../../../src/front/Phaser/Game/MapEditor/MeetingAreaPresence";
+import { MeetingAreaPresence } from "../../../../../src/front/Phaser/Game/MapEditor/MeetingAreaPresence";
 
 function setup() {
     const occupiedAreas = new Set<string>();
@@ -41,8 +38,8 @@ describe("MeetingAreaPresence", () => {
         expect(events).toEqual([]);
     });
 
-    it("starts the meeting when someone else comes in, and stops it when they leave", async () => {
-        const { presence, occupiedAreas, events } = setup();
+    it("starts the meeting when someone else comes in, and keeps it when they are no longer seen", async () => {
+        const { presence, occupiedAreas, events, signals } = setup();
         presence.enter("property", "area", "room");
 
         occupiedAreas.add("area");
@@ -51,15 +48,12 @@ describe("MeetingAreaPresence", () => {
         await flush();
         expect(events).toEqual(["start room"]);
 
+        // The other player left, or the camera moved away from them: the front cannot tell, the meeting goes on.
         occupiedAreas.delete("area");
         presence.refresh();
         await flush();
-        expect(events).toEqual(["start room", "stop room"]);
-
-        occupiedAreas.add("area");
-        presence.refresh();
-        await flush();
-        expect(events).toEqual(["start room", "stop room", "start room"]);
+        expect(events).toEqual(["start room"]);
+        expect(signals[0].aborted).toBe(false);
     });
 
     it("starts at once when someone is already in the area", async () => {
@@ -112,30 +106,5 @@ describe("MeetingAreaPresence", () => {
         expect(events).toEqual(["start room"]);
         expect(signals[0].aborted).toBe(true);
         expect(presence.size).toBe(0);
-    });
-});
-
-describe("playersStillInMeetingArea", () => {
-    const member = (uuids: string[]) => (userUuid: string) => uuids.includes(userUuid);
-
-    it("counts a known player inside the area, not one outside it", () => {
-        const known = [
-            { userUuid: "alice", inside: true },
-            { userUuid: "bob", inside: false },
-        ];
-        expect(playersStillInMeetingArea(known, new Set(), member([]))).toEqual(new Set(["alice"]));
-    });
-
-    it("keeps a player seen inside when the camera moves away, while they are in the meeting", () => {
-        expect(playersStillInMeetingArea([], new Set(["alice"]), member(["alice"]))).toEqual(new Set(["alice"]));
-    });
-
-    it("drops a player seen inside who left the meeting, even out of view", () => {
-        expect(playersStillInMeetingArea([], new Set(["alice"]), member([]))).toEqual(new Set());
-    });
-
-    it("drops a player seen inside who is now known outside the area, whatever the meeting says", () => {
-        const known = [{ userUuid: "alice", inside: false }];
-        expect(playersStillInMeetingArea(known, new Set(["alice"]), member(["alice"]))).toEqual(new Set());
     });
 });
