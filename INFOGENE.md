@@ -45,8 +45,12 @@ clé de salle = empreinte du lien Teams, avance d'alarme). Fichiers `MacCompanio
 compagnons animaux d'upstream.
 
 La propriété de zone `teamsMeetingRoomPropertyData` (« Salle de réunion Teams ») marque les salles ; elle est muette
-comme `silent`. Le rappel d'une réunion à clé propose **Y aller** : l'appli Teams s'ouvre dans le clic (`msteams:`),
-puis la salle est demandée (déjà prise par la réunion, sinon la première libre) et l'avatar y marche. Le titre des
+comme `silent`. Le rappel d'une réunion à clé propose **Y aller** : la salle est demandée (déjà prise par la réunion,
+sinon la première libre) et l'avatar y marche **sans ouvrir Teams** (un nouvel onglet dans le clic mettait le jeu en
+arrière-plan, ce qui annule la marche : il fallait recliquer). À l'arrivée dans cette salle (position réelle de
+l'avatar, vue à la fin de la marche ou dans les 2 s), une carte demande « Ouvrir la réunion dans Teams ? » : **Oui**
+ouvre le lien dans un nouvel onglet, **Non**, × ou Échap ferment. Sans salle libre, sans salle sur la carte ou si la
+salle ne peut être demandée ni atteinte, la même carte s'affiche aussitôt. Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
 salles prises s'affiche au-dessus d'elles (« Réunion privée » le cas échéant) ; entrer à pied dans une salle pendant
 sa réunion réaffiche le rappel. Coupé tant que l'Admin API n'a pas `COMPANION_ENABLED=true`. Guide : repo d'infra,
 `docs/compagnon-mac.md`.
