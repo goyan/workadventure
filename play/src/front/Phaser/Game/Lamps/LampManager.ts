@@ -106,10 +106,13 @@ interface PlacedFloor {
 /** A silence of the music this long, and the floor goes back to its own patterns. */
 const FLOOR_SILENCE_MS = 2000;
 
-/** The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor). */
+/**
+ * The kind of light an object carries; a dance floor is not a light, it has its own way (see PlacedFloor), and so has
+ * an RGB lamp, which does not follow the music.
+ */
 function lightKindOf(entity: Entity): LampKind | undefined {
     const kind = entity.getPrefab().lamp?.kind;
-    return kind === "dancefloor" ? undefined : kind;
+    return kind === "dancefloor" || kind === "rgb" ? undefined : kind;
 }
 
 function isDanceFloor(entity: Entity): boolean {
