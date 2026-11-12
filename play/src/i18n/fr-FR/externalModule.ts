@@ -167,7 +167,7 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         empty: "Aucun agenda pour l'instant",
         busyOption: "Me passer « occupé » pendant mes réunions",
         busyOptionHelp:
-            "Seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent ». Les autres ne voient que le statut.",
+            "Seulement si vous n'avez pas choisi de statut vous-même : jamais par-dessus « ne pas déranger », « de retour dans un instant » ou « occupé ». Les autres ne voient que le statut.",
         manage: "Gérer",
         closeSettings: "Fermer",
         availability: {

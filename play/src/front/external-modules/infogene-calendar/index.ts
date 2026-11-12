@@ -6,7 +6,7 @@ import LL from "../../../i18n/i18n-svelte";
 import { requestedStatusStore } from "../../Stores/MediaStore";
 import type { CalendarApiEvent } from "../../../common/Calendar";
 import { fetchCalendarEvents } from "./CalendarApi";
-import { currentBusyMeetingId, decideBusyStatus, mergeRefreshedEvents, toCalendarEvents } from "./calendarEvents";
+import { currentBusyMeetingIds, decideBusyStatus, mergeRefreshedEvents, toCalendarEvents } from "./calendarEvents";
 import {
     busyOptionStore,
     calendarRefresh,
@@ -71,7 +71,7 @@ function updateStatus(): void {
     if (!options || !eventsLoaded) return;
     const decision = decideBusyStatus({
         enabled: get(busyOptionStore),
-        meetingId: currentBusyMeetingId(lastEvents, new Date()),
+        meetingIds: currentBusyMeetingIds(lastEvents, new Date()),
         requested: get(requestedStatusStore),
         state: busyState,
     });

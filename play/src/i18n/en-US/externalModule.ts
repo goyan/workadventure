@@ -161,7 +161,8 @@ const externalModule: BaseTranslation = {
         remove: "Remove {label}",
         empty: "No calendar yet",
         busyOption: "Set me busy during my meetings",
-        busyOptionHelp: "Only from online, and never over do not disturb or away. Others only see the status.",
+        busyOptionHelp:
+            "Only when you have not picked a status yourself: never over do not disturb, back in a moment or busy. Others only see the status.",
         manage: "Manage",
         closeSettings: "Close",
         availability: {

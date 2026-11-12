@@ -15,8 +15,10 @@ Le panneau **Agenda** natif affiche les agendas Outlook de chacun : sous « Mes 
 utilisateur colle le lien ICS d'un agenda publié depuis Outlook sur le web (Paramètres → Calendrier →
 Calendriers partagés → Publier un calendrier), 5 au plus. Semaine à venir, réunion en cours, rappels et bouton
 **Rejoindre** pour les réunions Teams. Une option, désactivée par défaut, passe l'utilisateur « occupé » pendant
-ses réunions : seulement depuis « en ligne », jamais par-dessus « ne pas déranger » ni « absent », et un statut
-changé à la main reste respecté jusqu'à la réunion suivante.
+ses réunions : seulement sans statut choisi par l'utilisateur (« absent », posé seul quand l'onglet est caché, ne
+compte pas), jamais par-dessus « ne pas déranger », « de retour dans un instant » ou « occupé » ; un statut changé à
+la main reste respecté pour les réunions en cours, chevauchements compris, jusqu'à une nouvelle réunion. Les appels au
+pusher du module (`pusherRequest.ts`, commun aux agendas et au compagnon) abandonnent après 15 s.
 
 Le module front `external-modules/infogene-calendar` (suivi avec `git add -f` : ce dossier est ignoré pour les
 modules privés d'upstream) n'est chargé que si l'Admin API l'annonce dans `/api/map` (`modules`). La scène
