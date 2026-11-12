@@ -171,9 +171,10 @@ export class LyricsService {
                 (candidate) =>
                     !candidate.instrumental &&
                     Boolean(candidate.syncedLyrics?.trim()) &&
-                    (seconds === undefined
-                        ? same(candidate.trackName, track.title) && same(candidate.artistName, track.artist)
-                        : gap(candidate) <= 3),
+                    // The search is fuzzy: never take another song, whatever its duration.
+                    same(candidate.trackName, track.title) &&
+                    same(candidate.artistName, track.artist) &&
+                    (seconds === undefined || gap(candidate) <= 3),
             );
             const sameAlbum = (candidate: LrclibSearchResult) => (same(candidate.albumName, track.album) ? 0 : 1);
             // Stable sort: with an unknown duration, the provider's order decides among equals.
