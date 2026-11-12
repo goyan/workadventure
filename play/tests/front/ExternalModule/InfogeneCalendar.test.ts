@@ -1,12 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { AvailabilityStatus } from "@workadventure/messages";
 import type { CalendarApiEvent } from "../../../src/common/Calendar";
 import {
     decideBusyStatus,
-    currentBusyMeetingId,
+    currentBusyMeetingIds,
     mergeRefreshedEvents,
     toCalendarEvents,
 } from "../../../src/front/external-modules/infogene-calendar/calendarEvents";
+import {
+    loadBusyState,
+    saveBusyState,
+} from "../../../src/front/external-modules/infogene-calendar/calendarModuleState";
 
 const meeting: CalendarApiEvent = {
     id: "s1:revue:2026-11-19T13:00:00.000Z",
@@ -60,7 +64,7 @@ describe("mergeRefreshedEvents", () => {
         const kept = mergeRefreshedEvents([meeting, otherCalendarMeeting], [otherCalendarMeeting], ["s1"]);
 
         expect(kept.map((event) => event.id)).toEqual([otherCalendarMeeting.id, meeting.id]);
-        expect(currentBusyMeetingId(kept, new Date("2026-11-19T13:30:00.000Z"))).toBe(meeting.id);
+        expect(currentBusyMeetingIds(kept, new Date("2026-11-19T13:30:00.000Z"))).toEqual([meeting.id]);
     });
 
     it("replaces the events of a calendar read again: a cancelled meeting goes away", () => {
@@ -144,25 +148,39 @@ describe("toCalendarEvents", () => {
     });
 });
 
-describe("currentBusyMeeting", () => {
+describe("currentBusyMeetingIds", () => {
     const list = [meeting, leave, lunch];
+    const overlapping: CalendarApiEvent = {
+        ...meeting,
+        id: "s2:point:2026-11-19T13:30:00.000Z",
+        title: "Point client",
+        start: "2026-11-19T13:30:00.000Z",
+        end: "2026-11-19T14:30:00.000Z",
+    };
 
-    it("names the busy meeting in progress, end excluded", () => {
-        expect(currentBusyMeetingId(list, new Date("2026-11-19T13:00:00.000Z"))).toBe(meeting.id);
-        expect(currentBusyMeetingId(list, new Date("2026-11-19T13:59:59.000Z"))).toBe(meeting.id);
-        expect(currentBusyMeetingId(list, new Date("2026-11-19T14:00:00.000Z"))).toBeUndefined();
+    it("names the busy meetings in progress, end excluded", () => {
+        expect(currentBusyMeetingIds(list, new Date("2026-11-19T13:00:00.000Z"))).toEqual([meeting.id]);
+        expect(currentBusyMeetingIds(list, new Date("2026-11-19T13:59:59.000Z"))).toEqual([meeting.id]);
+        expect(currentBusyMeetingIds(list, new Date("2026-11-19T14:00:00.000Z"))).toEqual([]);
+    });
+
+    it("names every meeting of an overlap", () => {
+        expect(currentBusyMeetingIds([overlapping, meeting], new Date("2026-11-19T13:45:00.000Z"))).toEqual([
+            overlapping.id,
+            meeting.id,
+        ]);
     });
 
     it("ignores a slot marked free and an all-day event", () => {
-        expect(currentBusyMeetingId(list, new Date("2026-11-19T11:30:00.000Z"))).toBeUndefined();
-        expect(currentBusyMeetingId(list, new Date(2026, 10, 17, 10, 0))).toBeUndefined();
+        expect(currentBusyMeetingIds(list, new Date("2026-11-19T11:30:00.000Z"))).toEqual([]);
+        expect(currentBusyMeetingIds(list, new Date(2026, 10, 17, 10, 0))).toEqual([]);
     });
 });
 
 describe("decideBusyStatus", () => {
-    const idle = { setByCalendar: false, handledMeetingId: undefined };
-    const base = { enabled: true, meetingId: "m1", requested: null, state: idle };
-    const busyByCalendar = { setByCalendar: true, handledMeetingId: "m1" };
+    const idle = { setByCalendar: false, handledMeetingIds: [] };
+    const base = { enabled: true, meetingIds: ["m1"], requested: null, state: idle };
+    const busyByCalendar = { setByCalendar: true, handledMeetingIds: ["m1"] };
     const busy = { ...base, requested: AvailabilityStatus.BUSY, state: busyByCalendar };
 
     it("turns a user with no requested status busy when a meeting starts, and remembers it did", () => {
@@ -171,7 +189,7 @@ describe("decideBusyStatus", () => {
 
     it("does nothing while the option is off, or out of a meeting", () => {
         expect(decideBusyStatus({ ...base, enabled: false })).toEqual({ change: undefined, state: idle });
-        expect(decideBusyStatus({ ...base, meetingId: undefined })).toEqual({ change: undefined, state: idle });
+        expect(decideBusyStatus({ ...base, meetingIds: [] })).toEqual({ change: undefined, state: idle });
     });
 
     it("never overrides do not disturb, back in a moment or a busy status the user requested", () => {
@@ -186,39 +204,79 @@ describe("decideBusyStatus", () => {
 
     it("keeps the busy status it set while meetings go on, back to back included", () => {
         expect(decideBusyStatus(busy)).toEqual({ change: undefined, state: busyByCalendar });
-        expect(decideBusyStatus({ ...busy, meetingId: "m2" })).toEqual({ change: undefined, state: busyByCalendar });
+        expect(decideBusyStatus({ ...busy, meetingIds: ["m2"] })).toEqual({
+            change: undefined,
+            state: { setByCalendar: true, handledMeetingIds: ["m2"] },
+        });
     });
 
     it("puts the user back online at the end, only if it set the busy status itself", () => {
-        expect(decideBusyStatus({ ...busy, meetingId: undefined })).toEqual({
+        expect(decideBusyStatus({ ...busy, meetingIds: [] })).toEqual({
             change: AvailabilityStatus.ONLINE,
-            state: { setByCalendar: false, handledMeetingId: "m1" },
+            state: idle,
         });
-        expect(decideBusyStatus({ ...base, meetingId: undefined, requested: AvailabilityStatus.BUSY })).toEqual({
+        expect(decideBusyStatus({ ...base, meetingIds: [], requested: AvailabilityStatus.BUSY })).toEqual({
             change: undefined,
             state: idle,
         });
     });
 
-    it("lets the user take over: a status requested by hand is left alone for the rest of that meeting", () => {
-        const tookOver = { setByCalendar: false, handledMeetingId: "m1" };
+    it("lets the user take over: a status requested by hand is left alone for the meetings going on", () => {
+        const tookOver = { setByCalendar: false, handledMeetingIds: ["m1"] };
         expect(decideBusyStatus({ ...busy, requested: null })).toEqual({ change: undefined, state: tookOver });
         expect(decideBusyStatus({ ...busy, requested: AvailabilityStatus.DO_NOT_DISTURB })).toEqual({
             change: undefined,
             state: tookOver,
         });
         expect(decideBusyStatus({ ...base, state: tookOver })).toEqual({ change: undefined, state: tookOver });
-        // The next meeting turns the user busy again.
-        expect(decideBusyStatus({ ...base, meetingId: "m2", state: tookOver })).toEqual({
+        // A meeting that starts after the take-over turns the user busy again.
+        expect(decideBusyStatus({ ...base, meetingIds: ["m1", "m2"], state: tookOver })).toEqual({
             change: AvailabilityStatus.BUSY,
-            state: { setByCalendar: true, handledMeetingId: "m2" },
+            state: { setByCalendar: true, handledMeetingIds: ["m1", "m2"] },
+        });
+    });
+
+    it("does not turn the user busy again at the end of the first of two overlapping meetings", () => {
+        // Busy for m1, then m2 starts during m1, then the user takes over, then m1 ends while m2 goes on.
+        const both = decideBusyStatus({ ...busy, meetingIds: ["m1", "m2"] });
+        expect(both).toEqual({ change: undefined, state: { setByCalendar: true, handledMeetingIds: ["m1", "m2"] } });
+        const tookOver = decideBusyStatus({ ...base, meetingIds: ["m1", "m2"], requested: null, state: both.state });
+        expect(tookOver).toEqual({
+            change: undefined,
+            state: { setByCalendar: false, handledMeetingIds: ["m1", "m2"] },
+        });
+        expect(decideBusyStatus({ ...base, meetingIds: ["m2"], state: tookOver.state })).toEqual({
+            change: undefined,
+            state: { setByCalendar: false, handledMeetingIds: ["m2"] },
         });
     });
 
     it("gives the busy status back when the option is turned off during a meeting", () => {
         expect(decideBusyStatus({ ...busy, enabled: false })).toEqual({
             change: AvailabilityStatus.ONLINE,
-            state: { setByCalendar: false, handledMeetingId: "m1" },
+            state: { setByCalendar: false, handledMeetingIds: ["m1"] },
         });
+    });
+});
+
+describe("busy state kept across reloads", () => {
+    afterEach(() => localStorage.clear());
+
+    it("keeps every handled meeting", () => {
+        saveBusyState({ setByCalendar: true, handledMeetingIds: ["m1", "m2"] });
+        expect(loadBusyState()).toEqual({ setByCalendar: true, handledMeetingIds: ["m1", "m2"] });
+    });
+
+    it("reads the state written before overlapping meetings were tracked", () => {
+        localStorage.setItem(
+            "infogeneCalendarBusyState",
+            JSON.stringify({ setByCalendar: true, handledMeetingId: "m1" }),
+        );
+        expect(loadBusyState()).toEqual({ setByCalendar: true, handledMeetingIds: ["m1"] });
+    });
+
+    it("forgets an empty state", () => {
+        saveBusyState({ setByCalendar: false, handledMeetingIds: [] });
+        expect(localStorage.getItem("infogeneCalendarBusyState")).toBeNull();
     });
 });

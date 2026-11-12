@@ -46,8 +46,12 @@ export const busyOptionStore = createBusyOptionStore();
 
 const StoredBusyState = z.object({
     setByCalendar: z.boolean().catch(false),
+    handledMeetingIds: z.array(z.string()).optional().catch(undefined),
+    /** Written before overlapping meetings were tracked: one meeting only. */
     handledMeetingId: z.string().optional().catch(undefined),
 });
+
+const NO_BUSY_STATE: BusyStatusState = { setByCalendar: false, handledMeetingIds: [] };
 
 /**
  * Whether the calendar set the busy status itself, kept across reloads: the requested status survives a reload too,
@@ -55,21 +59,22 @@ const StoredBusyState = z.object({
  */
 export function loadBusyState(): BusyStatusState {
     const raw = read(BUSY_STATE_KEY);
-    if (!raw) return { setByCalendar: false, handledMeetingId: undefined };
+    if (!raw) return NO_BUSY_STATE;
     let json: unknown;
     try {
         json = JSON.parse(raw);
     } catch {
-        return { setByCalendar: false, handledMeetingId: undefined };
+        return NO_BUSY_STATE;
     }
     const parsed = StoredBusyState.safeParse(json);
-    return parsed.success
-        ? { setByCalendar: parsed.data.setByCalendar, handledMeetingId: parsed.data.handledMeetingId }
-        : { setByCalendar: false, handledMeetingId: undefined };
+    if (!parsed.success) return NO_BUSY_STATE;
+    const { setByCalendar, handledMeetingIds, handledMeetingId } = parsed.data;
+    return { setByCalendar, handledMeetingIds: handledMeetingIds ?? (handledMeetingId ? [handledMeetingId] : []) };
 }
 
 export function saveBusyState(state: BusyStatusState): void {
-    write(BUSY_STATE_KEY, state.setByCalendar || state.handledMeetingId ? JSON.stringify(state) : undefined);
+    const worthKeeping = state.setByCalendar || state.handledMeetingIds.length > 0;
+    write(BUSY_STATE_KEY, worthKeeping ? JSON.stringify(state) : undefined);
 }
 
 /** Asks the module to read the calendars again (after an addition or a deletion); replaced by the module at init. */

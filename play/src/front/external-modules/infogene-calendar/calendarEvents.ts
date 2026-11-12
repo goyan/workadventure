@@ -68,51 +68,57 @@ export function mergeRefreshedEvents(
     return [...events, ...keptFromFailed];
 }
 
-/** The busy meeting going on at `now` (end excluded), if any. A free slot or an all-day event does not count. */
-export function currentBusyMeetingId(events: readonly CalendarApiEvent[], now: Date): string | undefined {
-    return events.find((event) => {
-        if (!event.busy || event.allDay) return false;
-        const start = parseDate(event.start);
-        const end = parseDate(event.end);
-        return start !== undefined && end !== undefined && start <= now && now < end;
-    })?.id;
+/** The busy meetings going on at `now` (end excluded), overlaps included. A free slot or an all-day event does not count. */
+export function currentBusyMeetingIds(events: readonly CalendarApiEvent[], now: Date): string[] {
+    return events
+        .filter((event) => {
+            if (!event.busy || event.allDay) return false;
+            const start = parseDate(event.start);
+            const end = parseDate(event.end);
+            return start !== undefined && end !== undefined && start <= now && now < end;
+        })
+        .map((event) => event.id);
 }
 
 export interface BusyStatusState {
     /** The busy status of the user was set by the calendar, and is given back at the end of the meetings. */
     setByCalendar: boolean;
-    /** The meeting already handled: once the user changed their status during it, it is not set again. */
-    handledMeetingId: string | undefined;
+    /**
+     * The meetings already handled, among those going on: once the user changed their status during them, they do not
+     * set it again. A meeting that starts later does.
+     */
+    handledMeetingIds: string[];
 }
 
 /**
- * The status the calendar requests, from the option, the meeting going on and the status the user requested. The
- * requested status is read, not the displayed one: a bubble or a hidden tab changes what is displayed without the
- * user choosing anything. Only a user with no requested status is turned busy, and only the busy status the calendar
- * set itself is given back: do not disturb, back in a moment, or a busy status the user picked are never overridden.
- * A status the user changes during a meeting is left alone until the next one.
+ * The status the calendar requests, from the option, the meetings going on and the status the user requested. The
+ * requested status is read, not the displayed one: a bubble or a hidden tab (shown "away") changes what is displayed
+ * without the user choosing anything. Only a user with no requested status is turned busy, and only the busy status
+ * the calendar set itself is given back: do not disturb, back in a moment, or a busy status the user picked are never
+ * overridden. A status the user changes during meetings is left alone until a new meeting starts.
  */
 export function decideBusyStatus(input: {
     enabled: boolean;
-    meetingId: string | undefined;
+    meetingIds: readonly string[];
     requested: AvailabilityStatus | null;
     state: BusyStatusState;
 }): { change: AvailabilityStatus | undefined; state: BusyStatusState } {
-    const { enabled, meetingId, requested, state } = input;
+    const { enabled, meetingIds, requested, state } = input;
+    // Finished meetings are forgotten; the meetings going on are all handled once the calendar acted on them.
+    const handled = state.handledMeetingIds.filter((id) => meetingIds.includes(id));
+    const allGoingOn = [...handled, ...meetingIds.filter((id) => !handled.includes(id))];
     if (state.setByCalendar) {
         if (requested !== AvailabilityStatus.BUSY) {
-            return { change: undefined, state: { setByCalendar: false, handledMeetingId: state.handledMeetingId } };
+            return { change: undefined, state: { setByCalendar: false, handledMeetingIds: allGoingOn } };
         }
-        if (!enabled || meetingId === undefined) {
-            return {
-                change: AvailabilityStatus.ONLINE,
-                state: { setByCalendar: false, handledMeetingId: state.handledMeetingId },
-            };
+        if (!enabled || meetingIds.length === 0) {
+            return { change: AvailabilityStatus.ONLINE, state: { setByCalendar: false, handledMeetingIds: handled } };
         }
-        return { change: undefined, state };
+        return { change: undefined, state: { setByCalendar: true, handledMeetingIds: allGoingOn } };
     }
-    if (enabled && meetingId !== undefined && meetingId !== state.handledMeetingId && requested === null) {
-        return { change: AvailabilityStatus.BUSY, state: { setByCalendar: true, handledMeetingId: meetingId } };
+    const newMeeting = meetingIds.some((id) => !handled.includes(id));
+    if (enabled && newMeeting && requested === null) {
+        return { change: AvailabilityStatus.BUSY, state: { setByCalendar: true, handledMeetingIds: allGoingOn } };
     }
-    return { change: undefined, state };
+    return { change: undefined, state: { setByCalendar: false, handledMeetingIds: handled } };
 }

@@ -1,9 +1,7 @@
-import { asError } from "catch-unknown";
 import type { z } from "zod";
 import { CompanionTokenList, CreatedCompanionToken, MeetingRoomClaim, MeetingRoomList } from "../../../common/MacCompanion";
 import type { MeetingRoomClaimInput } from "../../../common/MacCompanion";
-import { localUserStore } from "../../Connection/LocalUserStore";
-import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
+import { PusherUnreachableError, pusherFetch } from "./pusherRequest";
 
 /** Where the Mac companion is published: the public fork, branch infogene (no secret in it). */
 const INSTALL_SCRIPT_URL =
@@ -17,21 +15,12 @@ export class CompanionApiError extends Error {
 }
 
 async function request(path: string, init: { method: string; body?: unknown; signal?: AbortSignal }) {
-    const hasBody = init.body !== undefined;
     try {
-        return await fetch(`${ABSOLUTE_PUSHER_URL}${path}`, {
-            method: init.method,
-            headers: {
-                Authorization: localUserStore.getAuthToken() || "",
-                ...(hasBody ? { "Content-Type": "application/json" } : {}),
-            },
-            ...(hasBody ? { body: JSON.stringify(init.body) } : {}),
-            signal: init.signal,
-        });
+        return await pusherFetch(path, init);
     } catch (e) {
-        // An aborted request is not a failure: the caller is gone and ignores it.
-        if (init.signal?.aborted) throw asError(e);
-        throw new CompanionApiError(0);
+        // A request cancelled by its caller keeps its abort error: the caller is gone and ignores it.
+        if (e instanceof PusherUnreachableError) throw new CompanionApiError(0);
+        throw e;
     }
 }
 
