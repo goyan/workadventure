@@ -160,7 +160,7 @@ describe("Torches", () => {
         expect(isLit(visuals[0].draws[1].polygon, { x: 645, y: 760 })).toBe(false);
     });
 
-    it("casts the shadow of a tall object of the map, and of a closed door of the map layer", () => {
+    it("casts the shadow of a tall object of the map", () => {
         const { state, torches } = setup();
         state.entities.set(
             "cupboard",
@@ -174,6 +174,35 @@ describe("Torches", () => {
         torches.update(0, [bearer("7", 640, 640)], false);
         expect(isLit(visuals[0].draws[0].polygon, { x: 645, y: 690 })).toBe(true);
         expect(isLit(visuals[0].draws[0].polygon, { x: 645, y: 780 })).toBe(false);
+    });
+
+    it("is stopped by a closed door of the map layer, and passes through it once open", () => {
+        const { scene, state, torches } = setup();
+        const piece = (id: string, column: number, model: string, collectionName: string) =>
+            state.entities.set(
+                id,
+                entity(
+                    id,
+                    column * 32,
+                    22 * 32,
+                    prefab({ collectionName, id: `${collectionName}:${model}:Default:Down` }),
+                ),
+            );
+        // A wall along the line 22 from the column 15 to 25, with a door on the columns 19 and 20: under the torch.
+        for (const column of [15, 16, 17, 18, 21, 22, 23, 24]) {
+            piece(`wall-${column}`, column, "facade-blanc-mid", "Carte Murs");
+        }
+        piece("door", 19, "porte-h-blanc-g", "Carte Portes");
+        const open = new Set<string>();
+        scene.isDoorOpen.mockImplementation((id: string) => open.has(id));
+        torches.update(0, [bearer("7", 640, 640)], false);
+        expect(isLit(visuals[0].draws[0].polygon, { x: 645, y: 780 })).toBe(false);
+        open.add("door");
+        // The objects of the map are looked at again a quarter of a second later.
+        torches.update(300, [bearer("7", 640, 640)], false);
+        expect(visuals[0].draws).toHaveLength(2);
+        expect(isLit(visuals[0].draws[1].polygon, { x: 645, y: 780 })).toBe(true);
+        expect(isLit(visuals[0].draws[1].polygon, { x: 560, y: 780 })).toBe(false);
     });
 
     it("keeps each bearer's light on its own side of a wall of the map layer", () => {

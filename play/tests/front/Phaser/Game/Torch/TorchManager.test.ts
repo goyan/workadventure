@@ -144,6 +144,16 @@ describe("TorchManager", () => {
         expect(scene.markDirty.mock.calls).toHaveLength(2);
     });
 
+    it("keeps the flame in the hand moving in the map editor, where the lights are out", () => {
+        mapEditorModeStore.set(true);
+        manager.update(1000);
+        manager.update(1040);
+        expect(scene.markDirty.mock.calls).toHaveLength(2);
+        expect(remote.setTorchFlame.mock.calls.at(-1)).toEqual([
+            torchFlameShape((31 * 1000) / 30, torchFlickerPhase("2"), false),
+        ]);
+    });
+
     it("tells the torches when the map editor is open", () => {
         mapEditorModeStore.set(true);
         manager.update(1000);

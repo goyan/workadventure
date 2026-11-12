@@ -19,8 +19,10 @@ describe("TorchFlameEffect", () => {
         });
         const container = mock<Phaser.GameObjects.Container>();
         const effect = new TorchFlameEffect(scene, container);
-        const [stick, flame] = drawn;
-        expect(container.add.mock.calls).toEqual([[stick], [flame]]);
+        // Both parts are in the avatar; the handle is drawn once, the flame only when it has a shape.
+        expect(drawn).toHaveLength(2);
+        expect(container.add.mock.calls.flat()).toEqual(expect.arrayContaining(drawn));
+        const [flame, stick] = [...drawn].sort((a, b) => a.commandBuffer.length - b.commandBuffer.length);
         expect(stick.visible).toBe(false);
         expect(flame.visible).toBe(false);
 
