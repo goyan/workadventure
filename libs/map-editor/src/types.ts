@@ -242,6 +242,13 @@ export const RGB_LAMP_MAX_RADIUS_TILES = 20;
 export const RGB_LAMP_DEFAULT_DIRECTION = 90;
 export const RGB_LAMP_MIN_ANGLE = 10;
 export const RGB_LAMP_MAX_ANGLE = 360;
+/**
+ * A turning lamp (a rotating beacon) goes round at this many turns a minute. At most 2 turns a second: its single beam
+ * passes a still observer at most twice a second, under the 3 flashes a second of WCAG 2.3.1.
+ */
+export const RGB_LAMP_MIN_ROTATION_SPEED = 10;
+export const RGB_LAMP_MAX_ROTATION_SPEED = 120;
+export const RGB_LAMP_DEFAULT_ROTATION_SPEED = 30;
 
 /**
  * The light of an RGB lamp: a cone of the colour `color`, `radius` tiles long, `angle` degrees wide (360: a full disc)
@@ -262,6 +269,19 @@ export const RgbLampPropertyData = PropertyBase.extend({
         .default(RGB_LAMP_DEFAULT_RADIUS_TILES),
     direction: z.number().min(0).lt(360).default(RGB_LAMP_DEFAULT_DIRECTION),
     angle: z.number().min(RGB_LAMP_MIN_ANGLE).max(RGB_LAMP_MAX_ANGLE).default(RGB_LAMP_MAX_ANGLE),
+    // The lamp turns like a rotating beacon: `direction` is where its beam points at every whole turn of the clock
+    // (see rgbLampBeamDirection in the front). All three are optional and fail open: a lamp saved without them, or
+    // with a value that is not valid, stands still (or turns at the default speed, clockwise).
+    rotation: z.boolean().optional().catch(undefined),
+    /** Turns a minute. */
+    rotationSpeed: z
+        .number()
+        .min(RGB_LAMP_MIN_ROTATION_SPEED)
+        .max(RGB_LAMP_MAX_ROTATION_SPEED)
+        .optional()
+        .catch(undefined),
+    /** Clockwise on the screen when absent. */
+    rotationClockwise: z.boolean().optional().catch(undefined),
 });
 
 export const MatrixRoomPropertyData = PropertyBase.extend({
