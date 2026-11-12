@@ -100,7 +100,7 @@ import { currentPlayerLockableAreasStore, type LockableAreaEntry } from "../../.
 import { areaPropertyVariablesManagerStore } from "../../../Stores/AreaPropertyVariablesStore";
 import { enterListeningZone, leaveListeningZone } from "../../../ListeningZone/ListeningZoneController";
 import { touchScreenManager } from "../../../Touch/TouchScreenManager";
-import { MeetingAreaPresence } from "./MeetingAreaPresence";
+import { MeetingAreaPresence, playersStillInMeetingArea } from "./MeetingAreaPresence";
 
 import Rectangle = Phaser.Geom.Rectangle;
 import Color = Phaser.Display.Color;
@@ -175,12 +175,14 @@ export class AreasPropertiesListener {
      * the area: positions are checked every MEETING_AREA_PRESENCE_CHECK_MS while the player is in one.
      */
     private readonly meetingAreaPresence: MeetingAreaPresence<LivekitRoomPropertyData>;
+    /** Per meeting area (property id): the remote players last seen standing in it. */
+    private readonly playersSeenInMeetingArea = new Map<string, Set<string>>();
     private meetingAreaPresenceTimer: Phaser.Time.TimerEvent | undefined;
 
     constructor(scene: GameScene) {
         this.scene = scene;
         this.meetingAreaPresence = new MeetingAreaPresence<LivekitRoomPropertyData>(
-            (areaId) => this.hasSomeoneElseInArea(areaId),
+            (areaId, property) => this.hasSomeoneElseInArea(areaId, property),
             (property, signal) => this.handleLivekitRoomPropertyOnEnter(property, signal),
             (property) => this.handleLivekitRoomPropertyOnLeave(property),
             (error) => {
@@ -1418,6 +1420,7 @@ export class AreasPropertiesListener {
 
     private leaveMeetingArea(property: LivekitRoomPropertyData): void {
         this.meetingAreaPresence.leave(property.id);
+        this.playersSeenInMeetingArea.delete(property.id);
         if (this.meetingAreaPresence.size === 0) {
             this.meetingAreaPresenceTimer?.remove();
             this.meetingAreaPresenceTimer = undefined;
@@ -1425,22 +1428,43 @@ export class AreasPropertiesListener {
     }
 
     /**
-     * Whether another player stands in the area, judged like the local player is (`isPlayerInsideArea`).
+     * Whether another player stands in the area, from the players' positions and never from the camera.
+     * The front only knows the players the pusher sends, those around the viewport: a player the camera moved away
+     * from is no longer known, yet still in the area. So:
+     * - a known player inside the area counts (`isPlayerInsideArea`, the rule used for the local player), and is
+     *   remembered as seen there;
+     * - a known player outside the area left it;
+     * - a player seen in the area but no longer known still counts while they are a member of the meeting's space,
+     *   which they leave as they leave the area, wherever the camera is.
      * NPCs do not count: nobody would be there to see or hear the meeting.
-     * Only the players the pusher sends us are known, those around our viewport, which covers a meeting room
-     * we are in.
      */
-    private hasSomeoneElseInArea(areaId: string): boolean {
+    private hasSomeoneElseInArea(areaId: string, property: LivekitRoomPropertyData): boolean {
         const gameMapAreas = this.scene.getGameMapFrontWrapper().getGameMap().getWamFile()?.getGameMapAreas();
         if (!gameMapAreas) {
             return false;
         }
-        for (const player of this.scene.getRemotePlayersRepository().getPlayers().values()) {
-            if (!isNpcUserUuid(player.userUuid) && gameMapAreas.isPlayerInsideArea(areaId, player.position)) {
-                return true;
-            }
-        }
-        return false;
+        const knownPlayers = Array.from(this.scene.getRemotePlayersRepository().getPlayers().values())
+            .filter((player) => !isNpcUserUuid(player.userUuid))
+            .map((player) => ({
+                userUuid: player.userUuid,
+                inside: gameMapAreas.isPlayerInsideArea(areaId, player.position),
+            }));
+        const meetingSpace = this.meetingSpace(property);
+        const stillThere = playersStillInMeetingArea(
+            knownPlayers,
+            this.playersSeenInMeetingArea.get(property.id) ?? new Set<string>(),
+            (userUuid) => meetingSpace?.getSpaceUserByUuid(userUuid) !== undefined,
+        );
+        this.playersSeenInMeetingArea.set(property.id, stillThere);
+        return stillThere.size > 0;
+    }
+
+    /** The space the area's meeting joins (handleLivekitRoomPropertyOnEnter), if it is joined. */
+    private meetingSpace(property: LivekitRoomPropertyData): SpaceInterface | undefined {
+        const roomID = property.roomName.trim().length === 0 ? property.id : property.roomName;
+        const roomName = Jitsi.slugifyJitsiRoomName(roomID, this.scene.roomUrl).trim();
+        const spaceRegistry = this.scene.spaceRegistry;
+        return spaceRegistry.exist(roomName) ? spaceRegistry.get(roomName) : undefined;
     }
 
     private async handleLivekitRoomPropertyOnLeave(property: LivekitRoomPropertyData): Promise<void> {

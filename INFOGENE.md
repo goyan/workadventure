@@ -550,12 +550,15 @@ Un joueur qui entre là où quelqu'un se trouve déjà démarre la réunion tout
 
 `MeetingAreaPresence.ts` suit les zones de réunion du joueur et enchaîne démarrages et arrêts (un arrêt
 n'en devance jamais le démarrage). `AreasPropertiesListener` vérifie la présence toutes les 500 ms tant que
-le joueur est dans une telle zone, avec la même règle que pour le joueur local (`isPlayerInsideArea`), sur les
-joueurs distants connus du front (ceux autour de la vue, ce qui couvre la salle où l'on est). Les NPC
-(`npc:<id>`) ne comptent pas. Aucun changement du protocole ou du back : le statut « en réunion » exclut
+le joueur est dans une telle zone, avec la même règle que pour le joueur local (`isPlayerInsideArea`), d'après
+la **position des avatars**, jamais la caméra : un joueur distant connu dans la zone compte ; connu hors de la zone, il
+est parti ; vu dans la zone puis plus connu (le pusher n'envoie que les joueurs autour de la vue, et la caméra a pu
+s'éloigner), il compte tant qu'il est membre de l'espace de la réunion, qu'il quitte en sortant de la zone
+(`playersStillInMeetingArea`). Déplacer la caméra ne coupe donc pas l'appel. Les NPC (`npc:<id>`) ne comptent pas. Aucun changement du protocole ou du back : le statut « en réunion » exclut
 toujours des bulles une fois la réunion démarrée.
 
-Recette en beta : entrer seul dans une zone de réunion et changer de statut ; faire entrer un second joueur
+Recette en beta : entrer seul dans une zone de réunion et changer de statut ; en réunion à deux, éloigner la caméra
+de la zone sans bouger son woka (l'appel continue) ; faire entrer un second joueur
 (réunion des deux côtés, en moins d'une seconde) ; le faire sortir (réunion quittée, statut d'avant).
 
 ### Une session par compte et par salle
