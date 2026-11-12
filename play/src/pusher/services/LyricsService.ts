@@ -8,6 +8,17 @@ const LrclibLyrics = z.object({
     syncedLyrics: z.string().max(100_000).nullable(),
     instrumental: z.boolean(),
 });
+const LrclibSearchResults = z
+    .array(
+        LrclibLyrics.extend({
+            trackName: z.string().max(1000).nullish(),
+            artistName: z.string().max(1000).nullish(),
+            albumName: z.string().max(1000).nullish(),
+            duration: z.number().nullish(),
+        }),
+    )
+    .max(100);
+type LrclibSearchResult = z.infer<typeof LrclibSearchResults>[number];
 const OvhLyrics = z.object({ lyrics: z.string().min(1).max(100_000) });
 
 export type LyricsServiceResult =
@@ -101,13 +112,17 @@ export class LyricsService {
             const parsed = LrclibLyrics.safeParse(await response.json());
             if (!parsed.success) return { status: "unavailable" };
             if (parsed.data.instrumental || parsed.data.plainLyrics || parsed.data.syncedLyrics) {
-                return {
+                const exact: LyricsResult = {
                     status: "found",
                     plainLyrics: parsed.data.plainLyrics ?? "",
                     syncedLyrics: parsed.data.syncedLyrics ?? "",
                     instrumental: parsed.data.instrumental,
                     source: "lrclib",
                 };
+                // A version chosen by hand in the panel only has a title and an artist: show it as is.
+                const automatic = Boolean(track.album) || track.durationMs !== undefined;
+                if (exact.instrumental || exact.syncedLyrics.trim() || !automatic) return exact;
+                return (await this.syncedEquivalent(track)) ?? exact;
             }
         } else if (response.status !== 404) {
             return { status: "unavailable" };
@@ -128,5 +143,52 @@ export class LyricsService {
                   source: "lyrics.ovh",
               }
             : { status: "unavailable" };
+    }
+
+    /**
+     * LRCLIB stores one entry per edition: the exact album may only have plain lyrics while another edition of the
+     * same recording is synced. Any failure keeps the plain lyrics already found.
+     */
+    private async syncedEquivalent(track: LyricsTrack): Promise<LyricsResult | undefined> {
+        try {
+            const url = new URL("https://lrclib.net/api/search");
+            url.searchParams.set("track_name", track.title);
+            url.searchParams.set("artist_name", track.artist);
+            const response = await this.providerRequest(url);
+            if (!(response instanceof Response) || !response.ok) return undefined;
+            const parsed = LrclibSearchResults.safeParse(await response.json());
+            if (!parsed.success) return undefined;
+            const same = (a: string | null | undefined, b: string | undefined) =>
+                a !== null && a !== undefined && b !== undefined && a.trim().toLowerCase() === b.trim().toLowerCase();
+            const seconds = track.durationMs === undefined ? undefined : track.durationMs / 1000;
+            const gap = (candidate: LrclibSearchResult) =>
+                seconds === undefined
+                    ? 0
+                    : candidate.duration === null || candidate.duration === undefined
+                      ? Infinity
+                      : Math.abs(candidate.duration - seconds);
+            const candidates = parsed.data.filter(
+                (candidate) =>
+                    !candidate.instrumental &&
+                    Boolean(candidate.syncedLyrics?.trim()) &&
+                    // The search is fuzzy: never take another song, whatever its duration.
+                    same(candidate.trackName, track.title) &&
+                    same(candidate.artistName, track.artist) &&
+                    (seconds === undefined || gap(candidate) <= 3),
+            );
+            const sameAlbum = (candidate: LrclibSearchResult) => (same(candidate.albumName, track.album) ? 0 : 1);
+            // Stable sort: with an unknown duration, the provider's order decides among equals.
+            const best = candidates.sort((a, b) => sameAlbum(a) - sameAlbum(b) || gap(a) - gap(b))[0];
+            if (!best) return undefined;
+            return {
+                status: "found",
+                plainLyrics: best.plainLyrics ?? "",
+                syncedLyrics: best.syncedLyrics ?? "",
+                instrumental: false,
+                source: "lrclib",
+            };
+        } catch {
+            return undefined;
+        }
     }
 }

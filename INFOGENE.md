@@ -167,7 +167,10 @@ Cliquer à nouveau sur **Karaoké** ferme le panneau ; cliquer sur celui d'un au
 Jam change la source des paroles.
 
 Les paroles gratuites viennent de LRCLIB, puis de lyrics.ovh pour un repli sans
-synchronisation. Le morceau courant passe avant le préchargement du seul titre
+synchronisation. Quand l'édition exacte de l'album n'a que du texte brut sur LRCLIB,
+une recherche titre/artiste reprend une autre édition synchronisée de même durée
+(±3 s, même album d'abord) ; sans elle, ou en cas d'erreur, le texte brut reste.
+Une version choisie à la main n'est pas remplacée. Le morceau courant passe avant le préchargement du seul titre
 suivant connu ; la file peut changer. Les paroles suivent la position de l'hôte,
 conservent le morceau en pause et se recalibrent après une recherche. Le lecteur
 desktop fournit ses changements ; la Web API est relue toutes les cinq secondes.
