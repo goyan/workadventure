@@ -72,6 +72,39 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Torche
+
+Cliquer sur son avatar, puis **Équiper la torche** dans la roue d'actions ; **Ranger la torche** apparaît au même
+endroit une fois équipée. La main est unique : équiper la torche range le Nerf, équiper le Nerf range la torche.
+Comme le Nerf, la torche n'est refusée ni à la nage ni en véhicule ; on ne l'équipe pas dans l'éditeur (la ranger
+reste possible).
+
+- **Partage** : l'état est la variable de joueur publique et non sauvegardée `_torchEquipped` (comme
+  `_nerfEquipped`), aucun changement du protocole protobuf ni du `back`. Chaque navigateur dessine la torche et la
+  lumière de chaque porteur qu'il voit.
+- **Lumière** : orange chaud, 5,5 cases autour de la flamme, de jour comme de nuit ; la nuit, le voile est percé de la
+  forme exacte de la lumière (comme la lampe RGB). Elle est arrêtée par les mêmes obstacles que la lampe RGB : cases
+  bloquantes, murs de l'outil Carte (porte fermée), objets `castsShadow` ; ni les avatars ni les objets bas ne font
+  d'ombre. La lumière part de la flamme, dans la main ; si la flamme passe au-dessus d'un mur (avatar collé à un mur),
+  elle part du point du corps le plus proche de la flamme encore du bon côté : la lumière ne traverse jamais un mur.
+- **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
+  100 %), sans alternance brusque ni plus de trois variations marquées par seconde (photosensibilité, WCAG 2.3.1) ;
+  la forme et la portée restent fixes (une portée qui varie ferait bouger le bord des ombres sur les murs). La petite
+  flamme dans la main suit la même onde. Préférence système de mouvement réduit : lumière et flamme fixes.
+- **Coût** : la forme d'une lumière n'est recalculée que si la flamme a bougé d'au moins un pixel ou qu'un obstacle a
+  changé dans sa portée (porteur immobile : rien) ; au plus quatre porteurs sont recalculés par image, le joueur local
+  en premier. Le scintillement redessine la scène 15 fois par seconde tant qu'une torche est à l'écran. Dans
+  l'éditeur, les lumières des torches sont éteintes pour soi (la flamme reste dans la main, comme le blaster ; la
+  variable n'est pas modifiée).
+
+Code : `play/src/front/Phaser/Game/Torch/*` (protocole, scintillement, géométrie et main exclusive sans Phaser,
+testés), la lecture des obstacles est partagée avec la lampe RGB (`Lamps/LightObstacleReader.ts`) et le dessin
+réutilise `RgbLampVisual`.
+
+Recette : deux personnes ; équiper/ranger, passer de la torche au Nerf ; marcher le long d'un mur, d'une porte de
+l'outil Carte (ouverte et fermée) et d'un meuble haut ; regarder de nuit (`?nightAt=22:00` en dev) ; mouvement réduit
+du système ; plusieurs porteurs à l'écran pour le débit d'images.
+
 ## Lumières des Jams
 
 La boule disco avec un badge **personne** dans chaque carte de Jam coupe ou réactive les effets lumineux
