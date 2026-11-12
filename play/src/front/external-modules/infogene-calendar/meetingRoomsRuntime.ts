@@ -1,6 +1,6 @@
 import { get } from "svelte/store";
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
-import type { AreaData } from "@workadventure/map-editor";
+import { AREA_POSITION_OFFSET_Y, type AreaData } from "@workadventure/map-editor";
 import { asError } from "catch-unknown";
 import { gameManager } from "../../Phaser/Game/GameManager";
 import type { GameScene } from "../../Phaser/Game/GameScene";
@@ -50,7 +50,11 @@ export function startMeetingRooms(): () => void {
         askToOpenInTeams(event, "arrived");
     };
 
-    const feet = (scene: GameScene) => ({ x: scene.CurrentPlayer.x, y: scene.CurrentPlayer.y });
+    // In an area by the feet, as the game's own area events (the sprite's position is its middle).
+    const feet = (scene: GameScene) => ({
+        x: scene.CurrentPlayer.x,
+        y: scene.CurrentPlayer.y + AREA_POSITION_OFFSET_Y,
+    });
 
     goToMeetingStore.set((event) => {
         const scene = currentScene();
@@ -133,7 +137,7 @@ export function startMeetingRooms(): () => void {
         const areas = sceneAreas(scene);
         // Before the entry below: arriving after "Go there" asks about Teams instead of reminding.
         arrived(arrival.check(feet(scene), areas, scene.roomUrl, new Date()));
-        const room = roomAt({ x: player.x, y: player.y }, areas);
+        const room = roomAt(feet(scene), areas);
         if (room?.id === lastRoomId) return;
         lastRoomId = room?.id;
         // Out of every room: "Go there" only kept the arrival it caused quiet; coming back reminds again.
