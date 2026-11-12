@@ -203,22 +203,28 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   du bout reste sur le faisceau et règle la phase sans ambiguïté (fermer l'éditeur pour voir tourner). Une lampe à 360°
   d'ouverture ne peut pas tourner (rien ne changerait à l'écran) : le réglage est grisé, avec l'explication.
   **Photosensibilité** : un seul faisceau passe sur un observateur immobile au plus 2 fois par seconde (120 tr/min),
-  sous les 3 flashs par seconde de WCAG 2.3.1 (testé au cône le plus étroit, 10°). Format : trois champs facultatifs
+  sous les 3 flashs par seconde de WCAG 2.3.1 (testé au cône le plus étroit, 10°). Limite : **deux lampes** à
+  120 tr/min qui balaient le même endroit y passent 4 fois par seconde (au-dessus du seuil) ; rien ne l'empêche
+  aujourd'hui (plafond à 90 tr/min, ou décalage des lampes voisines, à décider). Format : trois champs facultatifs
   de `rgbLampPropertyData` (`rotation`, `rotationSpeed`, `rotationClockwise`) ; absents, la lampe est fixe ; une valeur
   invalide est ignorée sans refuser la carte ; rien n'est écrit sur une lampe qui n'a jamais tourné. Une image plus
   ancienne (`play`, `back`, `map-storage` de la PR #199) **ne refuse pas** une carte qui les porte : elle retire ces
   champs à la lecture (Zod, vérifié par un test du schéma), la lampe y est fixe ; un `map-storage` ancien qui
   réécrit la carte peut donc les effacer (non vérifié). Déployer les trois
   images ensemble. Coût : le tour complet de lumière (lancer de rayons, ombres comprises) n'est calculé qu'au réglage,
-  au déplacement ou quand un obstacle change dans sa portée ; à chaque pas, le faisceau est découpé dans ce tour
+  au déplacement ou quand un obstacle change dans sa portée (une porte de l'outil Carte qui s'ouvre au passage de
+  quelqu'un compte : hors budget, 7 à 8 fois plus cher que le cône étroit d'une lampe fixe) ; à chaque pas, le faisceau est découpé dans ce tour
   (`coneOfLitPolygon`, sans rayon), puis la texture est redessinée. Seules les lampes à l'écran sont redessinées,
-  dès 1° de mouvement, au plus 4 par image (les plus anciennes d'abord : au-delà de 4 lampes à l'écran, chacune
-  avance moins souvent, par sauts plus grands). Mesure hors navigateur, 10 lampes, calcul seul : découpage 0,03 à
+  dès 1° de mouvement (même à 10 tr/min, presque à chaque image), au plus 4 par image (les plus anciennes d'abord :
+  au-delà de 4 lampes à l'écran, chacune avance moins souvent, par sauts plus grands), soit au plus 240 dessins de
+  texture par seconde à 60 images par seconde. Mesure hors navigateur, 10 lampes, calcul seul : découpage 0,03 à
   0,1 ms par pas pour les 10 sur une carte de bureaux (6 à 20 cases), 0,8 ms sur des piliers une case sur deux à
-  20 cases ; le tour complet, ponctuel, coûte 0,5 ms (bureaux, 6 cases) à 5 ms (bureaux 20 cases, ou piliers
+  20 cases ; le tour complet coûte 0,5 ms (bureaux, 6 cases) à 5 ms (bureaux 20 cases, ou piliers
   6 cases) pour les 10, et 330 ms sur les piliers à 20 cases (pire cas). Le dessin de la texture (dégradé sur
-  (2 × portée en px / 4)² texels, 37 Ko à 6 cases, 400 Ko à 20 cases, envoyés au GPU à chaque pas) et la
-  recomposition du voile de nuit à chaque pas ne sont pas mesurés.
+  (2 × portée en px / 4)² texels, 37 Ko à 6 cases, 400 Ko à 20 cases, envoyés au GPU à chaque pas : au plus
+  9 Mo/s à 6 cases, 98 Mo/s à 20 cases) et la recomposition du voile de nuit à chaque pas ne sont pas mesurés. Le
+  tour complet des piliers à 20 cases (330 ms pour 10 lampes) fait une saccade visible : acceptable sur des bureaux,
+  pas sur ce pire cas.
 
 Code : `play/src/front/Phaser/Game/Lamps/RgbLamp*.ts`. Le calcul est sans Phaser et testé : segments d'obstacles
 (`RgbLampObstacles`), polygone éclairé par lancer de rayons découpé par le cône (`RgbLampGeometry`). Rendu : une
