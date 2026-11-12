@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
+import { localUserStore } from "../../Connection/LocalUserStore";
 import { cameraDetachedStore } from "../../Stores/CameraStore";
 import { Easing } from "../../types";
 import { HtmlUtils } from "../../WebRtc/HtmlUtils";
@@ -19,6 +20,7 @@ import {
     getSmoothButtonZoomModifier,
 } from "./CameraZoomUtils";
 import type { GameScene } from "./GameScene";
+import { DebouncedZoomSaver } from "./ZoomPersistence";
 
 import Clamp = Phaser.Math.Clamp;
 import EventEmitter = Phaser.Events.EventEmitter;
@@ -136,6 +138,12 @@ export class CameraManager extends EventEmitter {
     // Target follow offset for the camera, expressed in game pixels.
     private targetFollowOffset: { x: number; y: number } | undefined;
 
+    // The zoom the user settles on is kept for the next page load (see ZoomPersistence).
+    private readonly zoomSaver = new DebouncedZoomSaver((zoomModifier) =>
+        localUserStore.setCameraZoomModifier(zoomModifier),
+    );
+    private restoringSavedZoom = false;
+
     constructor(
         private scene: GameScene,
         private mapSize: { width: number; height: number },
@@ -182,11 +190,47 @@ export class CameraManager extends EventEmitter {
         this.waScaleManager.mapSize = this.mapSize;
 
         this.scene.game.events.on(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
+        window.addEventListener("pagehide", this.onPageHide);
+        this.restoreSavedZoom();
     }
 
     private readonly onZoomChanged = (): void => {
         this.doUpdateCameraOffset(true);
+        if (this.isUserZoom()) this.zoomSaver.schedule(this.waScaleManager.zoomModifier);
     };
+
+    // A reload (F5) may come right after a wheel gesture, before the debounced save.
+    private readonly onPageHide = (): void => {
+        this.zoomSaver.flush();
+    };
+
+    /**
+     * Starts at the zoom the user chose last, once the map size is known so that WaScaleManager clamps it to this
+     * screen and map. The clamped value is not written back: a bigger screen or map may allow the saved zoom again.
+     */
+    private restoreSavedZoom(): void {
+        const savedZoomModifier = localUserStore.getCameraZoomModifier();
+        if (savedZoomModifier === undefined) return;
+        this.restoringSavedZoom = true;
+        try {
+            this.waScaleManager.setZoomModifier(savedZoomModifier, this.camera, false);
+        } finally {
+            this.restoringSavedZoom = false;
+        }
+    }
+
+    /**
+     * Whether the current zoom is one the user chose. Focus zones, the map editor and the tap-walk framing set
+     * temporary zooms, which the camera leaves when they end: those are not saved.
+     */
+    private isUserZoom(): boolean {
+        return (
+            !this.restoringSavedZoom &&
+            !this.mapEditorOpen &&
+            !this.walkFraming &&
+            !this.waScaleManager.getFocusTarget()
+        );
+    }
 
     /**
      * In game mode the view stays on the map. On an axis where the map is smaller than the view, the map is centred
@@ -227,6 +271,9 @@ export class CameraManager extends EventEmitter {
         this.zoomAnimation?.onInterrupt();
         this.zoomAnimation = undefined;
         this.scene.game.events.off(WaScaleManagerEvent.ZoomChanged, this.onZoomChanged);
+        window.removeEventListener("pagehide", this.onPageHide);
+        // The next scene (another room, a reconnection) restores the zoom: save the last one first.
+        this.zoomSaver.flush();
         this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.updateGameBounds);
 
         this.scene.game.events.off(WaScaleManagerEvent.RefreshFocusOnTarget);
