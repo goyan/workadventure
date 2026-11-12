@@ -43,12 +43,14 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightHalos", () => ({
 }));
 const { NightMode, nightModeStore, nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");
+const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/RgbLampStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
     manager?.destroy();
     manager = undefined;
     nightModeStore.set(NightMode.Server);
+    rgbLampLightsStore.set([]);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -111,5 +113,28 @@ describe("personal night clock choice", () => {
         nightModeStore.set(NightMode.Computer);
         manager.update(1);
         expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+    });
+
+    it("pierces the veil with the lights of the RGB lamps, and draws it again when one changes shape", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-15T20:00:00Z"));
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: Date.now() }))));
+        const scene = createScene();
+        manager = new NightManager(scene);
+        await vi.advanceTimersByTimeAsync(0);
+        const light = { id: "lamp", x: 10, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1 };
+        rgbLampLightsStore.set([light]);
+        manager.update(0);
+        expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ lamps: [light] }));
+        manager.update(1);
+        expect(draw).toHaveBeenCalledTimes(1);
+        scene.markDirty.mockClear();
+        rgbLampLightsStore.set([{ ...light, revision: 2 }]);
+        // The scene is only rendered when asked: a lamp that changes asks for it.
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+        manager.update(2);
+        expect(draw).toHaveBeenCalledTimes(2);
+        expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ lamps: [{ ...light, revision: 2 }] }));
     });
 });
