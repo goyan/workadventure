@@ -195,8 +195,8 @@ export class LampManager {
     ) {
         ensureLampTextures(scene);
         this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, ROOM_SHADE_DEPTH);
-        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH, { reducedMotion: this.systemReducedMotion });
         this.unsubscribers = [
             lampEffectsEnabledStore.subscribe((enabled) => {
                 this.effectsEnabled = enabled;
@@ -569,7 +569,7 @@ export class LampManager {
         this.frames.clear();
         // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
         // (it is a steady light, not an effect).
-        this.rgbLamps.update();
+        this.rgbLamps.update(this.editorOpen);
         const demoFrame = this.demoSignal?.read(now);
         if (this.updateFloors(now, demoFrame)) {
             // The scene is only drawn when something changed: a floor on the screen changes at every image.
