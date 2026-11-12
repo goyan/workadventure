@@ -12,6 +12,9 @@ export function roomsOfMap(areas: readonly AreaData[]): string[] {
     return areas.filter(isTeamsMeetingRoom).map((area) => area.id);
 }
 
+/** What "Go there" did, so that the player is told why the avatar does not move. */
+export type GoToMeetingOutcome = { kind: "walking" } | { kind: "teams-only" } | { kind: "rooms-full" };
+
 export interface GoToMeetingDeps {
     openUrl: (url: string) => void;
     claim: (input: MeetingRoomClaimInput) => Promise<MeetingRoomClaim>;
@@ -24,20 +27,21 @@ export interface GoToMeetingDeps {
  * "Go there": opens the meeting's https link in a new tab at once (the browser only allows it within the click; the
  * Teams page hands it to the app), then asks for the meeting's room and walks to its center. Never a navigation of
  * the game window: an msteams: link opened there unloads the page and closes the game connection for good.
- * No room on the map, or all taken: Teams only.
+ * A room is given at any time before the end, as Teams lets one join early. No room on the map, or all taken: Teams
+ * only, and the outcome says which.
  */
-export function goToMeeting(event: CalendarEventInterface, deps: GoToMeetingDeps): Promise<void> {
+export async function goToMeeting(event: CalendarEventInterface, deps: GoToMeetingDeps): Promise<GoToMeetingOutcome> {
     const joinUrl = event.resource?.onlineMeeting?.joinUrl;
     if (joinUrl) deps.openUrl(joinUrl);
     const meetingKey = event.resource?.meetingKey;
     const areas = deps.areas();
     const roomAreaIds = roomsOfMap(areas);
-    if (!meetingKey || roomAreaIds.length === 0) return Promise.resolve();
-    return deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds }).then(({ areaId }) => {
-        const room = areas.find((area) => area.id === areaId);
-        if (!room) return;
-        return deps.walkTo({ x: room.x + room.width / 2, y: room.y + room.height / 2 });
-    });
+    if (!meetingKey || roomAreaIds.length === 0) return { kind: "teams-only" };
+    const claim = await deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds });
+    const room = areas.find((area) => area.id === claim.areaId);
+    if (!room) return { kind: "rooms-full" };
+    await deps.walkTo({ x: room.x + room.width / 2, y: room.y + room.height / 2 });
+    return { kind: "walking" };
 }
 
 /** The title of each taken room, written above the middle of its top edge. Rooms gone from the map are skipped. */

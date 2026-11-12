@@ -9,6 +9,8 @@ import { calendarEventsStore, goToMeetingStore } from "../../Stores/CalendarStor
 import { calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
 import { scriptUtils } from "../../Api/ScriptUtils";
+import { warningMessageStore } from "../../Stores/ErrorStore";
+import LL from "../../../i18n/i18n-svelte";
 import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
 import { goToMeeting, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
@@ -54,7 +56,15 @@ export function startMeetingRooms(): () => void {
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
         })
-            .then(() => refreshLabels())
+            .then((outcome) => {
+                // Teams is open but the avatar stays: say why, instead of a click that seems to do nothing.
+                if (outcome.kind === "rooms-full") {
+                    warningMessageStore.addWarningMessage(get(LL).externalModule.calendar.goToMeetingRoomsFull(), {
+                        closable: true,
+                    });
+                }
+                refreshLabels();
+            })
             .catch((e: unknown) => console.warn("Cannot go to the meeting room", asError(e).message));
     });
 
