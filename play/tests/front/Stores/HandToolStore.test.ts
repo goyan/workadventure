@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
-import { toggleHandTool } from "../../../../../src/front/Phaser/Game/Torch/HandTools";
-import { nerfEquippedStore } from "../../../../../src/front/Stores/NerfStore";
-import { torchEquippedStore } from "../../../../../src/front/Stores/TorchStore";
+import { toggleHandTool } from "../../../src/front/Stores/HandToolStore";
+import { nerfEquippedStore } from "../../../src/front/Stores/NerfStore";
+import { torchEquippedStore } from "../../../src/front/Stores/TorchStore";
 
 afterEach(() => {
     nerfEquippedStore.set(false);

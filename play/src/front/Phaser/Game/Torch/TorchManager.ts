@@ -2,16 +2,14 @@ import { get, type Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { torchEquippedStore } from "../../../Stores/TorchStore";
 import type { Character } from "../../Entity/Character";
-import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
-import { toggleHandTool } from "./HandTools";
+import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { torchFlicker, torchFlickerPhase, torchFlickerStep } from "./TorchFlicker";
 import { TORCH_FLAME_FRAMES_PER_SECOND, torchFlameShape, torchFlameStep } from "./TorchFlameShape";
 import { TORCH_EQUIPPED_VARIABLE } from "./TorchProtocol";
 import { Torches, type TorchBearer } from "./Torches";
 
-/** With the lights of the RGB lamps (see LampManager): above the night veil, which they pierce. */
-const TORCH_DEPTH = DEPTH_NIGHT_INDEX + 100;
 /** The id of the local player among the bearers (the others go by their numeric key). */
 const LOCAL_ID = "me";
 
@@ -29,7 +27,7 @@ export class TorchManager {
     private flameStep: number | undefined;
 
     constructor(private readonly scene: GameScene) {
-        this.torches = new Torches(scene, TORCH_DEPTH);
+        this.torches = new Torches(scene, DEPTH_LAMP_LIGHT_INDEX);
         this.equipmentUnsubscribe = torchEquippedStore.subscribe((equipped) => {
             scene.CurrentPlayer.setTorchEquipped(equipped);
             scene.getPlayerVariablesManager()?.setVariableFromApp(TORCH_EQUIPPED_VARIABLE, equipped, {

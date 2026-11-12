@@ -106,8 +106,8 @@ reste possible).
   l'éditeur, les lumières des torches sont éteintes pour soi (la flamme reste dans la main, comme le blaster ; la
   variable n'est pas modifiée).
 
-Code : `play/src/front/Phaser/Game/Torch/*` (protocole, scintillement, géométrie et main exclusive sans Phaser,
-testés), la lecture des obstacles est partagée avec la lampe RGB (`Lamps/LightObstacleReader.ts`) et le dessin
+Code : `play/src/front/Phaser/Game/Torch/*` (protocole, scintillement, forme de la flamme et géométrie sans Phaser,
+testés), la main exclusive torche/Nerf dans `Stores/HandToolStore.ts`, la lecture des obstacles est partagée avec la lampe RGB (`Lamps/LightObstacleReader.ts`) et le dessin
 réutilise `RgbLampVisual`.
 
 Recette : deux personnes ; équiper/ranger, passer de la torche au Nerf ; marcher le long d'un mur, d'une porte de

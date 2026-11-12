@@ -1,6 +1,6 @@
 import { get, type Writable } from "svelte/store";
-import { nerfEquippedStore } from "../../../Stores/NerfStore";
-import { torchEquippedStore } from "../../../Stores/TorchStore";
+import { nerfEquippedStore } from "./NerfStore";
+import { torchEquippedStore } from "./TorchStore";
 
 /** What the avatar can hold in its hand: one at a time. */
 export type HandTool = "nerf" | "torch";

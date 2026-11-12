@@ -17,7 +17,7 @@ import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEf
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { lightableAreas } from "../Night/NightLights";
 import type { Entity } from "../../ECS/Entity";
-import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
+import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import type { GameScene } from "../GameScene";
 import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
@@ -58,7 +58,7 @@ interface RoomBeat {
 }
 
 /** Above the night veil: lamps glow at night, and are a light touch by day. */
-const LAMP_DEPTH = DEPTH_NIGHT_INDEX + 100;
+const LAMP_DEPTH = DEPTH_LAMP_LIGHT_INDEX;
 /** Where a playing room is darkened: over its floor (and rugs), under the players and the furniture standing on it. */
 const ROOM_SHADE_DEPTH = FLOOR_OBJECT_DEPTH + 0.5;
 /** A dance floor shines in the dark: over the darkness of its room, still under the players. */

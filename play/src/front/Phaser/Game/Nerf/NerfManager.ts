@@ -13,7 +13,7 @@ import type { GameScene } from "../GameScene";
 import type { Character } from "../../Entity/Character";
 import { CHARACTER_BODY_HEIGHT } from "../../Entity/Character";
 import { Area } from "../../Entity/Area";
-import { toggleHandTool } from "../Torch/HandTools";
+import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { NerfImpactEffect } from "./NerfImpactEffect";
 import { countsAsHit, fullHearts, hit, release, thirdsAt, type NerfHeartsState } from "./NerfHearts";
 import { findNerfPrison, isInZone, zoneCenter, type NerfZone } from "./NerfPrison";
