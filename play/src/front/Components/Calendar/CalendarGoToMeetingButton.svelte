@@ -15,7 +15,7 @@
     let { event, class: className = "", ongo }: Props = $props();
 </script>
 
-<!-- "Go there": open the meeting in Teams and walk to its room (Mac companion meetings), until the meeting ends. -->
+<!-- "Go there": walk to the meeting's room, Teams offered on arrival (Mac companion meetings), until it ends. -->
 {#if canGoToMeeting(event, $goToMeetingStore)}
     <Button
         variant="secondary"

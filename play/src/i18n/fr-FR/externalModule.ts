@@ -135,7 +135,10 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         startsNow: "Commence maintenant",
         startedAgo: "A commencé {ago}",
         noLink: "Pas de lien de réunion",
-        goToMeetingRoomsFull: "Toutes les salles Teams sont prises : la réunion est ouverte dans Teams seulement.",
+        goToMeetingRoomsFull: "Toutes les salles Teams sont prises.",
+        openInTeamsQuestion: "Ouvrir la réunion dans Teams ?",
+        openInTeamsYes: "Oui",
+        openInTeamsNo: "Non",
     },
     companion: {
         title: "Compagnon Mac",

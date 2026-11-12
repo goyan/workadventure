@@ -1,19 +1,17 @@
 import { get } from "svelte/store";
-import type { AreaData } from "@workadventure/map-editor";
+import type { CalendarEventInterface } from "@workadventure/shared-utils";
+import { AREA_POSITION_OFFSET_Y, type AreaData } from "@workadventure/map-editor";
 import { asError } from "catch-unknown";
 import { gameManager } from "../../Phaser/Game/GameManager";
 import type { GameScene } from "../../Phaser/Game/GameScene";
 import { DEPTH_DOOR_LOCK_INDEX } from "../../Phaser/Game/DepthIndexes";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
 import { calendarEventsStore, goToMeetingStore } from "../../Stores/CalendarStore";
-import { calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
+import { askToOpenInTeams, calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
-import { scriptUtils } from "../../Api/ScriptUtils";
-import { warningMessageStore } from "../../Stores/ErrorStore";
-import LL from "../../../i18n/i18n-svelte";
 import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
-import { goToMeeting, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
+import { goToMeeting, MeetingArrival, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
 
 /** The titles of the taken rooms are read again twice a minute, as the agenda's busy status. */
 const LABELS_INTERVAL_MS = 30 * 1000;
@@ -33,39 +31,67 @@ function currentScene(): GameScene | undefined {
 }
 
 /**
- * The Teams meeting rooms in the game: "Go there" on a reminder, the title of each taken room above it, and the
- * reminder shown again to a player who walks into a room during their meeting. Returns the function stopping it all.
+ * The Teams meeting rooms in the game: "Go there" on a reminder (walk to the room, then "Open in Teams?" on arrival),
+ * the title of each taken room above it, and the reminder shown again to a player who walks into a room during their
+ * meeting. Returns the function stopping it all.
  */
 export function startMeetingRooms(): () => void {
     const labels = new Map<string, Phaser.GameObjects.Text>();
     let lastRoomId: string | undefined;
     let rooms: MeetingRoom[] = [];
-    /** Meetings the player just went to with "Go there": arriving in their room does not remind them again. */
+    /** Meetings already offered on arrival with "Go there": being in their room does not remind them again. */
     const joined = new Set<string>();
+    const arrival = new MeetingArrival();
     const abortController = new AbortController();
+
+    const arrived = (event: CalendarEventInterface | undefined) => {
+        if (!event) return;
+        joined.add(event.id);
+        askToOpenInTeams(event, "arrived");
+    };
+
+    // In an area by the feet, as the game's own area events (the sprite's position is its middle).
+    const feet = (scene: GameScene) => ({
+        x: scene.CurrentPlayer.x,
+        y: scene.CurrentPlayer.y + AREA_POSITION_OFFSET_Y,
+    });
 
     goToMeetingStore.set((event) => {
         const scene = currentScene();
         if (!scene) return;
-        joined.add(event.id);
+        let walk: number | undefined;
         goToMeeting(event, {
-            // A new tab, as the agenda's Join button: the game window must never navigate away.
-            openUrl: (url) => scriptUtils.openTab(url),
             claim: (input) => claimMeetingRoom(input, abortController.signal),
-            walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5).then(() => undefined),
+            onRoom: (areaId) => {
+                walk = arrival.expect(event, areaId, scene.roomUrl);
+            },
+            walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
         })
             .then((outcome) => {
-                // Teams is open but the avatar stays: say why, instead of a click that seems to do nothing.
-                if (outcome.kind === "rooms-full") {
-                    warningMessageStore.addWarningMessage(get(LL).externalModule.calendar.goToMeetingRoomsFull(), {
-                        closable: true,
-                    });
-                }
                 refreshLabels();
+                // No room to walk to: the avatar stays, and Teams is offered at once.
+                if (outcome.kind !== "walking") {
+                    askToOpenInTeams(event, outcome.kind);
+                    return;
+                }
+                if (walk === undefined || abortController.signal.aborted) return;
+                // Noticed as soon as the walk ends; a walk that never ends is caught by watchEntry.
+                const current = currentScene();
+                if (current?.CurrentPlayer) {
+                    arrived(
+                        arrival.walkEnded(walk, feet(current), sceneAreas(current), current.roomUrl, new Date()),
+                    );
+                }
             })
-            .catch((e: unknown) => console.warn("Cannot go to the meeting room", asError(e).message));
+            .catch((e: unknown) => {
+                if (abortController.signal.aborted) return;
+                console.warn("Cannot go to the meeting room", asError(e).message);
+                // No room could be asked for, or no path leads there: the meeting can still be opened in Teams.
+                if (walk !== undefined) arrival.cancel();
+                askToOpenInTeams(event, "teams-only");
+            });
     });
 
     const refreshLabels = () => {
@@ -108,7 +134,10 @@ export function startMeetingRooms(): () => void {
         const scene = currentScene();
         const player = scene?.CurrentPlayer;
         if (!scene || !player) return;
-        const room = roomAt({ x: player.x, y: player.y }, sceneAreas(scene));
+        const areas = sceneAreas(scene);
+        // Before the entry below: arriving after "Go there" asks about Teams instead of reminding.
+        arrived(arrival.check(feet(scene), areas, scene.roomUrl, new Date()));
+        const room = roomAt(feet(scene), areas);
         if (room?.id === lastRoomId) return;
         lastRoomId = room?.id;
         // Out of every room: "Go there" only kept the arrival it caused quiet; coming back reminds again.
@@ -116,11 +145,13 @@ export function startMeetingRooms(): () => void {
             joined.clear();
             return;
         }
+        // The meeting walked to with "Go there" is not reminded on the way into its room.
+        const pending = arrival.pendingEventId();
         const meeting = meetingToOpenOnEntry(
             get(calendarEventsStore).values(),
             new Date(),
             rooms.find((candidate) => candidate.areaId === room.id),
-            joined,
+            pending === undefined ? joined : new Set([...joined, pending]),
         );
         if (meeting) remindAgain(meeting);
     };
@@ -147,6 +178,7 @@ export function startMeetingRooms(): () => void {
 
     return () => {
         abortController.abort();
+        arrival.cancel();
         unsubscribeReminders();
         clearInterval(labelsTimer);
         clearInterval(entryTimer);

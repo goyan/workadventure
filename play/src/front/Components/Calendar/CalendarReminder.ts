@@ -81,6 +81,27 @@ export function remindAgain(event: CalendarEventInterface): void {
     );
 }
 
+/**
+ * Why Teams is offered: the avatar arrived in the meeting's room after "Go there", or "Go there" could not give a
+ * room (all taken, or none on the map) and the avatar stays.
+ */
+export type TeamsPromptReason = "arrived" | "rooms-full" | "teams-only";
+
+/** The question "Open the meeting in Teams?", one at a time: a newer one replaces it. */
+export const teamsPromptStore = writable<{ event: CalendarEventInterface; reason: TeamsPromptReason } | undefined>(
+    undefined,
+);
+
+/** Asks whether to open the meeting in Teams; its link opens on Yes, a click the browser lets open a new tab. */
+export function askToOpenInTeams(event: CalendarEventInterface, reason: TeamsPromptReason): void {
+    if (!event.resource?.onlineMeeting?.joinUrl) return;
+    teamsPromptStore.set({ event, reason });
+}
+
+export function closeTeamsPrompt(): void {
+    teamsPromptStore.set(undefined);
+}
+
 export function dismissReminder(event: CalendarEventInterface): void {
     dismissed.add(event.id);
     shownAgain.delete(event.id);

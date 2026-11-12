@@ -1,11 +1,15 @@
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
-import { describe, expect, it } from "vitest";
+import { get } from "svelte/store";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
+    askToOpenInTeams,
     canGoToMeeting,
+    closeTeamsPrompt,
     dueReminders,
     REMINDER_LEAD_MS,
     REMINDER_LINGER_MS,
+    teamsPromptStore,
 } from "../../../../src/front/Components/Calendar/CalendarReminder";
 
 const NOW = new Date("2026-09-10T10:00:00.000Z");
@@ -104,5 +108,33 @@ describe("canGoToMeeting", () => {
 
         expect(canGoToMeeting(started, goTo, NOW)).toBe(true);
         expect(canGoToMeeting(started, goTo, new Date(started.end.getTime()))).toBe(false);
+    });
+});
+
+describe("askToOpenInTeams", () => {
+    const joinUrl = "https://teams.microsoft.com/l/meetup-join/abc";
+    const teams = event("teams", 0, { resource: { onlineMeeting: { joinUrl } } });
+
+    afterEach(() => closeTeamsPrompt());
+
+    it("asks once, for the latest meeting only", () => {
+        askToOpenInTeams(teams, "arrived");
+        askToOpenInTeams(teams, "arrived");
+        expect(get(teamsPromptStore)).toEqual({ event: teams, reason: "arrived" });
+
+        const other = event("other", 0, { resource: { onlineMeeting: { joinUrl } } });
+        askToOpenInTeams(other, "rooms-full");
+        expect(get(teamsPromptStore)).toEqual({ event: other, reason: "rooms-full" });
+    });
+
+    it("asks nothing for a meeting without a link to open", () => {
+        askToOpenInTeams(event("nolink", 0), "teams-only");
+        expect(get(teamsPromptStore)).toBeUndefined();
+    });
+
+    it("closes the question", () => {
+        askToOpenInTeams(teams, "teams-only");
+        closeTeamsPrompt();
+        expect(get(teamsPromptStore)).toBeUndefined();
     });
 });

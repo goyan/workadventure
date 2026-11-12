@@ -130,7 +130,10 @@ const externalModule: BaseTranslation = {
         startsNow: "Starting now",
         startedAgo: "Started {ago}",
         noLink: "No meeting link",
-        goToMeetingRoomsFull: "Every Teams room is taken: the meeting is open in Teams only.",
+        goToMeetingRoomsFull: "Every Teams room is taken.",
+        openInTeamsQuestion: "Open the meeting in Teams?",
+        openInTeamsYes: "Yes",
+        openInTeamsNo: "No",
     },
     companion: {
         title: "Mac companion",
