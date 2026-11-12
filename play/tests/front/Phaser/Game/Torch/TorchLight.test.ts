@@ -67,7 +67,7 @@ describe("torchLightShape", () => {
     });
 
     // A horizontal wall of the map layer on grid line 22: drawn on the tile row 704-736, its cap (where it stops the
-    // light) at 710, its collision the foot of the wall, 730-736 (see build_map_layer_prefabs, FOOTPRINT). The avatars
+    // light) at 710, its collision the foot of the wall, 730-736 (see WALL_FOOTPRINT). The avatars
     // stand as close as their 16 px body allows: north, the sprite centre at 714 (body 714-730); south, at 736.
     const wall = { ax: 0, ay: 710, bx: 1280, by: 710 };
 
@@ -89,6 +89,25 @@ describe("torchLightShape", () => {
         expect(isLit(polygon, { x: 640, y: 780 })).toBe(true);
         expect(isLit(polygon, { x: 640, y: 720 })).toBe(true);
         expect(isLit(polygon, { x: 640, y: 650 })).toBe(false);
+    });
+
+    // A wall on the line 10, columns 10 to 15: cap at 326, free end at x = 512; the avatar north of it, as close as it
+    // can (sprite centre at 330), facing down: the flame is held 5 px aside, at y = 328, south of the cap.
+    const endingWall = { ax: 320, ay: 326, bx: 512, by: 326 };
+
+    it.each([507, 508, 510])(
+        "lights the northern room of an avatar north of a wall up to the free end of the wall (x = %s)",
+        (x) => {
+            const { light, polygon } = torchLightShape(bearer(x, 330), obstacles({ walls: [endingWall] }));
+            expect(light.y).toBeLessThan(326);
+            expect(isLit(polygon, { x: 480, y: 280 })).toBe(true);
+        },
+    );
+
+    it("keeps the room behind the wall dark while the flame is above the wall", () => {
+        // x = 507: the flame (512) is still above the wall. Beyond its end, the light goes round the end, as it should.
+        const { polygon } = torchLightShape(bearer(507, 330), obstacles({ walls: [endingWall] }));
+        expect(isLit(polygon, { x: 480, y: 380 })).toBe(false);
     });
 
     it("is stopped by a tall object, and does not shine out of one the flame is held into", () => {

@@ -1,18 +1,23 @@
 import type { PositionMessage_Direction } from "@workadventure/messages";
-import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
+import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_Y, CHARACTER_BODY_WIDTH } from "../../Entity/Character";
 import { litPolygon, segmentsNearLight, type LightCone, type Point, type Segment } from "../Lamps/RgbLampGeometry";
 import { obstacleSegments, type LightObstacles } from "../Lamps/RgbLampObstacles";
-import { FACADE_HEIGHT, WALL_HALF } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { FACADE_HEIGHT, WALL_FOOTPRINT, WALL_HALF } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { TORCH_RADIUS_TILES, torchFlamePose } from "./TorchProtocol";
 
 /** Pulled back from a wall the flame reaches over, in map pixels: the light starts just on the avatar's side. */
 const WALL_MARGIN_PX = 0.5;
 /**
  * A horizontal wall of the map layer stops the light on its cap (see wallSegments), but the avatars on each side are
- * kept apart by its foot: a band 6 px high at the bottom of the facade (FOOTPRINT, tools/build_map_layer_prefabs.mjs).
- * Its middle, from the cap: the line that tells on which side of the wall an avatar stands.
+ * kept apart by its foot, a band WALL_FOOTPRINT high at the bottom of the facade. Its middle, from the cap: the line
+ * that tells on which side of the wall an avatar stands.
  */
-const WALL_FOOT_BELOW_CAP_PX = FACADE_HEIGHT - 3 - WALL_HALF;
+const WALL_FOOT_BELOW_CAP_PX = FACADE_HEIGHT - WALL_FOOTPRINT / 2 - WALL_HALF;
+/**
+ * An avatar against the free end of a wall still stands on its foot with half its body, and holds the flame 5 px
+ * aside (see torchFlamePose): the side of the wall is kept that far beyond its end, rounded up.
+ */
+const WALL_END_REACH_PX = CHARACTER_BODY_WIDTH / 2 + 8;
 
 /** Who holds a torch, and how. */
 export interface TorchHolder {
@@ -71,12 +76,16 @@ export function torchLightOrigin(anchor: Point, flame: Point, segments: readonly
 /**
  * Keeps the light on the side of each horizontal wall of the map layer where the avatar stands. An avatar north of a
  * wall stands right over its foot, under its cap: its body is south of the cap and its flame can be too, though the
- * room it lights is the northern one. Only the walls above or under the light are looked at.
+ * room it lights is the northern one. Only the walls above or under the light are looked at, a little beyond their
+ * ends (see WALL_END_REACH_PX).
  */
 export function keepOnHolderSide(origin: Point, anchor: Point, horizontalWalls: readonly Segment[]): Point {
     let y = origin.y;
     for (const wall of horizontalWalls) {
-        if (origin.x < Math.min(wall.ax, wall.bx) || origin.x > Math.max(wall.ax, wall.bx)) {
+        if (
+            origin.x < Math.min(wall.ax, wall.bx) - WALL_END_REACH_PX ||
+            origin.x > Math.max(wall.ax, wall.bx) + WALL_END_REACH_PX
+        ) {
             continue;
         }
         const north = anchor.y < wall.ay + WALL_FOOT_BELOW_CAP_PX;
