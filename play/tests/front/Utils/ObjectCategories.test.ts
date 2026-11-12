@@ -124,3 +124,16 @@ describe("ObjectCategories", () => {
         ).toBe("iceSkate");
     });
 });
+
+describe("getObjectInteraction cache", () => {
+    it("answers again when the object changes, not with the cached answer of its old description", () => {
+        expect(getObjectInteraction(object(["Misc"], "Lamp"), undefined).interaction).toBe("none");
+        expect(getObjectInteraction(object(["Beds"], "Lamp"), undefined).interaction).toBe(AvatarAction.Sleep);
+    });
+
+    it("answers again when the map's categories change", () => {
+        const seat = object(["Seats"]);
+        expect(getObjectInteraction(seat, undefined).trigger).toBe("auto");
+        expect(getObjectInteraction(seat, { seats: { interaction: "sit", trigger: "key" } }).trigger).toBe("key");
+    });
+});

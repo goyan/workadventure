@@ -51,6 +51,26 @@ export function getObjectInteraction(
     prefab: Pick<EntityPrefab, "tags" | "name" | "sittable" | "water">,
     mapCategories: MapCategories,
 ): { interaction: ObjectInteraction; trigger: InteractionTrigger } {
+    // Called on every frame for the objects around the player (seats, actionable objects, ice, water): the answer
+    // only changes with what it depends on, so it is computed once per object description and map categories.
+    const cache = interactionCaches.get(mapCategories ?? NO_CATEGORIES) ?? new Map<string, ObjectInteractionResult>();
+    interactionCaches.set(mapCategories ?? NO_CATEGORIES, cache);
+    const key = `${prefab.name}\u0000${prefab.tags.join("\u0001")}\u0000${String(prefab.sittable)}\u0000${prefab.water?.length ?? 0}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const result = computeObjectInteraction(prefab, mapCategories);
+    cache.set(key, result);
+    return result;
+}
+
+type ObjectInteractionResult = { interaction: ObjectInteraction; trigger: InteractionTrigger };
+const NO_CATEGORIES = {};
+const interactionCaches = new WeakMap<object, Map<string, ObjectInteractionResult>>();
+
+function computeObjectInteraction(
+    prefab: Pick<EntityPrefab, "tags" | "name" | "sittable" | "water">,
+    mapCategories: MapCategories,
+): ObjectInteractionResult {
     const settings = getCategorySettings(getEntityCategory(prefab), mapCategories);
     const trigger = settings?.trigger ?? "auto";
     if (prefab.sittable) {
