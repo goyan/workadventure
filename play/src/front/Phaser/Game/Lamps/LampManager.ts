@@ -568,8 +568,8 @@ export class LampManager {
         }
         this.frames.clear();
         // Before anything that returns early: an RGB lamp shines without music, and with the light effects turned off
-        // (it is a steady light, not an effect).
-        this.rgbLamps.update(this.editorOpen);
+        // (it is a steady light, not an effect); a turning one then stands still at its direction.
+        this.rgbLamps.update(this.editorOpen, this.effectsEnabled);
         const demoFrame = this.demoSignal?.read(now);
         if (this.updateFloors(now, demoFrame)) {
             // The scene is only drawn when something changed: a floor on the screen changes at every image.

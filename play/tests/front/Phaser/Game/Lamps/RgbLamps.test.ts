@@ -398,6 +398,21 @@ describe("RgbLamps that turn like a rotating beacon", () => {
         expect(visuals[0].draws.at(-1)?.light.direction).toBeCloseTo(252, 6);
     });
 
+    it("stands still at the direction that was set while the light effects are off for me, and turns again in step with the clock once they are back on", () => {
+        const { lamps, scene } = start([turningLamp("a", 624, 624).entity]);
+        clock.now = 500;
+        lamps.update(false, false);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBe(90);
+        const whileOff = visuals[0].draws.length;
+        scene.markDirty.mockClear();
+        clock.now = 900;
+        lamps.update(false, false);
+        expect(visuals[0].draws).toHaveLength(whileOff);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+        lamps.update(false, true);
+        expect(visuals[0].draws.at(-1)?.light.direction).toBeCloseTo(252, 6);
+    });
+
     it("does not turn a lamp that shines all around, nor one whose rotation is off", () => {
         const { lamps } = start([
             turningLamp("round", 624, 624, { angle: 360 }).entity,

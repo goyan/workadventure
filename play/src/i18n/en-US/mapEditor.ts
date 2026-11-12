@@ -347,7 +347,7 @@ const mapEditor: BaseTranslation = {
             rotationClockwise: "Clockwise",
             rotationCounterclockwise: "Counterclockwise",
             rotationHint:
-                "Every player sees the beam at the same place at the same time. The direction is where the beam points at the start of each turn. It stays still while the editor is open, and for players who asked for reduced motion.",
+                "Every player sees the beam at the same place at the same time. The direction is where the beam points at the start of each turn. It stays still while the editor is open, and for players who turned the light effects off or asked for reduced motion.",
             rotationFullCircle: "A lamp that shines all around (360° opening) cannot turn: make its opening narrower.",
         },
         openFile: {

@@ -63,7 +63,8 @@ function isRgbLamp(entity: Entity): boolean {
  * A turning lamp (a rotating beacon, see rgbLampBeamDirection) casts its full turn of light only when one of those
  * changes, and cuts its beam out of it as it turns, without casting a ray (coneOfLitPolygon). Its texture is drawn
  * again at most at every image, only while its light is on the screen, and for at most a few turning lamps per image.
- * It stands still with reduced motion and while the map editor is open, where the handles stay on the beam.
+ * It stands still with reduced motion, with the light effects turned off for this player, and while the map editor is
+ * open, where the handles stay on the beam.
  */
 export class RgbLamps {
     private readonly lamps = new Map<string, PlacedRgbLamp>();
@@ -140,16 +141,17 @@ export class RgbLamps {
     }
 
     /**
-     * At every image: draws again the lights that changed, and only them. With the map editor open, the turning lamps
-     * stand still at the direction that was set.
+     * At every image: draws again the lights that changed, and only them. With the map editor open, or with the light
+     * effects turned off for this player (lampEffectsEnabledStore), the turning lamps stand still at the direction that
+     * was set; they turn again in step with the clock once both are back.
      */
-    public update(editorOpen = false): void {
+    public update(editorOpen = false, effectsEnabled = true): void {
         if (this.lamps.size === 0) {
             return;
         }
         this.frame += 1;
         const tileSize = this.tileSize();
-        const still = this.reducedMotion || editorOpen;
+        const still = this.reducedMotion || editorOpen || !effectsEnabled;
         const turning: { lamp: PlacedRgbLamp; light: LightCone; colour: number; direction: number }[] = [];
         let time: number | undefined;
         let changed = false;

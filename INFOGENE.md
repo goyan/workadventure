@@ -182,7 +182,8 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   `castsShadow: true` (leurs `collisionRectangles`, sinon les cases de leur `collisionGrid`). Les autres objets (une
   table basse) et les avatars ne font pas d'ombre. Une lampe posée sur un mur ou sur un meuble haut éclaire quand même.
 - **Jour et nuit** : la lampe éclaire tout le temps, sans musique, et même quand les effets lumineux des Jams sont
-  coupés (ce n'est pas un effet de Jam : rien ne clignote ; seule une lampe réglée en rotation bouge, voir plus bas). La nuit, le voile est percé de la forme exacte de sa
+  coupés (ce n'est pas un effet de Jam : rien ne clignote ; seule une lampe réglée en rotation bouge, et elle se fige
+  quand on coupe ses effets lumineux, voir plus bas). La nuit, le voile est percé de la forme exacte de sa
   lumière. Elle n'est pas pilotée par script pour l'instant ; elle relit sa propriété à chaque image, ce qui le
   permettra.
 - **Format** : les réglages sont dans une nouvelle propriété d'objet `rgbLampPropertyData` (`color`, `radius`,
@@ -199,7 +200,9 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   **direction** réglée, qui sert donc de phase ; tous les joueurs voient le même faisceau au même moment. L'horloge est
   celle du serveur (`/server-time`, comme la nuit), demandée seulement quand une lampe tourne ; en attendant sa réponse,
   celle du poste (le faisceau saute une fois à la réponse). Le faisceau reste **fixe** à sa direction pour les joueurs
-  qui ont demandé moins d'animations (préférence système), et **tant que l'éditeur est ouvert** pour soi : la poignée
+  qui ont demandé moins d'animations (préférence système) ou coupé leurs effets lumineux **pour soi** (Paramètres →
+  Ambiance, ou la boule « pour moi » d'un Jam : `lampEffectsEnabledStore`) ; rallumés, il reprend là où l'horloge
+  le place, en phase avec les autres (la coupure « pour tous » de l'hôte d'un Jam ne le fige pas), et **tant que l'éditeur est ouvert** pour soi : la poignée
   du bout reste sur le faisceau et règle la phase sans ambiguïté (fermer l'éditeur pour voir tourner). Une lampe à 360°
   d'ouverture ne peut pas tourner (rien ne changerait à l'écran) : le réglage est grisé, avec l'explication.
   **Photosensibilité** : un seul faisceau passe sur un observateur immobile au plus 2 fois par seconde (120 tr/min),
@@ -239,7 +242,7 @@ puis les losanges ; changer la couleur ; annuler ; déplacer la lampe et le meub
 regarder de nuit (`?nightAt=22:00` en dev).
 Rotation (code `RgbLampRotation.ts`, `coneOfLitPolygon`) : activer la rotation, fermer l'éditeur, comparer deux postes
 côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouverture ; sens anti-horaire ; près d'un mur et
-d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; une dizaine de lampes tournantes à l'écran pour le
+d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
 débit d'images.
 
 ## Paroles de karaoké
