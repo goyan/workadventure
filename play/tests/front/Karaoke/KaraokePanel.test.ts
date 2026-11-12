@@ -26,6 +26,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     unsynced: () => "Unsynced",
                     follow: () => "Follow",
                     offset: () => "Offset",
+                    offsetReset: () => "Reset",
+                    next: () => "Up next",
                     source: ({ name }: { name: string }) => name,
                     choose: () => "Choose",
                     trackTitle: () => "Title",
@@ -190,6 +192,60 @@ describe("KaraokePanel", () => {
         expect(target.textContent).toContain("<script>literal</script>");
         expect(target.querySelector("script")).toBeNull();
         expect(target.querySelector('[aria-current="true"]')).toBeNull();
+    });
+
+    it("fills the current line as playback goes through it, and leaves a line without a known end whole", async () => {
+        await settle();
+        const fill = (): string | undefined =>
+            target.querySelector<HTMLElement>('[aria-current="true"] span')?.style.getPropertyValue("--karaoke-fill");
+        expect(fill()).toBe("0%");
+        await vi.advanceTimersByTimeAsync(500);
+        flushSync();
+        expect(fill()).toBe("50%");
+        await vi.advanceTimersByTimeAsync(500);
+        flushSync();
+        expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("Second");
+        expect(fill()).toBe("");
+    });
+
+    it("shows how far the track is only when its duration is known", async () => {
+        await settle();
+        expect(target.querySelector('[role="progressbar"]')).toBeNull();
+        flushSync(() => playback.set({ ...initial, track: { ...initial.track, durationMs: 4000 } }));
+        await settle();
+        expect(target.querySelector('[role="progressbar"]')?.getAttribute("aria-valuenow")).toBe("25");
+    });
+
+    it("announces the next track", async () => {
+        await settle();
+        expect(target.textContent).not.toContain("Up next");
+        flushSync(() => playback.set({ ...initial, next: { title: "Next song", artist: "Next artist" } }));
+        await settle();
+        expect(target.querySelector('[data-testid="karaoke-next"]')?.textContent).toMatch(
+            /Up next.*Next song.*Next artist/s,
+        );
+    });
+
+    it("keeps the delay setting folded until asked for, and resets it", async () => {
+        await settle();
+        const range = (): HTMLInputElement | null => target.querySelector('input[type="range"]');
+        expect(range()).toBeNull();
+        const toggle = target.querySelector<HTMLButtonElement>('[data-testid="karaoke-offset-toggle"]');
+        expect(toggle?.getAttribute("aria-expanded")).toBe("false");
+        flushSync(() => toggle?.click());
+        expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+        const input = range();
+        if (!input) throw new Error("Delay slider absent");
+        input.value = "1000";
+        flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+        // Lyrics shown one second early: the second line is already the current one.
+        expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("Second");
+        expect(toggle?.textContent).toContain("+1.00 s");
+        const reset = [...target.querySelectorAll<HTMLButtonElement>("button")].find(
+            (button) => button.getAttribute("aria-label") === "Reset",
+        );
+        flushSync(() => reset?.click());
+        expect(target.querySelector('[aria-current="true"]')?.textContent).toBe("First");
     });
 
     it("lets readers scroll manually and resume following", async () => {

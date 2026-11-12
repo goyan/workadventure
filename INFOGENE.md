@@ -134,8 +134,15 @@ desktop fournit ses changements ; la Web API est relue toutes les cinq secondes.
 Un hôte avec un ancien front garde les métadonnées déjà partagées, avec leur
 précision de présence.
 
-Le réglage d'avance/retard compense le délai de l'audio relayé. Faire défiler les
-paroles suspend leur suivi ; **Suivre la lecture** le reprend. **Choisir une autre
+La ligne en cours reste au milieu du panneau ; elle se remplit en vert du début de la
+ligne au début de la suivante (les paroles ne sont horodatées que par ligne), les
+lignes passées et à venir sont estompées, une pause musicale affiche une note.
+Sous le titre, une barre montre l'avancement du morceau quand sa durée est connue ;
+le morceau suivant connu est annoncé en bas. Avec le mouvement réduit du système,
+la ligne en cours est verte d'un bloc et le défilement est immédiat.
+
+Le réglage d'avance/retard (bouton à l'horloge, replié par défaut) compense le délai
+de l'audio relayé. Faire défiler les paroles suspend leur suivi ; **Suivre la lecture** le reprend. **Choisir une autre
 version** recherche un titre/artiste pour cet affichage uniquement. Une absence,
 un instrumental et une erreur ont des messages distincts ; un changement de
 morceau retire les anciennes paroles. Fermer le panneau conserve l'audio.

@@ -16,6 +16,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         unsynced: "Ces paroles ne sont pas synchronisées : faites-les défiler à la main.",
         follow: "Suivre la lecture",
         offset: "Avance ou retard des paroles",
+        offsetReset: "Remettre à zéro",
+        next: "À suivre",
         source: "Paroles : {name}",
         choose: "Choisir une autre version",
         trackTitle: "Titre du morceau",
