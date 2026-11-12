@@ -352,6 +352,12 @@ npm run pretty        # corrige le formatage
 Zoom de page désactivé hors canvas (`Utils/PreventBrowserPageZoom.ts`), caméra centrée sur l'avatar à tout zoom et pan
 souris/trackpad (`Phaser/Game/CameraManager.ts`, `Phaser/UserInput/GameSceneUserInputHandler.ts`), zoom par défaut par
 paliers de 0,25 (`Phaser/Services/HdpiManager.ts`), CI de build et de contrôle (`.github/workflows/`).
+Zoom de la caméra gardé après un rechargement (F5) : `CameraManager` enregistre dans le navigateur (`localUserStore`,
+clé `cameraZoomModifier`, pour toutes les cartes) le facteur de zoom choisi par l'utilisateur par rapport au zoom par
+défaut, 300 ms après la fin du geste ou tout de suite à la fermeture de la page, puis le reprend au démarrage de la
+scène dans les limites de l'écran et de la carte (`Phaser/Game/ZoomPersistence.ts`). Les zooms imposés par une zone de
+focus, l'éditeur de carte ou le cadrage d'un trajet ne sont pas enregistrés ; une valeur absente ou corrompue garde le
+zoom par défaut.
 Notification de nouvelle version (`Components/BuildUpdateNotification.svelte`, `Network/BuildUpdate.ts`,
 `pusher/controllers/FrontController.ts`) : le serveur identifie le front compilé par le SHA-256 de son HTML
 (qui référence les assets Vite avec leur hash), le transmet dans la page et expose `/build-version` sans cache.

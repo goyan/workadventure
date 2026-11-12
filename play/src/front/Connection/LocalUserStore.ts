@@ -18,6 +18,7 @@ import {
     SWIMWEAR_COLOR_VARIABLE,
 } from "@wa/front/Phaser/Entity/Swimwear";
 import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
+import { parseStoredZoomModifier, serializeZoomModifier } from "@wa/front/Phaser/Game/ZoomPersistence";
 import type { LocalUser } from "./LocalUser";
 import { areCharacterTexturesValid, isUserNameValid } from "./LocalUserUtils";
 
@@ -34,6 +35,7 @@ const helpCameraSettingsShown = "helpCameraSettingsShown";
 const fullscreenKey = "fullscreen";
 const blockAudio = "blockAudio";
 const disableNight = "disableNight";
+const cameraZoomModifierKey = "cameraZoomModifier";
 const forceCowebsiteTriggerKey = "forceCowebsiteTrigger";
 const ignoreFollowRequests = "ignoreFollowRequests";
 const decreaseAudioPlayerVolumeWhileTalking = "decreaseAudioPlayerVolumeWhileTalking";
@@ -375,6 +377,24 @@ class LocalUserStore {
     }
     getDisableNight(): boolean {
         return localStorage.getItem(disableNight) === "true";
+    }
+
+    /** The camera zoom modifier the user settled on, restored after a reload (see ZoomPersistence). */
+    setCameraZoomModifier(value: number): void {
+        const serialized = serializeZoomModifier(value);
+        if (serialized === undefined) return;
+        try {
+            localStorage.setItem(cameraZoomModifierKey, serialized);
+        } catch {
+            // Storage refused (private mode, quota): the zoom is simply not kept after a reload.
+        }
+    }
+    getCameraZoomModifier(): number | undefined {
+        try {
+            return parseStoredZoomModifier(localStorage.getItem(cameraZoomModifierKey));
+        } catch {
+            return undefined;
+        }
     }
 
     setForceCowebsiteTrigger(value: boolean): void {
