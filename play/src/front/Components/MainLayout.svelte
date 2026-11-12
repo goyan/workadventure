@@ -98,6 +98,7 @@
     import RecordingsListModal from "./PopUp/Recording/RecordingsListModal.svelte";
     import Calendar from "./Calendar/Calendar.svelte";
     import CalendarReminders from "./Calendar/CalendarReminders.svelte";
+    import CalendarTeamsPrompt from "./Calendar/CalendarTeamsPrompt.svelte";
     import TodoList from "./TodoList/TodoList.svelte";
     import ProximityNotificationContainer from "./ProximityNotification/ProximityNotificationContainer.svelte";
     import BubbleListeningHint from "./Video/BubbleListeningHint.svelte";
@@ -476,6 +477,8 @@
                 {#if $calendarIsActivatedStore && !$isCalendarVisibleStore && $calendarRemindersStore.length > 0}
                     <CalendarReminders />
                 {/if}
+                <!-- Apart from the reminders: "Go there" also comes from the agenda, which hides them. -->
+                <CalendarTeamsPrompt />
                 <RaisedHandsDock />
             </div>
             <!-- The music of the Jam listened to plays here, whatever the panel shows: closing it must not mute it. -->
