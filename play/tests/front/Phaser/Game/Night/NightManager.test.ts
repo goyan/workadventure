@@ -44,6 +44,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightHalos", () => ({
 const { NightMode, nightModeStore, nightDateStore } = await import("../../../../../src/front/Stores/NightStore");
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");
 const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/RgbLampStore");
+const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
@@ -51,6 +52,7 @@ afterEach(() => {
     manager = undefined;
     nightModeStore.set(NightMode.Server);
     rgbLampLightsStore.set([]);
+    torchLightsStore.set([]);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -136,5 +138,35 @@ describe("personal night clock choice", () => {
         manager.update(2);
         expect(draw).toHaveBeenCalledTimes(2);
         expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ lamps: [{ ...light, revision: 2 }] }));
+    });
+
+    it("pierces the veil with the lights of the torches too, next to those of the RGB lamps", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-15T20:00:00Z"));
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: Date.now() }))));
+        const scene = createScene();
+        manager = new NightManager(scene);
+        await vi.advanceTimersByTimeAsync(0);
+        const lamp = { id: "lamp", x: 10, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1 };
+        const torch = { id: "torch:2", x: 100, y: 200, size: 352, textureKey: "rgb-lamp:torch:2:88", revision: 1 };
+        rgbLampLightsStore.set([lamp]);
+        torchLightsStore.set([torch]);
+        manager.update(0);
+        expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ lamps: [lamp, torch] }));
+        scene.markDirty.mockClear();
+        torchLightsStore.set([{ ...torch, x: 101 }]);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+        // A lamp that changes keeps the torches.
+        rgbLampLightsStore.set([{ ...lamp, revision: 2 }]);
+        manager.update(1);
+        expect(draw).toHaveBeenLastCalledWith(
+            expect.objectContaining({
+                lamps: [
+                    { ...lamp, revision: 2 },
+                    { ...torch, x: 101 },
+                ],
+            }),
+        );
     });
 });

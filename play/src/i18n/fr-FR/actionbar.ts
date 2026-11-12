@@ -18,6 +18,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             jailed: "En prison — sortez à pied pour revenir",
         },
     },
+    torch: {
+        equip: "Équiper la torche",
+        unequip: "Ranger la torche",
+    },
     participantListPlaceholder: "Liste des participants",
     participantSendMessage: "Écrire un message",
     participantInviteUser: "Inviter un utilisateur",

@@ -22,6 +22,7 @@ import { followRoleStore, followStateStore, followUsersStore } from "@wa/front/S
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
 import { nerfEquippedStore } from "@wa/front/Stores/NerfStore";
+import { torchEquippedStore } from "@wa/front/Stores/TorchStore";
 import { characterPickerStore, type CharacterPickerCandidate } from "@wa/front/Stores/CharacterPickerStore";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
@@ -315,6 +316,15 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             testId: "avatar-nerf",
             callback: () => {
                 this.gameScene.nerfManager?.toggleEquipment();
+                wokaMenuStore.clear();
+            },
+        });
+        wokaMenuStore.addAction({
+            actionName: get(torchEquippedStore) ? get(LL).actionbar.torch.unequip() : get(LL).actionbar.torch.equip(),
+            icon: "torch",
+            testId: "avatar-torch",
+            callback: () => {
+                this.gameScene.torchManager?.toggleEquipment();
                 wokaMenuStore.clear();
             },
         });

@@ -20,6 +20,7 @@ import {
     NERF_SOUND_KEY,
 } from "../../../../../src/front/Phaser/Game/Nerf/NerfProtocol";
 import { nerfEquippedStore, nerfHeartsStore } from "../../../../../src/front/Stores/NerfStore";
+import { torchEquippedStore } from "../../../../../src/front/Stores/TorchStore";
 import { mapEditorModeStore } from "../../../../../src/front/Stores/MapEditorStore";
 import { nerfVolumeStore } from "../../../../../src/front/Stores/SoundEffectsStore";
 import { Area } from "../../../../../src/front/Phaser/Entity/Area";
@@ -116,6 +117,13 @@ describe("NerfManager", () => {
         manager.toggleEquipment();
         expect(get(nerfEquippedStore)).toBe(false);
         expect(player.setNerfEquipped.mock.calls.at(-1)).toEqual([false]);
+    });
+
+    it("puts the torch away when the Nerf is equipped: one hand", () => {
+        torchEquippedStore.set(true);
+        manager.toggleEquipment();
+        expect(get(nerfEquippedStore)).toBe(true);
+        expect(get(torchEquippedStore)).toBe(false);
     });
 
     it("does not fire when unequipped, editing or controls are locked", () => {

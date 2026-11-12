@@ -33,6 +33,8 @@ import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
 import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
+import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
+import { decodeTorchEquipped } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
@@ -102,6 +104,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
+    private torchEquipped = false;
+    private torchFlameEffect: TorchFlameEffect | undefined;
+    /** How bright the torch is now, set by the TorchManager (see torchFlicker). */
+    private torchIntensity = 1;
     /** Thirds of heart another player publishes while they carry a Nerf (the local player has the screen counter). */
     private nerfHearts: number | undefined;
     private nerfHeartsEffect: NerfHeartsEffect | undefined;
@@ -175,6 +181,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         );
         this.nerfHeartsEffect?.update(this.nerfHearts, this.nerfEquipped && !this.invisible);
         this.updateNerfBlink();
+        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchIntensity);
     };
     private swimEffect: SwimEffect | undefined;
     private swimwearStyle = Swimwear.Auto;
@@ -717,6 +724,22 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    public setTorchEquipped(value: unknown): void {
+        this.torchEquipped = decodeTorchEquipped(value);
+        if (this.torchEquipped) this.torchFlameEffect ??= new TorchFlameEffect(this.scene, this);
+        this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchIntensity);
+        this.scene.markDirty();
+    }
+
+    /** Holds a torch that can be seen: an invisible avatar carries no light. */
+    public isTorchLit(): boolean {
+        return this.torchEquipped && !this.invisible;
+    }
+
+    public setTorchIntensity(intensity: number): void {
+        this.torchIntensity = intensity;
+    }
+
     public isNerfEquipped(): boolean {
         return this.nerfEquipped;
     }
@@ -986,6 +1009,7 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.musicHeadphonesEffect?.destroy();
         this.nerfGunEffect?.destroy();
         this.nerfHeartsEffect?.destroy();
+        this.torchFlameEffect?.destroy();
         if (this.scene) {
             this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.syncDisplayPositionWithPhysics);
             for (const sprite of this.sprites.values()) {
