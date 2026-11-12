@@ -75,18 +75,20 @@ function setup({ maxZoomModifier = Number.POSITIVE_INFINITY } = {}) {
     const setFocusTarget = (target: { x: number; y: number } | undefined) => {
         focusTarget = target;
     };
-    return { create, userZoom, setZoomModifier, setFocusTarget, camera, getModifier: () => modifier };
+    return { create, userZoom, setZoomModifier, setFocusTarget, camera, gameEvents, getModifier: () => modifier };
 }
 
 describe("camera zoom kept across page reloads", () => {
     it("starts at the zoom saved last, within the limits of this screen and map, without overwriting it", () => {
         localStorage.setItem(STORAGE_KEY, "2.5");
-        const { create, setZoomModifier, getModifier, camera } = setup({ maxZoomModifier: 2 });
+        const { create, setZoomModifier, getModifier, camera, gameEvents } = setup({ maxZoomModifier: 2 });
 
         create();
 
         expect(setZoomModifier).toHaveBeenCalledWith(2.5, camera, false);
         expect(getModifier()).toBe(2);
+        // A window resize re-emits ZoomChanged with the same zoom modifier (only the canvas scale changed).
+        gameEvents.emit("zoomChanged", 2);
         vi.advanceTimersByTime(ZOOM_SAVE_DELAY_MS * 2);
         // A bigger screen or map may allow the saved zoom again: keep the user's choice, not the clamped value.
         expect(localStorage.getItem(STORAGE_KEY)).toBe("2.5");

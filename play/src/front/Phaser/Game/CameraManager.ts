@@ -143,6 +143,8 @@ export class CameraManager extends EventEmitter {
         localUserStore.setCameraZoomModifier(zoomModifier),
     );
     private restoringSavedZoom = false;
+    // ZoomChanged also fires when only the canvas scale changes (window resize): such events change no zoom choice.
+    private lastZoomModifier: number | undefined;
 
     constructor(
         private scene: GameScene,
@@ -196,7 +198,10 @@ export class CameraManager extends EventEmitter {
 
     private readonly onZoomChanged = (): void => {
         this.doUpdateCameraOffset(true);
-        if (this.isUserZoom()) this.zoomSaver.schedule(this.waScaleManager.zoomModifier);
+        const zoomModifier = this.waScaleManager.zoomModifier;
+        const changed = zoomModifier !== this.lastZoomModifier;
+        this.lastZoomModifier = zoomModifier;
+        if (changed && this.isUserZoom()) this.zoomSaver.schedule(zoomModifier);
     };
 
     // A reload (F5) may come right after a wheel gesture, before the debounced save.
@@ -206,17 +211,20 @@ export class CameraManager extends EventEmitter {
 
     /**
      * Starts at the zoom the user chose last, once the map size is known so that WaScaleManager clamps it to this
-     * screen and map. The clamped value is not written back: a bigger screen or map may allow the saved zoom again.
+     * screen and map. The clamped value is not written back on its own (a bigger screen or map may allow the saved
+     * zoom again); it is only replaced once the zoom changes again, by a gesture or by WaScaleManager's limits.
      */
     private restoreSavedZoom(): void {
         const savedZoomModifier = localUserStore.getCameraZoomModifier();
-        if (savedZoomModifier === undefined) return;
-        this.restoringSavedZoom = true;
-        try {
-            this.waScaleManager.setZoomModifier(savedZoomModifier, this.camera, false);
-        } finally {
-            this.restoringSavedZoom = false;
+        if (savedZoomModifier !== undefined) {
+            this.restoringSavedZoom = true;
+            try {
+                this.waScaleManager.setZoomModifier(savedZoomModifier, this.camera, false);
+            } finally {
+                this.restoringSavedZoom = false;
+            }
         }
+        this.lastZoomModifier = this.waScaleManager.zoomModifier;
     }
 
     /**
