@@ -5,6 +5,7 @@ import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
+import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { nightOpacityAtMinutes, parisMinutes, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
@@ -36,7 +37,11 @@ export class NightManager {
     private readonly unsubscribeMode: Unsubscriber;
     private readonly unsubscribeParty: Unsubscriber;
     private readonly unsubscribeLamps: Unsubscriber;
+    private readonly unsubscribeTorches: Unsubscriber;
     private partyRooms: readonly NightRect[] = [];
+    // The lights of the RGB lamps and of the torches, each written by its own owner, and both together.
+    private rgbLamps: readonly RgbLampLight[] = [];
+    private torches: readonly RgbLampLight[] = [];
     private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
@@ -62,7 +67,13 @@ export class NightManager {
             this.scene.markDirty();
         });
         this.unsubscribeLamps = rgbLampLightsStore.subscribe((lamps) => {
-            this.lamps = lamps;
+            this.rgbLamps = lamps;
+            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.scene.markDirty();
+        });
+        this.unsubscribeTorches = torchLightsStore.subscribe((torches) => {
+            this.torches = torches;
+            this.lamps = [...this.rgbLamps, ...this.torches];
             this.scene.markDirty();
         });
         this.unsubscribeMode = nightModeStore.subscribe((mode) => {
@@ -154,6 +165,7 @@ export class NightManager {
         this.unsubscribeMode();
         this.unsubscribeParty();
         this.unsubscribeLamps();
+        this.unsubscribeTorches();
         this.overlay.destroy();
     }
 

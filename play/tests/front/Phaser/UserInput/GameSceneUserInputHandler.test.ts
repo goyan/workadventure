@@ -23,6 +23,8 @@ import { Swimwear } from "../../../../src/front/Phaser/Entity/Swimwear";
 import { LL, setLocale } from "../../../../src/i18n/i18n-svelte";
 import { nerfEquippedStore } from "../../../../src/front/Stores/NerfStore";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
+import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
+import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
 import { findSeatAtPoint } from "../../../../src/front/Phaser/Player/Seat";
 import type { Seat } from "../../../../src/front/Phaser/Player/Seat";
 
@@ -346,6 +348,7 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(actions.map(({ testId }) => testId)).toEqual([
                 "avatar-profile",
                 "avatar-nerf",
+                "avatar-torch",
                 "avatar-action-dance",
                 "avatar-action-coffee",
                 "avatar-change-outfit",
@@ -392,6 +395,32 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             expect(get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-nerf")?.actionName).toBe(
                 equipped ? get(LL).actionbar.nerf.equip() : get(LL).actionbar.nerf.unequip(),
             );
+        });
+
+        it.each([false, true])("toggles the torch from the own-avatar wheel when equipped is %s", (equipped) => {
+            torchEquippedStore.set(equipped);
+            const torchManager = mock<TorchManager>();
+            torchManager.toggleEquipment.mockImplementation(() => torchEquippedStore.update((value) => !value));
+            Object.defineProperty(scene, "torchManager", { configurable: true, value: torchManager });
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const action = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-torch");
+            expect(action?.icon).toBe("torch");
+            expect(action?.actionName).toBe(
+                equipped ? get(LL).actionbar.torch.unequip() : get(LL).actionbar.torch.equip(),
+            );
+            action?.callback();
+            expect(torchManager.toggleEquipment.mock.calls).toHaveLength(1);
+            expect(get(torchEquippedStore)).toBe(!equipped);
+            expect(get(wokaMenuStore)).toBeUndefined();
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-torch")?.actionName).toBe(
+                equipped ? get(LL).actionbar.torch.equip() : get(LL).actionbar.torch.unequip(),
+            );
+            torchEquippedStore.set(false);
         });
 
         it("offers no swimwear to a costume such as the duck, whose body has no swimwear poses", () => {

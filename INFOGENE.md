@@ -76,6 +76,48 @@ viser un mur, un meuble et un avatar, puis vérifier les espaces dans une saisie
 l'éditeur et une interaction ESPACE après rangement. Le son est synthétique original,
 CC0 ; aucune dépendance, texture externe ni modification du protocole protobuf.
 
+## Torche
+
+Cliquer sur son avatar, puis **Équiper la torche** dans la roue d'actions ; **Ranger la torche** apparaît au même
+endroit une fois équipée. La main est unique : équiper la torche range le Nerf, équiper le Nerf range la torche.
+Comme le Nerf, la torche n'est refusée ni à la nage ni en véhicule ; on ne l'équipe pas dans l'éditeur (la ranger
+reste possible).
+
+- **Partage** : l'état est la variable de joueur publique et non sauvegardée `_torchEquipped` (comme
+  `_nerfEquipped`), aucun changement du protocole protobuf ni du `back`. Chaque navigateur dessine la torche et la
+  lumière de chaque porteur qu'il voit.
+- **Lumière** : orange chaud, 5,5 cases autour de la flamme, de jour comme de nuit ; la nuit, le voile est percé de la
+  forme exacte de la lumière (comme la lampe RGB). Elle est arrêtée par les mêmes obstacles que la lampe RGB : cases
+  bloquantes, murs de l'outil Carte (porte fermée), objets `castsShadow` ; ni les avatars ni les objets bas ne font
+  d'ombre. La lumière part de la flamme, dans la main ; si la flamme passe au-dessus d'un obstacle (avatar collé à un
+  mur), elle part juste avant l'obstacle, du côté du corps. Pour un mur horizontal de l'outil Carte, le côté est
+  celui du pied du mur (collision de 6 px en bas de la façade) où se tient l'avatar : collé au mur par le nord, son
+  corps est sous le chapeau du mur, mais c'est la pièce nord qu'il éclaire. La lumière ne traverse jamais un mur
+  (positions limites calculées d'après les collisions du catalogue, pas observées en jeu).
+- **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
+  100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées
+  par seconde (photosensibilité, WCAG 2.3.1) ; la forme et la portée de la lumière restent fixes : son polygone part de la flamme sans tenir compte de son
+  mouvement (un halo qui bouge ferait glisser le bord des ombres sur les murs).
+- **Flamme dans la main** : elle ondule, 30 images par seconde, sur son propre pas (indépendant des 15 pas de la
+  lumière, sans recalcul du polygone) : sa pointe penche de 1,8 px au plus, sa hauteur varie de 13 % et sa largeur de
+  10 % (sommes d'ondes de 1,7 à 4,4 Hz sans mesure commune, décalées par porteur : deux flammes ne battent pas
+  ensemble) ; une braise d'un pixel monte toutes les 1,7 s et s'éteint en fondu (0,7 s). C'est la forme qui bouge,
+  pas la luminosité. La scène est redessinée 30 fois par seconde tant qu'une flamme est à l'écran.
+- **Mouvement réduit** (préférence système) : lumière, flamme et braise fixes.
+- **Coût** : la forme d'une lumière n'est recalculée que si la flamme a bougé d'au moins un pixel ou qu'un obstacle a
+  changé dans sa portée (porteur immobile : rien) ; au plus quatre porteurs sont recalculés par image, le joueur local
+  en premier. Le scintillement et la flamme redessinent la scène (pas la lumière) tant qu'une torche est à l'écran. Dans
+  l'éditeur, les lumières des torches sont éteintes pour soi (la flamme reste dans la main, comme le blaster ; la
+  variable n'est pas modifiée).
+
+Code : `play/src/front/Phaser/Game/Torch/*` (protocole, scintillement, forme de la flamme et géométrie sans Phaser,
+testés), la main exclusive torche/Nerf dans `Stores/HandToolStore.ts`, la lecture des obstacles est partagée avec la lampe RGB (`Lamps/LightObstacleReader.ts`) et le dessin
+réutilise `RgbLampVisual`.
+
+Recette : deux personnes ; équiper/ranger, passer de la torche au Nerf ; marcher le long d'un mur, d'une porte de
+l'outil Carte (ouverte et fermée) et d'un meuble haut ; regarder de nuit (`?nightAt=22:00` en dev) ; mouvement réduit
+du système ; plusieurs porteurs à l'écran pour le débit d'images.
+
 ## Lumières des Jams
 
 La boule disco avec un badge **personne** dans chaque carte de Jam coupe ou réactive les effets lumineux

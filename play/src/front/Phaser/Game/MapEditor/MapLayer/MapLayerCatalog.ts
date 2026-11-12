@@ -59,6 +59,8 @@ export const WALL_HALF = WALL_THICKNESS / 2;
  * wall, a bit more than its 12 px to keep the head of the avatar clear of it).
  */
 export const WALL_COLLISION_HALF = 9;
+/** Height of the collision of a horizontal wall, at the bottom of its facade (its foot), as the catalogs declare it. */
+export const WALL_FOOTPRINT = 6;
 export const FACADE_FACE_HEIGHT = 20;
 export const FACADE_HEIGHT = WALL_THICKNESS + FACADE_FACE_HEIGHT;
 /** A vertical wall piece spans the grid row between the joints drawn on its two vertices. */

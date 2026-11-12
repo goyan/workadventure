@@ -13,6 +13,7 @@ import type { GameScene } from "../GameScene";
 import type { Character } from "../../Entity/Character";
 import { CHARACTER_BODY_HEIGHT } from "../../Entity/Character";
 import { Area } from "../../Entity/Area";
+import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { NerfImpactEffect } from "./NerfImpactEffect";
 import { countsAsHit, fullHearts, hit, release, thirdsAt, type NerfHeartsState } from "./NerfHearts";
 import { findNerfPrison, isInZone, zoneCenter, type NerfZone } from "./NerfPrison";
@@ -97,8 +98,9 @@ export class NerfManager {
         return get(nerfEquippedStore);
     }
 
+    /** Equips or puts away the Nerf; equipping it puts the torch away (one hand). */
     public toggleEquipment(): void {
-        nerfEquippedStore.update((equipped) => !equipped);
+        toggleHandTool("nerf");
     }
 
     public fire(): void {

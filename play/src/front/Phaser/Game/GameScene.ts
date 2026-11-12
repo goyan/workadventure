@@ -258,6 +258,7 @@ import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveS
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
+import { torchEquippedStore } from "../../Stores/TorchStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
@@ -314,6 +315,8 @@ import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
 import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
+import { TorchManager } from "./Torch/TorchManager";
+import { TORCH_EQUIPPED_VARIABLE } from "./Torch/TorchProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
@@ -472,6 +475,7 @@ export class GameScene extends DirtyScene {
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
     private _nerfManager: NerfManager | undefined;
+    private _torchManager: TorchManager | undefined;
     private _coffeeManager: CoffeeManager | undefined;
     /** Animated treadmills move their belt only while someone runs on them. */
     public readonly treadmillBelts = new TreadmillBelts((entityId) =>
@@ -1502,6 +1506,9 @@ export class GameScene extends DirtyScene {
         this._nerfManager?.destroy();
         this._nerfManager = undefined;
         nerfEquippedStore.set(false);
+        this._torchManager?.destroy();
+        this._torchManager = undefined;
+        torchEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
         this.wanderingCharactersManager?.destroy();
@@ -1753,6 +1760,8 @@ export class GameScene extends DirtyScene {
         if (this.hasJoinedRoom) {
             this.updateDoors(time);
             this._nerfManager?.update(time);
+            // Before the night veil: it is pierced with the lights the torches have just drawn.
+            this._torchManager?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             desktopApi.reportEnvironment(time);
@@ -2018,6 +2027,7 @@ export class GameScene extends DirtyScene {
         character.setVehicle(update.player.variables.get(VEHICLE_VARIABLE));
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
+        character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
         character.setSwimwearColor(update.player.variables.get(SWIMWEAR_COLOR_VARIABLE));
@@ -2316,6 +2326,10 @@ export class GameScene extends DirtyScene {
 
     public get waveManager(): WaveManager | undefined {
         return this._waveManager;
+    }
+
+    public get torchManager(): TorchManager | undefined {
+        return this._torchManager;
     }
 
     public get nerfManager(): NerfManager | undefined {
@@ -3136,6 +3150,8 @@ export class GameScene extends DirtyScene {
         );
         this._nerfManager?.destroy();
         this._nerfManager = new NerfManager(this);
+        this._torchManager?.destroy();
+        this._torchManager = new TorchManager(this);
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
         this.CurrentPlayer.setSwimwearColor(localUserStore.getSwimwearColor());
 
@@ -5192,6 +5208,9 @@ ${escapedMessage}
         );
         player.setNerfHearts(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(NERF_HEARTS_VARIABLE),
+        );
+        player.setTorchEquipped(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_EQUIPPED_VARIABLE),
         );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),

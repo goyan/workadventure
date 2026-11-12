@@ -16,6 +16,10 @@ const actionbar = {
             jailed: "In prison — walk out to come back",
         },
     },
+    torch: {
+        equip: "Equip the torch",
+        unequip: "Put away the torch",
+    },
     participantListPlaceholder: "Participants list",
     participantSendMessage: "Send a message",
     participantInviteUser: "Invite a user",

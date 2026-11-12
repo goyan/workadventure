@@ -91,6 +91,11 @@ export class RgbLampVisual {
         previous?.destroy();
     }
 
+    /** How much of its colour the light adds, from 0 to 1 of the usual (a torch flickers through it). */
+    public setIntensity(intensity: number): void {
+        this.image.setAlpha(LIGHT_ALPHA * Math.min(1, Math.max(0, intensity)));
+    }
+
     public setVisible(visible: boolean): void {
         this.image.setVisible(visible);
     }

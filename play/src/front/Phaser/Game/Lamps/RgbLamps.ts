@@ -1,18 +1,12 @@
 import type { Unsubscriber } from "svelte/store";
 import { rgbLampLightsStore, rgbLampPreviewStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
-import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
-import {
-    MAP_LAYER_DOOR_COLLECTION,
-    MAP_LAYER_TILE_SIZE,
-    MAP_LAYER_WALL_COLLECTION,
-} from "../MapEditor/MapLayer/MapLayerCatalog";
-import { edgeKey } from "../MapEditor/MapLayer/MapLayerModel";
-import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
+import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { lampSource } from "./LampReconcile";
-import { litPolygon, type LightCone, type Segment } from "./RgbLampGeometry";
-import { obstacleSegments, shadowRectangles, wallSegments } from "./RgbLampObstacles";
+import { LightObstacleReader } from "./LightObstacleReader";
+import { litPolygon, type LightCone } from "./RgbLampGeometry";
+import { obstacleSegments } from "./RgbLampObstacles";
 import { rgbLampColour, rgbLampLight, rgbLampSettingsOf, type RgbLampSettings } from "./RgbLampSettings";
 import { RgbLampVisual } from "./RgbLampVisual";
 
@@ -23,17 +17,11 @@ interface PlacedRgbLamp {
     key: string;
     /** The segments that stopped it when it was last drawn. */
     segmentsKey: string;
-    /** The state of the obstacles of the map it was last checked against (see RgbLamps.obstaclesVersion). */
+    /** The state of the obstacles of the map it was last checked against (see LightObstacleReader.version). */
     obstaclesVersion: number;
     light: LightCone | undefined;
     revision: number;
     visible: boolean;
-}
-
-/** A tall object and what it stops the light with. */
-interface ShadowCaster {
-    entityId: string;
-    rectangle: ObstacleRectangle;
 }
 
 function isRgbLamp(entity: Entity): boolean {
@@ -55,20 +43,15 @@ export class RgbLamps {
     private preview: { entityId: string; settings: RgbLampSettings } | undefined;
     private revisions = 0;
 
-    // The obstacles of the map, as last read. `obstaclesVersion` changes with them: each lamp then checks whether
-    // what stops its own light changed.
-    private grid: readonly (readonly number[])[] = [];
-    private wallsSignature = "";
-    private walls: Segment[] = [];
-    private casters: ShadowCaster[] = [];
-    private castersSignature = "";
-    private obstaclesVersion = 0;
+    // The obstacles of the map, as last read: each lamp checks whether what stops its own light changed.
+    private readonly obstacles: LightObstacleReader;
 
     constructor(
         private readonly scene: GameScene,
         private readonly depth: number,
     ) {
         this.unsubscribePreview = rgbLampPreviewStore.subscribe((preview) => (this.preview = preview));
+        this.obstacles = new LightObstacleReader(scene, () => this.tileSize());
     }
 
     private tileSize(): number {
@@ -106,59 +89,7 @@ export class RgbLamps {
             this.scene.markDirty();
         }
         if (this.lamps.size > 0) {
-            this.readObstacles(entities);
-        }
-    }
-
-    private readObstacles(entities: ReadonlyMap<string, Entity>): void {
-        // The same array as long as the walls of the map do not change (see getMapCollisionGrid).
-        const grid = this.scene.getGameMapFrontWrapper().getMapCollisionGrid();
-        let changed = grid !== this.grid;
-        this.grid = grid;
-
-        const pieces: PlacedPrefabLike[] = [];
-        const openDoors: PlacedPrefabLike[] = [];
-        const casters: ShadowCaster[] = [];
-        let wallsSignature = "";
-        let castersSignature = "";
-        const tileSize = this.tileSize();
-        for (const [entityId, entity] of entities) {
-            const prefab = entity.getPrefab();
-            const { collectionName } = prefab;
-            if (collectionName === MAP_LAYER_WALL_COLLECTION || collectionName === MAP_LAYER_DOOR_COLLECTION) {
-                const piece = { x: entity.x, y: entity.y, collectionName, prefabId: prefab.id };
-                const open = collectionName === MAP_LAYER_DOOR_COLLECTION && this.scene.isDoorOpen(entityId);
-                pieces.push(piece);
-                if (open) {
-                    openDoors.push(piece);
-                }
-                wallsSignature += `${prefab.id}@${entity.x},${entity.y}${open ? "!" : ""};`;
-            } else if (prefab.castsShadow === true) {
-                for (const rectangle of shadowRectangles(prefab, { x: entity.x, y: entity.y }, tileSize)) {
-                    casters.push({ entityId, rectangle });
-                    castersSignature += `${entityId}@${rectangle.x},${rectangle.y},${rectangle.width},${rectangle.height};`;
-                }
-            }
-        }
-        if (wallsSignature !== this.wallsSignature) {
-            this.wallsSignature = wallsSignature;
-            // A door is read from its first piece, open or not: the doors that are open now are read apart.
-            const open = new Set<string>();
-            for (const door of modelFromPlacedPrefabs(openDoors).getDoors()) {
-                open.add(edgeKey(door.orientation, door.x, door.y));
-            }
-            this.walls = wallSegments(modelFromPlacedPrefabs(pieces), (door) =>
-                open.has(edgeKey(door.orientation, door.x, door.y)),
-            );
-            changed = true;
-        }
-        if (castersSignature !== this.castersSignature) {
-            this.castersSignature = castersSignature;
-            this.casters = casters;
-            changed = true;
-        }
-        if (changed) {
-            this.obstaclesVersion += 1;
+            this.obstacles.read(entities);
         }
     }
 
@@ -176,13 +107,13 @@ export class RgbLamps {
                 this.preview?.entityId === id ? this.preview.settings : rgbLampSettingsOf(entity.getProperties());
             const light = rgbLampLight(lampSource(entity, entity.getPrefab().lamp?.anchor), settings, tileSize);
             const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${settings.color}`;
-            if (key !== lamp.key || lamp.obstaclesVersion !== this.obstaclesVersion) {
+            if (key !== lamp.key || lamp.obstaclesVersion !== this.obstacles.version) {
                 const segments = obstacleSegments(light, {
-                    grid: this.grid,
+                    grid: this.obstacles.grid,
                     tileSize,
-                    walls: this.walls,
+                    walls: this.obstacles.walls,
                     // A lamp that is itself a tall object does not stand in its own light.
-                    rectangles: this.casters
+                    rectangles: this.obstacles.casters
                         .filter((caster) => caster.entityId !== id)
                         .map((caster) => caster.rectangle),
                 });
@@ -197,7 +128,7 @@ export class RgbLamps {
                 }
                 lamp.key = key;
                 lamp.segmentsKey = segmentsKey;
-                lamp.obstaclesVersion = this.obstaclesVersion;
+                lamp.obstaclesVersion = this.obstacles.version;
             }
             if (lamp.visible !== entity.visible) {
                 lamp.visible = entity.visible;
