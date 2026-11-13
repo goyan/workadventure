@@ -1,6 +1,7 @@
 import {
     isHomeJam,
     isLiveJam,
+    isSpotifyJamUrl,
     LISTENING_ZONE_JAM_VARIABLE,
     listeningZoneJamKey,
     type ListeningZoneJam,
@@ -8,7 +9,7 @@ import {
     MAX_LISTENING_ZONE_JAMS,
     parseListeningZoneJams,
 } from "@workadventure/map-editor";
-import { derived, get, type Readable, readable, type Unsubscriber } from "svelte/store";
+import { derived, get, type Readable, readable, type Unsubscriber, writable } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { areaPropertyVariablesManagerStore, setAreaPropertyVariable } from "../Stores/AreaPropertyVariablesStore";
 import { followedUserUuidStore } from "../Spotify/ListeningFollower";
@@ -93,6 +94,13 @@ export const jamParticipantsCountStore: Readable<Map<string, number>> = derived(
     },
 );
 
+const relinkedJamHost = writable<string | undefined>(undefined);
+/**
+ * The host of the Spotify Jam we had joined, until we join a room again, when that host pasted a new invite link: the
+ * Jam is the same room, but Spotify needs the new link to take us in.
+ */
+export const relinkedJamHostStore: Readable<string | undefined> = relinkedJamHost;
+
 export function isLocalUser(uuid: string): boolean {
     return uuid === localUserStore.getLocalUser()?.uuid;
 }
@@ -132,12 +140,16 @@ export function startLiveJam(title = ""): void {
 }
 
 /**
- * Renames our room (an empty title names it after us again), switches the DJ mode of our Jukebox, or turns the light
- * effects of our room off or on for everyone in it.
+ * Renames our room (an empty title names it after us again), switches the DJ mode of our Jukebox, turns the light
+ * effects of our room off or on for everyone in it, or gives our Spotify Jam a new invite link (Spotify ended the
+ * previous Jam): the room stays where it was opened, wherever we stand.
  */
-export function updateOwnRoom(change: { title?: string; djMode?: boolean; lightsOff?: boolean }): void {
+export function updateOwnRoom(change: { title?: string; djMode?: boolean; lightsOff?: boolean; url?: string }): void {
     const own = get(ownJamRoomStore);
     if (!own) {
+        return;
+    }
+    if (change.url !== undefined && (isHomeJam(own.jam) || isLiveJam(own.jam) || !isSpotifyJamUrl(change.url))) {
         return;
     }
     // An undefined title is left out of the stored JSON.
@@ -146,6 +158,7 @@ export function updateOwnRoom(change: { title?: string; djMode?: boolean; lights
         ...(change.title !== undefined && { title: titled(change.title).title }),
         ...(change.djMode !== undefined && isHomeJam(own.jam) && { djMode: change.djMode }),
         ...(change.lightsOff !== undefined && { lightsOff: change.lightsOff }),
+        ...(change.url !== undefined && { url: change.url }),
     };
     const rooms = roomsInZone(get(allJamRoomsStore), own.zone).map((room) =>
         room.jam.hostUuid === own.jam.hostUuid ? jam : room.jam,
@@ -217,7 +230,18 @@ export function syncJoinedJam(): Unsubscriber {
                 enterRoom(own);
             }
         } else if (joined && !rooms.some((room) => listeningZoneJamKey(room.jam) === joined.url)) {
+            // Same host, same zone, another invite link: the host replaced the link of their Spotify Jam.
+            const relinked =
+                !isHomeJamKey(joined.url) &&
+                rooms.some(
+                    (room) =>
+                        room.jam.hostUuid === joined.hostUuid &&
+                        room.zone.areaId === joined.areaId &&
+                        !isHomeJam(room.jam) &&
+                        !isLiveJam(room.jam),
+                );
             leaveJam();
+            if (relinked) relinkedJamHost.set(joined.hostUuid);
         } else if (!joined) {
             rejoinRememberedRoom(rooms);
         }
@@ -245,6 +269,7 @@ function isHomeJamKey(key: string): boolean {
 }
 
 function enterRoom({ zone, jam }: JamRoom): void {
+    relinkedJamHost.set(undefined);
     const key = listeningZoneJamKey(jam);
     joinedJamStore.set({ areaId: zone.areaId, areaName: zone.areaName, url: key, hostUuid: jam.hostUuid });
     if (!isLocalUser(jam.hostUuid)) {

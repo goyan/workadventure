@@ -11,6 +11,7 @@ import {
     joinJam,
     leaveJam,
     leaveListeningZone,
+    relinkedJamHostStore,
     shareJam,
     startHomeJam,
     startLiveJam,
@@ -217,6 +218,65 @@ describe("Jam rooms", () => {
             djMode: true,
         });
         expect(roomsOf(lounge)[0]).toEqual(spotifyJam);
+        unsubscribe();
+    });
+
+    it("lets the host paste a new invite link from anywhere, keeping the room, its title and its lights", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(lounge, [homeJam]);
+        shareJam("https://spotify.link/expired", "Vendredi rock");
+        updateOwnRoom({ lightsOff: true });
+        currentListeningZoneStore.set(undefined);
+
+        updateOwnRoom({ url: "https://spotify.link/fresh" });
+
+        expect(roomsOf(lounge)).toEqual([
+            homeJam,
+            {
+                url: "https://spotify.link/fresh",
+                hostUuid: "me",
+                hostName: "Me",
+                title: "Vendredi rock",
+                lightsOff: true,
+            },
+        ]);
+        expect(get(joinedJamStore)).toMatchObject({ areaId: "lounge", url: "https://spotify.link/fresh" });
+        unsubscribe();
+    });
+
+    it("refuses a link that is not a Spotify Jam invite, and a link for a Jukebox", () => {
+        shareJam("https://spotify.link/mine");
+        updateOwnRoom({ url: "https://example.com/jam" });
+        expect(roomsOf(lounge)).toEqual([{ url: "https://spotify.link/mine", hostUuid: "me", hostName: "Me" }]);
+
+        startHomeJam();
+        updateOwnRoom({ url: "https://spotify.link/other" });
+        expect(roomsOf(lounge)).toEqual([{ home: true, hostUuid: "me", hostName: "Me" }]);
+    });
+
+    it("tells a guest that the Jam they joined has a new invite link, until they join it again", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(lounge, [spotifyJam]);
+        joinJam(room(lounge, spotifyJam));
+        expect(get(relinkedJamHostStore)).toBeUndefined();
+
+        const relinked: ListeningZoneJam = { ...spotifyJam, url: "https://spotify.link/fresh" };
+        setRooms(lounge, [relinked]);
+
+        expect(get(joinedJamStore)).toBeUndefined();
+        expect(get(relinkedJamHostStore)).toBe("dj");
+        joinJam(room(lounge, relinked));
+        expect(window.open).toHaveBeenLastCalledWith("https://spotify.link/fresh", "_blank", "noopener,noreferrer");
+        expect(get(relinkedJamHostStore)).toBeUndefined();
+        unsubscribe();
+    });
+
+    it("does not call a closed Jam relinked", () => {
+        const unsubscribe = syncJoinedJam();
+        setRooms(lounge, [spotifyJam]);
+        joinJam(room(lounge, spotifyJam));
+        setRooms(lounge, []);
+        expect(get(relinkedJamHostStore)).toBeUndefined();
         unsubscribe();
     });
 
