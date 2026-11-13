@@ -266,6 +266,8 @@ pour soi seulement. Les auditeurs de l'audio relayé n'ont besoin ni de compte
 Spotify ni d'invitation supplémentaire. Les salons Live sont exclus.
 Cliquer à nouveau sur **Karaoké** ferme le panneau ; cliquer sur celui d'un autre
 Jam change la source des paroles.
+Le panneau est à 16 px du bord gauche de la zone de jeu, donc juste à droite du panneau
+latéral (chat, utilisateurs) quand il est ouvert : cette zone commence déjà après lui.
 
 Les paroles gratuites viennent de LRCLIB, puis de lyrics.ovh pour un repli sans
 synchronisation. Quand l'édition exacte de l'album n'a que du texte brut sur LRCLIB,

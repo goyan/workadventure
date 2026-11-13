@@ -13,9 +13,6 @@
     import { karaokePositionMs, readFailedText } from "../../Karaoke/JamKaraoke";
     import type { KaraokePlayback } from "../../Karaoke/JamKaraoke";
     import type { JamLinkSave, JamRoom } from "../../ListeningZone/ListeningZoneController";
-    import { chatSidebarWidthStore } from "../../Chat/ChatSidebarWidthStore";
-    import { chatVisibilityStore } from "../../Stores/ChatStore";
-    import { windowSize } from "../../Stores/CoWebsiteStore";
     import { karaokeInputFocusStore } from "../../Stores/UserInputStore";
     import Button from "../UI/Button.svelte";
     import PlayerPauseIcon from "../Icons/PlayerPauseIcon.svelte";
@@ -55,9 +52,6 @@
         /** Where the host's last new invite link stands (kept by the controller). */
         linkSave?: JamLinkSave;
     } = $props();
-
-    /** The panel's width (26rem) and its margin, kept on screen beside an open chat. */
-    const PANEL_ROOM_PX = 432;
 
     let loadState = $derived(loader.state);
     let now = $state(Date.now());
@@ -275,8 +269,7 @@
 {/snippet}
 
 <div
-    class="karaoke-panel pointer-events-auto absolute top-4 z-[310] flex max-h-[calc(100%-6rem)] w-[min(26rem,calc(100%-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
-    style:left={`${$chatVisibilityStore ? Math.max(16, Math.min($chatSidebarWidthStore + 16, $windowSize.width - PANEL_ROOM_PX)) : 16}px`}
+    class="karaoke-panel pointer-events-auto absolute left-4 top-4 z-[310] flex max-h-[calc(100%-6rem)] w-[min(26rem,calc(100%-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
     aria-label={$LL.spotify.karaoke.title()}
     role="dialog"
     tabindex="-1"
