@@ -25,6 +25,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                 invalidLink: () => "Not a Jam link",
                 cancel: () => "Cancel",
                 jamStatus: {
+                    positionUnavailable: () => "Position unavailable: the Jam has most likely stopped",
                     noPlayback: () => "No playback (host)",
                     noPlaybackGuest: () => "No playback (guest)",
                     noPlayer: () => "No player read",
@@ -57,7 +58,11 @@ function render(props: { mine: boolean; joined?: boolean }): void {
     });
 }
 
-function hostReports(issue: KaraokePlaybackIssue | undefined, issueStatus?: number): void {
+function hostReports(
+    issue: KaraokePlaybackIssue | undefined,
+    issueStatus?: number,
+    playback: { track: { title: string; artist: string } | null; positionAt: number } = { track: null, positionAt: 1 },
+): void {
     flushSync(() =>
         karaokeStatesStore.set(
             new Map([
@@ -67,11 +72,10 @@ function hostReports(issue: KaraokePlaybackIssue | undefined, issueStatus?: numb
                         areaId: "area",
                         propertyId: "property",
                         jamKey: "https://spotify.link/expired",
-                        track: null,
                         next: null,
                         playing: false,
                         positionMs: 0,
-                        positionAt: 1,
+                        ...playback,
                         issue,
                         issueStatus,
                     },
@@ -107,6 +111,9 @@ describe("Jam invite link status", () => {
         render({ mine: true });
         expect(testId("jam-link-warning")).toBeNull();
         hostReports("noPlayback");
+        expect(testId("jam-link-warning")?.textContent).toContain(
+            "Position unavailable: the Jam has most likely stopped",
+        );
         expect(testId("jam-link-warning")?.textContent).toContain("No playback (host)");
         expect(testId("jam-link-open-settings")).toBeNull();
 
@@ -119,6 +126,17 @@ describe("Jam invite link status", () => {
 
         expect(mocks.update).toHaveBeenCalledExactlyOnceWith({ url: "https://spotify.link/fresh" });
         expect(testId("jam-link-replace-form")).toBeNull();
+    });
+
+    it("asks the host to refresh the Jam when their position is unavailable for a reason nobody knows", () => {
+        render({ mine: true });
+        hostReports(undefined, undefined, { track: { title: "Pearl Necklace", artist: "ZZ Top" }, positionAt: 0 });
+        expect(testId("jam-link-warning")?.textContent).toContain(
+            "Position unavailable: the Jam has most likely stopped",
+        );
+        expect(testId("jam-link-replace")).not.toBeNull();
+        hostReports(undefined, undefined, { track: { title: "Pearl Necklace", artist: "ZZ Top" }, positionAt: 5 });
+        expect(testId("jam-link-warning")).toBeNull();
     });
 
     it("refuses a link that is not a Spotify Jam invite, without replacing anything", () => {

@@ -43,6 +43,10 @@
                 return undefined;
         }
     });
+    // Whatever the reason, a host whose playback position is missing most likely has a Jam Spotify stopped.
+    let positionUnavailable = $derived(
+        hostState !== undefined && (issue !== undefined || (hostState.track !== null && !hostState.positionAt)),
+    );
     let needsSettings = $derived(issue === "noPlayer" || issue === "authorizationExpired" || issue === "accessDenied");
 
     function cancel(): void {
@@ -64,14 +68,19 @@
 </script>
 
 {#if mine}
-    {#if hostWarning}
+    {#if positionUnavailable}
         <div
             class="flex items-start gap-1.5 rounded-md bg-warning/15 p-2 text-xs text-white/90"
             role="status"
             data-testid="jam-link-warning"
         >
             <IconAlertTriangle font-size="14" class="mt-px shrink-0 text-warning" />
-            <p class="m-0">{hostWarning}</p>
+            <div class="flex flex-col gap-0.5">
+                <p class="m-0 font-bold">{$LL.spotify.listeningZone.jamStatus.positionUnavailable()}</p>
+                {#if hostWarning}
+                    <p class="m-0 text-white/70">{hostWarning}</p>
+                {/if}
+            </div>
         </div>
         {#if needsSettings}
             <Button
@@ -110,7 +119,7 @@
     {:else}
         <Button
             variant="light"
-            appearance={hostWarning ? "filled" : "border"}
+            appearance={positionUnavailable ? "filled" : "border"}
             size="sm"
             onclick={() => (replacing = true)}
             dataTestId="jam-link-replace">{$LL.spotify.listeningZone.jamStatus.replace()}</Button

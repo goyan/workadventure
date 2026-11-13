@@ -14,8 +14,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         noPosition: "La position de lecture est inconnue : faites défiler les paroles à la main.",
         issue: {
             noPlayback: "Spotify ne renvoie aucune lecture pour l’hôte : la Jam a peut-être pris fin.",
-            noPlaybackHost:
-                "Spotify ne renvoie aucune lecture : relancez la musique, ou collez le lien d’une nouvelle Jam dans « Jams en cours ».",
+            noPlaybackHost: "Spotify ne renvoie aucune lecture pour votre Jam.",
             noPlayer:
                 "WorkAdventure ne lit pas le lecteur Spotify de l’hôte : la position est inconnue, faites défiler les paroles à la main.",
             noPlayerHost:
@@ -155,8 +154,9 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         lightsEnableForAll: "Rallumer les effets lumineux (pour tous)",
         lightsOffByHost: "Effets lumineux coupés par l’hôte",
         jamStatus: {
-            noPlayback:
-                "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin. Relancez la musique, ou collez le lien d’une nouvelle Jam.",
+            positionUnavailable:
+                "Position de lecture indisponible : la Jam s’est sûrement arrêtée sur Spotify. Collez le lien d’une nouvelle Jam.",
+            noPlayback: "Spotify ne renvoie plus de lecture pour cette Jam.",
             noPlaybackGuest: "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin.",
             noPlayer: "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour qu’il voie votre lecture.",
             authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",

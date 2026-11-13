@@ -115,12 +115,17 @@
                 return undefined;
         }
     });
-    let issueAction = $derived(
-        !mine || !issue
-            ? undefined
-            : issue === "noPlayback"
-              ? onopenjams && { label: $LL.spotify.listeningZone.roomsTitle(), run: onopenjams }
-              : onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
+    // Whatever the reason, a host of a Spotify Jam whose position is missing most likely has a Jam Spotify stopped.
+    let refreshJam = $derived(
+        mine && !isHomeJam(room.jam) && (issue !== undefined || (playback.track !== null && !playback.positionAt)),
+    );
+    let issueActions = $derived(
+        [
+            refreshJam && onopenjams && { label: $LL.spotify.listeningZone.jamStatus.replace(), run: onopenjams },
+            mine &&
+                (issue === "noPlayer" || issue === "authorizationExpired" || issue === "accessDenied") &&
+                onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
+        ].filter((action) => !!action),
     );
     let offsetLabel = $derived(`${offsetMs > 0 ? "+" : ""}${(offsetMs / 1000).toFixed(2)} s`);
 
@@ -206,13 +211,25 @@
     }
 </script>
 
-{#snippet issueNotice(text: string)}
+{#snippet issueNotice()}
     <div class="flex flex-col items-start gap-2 px-4 pt-3" data-testid="karaoke-issue">
-        <p class="m-0 flex items-start gap-1.5 text-xs text-white/80" role="status">
-            <IconAlertTriangle font-size="14" class="mt-px shrink-0 text-warning" />{text}
-        </p>
-        {#if issueAction}
-            <Button size="sm" variant="light" appearance="border" onclick={issueAction.run}>{issueAction.label}</Button>
+        <div class="flex items-start gap-1.5 text-xs text-white/80" role="status">
+            <IconAlertTriangle font-size="14" class="mt-px shrink-0 text-warning" />
+            <div class="flex flex-col gap-0.5">
+                {#if refreshJam}
+                    <p class="m-0 font-bold">{$LL.spotify.listeningZone.jamStatus.positionUnavailable()}</p>
+                {/if}
+                {#if issueText}
+                    <p class="m-0 {refreshJam ? 'text-white/70' : ''}">{issueText}</p>
+                {/if}
+            </div>
+        </div>
+        {#if issueActions.length}
+            <div class="flex flex-wrap gap-2">
+                {#each issueActions as action (action.label)}
+                    <Button size="sm" variant="light" appearance="border" onclick={action.run}>{action.label}</Button>
+                {/each}
+            </div>
         {/if}
     </div>
 {/snippet}
@@ -309,8 +326,8 @@
             <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
                 <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.unsynced()}
             </p>
-        {:else if issueText}
-            {@render issueNotice(issueText)}
+        {:else if refreshJam || issueText}
+            {@render issueNotice()}
         {:else if !playback.positionAt}
             <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
                 <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.noPosition()}
@@ -379,8 +396,8 @@
                 </div>
             {/if}
         </div>
-    {:else if !track && issueText}
-        {@render issueNotice(issueText)}
+    {:else if !track && (refreshJam || issueText)}
+        {@render issueNotice()}
     {:else}
         {@render notice(IconMusic, track ? $LL.spotify.karaoke.missing() : $LL.spotify.karaoke.noTrack())}
     {/if}

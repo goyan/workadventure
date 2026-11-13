@@ -49,6 +49,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                 listeningZone: {
                     roomsTitle: () => "Jams on the map",
                     jamStatus: {
+                        positionUnavailable: () => "Position unavailable: the Jam has most likely stopped",
+                        replace: () => "Paste a new Jam link",
                         rateLimited: () => "Your reads are rate limited",
                         readFailedStatus: ({ status }: { status: number }) => `Your read failed (${status})`,
                         readFailedUnreadable: () => "Your read is unreadable",
@@ -347,8 +349,11 @@ describe("KaraokePanel playback issues", () => {
 
     it("replaces the unknown position by the host's missing player, with the action to link Spotify (the beta report)", async () => {
         await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "noPlayer" });
+        expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
         expect(target.textContent).toContain("Your player is not read");
         expect(target.textContent).not.toContain("No position");
+        flushSync(() => button("Paste a new Jam link")?.click());
+        expect(onopenjams).toHaveBeenCalledOnce();
         flushSync(() => button("Spotify settings")?.click());
         expect(onopensettings).toHaveBeenCalledOnce();
     });
@@ -362,14 +367,14 @@ describe("KaraokePanel playback issues", () => {
 
     it("says that Spotify returns no playback instead of no shared track, and points the host to the Jams", async () => {
         await remount(true, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
-        expect(target.textContent).toContain("No playback: paste a new Jam");
+        expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
         expect(target.textContent).not.toContain("No track");
-        flushSync(() => button("Jams on the map")?.click());
+        flushSync(() => button("Paste a new Jam link")?.click());
         expect(onopenjams).toHaveBeenCalledOnce();
 
         await remount(false, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
         expect(target.textContent).toContain("No playback for the host");
-        expect(button("Jams on the map")).toBeUndefined();
+        expect(button("Paste a new Jam link")).toBeUndefined();
     });
 
     it("names a failed read of the host's player: its status to the host, the unknown position to guests", async () => {
@@ -378,6 +383,14 @@ describe("KaraokePanel playback issues", () => {
         expect(target.textContent).not.toContain("No position");
         await remount(false, { ...initial, positionMs: 0, positionAt: 0, issue: "rateLimited" });
         expect(target.textContent).toContain("Host player unreadable");
+    });
+
+    it("asks the host to refresh the Jam when their position is unavailable for a reason nobody knows", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0 });
+        expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
+        expect(target.textContent).not.toContain("No position");
+        flushSync(() => button("Paste a new Jam link")?.click());
+        expect(onopenjams).toHaveBeenCalledOnce();
     });
 
     it("keeps the unknown position message when the host's browser knows no reason", async () => {

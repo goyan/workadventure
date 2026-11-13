@@ -13,8 +13,7 @@ const spotify: BaseTranslation = {
         noPosition: "Playback position is unknown: scroll through the lyrics manually.",
         issue: {
             noPlayback: "Spotify returns no playback for the host: the Jam may have ended.",
-            noPlaybackHost:
-                "Spotify returns no playback: start the music again, or paste the link of a new Jam in “Jams on the map”.",
+            noPlaybackHost: "Spotify returns no playback for your Jam.",
             noPlayer:
                 "WorkAdventure does not read the host’s Spotify player: the position is unknown, scroll through the lyrics manually.",
             noPlayerHost:
@@ -152,8 +151,9 @@ const spotify: BaseTranslation = {
         lightsEnableForAll: "Turn light effects back on (for everyone)",
         lightsOffByHost: "Light effects turned off by the host",
         jamStatus: {
-            noPlayback:
-                "Spotify no longer returns playback for this Jam: it may have ended. Start the music again, or paste the link of a new Jam.",
+            positionUnavailable:
+                "Playback position unavailable: the Jam has most likely stopped on Spotify. Paste the link of a new Jam.",
+            noPlayback: "Spotify no longer returns playback for this Jam.",
             noPlaybackGuest: "Spotify no longer returns playback for this Jam: it may have ended.",
             noPlayer: "WorkAdventure does not read your Spotify player: link Spotify so that it sees your playback.",
             authorizationExpired: "Your Spotify authorization expired: link Spotify again.",

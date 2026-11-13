@@ -331,8 +331,11 @@ désormais nommée à l'hôte. Une demande de jeton à Spotify est abandonnée a
 avant, un rafraîchissement sans réponse suspendait toutes les lectures du lecteur
 (karaoké et présence) jusqu'au rechargement.
 
-Sur la carte de sa Jam Spotify, l'hôte voit l'avertissement correspondant
-(« Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin »),
+Dès que sa position de lecture manque, quelle qu'en soit la raison (y compris « lecteur
+non lu » ou une raison inconnue), l'hôte d'une Jam Spotify voit sur la carte et dans le
+karaoké « Position de lecture indisponible : la Jam s'est sûrement arrêtée sur Spotify »
+avec l'action **Coller un nouveau lien de Jam** (décision de l'utilisateur : chez lui, une
+Jam expirée laissait la musique jouer et le compte lié). Le détail de la raison suit,
 un bouton **Réglages Spotify** quand il faut relier le compte, et **Coller un nouveau
 lien de Jam** à tout moment : le lien remplace l'ancien sans fermer le salon (titre,
 lumières, zone conservés, même hors de la zone). L'audio relayé continue : le Space
