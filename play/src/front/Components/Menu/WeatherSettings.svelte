@@ -2,18 +2,16 @@
     import { DEFAULT_AUTO_WEATHER, Season, Weather, WeatherType } from "@workadventure/map-editor";
     import type { AutoWeatherFrequency, AutoWeatherSettings } from "@workadventure/map-editor";
     import { get } from "svelte/store";
-    import { mapEditorActivated } from "../../../Stores/MenuStore";
-    import { LL } from "../../../../i18n/i18n-svelte";
-    import { gameManager } from "../../../Phaser/Game/GameManager";
-    import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
-    import { autoWeatherAt, autoWeatherChanges } from "../../../Phaser/Game/Weather/WeatherSchedule";
-    import { seasonAt } from "../../../Phaser/Game/Nature/SeasonClock";
-    import ButtonState from "../../Input/ButtonState.svelte";
-    import InputCheckbox from "../../Input/InputCheckbox.svelte";
-    import SegmentedControl from "../../Menu/SegmentedControl.svelte";
+    import { mapEditorActivated } from "../../Stores/MenuStore";
+    import { LL } from "../../../i18n/i18n-svelte";
+    import { gameManager } from "../../Phaser/Game/GameManager";
+    import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
+    import { autoWeatherAt, autoWeatherChanges } from "../../Phaser/Game/Weather/WeatherSchedule";
+    import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
+    import ButtonState from "../Input/ButtonState.svelte";
+    import InputCheckbox from "../Input/InputCheckbox.svelte";
+    import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
-
-    let { showTitle = true }: { showTitle?: boolean } = $props();
 
     type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
     const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
@@ -146,10 +144,6 @@
     }
 </script>
 
-{#if showTitle}
-    <h3>{$LL.mapEditor.settings.weather.title()}</h3>
-{/if}
-<p>{$LL.mapEditor.settings.weather.description()}</p>
 <div class="flex flex-col gap-4">
     <WeatherTiles
         bind:value={weather}

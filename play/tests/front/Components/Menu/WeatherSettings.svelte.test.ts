@@ -13,7 +13,6 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
             settings: {
                 weather: {
                     title: label("Weather"),
-                    description: label("desc"),
                     automatic: label("Auto"),
                     clear: label("Clear"),
                     rain: label("Rain"),
@@ -65,7 +64,7 @@ vi.mock("../../../../src/front/Stores/MenuStore", async () => {
     return { mapEditorActivated: writable(true) };
 });
 
-import WeatherSettings from "../../../../src/front/Components/MapEditor/ConfigureMyRoom/WeatherSettings.svelte";
+import WeatherSettings from "../../../../src/front/Components/Menu/WeatherSettings.svelte";
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLElement;

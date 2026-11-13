@@ -731,8 +731,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             automatic: "Auto",
             fog: "Brouillard",
             title: "Météo",
-            description:
-                "Partagée par tout le monde sur cette carte. Chacun peut la masquer dans ses paramètres (Ambiance).",
             clear: "Ciel clair",
             rain: "Pluie",
             snow: "Neige",

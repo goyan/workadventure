@@ -718,7 +718,6 @@ const mapEditor: BaseTranslation = {
             automatic: "Auto",
             fog: "Fog",
             title: "Weather",
-            description: "Shared by everyone on this map. Anyone can hide it in their settings (Ambiance).",
             clear: "Clear sky",
             rain: "Rain",
             snow: "Snow",
