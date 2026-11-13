@@ -1366,17 +1366,43 @@ créer, ouvrir/modifier et supprimer (bouton ou gomme).
 
 ## Caméra en mode éditeur
 
-À l'ouverture de l'éditeur, quel que soit l'outil, la caméra se détache de l'avatar sans saut et les contrôles de
-l'avatar sont désactivés (raison `mapEditor`). Les flèches et ZQSD / WASD font défiler la carte (même vitesse que
-l'Explorateur, `EditorCameraKeys.ts`) ; elles sont ignorées dans un champ de saisie et avec Ctrl / Cmd / Alt (pour
-garder Ctrl+Z). Le trackpad à deux doigts déplace aussi la vue ; le glisser clic gauche reste réservé aux outils.
-Le verrou `mapEditor` de l'avatar ne bloque pas les événements de scroll ou de pincement : ils atteignent le
-gestionnaire de caméra natif. Les autres raisons de blocage (champ, fenêtre, script, écran d'erreur) restent
-respectées ; l'Explorateur conserve son gestionnaire de molette pour éviter un double zoom.
+À l'ouverture de l'éditeur, quel que soit l'outil, la caméra se détache de l'avatar sans saut (`CameraManager.enterMapEditor`).
+L'avatar reste sur place : dans l'éditeur, `GameScene.update` envoie les touches de déplacement à `CameraManager.move`
+au lieu de l'avatar. Les flèches et ZQSD / WASD font donc défiler la carte, à vitesse constante à l'écran quel que soit le zoom ;
+elles sont ignorées dans un champ de saisie et avec Ctrl / Cmd (`UserInputManager.getEventListForGameTick`, pour garder
+Ctrl+Z). L'ancien `EditorCameraKeys.ts` et la raison de verrouillage `mapEditor` n'existent plus depuis la fusion
+amont Phaser 4 (`ba731f2f0`) : ce paragraphe décrit le code actuel.
+Le trackpad à deux doigts déplace la vue ; le pincement, Ctrl+molette et une molette crantée zooment sur le curseur.
+Le glisser clic gauche déplace la vue dans l'Explorateur seulement ; avec les autres outils il sert à l'outil, et la vue se
+déplace au bouton du milieu ou avec Espace + clic gauche (`MapPanShortcut`). Les raisons de blocage (champ, fenêtre, script,
+écran d'erreur) restent respectées.
 Pendant l'édition, aucun clic droit, double-clic gauche ou toucher ne lance de déplacement vers le pointeur.
 Les déplacements par clic reprennent leur comportement habituel après fermeture de l'éditeur.
-Changer d'outil ne recentre pas la vue. À la fermeture, les contrôles sont rétablis et la caméra revient sur l'avatar
-(~300 ms), le zoom de l'Explorateur étant restauré comme avant.
+Changer d'outil ne recentre pas la vue. À la fermeture, la caméra revient sur l'avatar (~1 s) ; un zoom arrière poussé
+au-delà du palier de résistance revient au zoom d'avant l'éditeur.
+
+## Raccourcis des outils, outil Carte et Réglages de carte
+
+- **Raccourcis 1 à 8** (`MapEditor/EditorToolShortcuts.ts`) : lus par la position de la touche (`event.code` `Digit1`…,
+  pavé numérique quand Verr. Num tape un chiffre), donc sans Maj sur AZERTY. 1 Explorer, 2 Zones, 3 Objets,
+  4 Réglages de carte, 6 fermer l'éditeur, 7 Sélection, 8 Carte ; 5 reste à l'émote du jeu. L'infobulle de chaque outil de la
+  barre affiche son numéro. Ctrl / Cmd / Alt + chiffre ne change pas d'outil. Sans droit d'édition, une touche d'outil
+  indisponible ne fait rien (avant, 2 fermait l'éditeur) ; 1 ouvre toujours l'Explorer.
+- **Fermer avec la touche `** : inchangé, la touche qui tape « ` » ferme l'éditeur, de même qu'une touche morte placée sur
+  la touche `Backquote` (clavier US international). Les autres touches mortes ne ferment plus l'éditeur : le ^ d'un clavier
+  français le fermait (`event.key` « Dead »). La touche ² d'un AZERTY PC ne le fermait pas et ne le ferme toujours pas.
+- **Outil Carte, tracé** : pendant un geste, le pointeur est capturé par le canvas (`MapDragPointerCapture`, comme le glisser
+  de l'Explorer). Passer sur le panneau, la barre d'actions ou une bulle vidéo n'annule plus le pinceau, la gomme ou la pièce ;
+  Échap, une perte de capture bouton enfoncé ou la perte du focus de la fenêtre annulent toujours le tracé.
+- **Outil Carte, portes** : la disponibilité des portes est remise à zéro au début de la vérification des catalogues de la
+  salle. Sans catalogue de portes, l'outil repasse en « Mur », n'affiche plus d'aperçu de porte, et un clic en mode Porte
+  affiche « Cette salle n’a pas de catalogue de portes… ».
+- **Réglages de carte** : Échap les ferme (hors champ de saisie), et la fermeture revient à l'outil utilisé avant
+  (`MapEditorModeManager.closeWamSettings`), l'outil Objets s'il n'y en avait pas. Le bouton « Fermer » est traduit.
+
+Recette : sur un Mac AZERTY, touches 1 à 8 sans Maj, ^ (l'éditeur reste ouvert), ` ; survoler les outils de la barre ;
+peindre un sol en traversant la barre d'actions et le panneau, puis recommencer et appuyer sur Échap ; dans une salle sans
+portes, vérifier le mode Mur ; ouvrir les Réglages depuis l'outil Carte et les fermer par Échap et par le bouton.
 
 ## Recentrage sur la case à l'arrêt
 

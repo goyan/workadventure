@@ -17,5 +17,5 @@ export const mapLayerCatalogAvailableStore = writable<boolean | undefined>(undef
 /** Whether the door catalog is loaded in the current room: the door mode is disabled without it. */
 export const mapLayerDoorsAvailableStore = writable<boolean>(false);
 
-export type MapLayerStatus = "tooLarge" | "fillTooLarge" | "doorInvalid" | "failed";
+export type MapLayerStatus = "tooLarge" | "fillTooLarge" | "doorInvalid" | "doorsUnavailable" | "failed";
 export const mapLayerStatusStore = writable<MapLayerStatus | undefined>(undefined);

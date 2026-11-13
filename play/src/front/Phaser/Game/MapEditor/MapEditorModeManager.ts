@@ -14,6 +14,7 @@ import {
     mapEditorModeStore,
     mapEditorSnapEnabledStore,
     mapEditorSelectedToolStore,
+    mapEditorWamSettingsEditorToolCurrentMenuItemStore,
 } from "../../../Stores/MapEditorStore";
 import { mapEditorActivated, mapEditorActivatedForThematics } from "../../../Stores/MenuStore";
 import { localUserStore } from "../../../Connection/LocalUserStore";
@@ -23,6 +24,8 @@ import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Store
 import { analyticsClient } from "../../../Administration/AnalyticsClient";
 import { warningMessageStore } from "../../../Stores/ErrorStore";
 import { isTextEditingTarget } from "./isTextEditingTarget";
+import { EditorToolName } from "./EditorToolName";
+import { editorToolForKey } from "./EditorToolShortcuts";
 import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { MapLayerEditorTool } from "./Tools/MapLayerEditorTool";
@@ -38,15 +41,7 @@ import { isMapLayerPrefab } from "./MapLayer/MapLayerCatalog";
 import { SelectionEditorTool } from "./Tools/SelectionEditorTool";
 import { UpdateEntityFrontCommand } from "./Commands/Entity/UpdateEntityFrontCommand";
 
-export enum EditorToolName {
-    AreaEditor = "AreaEditor",
-    MapLayerEditor = "MapLayerEditor",
-    EntityEditor = "EntityEditor",
-    WAMSettingsEditor = "WAMSettingsEditor",
-    SelectionEditor = "SelectionEditor",
-    ExploreTheRoom = "ExploreTheRoom",
-    CloseMapEditor = "CloseMapEditor",
-}
+export { EditorToolName };
 
 const logger = debug("map-editor");
 
@@ -89,6 +84,8 @@ export class MapEditorModeManager {
      * Last tool used before closing map editor
      */
     private lastlyUsedTool?: EditorToolName;
+    /** The tool to go back to when the map settings, a modal over the map, are closed. */
+    private toolBeforeWamSettings?: EditorToolName;
 
     /**
      * We are making use of CommandPattern to implement an Undo-Redo mechanism
@@ -512,49 +509,20 @@ export class MapEditorModeManager {
             event.preventDefault();
             return true;
         }
+        if (this.activeTool === EditorToolName.WAMSettingsEditor && key === "escape") {
+            this.closeWamSettings();
+            return true;
+        }
+        // Tool keys are read from their physical position, so that AZERTY keyboards need no Shift.
+        const shortcut = editorToolForKey(event, mapEditorModeActivated);
+        if (shortcut.kind === "tool") {
+            this.equipTool(shortcut.tool);
+            return true;
+        }
+        if (shortcut.kind === "unavailable") {
+            return true;
+        }
         switch (key) {
-            case "dead":
-            case "`": {
-                this.equipTool(EditorToolName.CloseMapEditor);
-                break;
-            }
-            case "1": {
-                this.equipTool(EditorToolName.ExploreTheRoom);
-                break;
-            }
-            case "2": {
-                if (!mapEditorModeActivated) {
-                    this.equipTool(EditorToolName.CloseMapEditor);
-                    break;
-                }
-                this.equipTool(EditorToolName.AreaEditor);
-                break;
-            }
-            case "3": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.EntityEditor);
-                break;
-            }
-            case "4": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.WAMSettingsEditor);
-                break;
-            }
-            case "6": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.CloseMapEditor);
-                break;
-            }
-            case "7": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.SelectionEditor);
-                break;
-            }
-            case "8": {
-                if (!mapEditorModeActivated) break;
-                this.equipTool(EditorToolName.MapLayerEditor);
-                break;
-            }
             case "z": {
                 if (!mapEditorModeActivated) break;
                 // Todo replace with key combo https://photonstorm.github.io/phaser3-docs/Phaser.Input.Keyboard.KeyCombo.html
@@ -761,6 +729,9 @@ export class MapEditorModeManager {
         if (this.activeTool === tool) {
             return;
         }
+        if (tool === EditorToolName.WAMSettingsEditor) {
+            this.toolBeforeWamSettings = this.activeTool;
+        }
         this.clearToNeutralState();
         this.activeTool = tool;
 
@@ -768,6 +739,18 @@ export class MapEditorModeManager {
             this.activateTool();
         }
         mapEditorSelectedToolStore.set(tool);
+    }
+
+    /** Closes the map settings and goes back to the tool used before them (the objects tool if there was none). */
+    public closeWamSettings(): void {
+        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(undefined);
+        const previous = this.toolBeforeWamSettings;
+        this.toolBeforeWamSettings = undefined;
+        this.equipTool(
+            previous !== undefined && previous !== EditorToolName.CloseMapEditor
+                ? previous
+                : EditorToolName.EntityEditor,
+        );
     }
 
     public returnToLastMode(): boolean {

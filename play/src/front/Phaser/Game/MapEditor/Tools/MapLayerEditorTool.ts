@@ -20,6 +20,7 @@ import type { GameScene } from "../../GameScene";
 import type { FrontCommand } from "../Commands/FrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { isPointerInsideCanvas } from "../MapEditorPointer";
+import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture";
 import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
@@ -93,6 +94,11 @@ export class MapLayerEditorTool extends MapEditorTool {
     private hover: Point | undefined;
     /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
     private hoverModel: MapLayerModel | undefined;
+    /**
+     * Keeps a mouse gesture on the canvas while it crosses HTML overlays (the editor panel, the action bar, video
+     * bubbles): without it the browser sends the moves to the overlay and Phaser reports that the pointer left the game.
+     */
+    private pointerCapture: MapDragPointerCapture | undefined;
 
     private readonly pointerDownEventHandler = (pointer: Phaser.Input.Pointer): void => {
         this.handlePointerDown(pointer);
@@ -105,6 +111,11 @@ export class MapLayerEditorTool extends MapEditorTool {
     };
     private readonly pointerUpOutsideEventHandler = (pointer: Phaser.Input.Pointer): void => {
         if (this.gesture?.pointerId === pointer.id) this.cancelGesture();
+    };
+    private readonly gameOutEventHandler = (): void => {
+        // A captured gesture never really leaves the canvas: it ends on pointer up or Escape.
+        if (this.pointerCapture?.active) return;
+        this.cancelGesture();
     };
     private readonly cancelEventHandler = (): void => {
         this.cancelGesture();
@@ -126,8 +137,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
         this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUpOutsideEventHandler);
-        this.scene.input.on(Phaser.Input.Events.GAME_OUT, this.cancelEventHandler);
+        this.scene.input.on(Phaser.Input.Events.GAME_OUT, this.gameOutEventHandler);
         window.addEventListener("blur", this.cancelEventHandler);
+        this.pointerCapture = new MapDragPointerCapture(
+            this.scene.game.canvas,
+            () => this.canStartGesture(),
+            () => this.cancelGesture(),
+        );
         mapEditorVisibilityStore.set(true);
         mapLayerStatusStore.set(undefined);
         this.hoverModel = undefined;
@@ -145,8 +161,10 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUpOutsideEventHandler);
-        this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.cancelEventHandler);
+        this.scene.input.off(Phaser.Input.Events.GAME_OUT, this.gameOutEventHandler);
         window.removeEventListener("blur", this.cancelEventHandler);
+        this.pointerCapture?.destroy();
+        this.pointerCapture = undefined;
         this.graphics?.destroy();
         this.graphics = undefined;
         this.scene.input.topOnly = false;
@@ -172,6 +190,8 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     private async checkCatalogs(): Promise<void> {
         mapLayerCatalogAvailableStore.set(undefined);
+        // The doors of the previous room must not stay available while this room's catalogs are checked.
+        mapLayerDoorsAvailableStore.set(false);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -191,6 +211,8 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerPrefabId(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", "blanc", "g")),
         );
         mapLayerDoorsAvailableStore.set(door !== undefined);
+        // The door button is disabled without doors: leave a mode that could not draw anything.
+        if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -253,6 +275,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         return this.active && get(mapLayerCatalogAvailableStore) === true;
     }
 
+    /** Whether a press can start a gesture now: the capture is only taken for a press that draws. */
+    private canStartGesture(): boolean {
+        return (
+            this.canDraw() && !this.gesture && !(get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore))
+        );
+    }
+
     private handlePointerDown(pointer: Phaser.Input.Pointer): void {
         if (
             !this.canDraw() ||
@@ -265,6 +294,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
         if (get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore)) {
+            mapLayerStatusStore.set("doorsUnavailable");
             return;
         }
         mapLayerStatusStore.set(undefined);
@@ -310,6 +340,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         const operation = this.buildOperation(gesture);
         const mode = get(mapLayerModeStore);
         this.gesture = undefined;
+        this.pointerCapture?.release();
         this.clearPreview();
         if (operation) {
             this.commit(operation);
@@ -319,6 +350,7 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     private cancelGesture(): void {
+        this.pointerCapture?.release();
         if (!this.gesture) return;
         this.gesture = undefined;
         this.clearPreview();
@@ -407,6 +439,11 @@ export class MapLayerEditorTool extends MapEditorTool {
             if (this.hover) {
                 const mode = get(mapLayerModeStore);
                 if (mode === "door") {
+                    // Without doors a click does nothing: no preview that would suggest otherwise.
+                    if (!get(mapLayerDoorsAvailableStore)) {
+                        this.scene.markDirty();
+                        return;
+                    }
                     this.hoverModel ??= this.readModel();
                     this.drawDoorPreview(graphics, this.hoverModel, this.hover);
                 } else if (mode === "erase") {
