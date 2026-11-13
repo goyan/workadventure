@@ -5,6 +5,7 @@ import type { LyricsResult } from "../../../src/common/Lyrics";
 import type { KaraokePlayback } from "../../../src/front/Karaoke/JamKaraoke";
 import { LyricsLoader } from "../../../src/front/Karaoke/LyricsLoader";
 import { karaokeInputFocusStore } from "../../../src/front/Stores/UserInputStore";
+import { chatVisibilityStore } from "../../../src/front/Stores/ChatStore";
 import KaraokePanelContent from "./KaraokePanelContent.svelte";
 
 vi.mock("../../../src/i18n/i18n-svelte", async () => {
@@ -72,17 +73,9 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
     };
 });
 vi.mock("../../../src/front/Karaoke/LyricsApi", () => ({ fetchLyrics: vi.fn() }));
-vi.mock("../../../src/front/Chat/ChatSidebarWidthStore", async () => {
-    const { writable } = await import("svelte/store");
-    return { chatSidebarWidthStore: writable(300) };
-});
 vi.mock("../../../src/front/Stores/ChatStore", async () => {
     const { writable } = await import("svelte/store");
     return { chatVisibilityStore: writable(false) };
-});
-vi.mock("../../../src/front/Stores/CoWebsiteStore", async () => {
-    const { writable } = await import("svelte/store");
-    return { windowSize: writable({ width: 1000, height: 800 }) };
 });
 vi.mock("../../../src/front/Stores/UserInputStore", async () => {
     const { writable } = await import("svelte/store");
@@ -147,6 +140,18 @@ afterEach(async () => {
 });
 
 describe("KaraokePanel", () => {
+    it("stays 16 px from the left edge of the game area, also beside an open side panel", () => {
+        const panel = (): HTMLElement | null => target.querySelector<HTMLElement>('[data-testid="karaoke-panel"]');
+        // 16 px (left-4) from the game area, which already starts after the side panel (its padding): adding the
+        // panel's width again put the karaoke in the middle of the screen.
+        expect(panel()?.classList.contains("left-4")).toBe(true);
+        expect(panel()?.style.left).toBe("");
+        flushSync(() => chatVisibilityStore.set(true));
+        expect(panel()?.classList.contains("left-4")).toBe(true);
+        expect(panel()?.style.left).toBe("");
+        flushSync(() => chatVisibilityStore.set(false));
+    });
+
     it("shows the prefetched next recording in the same render that playback announces it", async () => {
         await settle();
         const forecast = { title: "Next song", artist: "Test artist", uri: "spotify:track:next" };
