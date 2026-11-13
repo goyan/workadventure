@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { localUserStore } from "../Connection/LocalUserStore";
 
 /** Whether the local user chose to hear the music of the Jam they joined: the music is only downloaded then. */
 export const jamMusicListeningStore = writable(false);
@@ -18,8 +19,15 @@ export function setJamMusicStream(spaceName: string, stream: MediaStream | undef
     });
 }
 
-/** The volume of the music alone, between 0 and 1: the voices and the audio of the screens keep their own. */
-export const jamMusicVolumeStore = writable(1);
+/**
+ * The volume of the music alone, between 0 and 1: the voices and the audio of the screens keep their own. Kept in the
+ * browser, so that a reload (a redeploy reloads every page) does not bring it back to full volume.
+ */
+export const jamMusicVolumeStore = writable(localUserStore.getJamMusicVolume() ?? 1);
+/** Saves every volume change for the life of the page; exported only so that the subscription is not dropped. */
+export const unsubscribeJamMusicVolumeSaving = jamMusicVolumeStore.subscribe((volume) =>
+    localUserStore.setJamMusicVolume(volume),
+);
 
 /** Whether the local user silenced the music while staying in the Jam. */
 export const jamMusicMutedStore = writable(false);

@@ -424,6 +424,10 @@ volume ici, sans Spotify ni extension. La capture et le transport stéréo réut
 le partage audio des Jams ; le micro de conversation reste exclu du choix de source.
 « Terminer le Live » ferme le salon et arrête sa capture.
 
+Le volume d'écoute de la musique d'un Jam (Spotify, Jukebox ou Live) est gardé dans le navigateur
+(`localUserStore`, clé `jamMusicVolume`, valeur de 0 à 1) : un rechargement, donc un redéploiement, ne le remet
+plus à 100 %. La sourdine, elle, reste pour la session.
+
 Recette : sur un Mac, brancher un instrument via une carte USB, garder le micro de
 conversation séparé, ouvrir un Live et partager cette carte. Écouter depuis un
 second compte, vérifier volume/pause/arrêt, fermeture du panneau, départ du salon,

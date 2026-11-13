@@ -22,6 +22,11 @@ import { parseStoredZoomModifier, serializeZoomModifier } from "@wa/front/Phaser
 import type { LocalUser } from "./LocalUser";
 import { areCharacterTexturesValid, isUserNameValid } from "./LocalUserUtils";
 
+/** A volume of the Jam music worth keeping: a finite number from 0 (silent) to 1 (full). */
+function isJamMusicVolume(value: number): boolean {
+    return Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
 const playerNameKey = "playerName";
 const selectedPlayerKey = "selectedPlayer";
 const customCursorPositionKey = "customCursorPosition";
@@ -36,6 +41,7 @@ const fullscreenKey = "fullscreen";
 const blockAudio = "blockAudio";
 const disableNight = "disableNight";
 const cameraZoomModifierKey = "cameraZoomModifier";
+const jamMusicVolumeKey = "jamMusicVolume";
 const forceCowebsiteTriggerKey = "forceCowebsiteTrigger";
 const ignoreFollowRequests = "ignoreFollowRequests";
 const decreaseAudioPlayerVolumeWhileTalking = "decreaseAudioPlayerVolumeWhileTalking";
@@ -392,6 +398,25 @@ class LocalUserStore {
     getCameraZoomModifier(): number | undefined {
         try {
             return parseStoredZoomModifier(localStorage.getItem(cameraZoomModifierKey));
+        } catch {
+            return undefined;
+        }
+    }
+
+    /** The volume of the Jam music, between 0 and 1: kept across reloads, a redeploy included. */
+    setJamMusicVolume(value: number): void {
+        if (!isJamMusicVolume(value)) return;
+        try {
+            localStorage.setItem(jamMusicVolumeKey, String(value));
+        } catch {
+            // Storage refused (private mode, quota): the volume is simply not kept after a reload.
+        }
+    }
+    getJamMusicVolume(): number | undefined {
+        try {
+            const stored = localStorage.getItem(jamMusicVolumeKey);
+            const value = stored === null ? Number.NaN : Number(stored);
+            return isJamMusicVolume(value) ? value : undefined;
         } catch {
             return undefined;
         }
