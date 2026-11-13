@@ -11,11 +11,23 @@ import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import { EditorToolName } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import {
+    mapEditorEntityModeStore,
     mapEditorModeStore,
     mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
 } from "../../../../src/front/Stores/MapEditorStore";
+
+const pickedPrefab = {
+    id: "lamp",
+    name: "Lamp",
+    tags: [],
+    imagePath: "lamp.png",
+    direction: "Down",
+    color: "Default",
+    collectionName: "Furniture",
+    type: "Default",
+} as EntityPrefab;
 
 const entityFactory = vi.hoisted(() => vi.fn<() => Entity>());
 
@@ -91,6 +103,7 @@ describe("Native entity clicks while selecting a group", () => {
         mapEditorSelectedEntityStore.set(undefined);
         mapEditorSelectedToolStore.set(undefined);
         mapEditorSelectedEntityPrefabStore.set(undefined);
+        mapEditorEntityModeStore.set("ADD");
         vi.restoreAllMocks();
     });
 
@@ -138,6 +151,25 @@ describe("Native entity clicks while selecting a group", () => {
 
         expect(manager.equipTool.mock.calls).toHaveLength(0);
         expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+    });
+
+    it("opens the clicked object while another object is picked to be placed", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        mapEditorSelectedEntityPrefabStore.set({ ...pickedPrefab });
+        clickEntity();
+
+        expect(get(mapEditorSelectedEntityStore)).toBe(entity);
+        expect(get(mapEditorEntityModeStore)).toBe("EDIT");
+    });
+
+    it("keeps placing the picked object on a floor object", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        mapEditorSelectedEntityPrefabStore.set({ ...pickedPrefab });
+        entity.getPrefab.mockReturnValue({ ...pickedPrefab, id: "rug", layer: "floor" });
+        clickEntity();
+
+        expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+        expect(get(mapEditorEntityModeStore)).toBe("ADD");
     });
 
     it("refreshes the selected instance when resize undo/redo recreates it with the same id", async () => {
