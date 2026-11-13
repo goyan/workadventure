@@ -159,8 +159,12 @@ const spotify: BaseTranslation = {
             noPlayback:
                 "Spotify plays nothing on your side (the Spotify app of this computer or the linked account): start the music again, or paste the link of a new Jam if it stopped.",
             noPlaybackGuest: "Spotify no longer returns playback for this Jam: it may have ended.",
-            desktopNoPosition:
-                "The desktop app reads your track without its position (it reads the Mac Spotify app without the WorkAdventure Spicetify extension): connect that extension, or link Spotify in the desktop app (Settings → Spotify → “Also share from another device”: a link made in a browser does not count here).",
+            desktopNoPosition: "The desktop app does not send the playback position.",
+            desktopNoPositionDetail:
+                "Connect the WorkAdventure Spicetify extension, or link Spotify in the desktop app (Settings → Spotify → “Also share from another device”; a link made in a browser does not count here).",
+            linkSaving: "Saving the new link…",
+            linkSaved: "Jam link updated.",
+            linkFailed: "The new link was not saved: try again.",
             noPlayer: "WorkAdventure does not read your Spotify player: link Spotify so that it sees your playback.",
             authorizationExpired: "Your Spotify authorization expired: link Spotify again.",
             accessDenied:

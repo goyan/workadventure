@@ -162,8 +162,12 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             noPlayback:
                 "Spotify ne lit rien chez vous (app Spotify de cet ordinateur ou compte lié) : relancez la musique, ou collez le lien d’une nouvelle Jam si elle s’est arrêtée.",
             noPlaybackGuest: "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin.",
-            desktopNoPosition:
-                "L’app de bureau lit votre morceau sans sa position (elle lit l’app Spotify du Mac sans l’extension Spicetify WorkAdventure) : connectez cette extension, ou liez Spotify dans l’app de bureau (Réglages → Spotify → « Partager aussi depuis un autre appareil » : une liaison faite dans un navigateur ne compte pas ici).",
+            desktopNoPosition: "L’app de bureau ne transmet pas la position de lecture.",
+            desktopNoPositionDetail:
+                "Connectez l’extension Spicetify WorkAdventure, ou liez Spotify dans l’app de bureau (Réglages → Spotify → « Partager aussi depuis un autre appareil » ; une liaison faite dans un navigateur ne compte pas ici).",
+            linkSaving: "Enregistrement du nouveau lien…",
+            linkSaved: "Lien de la Jam mis à jour.",
+            linkFailed: "Le nouveau lien n’a pas été enregistré : réessayez.",
             noPlayer: "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour qu’il voie votre lecture.",
             authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",
             accessDenied:

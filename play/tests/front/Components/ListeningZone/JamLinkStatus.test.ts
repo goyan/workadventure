@@ -6,7 +6,8 @@ import { karaokeStatesStore } from "../../../../src/front/Karaoke/JamKaraoke";
 import JamLinkStatus from "../../../../src/front/Components/ListeningZone/JamLinkStatus.svelte";
 
 const mocks = vi.hoisted(() => ({
-    update: vi.fn(),
+    update: vi.fn().mockResolvedValue("saved"),
+    setSave: vi.fn<(save: { status: "saving" | "saved" | "failed" } | undefined) => void>(),
     settings: vi.fn(),
     setRelinked: vi.fn<(hostUuid: string | undefined) => void>(),
 }));
@@ -14,7 +15,14 @@ vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () 
     const { writable } = await import("svelte/store");
     const relinked = writable<string | undefined>(undefined);
     mocks.setRelinked.mockImplementation(relinked.set);
-    return { relinkedJamHostStore: relinked, updateOwnRoom: mocks.update };
+    const save = writable<{ status: "saving" | "saved" | "failed" } | undefined>(undefined);
+    mocks.setSave.mockImplementation(save.set);
+    return {
+        relinkedJamHostStore: relinked,
+        replaceOwnJamLink: mocks.update,
+        ownJamLinkSaveStore: save,
+        forgetOwnJamLinkSave: vi.fn(),
+    };
 });
 vi.mock("../../../../src/front/Stores/MenuStore", () => ({ openSpotifySettings: mocks.settings }));
 vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
@@ -30,6 +38,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                     noPlaybackGuest: () => "No playback (guest)",
                     noPlayer: () => "No player read",
                     desktopNoPosition: () => "Desktop app gives no position",
+                    desktopNoPositionDetail: () => "Connect Spicetify or link Spotify",
+                    linkSaving: () => "Saving the link",
+                    linkSaved: () => "Jam link updated",
+                    linkFailed: () => "The link was not saved",
                     authorizationExpired: () => "Authorization expired",
                     accessDenied: () => "Access denied",
                     rateLimited: () => "Rate limited",
@@ -50,7 +62,8 @@ const room: JamRoom = {
     zone: { areaId: "area", propertyId: "property", areaName: "Dancefloor" },
     jam: { url: "https://spotify.link/expired", hostUuid: "host", hostName: "Host" },
 };
-const target = document.createElement("div");
+// Attached to the document: the paste field takes the focus.
+const target = document.body.appendChild(document.createElement("div"));
 let component: ReturnType<typeof mount> | undefined;
 
 function render(props: { mine: boolean; joined?: boolean }): void {
@@ -96,6 +109,7 @@ function testId(id: string): HTMLElement | null {
 
 beforeEach(() => {
     mocks.update.mockClear();
+    mocks.setSave(undefined);
     mocks.settings.mockClear();
     mocks.setRelinked(undefined);
     karaokeStatesStore.set(new Map());
@@ -120,11 +134,12 @@ describe("Jam invite link status", () => {
         flushSync(() => testId("jam-link-replace")?.click());
         const input = target.querySelector<HTMLInputElement>("input[type=url]");
         if (!input) throw new Error("Missing link input");
+        expect(document.activeElement).toBe(input);
         input.value = "  https://spotify.link/fresh  ";
         flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
         flushSync(() => form()?.requestSubmit());
 
-        expect(mocks.update).toHaveBeenCalledExactlyOnceWith({ url: "https://spotify.link/fresh" });
+        expect(mocks.update).toHaveBeenCalledExactlyOnceWith("https://spotify.link/fresh");
         expect(testId("jam-link-replace-form")).toBeNull();
     });
 
@@ -137,6 +152,29 @@ describe("Jam invite link status", () => {
         expect(testId("jam-link-replace")).not.toBeNull();
         hostReports(undefined, undefined, { track: { title: "Pearl Necklace", artist: "ZZ Top" }, positionAt: 5 });
         expect(testId("jam-link-warning")).toBeNull();
+    });
+
+    it("tells the host whether their new link is saved: saving, updated, or not saved", () => {
+        render({ mine: true });
+        for (const [status, text] of [
+            ["saving", "Saving the link"],
+            ["saved", "Jam link updated"],
+            ["failed", "The link was not saved"],
+        ] as const) {
+            flushSync(() => mocks.setSave({ status }));
+            expect(testId("jam-link-save")?.textContent).toContain(text);
+        }
+        flushSync(() => mocks.setSave(undefined));
+        expect(testId("jam-link-save")).toBeNull();
+    });
+
+    it("keeps the desktop warning short, its detail in small print", () => {
+        render({ mine: true });
+        hostReports("desktopNoPosition");
+        expect(testId("jam-link-warning")?.querySelector(".font-bold")?.textContent?.trim()).toBe(
+            "Desktop app gives no position",
+        );
+        expect(testId("jam-link-warning")?.textContent).toContain("Connect Spicetify or link Spotify");
     });
 
     it("refuses a link that is not a Spotify Jam invite, without replacing anything", () => {

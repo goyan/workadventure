@@ -1,11 +1,16 @@
 <script lang="ts">
-    import { isSpotifyJamUrl } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { karaokeStatesStore, readFailedText } from "../../Karaoke/JamKaraoke";
-    import { relinkedJamHostStore, updateOwnRoom, type JamRoom } from "../../ListeningZone/ListeningZoneController";
+    import {
+        forgetOwnJamLinkSave,
+        ownJamLinkSaveStore,
+        relinkedJamHostStore,
+        replaceOwnJamLink,
+        type JamRoom,
+    } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
-    import Input from "../Input/Input.svelte";
     import Button from "../UI/Button.svelte";
+    import JamLinkForm from "./JamLinkForm.svelte";
     import { IconAlertTriangle } from "@wa-icons";
 
     interface Props {
@@ -18,8 +23,6 @@
     let { room, mine, joined }: Props = $props();
 
     let replacing = $state(false);
-    let jamUrl = $state("");
-    let invalidLink = $state(false);
 
     // What the host's browser reads of their Spotify player, sent with the karaoke state of the room.
     let hostState = $derived($karaokeStatesStore.get(room.jam.hostUuid));
@@ -56,23 +59,6 @@
             issue === "accessDenied" ||
             issue === "desktopNoPosition",
     );
-
-    function cancel(): void {
-        replacing = false;
-        jamUrl = "";
-        invalidLink = false;
-    }
-
-    function submit(event: SubmitEvent): void {
-        event.preventDefault();
-        const url = jamUrl.trim();
-        if (!isSpotifyJamUrl(url)) {
-            invalidLink = true;
-            return;
-        }
-        updateOwnRoom({ url });
-        cancel();
-    }
 </script>
 
 {#if mine}
@@ -87,6 +73,11 @@
                 <p class="m-0 font-bold">
                     {hostWarning ?? $LL.spotify.listeningZone.jamStatus.positionUnavailable()}
                 </p>
+                {#if issue === "desktopNoPosition"}
+                    <p class="m-0 text-[11px] text-white/60">
+                        {$LL.spotify.listeningZone.jamStatus.desktopNoPositionDetail()}
+                    </p>
+                {/if}
             </div>
         </div>
         {#if needsSettings}
@@ -99,30 +90,35 @@
             >
         {/if}
     {/if}
+    {#if $ownJamLinkSaveStore}
+        <p
+            class="m-0 text-xs {$ownJamLinkSaveStore.status === 'failed'
+                ? 'text-red-400'
+                : $ownJamLinkSaveStore.status === 'saved'
+                  ? 'text-[#1ed760]'
+                  : 'text-white/70'}"
+            role={$ownJamLinkSaveStore.status === "failed" ? "alert" : "status"}
+            data-testid="jam-link-save"
+        >
+            {$ownJamLinkSaveStore.status === "failed"
+                ? $LL.spotify.listeningZone.jamStatus.linkFailed()
+                : $ownJamLinkSaveStore.status === "saved"
+                  ? $LL.spotify.listeningZone.jamStatus.linkSaved()
+                  : $LL.spotify.listeningZone.jamStatus.linkSaving()}
+        </p>
+    {/if}
     {#if replacing}
-        <form class="flex flex-col gap-2" onsubmit={submit} data-testid="jam-link-replace-form">
-            <Input
-                id={`jam-link-${room.jam.hostUuid}`}
-                type="url"
-                size="sm"
-                placeholder={$LL.spotify.listeningZone.sharePlaceholder()}
-                bind:value={jamUrl}
-                status={invalidLink ? "error" : undefined}
-                oninput={() => (invalidLink = false)}
-            />
-            <!-- The url variant of Input does not render its error helper text. -->
-            {#if invalidLink}
-                <p class="m-0 text-xs text-red-500" role="alert">{$LL.spotify.listeningZone.invalidLink()}</p>
-            {/if}
-            <div class="flex justify-end gap-2">
-                <Button variant="light" appearance="ghost" size="sm" onclick={cancel}>
-                    {$LL.spotify.listeningZone.cancel()}
-                </Button>
-                <Button variant="success" size="sm" type="submit" dataTestId="jam-link-replace-submit">
-                    {$LL.spotify.listeningZone.jamStatus.replaceSubmit()}
-                </Button>
-            </div>
-        </form>
+        <JamLinkForm
+            id={`jam-link-${room.jam.hostUuid}`}
+            onreplace={(url) => {
+                replaceOwnJamLink(url).catch((error) => console.error("Cannot replace the Jam link", error));
+                replacing = false;
+            }}
+            oncancel={() => {
+                replacing = false;
+                forgetOwnJamLinkSave();
+            }}
+        />
     {:else}
         <Button
             variant="light"

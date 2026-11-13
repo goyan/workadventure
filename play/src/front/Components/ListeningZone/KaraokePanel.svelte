@@ -12,13 +12,14 @@
     import { centeredScrollTop, lyricLineProgress } from "../../Karaoke/LyricsView";
     import { karaokePositionMs, readFailedText } from "../../Karaoke/JamKaraoke";
     import type { KaraokePlayback } from "../../Karaoke/JamKaraoke";
-    import type { JamRoom } from "../../ListeningZone/ListeningZoneController";
+    import type { JamLinkSave, JamRoom } from "../../ListeningZone/ListeningZoneController";
     import { chatSidebarWidthStore } from "../../Chat/ChatSidebarWidthStore";
     import { chatVisibilityStore } from "../../Stores/ChatStore";
     import { windowSize } from "../../Stores/CoWebsiteStore";
     import { karaokeInputFocusStore } from "../../Stores/UserInputStore";
     import Button from "../UI/Button.svelte";
     import PlayerPauseIcon from "../Icons/PlayerPauseIcon.svelte";
+    import JamLinkForm from "./JamLinkForm.svelte";
     import {
         IconAlertTriangle,
         IconArrowDown,
@@ -38,7 +39,8 @@
         loader = new LyricsLoader(fetchLyrics),
         mine = false,
         onopensettings,
-        onopenjams,
+        onreplacelink,
+        linkSave,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
@@ -48,8 +50,10 @@
         mine?: boolean;
         /** Opens the Spotify settings, to link Spotify again. */
         onopensettings?: () => void;
-        /** Opens the Jam rooms, where the host pastes the link of a new Jam. */
-        onopenjams?: () => void;
+        /** Gives the host's Spotify Jam the link of a new Jam, pasted right in the karaoke. */
+        onreplacelink?: (url: string) => void;
+        /** Where the host's last new invite link stands (kept by the controller). */
+        linkSave?: JamLinkSave;
     } = $props();
 
     /** The panel's width (26rem) and its margin, kept on screen beside an open chat. */
@@ -124,7 +128,10 @@
     let issueActions = $derived(
         [
             (refreshJam || (mine && !isHomeJam(room.jam) && issue === "noPlayback")) &&
-                onopenjams && { label: $LL.spotify.listeningZone.jamStatus.replace(), run: onopenjams },
+                onreplacelink && {
+                    label: $LL.spotify.listeningZone.jamStatus.replace(),
+                    run: () => (pastingLink = true),
+                },
             mine &&
                 (issue === "noPlayer" ||
                     issue === "authorizationExpired" ||
@@ -133,6 +140,7 @@
                 onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
         ].filter((action) => !!action),
     );
+    let pastingLink = $state(false);
     let offsetLabel = $derived(`${offsetMs > 0 ? "+" : ""}${(offsetMs / 1000).toFixed(2)} s`);
 
     $effect(() => {
@@ -228,9 +236,25 @@
                 {#if issueText}
                     <p class="m-0 {refreshJam ? 'text-white/70' : ''}">{issueText}</p>
                 {/if}
+                {#if mine && issue === "desktopNoPosition"}
+                    <p class="m-0 text-[11px] text-white/60">
+                        {$LL.spotify.listeningZone.jamStatus.desktopNoPositionDetail()}
+                    </p>
+                {/if}
             </div>
         </div>
-        {#if issueActions.length}
+        {#if pastingLink && onreplacelink}
+            <div class="w-full">
+                <JamLinkForm
+                    id={`karaoke-jam-link-${room.jam.hostUuid}`}
+                    onreplace={(url) => {
+                        onreplacelink(url);
+                        pastingLink = false;
+                    }}
+                    oncancel={() => (pastingLink = false)}
+                />
+            </div>
+        {:else if issueActions.length}
             <div class="flex flex-wrap gap-2">
                 {#each issueActions as action (action.label)}
                     <Button size="sm" variant="light" appearance="border" onclick={action.run}>{action.label}</Button>
@@ -294,6 +318,23 @@
             data-testid="karaoke-close"><IconX font-size="18" /></button
         >
     </div>
+    {#if mine && linkSave}
+        <p
+            class="m-0 px-4 pt-2 text-xs {linkSave.status === 'failed'
+                ? 'text-red-400'
+                : linkSave.status === 'saved'
+                  ? 'text-[#1ed760]'
+                  : 'text-white/70'}"
+            role={linkSave.status === "failed" ? "alert" : "status"}
+            data-testid="karaoke-link-save"
+        >
+            {linkSave.status === "failed"
+                ? $LL.spotify.listeningZone.jamStatus.linkFailed()
+                : linkSave.status === "saved"
+                  ? $LL.spotify.listeningZone.jamStatus.linkSaved()
+                  : $LL.spotify.listeningZone.jamStatus.linkSaving()}
+        </p>
+    {/if}
     {#if trackProgress !== undefined}
         <div
             class="mx-4 mt-3 h-1 shrink-0 overflow-hidden rounded-full bg-white/15"

@@ -49,10 +49,18 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                 },
                 listeningZone: {
                     roomsTitle: () => "Jams on the map",
+                    sharePlaceholder: () => "Paste the invite link",
+                    invalidLink: () => "Not a Jam link",
+                    cancel: () => "Cancel",
                     jamStatus: {
                         positionUnavailable: () => "Position unavailable: the Jam has most likely stopped",
                         replace: () => "Paste a new Jam link",
+                        replaceSubmit: () => "Replace the link",
                         desktopNoPosition: () => "Desktop app gives no position",
+                        desktopNoPositionDetail: () => "Connect Spicetify or link Spotify",
+                        linkSaving: () => "Saving the link",
+                        linkSaved: () => "Jam link updated",
+                        linkFailed: () => "The link was not saved",
                         rateLimited: () => "Your reads are rate limited",
                         readFailedStatus: ({ status }: { status: number }) => `Your read failed (${status})`,
                         readFailedUnreadable: () => "Your read is unreadable",
@@ -320,9 +328,13 @@ describe("KaraokePanel playback issues", () => {
         jam: { url: "https://spotify.link/expired", hostUuid: "host", hostName: "Host" },
     };
     const onopensettings = vi.fn();
-    const onopenjams = vi.fn();
+    const onreplacelink = vi.fn();
 
-    async function remount(mine: boolean, state: KaraokePlayback): Promise<void> {
+    async function remount(
+        mine: boolean,
+        state: KaraokePlayback,
+        linkSave?: { status: "saving" | "saved" | "failed" },
+    ): Promise<void> {
         const mounted = component;
         component = undefined;
         if (mounted) await unmount(mounted);
@@ -338,11 +350,26 @@ describe("KaraokePanel playback issues", () => {
                     room: spotifyRoom,
                     mine,
                     onopensettings,
-                    onopenjams,
+                    onreplacelink,
+                    linkSave,
                 },
             });
         });
         await settle();
+    }
+
+    /** The host pastes the link of a new Jam right in the karaoke: the field opens there, focused. */
+    async function pasteNewLink(): Promise<void> {
+        flushSync(() => button("Paste a new Jam link")?.click());
+        const input = target.querySelector<HTMLInputElement>('[data-testid="karaoke-panel"] input[type=url]');
+        if (!input) throw new Error("The paste field did not open in the karaoke");
+        await settle();
+        expect(document.activeElement).toBe(input);
+        input.value = "https://spotify.link/fresh";
+        flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+        flushSync(() => input.form?.requestSubmit());
+        expect(onreplacelink).toHaveBeenCalledExactlyOnceWith("https://spotify.link/fresh");
+        expect(target.querySelector('[data-testid="karaoke-panel"] input[type=url]')).toBeNull();
     }
 
     function button(text: string): HTMLButtonElement | undefined {
@@ -362,6 +389,7 @@ describe("KaraokePanel playback issues", () => {
     it("tells a desktop host that the desktop app gives no position, not that the Jam stopped (the beta report)", async () => {
         await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "desktopNoPosition" });
         expect(target.textContent).toContain("Desktop app gives no position");
+        expect(target.textContent).toContain("Connect Spicetify or link Spotify");
         expect(target.textContent).not.toContain("most likely stopped");
         flushSync(() => button("Spotify settings")?.click());
         expect(onopensettings).toHaveBeenCalledOnce();
@@ -382,8 +410,7 @@ describe("KaraokePanel playback issues", () => {
         expect(target.textContent).toContain("No playback: paste a new Jam");
         expect(target.textContent).not.toContain("most likely stopped");
         expect(target.textContent).not.toContain("No track");
-        flushSync(() => button("Paste a new Jam link")?.click());
-        expect(onopenjams).toHaveBeenCalledOnce();
+        await pasteNewLink();
 
         await remount(false, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
         expect(target.textContent).toContain("No playback for the host");
@@ -402,8 +429,18 @@ describe("KaraokePanel playback issues", () => {
         await remount(true, { ...initial, positionMs: 0, positionAt: 0 });
         expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
         expect(target.textContent).not.toContain("No position");
-        flushSync(() => button("Paste a new Jam link")?.click());
-        expect(onopenjams).toHaveBeenCalledOnce();
+        await pasteNewLink();
+    });
+
+    it("tells the host whether the link pasted in the karaoke is saved", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0 }, { status: "saved" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')?.textContent).toContain("Jam link updated");
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0 }, { status: "failed" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')?.textContent).toContain(
+            "The link was not saved",
+        );
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0 }, { status: "saved" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')).toBeNull();
     });
 
     it("keeps the unknown position message when the host's browser knows no reason", async () => {
