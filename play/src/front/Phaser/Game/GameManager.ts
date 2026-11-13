@@ -35,6 +35,7 @@ import { loginTokenErrorStore, isMatrixChatEnabledStore } from "../../Stores/Cha
 import { initializeChatVisibilitySubscription } from "../../Chat/Stores/ChatStore";
 import { ABSOLUTE_PUSHER_URL } from "../../Enum/ComputedConst";
 import type { WokaData } from "../../Components/Woka/WokaTypes";
+import { createWokaListCache } from "../../Components/Woka/WokaListCache";
 import { generateRandomName } from "../../Utils/RandomNameGenerator";
 import { shouldShowPwaInstallSceneAsync } from "../../Utils/PwaInstallEligibility";
 import { raceTimeout } from "../../Utils/PromiseUtils";
@@ -579,8 +580,13 @@ export class GameManager {
         localUserStore.clearMatrixSession();
     }
 
-    public async loadWokaData(): Promise<WokaData> {
-        const roomUrl = gameManager.currentStartedRoom.href;
+    private readonly wokaListCache = createWokaListCache((roomUrl) => this.fetchWokaList(roomUrl));
+
+    public loadWokaData(): Promise<WokaData> {
+        return this.wokaListCache.load(gameManager.currentStartedRoom.href);
+    }
+
+    private async fetchWokaList(roomUrl: string): Promise<WokaData> {
         const response = await fetch(`${ABSOLUTE_PUSHER_URL}woka/list?roomUrl=${encodeURIComponent(roomUrl)}`, {
             headers: {
                 Authorization: localUserStore.getAuthToken() || "",

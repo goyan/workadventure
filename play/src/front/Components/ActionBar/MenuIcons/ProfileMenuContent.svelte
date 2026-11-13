@@ -1,7 +1,7 @@
 <script lang="ts">
     import * as Sentry from "@sentry/svelte";
     import { AvailabilityStatus } from "@workadventure/messages";
-    import { setContext } from "svelte";
+    import { onMount, setContext } from "svelte";
     import type { Readable } from "svelte/store";
     import { derived, get } from "svelte/store";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
@@ -60,6 +60,11 @@
         AvailabilityStatus.BACK_IN_A_MOMENT,
         AvailabilityStatus.DO_NOT_DISTURB,
     ];
+
+    // Warm the woka list while the menu is open, so that "My avatar" opens without waiting for the server.
+    onMount(() => {
+        gameManager.loadWokaData().catch((err: unknown) => console.warn("Could not preload the woka list", err));
+    });
 
     function showWokaNameMenuItem() {
         return connectionManager.currentRoom?.opidWokaNamePolicy !== "force_opid";
