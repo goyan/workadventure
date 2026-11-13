@@ -13,7 +13,7 @@
     import { spotifyAccount } from "../../Spotify/SpotifyAccount";
     import { desktopSpotifyPlayer } from "../../Spotify/LocalSpotifyPlayer";
     import { listenAlongAvailableStore } from "../../Spotify/ListeningFollower";
-    import { handleOpenMenuEvent, settingsSubMenuTargetStore, SubMenusInterface } from "../../Stores/MenuStore";
+    import { openSpotifySettings } from "../../Stores/MenuStore";
     import Input from "../Input/Input.svelte";
     import Button from "../UI/Button.svelte";
     import JamRoomsList from "./JamRoomsList.svelte";
@@ -64,11 +64,6 @@
     function openLiveJam(): void {
         startLiveJam(title);
         cancelCreating();
-    }
-
-    function openSpotifySettings(): void {
-        settingsSubMenuTargetStore.set("spotify");
-        handleOpenMenuEvent(SubMenusInterface.settings);
     }
 </script>
 

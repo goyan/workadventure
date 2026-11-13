@@ -12,6 +12,22 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         missing: "Aucune parole trouvée pour cette version. Essayez un autre titre ou artiste.",
         noTrack: "L’hôte n’a pas encore partagé de morceau. Vous pouvez choisir un titre pour lire ses paroles.",
         noPosition: "La position de lecture est inconnue : faites défiler les paroles à la main.",
+        issue: {
+            noPlayback: "Spotify ne renvoie aucune lecture pour l’hôte : la Jam a peut-être pris fin.",
+            noPlaybackHost: "Spotify ne renvoie aucune lecture pour votre Jam.",
+            noPlayer:
+                "WorkAdventure ne lit pas le lecteur Spotify de l’hôte : la position est inconnue, faites défiler les paroles à la main.",
+            noPlayerHost:
+                "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour que les paroles suivent la lecture.",
+            authorizationExpired: "L’autorisation Spotify de l’hôte a expiré : la position de lecture est inconnue.",
+            authorizationExpiredHost:
+                "Votre autorisation Spotify a expiré : liez Spotify à nouveau pour que les paroles suivent la lecture.",
+            accessDenied: "Spotify refuse de lire le lecteur de l’hôte : la position de lecture est inconnue.",
+            accessDeniedHost:
+                "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",
+            unreadable: "Spotify ne répond pas pour le lecteur de l’hôte : la position de lecture est inconnue.",
+            openSettings: "Réglages Spotify",
+        },
         paused: "Lecture en pause",
         unsynced: "Ces paroles ne sont pas synchronisées : faites-les défiler à la main.",
         follow: "Suivre la lecture",
@@ -137,6 +153,25 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         lightsDisableForAll: "Couper les effets lumineux (pour tous)",
         lightsEnableForAll: "Rallumer les effets lumineux (pour tous)",
         lightsOffByHost: "Effets lumineux coupés par l’hôte",
+        jamStatus: {
+            positionUnavailable:
+                "Position de lecture indisponible : la Jam s’est sûrement arrêtée sur Spotify. Collez le lien d’une nouvelle Jam.",
+            noPlayback: "Spotify ne renvoie plus de lecture pour cette Jam.",
+            noPlaybackGuest: "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin.",
+            noPlayer: "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour qu’il voie votre lecture.",
+            authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",
+            accessDenied:
+                "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",
+            rateLimited:
+                "Spotify demande d’attendre avant de relire votre lecteur : WorkAdventure réessaie après le délai demandé.",
+            readFailedStatus: "WorkAdventure n’arrive pas à lire votre lecteur Spotify (réponse {status}).",
+            readFailedUnreadable: "WorkAdventure n’arrive pas à lire votre lecteur Spotify : sa réponse est illisible.",
+            readFailedNetwork: "WorkAdventure n’arrive pas à joindre Spotify pour lire votre lecteur.",
+            openSettings: "Réglages Spotify",
+            replace: "Coller un nouveau lien de Jam",
+            replaceSubmit: "Remplacer le lien",
+            relinked: "L’hôte a partagé un nouveau lien : rejoignez la Jam à nouveau.",
+        },
         playbackEmpty: "Aucun morceau sélectionné",
         playbackDisconnected: "Connexion à Spotify… Ouvrez Spotify avec l’extension WorkAdventure Spicetify.",
         queueEmpty: "Rien dans la file pour l'instant.",

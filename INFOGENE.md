@@ -303,6 +303,60 @@ pause/reprise/recherche, file réordonnée et saut, lecture manuelle/reprise,
 réglage du délai, autre version et morceau introuvable, fermeture et saisie sans
 déplacement de l'avatar. Aucun compte fournisseur, dépendance ou protobuf ajouté.
 
+## Jam Spotify terminée ou sans lecture
+
+L'API Web Spotify ne connaît pas les Jams : aucune route ne dit qu'une Jam a pris fin
+ni qu'un lien d'invitation a expiré, et la page d'aide « Jam » de Spotify ne précise
+ni durée ni expiration. WorkAdventure ne voit donc que le lecteur de l'hôte, lu par
+la boucle existante du karaoké (Web API toutes les 5 s, `Retry-After` respecté, 403
+relu après 5 min ; aucune requête ajoutée). Le navigateur de l'hôte joint un statut
+facultatif à l'état du karaoké (événement de salle existant, ignoré par les anciens
+fronts) :
+
+- **rien en lecture** : réponse 204 (« Playback not available or active ») ou app
+  Spotify du desktop sans morceau ;
+- **lecteur non lu** : ni lecteur desktop ni compte Spotify lié, le morceau ne vient
+  que de la présence, sans position (le cas « position inconnue » vu en beta) ;
+- **autorisation expirée** : Spotify a refusé le refresh token, ce qui a délié le
+  compte (non retenu après un rechargement : il se lit alors « non lié ») ;
+- **accès refusé** : 403, compte absent de l'app Spotify du serveur.
+- **lecture limitée** : 429, Spotify demande d'attendre (`Retry-After`) ;
+- **lecture impossible** : réponse non OK (code affiché à l'hôte), réponse illisible,
+  ou Spotify injoignable (réseau, délai, demande de jeton).
+
+Un compte lié dont le lecteur n'est pas lu tombait auparavant, sans rien dire, sur
+« position inconnue » (le morceau venait alors de la présence, par exemple de l'app
+Spotify du Mac via le client desktop, sans position) : chacune de ces raisons est
+désormais nommée à l'hôte. Une demande de jeton à Spotify est abandonnée après 10 s :
+avant, un rafraîchissement sans réponse suspendait toutes les lectures du lecteur
+(karaoké et présence) jusqu'au rechargement.
+
+Dès que sa position de lecture manque, quelle qu'en soit la raison (y compris « lecteur
+non lu » ou une raison inconnue), l'hôte d'une Jam Spotify voit sur la carte et dans le
+karaoké « Position de lecture indisponible : la Jam s'est sûrement arrêtée sur Spotify »
+avec l'action **Coller un nouveau lien de Jam** (décision de l'utilisateur : chez lui, une
+Jam expirée laissait la musique jouer et le compte lié). Le détail de la raison suit,
+un bouton **Réglages Spotify** quand il faut relier le compte, et **Coller un nouveau
+lien de Jam** à tout moment : le lien remplace l'ancien sans fermer le salon (titre,
+lumières, zone conservés, même hors de la zone). L'audio relayé continue : le Space
+`jam:…` est nommé d'après la salle, la zone et l'hôte, jamais d'après le lien ; ni la
+capture de l'hôte ni l'écoute des auditeurs ne s'arrêtent, à l'expiration comme au
+remplacement du lien. Les auditeurs voient
+seulement « rien en lecture » ; ceux qui avaient rejoint par l'ancien lien sont
+invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké remplace
+« position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile
+pour l'hôte (réglages Spotify ou tiroir des Jams), et reste ouvert sur le nouveau lien.
+
+Limites : si le Spotify de l'hôte continue de jouer après la fin de la Jam, rien ne
+le signale (seul le bouton de nouveau lien reste utile). Un hôte qui n'a jamais lié
+Spotify, hors client desktop, voit en permanence la mention « lecteur non lu ». Un
+invité arrivé après le début d'un 204 ne voit l'avertissement qu'au prochain
+changement d'état de l'hôte, ou en ouvrant le karaoké.
+
+Recette : Jam expirée réelle (statut observé chez l'hôte : 204 ou lecture continue),
+navigateur sans Spotify lié, refresh refusé, collage d'un nouveau lien hors de la
+zone avec un auditeur audio et un invité Spotify, karaoké ouvert des deux côtés.
+
 ## Compteur des Jams et écoute audio
 
 « Écouter l'audio » suffit pour apparaître parmi les participants d'un Jam Spotify :

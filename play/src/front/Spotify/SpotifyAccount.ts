@@ -11,6 +11,11 @@ const EXPIRY_MARGIN_MS = 60_000;
 const POPUP_FEATURES = "popup,width=480,height=720";
 /** The callback page posts its message right before closing: give it time to arrive before calling it a cancel. */
 const CLOSED_POPUP_GRACE_MS = 1_000;
+/**
+ * A token request Spotify never answers is given up: a refresh pending forever would hold every later call to
+ * getAccessToken(), and with it the reading of the player, until the page is reloaded.
+ */
+const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
 const StoredTokens = z.object({
     // Tokens can only be refreshed with the client ID that issued them.
@@ -62,10 +67,17 @@ export class SpotifyAccount {
     private readonly _accessDenied = writable(false);
     /** Linked, but Spotify refuses to answer for this account: it is not registered in the Spotify app. */
     public readonly accessDenied: Readable<boolean> = this._accessDenied;
+    private readonly _authorizationExpired = writable(false);
+    /**
+     * Spotify rejected the refresh token (revoked or expired), which unlinked the account: the user must link it again.
+     * Not stored: after a reload the account simply reads as not linked.
+     */
+    public readonly authorizationExpired: Readable<boolean> = this._authorizationExpired;
 
     constructor(
         private readonly storage: Pick<Storage, "getItem" | "setItem" | "removeItem">,
         private readonly fetchFn: typeof fetch,
+        private readonly tokenRequestTimeoutMs = TOKEN_REQUEST_TIMEOUT_MS,
     ) {
         this.tokens = this.readTokens();
         this._linked.set(this.tokens !== undefined);
@@ -100,6 +112,7 @@ export class SpotifyAccount {
                 }),
             );
             this._accessDenied.set(false);
+            this._authorizationExpired.set(false);
         } catch (error) {
             popup.close();
             if (error instanceof SpotifyLinkError) {
@@ -112,6 +125,7 @@ export class SpotifyAccount {
     public unlink(): void {
         this.saveTokens(undefined);
         this._accessDenied.set(false);
+        this._authorizationExpired.set(false);
     }
 
     public reportAccessDenied(): void {
@@ -159,6 +173,7 @@ export class SpotifyAccount {
         } catch (error) {
             if (error instanceof SpotifyTokenRejectedError) {
                 this.unlink();
+                this._authorizationExpired.set(true);
                 return undefined;
             }
             throw error;
@@ -174,6 +189,7 @@ export class SpotifyAccount {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: new URLSearchParams({ client_id: clientId, ...params }).toString(),
+            signal: AbortSignal.timeout(this.tokenRequestTimeoutMs),
         });
         if (response.status === 400 || response.status === 401) {
             throw new SpotifyTokenRejectedError(`Spotify rejected the token request (${response.status})`);

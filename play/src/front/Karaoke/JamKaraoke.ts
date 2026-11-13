@@ -21,12 +21,50 @@ const RoomIdentity = z.object({
     propertyId: z.string().min(1).max(200),
     jamKey: z.string().min(1).max(2048),
 });
+/**
+ * Why the host's playback is missing, when the host's browser knows it. Spotify's Web API knows nothing of Jams: an
+ * ended Jam is never seen as such, only a player with nothing to play.
+ * - `noPlayback`: the host's Spotify plays nothing (Web API 204 "Playback not available or active", or the desktop
+ *   Spotify app reports no track).
+ * - `noPlayer`: WorkAdventure reads no player of the host (no desktop player, Spotify not linked): the track comes
+ *   from their presence only, without a position.
+ * - `authorizationExpired`: Spotify rejected the host's refresh token, which unlinked their account.
+ * - `accessDenied`: Spotify refuses to read the host's player (403: account not registered in the Spotify app).
+ * - `rateLimited`: Spotify asks to wait (429) before the host's player is read again.
+ * - `readFailed`: the host's player could not be read (network error, unexpected status or unreadable answer).
+ */
+export const KaraokePlaybackIssueSchema = z.enum([
+    "noPlayback",
+    "noPlayer",
+    "authorizationExpired",
+    "accessDenied",
+    "rateLimited",
+    "readFailed",
+]);
+export type KaraokePlaybackIssue = z.infer<typeof KaraokePlaybackIssueSchema>;
+
+/** The host's text for a failed read: its HTTP status, an unreadable answer (200), or Spotify out of reach (0). */
+export function readFailedText(
+    texts: {
+        readFailedStatus: (params: { status: number }) => string;
+        readFailedUnreadable: () => string;
+        readFailedNetwork: () => string;
+    },
+    status: number | undefined,
+): string {
+    if (!status) return texts.readFailedNetwork();
+    return status === 200 ? texts.readFailedUnreadable() : texts.readFailedStatus({ status });
+}
 const PlaybackState = z.object({
     track: LyricsTrackSchema.nullable(),
     next: LyricsTrackSchema.nullable(),
     playing: z.boolean(),
     positionMs: z.number().finite().nonnegative().max(86_400_000),
     positionAt: z.number().finite().nonnegative(),
+    // Optional: older hosts do not send it, older guests drop it.
+    issue: KaraokePlaybackIssueSchema.optional().catch(undefined),
+    /** With `readFailed`: the HTTP status Spotify answered, 0 when it could not be reached. */
+    issueStatus: z.number().int().min(0).max(999).optional().catch(undefined),
 });
 const StateMessage = RoomIdentity.merge(PlaybackState);
 export type KaraokePlayback = z.infer<typeof PlaybackState>;
@@ -63,7 +101,8 @@ export interface JamKaraokeContext extends Pick<
 > {
     desktop?: Pick<NonNullable<HomeJamContext["desktop"]>, "watchSpotifyPlayback" | "watchSpotifyQueue">;
     sharingEnabled?: Readable<boolean>;
-    account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied">;
+    account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied"> &
+        Partial<Pick<SpotifyAccount, "authorizationExpired">>;
     /** Where the open karaoke is remembered across a reload of the page (the tab's session storage by default). */
     memory?: KaraokeMemory;
 }
@@ -123,6 +162,10 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     let spotifyBlockedUntil = 0;
     let hasPlayer = false;
     let desktopPlaying = false;
+    // Why the last read of the host's player through the Web API failed, until one succeeds.
+    let readIssue: { issue: "accessDenied" | "rateLimited" | "readFailed"; status?: number } | undefined;
+    // The desktop Spotify app reported no track: nothing plays until it reports one again.
+    let desktopIdle = false;
     let lastPublished: KaraokePlayback | undefined;
     let hostGeneration = 0;
     let lastRequest = "";
@@ -155,6 +198,17 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     const setQueue = (queue: { tracks: LyricsTrack[]; upcoming: LyricsTrack[] }): void =>
         setNext(queue.tracks[0] ?? queue.upcoming[0]);
 
+    /** Why no player of the host is read, the track coming from their presence only. */
+    const unreadPlayerIssue = (): KaraokePlaybackIssue | undefined => {
+        if (stopPlayback && desktopIdle) return "noPlayback";
+        if (readIssue) return readIssue.issue;
+        if (stopPlayback) return undefined;
+        if (context.account && get(context.account.linked)) return undefined;
+        return context.account?.authorizationExpired && get(context.account.authorizationExpired)
+            ? "authorizationExpired"
+            : "noPlayer";
+    };
+
     const publishListening = (): void => {
         if (!own || hasPlayer) return;
         const host = get(context.listeningByUserUuid).get(own.jam.hostUuid);
@@ -170,7 +224,20 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             playing: parsed.success,
             positionMs: host?.positionMs ?? 0,
             positionAt: host?.positionAt ?? 0,
+            issue: unreadPlayerIssue(),
+            issueStatus: readIssue?.status,
         });
+    };
+
+    /** A read of the host's player failed: say why, keeping the last position read while it still moves on. */
+    const failRead = (issue: "accessDenied" | "rateLimited" | "readFailed", status?: number): void => {
+        readIssue = { issue, status };
+        if (hasPlayer && issue !== "accessDenied") {
+            publish({ ...state, issue, issueStatus: status });
+        } else {
+            hasPlayer = false;
+            publishListening();
+        }
     };
 
     const stopHost = (): void => {
@@ -187,6 +254,8 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         spotifyBlockedUntil = 0;
         hasPlayer = false;
         desktopPlaying = false;
+        readIssue = undefined;
+        desktopIdle = false;
         lastPublished = undefined;
         state = { track: null, next: null, playing: false, positionMs: 0, positionAt: 0 };
     };
@@ -204,7 +273,10 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             return 5000;
         if (endpoint === "queue" && (stopQueue || (own && isHomeJam(own.jam) && context.desktop?.watchSpotifyQueue)))
             return 5000;
-        if (spotifyBlockedUntil > now()) return Math.max(5000, spotifyBlockedUntil - now());
+        if (spotifyBlockedUntil > now()) {
+            if (endpoint === "currently-playing") failRead("rateLimited");
+            return Math.max(5000, spotifyBlockedUntil - now());
+        }
         const response = await fetchSpotifyKaraoke(token, endpoint, controller.signal);
         if (controller.signal.aborted || (context.account && !get(context.account.linked))) return 5000;
         if (response.status === 401) {
@@ -213,24 +285,45 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         }
         if (response.status === 403) {
             // The queue needs an additional scope: its refusal must not suspend allowed playback reads.
-            if (endpoint === "currently-playing") context.account?.reportAccessDenied();
+            if (endpoint === "currently-playing") {
+                context.account?.reportAccessDenied();
+                failRead("accessDenied");
+            }
             return 300_000;
         }
         if (response.status === 429) {
             const delayMs = Math.max(5000, Number(response.headers.get("Retry-After")) * 1000 || 60_000);
-            return blockSpotify(delayMs);
+            const blockedMs = blockSpotify(delayMs);
+            if (endpoint === "currently-playing") failRead("rateLimited");
+            return blockedMs;
+        }
+        if (endpoint === "currently-playing" && !response.ok) {
+            failRead("readFailed", response.status);
+            return 5000;
         }
         if (endpoint === "currently-playing" && response.status === 204 && !desktopPlaying) {
+            readIssue = undefined;
             hasPlayer = true;
-            publish({ ...state, track: null, playing: false, positionMs: 0, positionAt: now() });
+            publish({
+                ...state,
+                track: null,
+                playing: false,
+                positionMs: 0,
+                positionAt: now(),
+                issue: "noPlayback",
+                issueStatus: undefined,
+            });
         } else if (response.ok) {
             const json: unknown = await response.json();
             if (controller.signal.aborted) return 5000;
             if (endpoint === "currently-playing" && !desktopPlaying) {
                 const playback = parseKaraokePlayback(json);
-                if (playback) {
+                if (!playback) {
+                    failRead("readFailed", response.status);
+                } else {
+                    readIssue = undefined;
                     hasPlayer = true;
-                    publish({ ...state, ...playback, positionAt: now() });
+                    publish({ ...state, ...playback, positionAt: now(), issue: undefined, issueStatus: undefined });
                 }
             } else if (endpoint === "queue") {
                 setNext(parseKaraokeQueue(json));
@@ -264,7 +357,11 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             return playbackDelay;
         };
         const delayMs = await refresh().catch((error: unknown) => {
-            if (!controller.signal.aborted) logger("Playback refresh failed", { error });
+            if (!controller.signal.aborted) {
+                logger("Playback refresh failed", { error });
+                // Spotify could not be reached (network, timeout, token request): status 0.
+                failRead("readFailed", 0);
+            }
             return 5000;
         });
         if (!controller.signal.aborted) {
@@ -279,9 +376,18 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         stopPlayback = context.desktop?.watchSpotifyPlayback?.((playback) => {
             if (!own || generation !== hostGeneration) return;
             desktopPlaying = playback?.track !== null && playback?.track !== undefined;
+            desktopIdle = !playback;
             if (!playback) {
                 hasPlayer = false;
-                publish({ ...state, track: null, playing: false, positionMs: 0, positionAt: now() });
+                publish({
+                    ...state,
+                    track: null,
+                    playing: false,
+                    positionMs: 0,
+                    positionAt: now(),
+                    issue: "noPlayback",
+                    issueStatus: undefined,
+                });
                 return;
             }
             const parsed = LyricsTrackSchema.safeParse({
@@ -299,6 +405,8 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
                 playing: playback.playing,
                 positionMs: playback.positionMs,
                 positionAt: now(),
+                issue: undefined,
+                issueStatus: undefined,
             });
         });
         if (own && !isHomeJam(own.jam)) {
@@ -362,12 +470,17 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         );
     });
     const unsubscribeListening = context.listeningByUserUuid.subscribe(publishListening);
-    const unsubscribeAccount = context.account?.linked.subscribe((linked) => {
-        if (!linked && !desktopPlaying) {
-            hasPlayer = false;
-            publishListening();
-        }
-    });
+    const unsubscribeAccount = context.account
+        ? derived(
+              [context.account.linked, context.account.authorizationExpired ?? readable(false)],
+              (values) => values,
+          ).subscribe(([linked]) => {
+              if (!linked && !desktopPlaying) {
+                  hasPlayer = false;
+                  publishListening();
+              }
+          })
+        : undefined;
     const unsubscribeQueues = jukeboxQueuesStore.subscribe((queues) => {
         if (own && isHomeJam(own.jam)) {
             const queue = queues.get(own.jam.hostUuid);
@@ -397,6 +510,22 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
             }
             pending = undefined;
             const room = rooms.find((room) => !isLiveJam(room.jam) && sameRoom(room, identity(selected)));
+            // A Spotify Jam is told by its invite link: a host pasting a new one keeps the same room for its guests.
+            const successor = !room
+                ? rooms.find(
+                      (candidate) =>
+                          !isLiveJam(candidate.jam) &&
+                          !isHomeJam(candidate.jam) &&
+                          !isHomeJam(selected.jam) &&
+                          candidate.jam.hostUuid === selected.jam.hostUuid &&
+                          candidate.zone.areaId === selected.zone.areaId &&
+                          candidate.zone.propertyId === selected.zone.propertyId,
+                  )
+                : undefined;
+            if (successor) {
+                selectedKaraokeRoomStore.set(successor);
+                return;
+            }
             if (!room) {
                 // Gone for now (its host reconnects, the server restarts): wait for it a moment, remembered.
                 pending = identity(selected);
