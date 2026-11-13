@@ -8,6 +8,7 @@ import { jamMusicCapture, type SharedJamMusic } from "../../../ListeningZone/Jam
 import { jamMusicStreamsStore } from "../../../ListeningZone/JamMusicStore";
 import {
     allJamRoomsStore,
+    isLocalUser,
     jamParticipantsCountStore,
     type JamRoom,
 } from "../../../ListeningZone/ListeningZoneController";
@@ -25,6 +26,7 @@ import {
     jamOfSpaces,
     lampJamsOf,
     lampLightZone,
+    liveSharesAudio,
     resolveLampJam,
     toLampZone,
     type LampJam,
@@ -287,6 +289,21 @@ export class LampManager {
             : undefined;
     }
 
+    /** Whether a Live shares its audio, as far as this client sees it (see liveSharesAudio). */
+    private liveSharesAudio = (room: JamRoom): boolean => {
+        const spaceName = this.spaceNameOf({ areaId: room.zone.areaId, hostUuid: room.jam.hostUuid });
+        return (
+            spaceName !== undefined &&
+            liveSharesAudio({
+                spaceName,
+                hostIsLocal: isLocalUser(room.jam.hostUuid),
+                sharedSpace: this.sharedMusic?.spaceName,
+                listenedSpace: this.listeningSpace,
+                receivedSpaces: this.receivedStreams,
+            })
+        );
+    };
+
     /** The Jam the user hears, as a choice: the one they listen to, or, for a host, the one whose music they share. */
     private listenedJam(): LampJamChoice | undefined {
         const joined = this.joined;
@@ -392,7 +409,7 @@ export class LampManager {
 
         // Which Jam each lamp follows: worked out the same way by every client, from what everyone shares.
         const listeningZones = this.listeningZones(areas);
-        const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants);
+        const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
@@ -431,7 +448,7 @@ export class LampManager {
         }
         // The same rule as the lamps, from the middle of the floor: every client follows the same Jam.
         const listeningZones = this.listeningZones(this.areas());
-        const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants);
+        const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const floor of this.floors.values()) {
             const bounds = this.floorBounds(floor.entity);
