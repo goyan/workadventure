@@ -21,6 +21,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
+const { autoWeatherAt, slotStart } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
@@ -120,20 +121,49 @@ describe("weather rendering lifecycle", () => {
     it("changes graphics and sounds together at the shared server boundary", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Automatic };
+        // Find, on the real schedule, a rainy slot, a later snowy one, then the first dry slot after that.
+        const slot = 30 * 60 * 1000;
+        let t = Date.parse("2026-01-05T00:00:00Z");
+        const next = (weather: (typeof WeatherType)[keyof typeof WeatherType] | "dry"): number => {
+            while (
+                weather === "dry"
+                    ? autoWeatherAt(new Date(t)) === WeatherType.Snow
+                    : autoWeatherAt(new Date(t)) !== weather
+            ) {
+                t += slot;
+                if (t > Date.parse("2026-03-01T00:00:00Z")) throw new Error(`no ${weather} slot`);
+            }
+            return t;
+        };
+        const rainy = next(WeatherType.Rain);
+        const snowy = next(WeatherType.Snow);
+        const dry = next("dry");
+        expect(slotStart(new Date(dry)).getTime()).toBe(dry);
         manager = new WeatherManager(scene);
         manager.update(0, undefined);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Clear);
-        manager.update(40, new Date(1800000));
+        manager.update(40, new Date(rainy));
         expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
-        manager.update(80, new Date(5400000));
+        manager.update(80, new Date(snowy));
         expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Snow);
-        manager.update(120, new Date(7200000));
-        expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+        manager.update(120, new Date(dry));
+        expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(new Date(dry)));
+        expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Snow);
         expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Automatic);
         expect(ground.update.mock.lastCall?.[3]).toBe(true);
-        expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Clear);
+    });
+
+    it("hands the map's automatic settings to the schedule, the ground and the sounds", () => {
+        const { scene, wam } = fixture();
+        const auto = { frequency: "stormy" as const, include: [WeatherType.Fog] };
+        wam.settings = { weather: WeatherType.Automatic, weatherAuto: auto };
+        manager = new WeatherManager(scene);
+        const date = new Date("2026-01-12T07:00:00Z");
+        manager.update(0, date);
+        expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(date, auto));
+        expect(ground.update.mock.lastCall?.[6]).toBe(auto);
     });
 
     it("hides effects immediately for the personal preference and the editor, then restores them", () => {
@@ -160,7 +190,7 @@ describe("weather rendering lifecycle", () => {
         manager = new WeatherManager(scene);
         const date = new Date(456);
         manager.update(0, date);
-        expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, false, 123);
+        expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, false, 123, undefined);
     });
 
     it("keeps the map snow off the ground when a theme is chosen", () => {

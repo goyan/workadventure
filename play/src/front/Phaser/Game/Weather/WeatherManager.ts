@@ -58,7 +58,7 @@ export class WeatherManager {
         const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
         const configured = settings?.weather ?? WeatherType.Clear;
         const theme = this.options.seasonalTheme?.();
-        const weather = effectiveWeather(weatherAtTime(configured, serverDate), theme);
+        const weather = effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), theme);
         this.sounds.update(weather, serverDate, this.editing, night);
         const enabled = this.weatherShown && !this.editing;
         this.snowGround.update(
@@ -70,6 +70,7 @@ export class WeatherManager {
             !this.editing && theme !== SeasonalTheme.Christmas,
             theme === SeasonalTheme.Autumn,
             settings?.weatherStartedAt,
+            settings?.weatherAuto,
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day.

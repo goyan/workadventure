@@ -59,10 +59,20 @@ export function slotStart(date: Date): Date {
 
 /** Automatic weather at `date`, identical for every client with the same settings. */
 export function autoWeatherAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER): WeatherType {
-    if (!Number.isFinite(date.getTime())) return WeatherType.Clear;
+    const time = date.getTime();
+    if (!Number.isFinite(time)) return WeatherType.Clear;
+    const settings = normalise(auto);
+    // Called several times per frame: the weather is constant within a slot, so skip the Paris-time formatting.
+    const index = Math.floor(time / SLOT_MS);
+    const key = `${settings.frequency}|${settings.include.join(",")}`;
+    if (lastCall && lastCall.index === index && lastCall.key === key) return lastCall.weather;
     const { day, slot } = parisSlot(date);
-    return daySchedule(day, normalise(auto))[slot];
+    const weather = daySchedule(day, settings)[slot];
+    lastCall = { index, key, weather };
+    return weather;
 }
+
+let lastCall: { index: number; key: string; weather: WeatherType } | undefined;
 
 /**
  * Next weather changes after `date` (at most `count`), looking at the current Paris day and the next one.

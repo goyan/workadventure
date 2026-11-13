@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/svelte";
-import type { WeatherType } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, WeatherType } from "@workadventure/map-editor";
 import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
 import { FootstepSurfaces } from "../FootstepSurfaces";
 import type { GameScene } from "../GameScene";
@@ -70,10 +70,11 @@ export class SnowGround {
         enabled: boolean,
         autumnGround = false,
         startedAt?: number,
+        auto?: AutoWeatherSettings,
     ): void {
         // Snow on the map settles on the grass for everyone: it is weather, not a decor.
         this.clock = now;
-        const coverage = serverDate ? snowCoverage(configured, serverDate.getTime(), startedAt) : 0;
+        const coverage = serverDate ? snowCoverage(configured, serverDate.getTime(), startedAt, auto) : 0;
         if (!enabled || !serverDate || !this.ready) {
             this.lastDrawKey = "";
             if (this.canvas.visible) {

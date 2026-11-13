@@ -8,6 +8,7 @@ import {
     weatherParticles,
     weatherAtTime,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { autoWeatherAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
@@ -39,31 +40,48 @@ describe("world weather", () => {
 });
 
 describe("common automatic weather", () => {
-    it("replaces snowy phases with rain outside November through March", () => {
+    const halfHour = 30 * 60 * 1000;
+    it("replaces fixed snow with rain outside November through March, and never snows there in automatic", () => {
         for (const date of ["2026-07-01T01:30:00Z", "2026-04-01T01:30:00Z", "2026-10-01T01:30:00Z"]) {
-            const clock = new Date(date);
-            expect(weatherAtTime(WeatherType.Automatic, clock)).toBe(WeatherType.Rain);
-            expect(weatherAtTime(WeatherType.Snow, clock)).toBe(WeatherType.Rain);
+            expect(weatherAtTime(WeatherType.Snow, new Date(date))).toBe(WeatherType.Rain);
         }
-        expect(weatherAtTime(WeatherType.Automatic, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        expect(weatherAtTime(WeatherType.Snow, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        for (const month of ["2026-04", "2026-07", "2026-10"]) {
+            for (let t = Date.parse(`${month}-01T00:00:00Z`); t < Date.parse(`${month}-28T00:00:00Z`); t += halfHour) {
+                expect(weatherAtTime(WeatherType.Automatic, new Date(t))).not.toBe(WeatherType.Snow);
+            }
+        }
     });
 
-    it("changes exactly every thirty minutes and repeats after two hours", () => {
-        const halfHour = 30 * 60 * 1000;
-        expect(weatherAtTime(WeatherType.Automatic, new Date(halfHour - 1))).toBe(WeatherType.Clear);
-        for (const [phase, weather] of [
-            WeatherType.Clear,
-            WeatherType.Rain,
-            WeatherType.Storm,
-            WeatherType.Snow,
-            WeatherType.Clear,
-        ].entries()) {
-            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour))).toBe(weather);
-            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour + halfHour - 1))).toBe(weather);
+    it("follows the seasonal schedule in automatic", () => {
+        const auto = { frequency: "stormy" as const, include: [WeatherType.Rain, WeatherType.Fog] };
+        for (const date of [
+            "2026-01-05T08:10:00Z",
+            "2026-04-20T17:45:00Z",
+            "2026-07-14T12:00:00Z",
+            "2026-11-08T13:31:00Z",
+        ]) {
+            const clock = new Date(date);
+            expect(weatherAtTime(WeatherType.Automatic, clock)).toBe(autoWeatherAt(clock));
+            expect(weatherAtTime(WeatherType.Automatic, clock, auto)).toBe(autoWeatherAt(clock, auto));
         }
     });
-    it("keeps manual choices and waits for a valid server clock", () => {
+
+    it("changes only on thirty-minute boundaries", () => {
+        const first = Date.parse("2026-01-12T00:00:00Z");
+        for (let slot = 0; slot < 48; slot++) {
+            const weather = weatherAtTime(WeatherType.Automatic, new Date(first + slot * halfHour));
+            expect(weatherAtTime(WeatherType.Automatic, new Date(first + slot * halfHour + halfHour - 1))).toBe(
+                weather,
+            );
+        }
+    });
+
+    it("keeps manual choices, fog all day, and waits for a valid server clock", () => {
         expect(weatherAtTime(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
+        for (let hour = 0; hour < 24; hour++) {
+            expect(weatherAtTime(WeatherType.Fog, new Date(Date.UTC(2026, 6, 1, hour)))).toBe(WeatherType.Fog);
+        }
         expect(weatherAtTime(WeatherType.Automatic, undefined)).toBe(WeatherType.Clear);
         expect(weatherAtTime(WeatherType.Automatic, new Date(NaN))).toBe(WeatherType.Clear);
     });

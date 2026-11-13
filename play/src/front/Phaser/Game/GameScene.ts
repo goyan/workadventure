@@ -2340,8 +2340,12 @@ export class GameScene extends DirtyScene {
     }
 
     public getDesktopWeather(): WeatherType {
-        const configured = this.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(weatherAtTime(configured, this.nightManager?.serverDate()), this.getSeasonalTheme());
+        const settings = this.getGameMap().getWamFile()?.getWam().settings;
+        const configured = settings?.weather ?? WeatherType.Clear;
+        return effectiveWeather(
+            weatherAtTime(configured, this.nightManager?.serverDate(), settings?.weatherAuto),
+            this.getSeasonalTheme(),
+        );
     }
 
     public getGameMap(): GameMap {

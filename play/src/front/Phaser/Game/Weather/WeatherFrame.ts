@@ -1,7 +1,9 @@
 import { WeatherType } from "@workadventure/map-editor";
+import type { AutoWeatherSettings } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import { hash01, leafColor } from "../Autumn/LeafPalette";
+import { autoWeatherAt } from "./WeatherSchedule";
 
 export interface WeatherView {
     x: number;
@@ -72,18 +74,19 @@ export function stormGlow(epoch: number): number {
     return phase < 1200 ? Math.sin((phase / 1200) * Math.PI) * 0.12 : 0;
 }
 
-/** A common thirty-minute phase survives reconnects and server restarts. */
-export function weatherAtTime(configured: WeatherType, serverDate: Date | undefined): WeatherType {
+/** The seasonal schedule is shared by every client: same Paris date and settings, same weather. */
+export function weatherAtTime(
+    configured: WeatherType,
+    serverDate: Date | undefined,
+    auto?: AutoWeatherSettings,
+): WeatherType {
     if (configured === WeatherType.Snow) {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
         return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
     }
     if (configured !== WeatherType.Automatic) return configured;
     if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
-    const cycle = [WeatherType.Clear, WeatherType.Rain, WeatherType.Storm, WeatherType.Snow];
-    const phase = Math.floor(serverDate.getTime() / (30 * 60 * 1000));
-    const weather = cycle[((phase % cycle.length) + cycle.length) % cycle.length] ?? WeatherType.Clear;
-    return weather === WeatherType.Snow && !snowPossibleAt(serverDate) ? WeatherType.Rain : weather;
+    return autoWeatherAt(serverDate, auto);
 }
 
 /** Weather only falls outdoors: particles above an indoor cell are not drawn. No grid means no filtering. */

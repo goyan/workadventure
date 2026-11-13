@@ -271,4 +271,18 @@ describe("seasonal weather schedule", () => {
         }
         expect(autoWeatherChanges(new Date(START), { frequency: "normal", include: [] }, 3)).toEqual([]);
     });
+
+    it("answers repeated calls in a slot with the same value and no recomputation", () => {
+        const auto: AutoWeatherSettings = { frequency: "calm", include: [WeatherType.Rain, WeatherType.Fog] };
+        const slot = Date.parse("2031-03-04T10:00:00Z");
+        const expected = autoWeatherAt(new Date(slot), auto);
+        const before = scheduleComputations();
+        for (let offset = 0; offset < SLOT_MS; offset += 60_000) {
+            expect(autoWeatherAt(new Date(slot + offset), auto)).toBe(expected);
+        }
+        expect(scheduleComputations() - before).toBeLessThanOrEqual(0);
+        // A different setting in the same slot is not served from the memo.
+        expect(autoWeatherAt(new Date(slot), { frequency: "normal", include: [] })).toBe(WeatherType.Clear);
+        expect(autoWeatherAt(new Date(slot), auto)).toBe(expected);
+    });
 });
