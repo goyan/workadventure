@@ -1660,3 +1660,11 @@ Le choix d'arrière-plan (flou ou image) est gardé dans le navigateur par le co
 quand le fond ne pouvait pas s'appliquer (échec du moteur, par exemple pendant un redéploiement) ou quand le monde ne
 proposait pas l'image au chargement. `backgroundConfigStore.disableForSession()` le coupe désormais pour la page seule :
 le choix gardé est retenté au chargement suivant. Choisir « aucun » l'efface toujours (`reset`).
+
+## Écran « Mon avatar » plus rapide
+
+La liste des wokas était redemandée au serveur à chaque ouverture de l'écran de choix (spinner à chaque fois) et chaque
+vignette se redessinait 60 fois par seconde. `gameManager.loadWokaData()` garde désormais la liste de chaque salle pour
+la page (`WokaListCache` : une requête par salle, copie par appelant, échec oublié pour que « Réessayer » redemande) ;
+l'écran de choix l'utilise et le menu profil la précharge à son ouverture. `WokaImage` ne redessine plus qu'au
+chargement d'une image ou au changement de ce qu'elle montre (direction, taille, maillot, véhicule).

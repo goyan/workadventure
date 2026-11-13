@@ -42,6 +42,7 @@
     $effect(() => {
         if (vehicle === undefined || vehicle === Vehicle.None) return;
         vehicleCanvas = createVehicleSheet(vehicleColors, vehicle);
+        scheduleDraw();
         return () => {
             vehicleCanvas = undefined;
         };
@@ -54,7 +55,9 @@
     let images: Record<string, HTMLImageElement> = {};
     let frame: number = 0;
 
-    let raf: number;
+    // A thumbnail is a still image: it is drawn again only when what it shows changes, not on every frame (a woka
+    // screen holds dozens of thumbnails).
+    let raf = 0;
     let outfitCanvas: HTMLCanvasElement;
     let outfitContext: CanvasRenderingContext2D | null = null;
     let swimwearAssets = $state<SwimwearAssets | undefined>();
@@ -89,10 +92,20 @@
                 const img = new window.Image();
                 // Load image with CORS headers to populate the cache with CORS headers
                 img.crossOrigin = "user-credentials";
+                img.addEventListener("load", scheduleDraw, { once: true });
                 img.src = url;
                 images[part] = img;
             }
         }
+        scheduleDraw();
+    }
+
+    function scheduleDraw() {
+        if (raf !== 0 || !ctx) return;
+        raf = requestAnimationFrame(() => {
+            raf = 0;
+            draw();
+        });
     }
 
     function draw() {
@@ -161,15 +174,17 @@
         }
     }
 
-    function animate() {
-        draw();
-        raf = requestAnimationFrame(animate);
-    }
-
     $effect(() => {
         if (selectedTextures) {
             loadImages();
         }
+    });
+
+    $effect(() => {
+        // Reads everything else the drawing uses, so that a change redraws the thumbnail; selected textures and the
+        // vehicle sheet schedule their own redraw.
+        const drawInputs = [direction, canvasSize, swimwear, swimwearColor, swimwearAssets];
+        if (drawInputs.length > 0) scheduleDraw();
     });
 
     onMount(() => {
@@ -182,10 +197,10 @@
         outfitContext = outfitCanvas.getContext("2d");
         if (outfitContext) outfitContext.imageSmoothingEnabled = false;
         loadImages();
-        animate();
     });
     onDestroy(() => {
         cancelAnimationFrame(raf);
+        for (const img of Object.values(images)) img.removeEventListener("load", scheduleDraw);
     });
 </script>
 
