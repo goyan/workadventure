@@ -51,6 +51,11 @@ const menu: DeepPartial<Translation["menu"]> = {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
         },
+        mapWeather: {
+            title: "Météo de la carte",
+            description:
+                "Ce que tout le monde voit sur cette carte. Chacun peut la masquer avec « Afficher la météo » ci-dessus.",
+        },
         seasonal: {
             label: "Thème saisonnier",
             auto: "Auto",

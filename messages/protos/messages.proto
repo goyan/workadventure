@@ -381,6 +381,9 @@ message UpdateWAMSettingsMessage {
 message UpdateWeatherSettingMessage {
   string weather = 1;
   optional double startedAt = 2;
+  // Automatic weather settings (AutoWeather in libs/map-editor). Absent from older clients.
+  optional string autoFrequency = 3;
+  repeated string autoInclude = 4;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in

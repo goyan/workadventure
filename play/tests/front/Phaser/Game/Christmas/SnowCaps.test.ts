@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mockDeep } from "vitest-mock-extended";
+import { mockDeep, type DeepMockProxy } from "vitest-mock-extended";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { SnowCaps, type SnowEntity } from "../../../../../src/front/Phaser/Game/Christmas/SnowCaps";
 
@@ -114,5 +114,18 @@ describe("SnowCaps", () => {
         );
         expect(scene.add.image.mock.calls).toHaveLength(0);
         expect(readPixels).not.toHaveBeenCalled();
+    });
+
+    it("fades its caps and frost, and gives new ones the current alpha", () => {
+        const { scene, caps } = setup();
+        caps.rebuild([entity(0, 0)], grid);
+        const first = scene.add.image.mock.results[0].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        caps.setAlpha(0.4);
+        expect(first.setAlpha.mock.lastCall).toEqual([0.4]);
+        caps.rebuild([entity(32, 0), entity(0, 0, "Carte Sols")], grid);
+        const cap = scene.add.image.mock.results[1].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        const frost = scene.add.rectangle.mock.results[0].value as DeepMockProxy<Phaser.GameObjects.Rectangle>;
+        expect(cap.setAlpha.mock.lastCall).toEqual([0.4]);
+        expect(frost.setAlpha.mock.lastCall).toEqual([0.4]);
     });
 });

@@ -266,6 +266,7 @@ import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
+import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
 import { EmoteManager } from "./EmoteManager";
@@ -437,7 +438,7 @@ export class GameScene extends DirtyScene {
     private listeningUserUuids = new Set<string>();
     private localVolumeStoreUnsubscriber: Unsubscriber | undefined;
     private unsubscribers: Unsubscriber[] = [];
-    /** Whether the map snow whitens the trees for this person: read once per change, not at every image. */
+    /** Whether the map snow shows for this person (trees, Christmas decor): read once per change, not at every image. */
     private mapSnowShown = true;
     private storesSubscribed = false;
     private entityPermissions: EntityPermissions | undefined;
@@ -2339,9 +2340,24 @@ export class GameScene extends DirtyScene {
         return (this.nightManager?.isNight() ?? false) && !this.mapEditorModeManager?.isActive();
     }
 
+    /** Server (Paris) time shared by every client, undefined until the clock is synchronised. */
+    public getServerDate(): Date | undefined {
+        return this.nightManager?.serverDate();
+    }
+
     public getDesktopWeather(): WeatherType {
-        const configured = this.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(weatherAtTime(configured, this.nightManager?.serverDate()), this.getSeasonalTheme());
+        const settings = this.getGameMap().getWamFile()?.getWam().settings;
+        const configured = settings?.weather ?? WeatherType.Clear;
+        return effectiveWeather(
+            weatherAtTime(configured, this.nightManager?.serverDate(), settings?.weatherAuto),
+            this.getSeasonalTheme(),
+        );
+    }
+
+    /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */
+    public getMapSnowCoverage(): number {
+        const settings = this.getGameMap().getWamFile()?.getWam().settings;
+        return mapSnowCoverage(this.mapSnowShown, settings, this.nightManager?.serverDate());
     }
 
     public getGameMap(): GameMap {
@@ -2963,6 +2979,7 @@ export class GameScene extends DirtyScene {
                     entities: () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
                     markDirty: () => this.markDirty(),
                     serverDate: () => this.nightManager?.serverDate(),
+                    mapSnowCoverage: () => this.getMapSnowCoverage(),
                 });
                 // Same: one event subscription and one timer at a time.
                 this._knockManager?.destroy();

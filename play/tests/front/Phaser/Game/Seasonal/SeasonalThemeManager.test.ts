@@ -17,9 +17,11 @@ const events: string[] = [];
 
 function fakeDecor(theme: Theme) {
     return {
+        theme,
         redrawGround: vi.fn(() => events.push(`${theme}:ground`)),
         rebuildObjects: vi.fn(() => events.push(`${theme}:objects`)),
         update: vi.fn((_time: number, _walkers: unknown[]) => false),
+        setAlpha: vi.fn((_alpha: number) => undefined),
         setVisible: vi.fn((visible: boolean) => events.push(`${theme}:visible:${visible}`)),
         destroy: vi.fn(() => events.push(`${theme}:destroy`)),
     };
@@ -27,20 +29,24 @@ function fakeDecor(theme: Theme) {
 
 let manager: InstanceType<typeof SeasonalThemeManager> | undefined;
 let decors: ReturnType<typeof fakeDecor>[] = [];
+let markDirty = vi.fn();
 
 function setup(
     options: {
         serverDate?: () => Date | undefined;
         version?: () => number;
         entities?: () => { visible: boolean; texture?: { key: string }; getPrefab?: () => { seasonal?: unknown } }[];
+        mapSnowCoverage?: () => number;
     } = {},
 ) {
+    markDirty = vi.fn();
     manager = new SeasonalThemeManager(mockDeep<Phaser.Scene>(), {
         outdoorGrid: () => grid,
         outdoorVersion: options.version ?? (() => 1),
         entities: (options.entities ?? (() => [])) as never,
-        markDirty: vi.fn(),
+        markDirty,
         serverDate: options.serverDate ?? (() => new Date("2026-07-14T12:00:00Z")),
+        mapSnowCoverage: options.mapSnowCoverage,
         createDecor: (theme) => {
             events.push(`${theme}:create`);
             const decor = fakeDecor(theme);
@@ -52,6 +58,12 @@ function setup(
 }
 
 const walking = () => [{ id: "a", x: 0, y: 0, running: false }];
+const october = () => new Date("2026-10-01T10:00:00Z");
+function decorOf(theme: Theme): ReturnType<typeof fakeDecor> {
+    const decor = decors.find((candidate) => candidate.theme === theme);
+    if (!decor) throw new Error(`no ${theme} decor`);
+    return decor;
+}
 
 beforeEach(() => {
     events.length = 0;
@@ -183,5 +195,108 @@ describe("SeasonalThemeManager", () => {
         manager?.destroy();
         manager = undefined;
         expect(decors[0].destroy).toHaveBeenCalledTimes(1);
+    });
+
+    describe("map snow", () => {
+        it("fades the Christmas decor in with the map snow", () => {
+            setup({ serverDate: october, mapSnowCoverage: () => 0.4 }).update(0, walking);
+            expect(events.slice(0, 6)).toEqual([
+                "autumn:create",
+                "autumn:ground",
+                "autumn:objects",
+                "christmas:create",
+                "christmas:ground",
+                "christmas:objects",
+            ]);
+            expect(decorOf(SeasonalTheme.Christmas).setAlpha).toHaveBeenLastCalledWith(0.4);
+            expect(decorOf(SeasonalTheme.Autumn).setAlpha.mock.lastCall?.[0]).toBeCloseTo(0.6);
+            expect(manager?.activeTheme()).toBe(SeasonalTheme.Autumn);
+        });
+
+        it("hides autumn under full snow", () => {
+            setup({ serverDate: october, mapSnowCoverage: () => 1 }).update(0, walking);
+            const autumn = decorOf(SeasonalTheme.Autumn);
+            const hidden = autumn.setVisible.mock.lastCall?.[0] === false || autumn.setAlpha.mock.lastCall?.[0] === 0;
+            expect(hidden).toBe(true);
+            expect(decorOf(SeasonalTheme.Christmas).setAlpha).toHaveBeenLastCalledWith(1);
+        });
+
+        it("removes the snow decor once melted", () => {
+            let coverage = 0.5;
+            setup({ serverDate: october, mapSnowCoverage: () => coverage }).update(0, walking);
+            coverage = 0;
+            manager?.update(16, walking);
+            expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
+            expect(decorOf(SeasonalTheme.Autumn).destroy).not.toHaveBeenCalled();
+            expect(decorOf(SeasonalTheme.Autumn).setAlpha).toHaveBeenLastCalledWith(1);
+        });
+
+        it("keeps a single Christmas decor with the Christmas theme", () => {
+            seasonalThemeModeStore.set(SeasonalThemeMode.Christmas);
+            setup({ mapSnowCoverage: () => 0.5 }).update(0, walking);
+            manager?.update(16, walking);
+            expect(events.filter((event) => event.endsWith(":create"))).toEqual(["christmas:create"]);
+            for (const call of decors[0].setAlpha.mock.calls) expect(call[0]).toBe(1);
+        });
+
+        it("shows the snow decor alone without a theme decor, and does not crash", () => {
+            seasonalThemeModeStore.set(SeasonalThemeMode.None);
+            setup({ mapSnowCoverage: () => 0.25 }).update(0, walking);
+            expect(events).toEqual(["christmas:create", "christmas:ground", "christmas:objects"]);
+            expect(decors[0].setAlpha).toHaveBeenLastCalledWith(0.25);
+        });
+
+        it("redraws only when the snow changes by a fortieth", () => {
+            let coverage = 0.4;
+            setup({ serverDate: october, mapSnowCoverage: () => coverage }).update(0, walking);
+            const snow = decorOf(SeasonalTheme.Christmas);
+            const alphaCalls = snow.setAlpha.mock.calls.length;
+            markDirty.mockClear();
+            coverage = 0.405;
+            manager?.update(16, walking);
+            expect(snow.setAlpha.mock.calls).toHaveLength(alphaCalls);
+            expect(markDirty).not.toHaveBeenCalled();
+            coverage = 0.43;
+            manager?.update(32, walking);
+            expect(snow.setAlpha).toHaveBeenLastCalledWith(0.425);
+            expect(markDirty).toHaveBeenCalled();
+        });
+
+        it("shows a little snow as soon as there is any", () => {
+            setup({ serverDate: october, mapSnowCoverage: () => 0.001 }).update(0, walking);
+            expect(decorOf(SeasonalTheme.Christmas).setAlpha).toHaveBeenLastCalledWith(1 / 40);
+        });
+
+        it("gives the snow decor the same redraws, editing and walkers as the theme decor", () => {
+            let version = 1;
+            setup({ serverDate: october, version: () => version, mapSnowCoverage: () => 0.5 }).update(0, walking);
+            const snow = decorOf(SeasonalTheme.Christmas);
+            expect(snow.update.mock.lastCall?.[1]).toEqual(walking());
+            events.length = 0;
+            version = 2;
+            manager?.update(16, walking);
+            expect(events).toEqual(["autumn:ground", "autumn:objects", "christmas:ground", "christmas:objects"]);
+            mapEditorModeStore.set(true);
+            manager?.update(32, walking);
+            expect(snow.setVisible).toHaveBeenLastCalledWith(false);
+            expect(snow.update.mock.lastCall?.[1]).toEqual([]);
+            events.length = 0;
+            mapEditorModeStore.set(false);
+            manager?.update(48, walking);
+            expect(events).toEqual([
+                "autumn:objects",
+                "autumn:visible:true",
+                "christmas:objects",
+                "christmas:visible:true",
+            ]);
+        });
+
+        it("destroys the snow decor with the scene", () => {
+            setup({ serverDate: october, mapSnowCoverage: () => 0.5 }).update(0, walking);
+            manager?.destroy();
+            manager = undefined;
+            expect(decorOf(SeasonalTheme.Christmas).destroy).toHaveBeenCalledTimes(1);
+            expect(decorOf(SeasonalTheme.Autumn).destroy).toHaveBeenCalledTimes(1);
+        });
     });
 });
