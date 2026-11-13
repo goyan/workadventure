@@ -19,6 +19,7 @@
     import { karaokeInputFocusStore } from "../../Stores/UserInputStore";
     import Button from "../UI/Button.svelte";
     import PlayerPauseIcon from "../Icons/PlayerPauseIcon.svelte";
+    import JamLinkForm from "./JamLinkForm.svelte";
     import {
         IconAlertTriangle,
         IconArrowDown,
@@ -38,7 +39,7 @@
         loader = new LyricsLoader(fetchLyrics),
         mine = false,
         onopensettings,
-        onopenjams,
+        onreplacelink,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
@@ -48,8 +49,8 @@
         mine?: boolean;
         /** Opens the Spotify settings, to link Spotify again. */
         onopensettings?: () => void;
-        /** Opens the Jam rooms, where the host pastes the link of a new Jam. */
-        onopenjams?: () => void;
+        /** Gives the host's Spotify Jam the link of a new Jam, pasted right in the karaoke. */
+        onreplacelink?: (url: string) => void;
     } = $props();
 
     /** The panel's width (26rem) and its margin, kept on screen beside an open chat. */
@@ -124,7 +125,10 @@
     let issueActions = $derived(
         [
             (refreshJam || (mine && !isHomeJam(room.jam) && issue === "noPlayback")) &&
-                onopenjams && { label: $LL.spotify.listeningZone.jamStatus.replace(), run: onopenjams },
+                onreplacelink && {
+                    label: $LL.spotify.listeningZone.jamStatus.replace(),
+                    run: () => (pastingLink = true),
+                },
             mine &&
                 (issue === "noPlayer" ||
                     issue === "authorizationExpired" ||
@@ -133,6 +137,7 @@
                 onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
         ].filter((action) => !!action),
     );
+    let pastingLink = $state(false);
     let offsetLabel = $derived(`${offsetMs > 0 ? "+" : ""}${(offsetMs / 1000).toFixed(2)} s`);
 
     $effect(() => {
@@ -230,7 +235,18 @@
                 {/if}
             </div>
         </div>
-        {#if issueActions.length}
+        {#if pastingLink && onreplacelink}
+            <div class="w-full">
+                <JamLinkForm
+                    id={`karaoke-jam-link-${room.jam.hostUuid}`}
+                    onreplace={(url) => {
+                        onreplacelink(url);
+                        pastingLink = false;
+                    }}
+                    oncancel={() => (pastingLink = false)}
+                />
+            </div>
+        {:else if issueActions.length}
             <div class="flex flex-wrap gap-2">
                 {#each issueActions as action (action.label)}
                     <Button size="sm" variant="light" appearance="border" onclick={action.run}>{action.label}</Button>

@@ -50,7 +50,8 @@ const room: JamRoom = {
     zone: { areaId: "area", propertyId: "property", areaName: "Dancefloor" },
     jam: { url: "https://spotify.link/expired", hostUuid: "host", hostName: "Host" },
 };
-const target = document.createElement("div");
+// Attached to the document: the paste field takes the focus.
+const target = document.body.appendChild(document.createElement("div"));
 let component: ReturnType<typeof mount> | undefined;
 
 function render(props: { mine: boolean; joined?: boolean }): void {
@@ -120,6 +121,7 @@ describe("Jam invite link status", () => {
         flushSync(() => testId("jam-link-replace")?.click());
         const input = target.querySelector<HTMLInputElement>("input[type=url]");
         if (!input) throw new Error("Missing link input");
+        expect(document.activeElement).toBe(input);
         input.value = "  https://spotify.link/fresh  ";
         flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
         flushSync(() => form()?.requestSubmit());

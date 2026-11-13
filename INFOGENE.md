@@ -357,7 +357,9 @@ remplacement du lien. Les auditeurs voient
 seulement « rien en lecture » ; ceux qui avaient rejoint par l'ancien lien sont
 invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké remplace
 « position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile
-pour l'hôte (réglages Spotify ou tiroir des Jams), et reste ouvert sur le nouveau lien.
+pour l'hôte (réglages Spotify, ou **Coller un nouveau lien de Jam** qui ouvre le champ
+dans le karaoké même, avec le focus), et reste ouvert sur le nouveau lien. Sur la carte,
+le même bouton ouvre le champ avec le focus.
 
 Limites : si le Spotify de l'hôte continue de jouer après la fin de la Jam, rien ne
 le signale (seul le bouton de nouveau lien reste utile). Un hôte qui n'a jamais lié

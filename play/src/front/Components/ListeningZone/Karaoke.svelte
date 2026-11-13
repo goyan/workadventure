@@ -4,18 +4,11 @@
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
     import { LyricsTrackSchema } from "../../../common/Lyrics";
     import { spotifyTrackUri } from "../../../common/SpotifyListening";
-    import { isLocalUser } from "../../ListeningZone/ListeningZoneController";
-    import { jamDrawer } from "../../ListeningZone/JamDrawerStore";
+    import { isLocalUser, updateOwnRoom } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import KaraokePanel from "./KaraokePanel.svelte";
 
     let room = $derived($selectedKaraokeRoomStore);
-    const drawerOpen = jamDrawer.open;
-
-    /** The host pastes the link of a new Jam on their room's card, in the Jam drawer. */
-    function openJams(): void {
-        if (!$drawerOpen) jamDrawer.toggle();
-    }
     let host = $derived(room ? $listeningByUserUuidStore.get(room.jam.hostUuid) : undefined);
     let queue = $derived(room ? $jukeboxQueuesStore.get(room.jam.hostUuid) : undefined);
     let fallbackTrack = $derived(
@@ -45,7 +38,7 @@
             {playback}
             mine={isLocalUser(room.jam.hostUuid)}
             onopensettings={openSpotifySettings}
-            onopenjams={openJams}
+            onreplacelink={(url) => updateOwnRoom({ url })}
             onclose={() => selectedKaraokeRoomStore.set(undefined)}
         />
     {/key}
