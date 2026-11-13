@@ -451,6 +451,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         create: "Tracez un rectangle sur le sol pour créer une zone : elle s'adapte à la taille de la pièce.",
         open: "Cliquez sur une zone pour voir et modifier son contenu.",
         remove: "Supprimez une zone avec le bouton « Supprimer la zone » ou avec la gomme.",
+        duplicate: "Glissez une zone en maintenant Ctrl, Cmd ou Option pour la dupliquer : la copie reste à sa place.",
     },
     mapLayer: {
         groups: {
