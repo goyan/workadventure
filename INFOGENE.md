@@ -359,7 +359,12 @@ invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké 
 « position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile
 pour l'hôte (réglages Spotify, ou **Coller un nouveau lien de Jam** qui ouvre le champ
 dans le karaoké même, avec le focus), et reste ouvert sur le nouveau lien. Sur la carte,
-le même bouton ouvre le champ avec le focus.
+le même bouton ouvre le champ avec le focus. Après l'envoi, la carte et le karaoké disent « Enregistrement du
+nouveau lien… », puis « Lien de la Jam mis à jour. » dès que le serveur renvoie la salle
+avec ce lien (la variable de zone n'est jamais écrite localement d'abord : son retour
+prouve l'enregistrement), ou « Le nouveau lien n'a pas été enregistré : réessayez. »
+au bout de 10 s sans retour (refus du back ou perte). Un lien qui n'est pas une
+invitation de Jam est refusé tout de suite dans le champ.
 
 Limites : si le Spotify de l'hôte continue de jouer après la fin de la Jam, rien ne
 le signale (seul le bouton de nouveau lien reste utile). Un hôte qui n'a jamais lié

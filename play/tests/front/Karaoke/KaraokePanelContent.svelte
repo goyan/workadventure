@@ -13,6 +13,7 @@
         mine,
         onopensettings,
         onreplacelink,
+        linkSave,
     }: {
         playback: Writable<KaraokePlayback>;
         room: JamRoom;
@@ -21,7 +22,8 @@
         mine?: boolean;
         onopensettings?: () => void;
         onreplacelink?: (url: string) => void;
+        linkSave?: { status: "saving" | "saved" | "failed" };
     } = $props();
 </script>
 
-<KaraokePanel playback={$playback} {room} {loader} {onclose} {mine} {onopensettings} {onreplacelink} />
+<KaraokePanel playback={$playback} {room} {loader} {onclose} {mine} {onopensettings} {onreplacelink} {linkSave} />

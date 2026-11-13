@@ -166,6 +166,73 @@ export function updateOwnRoom(change: { title?: string; djMode?: boolean; lights
     setAreaPropertyVariable(own.zone.areaId, own.zone.propertyId, LISTENING_ZONE_JAM_VARIABLE, rooms);
 }
 
+/** How long the server has to send our room back with its new invite link before the change is called failed. */
+export const JAM_LINK_SAVE_TIMEOUT_MS = 10_000;
+/** How long "link updated" stays on the card. */
+const JAM_LINK_SAVED_SHOWN_MS = 8_000;
+
+export type JamLinkSave = { status: "saving" } | { status: "saved" } | { status: "failed" };
+const ownJamLinkSave = writable<JamLinkSave | undefined>(undefined);
+/**
+ * Where the last new invite link of our Spotify Jam stands. Kept here, not in the card: the card is keyed by the link,
+ * so a saved link mounts a new one.
+ */
+export const ownJamLinkSaveStore: Readable<JamLinkSave | undefined> = ownJamLinkSave;
+let jamLinkSavedTimer: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Gives our Spotify Jam a new invite link and tells whether it is saved: the room variable only changes once the
+ * server accepted the change and sent the room back (it is never written locally first), so seeing our room come back
+ * with the new link is the proof. "failed" when it does not come back in time (refused by the server, or lost).
+ */
+export async function replaceOwnJamLink(
+    url: string,
+    timeoutMs = JAM_LINK_SAVE_TIMEOUT_MS,
+): Promise<"saved" | "invalid" | "failed"> {
+    if (!isSpotifyJamUrl(url)) return "invalid";
+    clearTimeout(jamLinkSavedTimer);
+    ownJamLinkSave.set({ status: "saving" });
+    updateOwnRoom({ url });
+    const saved = await ownJamLinkComesBack(url, timeoutMs);
+    settleOwnJamLinkSave(saved);
+    return saved ? "saved" : "failed";
+}
+
+function ownJamLinkComesBack(url: string, timeoutMs: number): Promise<boolean> {
+    const isBack = (own: JamRoom | undefined): boolean =>
+        own !== undefined && !isHomeJam(own.jam) && !isLiveJam(own.jam) && own.jam.url === url;
+    return new Promise<boolean>((resolve) => {
+        // The server may have answered already (it answers as soon as it accepts).
+        if (isBack(get(ownJamRoomStore))) {
+            resolve(true);
+            return;
+        }
+        // Filled right after subscribing: the first, synchronous call above found the old link.
+        const subscription: { stop?: Unsubscriber } = {};
+        const timer = setTimeout(() => {
+            subscription.stop?.();
+            resolve(false);
+        }, timeoutMs);
+        subscription.stop = ownJamRoomStore.subscribe((own) => {
+            if (!isBack(own)) return;
+            clearTimeout(timer);
+            subscription.stop?.();
+            resolve(true);
+        });
+    });
+}
+
+function settleOwnJamLinkSave(saved: boolean): void {
+    ownJamLinkSave.set({ status: saved ? "saved" : "failed" });
+    clearTimeout(jamLinkSavedTimer);
+    if (saved) jamLinkSavedTimer = setTimeout(() => ownJamLinkSave.set(undefined), JAM_LINK_SAVED_SHOWN_MS);
+}
+
+/** Forgets a failed new link once the host closes the form or tries again. */
+export function forgetOwnJamLinkSave(): void {
+    if (get(ownJamLinkSave)?.status !== "saving") ownJamLinkSave.set(undefined);
+}
+
 /** A room without a title is named after its host. */
 function titled(title: string): { title?: string } {
     const trimmed = title.trim().slice(0, MAX_LISTENING_ZONE_JAM_TITLE_LENGTH);

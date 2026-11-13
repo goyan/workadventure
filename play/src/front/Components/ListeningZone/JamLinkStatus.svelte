@@ -1,7 +1,13 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import { karaokeStatesStore, readFailedText } from "../../Karaoke/JamKaraoke";
-    import { relinkedJamHostStore, updateOwnRoom, type JamRoom } from "../../ListeningZone/ListeningZoneController";
+    import {
+        forgetOwnJamLinkSave,
+        ownJamLinkSaveStore,
+        relinkedJamHostStore,
+        replaceOwnJamLink,
+        type JamRoom,
+    } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import Button from "../UI/Button.svelte";
     import JamLinkForm from "./JamLinkForm.svelte";
@@ -67,6 +73,11 @@
                 <p class="m-0 font-bold">
                     {hostWarning ?? $LL.spotify.listeningZone.jamStatus.positionUnavailable()}
                 </p>
+                {#if issue === "desktopNoPosition"}
+                    <p class="m-0 text-[11px] text-white/60">
+                        {$LL.spotify.listeningZone.jamStatus.desktopNoPositionDetail()}
+                    </p>
+                {/if}
             </div>
         </div>
         {#if needsSettings}
@@ -79,14 +90,34 @@
             >
         {/if}
     {/if}
+    {#if $ownJamLinkSaveStore}
+        <p
+            class="m-0 text-xs {$ownJamLinkSaveStore.status === 'failed'
+                ? 'text-red-400'
+                : $ownJamLinkSaveStore.status === 'saved'
+                  ? 'text-[#1ed760]'
+                  : 'text-white/70'}"
+            role={$ownJamLinkSaveStore.status === "failed" ? "alert" : "status"}
+            data-testid="jam-link-save"
+        >
+            {$ownJamLinkSaveStore.status === "failed"
+                ? $LL.spotify.listeningZone.jamStatus.linkFailed()
+                : $ownJamLinkSaveStore.status === "saved"
+                  ? $LL.spotify.listeningZone.jamStatus.linkSaved()
+                  : $LL.spotify.listeningZone.jamStatus.linkSaving()}
+        </p>
+    {/if}
     {#if replacing}
         <JamLinkForm
             id={`jam-link-${room.jam.hostUuid}`}
             onreplace={(url) => {
-                updateOwnRoom({ url });
+                replaceOwnJamLink(url).catch((error) => console.error("Cannot replace the Jam link", error));
                 replacing = false;
             }}
-            oncancel={() => (replacing = false)}
+            oncancel={() => {
+                replacing = false;
+                forgetOwnJamLinkSave();
+            }}
         />
     {:else}
         <Button

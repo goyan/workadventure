@@ -11,7 +11,10 @@ import {
     joinJam,
     leaveJam,
     leaveListeningZone,
+    ownJamLinkSaveStore,
     relinkedJamHostStore,
+    replaceOwnJamLink,
+    JAM_LINK_SAVE_TIMEOUT_MS,
     shareJam,
     startHomeJam,
     startLiveJam,
@@ -242,6 +245,36 @@ describe("Jam rooms", () => {
         ]);
         expect(get(joinedJamStore)).toMatchObject({ areaId: "lounge", url: "https://spotify.link/fresh" });
         unsubscribe();
+    });
+
+    it("confirms a new invite link once the server sent the room back with it", async () => {
+        shareJam("https://spotify.link/expired");
+        const saved = replaceOwnJamLink("https://spotify.link/fresh");
+        expect(get(ownJamLinkSaveStore)).toEqual({ status: "saving" });
+        await expect(saved).resolves.toBe("saved");
+        expect(roomsOf(lounge)).toEqual([{ url: "https://spotify.link/fresh", hostUuid: "me", hostName: "Me" }]);
+        expect(get(ownJamLinkSaveStore)).toEqual({ status: "saved" });
+    });
+
+    it("reports a new invite link the server never sent back (refused), without changing the room", async () => {
+        vi.useFakeTimers();
+        shareJam("https://spotify.link/expired");
+        const manager = get(areaPropertyVariablesManagerStore);
+        if (!manager) throw new Error("No manager");
+        // The back refuses the change: nothing comes back.
+        vi.spyOn(manager, "setVariable").mockImplementation(() => undefined);
+        const saved = replaceOwnJamLink("https://spotify.link/fresh");
+        await vi.advanceTimersByTimeAsync(JAM_LINK_SAVE_TIMEOUT_MS);
+        await expect(saved).resolves.toBe("failed");
+        expect(get(ownJamLinkSaveStore)).toEqual({ status: "failed" });
+        expect(roomsOf(lounge)[0]).toMatchObject({ url: "https://spotify.link/expired" });
+        vi.useRealTimers();
+    });
+
+    it("refuses at once a link that is not a Spotify Jam invite", async () => {
+        shareJam("https://spotify.link/expired");
+        await expect(replaceOwnJamLink("https://example.com/jam")).resolves.toBe("invalid");
+        expect(roomsOf(lounge)[0]).toMatchObject({ url: "https://spotify.link/expired" });
     });
 
     it("refuses a link that is not a Spotify Jam invite, and a link for a Jukebox", () => {

@@ -57,6 +57,10 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                         replace: () => "Paste a new Jam link",
                         replaceSubmit: () => "Replace the link",
                         desktopNoPosition: () => "Desktop app gives no position",
+                        desktopNoPositionDetail: () => "Connect Spicetify or link Spotify",
+                        linkSaving: () => "Saving the link",
+                        linkSaved: () => "Jam link updated",
+                        linkFailed: () => "The link was not saved",
                         rateLimited: () => "Your reads are rate limited",
                         readFailedStatus: ({ status }: { status: number }) => `Your read failed (${status})`,
                         readFailedUnreadable: () => "Your read is unreadable",
@@ -326,7 +330,11 @@ describe("KaraokePanel playback issues", () => {
     const onopensettings = vi.fn();
     const onreplacelink = vi.fn();
 
-    async function remount(mine: boolean, state: KaraokePlayback): Promise<void> {
+    async function remount(
+        mine: boolean,
+        state: KaraokePlayback,
+        linkSave?: { status: "saving" | "saved" | "failed" },
+    ): Promise<void> {
         const mounted = component;
         component = undefined;
         if (mounted) await unmount(mounted);
@@ -343,6 +351,7 @@ describe("KaraokePanel playback issues", () => {
                     mine,
                     onopensettings,
                     onreplacelink,
+                    linkSave,
                 },
             });
         });
@@ -380,6 +389,7 @@ describe("KaraokePanel playback issues", () => {
     it("tells a desktop host that the desktop app gives no position, not that the Jam stopped (the beta report)", async () => {
         await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "desktopNoPosition" });
         expect(target.textContent).toContain("Desktop app gives no position");
+        expect(target.textContent).toContain("Connect Spicetify or link Spotify");
         expect(target.textContent).not.toContain("most likely stopped");
         flushSync(() => button("Spotify settings")?.click());
         expect(onopensettings).toHaveBeenCalledOnce();
@@ -420,6 +430,17 @@ describe("KaraokePanel playback issues", () => {
         expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
         expect(target.textContent).not.toContain("No position");
         await pasteNewLink();
+    });
+
+    it("tells the host whether the link pasted in the karaoke is saved", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0 }, { status: "saved" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')?.textContent).toContain("Jam link updated");
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0 }, { status: "failed" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')?.textContent).toContain(
+            "The link was not saved",
+        );
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0 }, { status: "saved" });
+        expect(target.querySelector('[data-testid="karaoke-link-save"]')).toBeNull();
     });
 
     it("keeps the unknown position message when the host's browser knows no reason", async () => {

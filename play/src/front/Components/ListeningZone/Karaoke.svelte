@@ -4,7 +4,7 @@
     import { jukeboxQueuesStore } from "../../Spotify/HomeJam";
     import { LyricsTrackSchema } from "../../../common/Lyrics";
     import { spotifyTrackUri } from "../../../common/SpotifyListening";
-    import { isLocalUser, updateOwnRoom } from "../../ListeningZone/ListeningZoneController";
+    import { isLocalUser, ownJamLinkSaveStore, replaceOwnJamLink } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import KaraokePanel from "./KaraokePanel.svelte";
 
@@ -38,7 +38,10 @@
             {playback}
             mine={isLocalUser(room.jam.hostUuid)}
             onopensettings={openSpotifySettings}
-            onreplacelink={(url) => updateOwnRoom({ url })}
+            onreplacelink={(url) => {
+                replaceOwnJamLink(url).catch((error) => console.error("Cannot replace the Jam link", error));
+            }}
+            linkSave={$ownJamLinkSaveStore}
             onclose={() => selectedKaraokeRoomStore.set(undefined)}
         />
     {/key}
