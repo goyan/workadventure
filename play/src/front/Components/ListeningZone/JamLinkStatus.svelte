@@ -31,6 +31,8 @@
                 return $LL.spotify.listeningZone.jamStatus.noPlayback();
             case "noPlayer":
                 return $LL.spotify.listeningZone.jamStatus.noPlayer();
+            case "desktopNoPosition":
+                return $LL.spotify.listeningZone.jamStatus.desktopNoPosition();
             case "authorizationExpired":
                 return $LL.spotify.listeningZone.jamStatus.authorizationExpired();
             case "accessDenied":
@@ -43,11 +45,17 @@
                 return undefined;
         }
     });
-    // Whatever the reason, a host whose playback position is missing most likely has a Jam Spotify stopped.
+    // A position missing for a reason the host's browser knows is named; only otherwise has the Jam most likely stopped.
+    let jamStopped = $derived(issue === undefined && hostState?.track !== null && hostState?.positionAt === 0);
     let positionUnavailable = $derived(
         hostState !== undefined && (issue !== undefined || (hostState.track !== null && !hostState.positionAt)),
     );
-    let needsSettings = $derived(issue === "noPlayer" || issue === "authorizationExpired" || issue === "accessDenied");
+    let needsSettings = $derived(
+        issue === "noPlayer" ||
+            issue === "authorizationExpired" ||
+            issue === "accessDenied" ||
+            issue === "desktopNoPosition",
+    );
 
     function cancel(): void {
         replacing = false;
@@ -76,10 +84,9 @@
         >
             <IconAlertTriangle font-size="14" class="mt-px shrink-0 text-warning" />
             <div class="flex flex-col gap-0.5">
-                <p class="m-0 font-bold">{$LL.spotify.listeningZone.jamStatus.positionUnavailable()}</p>
-                {#if hostWarning}
-                    <p class="m-0 text-white/70">{hostWarning}</p>
-                {/if}
+                <p class="m-0 font-bold">
+                    {hostWarning ?? $LL.spotify.listeningZone.jamStatus.positionUnavailable()}
+                </p>
             </div>
         </div>
         {#if needsSettings}
@@ -119,7 +126,7 @@
     {:else}
         <Button
             variant="light"
-            appearance={positionUnavailable ? "filled" : "border"}
+            appearance={jamStopped || issue === "noPlayback" ? "filled" : "border"}
             size="sm"
             onclick={() => (replacing = true)}
             dataTestId="jam-link-replace">{$LL.spotify.listeningZone.jamStatus.replace()}</Button

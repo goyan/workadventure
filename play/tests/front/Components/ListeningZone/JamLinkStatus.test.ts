@@ -29,6 +29,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                     noPlayback: () => "No playback (host)",
                     noPlaybackGuest: () => "No playback (guest)",
                     noPlayer: () => "No player read",
+                    desktopNoPosition: () => "Desktop app gives no position",
                     authorizationExpired: () => "Authorization expired",
                     accessDenied: () => "Access denied",
                     rateLimited: () => "Rate limited",
@@ -111,10 +112,9 @@ describe("Jam invite link status", () => {
         render({ mine: true });
         expect(testId("jam-link-warning")).toBeNull();
         hostReports("noPlayback");
-        expect(testId("jam-link-warning")?.textContent).toContain(
-            "Position unavailable: the Jam has most likely stopped",
-        );
+        // A known reason is named on its own: "the Jam has most likely stopped" is the last resort.
         expect(testId("jam-link-warning")?.textContent).toContain("No playback (host)");
+        expect(testId("jam-link-warning")?.textContent).not.toContain("most likely stopped");
         expect(testId("jam-link-open-settings")).toBeNull();
 
         flushSync(() => testId("jam-link-replace")?.click());
@@ -154,6 +154,7 @@ describe("Jam invite link status", () => {
 
     it.each([
         ["noPlayer", "No player read"],
+        ["desktopNoPosition", "Desktop app gives no position"],
         ["authorizationExpired", "Authorization expired"],
         ["accessDenied", "Access denied"],
     ] as const)("names a %s issue to the host and opens the Spotify settings", (issue, text) => {

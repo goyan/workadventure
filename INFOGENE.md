@@ -324,18 +324,30 @@ fronts) :
 - **lecture impossible** : réponse non OK (code affiché à l'hôte), réponse illisible,
   ou Spotify injoignable (réseau, délai, demande de jeton).
 
-Un compte lié dont le lecteur n'est pas lu tombait auparavant, sans rien dire, sur
-« position inconnue » (le morceau venait alors de la présence, par exemple de l'app
-Spotify du Mac via le client desktop, sans position) : chacune de ces raisons est
-désormais nommée à l'hôte. Une demande de jeton à Spotify est abandonnée après 10 s :
-avant, un rafraîchissement sans réponse suspendait toutes les lectures du lecteur
-(karaoké et présence) jusqu'au rechargement.
+**App de bureau (workadventure-desktop 1.1.4).** `watchSpotifyTrack` lit l'app
+Spotify du Mac par AppleScript (`spotify-player.ts`), **sans position**, sauf quand
+l'extension Spicetify WorkAdventure est connectée (`spicetifyTrack()`, position depuis
+0.1.0-beta.14). `watchSpotifyPlayback` ne relaie que cette extension et envoie `null`
+tant qu'elle ne rapporte rien (`spicetifyPlayback()` à l'abonnement, `ipc.ts`) : ce
+`null` veut dire « extension absente », pas « rien ne joue ». Le cas de la beta du
+13/11 : app de bureau sans Spicetify ni compte lié dans son stockage (le bouton
+« Partager aussi depuis un autre appareil » n'apparaît que non lié ; une liaison faite
+dans un navigateur ne vaut pas pour l'app de bureau). Le morceau venait d'AppleScript
+sans position, puis le `null` de Spicetify le remplaçait par « rien en lecture ».
+Désormais l'hôte voit **« L'app de bureau lit votre morceau sans sa position »**
+(connecter l'extension, ou lier Spotify dans l'app de bureau : la Web API donne alors
+la position, et un `null` ultérieur ne l'efface pas) ; « rien en lecture » est réservé
+à un état Spicetify sans morceau, à AppleScript qui ne lit rien ou à un 204.
 
-Dès que sa position de lecture manque, quelle qu'en soit la raison (y compris « lecteur
-non lu » ou une raison inconnue), l'hôte d'une Jam Spotify voit sur la carte et dans le
-karaoké « Position de lecture indisponible : la Jam s'est sûrement arrêtée sur Spotify »
-avec l'action **Coller un nouveau lien de Jam** (décision de l'utilisateur : chez lui, une
-Jam expirée laissait la musique jouer et le compte lié). Le détail de la raison suit,
+Un compte lié dont la lecture Web API échoue est nommé de même (429, code HTTP, réponse
+illisible, Spotify injoignable). Une demande de jeton à Spotify est abandonnée après
+10 s : avant, un rafraîchissement sans réponse suspendait toutes les lectures du
+lecteur jusqu'au rechargement.
+
+Quand la position de l'hôte d'une Jam Spotify manque **sans raison connue**, la carte et
+le karaoké affichent en dernier recours « Position de lecture indisponible : la Jam
+s'est sûrement arrêtée sur Spotify » avec **Coller un nouveau lien de Jam** (mis en avant
+aussi pour « rien en lecture »). Une raison connue est affichée seule, avec
 un bouton **Réglages Spotify** quand il faut relier le compte, et **Coller un nouveau
 lien de Jam** à tout moment : le lien remplace l'ancien sans fermer le salon (titre,
 lumières, zone conservés, même hors de la zone). L'audio relayé continue : le Space

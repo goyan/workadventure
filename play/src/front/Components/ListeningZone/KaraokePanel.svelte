@@ -101,6 +101,8 @@
                 return mine ? texts.noPlaybackHost() : texts.noPlayback();
             case "noPlayer":
                 return mine ? texts.noPlayerHost() : texts.noPlayer();
+            case "desktopNoPosition":
+                return mine ? $LL.spotify.listeningZone.jamStatus.desktopNoPosition() : texts.desktopNoPosition();
             case "authorizationExpired":
                 return mine ? texts.authorizationExpiredHost() : texts.authorizationExpired();
             case "accessDenied":
@@ -115,15 +117,19 @@
                 return undefined;
         }
     });
-    // Whatever the reason, a host of a Spotify Jam whose position is missing most likely has a Jam Spotify stopped.
+    // A host of a Spotify Jam whose position is missing for no known reason most likely has a Jam Spotify stopped.
     let refreshJam = $derived(
-        mine && !isHomeJam(room.jam) && (issue !== undefined || (playback.track !== null && !playback.positionAt)),
+        mine && !isHomeJam(room.jam) && issue === undefined && playback.track !== null && !playback.positionAt,
     );
     let issueActions = $derived(
         [
-            refreshJam && onopenjams && { label: $LL.spotify.listeningZone.jamStatus.replace(), run: onopenjams },
+            (refreshJam || (mine && !isHomeJam(room.jam) && issue === "noPlayback")) &&
+                onopenjams && { label: $LL.spotify.listeningZone.jamStatus.replace(), run: onopenjams },
             mine &&
-                (issue === "noPlayer" || issue === "authorizationExpired" || issue === "accessDenied") &&
+                (issue === "noPlayer" ||
+                    issue === "authorizationExpired" ||
+                    issue === "accessDenied" ||
+                    issue === "desktopNoPosition") &&
                 onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
         ].filter((action) => !!action),
     );
