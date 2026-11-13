@@ -112,7 +112,7 @@
     }
 
     function displayTagListAndClearCurrentSelection() {
-        get(mapEditorSelectedEntityStore)?.delete();
+        // Back to the categories: an object still selected on the map stays there (clearEntitySelection deselects it).
         mapEditorEntityModeStore.set("ADD");
         clearEntitySelection();
         selectCategoryStore.set(undefined);
@@ -301,6 +301,9 @@
                 alignLabel="center"
             />
         </div>
+        <p class="retro-hint m-0" data-testid="entityEditorShortcuts">
+            {$LL.mapEditor.entityEditor.header.shortcuts()}
+        </p>
         {#if userCanEditMap}
             <button
                 type="button"
