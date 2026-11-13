@@ -619,4 +619,34 @@ describe("MapEditorModeManager command groups", () => {
         expect(manager.currentlyActiveTool).toBe(activeTool);
         expect(editorToolMocks.keyDownEvents).toHaveLength(0);
     });
+
+    it.each([{ ctrlKey: true }, { metaKey: true }])("redoes with Y and %o, as with Shift+Z", async (modifier) => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+        const redo = vi.spyOn(manager, "redoCommand").mockResolvedValue(undefined);
+        const event = new KeyboardEvent("keydown", { key: "y", cancelable: true, ...modifier });
+
+        expect(manager.handleKeyDownEvent(event)).toBe(true);
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(redo).toHaveBeenCalledTimes(1);
+        expect(event.defaultPrevented).toBe(true);
+    });
+
+    it("checks the selected object still exists once a queued command has run", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const entitiesManager = mock<EntitiesManager>();
+        const wrapper = mock<GameMapFrontWrapper>();
+        wrapper.getEntitiesManager.mockReturnValue(entitiesManager);
+        fixture.scene.getGameMapFrontWrapper.mockReturnValue(wrapper);
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+
+        await manager.executeCommand(new StateCommand(state, 1));
+
+        expect(entitiesManager.syncSelectionWithMap.mock.calls.length).toBeGreaterThan(0);
+    });
 });

@@ -155,9 +155,10 @@ export class MapEditorModeManager {
     private currentRunningCommand: Promise<void>;
 
     private enqueueCommand<T>(operation: () => Promise<T>): Promise<T> {
-        const queuedOperation = this.currentRunningCommand
-            .then(operation)
-            .finally(() => this.selectionEditorTool.refreshSelection());
+        const queuedOperation = this.currentRunningCommand.then(operation).finally(() => {
+            this.selectionEditorTool.refreshSelection();
+            this.scene.getGameMapFrontWrapper().getEntitiesManager().syncSelectionWithMap();
+        });
         this.currentRunningCommand = queuedOperation.then(
             () => undefined,
             () => undefined,
@@ -573,6 +574,15 @@ export class MapEditorModeManager {
                             .catch((error: unknown) => logger("Map editor history operation failed", { error }));
                     }
                 }
+                break;
+            }
+            case "y": {
+                if (!mapEditorModeActivated || !(event.ctrlKey || event.metaKey)) return false;
+                // Ctrl+Y redoes too, as in most Windows applications.
+                event.preventDefault();
+                this.runningUndoRedoCommand = this.runningUndoRedoCommand
+                    .then(() => this.redoCommand())
+                    .catch((error: unknown) => logger("Map editor history operation failed", { error }));
                 break;
             }
             default: {

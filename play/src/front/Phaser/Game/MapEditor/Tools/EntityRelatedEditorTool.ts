@@ -7,6 +7,7 @@ import type { GameScene } from "../../GameScene";
 import type { EntitiesManager } from "../../GameMap/EntitiesManager";
 import { EntitiesManagerEvent } from "../../GameMap/EntitiesManager";
 import {
+    entityPlacementBlockerStore,
     mapEditorCopiedEntityDataPropertiesStore,
     mapEditorEntityFileDroppedStore,
     mapEditorEntityEraserStore,
@@ -47,6 +48,10 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     protected mapEditorEntityEraserStoreUnsubscriber: Unsubscriber | undefined;
     /** Buttons shown above the selected entity: rotate, bring forward / send backward, then duplicate. */
     private entityButtons: Phaser.GameObjects.Text[] = [];
+    /** The entity the buttons are above: they follow it when it moves (drag, undo, another editor). */
+    private entityButtonsOwner: Entity | undefined;
+    /** Objects of the eraser stroke in progress: hidden at once, deleted as one step to undo on release. */
+    private erasedEntities: Entity[] = [];
 
     protected constructor(mapEditorModeManager: MapEditorModeManager) {
         super();
@@ -65,6 +70,9 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     public update(time: number, dt: number): void {}
 
     public clear(): void {
+        this.eraseStrokeEntities();
+        this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.eraseStrokeEntities);
+        this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.eraseStrokeEntities);
         this.scene.input.topOnly = false;
         mapEditorEntityModeStore.set("ADD");
         mapEditorEntityEraserStore.set(false);
@@ -83,9 +91,13 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
 
         this.subscribeToStores();
         this.entitiesManager.on(EntitiesManagerEvent.DeleteEntity, this.handleDeleteEntity);
+        this.scene.input.on(Phaser.Input.Events.POINTER_UP, this.eraseStrokeEntities);
+        this.scene.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.eraseStrokeEntities);
     }
 
     public destroy(): void {
+        this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.eraseStrokeEntities);
+        this.scene.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.eraseStrokeEntities);
         this.cleanPreview();
         this.unsubscribeToStores();
         this.entitiesManager.off(EntitiesManagerEvent.DeleteEntity, this.handleDeleteEntity);
@@ -266,7 +278,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         });
         this.entityButtons = buttons.map(({ label, onClick }) =>
             this.scene.add
-                .text(0, entity.y - 8, label, {
+                .text(0, 0, label, {
                     fontSize: "18px",
                     color: "#ffffff",
                     backgroundColor: "#1b2a41",
@@ -277,7 +289,18 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
                 .setInteractive({ cursor: "pointer" })
                 .on(Phaser.Input.Events.POINTER_DOWN, onClick),
         );
-        // Centered above the entity, side by side.
+        this.entityButtonsOwner = entity;
+        this.placeEntityButtons();
+        this.scene.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.placeEntityButtons);
+        this.scene.markDirty();
+    }
+
+    /** Centered above the entity, side by side, wherever the entity is now. */
+    private readonly placeEntityButtons = (): void => {
+        const entity = this.entityButtonsOwner;
+        if (!entity || this.entityButtons.length === 0) {
+            return;
+        }
         const gap = 4;
         const totalWidth =
             this.entityButtons.reduce((width, button) => width + button.width, 0) +
@@ -285,14 +308,18 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         let left = entity.x + entity.displayWidth / 2 - totalWidth / 2;
         for (const button of this.entityButtons) {
             button.setX(left);
+            button.setY(entity.y - 8);
             left += button.width + gap;
         }
-        this.scene.markDirty();
-    }
+    };
 
     private destroyEntityButtons(): void {
+        if (this.entityButtonsOwner) {
+            this.scene.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.placeEntityButtons);
+        }
         this.entityButtons.forEach((button) => button.destroy());
         this.entityButtons = [];
+        this.entityButtonsOwner = undefined;
     }
 
     /**
@@ -352,6 +379,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
         mapEditorCopiedEntityDataPropertiesStore.set(undefined);
         mapEditorSelectedEntityPrefabStore.set(undefined);
         mapEditorEntityFileDroppedStore.set(false);
+        entityPlacementBlockerStore.set(undefined);
         this.scene.markDirty();
     }
 
@@ -373,6 +401,15 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     }
 
     private deleteEntity(entity: Entity) {
+        if (get(mapEditorEntityEraserStore) && this.scene.input.activePointer.leftButtonDown()) {
+            // An eraser stroke is one step to undo: the objects disappear now and are deleted together on release.
+            if (!this.erasedEntities.includes(entity)) {
+                this.erasedEntities.push(entity);
+                entity.setVisible(false);
+                this.scene.markDirty();
+            }
+            return;
+        }
         this.mapEditorModeManager
             .executeCommand(
                 new DeleteEntityFrontCommand(
@@ -384,4 +421,37 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
             )
             .catch((e) => console.error(e));
     }
+
+    private readonly eraseStrokeEntities = (): void => {
+        const erased = this.erasedEntities;
+        if (erased.length === 0) {
+            return;
+        }
+        this.erasedEntities = [];
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (!wamFile) {
+            erased.forEach((entity) => {
+                entity.setVisible(true);
+                this.entitiesManager.cancelErasing(entity.entityId);
+            });
+            return;
+        }
+        this.mapEditorModeManager
+            .executeCommands(
+                erased.map(
+                    (entity) => new DeleteEntityFrontCommand(wamFile, entity.entityId, undefined, this.entitiesManager),
+                ),
+            )
+            .catch((e) => {
+                console.error(e);
+                // Not deleted after all (deleted meanwhile by another editor, refused): shown again.
+                erased
+                    .filter((entity) => entity.active)
+                    .forEach((entity) => {
+                        entity.setVisible(true);
+                        this.entitiesManager.cancelErasing(entity.entityId);
+                    });
+                this.scene.markDirty();
+            });
+    };
 }
