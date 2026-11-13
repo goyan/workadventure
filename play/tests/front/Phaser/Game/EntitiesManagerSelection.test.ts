@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
 import type * as EntityModule from "../../../../src/front/Phaser/ECS/Entity";
 import type { Entity } from "../../../../src/front/Phaser/ECS/Entity";
-import { EntitiesManager } from "../../../../src/front/Phaser/Game/GameMap/EntitiesManager";
+import { EntitiesManager, EntitiesManagerEvent } from "../../../../src/front/Phaser/Game/GameMap/EntitiesManager";
 import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import { EditorToolName } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
@@ -13,6 +13,7 @@ import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/Map
 import {
     mapEditorEntityModeStore,
     mapEditorModeStore,
+    mapEditorSelectedEntityDraggedStore,
     mapEditorSelectedEntityPrefabStore,
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
@@ -48,6 +49,7 @@ describe("Native entity clicks while selecting a group", () => {
     let entity: ReturnType<typeof mock<Entity>>;
     let manager: ReturnType<typeof mock<MapEditorModeManager>>;
     let canvas: HTMLCanvasElement;
+    let wrapper: ReturnType<typeof mock<GameMapFrontWrapper>>;
 
     beforeEach(async () => {
         mapEditorModeStore.set(true);
@@ -56,7 +58,8 @@ describe("Native entity clicks while selecting a group", () => {
         mapEditorSelectedToolStore.set(EditorToolName.SelectionEditor);
         canvas = document.createElement("canvas");
         const scene = mock<GameScene>();
-        const wrapper = mock<GameMapFrontWrapper>();
+        wrapper = mock<GameMapFrontWrapper>();
+        scene.getGameMapFrontWrapper.mockReturnValue(wrapper);
         manager = mock<MapEditorModeManager>();
         manager.equipTool.mockImplementation((tool) => mapEditorSelectedToolStore.set(tool));
         scene.getMapEditorModeManager.mockReturnValue(manager);
@@ -69,6 +72,7 @@ describe("Native entity clicks while selecting a group", () => {
             collectionName: "Furniture",
             imagePath: "chair.png",
             collisionGrid: [[0]],
+            seasonal: undefined,
         });
         const collections = mock<ReturnType<GameScene["getEntitiesCollectionsManager"]>>();
         collections.getEntityPrefab.mockResolvedValue(prefab);
@@ -86,6 +90,8 @@ describe("Native entity clicks while selecting a group", () => {
         entity.setInteractive.mockReturnValue(entity);
         entity.getPrefab.mockReturnValue(prefab);
         entity.getCollisionGrid.mockReturnValue([[0]]);
+        entity.getOverlappingEntities.mockReturnValue([]);
+        entity.showPrefabTexture.mockReturnValue(entity);
         entityFactory.mockReturnValue(entity);
         entitiesManager = new EntitiesManager(scene, wrapper);
         const data: WAMEntityData = {
@@ -107,9 +113,11 @@ describe("Native entity clicks while selecting a group", () => {
         vi.restoreAllMocks();
     });
 
-    function clickEntity(downElement: Element = canvas): void {
-        const pointer = mock<Phaser.Input.Pointer>();
+    function clickEntity(downElement: Element = canvas, button = 0): void {
+        const pointer = mock<Phaser.Input.Pointer>({ button });
         Object.defineProperty(pointer, "downElement", { value: downElement });
+        pointer.leftButtonDown.mockReturnValue(button === 0);
+        pointer.rightButtonDown.mockReturnValue(button === 2);
         entityEvents.emit(Phaser.Input.Events.POINTER_DOWN, pointer);
     }
 
@@ -181,5 +189,104 @@ describe("Native entity clicks while selecting a group", () => {
             properties: [],
         });
         expect(get(mapEditorSelectedEntityStore)).toBe(entity);
+    });
+
+    it("leaves the picked object alone on a right click on a placed object", () => {
+        // A right click (or Ctrl+click on a Mac) drops the picked object: it must not open the object under it.
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        mapEditorSelectedEntityPrefabStore.set({ ...pickedPrefab });
+        clickEntity(canvas, 2);
+
+        expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+        expect(get(mapEditorEntityModeStore)).toBe("ADD");
+    });
+
+    it("does not open an object on a right click without a picked object either", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        clickEntity(canvas, 2);
+
+        expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+    });
+
+    it("closes the properties of an object deleted from the map", () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        clickEntity();
+        expect(get(mapEditorEntityModeStore)).toBe("EDIT");
+
+        entitiesManager.deleteEntity("chair-instance");
+        entitiesManager.syncSelectionWithMap();
+
+        expect(get(mapEditorSelectedEntityStore)).toBeUndefined();
+        expect(get(mapEditorEntityModeStore)).toBe("ADD");
+    });
+
+    it("keeps the selection on an object replaced under the same id", async () => {
+        mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+        clickEntity();
+        const replacement = mock<Entity>({ entityId: "chair-instance", x: 32, y: 32 });
+        replacement.on.mockReturnValue(replacement);
+        replacement.setVisible.mockReturnValue(replacement);
+        replacement.showPrefabTexture.mockReturnValue(replacement);
+        replacement.getOverlappingEntities.mockReturnValue([]);
+        replacement.getPrefab.mockReturnValue(entity.getPrefab());
+        entityFactory.mockReturnValue(replacement);
+
+        entitiesManager.deleteEntity("chair-instance");
+        await entitiesManager.addEntity("chair-instance", {
+            x: 32,
+            y: 32,
+            prefabRef: { id: "chair", collectionName: "Furniture" },
+            properties: [],
+        });
+        entitiesManager.syncSelectionWithMap();
+
+        expect(get(mapEditorSelectedEntityStore)).toBe(replacement);
+        expect(get(mapEditorEntityModeStore)).toBe("EDIT");
+    });
+
+    describe("dragging an object with a modifier", () => {
+        let copies: unknown[];
+        let updates: unknown[];
+
+        beforeEach(() => {
+            mapEditorSelectedToolStore.set(EditorToolName.EntityEditor);
+            wrapper.canEntityBePlacedOnMap.mockReturnValue(true);
+            entity.getOldPosition.mockReturnValue({ x: 32, y: 32 });
+            entity.getPosition.mockReturnValue({ x: 96, y: 32 });
+            entity.getEntityData.mockReturnValue({
+                x: 32,
+                y: 32,
+                prefabRef: { id: "chair", collectionName: "Furniture" },
+                properties: [],
+                name: "",
+                depthStep: 0,
+            });
+            copies = [];
+            updates = [];
+            entitiesManager.on(EntitiesManagerEvent.CopyEntity, (data: unknown) => copies.push(data));
+            entitiesManager.on(EntitiesManagerEvent.UpdateEntity, (data: unknown) => updates.push(data));
+            clickEntity();
+        });
+
+        function releaseDrag(modifiers: MouseEventInit): void {
+            const pointer = mock<Phaser.Input.Pointer>({ button: 0 });
+            Object.defineProperty(pointer, "event", { value: new MouseEvent("mouseup", modifiers) });
+            entityEvents.emit(Phaser.Input.Events.DRAG_END, pointer, 96, 32);
+        }
+
+        it.each([{ metaKey: true }, { altKey: true }, { ctrlKey: true }])("copies the object with %o", (modifiers) => {
+            releaseDrag(modifiers);
+
+            expect(copies).toHaveLength(1);
+            expect(updates).toHaveLength(0);
+        });
+
+        it("moves the object without a modifier", () => {
+            releaseDrag({});
+
+            expect(copies).toHaveLength(0);
+            expect(updates).toHaveLength(1);
+            expect(get(mapEditorSelectedEntityDraggedStore)).toBe(false);
+        });
     });
 });

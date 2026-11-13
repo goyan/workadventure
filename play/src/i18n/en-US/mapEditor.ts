@@ -26,6 +26,15 @@ const mapEditor: BaseTranslation = {
         shortcut: "Shortcut: {key}",
     },
     selection: {
+        filtersLabel: "Select:",
+        filterObjects: "Objects",
+        filterMapLayer: "Floors and walls",
+        filterAreas: "Zones",
+        shortcuts: "Shortcuts: Cmd/Ctrl+C copy, Cmd/Ctrl+V paste, Delete remove, Escape cancel or clear the selection.",
+        personalArea: "Personal desks are deleted with the Zones tool, which asks what to do with their furniture.",
+        deletePatternConfirm: "Delete this pattern for everyone?",
+        deletePatternYes: "Yes",
+        deletePatternNo: "No",
         title: "Select and edit in bulk",
         drawingInstruction: "Drag on the map to select objects and areas.",
         objectCount: "Objects: {count}",
@@ -443,6 +452,7 @@ const mapEditor: BaseTranslation = {
         create: "Draw a rectangle on the floor to create a zone: it fits the size of the room.",
         open: "Click a zone to see and edit its content.",
         remove: "Delete a zone with the Delete area button or with the eraser.",
+        duplicate: "Drag a zone while holding Ctrl, Cmd or Option to duplicate it: the copy stays where it was.",
     },
     mapLayer: {
         groups: {
@@ -573,6 +583,8 @@ const mapEditor: BaseTranslation = {
         header: {
             title: "Add object to your map",
             description: "Search, upload or select existing object and add it in the map.",
+            shortcuts:
+                "Shift: free placement · Esc or right click: drop the object · Delete: delete · ⧉ or Cmd/Ctrl + drag: copy · Cmd/Ctrl + Z: undo",
             choose: "Choose an object",
         },
         title: "Put your object",

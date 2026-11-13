@@ -225,6 +225,13 @@ export class AreaEditorTool extends MapEditorTool {
 
     public handleKeyDownEvent(event: KeyboardEvent): void {
         switch (event.key.toLowerCase()) {
+            case "escape": {
+                // Same as the object tool: Escape closes the properties of the selected area.
+                if (get(mapEditorAreaModeStore) === "EDIT" || get(mapEditorSelectedAreaPreviewStore)) {
+                    this.changeAreaMode("ADD");
+                }
+                break;
+            }
             case "backspace":
             case "delete": {
                 const areaPreview = get(mapEditorSelectedAreaPreviewStore);
@@ -259,24 +266,27 @@ export class AreaEditorTool extends MapEditorTool {
         this.scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.on(Phaser.Input.Events.POINTER_OUT, this.pointerOutEventHandler);
 
-        this.shiftKey?.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-            if (this.drawingNewArea && this.drawinNewAreaStartPos) {
-                this.drawNewArea(this.scene.input.activePointer);
-            }
-        });
-
-        this.shiftKey?.on(Phaser.Input.Keyboard.Events.UP, () => {
-            if (this.drawingNewArea && this.drawinNewAreaStartPos) {
-                this.drawNewArea(this.scene.input.activePointer);
-            }
-        });
-        this.ctrlKey?.on(Phaser.Input.Keyboard.Events.DOWN, () => {
-            this.scene.input.setDefaultCursor("crosshair");
-        });
-        this.ctrlKey?.on(Phaser.Input.Keyboard.Events.UP, () => {
-            this.scene.input.setDefaultCursor("grab");
-        });
+        this.shiftKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.shiftKeyEventHandler);
+        this.shiftKey?.on(Phaser.Input.Keyboard.Events.UP, this.shiftKeyEventHandler);
+        this.ctrlKey?.on(Phaser.Input.Keyboard.Events.DOWN, this.ctrlKeyDownEventHandler);
+        this.ctrlKey?.on(Phaser.Input.Keyboard.Events.UP, this.ctrlKeyUpEventHandler);
     }
+
+    // Named so that they can be removed: they used to pile up at every activation and to change the cursor of the
+    // other tools.
+    private readonly shiftKeyEventHandler = (): void => {
+        if (this.drawingNewArea && this.drawinNewAreaStartPos) {
+            this.drawNewArea(this.scene.input.activePointer);
+        }
+    };
+
+    private readonly ctrlKeyDownEventHandler = (): void => {
+        this.scene.input.setDefaultCursor("crosshair");
+    };
+
+    private readonly ctrlKeyUpEventHandler = (): void => {
+        this.scene.input.setDefaultCursor("grab");
+    };
 
     private unbindEventHandlers(): void {
         this.clearHoverMarker();
@@ -286,6 +296,10 @@ export class AreaEditorTool extends MapEditorTool {
         this.scene.input.off(Phaser.Input.Events.POINTER_OVER, this.pointerHoverEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_OUT, this.pointerOutEventHandler);
+        this.shiftKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.shiftKeyEventHandler);
+        this.shiftKey?.off(Phaser.Input.Keyboard.Events.UP, this.shiftKeyEventHandler);
+        this.ctrlKey?.off(Phaser.Input.Keyboard.Events.DOWN, this.ctrlKeyDownEventHandler);
+        this.ctrlKey?.off(Phaser.Input.Keyboard.Events.UP, this.ctrlKeyUpEventHandler);
     }
 
     private pointerHoverEventHandler = (pointer: Pointer, gameObjects: GameObject[]) => {

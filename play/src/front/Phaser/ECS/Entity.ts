@@ -466,7 +466,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     }
 
     public addProperty(property: EntityDataProperty): void {
-        this.entityData.properties.push(property);
+        // A new list, as in setProperty: the one in place may also be the map's, read by the undo.
+        this.entityData.properties = [...this.entityData.properties, property];
         this.emit(EntityEvent.Updated, this.appendId({ properties: this.entityData.properties }));
     }
 
@@ -490,10 +491,15 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     }
 
     public updateProperty(changes: AtLeast<EntityDataProperty, "id">): void {
-        const property = this.entityData.properties.find((property) => property.id === changes.id);
-        if (property) {
-            deepmergeInto(property, changes);
-        }
+        // New objects, as in setProperty: the property in place may also be the map's, read by the undo.
+        this.entityData.properties = this.entityData.properties.map((property) => {
+            if (property.id !== changes.id) {
+                return property;
+            }
+            const updated = structuredClone(property);
+            deepmergeInto(updated, changes);
+            return updated;
+        });
         this.onPropertiesUpdated();
     }
 
@@ -520,7 +526,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public deleteProperty(id: string): boolean {
         const index = this.entityData.properties.findIndex((property) => property.id === id);
         if (index !== -1) {
-            this.entityData.properties.splice(index, 1);
+            // A new list, as in setProperty: the one in place may also be the map's, read by the undo.
+            this.entityData.properties = this.entityData.properties.filter((property) => property.id !== id);
             this.emit(EntityEvent.Updated, this.appendId({ properties: this.entityData.properties }));
             return true;
         } else {

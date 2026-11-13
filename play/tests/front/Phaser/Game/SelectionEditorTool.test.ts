@@ -17,7 +17,14 @@ import {
     mapEditorSelectedEntityPrefabStore,
     mapEditorVisibilityStore,
 } from "../../../../src/front/Stores/MapEditorStore";
-import { mapEditorSelectionStore } from "../../../../src/front/Stores/MapEditorSelectionStore";
+import {
+    mapEditorSelectionFiltersStore,
+    mapEditorSelectionStore,
+} from "../../../../src/front/Stores/MapEditorSelectionStore";
+import {
+    MAP_LAYER_FLOOR_COLLECTION,
+    mapLayerPrefabId,
+} from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import type { FrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/FrontCommand";
 import type { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/MapEditor/EntitiesCollectionsManager";
@@ -86,6 +93,17 @@ const pilePrefab = EntityPrefab.parse({
     direction: "Down",
     color: "Default",
     collectionName: "Objects",
+    type: "Default",
+});
+
+const mapLayerFloorPrefab = EntityPrefab.parse({
+    id: mapLayerPrefabId(MAP_LAYER_FLOOR_COLLECTION, "sol-parquet-clair-uni"),
+    name: "sol-parquet-clair-uni",
+    tags: [],
+    imagePath: "sol-parquet-clair-uni.png",
+    direction: "Down",
+    color: "Default",
+    collectionName: MAP_LAYER_FLOOR_COLLECTION,
     type: "Default",
 });
 
@@ -393,6 +411,7 @@ describe("SelectionEditorTool", () => {
         mapEditorCopiedEntityDataPropertiesStore.set(undefined);
         mapEditorVisibilityStore.set(false);
         mapEditorSelectionStore.set(defaultSelectionState());
+        mapEditorSelectionFiltersStore.set({ objects: true, mapLayer: false, areas: true });
         activePointer = pointerAt(canvas, 0, 0);
         tool = new SelectionEditorTool(mapEditorModeManager, areaEditorTool);
         tool.activate();
@@ -458,8 +477,9 @@ describe("SelectionEditorTool", () => {
 
         select(0, 0, 64, 64);
         tool.moveSelection();
+        // Leaving the canvas (to reach the side panel) keeps the Move mode armed.
         inputEvents.emit(Phaser.Input.Events.GAME_OUT);
-        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, mode: "select" });
+        expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, mode: "move" });
     });
 
     it("keeps the initiating pointer as the owner of rectangle and placement gestures", async () => {
@@ -1048,6 +1068,129 @@ describe("SelectionEditorTool", () => {
             expect(get(mapEditorSelectionStore).error).toBeUndefined();
             expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toHaveLength(1);
             expect(wamFile.getGameMapAreas().getAreas()?.size ?? 0).toBe(0);
+        });
+    });
+    describe("map editor UX audit fixes", () => {
+        it("selects an area only when the rectangle contains it entirely", () => {
+            wamFile.getGameMapAreas().addArea(area("inside", 0, 0, 64, 64), true);
+            wamFile.getGameMapAreas().addArea(area("crossing", 64, 64, 96, 96), true);
+            userIsEditorStore.set(true);
+
+            select(0, 0, 96, 96);
+
+            expect(get(mapEditorSelectionStore).areaCount).toBe(1);
+        });
+
+        it("outlines every area while the tool is active, without any selection", () => {
+            wamFile.getGameMapAreas().addArea(area("room", 64, 96, 128, 160), true);
+            userIsEditorStore.set(true);
+            graphics.strokeRect.mockClear();
+
+            tool.clear();
+            tool.activate();
+
+            expect(graphics.strokeRect.mock.calls).toContainEqual([64, 96, 128, 160]);
+        });
+
+        it("refuses to delete a personal desk area and keeps the whole selection", async () => {
+            addEntity("chair", 32, 32, furniturePrefab);
+            wamFile.getGameMapAreas().addArea(
+                {
+                    ...area("desk", 0, 0, 96, 96),
+                    properties: [
+                        {
+                            id: "personal",
+                            type: "personalAreaPropertyData",
+                            accessClaimMode: "dynamic",
+                            allowedTags: [],
+                            ownerId: "someone",
+                        },
+                    ],
+                },
+                true,
+            );
+            userIsEditorStore.set(true);
+            select(0, 0, 96, 96);
+
+            await tool.deleteSelection();
+
+            expect(get(mapEditorSelectionStore)).toMatchObject({ error: "personalArea", entityCount: 1, areaCount: 1 });
+            expect(wamFile.getGameMapAreas().getAreas()?.has("desk")).toBe(true);
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toEqual(["chair"]);
+            expect(commandGroups).toHaveLength(0);
+        });
+
+        it("leaves floors and walls out by default and follows the kind filters", () => {
+            addEntity("parquet", 0, 0, mapLayerFloorPrefab);
+            addEntity("chair", 32, 32, furniturePrefab);
+            wamFile.getGameMapAreas().addArea(area("zone", 0, 0, 64, 64), true);
+            userIsEditorStore.set(true);
+
+            select(0, 0, 96, 96);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 1 });
+
+            // Changing a filter selects again what the current rectangle covers.
+            tool.setSelectionFilters({ mapLayer: true });
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 2, areaCount: 1 });
+
+            tool.setSelectionFilters({ objects: false, areas: false });
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 0 });
+            expect(get(mapEditorSelectionFiltersStore)).toEqual({ objects: false, mapLayer: true, areas: false });
+        });
+
+        it("keeps the Paste stamp armed when the pointer leaves the canvas or the window loses focus", async () => {
+            addEntity("source", 32, 32, furniturePrefab);
+            select(0, 0, 64, 64);
+            tool.copySelection();
+            tool.pasteSelection();
+
+            inputEvents.emit(Phaser.Input.Events.GAME_OUT);
+            window.dispatchEvent(new Event("blur"));
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+
+            // A press released outside the canvas is cancelled, but the mode stays armed.
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            inputEvents.emit(Phaser.Input.Events.POINTER_UP_OUTSIDE, pointerAt(canvas, 200, 200));
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toEqual(["source"]);
+
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            emitPointerUp(pointerAt(canvas, 200, 200, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+            expect(Object.keys(wamFile.getGameMapEntities().getEntities())).toHaveLength(2);
+            expect(get(mapEditorSelectionStore).mode).toBe("paste");
+        });
+
+        it("fits the selection rectangle to the selected items again after an undone move", async () => {
+            addEntity("chair", 32, 32, furniturePrefab);
+            select(0, 0, 96, 96);
+            tool.moveSelection();
+            emitPointerDown(pointerAt(canvas, 160, 160));
+            emitPointerUp(pointerAt(canvas, 160, 160, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+
+            await commandGroups[0][0].getUndoCommand().execute();
+            graphics.fillRect.mockClear();
+            tool.refreshSelectionAfterHistory();
+
+            expect(graphics.fillRect.mock.calls.at(-1)).toEqual([32, 32, 32, 32]);
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, hasRectangle: true });
+        });
+
+        it("clears the selection rectangle after an undone paste empties the selection", async () => {
+            addEntity("source", 32, 32, furniturePrefab);
+            select(0, 0, 64, 64);
+            tool.copySelection();
+            tool.pasteSelection();
+            emitPointerDown(pointerAt(canvas, 200, 200));
+            emitPointerUp(pointerAt(canvas, 200, 200, { pressed: false }));
+            await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+            tool.handleKeyDownEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+            await commandGroups[0][0].getUndoCommand().execute();
+            tool.refreshSelectionAfterHistory();
+
+            expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 0, hasRectangle: false });
         });
     });
 });

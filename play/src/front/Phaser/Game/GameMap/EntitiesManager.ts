@@ -76,6 +76,14 @@ export enum EntitiesManagerEvent {
     CopyEntity = "EntitiesManagerEvent:CopyEntity",
 }
 
+/**
+ * Releasing a dragged object with one of these keys drops a copy of it. Cmd and Option count on a Mac, where
+ * Ctrl+click is the secondary click.
+ */
+function isCopyModifier(event: MouseEvent | TouchEvent | WheelEvent | undefined): boolean {
+    return event !== undefined && (event.ctrlKey || event.metaKey || event.altKey);
+}
+
 /** Opacity of the entities that are not the subject of the map editor tool in use. */
 const DIMMED_ENTITY_ALPHA = 0.4;
 // Floors and walls are made of sprites that overlap: fading each of them with an alpha stacks the opacity where they
@@ -303,6 +311,27 @@ export class EntitiesManager extends EventEmitter {
         return deleted;
     }
 
+    /**
+     * Run once a map edit is done: an object deleted meanwhile (an undo, another editor) closes its properties, an
+     * object replaced under the same id (a rotation, a resize) keeps them, on the new instance.
+     */
+    public syncSelectionWithMap(): void {
+        const selected = get(mapEditorSelectedEntityStore);
+        if (!selected) {
+            return;
+        }
+        const current = this.entities.get(selected.entityId);
+        if (current === selected) {
+            return;
+        }
+        if (current) {
+            mapEditorSelectedEntityStore.set(current);
+            return;
+        }
+        mapEditorSelectedEntityStore.set(undefined);
+        mapEditorEntityModeStore.set("ADD");
+    }
+
     public deleteEntities(idsToRemove: string[]): boolean {
         const removedEntitiesStatus: boolean[] = idsToRemove.map((id) => this.deleteEntity(id));
         return removedEntitiesStatus.every(Boolean);
@@ -485,7 +514,7 @@ export class EntitiesManager extends EventEmitter {
                     entity.setPosition(oldPos.x, oldPos.y);
                     entity.clearTint();
                 } else {
-                    if (this.ctrlKey?.isDown) {
+                    if (this.ctrlKey?.isDown || isCopyModifier(pointer.event)) {
                         this.copyEntity(entity);
                     } else {
                         const data: Partial<EntityData> = {
@@ -502,6 +531,10 @@ export class EntitiesManager extends EventEmitter {
         });
         entity.on(Phaser.Input.Events.POINTER_DOWN, (pointer: Pointer) => {
             if (pointer.downElement?.tagName !== "CANVAS") {
+                return;
+            }
+            // A right click (Ctrl+click on a Mac) drops the object being placed: it does not open the one under it.
+            if (pointer.button !== 0 || pointer.rightButtonDown()) {
                 return;
             }
 
@@ -641,6 +674,11 @@ export class EntitiesManager extends EventEmitter {
         }
         this.erasingEntityIds.add(entity.entityId);
         entity.delete();
+    }
+
+    /** The eraser may erase this object again: its deletion did not happen. */
+    public cancelErasing(entityId: string): void {
+        this.erasingEntityIds.delete(entityId);
     }
 
     private isEntityEditorToolActive(): boolean {

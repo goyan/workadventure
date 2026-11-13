@@ -119,10 +119,8 @@
         if (!properties || (properties && properties.type !== "entityDescriptionProperties"))
             throw new Error("Wrong property type");
 
-        properties.description = entityDescription;
-        if ($mapEditorSelectedEntityStore) {
-            $mapEditorSelectedEntityStore.updateProperty($state.snapshot(properties));
-        }
+        // Only the change is given: the property in place may also be the map's, read by the undo.
+        $mapEditorSelectedEntityStore?.updateProperty({ id: properties.id, description: entityDescription });
     }
 
     function onUpdateSearchable() {
@@ -132,10 +130,8 @@
         if (!properties || (properties && properties.type !== "entityDescriptionProperties"))
             throw new Error("Wrong property type");
 
-        properties.searchable = entitySearchable;
-        if ($mapEditorSelectedEntityStore) {
-            $mapEditorSelectedEntityStore.updateProperty($state.snapshot(properties));
-        }
+        // Only the change is given: the property in place may also be the map's, read by the undo.
+        $mapEditorSelectedEntityStore?.updateProperty({ id: properties.id, searchable: entitySearchable });
     }
 
     function onUpdateProperty(property: EntityDataProperty) {
