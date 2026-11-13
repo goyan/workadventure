@@ -6,6 +6,7 @@ import {
     autoWeatherChanges,
     FOG_UNTIL_HOUR,
     FREQUENCY_FACTORS,
+    parisSlotComputations,
     PERSISTENCE,
     scheduleComputations,
     slotStart,
@@ -272,15 +273,24 @@ describe("seasonal weather schedule", () => {
         expect(autoWeatherChanges(new Date(START), { frequency: "normal", include: [] }, 3)).toEqual([]);
     });
 
-    it("answers repeated calls in a slot with the same value and no recomputation", () => {
+    it("answers repeated calls in a slot with the same value, computing each slot only once", () => {
         const auto: AutoWeatherSettings = { frequency: "calm", include: [WeatherType.Rain, WeatherType.Fog] };
         const slot = Date.parse("2031-03-04T10:00:00Z");
         const expected = autoWeatherAt(new Date(slot), auto);
-        const before = scheduleComputations();
-        for (let offset = 0; offset < SLOT_MS; offset += 60_000) {
-            expect(autoWeatherAt(new Date(slot + offset), auto)).toBe(expected);
+        const previous = autoWeatherAt(new Date(slot - 1), auto);
+        const before = parisSlotComputations();
+        const days = scheduleComputations();
+        // The snowCoverage pattern: current slot then previous slot, every frame.
+        for (let i = 0; i < 100; i++) {
+            expect(autoWeatherAt(new Date(slot + i * 1000), auto)).toBe(expected);
+            expect(autoWeatherAt(new Date(slot - 1), auto)).toBe(previous);
         }
-        expect(scheduleComputations() - before).toBeLessThanOrEqual(0);
+        expect(parisSlotComputations() - before).toBe(0);
+        expect(scheduleComputations() - days).toBe(0);
+        // A slot not seen yet is computed exactly once, however often it is asked.
+        const fresh = slot + 5 * SLOT_MS;
+        for (let i = 0; i < 100; i++) autoWeatherAt(new Date(fresh + i), auto);
+        expect(parisSlotComputations() - before).toBe(1);
         // A different setting in the same slot is not served from the memo.
         expect(autoWeatherAt(new Date(slot), { frequency: "normal", include: [] })).toBe(WeatherType.Clear);
         expect(autoWeatherAt(new Date(slot), auto)).toBe(expected);

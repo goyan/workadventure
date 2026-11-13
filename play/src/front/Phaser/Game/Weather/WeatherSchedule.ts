@@ -62,17 +62,32 @@ export function autoWeatherAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AU
     const time = date.getTime();
     if (!Number.isFinite(time)) return WeatherType.Clear;
     const settings = normalise(auto);
-    // Called several times per frame: the weather is constant within a slot, so skip the Paris-time formatting.
+    // Called several times per frame (current and previous slot): the weather is constant within a slot,
+    // so skip the Paris-time formatting.
     const index = Math.floor(time / SLOT_MS);
-    const key = `${settings.frequency}|${settings.include.join(",")}`;
-    if (lastCall && lastCall.index === index && lastCall.key === key) return lastCall.weather;
+    const key = `${index}|${settings.frequency}|${settings.include.join(",")}`;
+    const known = slotMemo.get(key);
+    if (known !== undefined) return known;
+    slotComputations++;
     const { day, slot } = parisSlot(date);
     const weather = daySchedule(day, settings)[slot];
-    lastCall = { index, key, weather };
+    slotMemo.set(key, weather);
+    while (slotMemo.size > MEMO_SIZE) {
+        const oldest = slotMemo.keys().next().value;
+        if (oldest === undefined) break;
+        slotMemo.delete(oldest);
+    }
     return weather;
 }
 
-let lastCall: { index: number; key: string; weather: WeatherType } | undefined;
+const MEMO_SIZE = 8;
+const slotMemo = new Map<string, WeatherType>();
+let slotComputations = 0;
+
+/** Number of Paris-slot lookups computed so far (memo misses), for tests. */
+export function parisSlotComputations(): number {
+    return slotComputations;
+}
 
 /**
  * Next weather changes after `date` (at most `count`), looking at the current Paris day and the next one.
