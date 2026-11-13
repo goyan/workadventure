@@ -26,6 +26,7 @@
             <li>{$LL.mapEditor.areaEditorInstructions.create()}</li>
             <li>{$LL.mapEditor.areaEditorInstructions.open()}</li>
             <li>{$LL.mapEditor.areaEditorInstructions.remove()}</li>
+            <li>{$LL.mapEditor.areaEditorInstructions.duplicate()}</li>
         </ul>
     {/if}
 </div>

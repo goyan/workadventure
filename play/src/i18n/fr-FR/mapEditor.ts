@@ -26,6 +26,17 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         configureMyRoomActivated: "Configuration de la salle activée",
     },
     selection: {
+        filtersLabel: "Sélectionner :",
+        filterObjects: "Objets",
+        filterMapLayer: "Sols et murs",
+        filterAreas: "Zones",
+        shortcuts:
+            "Raccourcis : Cmd/Ctrl+C copier, Cmd/Ctrl+V coller, Suppr supprimer, Échap annuler ou tout désélectionner.",
+        personalArea:
+            "Les bureaux personnels se suppriment avec l’outil Zones, qui demande quoi faire de leur mobilier.",
+        deletePatternConfirm: "Supprimer ce motif pour tous ?",
+        deletePatternYes: "Oui",
+        deletePatternNo: "Non",
         title: "Sélection et édition en masse",
         drawingInstruction: "Tracez un rectangle sur la carte pour sélectionner des objets et des zones.",
         objectCount: "Objets : {count}",
@@ -451,6 +462,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         create: "Tracez un rectangle sur le sol pour créer une zone : elle s'adapte à la taille de la pièce.",
         open: "Cliquez sur une zone pour voir et modifier son contenu.",
         remove: "Supprimez une zone avec le bouton « Supprimer la zone » ou avec la gomme.",
+        duplicate: "Glissez une zone en maintenant Ctrl, Cmd ou Option pour la dupliquer : la copie reste à sa place.",
     },
     mapLayer: {
         groups: {

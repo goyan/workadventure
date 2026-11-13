@@ -14,6 +14,7 @@ import { GameScene } from "../../Game/GameScene";
 import { SpeechDomElement } from "../../Entity/SpeechDomElement";
 import LL from "../../../../i18n/i18n-svelte";
 import { SizeAlteringSquare, SizeAlteringSquareEvent, SizeAlteringSquarePosition as Edge } from "./SizeAlteringSquare";
+import { isAreaDuplicateGesture } from "./AreaDuplicateGesture";
 
 import Rectangle = Phaser.GameObjects.Rectangle;
 import Key = Phaser.Input.Keyboard.Key;
@@ -343,7 +344,7 @@ export class AreaPreview extends Rectangle {
         this.on(Phaser.Input.Events.POINTER_UP, (pointer: Pointer) => {
             if (this.selected && this.moved) {
                 this.moved = false;
-                if (this.ctrlKey?.isDown) {
+                if (isAreaDuplicateGesture(pointer.event, this.ctrlKey?.isDown ?? false)) {
                     this.emit(AreaPreviewEvent.Copied, {
                         position: {
                             x: this.areaData.x,

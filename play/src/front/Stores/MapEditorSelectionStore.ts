@@ -7,7 +7,7 @@ export type MapEditorSelectionState = {
     hasRectangle: boolean;
     mode: "select" | "move" | "paste";
     busy: boolean;
-    error: "blocked" | "failed" | undefined;
+    error: "blocked" | "failed" | "personalArea" | undefined;
 };
 
 export const mapEditorSelectionStore = writable<MapEditorSelectionState>({
@@ -18,4 +18,20 @@ export const mapEditorSelectionStore = writable<MapEditorSelectionState>({
     mode: "select",
     busy: false,
     error: undefined,
+});
+
+/**
+ * Which kinds of content a selection rectangle picks up. Floors and walls of the Map tool cover whole rooms, so they
+ * are left out by default: a rectangle drawn around furniture would otherwise take (and delete) the floor under it.
+ */
+export type MapEditorSelectionFilters = {
+    objects: boolean;
+    mapLayer: boolean;
+    areas: boolean;
+};
+
+export const mapEditorSelectionFiltersStore = writable<MapEditorSelectionFilters>({
+    objects: true,
+    mapLayer: false,
+    areas: true,
 });

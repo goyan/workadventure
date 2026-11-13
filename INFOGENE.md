@@ -1699,3 +1699,27 @@ Suite d'un audit de l'outil Objets (lu dans le code, puis corrigé) :
 - relâcher un objet glissé avec Cmd ou Option (en plus de Ctrl) pose une copie ; Ctrl+Y (ou Cmd+Y) rétablit ;
 - une ligne d'aide rappelle les raccourcis dans la bibliothèque (Maj, Échap / clic droit, Suppr, ⧉ / Cmd ou Ctrl +
   glisser, Cmd ou Ctrl + Z).
+
+## Éditeur : outils Sélection et Zones
+
+Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lecture du code et non reproduits en jeu :
+
+- **Sélection, zones** : une zone n'est prise que si le rectangle la contient entièrement. Avant, il suffisait de la
+  toucher, et une grande zone invisible (une salle, un étage) partait avec les meubles quand on cliquait sur Supprimer
+  ou Déplacer. Le contour des zones est dessiné en blanc dans l'outil Sélection.
+- **Sélection, bureau personnel** : Supprimer refuse une sélection qui contient un bureau personnel et renvoie vers
+  l'outil Zones, qui demande quoi faire de son mobilier (`ActionPopupOnPersonalAreaWithEntities`). Le déplacer reste
+  possible.
+- **Sélection, filtres** : cases Objets / Sols et murs / Zones (`mapEditorSelectionFiltersStore`). « Sols et murs »
+  (prefabs de l'outil Carte, `isMapLayerPrefab`) est décoché par défaut ; changer une case resélectionne le rectangle courant.
+- **Sélection, mode tampon** : Coller en série et Déplacer restent armés quand la souris sort du canvas (panneau,
+  barres) ou que la fenêtre perd le focus ; seul l'appui en cours est abandonné.
+- **Sélection, annuler** : après Cmd/Ctrl+Z ou un rétablissement (`refreshSelectionAfterHistory`, appelé par
+  `MapEditorModeManager`), le rectangle est recalé sur les éléments sélectionnés restants, ou effacé si plus rien n'est
+  sélectionné. Un rectangle qui contient encore tous les éléments est gardé (cible de Remplir).
+- **Motifs partagés** : la poubelle demande « Supprimer ce motif pour tous ? Oui / Non » (`PatternDeleteButton.svelte`).
+- **Raccourcis** : une ligne dans le panneau Sélection rappelle Cmd/Ctrl+C, Cmd/Ctrl+V, Suppr et Échap. Dans l'outil Zones,
+  Échap ferme les propriétés de la zone sélectionnée.
+- **Zones, duplication** : glisser une zone avec Ctrl, Cmd ou Option la duplique (`isAreaDuplicateGesture`), alors que
+  Ctrl+clic ouvre le menu contextuel sur Mac. La consigne de l'outil le mentionne. Les écouteurs des touches Ctrl et
+  Maj sont retirés à la désactivation : ils s'empilaient à chaque activation et changeaient le curseur des autres outils.

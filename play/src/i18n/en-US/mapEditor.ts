@@ -25,6 +25,15 @@ const mapEditor: BaseTranslation = {
         configureMyRoomActivated: "Configure my room activated",
     },
     selection: {
+        filtersLabel: "Select:",
+        filterObjects: "Objects",
+        filterMapLayer: "Floors and walls",
+        filterAreas: "Zones",
+        shortcuts: "Shortcuts: Cmd/Ctrl+C copy, Cmd/Ctrl+V paste, Delete remove, Escape cancel or clear the selection.",
+        personalArea: "Personal desks are deleted with the Zones tool, which asks what to do with their furniture.",
+        deletePatternConfirm: "Delete this pattern for everyone?",
+        deletePatternYes: "Yes",
+        deletePatternNo: "No",
         title: "Select and edit in bulk",
         drawingInstruction: "Drag on the map to select objects and areas.",
         objectCount: "Objects: {count}",
@@ -442,6 +451,7 @@ const mapEditor: BaseTranslation = {
         create: "Draw a rectangle on the floor to create a zone: it fits the size of the room.",
         open: "Click a zone to see and edit its content.",
         remove: "Delete a zone with the Delete area button or with the eraser.",
+        duplicate: "Drag a zone while holding Ctrl, Cmd or Option to duplicate it: the copy stays where it was.",
     },
     mapLayer: {
         groups: {

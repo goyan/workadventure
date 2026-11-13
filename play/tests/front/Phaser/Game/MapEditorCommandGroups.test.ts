@@ -30,6 +30,7 @@ const editorToolMocks = vi.hoisted(() => {
             activate: vi.fn(),
             destroy: vi.fn(),
             refreshSelection: vi.fn(),
+            refreshSelectionAfterHistory: vi.fn(),
             subscribeToGameMapFrontWrapperEvents: vi.fn(),
             handleKeyDownEvent: vi.fn((event: unknown) => {
                 keyDownEvents.push(event);
@@ -187,6 +188,22 @@ describe("MapEditorModeManager command groups", () => {
         await manager.redoCommand();
         await manager.redoCommand();
         expect(state.value).toBe(6);
+    });
+
+    it("asks the selection tool to fit its rectangle again after an undo and a redo", async () => {
+        const fixture = createManagerFixture();
+        manager = fixture.manager;
+        const state: CommandTestState = { value: 0, emittedCommandIds: [] };
+        const selectionTool = vi.mocked(editorToolMocks.SelectionEditorTool).mock.results[0]?.value as {
+            refreshSelectionAfterHistory: ReturnType<typeof vi.fn>;
+        };
+        await manager.executeCommands([new StateCommand(state, 1, "move")]);
+        expect(selectionTool.refreshSelectionAfterHistory).not.toHaveBeenCalled();
+
+        await manager.undoCommand();
+        expect(selectionTool.refreshSelectionAfterHistory).toHaveBeenCalledTimes(1);
+        await manager.redoCommand();
+        expect(selectionTool.refreshSelectionAfterHistory).toHaveBeenCalledTimes(2);
     });
 
     it("reads the latest state in a command factory after earlier queued operations finish", async () => {

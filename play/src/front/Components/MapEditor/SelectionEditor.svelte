@@ -4,14 +4,16 @@
     import { asError } from "catch-unknown";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { mapEditorSelectionStore } from "../../Stores/MapEditorSelectionStore";
+    import { mapEditorSelectionFiltersStore, mapEditorSelectionStore } from "../../Stores/MapEditorSelectionStore";
+    import type { MapEditorSelectionFilters } from "../../Stores/MapEditorSelectionStore";
     import { mapEditorPatternStore } from "../../Stores/MapEditorPatternStore";
     import { refreshMapPatterns, removeMapPattern } from "../../Phaser/Game/MapEditor/MapPatternActions";
     import { MAP_PATTERN_MAX_NAME_LENGTH } from "../../../common/MapPattern";
     import type { MapPatternSummaryForClient } from "../../../common/MapPattern";
     import { mapEditorSelectedEntityPrefabStore } from "../../Stores/MapEditorStore";
     import EntityEditorPicker from "./EntityEditor/EntityEditorPicker.svelte";
-    import { IconCheck, IconTrash, IconX } from "@wa-icons";
+    import PatternDeleteButton from "./PatternDeleteButton.svelte";
+    import { IconCheck, IconX } from "@wa-icons";
 
     const mapEditorModeManager = gameManager.getCurrentGameScene().getMapEditorModeManager();
     if (!mapEditorModeManager) throw new Error("The map editor is not available");
@@ -93,6 +95,16 @@
         }
     }
 
+    const selectionFilters: { key: keyof MapEditorSelectionFilters; label: () => string }[] = [
+        { key: "objects", label: () => $LL.mapEditor.selection.filterObjects() },
+        { key: "mapLayer", label: () => $LL.mapEditor.selection.filterMapLayer() },
+        { key: "areas", label: () => $LL.mapEditor.selection.filterAreas() },
+    ];
+
+    function setSelectionFilter(key: keyof MapEditorSelectionFilters, checked: boolean): void {
+        selectionTool.setSelectionFilters({ [key]: checked });
+    }
+
     function copySelection(): void {
         selectionTool.copySelection();
     }
@@ -138,6 +150,23 @@
         {/if}
     </header>
 
+    <fieldset class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="mapEditorSelectionFilters">
+        <legend class="sr-only">{$LL.mapEditor.selection.filtersLabel()}</legend>
+        <span aria-hidden="true">{$LL.mapEditor.selection.filtersLabel()}</span>
+        {#each selectionFilters as filter (filter.key)}
+            <label class="flex items-center gap-1">
+                <input
+                    type="checkbox"
+                    data-testid={`mapEditorSelectionFilter-${filter.key}`}
+                    checked={$mapEditorSelectionFiltersStore[filter.key]}
+                    disabled={$mapEditorSelectionStore.busy}
+                    onchange={(event) => setSelectionFilter(filter.key, event.currentTarget.checked)}
+                />
+                {filter.label()}
+            </label>
+        {/each}
+    </fieldset>
+
     <div class="text-sm" aria-live="polite" data-testid="mapEditorSelectionCounts">
         <p>{$LL.mapEditor.selection.objectCount({ count: $mapEditorSelectionStore.entityCount })}</p>
         <p>{$LL.mapEditor.selection.areaCount({ count: $mapEditorSelectionStore.areaCount })}</p>
@@ -162,6 +191,10 @@
     {#if $mapEditorSelectionStore.error === "blocked"}
         <p class="text-sm text-red-400" role="alert" data-testid="mapEditorSelectionBlocked">
             {$LL.mapEditor.selection.blocked()}
+        </p>
+    {:else if $mapEditorSelectionStore.error === "personalArea"}
+        <p class="text-sm text-red-400" role="alert" data-testid="mapEditorSelectionPersonalArea">
+            {$LL.mapEditor.selection.personalArea()}
         </p>
     {:else if $mapEditorSelectionStore.error === "failed"}
         <p class="text-sm text-red-400" role="alert" data-testid="mapEditorSelectionFailed">
@@ -235,6 +268,8 @@
             </button>
         {/if}
     </div>
+
+    <p class="text-xs opacity-75" data-testid="mapEditorSelectionShortcuts">{$LL.mapEditor.selection.shortcuts()}</p>
 
     {#if isNamingPattern}
         <form
@@ -329,16 +364,13 @@
                             </span>
                         </button>
                         {#if pattern.canDelete}
-                            <button
-                                class="shrink-0 rounded p-1 hover:bg-white/10 disabled:opacity-50"
-                                data-testid="mapEditorSelectionPatternDelete"
-                                aria-label={$LL.mapEditor.selection.deletePattern({ name: pattern.name })}
+                            <PatternDeleteButton
+                                name={pattern.name}
                                 disabled={$mapEditorSelectionStore.busy}
-                                onclick={() => deletePattern(pattern)}
-                                type="button"
-                            >
-                                <IconTrash />
-                            </button>
+                                onConfirm={() => {
+                                    deletePattern(pattern).catch(() => undefined);
+                                }}
+                            />
                         {/if}
                     </li>
                 {/each}
