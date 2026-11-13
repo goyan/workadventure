@@ -94,11 +94,13 @@ describe("electric unicycle", () => {
             "avatar-electric-unicycle-details",
         ]);
         expect(vi.mocked(scene.add.sprite.mock.results[0].value.setFrame).mock.lastCall).toEqual([2]);
-        // Going down and to the left, the avatar faces down: the unicycle too, square, not turned to the diagonal.
-        effect.update(true, PositionMessage_Direction.DOWN, readVehicleColors(null), true, 100, { x: -1, y: 1 });
+        // Going down and to the left: the three-quarter view of that diagonal, upright, never turned like a board.
+        for (let time = 100; time <= 1000; time += 100) {
+            effect.update(true, PositionMessage_Direction.DOWN, readVehicleColors(null), true, time, { x: -1, y: 1 });
+        }
         const body = vi.mocked(scene.add.sprite.mock.results[0].value);
-        expect(body.setFrame.mock.lastCall?.[0] % 8).toBe(0);
-        expect(body.setAngle.mock.lastCall).toEqual([0]);
+        expect(body.setFrame.mock.lastCall?.[0] % 8).toBe(1);
+        expect(body.setAngle.mock.calls.every(([angle]) => angle === 0)).toBe(true);
         effect.destroy();
     });
 });

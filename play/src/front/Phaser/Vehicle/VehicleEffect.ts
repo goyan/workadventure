@@ -67,15 +67,15 @@ export class VehicleEffect {
         if (this.heading === undefined) this.heading = this.targetHeading = cardinalVehicleHeading(direction);
         if (moving && (dx || dy)) this.targetHeading = vehicleHeading(dx, dy);
         this.heading = turnVehicleTowards(this.heading, this.targetHeading, delta);
-        // A unicycle stands under the avatar, which only faces four ways: it faces the same way, square.
+        // A unicycle stays upright: it is drawn for each of the eight headings (three-quarter views on the
+        // diagonals) instead of being turned like a board seen from above.
         const upright = this.vehicle === Vehicle.ElectricUnicycle;
-        if (upright) this.heading = cardinalVehicleHeading(direction);
         const heading = Math.round(this.heading) % VEHICLE_DIRECTIONS;
         const frame = heading + (moving ? (Math.floor(time / 70) % 4) * VEHICLE_DIRECTIONS : 0);
         for (const [index, sprite] of this.sprites.entries()) {
             sprite
                 .setFrame(frame)
-                .setAngle((this.heading - Math.round(this.heading)) * 45)
+                .setAngle(upright ? 0 : (this.heading - Math.round(this.heading)) * 45)
                 .setVisible(true);
             const part = this.artwork.layers[index];
             if (part !== "outline" && part !== "details") sprite.setTint(parseInt(colors[part].slice(1), 16));
