@@ -61,15 +61,34 @@ export function dueReminders(
 
 /**
  * Whether the reminder or the agenda offers "Go there": a meeting with a Teams room key (Mac companion), once the module that
- * knows the rooms registered how to go there.
+ * knows the rooms registered how to go there, unless the player already stands in that meeting's room (`meetingKeyHere`).
  */
 export function canGoToMeeting(
     event: CalendarEventInterface,
     goTo: ((event: CalendarEventInterface) => void) | undefined,
     now: Date = new Date(),
+    meetingKeyHere?: string,
 ): boolean {
-    // Until the meeting ends: a guest arriving late still finds the room.
-    return goTo !== undefined && event.resource?.meetingKey !== undefined && now < event.end;
+    const meetingKey = event.resource?.meetingKey;
+    // Until the meeting ends: a guest arriving late still finds the room. Not from inside its room: already there.
+    return goTo !== undefined && meetingKey !== undefined && meetingKey !== meetingKeyHere && now < event.end;
+}
+
+/**
+ * The meetings to join now, by start: those in progress and those starting within their reminder lead, long and
+ * all-day events aside (they would hold the spot all day).
+ */
+export function meetingsAtHand(events: Iterable<CalendarEventInterface>, now: Date): CalendarEventInterface[] {
+    const time = now.getTime();
+    return [...events]
+        .filter(
+            (event) =>
+                !event.allDay &&
+                !isLong(event) &&
+                event.start.getTime() - reminderLeadMs(event) <= time &&
+                time < event.end.getTime(),
+        )
+        .sort(byStart);
 }
 
 /** Shows a settled reminder again (the user walked into a Teams room during that meeting). */
@@ -82,10 +101,11 @@ export function remindAgain(event: CalendarEventInterface): void {
 }
 
 /**
- * Why Teams is offered: the avatar arrived in the meeting's room after "Go there", or "Go there" could not give a
- * room (all taken, or none on the map) and the avatar stays.
+ * Why Teams is offered: the avatar arrived in the meeting's room after "Go there", or the avatar stays as "Go there"
+ * could not take it there: no room on the map (`teams-only`), all taken (`rooms-full`), the room could not be booked
+ * (`claim-failed`), or no way leads to it (`no-path`).
  */
-export type TeamsPromptReason = "arrived" | "rooms-full" | "teams-only";
+export type TeamsPromptReason = "arrived" | "rooms-full" | "teams-only" | "claim-failed" | "no-path";
 
 /** The question "Open the meeting in Teams?", one at a time: a newer one replaces it. */
 export const teamsPromptStore = writable<{ event: CalendarEventInterface; reason: TeamsPromptReason } | undefined>(

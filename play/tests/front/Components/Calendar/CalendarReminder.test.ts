@@ -7,6 +7,7 @@ import {
     canGoToMeeting,
     closeTeamsPrompt,
     dueReminders,
+    meetingsAtHand,
     REMINDER_LEAD_MS,
     REMINDER_LINGER_MS,
     teamsPromptStore,
@@ -108,6 +109,53 @@ describe("canGoToMeeting", () => {
 
         expect(canGoToMeeting(started, goTo, NOW)).toBe(true);
         expect(canGoToMeeting(started, goTo, new Date(started.end.getTime()))).toBe(false);
+    });
+});
+
+describe("canGoToMeeting in the meeting's own room", () => {
+    it("hides Go there while the feet stand in the room the meeting got, shows it again once out", () => {
+        const goTo = () => undefined;
+        const key = "a".repeat(64);
+        const started = event("started", -5 * MINUTE, { resource: { meetingKey: key } });
+
+        expect(canGoToMeeting(started, goTo, NOW, key)).toBe(false);
+        expect(canGoToMeeting(started, goTo, NOW, "b".repeat(64))).toBe(true);
+        expect(canGoToMeeting(started, goTo, NOW, undefined)).toBe(true);
+    });
+});
+
+describe("meetingsAtHand", () => {
+    // 2026-11-13: "Daily santé" ran from 09:15 to 09:45, "Daily Produit du Vendredi" started at 09:30.
+    const at = (time: string) => new Date(`2026-11-13T${time}:00+01:00`);
+    const meeting = (id: string, start: string, end: string, extra: Partial<CalendarEventInterface> = {}) => ({
+        id,
+        title: id,
+        description: "",
+        start: at(start),
+        end: at(end),
+        ...extra,
+    });
+    const sante = meeting("Daily santé", "09:15", "09:45");
+    const produit = meeting("Daily Produit du Vendredi", "09:30", "10:00");
+
+    it("gives the meetings in progress and those within their reminder lead, by start", () => {
+        expect(ids(meetingsAtHand([produit, sante], at("09:27")))).toEqual([
+            "Daily santé",
+            "Daily Produit du Vendredi",
+        ]);
+    });
+
+    it("leaves out a meeting not yet within its reminder lead", () => {
+        expect(ids(meetingsAtHand([produit, sante], at("09:24")))).toEqual(["Daily santé"]);
+    });
+
+    it("follows the alarm of the meeting, and leaves out the ended, all-day and long events", () => {
+        const early = meeting("early", "09:40", "10:00", { resource: { alarmMinutesBefore: 15 } });
+        const allDay = meeting("all day", "00:00", "23:59", { allDay: true });
+        const long = meeting("long", "08:00", "18:00");
+        const ended = meeting("ended", "09:00", "09:20");
+
+        expect(ids(meetingsAtHand([early, allDay, long, ended], at("09:27")))).toEqual(["early"]);
     });
 });
 

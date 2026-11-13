@@ -100,6 +100,69 @@ export class PathfindingManager {
     }
 
     /**
+     * The center of the free tile of a rectangle (an area) nearest to a target point (its center) that the avatar can
+     * walk to, the nearest to the avatar among equals. Unlike a walk to the target "nearest available", which only
+     * looks at the 8 tiles around it, the whole rectangle is searched: a meeting table can cover its center and the
+     * tiles around. Undefined when no tile of the rectangle can be reached (closed by walls, or locked).
+     */
+    public nearestReachablePointIn(
+        start: { x: number; y: number },
+        rectangle: { x: number; y: number; width: number; height: number },
+        target: { x: number; y: number },
+    ): { x: number; y: number } | undefined {
+        const startTile = this.mapPixelsToTileUnits(
+            this.clampToMap({ x: start.x, y: start.y + this.tileDimensions.height * 0.5 }),
+        );
+        const reached = this.reachableTiles(startTile);
+        let best: { tile: Tile; toTarget: number; toStart: number } | undefined;
+        for (const tile of reached) {
+            const center = this.mapTileUnitToPixels(tile);
+            if (
+                center.x < rectangle.x ||
+                center.x >= rectangle.x + rectangle.width ||
+                center.y < rectangle.y ||
+                center.y >= rectangle.y + rectangle.height
+            ) {
+                continue;
+            }
+            const toTarget = MathUtils.distanceBetween(center, target, false);
+            const toStart = MathUtils.distanceBetween(tile, startTile, false);
+            if (!best || toTarget < best.toTarget || (toTarget === best.toTarget && toStart < best.toStart)) {
+                best = { tile, toTarget, toStart };
+            }
+        }
+        return best ? this.mapTileUnitToPixels(best.tile) : undefined;
+    }
+
+    /** The tiles the avatar can walk to from a tile, by the same moves as the A* (the start tile included). */
+    private reachableTiles(start: Tile): Tile[] {
+        const width = this.grid[0]?.length ?? 0;
+        const height = this.grid.length;
+        const seen = new Uint8Array(width * height);
+        const reached: Tile[] = [start];
+        seen[start.y * width + start.x] = 1;
+        for (let i = 0; i < reached.length; i += 1) {
+            const tile = reached[i];
+            for (let dy = -1; dy <= 1; dy += 1) {
+                for (let dx = -1; dx <= 1; dx += 1) {
+                    const next = { x: tile.x + dx, y: tile.y + dy };
+                    if (
+                        (dx === 0 && dy === 0) ||
+                        !this.isTileWithinMap(next) ||
+                        seen[next.y * width + next.x] === 1 ||
+                        !this.canMove(tile, next)
+                    ) {
+                        continue;
+                    }
+                    seen[next.y * width + next.x] = 1;
+                    reached.push(next);
+                }
+            }
+        }
+        return reached;
+    }
+
+    /**
      * The path follows the centers of tiles, which makes stairs where a straight line would do. Each step is dropped
      * when the avatar can walk straight to the next one, as wide as it is and clear of the walls on its sides.
      */

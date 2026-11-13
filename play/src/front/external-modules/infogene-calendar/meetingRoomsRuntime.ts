@@ -6,12 +6,19 @@ import { gameManager } from "../../Phaser/Game/GameManager";
 import type { GameScene } from "../../Phaser/Game/GameScene";
 import { DEPTH_DOOR_LOCK_INDEX } from "../../Phaser/Game/DepthIndexes";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-import { calendarEventsStore, goToMeetingStore } from "../../Stores/CalendarStore";
+import { calendarEventsStore, goToMeetingStore, meetingKeyHereStore } from "../../Stores/CalendarStore";
 import { askToOpenInTeams, calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
 import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
-import { goToMeeting, MeetingArrival, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
+import {
+    goToMeeting,
+    MeetingArrival,
+    meetingKeyHere,
+    meetingRoomLabels,
+    meetingToOpenOnEntry,
+    roomAt,
+} from "./meetingRooms";
 
 /** The titles of the taken rooms are read again twice a minute, as the agenda's busy status. */
 const LABELS_INTERVAL_MS = 30 * 1000;
@@ -65,14 +72,26 @@ export function startMeetingRooms(): () => void {
             onRoom: (areaId) => {
                 walk = arrival.expect(event, areaId, scene.roomUrl);
             },
+            // The room is entered by the feet (see `feet`): a free point of the room is where the feet must go.
+            reachablePointIn: (room) =>
+                scene.nearestReachablePointIn(
+                    { x: room.x, y: room.y, width: room.width, height: room.height },
+                    { x: room.x + room.width / 2, y: room.y + room.height / 2 },
+                ),
+            standsIn: (room) => roomAt(feet(scene), [room]) !== undefined,
             walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
         })
             .then((outcome) => {
+                if (abortController.signal.aborted) return;
                 refreshLabels();
-                // No room to walk to: the avatar stays, and Teams is offered at once.
+                if (outcome.kind === "claim-failed" || outcome.kind === "no-path") {
+                    console.warn("Cannot go to the meeting room", outcome.kind, outcome.error);
+                }
+                // No room to walk to: the avatar stays, and Teams is offered at once, saying why.
                 if (outcome.kind !== "walking") {
+                    if (walk !== undefined) arrival.cancel();
                     askToOpenInTeams(event, outcome.kind);
                     return;
                 }
@@ -88,7 +107,7 @@ export function startMeetingRooms(): () => void {
             .catch((e: unknown) => {
                 if (abortController.signal.aborted) return;
                 console.warn("Cannot go to the meeting room", asError(e).message);
-                // No room could be asked for, or no path leads there: the meeting can still be opened in Teams.
+                // An unexpected error (goToMeeting itself never rejects): the meeting can still be opened in Teams.
                 if (walk !== undefined) arrival.cancel();
                 askToOpenInTeams(event, "teams-only");
             });
@@ -135,6 +154,8 @@ export function startMeetingRooms(): () => void {
         const player = scene?.CurrentPlayer;
         if (!scene || !player) return;
         const areas = sceneAreas(scene);
+        // "Go there" is hidden for the meeting whose room the player stands in.
+        meetingKeyHereStore.set(meetingKeyHere(feet(scene), areas, rooms));
         // Before the entry below: arriving after "Go there" asks about Teams instead of reminding.
         arrived(arrival.check(feet(scene), areas, scene.roomUrl, new Date()));
         const room = roomAt(feet(scene), areas);
@@ -185,5 +206,6 @@ export function startMeetingRooms(): () => void {
         for (const text of labels.values()) text.destroy();
         labels.clear();
         goToMeetingStore.set(undefined);
+        meetingKeyHereStore.set(undefined);
     };
 }

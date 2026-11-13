@@ -14,7 +14,8 @@
     import { blocker } from "../../Utils/screenBlocker";
     import { externalSvelteComponentService } from "../../Stores/Utils/externalSvelteComponentService";
     import ExternalComponents from "../ExternalModules/ExternalComponents.svelte";
-    import { buildAgenda, formatDayName, meetingsInProgress, nextMeeting, overlapsWith } from "./agenda";
+    import { buildAgenda, formatDayName, nextMeeting, overlapsWith } from "./agenda";
+    import { meetingsAtHand } from "./CalendarReminder";
     import CalendarNextMeeting from "./CalendarNextMeeting.svelte";
     import CalendarMeetingsInProgress from "./CalendarMeetingsInProgress.svelte";
     import CalendarEventRow from "./CalendarEventRow.svelte";
@@ -29,7 +30,7 @@
 
     let days = $derived(buildAgenda($calendarEventsStore.values(), now));
     let next = $derived(nextMeeting($calendarEventsStore.values(), now));
-    let inProgress = $derived(meetingsInProgress($calendarEventsStore.values(), now));
+    let atHand = $derived(meetingsAtHand($calendarEventsStore.values(), now));
 
     let sections: HTMLElement[] = $state([]);
 
@@ -80,9 +81,9 @@
             </div>
         {/if}
 
-        {#if inProgress.length > 1}
-            <!-- We cannot tell which one the user is in: offer them all rather than pick one. -->
-            <CalendarMeetingsInProgress events={inProgress} />
+        {#if atHand.length > 1}
+            <!-- In progress or within their reminder lead: we cannot tell which one the user goes to, offer them all. -->
+            <CalendarMeetingsInProgress events={atHand} {now} />
         {:else if next}
             <CalendarNextMeeting event={next} overlaps={overlapsWith(next, $calendarEventsStore.values())} {now} />
         {/if}

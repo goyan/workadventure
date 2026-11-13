@@ -269,4 +269,74 @@ describe("PathfindingManager", () => {
             expect(path.length).toBeGreaterThan(2);
         });
     });
+
+    describe("nearestReachablePointIn", () => {
+        /** A room of 7 x 5 tiles at (2, 2): its center (176, 144) is in the tile (5, 4). */
+        const room = { x: 64, y: 64, width: 224, height: 160 };
+        const roomCenter = { x: 176, y: 144 };
+
+        /** A meeting table of 3 x 3 tiles on the center of the room: the center and every tile around it are taken. */
+        function tableOnCenter(): number[][] {
+            const grid = emptyGrid(12, 10);
+            for (let y = 3; y <= 5; y += 1) {
+                for (let x = 4; x <= 6; x += 1) {
+                    grid[y][x] = 1;
+                }
+            }
+            return grid;
+        }
+
+        it("cannot reach the center of a room whose center and neighbours are taken, even nearest available", async () => {
+            const manager = new PathfindingManager(tableOnCenter(), tile);
+
+            // The walk to the center only looks at the 8 tiles around it: this is why "Go there" needs another point.
+            expect(await manager.findPathFromGameCoordinates(avatarAt(5, 8), roomCenter, true)).toEqual([]);
+        });
+
+        it("gives the free tile of the room nearest its center, the nearest to the avatar among equals", () => {
+            const manager = new PathfindingManager(tableOnCenter(), tile);
+
+            // (3, 4), (7, 4), (5, 2) and (5, 6) are all 64 px from the center: (5, 6) is on the side of the avatar.
+            expect(manager.nearestReachablePointIn(avatarAt(5, 8), room, roomCenter)).toEqual(centerOf(5, 6));
+        });
+
+        it("gives the tile of the center when it is free", () => {
+            const manager = new PathfindingManager(emptyGrid(12, 10), tile);
+
+            expect(manager.nearestReachablePointIn(avatarAt(5, 8), room, roomCenter)).toEqual(centerOf(5, 4));
+        });
+
+        it("skips a free tile near the center that no way leads to", () => {
+            // The center tile is free but walled on its four sides.
+            const barriers = new TileBarriers();
+            barriers.addSouthBorder(5, 3);
+            barriers.addSouthBorder(5, 4);
+            barriers.addWestBorder(5, 4);
+            barriers.addWestBorder(6, 4);
+            const manager = new PathfindingManager(emptyGrid(12, 10), tile);
+            manager.setBarriers(barriers);
+
+            // (5, 5) is 32 px from the center, as (4, 4), (6, 4) and (5, 3): the nearest to the avatar.
+            expect(manager.nearestReachablePointIn(avatarAt(5, 8), room, roomCenter)).toEqual(centerOf(5, 5));
+        });
+
+        it("gives nothing for a room closed by walls", () => {
+            const manager = new PathfindingManager(emptyGrid(12, 10), tile);
+            manager.setBarriers(closedRoom());
+
+            expect(
+                manager.nearestReachablePointIn(
+                    avatarAt(8, 8),
+                    { x: 64, y: 64, width: 96, height: 96 },
+                    centerOf(3, 3),
+                ),
+            ).toBeUndefined();
+        });
+
+        it("gives the tile of the avatar when it already stands in the room", () => {
+            const manager = new PathfindingManager(tableOnCenter(), tile);
+
+            expect(manager.nearestReachablePointIn(avatarAt(3, 4), room, roomCenter)).toEqual(centerOf(3, 4));
+        });
+    });
 });
