@@ -452,8 +452,10 @@ de Jam et réordonner la file. Vérifier aussi le toucher et les flèches sur l'
 Comme dans Gather, un bouton bureau (`PersonalDeskMenuItem.svelte`) se trouve dans la barre du haut, entre l'émoji et
 les applications, avant le micro et la caméra. Avec un bureau réservé sur la carte, un clic **fait marcher** l'avatar
 jusqu'au bureau, comme Cmd/Ctrl+D (`personalDeskActions.ts`, partagé avec Outils). L'infobulle affiche le raccourci
-`walkMyDesk` tel qu'il est réglé dans le menu des raccourcis, ou n'affiche rien s'il est retiré. Dans son bureau, le
-bouton est grisé et dit « Vous êtes à votre bureau ». Sans bureau sur la carte, il propose « Trouver un bureau libre »
+`walkMyDesk` tel qu'il est réglé dans le menu des raccourcis, ou n'affiche rien s'il est retiré. Debout dans son bureau,
+il dit « S’asseoir à mon bureau » et fait asseoir ; assis à son bureau, il est grisé et dit « Vous êtes à votre
+bureau » (le bouton d'Outils suit les mêmes états, `personalDeskModeStore`, d'après `userSeatedStore` que `Player`
+tient à jour). Sans bureau sur la carte, il propose « Trouver un bureau libre »
 (la liste des bureaux libres de l'explorateur). Le bouton n'apparaît qu'à partir de la largeur `@md` de la barre : le
 groupe de gauche ne rétrécit pas, et un bouton de plus juste au-dessus de `@sm` repousserait le menu profil hors de la
 barre. Outils garde donc « Aller à mon bureau » pour les petites largeurs, par exception à la règle « un seul endroit
@@ -465,8 +467,8 @@ et Outils : `GameScene.walkToPersonalDesk`, logique dans `Player/DeskSeat.ts`). 
 la place est dans la zone du bureau, le plus proche du centre de la zone : une zone personnelle ne dit pas quelle chaise
 est la sienne, et elle entoure en général un seul poste, dont la chaise est au centre plutôt qu'une chaise de visiteur
 au bord. Siège pris : le suivant le plus proche. Aucun siège libre dans le bureau : marche jusqu'au centre, debout,
-comme avant. Déjà assis à son bureau : rien. Debout dans son bureau, Cmd/Ctrl+D fait asseoir (les boutons restent
-grisés). `Player.sitOnSeat` garde ses refus (nage, eau, suivi, siège hors de portée) : l'avatar reste alors debout.
+comme avant. Déjà assis à son bureau : rien. Debout dans son bureau, l'avatar s'assoit ; sans siège libre, rien ne
+se passe. `Player.sitOnSeat` garde ses refus (nage, eau, suivi, siège hors de portée) : l'avatar reste alors debout.
 
 Recette : avec un bureau, cliquer (marche puis assise), entrer dans le bureau (bouton grisé, infobulle), réassigner le
 raccourci ; chaise du bureau prise par un collègue, bureau sans chaise ; sans bureau, ouvrir la liste des bureaux

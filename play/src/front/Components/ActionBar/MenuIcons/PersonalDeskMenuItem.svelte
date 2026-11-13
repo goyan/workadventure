@@ -1,42 +1,45 @@
 <script lang="ts">
     import ActionBarButton from "../ActionBarButton.svelte";
-    import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
+    import { personalDeskModeStore } from "../../../Stores/PersonalDeskStore";
     import { bindingKeys, shortcutsStore } from "../../../Stores/ShortcutsStore";
     import LL from "../../../../i18n/i18n-svelte";
     import { findFreeDesk, goToPersonalDesk } from "./personalDeskActions";
     import { IconDesk } from "@wa-icons";
 
-    // Without a desk reserved on this map, the same button offers to pick a free one.
-    let mode: "walk" | "inside" | "find" = $derived(
-        $personalAreaDataStore ? ($isInsidePersonalAreaStore ? "inside" : "walk") : "find",
-    );
+    let mode = $derived($personalDeskModeStore);
 
     let title = $derived(
         mode === "find"
             ? $LL.actionbar.personalDesk.find()
-            : mode === "inside"
+            : mode === "seated"
               ? $LL.actionbar.help.personalDesk.insideTitle()
-              : $LL.actionbar.personalDesk.label(),
+              : mode === "sit"
+                ? $LL.actionbar.personalDesk.sit()
+                : $LL.actionbar.personalDesk.label(),
     );
 
     let desc = $derived(
         mode === "find"
             ? $LL.actionbar.help.personalDesk.findDesc()
-            : mode === "inside"
+            : mode === "seated"
               ? $LL.actionbar.help.personalDesk.insideDesc()
-              : $LL.actionbar.help.personalDesk.desc(),
+              : mode === "sit"
+                ? $LL.actionbar.help.personalDesk.sitDesc()
+                : $LL.actionbar.help.personalDesk.desc(),
     );
 
     // The walkMyDesk shortcut can be rebound or removed in the shortcuts menu.
     let shortcut = $derived.by(() => {
         const binding = $shortcutsStore.walkMyDesk;
-        return mode === "walk" && binding ? bindingKeys(binding, $LL.menu.shortcuts.keyNames.shift()) : [];
+        return (mode === "walk" || mode === "sit") && binding
+            ? bindingKeys(binding, $LL.menu.shortcuts.keyNames.shift())
+            : [];
     });
 
     function onclick(): void {
         if (mode === "find") {
             findFreeDesk();
-        } else if (mode === "walk") {
+        } else if (mode === "walk" || mode === "sit") {
             goToPersonalDesk().catch((error: unknown) => console.error("Error while walking to personal desk", error));
         }
     }
@@ -50,7 +53,7 @@
     tooltipTitle={title}
     {desc}
     tooltipShortcuts={shortcut}
-    state={mode === "inside" ? "disabled" : "normal"}
+    state={mode === "seated" ? "disabled" : "normal"}
     dataTestId="desk-action-bar-button"
 >
     <IconDesk font-size="20" />
