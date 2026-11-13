@@ -168,6 +168,17 @@ export function meetingToOpenOnEntry(
     );
 }
 
+/** The key of the user's own meeting whose taken room the point (the feet of the player) is in, if any. */
+export function meetingKeyHere(
+    point: { x: number; y: number },
+    areas: readonly AreaData[],
+    rooms: readonly MeetingRoom[],
+): string | undefined {
+    const here = roomAt(point, areas);
+    const room = here && rooms.find((candidate) => candidate.areaId === here.id);
+    return room?.mine ? room.meetingKey : undefined;
+}
+
 /** Whether a point (the feet of the player) is inside one of the given rooms. */
 export function roomAt(point: { x: number; y: number }, areas: readonly AreaData[]): AreaData | undefined {
     return areas.find(

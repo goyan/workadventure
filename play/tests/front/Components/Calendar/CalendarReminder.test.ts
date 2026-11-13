@@ -111,6 +111,18 @@ describe("canGoToMeeting", () => {
     });
 });
 
+describe("canGoToMeeting in the meeting's own room", () => {
+    it("hides Go there while the feet stand in the room the meeting got, shows it again once out", () => {
+        const goTo = () => undefined;
+        const key = "a".repeat(64);
+        const started = event("started", -5 * MINUTE, { resource: { meetingKey: key } });
+
+        expect(canGoToMeeting(started, goTo, NOW, key)).toBe(false);
+        expect(canGoToMeeting(started, goTo, NOW, "b".repeat(64))).toBe(true);
+        expect(canGoToMeeting(started, goTo, NOW, undefined)).toBe(true);
+    });
+});
+
 describe("askToOpenInTeams", () => {
     const joinUrl = "https://teams.microsoft.com/l/meetup-join/abc";
     const teams = event("teams", 0, { resource: { onlineMeeting: { joinUrl } } });

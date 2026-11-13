@@ -6,12 +6,19 @@ import { gameManager } from "../../Phaser/Game/GameManager";
 import type { GameScene } from "../../Phaser/Game/GameScene";
 import { DEPTH_DOOR_LOCK_INDEX } from "../../Phaser/Game/DepthIndexes";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-import { calendarEventsStore, goToMeetingStore } from "../../Stores/CalendarStore";
+import { calendarEventsStore, goToMeetingStore, meetingKeyHereStore } from "../../Stores/CalendarStore";
 import { askToOpenInTeams, calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
 import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
-import { goToMeeting, MeetingArrival, meetingRoomLabels, meetingToOpenOnEntry, roomAt } from "./meetingRooms";
+import {
+    goToMeeting,
+    MeetingArrival,
+    meetingKeyHere,
+    meetingRoomLabels,
+    meetingToOpenOnEntry,
+    roomAt,
+} from "./meetingRooms";
 
 /** The titles of the taken rooms are read again twice a minute, as the agenda's busy status. */
 const LABELS_INTERVAL_MS = 30 * 1000;
@@ -147,6 +154,8 @@ export function startMeetingRooms(): () => void {
         const player = scene?.CurrentPlayer;
         if (!scene || !player) return;
         const areas = sceneAreas(scene);
+        // "Go there" is hidden for the meeting whose room the player stands in.
+        meetingKeyHereStore.set(meetingKeyHere(feet(scene), areas, rooms));
         // Before the entry below: arriving after "Go there" asks about Teams instead of reminding.
         arrived(arrival.check(feet(scene), areas, scene.roomUrl, new Date()));
         const room = roomAt(feet(scene), areas);
@@ -197,5 +206,6 @@ export function startMeetingRooms(): () => void {
         for (const text of labels.values()) text.destroy();
         labels.clear();
         goToMeetingStore.set(undefined);
+        meetingKeyHereStore.set(undefined);
     };
 }

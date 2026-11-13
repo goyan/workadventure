@@ -4,6 +4,7 @@ import type { CalendarEventInterface } from "@workadventure/shared-utils";
 import {
     goToMeeting,
     MeetingArrival,
+    meetingKeyHere,
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomsOfMap,
@@ -294,5 +295,30 @@ describe("meetingToOpenOnEntry", () => {
 
     it("offers nothing once the meeting is over", () => {
         expect(meetingToOpenOnEntry([daily], new Date("2026-11-17T09:45:00.000Z"), mine, new Set())).toBeUndefined();
+    });
+});
+
+describe("meetingKeyHere", () => {
+    const rooms = [area("r1", 0), area("r2", 400)];
+    const mine = {
+        areaId: "r2",
+        title: "Daily standup",
+        endsAt: "2026-11-17T10:00:00.000Z",
+        mine: true,
+        meetingKey: key,
+    };
+
+    it("gives the key of the user's meeting whose room the feet stand in", () => {
+        expect(meetingKeyHere({ x: 448, y: 132 }, rooms, [mine])).toBe(key);
+    });
+
+    it("gives nothing out of the room, in another room, or in the room of someone else's meeting", () => {
+        expect(meetingKeyHere({ x: 250, y: 132 }, rooms, [mine])).toBeUndefined();
+        expect(meetingKeyHere({ x: 48, y: 132 }, rooms, [mine])).toBeUndefined();
+        expect(
+            meetingKeyHere({ x: 448, y: 132 }, rooms, [
+                { areaId: "r2", title: "Other", endsAt: mine.endsAt, mine: false },
+            ]),
+        ).toBeUndefined();
     });
 });
