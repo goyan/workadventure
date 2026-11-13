@@ -28,6 +28,11 @@ export const MeetingRoomClaimInput = z.object({
     mapUrl: z.string().min(1).max(512),
     meetingKey: MeetingKey,
     roomAreaIds: z.array(z.string().min(1).max(128)).min(1).max(20),
+    /**
+     * The rooms of the map nobody stands in, as the player's browser sees them: the Admin API frees those whose meeting
+     * is over without waiting for the end of their hold (it never frees a meeting in progress).
+     */
+    vacantAreaIds: z.array(z.string().min(1).max(128)).max(20).optional(),
 });
 export type MeetingRoomClaimInput = z.infer<typeof MeetingRoomClaimInput>;
 

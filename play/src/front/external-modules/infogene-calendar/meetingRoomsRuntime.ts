@@ -18,6 +18,7 @@ import {
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomAt,
+    vacantRooms,
 } from "./meetingRooms";
 
 /** The titles of the taken rooms are read again twice a minute, as the agenda's busy status. */
@@ -82,6 +83,15 @@ export function startMeetingRooms(): () => void {
             walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
+            // Every player of the map, this one included, by their feet.
+            vacantAreaIds: () =>
+                vacantRooms(sceneAreas(scene), [
+                    feet(scene),
+                    ...Array.from(scene.MapPlayersByKey.values(), (player) => ({
+                        x: player.x,
+                        y: player.y + AREA_POSITION_OFFSET_Y,
+                    })),
+                ]),
         })
             .then((outcome) => {
                 if (abortController.signal.aborted) return;

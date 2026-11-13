@@ -59,7 +59,10 @@ la même carte s'affiche aussitôt et dit pourquoi : toutes les salles prises (`
 (`teams-only`), rien de plus. La console garde la cause (`Cannot go to the meeting room <raison> <erreur>`). Une salle
 réservée sans y marcher reste tenue jusqu'à la fin de la réunion (+ 15 min). Pieds dans la salle prise par une de ses réunions, **Y aller** est masqué pour
 cette réunion (rappel et Agenda ; seul Rejoindre reste) et revient en sortant (`meetingKeyHereStore`, relevé toutes
-les 2 s). En haut de l'Agenda, une carte par réunion en cours **ou** dans son délai de rappel (5 min par défaut,
+les 2 s). La demande de salle envoie aussi les salles Teams où aucun joueur ne se tient (`vacantRooms`,
+pieds des joueurs de la carte) : l'Admin API qui le gère (dépôt d'infra, `pickRoom`) libère tout de suite une salle
+dont la réunion est finie et vide ; occupée, elle reste tenue jusqu'à fin + 15 min (la réunion peut déborder). Le
+rappel dit « Commence maintenant » dans la minute qui précède le début, puis « En cours », puis « A commencé il y a … ». En haut de l'Agenda, une carte par réunion en cours **ou** dans son délai de rappel (5 min par défaut,
 `meetingsAtHand`), chacune avec Rejoindre / Y aller : à 09:27, « 09:15–09:45 » et « 09:30–10:00 » s'y voient ensemble. Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
 salles prises s'affiche au-dessus d'elles (« Réunion privée » le cas échéant) ; entrer à pied dans une salle pendant
 sa réunion réaffiche le rappel. Coupé tant que l'Admin API n'a pas `COMPANION_ENABLED=true`. Guide : repo d'infra,
