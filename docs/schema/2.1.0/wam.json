@@ -1384,6 +1384,7 @@
               "enum": [
                 "automatic",
                 "clear",
+                "fog",
                 "rain",
                 "snow",
                 "storm"
@@ -1392,6 +1393,30 @@
             "weatherStartedAt": {
               "type": "number",
               "minimum": 0
+            },
+            "weatherAuto": {
+              "type": "object",
+              "properties": {
+                "frequency": {
+                  "type": "string",
+                  "enum": [
+                    "calm",
+                    "normal",
+                    "stormy"
+                  ]
+                },
+                "include": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/WAMFileFormat/properties/settings/properties/weather"
+                  }
+                }
+              },
+              "required": [
+                "frequency",
+                "include"
+              ],
+              "additionalProperties": false
             },
             "megaphone": {
               "type": "object",

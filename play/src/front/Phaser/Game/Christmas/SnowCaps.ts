@@ -36,6 +36,7 @@ export class SnowCaps {
     private readonly caps = new Map<string, string | undefined>();
     private objects: SnowObject[] = [];
     private visible = true;
+    private alpha = 1;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -65,6 +66,8 @@ export class SnowCaps {
                 frost.setOrigin(0);
                 frost.setDepth(entity.depth + 0.05);
                 frost.setVisible(this.visible);
+                // On top of its fill alpha: the frost fades with the rest of the snow.
+                frost.setAlpha(this.alpha);
                 this.objects.push(frost);
                 continue;
             }
@@ -75,6 +78,7 @@ export class SnowCaps {
             cap.setScale(entity.displayWidth / entity.frame.width, entity.displayHeight / entity.frame.height);
             cap.setDepth(entity.depth + 0.1);
             cap.setVisible(this.visible);
+            cap.setAlpha(this.alpha);
             this.objects.push(cap);
         }
     }
@@ -82,6 +86,11 @@ export class SnowCaps {
     setVisible(visible: boolean): void {
         this.visible = visible;
         for (const object of this.objects) object.setVisible(visible);
+    }
+
+    setAlpha(alpha: number): void {
+        this.alpha = alpha;
+        for (const object of this.objects) object.setAlpha(alpha);
     }
 
     destroy(): void {

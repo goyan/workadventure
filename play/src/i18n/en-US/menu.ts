@@ -50,6 +50,10 @@ const menu: BaseTranslation = {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",
         },
+        mapWeather: {
+            title: "Map weather",
+            description: "What everyone sees on this map. Anyone can hide it with “Show weather effects” above.",
+        },
         seasonal: {
             label: "Seasonal theme",
             auto: "Auto",

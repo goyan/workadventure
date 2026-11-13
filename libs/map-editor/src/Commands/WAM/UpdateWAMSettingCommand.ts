@@ -1,6 +1,13 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings, Weather } from "../../types";
+import {
+    AutoWeather,
+    CategorySettings,
+    MegaphoneSettings,
+    PrefabOverride,
+    RecordingSettings,
+    Weather,
+} from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {
@@ -64,6 +71,14 @@ export class UpdateWAMSettingCommand extends Command {
             case "updateWeatherSettingMessage": {
                 this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
                 this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt;
+                const { autoFrequency, autoInclude } = message.updateWeatherSettingMessage;
+                // Older clients send no auto settings: keep the existing ones.
+                if (autoFrequency !== undefined && autoFrequency !== "") {
+                    const auto = AutoWeather.safeParse({ frequency: autoFrequency, include: autoInclude });
+                    if (auto.success) {
+                        this.wam.settings.weatherAuto = auto.data;
+                    }
+                }
                 break;
             }
             default: {

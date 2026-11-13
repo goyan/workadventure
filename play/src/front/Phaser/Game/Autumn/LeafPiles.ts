@@ -19,6 +19,7 @@ export class LeafPiles {
     private readonly textures = new Map<string, PileTexture | undefined>();
     private images: Phaser.GameObjects.Image[] = [];
     private visible = true;
+    private alpha = 1;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -46,6 +47,7 @@ export class LeafPiles {
             image.setScale(scaleX, scaleY);
             image.setDepth(entity.depth + 0.1);
             image.setVisible(this.visible);
+            image.setAlpha(this.alpha);
             this.images.push(image);
         }
     }
@@ -53,6 +55,11 @@ export class LeafPiles {
     setVisible(visible: boolean): void {
         this.visible = visible;
         for (const image of this.images) image.setVisible(visible);
+    }
+
+    setAlpha(alpha: number): void {
+        this.alpha = alpha;
+        for (const image of this.images) image.setAlpha(alpha);
     }
 
     destroy(): void {

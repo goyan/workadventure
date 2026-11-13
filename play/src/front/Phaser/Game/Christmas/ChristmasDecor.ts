@@ -53,6 +53,12 @@ export class ChristmasDecor implements SeasonalDecor {
         this.prints.setVisible(visible);
     }
 
+    setAlpha(alpha: number): void {
+        this.ground.setAlpha(alpha);
+        this.caps.setAlpha(alpha);
+        this.prints.setAlpha(alpha);
+    }
+
     destroy(): void {
         this.ground.destroy();
         this.caps.destroy();

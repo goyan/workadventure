@@ -2,12 +2,19 @@ import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
     effectiveWeather,
+    FOG_LEVELS,
+    fogBlocks,
+    fogPatches,
+    fogStrength,
     keepOutdoorParticles,
+    lastStrike,
     leafParticles,
-    stormGlow,
+    lightningBolt,
+    stormFlash,
     weatherParticles,
     weatherAtTime,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
@@ -30,40 +37,123 @@ describe("world weather", () => {
             500,
         );
     });
-    it("uses a gentle single storm glow and the same phase for every client", () => {
-        expect(stormGlow(600)).toBeCloseTo(0.12);
-        expect(stormGlow(23600)).toBeCloseTo(stormGlow(600));
-        expect(stormGlow(2000)).toBe(0);
-        expect(stormGlow(22999)).toBe(0);
+});
+
+describe("storm", () => {
+    it("strikes every 12 to 30 seconds, at the same times for everyone, without a fixed rhythm", () => {
+        let previous = lastStrike(0).at;
+        const gaps: number[] = [];
+        for (let time = 0; time < 3_600_000; time += 250) {
+            const strike = lastStrike(time);
+            expect(strike.at).toBeLessThanOrEqual(time);
+            if (strike.at !== previous) {
+                gaps.push(strike.at - previous);
+                previous = strike.at;
+            }
+        }
+        expect(gaps.length).toBeGreaterThan(100);
+        expect(Math.min(...gaps)).toBeGreaterThanOrEqual(12000);
+        expect(Math.max(...gaps)).toBeLessThanOrEqual(30000);
+        expect(new Set(gaps).size).toBeGreaterThan(20);
+        expect(lastStrike(1_234_567)).toEqual(lastStrike(1_234_567));
+    });
+
+    it("flashes twice in less than half a second after a strike", () => {
+        const samples = Array.from({ length: 80 }, (_, index) => stormFlash(index * 10, false));
+        expect(Math.max(...samples)).toBeCloseTo(0.45, 2);
+        const peaks = samples.filter(
+            (value, index) => value > 0 && value >= (samples[index - 1] ?? 0) && value > (samples[index + 1] ?? 0),
+        );
+        expect(peaks).toHaveLength(2);
+        expect(stormFlash(450, false)).toBe(0);
+        expect(stormFlash(5000, false)).toBe(0);
+        expect(stormFlash(-10, false)).toBe(0);
+    });
+
+    it("only glows gently when motion is reduced", () => {
+        const samples = Array.from({ length: 160 }, (_, index) => stormFlash(index * 10, true));
+        expect(Math.max(...samples)).toBeGreaterThan(0.1);
+        expect(Math.max(...samples)).toBeLessThanOrEqual(0.12);
+    });
+
+    describe("bolt", () => {
+        const outdoors = () => true;
+        const strike = lastStrike(500_000);
+
+        it("goes down to a point outdoors in the view, for about a third of a second", () => {
+            const bolt = lightningBolt(strike, 100, view, outdoors);
+            expect(bolt).toBeDefined();
+            expect(bolt!.length).toBeGreaterThanOrEqual(6);
+            for (const point of bolt!) {
+                expect(point.x).toBeGreaterThanOrEqual(view.x);
+                expect(point.x).toBeLessThanOrEqual(view.x + view.width);
+                expect(point.y).toBeGreaterThanOrEqual(view.y);
+                expect(point.y).toBeLessThanOrEqual(view.y + view.height);
+            }
+            const end = bolt![bolt!.length - 1];
+            expect(end.y).toBeGreaterThan(bolt![0].y);
+            expect(lightningBolt(strike, 400, view, outdoors)).toBeUndefined();
+            expect(lightningBolt(strike, -1, view, outdoors)).toBeUndefined();
+        });
+
+        it("is the same for everyone and changes from one strike to the next", () => {
+            expect(lightningBolt(strike, 100, view, outdoors)).toEqual(lightningBolt(strike, 200, view, outdoors));
+            const next = lastStrike(strike.at + 31000);
+            expect(lightningBolt(next, 100, view, outdoors)).not.toEqual(lightningBolt(strike, 100, view, outdoors));
+        });
+
+        it("never crosses a room: no bolt when no place outdoors fits it", () => {
+            expect(lightningBolt(strike, 100, view, () => false)).toBeUndefined();
+            const leftOnly = (x: number) => x < 400;
+            const bolt = lightningBolt(strike, 100, view, leftOnly);
+            if (bolt) for (const point of bolt) expect(point.x).toBeLessThan(400);
+        });
     });
 });
 
 describe("common automatic weather", () => {
-    it("replaces snowy phases with rain outside November through March", () => {
+    const halfHour = 30 * 60 * 1000;
+    it("replaces fixed snow with rain outside November through March, and never snows there in automatic", () => {
         for (const date of ["2026-07-01T01:30:00Z", "2026-04-01T01:30:00Z", "2026-10-01T01:30:00Z"]) {
-            const clock = new Date(date);
-            expect(weatherAtTime(WeatherType.Automatic, clock)).toBe(WeatherType.Rain);
-            expect(weatherAtTime(WeatherType.Snow, clock)).toBe(WeatherType.Rain);
+            expect(weatherAtTime(WeatherType.Snow, new Date(date))).toBe(WeatherType.Rain);
         }
-        expect(weatherAtTime(WeatherType.Automatic, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        expect(weatherAtTime(WeatherType.Snow, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        for (const month of ["2026-04", "2026-07", "2026-10"]) {
+            for (let t = Date.parse(`${month}-01T00:00:00Z`); t < Date.parse(`${month}-28T00:00:00Z`); t += halfHour) {
+                expect(weatherAtTime(WeatherType.Automatic, new Date(t))).not.toBe(WeatherType.Snow);
+            }
+        }
     });
 
-    it("changes exactly every thirty minutes and repeats after two hours", () => {
-        const halfHour = 30 * 60 * 1000;
-        expect(weatherAtTime(WeatherType.Automatic, new Date(halfHour - 1))).toBe(WeatherType.Clear);
-        for (const [phase, weather] of [
-            WeatherType.Clear,
-            WeatherType.Rain,
-            WeatherType.Storm,
-            WeatherType.Snow,
-            WeatherType.Clear,
-        ].entries()) {
-            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour))).toBe(weather);
-            expect(weatherAtTime(WeatherType.Automatic, new Date(phase * halfHour + halfHour - 1))).toBe(weather);
+    it("follows the seasonal schedule in automatic", () => {
+        const auto = { frequency: "stormy" as const, include: [WeatherType.Rain, WeatherType.Fog] };
+        for (const date of [
+            "2026-01-05T08:10:00Z",
+            "2026-04-20T17:45:00Z",
+            "2026-07-14T12:00:00Z",
+            "2026-11-08T13:31:00Z",
+        ]) {
+            const clock = new Date(date);
+            expect(weatherAtTime(WeatherType.Automatic, clock)).toBe(autoWeatherAt(clock));
+            expect(weatherAtTime(WeatherType.Automatic, clock, auto)).toBe(autoWeatherAt(clock, auto));
         }
     });
-    it("keeps manual choices and waits for a valid server clock", () => {
+
+    it("changes only on thirty-minute boundaries", () => {
+        const first = Date.parse("2026-01-12T00:00:00Z");
+        for (let slot = 0; slot < 48; slot++) {
+            const weather = weatherAtTime(WeatherType.Automatic, new Date(first + slot * halfHour));
+            expect(weatherAtTime(WeatherType.Automatic, new Date(first + slot * halfHour + halfHour - 1))).toBe(
+                weather,
+            );
+        }
+    });
+
+    it("keeps manual choices, fog all day, and waits for a valid server clock", () => {
         expect(weatherAtTime(WeatherType.Rain, undefined)).toBe(WeatherType.Rain);
+        for (let hour = 0; hour < 24; hour++) {
+            expect(weatherAtTime(WeatherType.Fog, new Date(Date.UTC(2026, 6, 1, hour)))).toBe(WeatherType.Fog);
+        }
         expect(weatherAtTime(WeatherType.Automatic, undefined)).toBe(WeatherType.Clear);
         expect(weatherAtTime(WeatherType.Automatic, new Date(NaN))).toBe(WeatherType.Clear);
     });
@@ -119,5 +209,131 @@ describe("leafParticles", () => {
         const after = leafParticles(5500, view);
         const fell = before.filter((particle, index) => after[index].y > particle.y).length;
         expect(fell).toBeGreaterThan(before.length * 0.9);
+    });
+});
+
+describe("fog", () => {
+    const foggy = { frequency: "stormy" as const, include: [WeatherType.Fog] };
+    const slot = 30 * 60 * 1000;
+    const minute = 60 * 1000;
+    const isFog = (time: number): boolean => autoWeatherAt(new Date(time), foggy) === WeatherType.Fog;
+    /** Start of a fog slot whose neighbours are `before` / `after` fog or not. */
+    const findSlot = (before: boolean, after: boolean): number => {
+        for (let t = Date.parse("2026-01-01T00:00:00Z"); t < Date.parse("2026-04-01T00:00:00Z"); t += slot) {
+            if (isFog(t) && isFog(t - slot) === before && isFog(t + slot) === after) return t;
+        }
+        throw new Error("no such fog slot");
+    };
+
+    it("is full strength all day for a fixed fog", () => {
+        expect(fogStrength(WeatherType.Fog, new Date("2026-01-12T07:10:00Z"))).toBe(1);
+        expect(fogStrength(WeatherType.Fog, new Date("2026-01-12T15:00:00Z"))).toBe(1);
+    });
+
+    it("is nothing without fog", () => {
+        expect(fogStrength(WeatherType.Rain, new Date("2026-01-12T07:10:00Z"))).toBe(0);
+        expect(fogStrength(WeatherType.Clear, new Date("2026-01-12T07:10:00Z"))).toBe(0);
+        expect(fogStrength(WeatherType.Automatic, new Date(Number.NaN), foggy)).toBe(0);
+    });
+
+    it("rises over three minutes when the fog follows another weather", () => {
+        const start = findSlot(false, true);
+        expect(fogStrength(WeatherType.Automatic, new Date(start), foggy)).toBe(0);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 1.5 * minute), foggy)).toBeCloseTo(0.5, 5);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 3 * minute), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 20 * minute), foggy)).toBe(1);
+    });
+
+    it("fades over the last three minutes when the next slot has no fog", () => {
+        const start = findSlot(true, false);
+        const end = start + slot;
+        expect(fogStrength(WeatherType.Automatic, new Date(start), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 3 * minute), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 1.5 * minute), foggy)).toBeCloseTo(0.5, 5);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 1), foggy)).toBeLessThan(0.001);
+    });
+
+    it("never jumps, midnight included", () => {
+        const step = 10_000;
+        let last = fogStrength(WeatherType.Automatic, new Date(Date.parse("2025-12-31T00:00:00Z")), foggy);
+        let seenFog = false;
+        for (let t = Date.parse("2025-12-31T00:00:00Z") + step; t < Date.parse("2026-02-10T00:00:00Z"); t += step) {
+            const strength = fogStrength(WeatherType.Automatic, new Date(t), foggy);
+            if (strength > 0) seenFog = true;
+            expect(Math.abs(strength - last)).toBeLessThanOrEqual(step / (3 * minute) + 1e-9);
+            last = strength;
+        }
+        expect(seenFog).toBe(true);
+        expect(slotStart(new Date(1)).getTime()).toBe(0);
+    });
+
+    describe("patches", () => {
+        const view = { x: 100, y: 50, width: 800, height: 600 };
+        it("are three or four", () => {
+            const count = fogPatches(123456, view, false).length;
+            expect(count).toBeGreaterThanOrEqual(3);
+            expect(count).toBeLessThanOrEqual(4);
+        });
+        it("are the same for everyone at the same time", () => {
+            expect(fogPatches(5000, view, false)).toEqual(fogPatches(5000, view, false));
+        });
+        it("drift about 4 px a second", () => {
+            const before = fogPatches(5000, view, false);
+            const after = fogPatches(6000, view, false);
+            for (const [index, patch] of before.entries()) {
+                expect(Math.hypot(after[index].x - patch.x, after[index].y - patch.y)).toBeCloseTo(4, 1);
+            }
+        });
+        it("stay world-fixed when the camera moves", () => {
+            const before = fogPatches(5000, view, false);
+            const moved = fogPatches(5000, { ...view, x: view.x + 10 }, false);
+            const same = before.filter((patch, index) => moved[index].x === patch.x).length;
+            expect(same).toBeGreaterThan(0);
+        });
+        it("stand still on request", () => {
+            expect(fogPatches(5000, view, true)).toEqual(fogPatches(90000, view, true));
+        });
+    });
+
+    describe("blocks", () => {
+        const inside = (block: { x: number; y: number; width: number; height: number }, run: typeof view) =>
+            block.x >= run.x &&
+            block.y >= run.y &&
+            block.x + block.width <= run.x + run.width &&
+            block.y + block.height <= run.y + run.height;
+
+        it("stay inside the outdoor runs, so a patch stops at the walls", () => {
+            const runs = [
+                { x: 0, y: 0, width: 40, height: 32 },
+                { x: 96, y: 32, width: 64, height: 32 },
+            ];
+            const blocks = fogBlocks(runs, [{ x: 80, y: 32, radius: 200 }], 16);
+            expect(blocks.length).toBeGreaterThan(0);
+            for (const block of blocks) expect(runs.some((run) => inside(block, run))).toBe(true);
+        });
+
+        it("are thickest at the centre of a patch and absent beyond its edge", () => {
+            const run = { x: 0, y: 0, width: 640, height: 16 };
+            const blocks = fogBlocks([run], [{ x: 200, y: 8, radius: 100 }], 16);
+            const at = (x: number) => blocks.find((block) => block.x <= x && x < block.x + block.width)?.level ?? 0;
+            expect(at(200)).toBe(FOG_LEVELS);
+            expect(at(200)).toBeGreaterThan(at(260));
+            expect(at(260)).toBeGreaterThan(0);
+            expect(at(320)).toBe(0);
+            expect(at(90)).toBe(0);
+        });
+
+        it("merge neighbours of the same thickness into one rectangle", () => {
+            const run = { x: 0, y: 0, width: 320, height: 32 };
+            const blocks = fogBlocks([run], [{ x: 160, y: 16, radius: 100000 }], 16);
+            expect(blocks).toEqual([
+                { x: 0, y: 0, width: 320, height: 16, level: FOG_LEVELS },
+                { x: 0, y: 16, width: 320, height: 16, level: FOG_LEVELS },
+            ]);
+        });
+
+        it("are none without a patch", () => {
+            expect(fogBlocks([view], [], 16)).toEqual([]);
+        });
     });
 });

@@ -688,7 +688,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         weather: {
             automatic: "Awtomatisce (kóždych 30 mjeńšin)",
             title: "Wjedro",
-            description: "Wjedro je za wšěch na tutej karće samsne. Efekty móžeće w osobinskich nastajenjach schować.",
             clear: "Jasne njebjo",
             rain: "Dešć",
             snow: "Sněh",

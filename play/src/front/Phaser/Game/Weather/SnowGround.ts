@@ -1,15 +1,15 @@
 import * as Sentry from "@sentry/svelte";
-import type { WeatherType } from "@workadventure/map-editor";
 import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
 import { FootstepSurfaces } from "../FootstepSurfaces";
 import type { GameScene } from "../GameScene";
-import { snowCoverage } from "./SnowCover";
 
 const GREEN_TEXTURE = "/resources/objects/weather/terrain-green.png";
 const AUTUMN_TEXTURE = "/resources/objects/weather/terrain-autumn.png";
-const SNOW_TEXTURE = "/resources/objects/weather/terrain-snow.png";
 
-/** One viewport-sized texture, below objects; no map-sized allocation or per-tile game objects. */
+/**
+ * The grass of the map, green or autumn: one viewport-sized texture, below objects; no map-sized allocation or per-tile
+ * game objects. The snow of the map weather is drawn over it by the Christmas decor (SeasonalThemeManager).
+ */
 export class SnowGround {
     private readonly canvas: Phaser.GameObjects.RenderTexture;
     private readonly surfaces: FootstepSurfaces;
@@ -39,7 +39,7 @@ export class SnowGround {
             (x, y) => !this.isGrassTile(x, y),
             () => this.clock,
         );
-        Promise.all([SNOW_TEXTURE, GREEN_TEXTURE, AUTUMN_TEXTURE].map((key) => scene.superLoad.image(key, key)))
+        Promise.all([GREEN_TEXTURE, AUTUMN_TEXTURE].map((key) => scene.superLoad.image(key, key)))
             .then(() => {
                 if (!this.destroyed) this.ready = true;
             })
@@ -63,17 +63,8 @@ export class SnowGround {
         return this.exteriorIsGrass;
     }
 
-    public update(
-        now: number,
-        serverDate: Date | undefined,
-        configured: WeatherType,
-        enabled: boolean,
-        autumnGround = false,
-        startedAt?: number,
-    ): void {
-        // Snow on the map settles on the grass for everyone: it is weather, not a decor.
+    public update(now: number, serverDate: Date | undefined, enabled: boolean, autumnGround = false): void {
         this.clock = now;
-        const coverage = serverDate ? snowCoverage(configured, serverDate.getTime(), startedAt) : 0;
         if (!enabled || !serverDate || !this.ready) {
             this.lastDrawKey = "";
             if (this.canvas.visible) {
@@ -87,8 +78,8 @@ export class SnowGround {
         const tileHeight = this.scene.Map.tileHeight;
         // The autumn theme colours the grass; the calendar is the theme's business.
         const groundTexture = autumnGround ? AUTUMN_TEXTURE : GREEN_TEXTURE;
-        // Drawn again only when what it shows changed: the ground, the snow on it, the surfaces of the map or the zoom.
-        const drawKey = `${groundTexture}:${Math.round(coverage * 240)}:${this.surfaces.layoutVersion()}:${this.scene.cameras.main.zoom}`;
+        // Drawn again only when what it shows changed: the ground, the surfaces of the map or the zoom.
+        const drawKey = `${groundTexture}:${this.surfaces.layoutVersion()}:${this.scene.cameras.main.zoom}`;
         const previous = this.drawnView;
         if (
             drawKey === this.lastDrawKey &&
@@ -135,18 +126,6 @@ export class SnowGround {
                         blockRow,
                         true,
                     );
-                    if (coverage > 0)
-                        this.stampTexture(
-                            SNOW_TEXTURE,
-                            x,
-                            y,
-                            tileWidth * 6 * scale,
-                            tileHeight * 5 * scale,
-                            coverage,
-                            blockColumn,
-                            blockRow,
-                            true,
-                        );
                     continue;
                 }
                 for (let row = blockRow; row < blockRow + 5; row++) {
@@ -156,17 +135,6 @@ export class SnowGround {
                         const x = (column - left) * tileWidth * scale;
                         const y = (row - top) * tileHeight * scale;
                         this.stampTexture(groundTexture, x, y, tileWidth * scale, tileHeight * scale, 1, column, row);
-                        if (coverage > 0)
-                            this.stampTexture(
-                                SNOW_TEXTURE,
-                                x,
-                                y,
-                                tileWidth * scale,
-                                tileHeight * scale,
-                                coverage,
-                                column,
-                                row,
-                            );
                     }
                 }
             }

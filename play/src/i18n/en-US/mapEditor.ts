@@ -715,9 +715,9 @@ const mapEditor: BaseTranslation = {
     },
     settings: {
         weather: {
-            automatic: "Automatic (every 30 minutes)",
+            automatic: "Auto",
+            fog: "Fog",
             title: "Weather",
-            description: "Weather shared by everyone on this map. You can hide its effects in your personal settings.",
             clear: "Clear sky",
             rain: "Rain",
             snow: "Snow",
@@ -725,6 +725,28 @@ const mapEditor: BaseTranslation = {
             saving: "Saving…",
             success: "Weather saved",
             error: "Could not save the weather",
+            auto: {
+                frequency: "Frequency",
+                calm: "Calm",
+                normal: "Normal",
+                stormy: "Stormy",
+                include: "Possible weather",
+                stormHint: "in the afternoon, mostly in summer",
+                snowHint: "from November to March",
+                fogHint: "in the morning",
+                now: "{season} · Now: {weather} until {time}",
+                then: "then {weather} at {time}",
+            },
+            season: {
+                winter: "Winter",
+                spring: "Spring",
+                summer: "Summer",
+                autumn: "Autumn",
+            },
+            fixed: {
+                snowHint: "Outside November–March, it falls as rain.",
+                fogHint: "All day long.",
+            },
         },
 
         loading: "Loading",

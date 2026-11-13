@@ -54,6 +54,7 @@
     import FontSettings from "./FontSettings.svelte";
     import NightSettings from "./NightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
+    import MapWeatherSection from "./MapWeatherSection.svelte";
     import {
         IconAntennaBarsLow,
         IconAntennaBarsMid,
@@ -369,6 +370,7 @@
             <SeasonalThemeSettings />
         </div>
     </SettingsSection>
+    <MapWeatherSection />
     <SettingsSection title={$LL.menu.settings.soundEffects.title()} dataTestId="sound-effects-settings">
         <SoundEffectsSettings />
     </SettingsSection>
