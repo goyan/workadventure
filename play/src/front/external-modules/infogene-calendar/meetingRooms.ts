@@ -36,8 +36,6 @@ export interface GoToMeetingDeps {
     walkTo: (point: { x: number; y: number }) => Promise<{ cancelled: boolean }>;
     mapUrl: string;
     areas: () => readonly AreaData[];
-    /** The Teams rooms of the map no player stands in now (see vacantRooms). */
-    vacantAreaIds: () => string[];
 }
 
 /**
@@ -53,7 +51,7 @@ export async function goToMeeting(event: CalendarEventInterface, deps: GoToMeeti
     if (!meetingKey || roomAreaIds.length === 0) return { kind: "teams-only" };
     let claim: MeetingRoomClaim;
     try {
-        claim = await deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds, vacantAreaIds: deps.vacantAreaIds() });
+        claim = await deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds });
     } catch (e) {
         return { kind: "claim-failed", error: asError(e).message };
     }
@@ -179,15 +177,6 @@ export function meetingKeyHere(
     const here = roomAt(point, areas);
     const room = here && rooms.find((candidate) => candidate.areaId === here.id);
     return room?.mine ? room.meetingKey : undefined;
-}
-
-/**
- * The Teams rooms no player stands in (by their feet, as `roomAt`): a room whose meeting is over is free once empty,
- * while one still occupied may host a meeting running late, and stays held.
- */
-export function vacantRooms(areas: readonly AreaData[], feet: readonly { x: number; y: number }[]): string[] {
-    const occupied = new Set(feet.flatMap((point) => roomAt(point, areas)?.id ?? []));
-    return roomsOfMap(areas).filter((areaId) => !occupied.has(areaId));
 }
 
 /** Whether a point (the feet of the player) is inside one of the given rooms. */

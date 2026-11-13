@@ -8,7 +8,6 @@ import {
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomsOfMap,
-    vacantRooms,
 } from "../../../src/front/external-modules/infogene-calendar/meetingRooms";
 
 const key = "a".repeat(64);
@@ -65,7 +64,6 @@ describe("goToMeeting", () => {
             }),
             mapUrl: "/~/goyan/office.wam",
             areas: () => rooms,
-            vacantAreaIds: () => ["r1"],
         };
     }
 
@@ -88,8 +86,6 @@ describe("goToMeeting", () => {
             mapUrl: "/~/goyan/office.wam",
             meetingKey: key,
             roomAreaIds: ["r1", "r2"],
-            // The rooms nobody stands in: the server frees those whose meeting is over (see vacantRooms).
-            vacantAreaIds: ["r1"],
         });
         expect(d.reachablePointIn).toHaveBeenCalledWith(expect.objectContaining({ id: "r2" }));
         expect(d.onRoom).toHaveBeenCalledWith("r2");
@@ -168,30 +164,6 @@ describe("goToMeeting", () => {
             areaId: "r2",
             cancelled: true,
         });
-    });
-});
-
-describe("vacantRooms", () => {
-    // 2026-11-13: "Daily santé" (09:15-09:45) is over and nobody is left in r1; r2 still has someone in it.
-    const rooms = [area("r1", 0), area("hall", 200, false), area("r2", 400)];
-
-    it("gives the Teams rooms no player's feet stand in", () => {
-        expect(
-            vacantRooms(rooms, [
-                { x: 448, y: 132 },
-                { x: 250, y: 132 },
-            ]),
-        ).toEqual(["r1"]);
-    });
-
-    it("gives every Teams room on an empty map, none when each has someone", () => {
-        expect(vacantRooms(rooms, [])).toEqual(["r1", "r2"]);
-        expect(
-            vacantRooms(rooms, [
-                { x: 48, y: 132 },
-                { x: 448, y: 132 },
-            ]),
-        ).toEqual([]);
     });
 });
 
