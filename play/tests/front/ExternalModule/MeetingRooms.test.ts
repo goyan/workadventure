@@ -41,7 +41,12 @@ describe("roomsOfMap", () => {
 });
 
 describe("goToMeeting", () => {
-    function deps(areaId: string | null, rooms = [area("r1", 0), area("r2", 400)], cancelled = false) {
+    function deps(
+        areaId: string | null,
+        rooms = [area("r1", 0), area("r2", 400)],
+        cancelled = false,
+        reachable: { x: number; y: number } | null = { x: 432, y: 144 },
+    ) {
         const calls: string[] = [];
         return {
             calls,
@@ -50,7 +55,8 @@ describe("goToMeeting", () => {
                 return Promise.resolve({ areaId });
             }),
             onRoom: vi.fn((id: string) => calls.push(`room:${id}`)),
-            walkTo: vi.fn(() => {
+            reachablePointIn: vi.fn((_room: AreaData) => reachable ?? undefined),
+            walkTo: vi.fn((_point: { x: number; y: number }) => {
                 calls.push("walk");
                 return Promise.resolve({ cancelled });
             }),
@@ -70,7 +76,7 @@ describe("goToMeeting", () => {
         open.mockRestore();
     });
 
-    it("walks to the center of the room the meeting got, once its arrival is watched", async () => {
+    it("walks to the free point of the room the meeting got that a way leads to, once its arrival is watched", async () => {
         const d = deps("r2");
         await goToMeeting(daily, d);
 
@@ -79,8 +85,34 @@ describe("goToMeeting", () => {
             meetingKey: key,
             roomAreaIds: ["r1", "r2"],
         });
+        expect(d.reachablePointIn).toHaveBeenCalledWith(expect.objectContaining({ id: "r2" }));
         expect(d.onRoom).toHaveBeenCalledWith("r2");
+        expect(d.walkTo).toHaveBeenCalledWith({ x: 432, y: 144 });
+    });
+
+    it("walks towards the center when no free point of the room can be reached (a locked room is walked to)", async () => {
+        const d = deps("r2", undefined, false, null);
+        await goToMeeting(daily, d);
+
         expect(d.walkTo).toHaveBeenCalledWith({ x: 448, y: 132 });
+    });
+
+    it("stays put and says the room could not be booked when the claim fails", async () => {
+        const d = deps("r2");
+        d.claim.mockRejectedValueOnce(new Error("Mac companion request failed: 500"));
+        const outcome = await goToMeeting(daily, d);
+
+        expect(d.onRoom).not.toHaveBeenCalled();
+        expect(d.walkTo).not.toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: "claim-failed", error: "Mac companion request failed: 500" });
+    });
+
+    it("says no way leads to the room when the walk cannot start", async () => {
+        const d = deps("r2");
+        d.walkTo.mockRejectedValueOnce(new Error("No path found"));
+        const outcome = await goToMeeting(daily, d);
+
+        expect(outcome).toEqual({ kind: "no-path", areaId: "r2", error: "No path found" });
     });
 
     it("stays put when every room is taken, and says so", async () => {

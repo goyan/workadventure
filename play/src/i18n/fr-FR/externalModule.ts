@@ -136,6 +136,8 @@ const externalModule: DeepPartial<Translation["externalModule"]> = {
         startedAgo: "A commencé {ago}",
         noLink: "Pas de lien de réunion",
         goToMeetingRoomsFull: "Toutes les salles Teams sont prises.",
+        goToMeetingNoPath: "Aucun chemin ne mène à la salle Teams : l'avatar reste ici.",
+        goToMeetingClaimFailed: "La salle Teams n'a pas pu être réservée : l'avatar reste ici.",
         openInTeamsQuestion: "Ouvrir la réunion dans Teams ?",
         openInTeamsYes: "Oui",
         openInTeamsNo: "Non",

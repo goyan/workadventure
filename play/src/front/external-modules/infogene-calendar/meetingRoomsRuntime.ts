@@ -65,14 +65,25 @@ export function startMeetingRooms(): () => void {
             onRoom: (areaId) => {
                 walk = arrival.expect(event, areaId, scene.roomUrl);
             },
+            // The room is entered by the feet (see `feet`): a free point of the room is where the feet must go.
+            reachablePointIn: (room) =>
+                scene.nearestReachablePointIn(
+                    { x: room.x, y: room.y, width: room.width, height: room.height },
+                    { x: room.x + room.width / 2, y: room.y + room.height / 2 },
+                ),
             walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),
         })
             .then((outcome) => {
+                if (abortController.signal.aborted) return;
                 refreshLabels();
-                // No room to walk to: the avatar stays, and Teams is offered at once.
+                if (outcome.kind === "claim-failed" || outcome.kind === "no-path") {
+                    console.warn("Cannot go to the meeting room", outcome.kind, outcome.error);
+                }
+                // No room to walk to: the avatar stays, and Teams is offered at once, saying why.
                 if (outcome.kind !== "walking") {
+                    if (walk !== undefined) arrival.cancel();
                     askToOpenInTeams(event, outcome.kind);
                     return;
                 }
@@ -88,7 +99,7 @@ export function startMeetingRooms(): () => void {
             .catch((e: unknown) => {
                 if (abortController.signal.aborted) return;
                 console.warn("Cannot go to the meeting room", asError(e).message);
-                // No room could be asked for, or no path leads there: the meeting can still be opened in Teams.
+                // An unexpected error (goToMeeting itself never rejects): the meeting can still be opened in Teams.
                 if (walk !== undefined) arrival.cancel();
                 askToOpenInTeams(event, "teams-only");
             });

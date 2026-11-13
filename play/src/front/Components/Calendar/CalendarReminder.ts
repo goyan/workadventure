@@ -82,10 +82,11 @@ export function remindAgain(event: CalendarEventInterface): void {
 }
 
 /**
- * Why Teams is offered: the avatar arrived in the meeting's room after "Go there", or "Go there" could not give a
- * room (all taken, or none on the map) and the avatar stays.
+ * Why Teams is offered: the avatar arrived in the meeting's room after "Go there", or the avatar stays as "Go there"
+ * could not take it there: no room on the map (`teams-only`), all taken (`rooms-full`), the room could not be booked
+ * (`claim-failed`), or no way leads to it (`no-path`).
  */
-export type TeamsPromptReason = "arrived" | "rooms-full" | "teams-only";
+export type TeamsPromptReason = "arrived" | "rooms-full" | "teams-only" | "claim-failed" | "no-path";
 
 /** The question "Open the meeting in Teams?", one at a time: a newer one replaces it. */
 export const teamsPromptStore = writable<{ event: CalendarEventInterface; reason: TeamsPromptReason } | undefined>(

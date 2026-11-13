@@ -24,6 +24,14 @@
 
 {#if $teamsPromptStore}
     {@const prompt = $teamsPromptStore}
+    {@const stayReason =
+        prompt.reason === "rooms-full"
+            ? $LL.externalModule.calendar.goToMeetingRoomsFull()
+            : prompt.reason === "no-path"
+              ? $LL.externalModule.calendar.goToMeetingNoPath()
+              : prompt.reason === "claim-failed"
+                ? $LL.externalModule.calendar.goToMeetingClaimFailed()
+                : undefined}
     <section
         aria-label={$LL.externalModule.calendar.openInTeamsQuestion()}
         class="pointer-events-auto mt-2 flex w-96 max-w-[calc(100vw-1rem)] flex-col gap-3.5 rounded-lg border border-solid border-white/10 bg-contrast/90 p-4 text-white shadow-dark backdrop-blur"
@@ -39,8 +47,8 @@
             <div class="flex min-w-0 flex-1 flex-col gap-1">
                 <span class="text-lg font-bold leading-tight">{$LL.externalModule.calendar.openInTeamsQuestion()}</span>
                 <span class="truncate text-sm text-contrast-200">{prompt.event.title}</span>
-                {#if prompt.reason === "rooms-full"}
-                    <span class="text-sm text-contrast-200">{$LL.externalModule.calendar.goToMeetingRoomsFull()}</span>
+                {#if stayReason}
+                    <span class="text-sm text-contrast-200">{stayReason}</span>
                 {/if}
             </div>
             <Button

@@ -1,4 +1,5 @@
 import type { AreaData } from "@workadventure/map-editor";
+import { asError } from "catch-unknown";
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
 import type { MeetingRoom, MeetingRoomClaim, MeetingRoomClaimInput } from "../../../common/MacCompanion";
 import { reminderLeadMs } from "../../Components/Calendar/CalendarReminder";
@@ -13,40 +14,56 @@ export function roomsOfMap(areas: readonly AreaData[]): string[] {
 }
 
 /**
- * What "Go there" did: walked (or tried to) to the room the meeting got, or stayed put as no room could be given, in
- * which case Teams is offered at once.
+ * What "Go there" did: walked (or tried to) to the room the meeting got, or stayed put, in which case Teams is offered
+ * at once: no room on the map (`teams-only`), every room taken (`rooms-full`), the room could not be asked for
+ * (`claim-failed`: the server refused or did not answer), or no way leads to the room the meeting got (`no-path`).
  */
 export type GoToMeetingOutcome =
     | { kind: "walking"; areaId: string; cancelled: boolean }
     | { kind: "teams-only" }
-    | { kind: "rooms-full" };
+    | { kind: "rooms-full" }
+    | { kind: "claim-failed"; error: string }
+    | { kind: "no-path"; areaId: string; error: string };
 
 export interface GoToMeetingDeps {
     claim: (input: MeetingRoomClaimInput) => Promise<MeetingRoomClaim>;
     /** Called with the room the meeting got, right before walking there: its arrival is watched from then on. */
     onRoom: (areaId: string) => void;
+    /** The free point of the room nearest its center that a way leads to, if any (see PathfindingManager). */
+    reachablePointIn: (room: AreaData) => { x: number; y: number } | undefined;
     walkTo: (point: { x: number; y: number }) => Promise<{ cancelled: boolean }>;
     mapUrl: string;
     areas: () => readonly AreaData[];
 }
 
 /**
- * "Go there": asks for the meeting's room and walks to its center. Teams is not opened here: a new tab in the click
- * would put the game in the background, which stops the avatar's walk (see Player), so it is offered on arrival.
- * A room is given at any time before the end, as Teams lets one join early. No room on the map, or all taken: the
- * avatar stays, and the outcome says which.
+ * "Go there": asks for the meeting's room and walks into it, to its free point nearest the center (a table often
+ * covers the center itself). Teams is not opened here: a new tab in the click would put the game in the background,
+ * which stops the avatar's walk (see Player), so it is offered on arrival. A room is given at any time before the end,
+ * as Teams lets one join early. When the avatar cannot go, the outcome says why; this function never rejects.
  */
 export async function goToMeeting(event: CalendarEventInterface, deps: GoToMeetingDeps): Promise<GoToMeetingOutcome> {
     const meetingKey = event.resource?.meetingKey;
     const areas = deps.areas();
     const roomAreaIds = roomsOfMap(areas);
     if (!meetingKey || roomAreaIds.length === 0) return { kind: "teams-only" };
-    const claim = await deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds });
+    let claim: MeetingRoomClaim;
+    try {
+        claim = await deps.claim({ mapUrl: deps.mapUrl, meetingKey, roomAreaIds });
+    } catch (e) {
+        return { kind: "claim-failed", error: asError(e).message };
+    }
     const room = areas.find((area) => area.id === claim.areaId);
     if (!room) return { kind: "rooms-full" };
+    // No free point reached: the center, as a locked room is walked to and the avatar stops at its door.
+    const point = deps.reachablePointIn(room) ?? { x: room.x + room.width / 2, y: room.y + room.height / 2 };
     deps.onRoom(room.id);
-    const walk = await deps.walkTo({ x: room.x + room.width / 2, y: room.y + room.height / 2 });
-    return { kind: "walking", areaId: room.id, cancelled: walk.cancelled };
+    try {
+        const walk = await deps.walkTo(point);
+        return { kind: "walking", areaId: room.id, cancelled: walk.cancelled };
+    } catch (e) {
+        return { kind: "no-path", areaId: room.id, error: asError(e).message };
+    }
 }
 
 /**

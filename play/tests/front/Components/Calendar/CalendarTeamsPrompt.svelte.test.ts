@@ -16,6 +16,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => {
                 openInTeamsYes: () => "Yes",
                 openInTeamsNo: () => "No",
                 goToMeetingRoomsFull: () => "Every Teams room is taken.",
+                goToMeetingNoPath: () => "No way leads to the Teams room: your avatar stays here.",
+                goToMeetingClaimFailed: () => "The Teams room could not be booked: your avatar stays here.",
             },
         },
         actionbar: { close: () => "Close" },
@@ -118,5 +120,31 @@ describe("CalendarTeamsPrompt", () => {
         flushSync();
 
         expect(target.textContent).toContain("Every Teams room is taken.");
+    });
+
+    it("says why the avatar stays when no way leads to the room", () => {
+        render();
+        askToOpenInTeams(daily, "no-path");
+        flushSync();
+
+        expect(target.textContent).toContain("No way leads to the Teams room: your avatar stays here.");
+        expect(target.textContent).not.toContain("Every Teams room is taken.");
+    });
+
+    it("says why the avatar stays when the room could not be booked", () => {
+        render();
+        askToOpenInTeams(daily, "claim-failed");
+        flushSync();
+
+        expect(target.textContent).toContain("The Teams room could not be booked: your avatar stays here.");
+    });
+
+    it("says nothing more when the avatar arrived in the room", () => {
+        render();
+        askToOpenInTeams(daily, "arrived");
+        flushSync();
+
+        expect(target.textContent).not.toContain("your avatar stays here");
+        expect(target.textContent).not.toContain("Every Teams room is taken.");
     });
 });

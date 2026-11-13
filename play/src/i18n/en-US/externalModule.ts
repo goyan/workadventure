@@ -131,6 +131,8 @@ const externalModule: BaseTranslation = {
         startedAgo: "Started {ago}",
         noLink: "No meeting link",
         goToMeetingRoomsFull: "Every Teams room is taken.",
+        goToMeetingNoPath: "No way leads to the Teams room: your avatar stays here.",
+        goToMeetingClaimFailed: "The Teams room could not be booked: your avatar stays here.",
         openInTeamsQuestion: "Open the meeting in Teams?",
         openInTeamsYes: "Yes",
         openInTeamsNo: "No",
