@@ -12,7 +12,7 @@ export const calendarEventsStore = writable(new Map<string, CalendarEventInterfa
 export const goToMeetingStore = writable<((event: CalendarEventInterface) => void) | undefined>(undefined);
 
 /**
- * The meeting key of the user's own taken room their feet stand in, if any: "Go there" is not offered for that meeting
- * then. Set by the calendar module that knows the Teams meeting rooms.
+ * The meetings "Go there" is not offered for, by event id: the Teams room the player stands in already serves them (its
+ * meeting, or the next meeting of the user taking it over). Set by the calendar module that knows the rooms.
  */
-export const meetingKeyHereStore = writable<string | undefined>(undefined);
+export const goToHiddenStore = writable<ReadonlySet<string>>(new Set());
