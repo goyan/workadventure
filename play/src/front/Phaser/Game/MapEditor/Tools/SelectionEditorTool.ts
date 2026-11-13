@@ -12,7 +12,12 @@ import {
     mapEditorSelectedEntityPrefabStore,
     mapEditorVisibilityStore,
 } from "../../../../Stores/MapEditorStore";
-import { mapEditorSelectionStore, type MapEditorSelectionState } from "../../../../Stores/MapEditorSelectionStore";
+import {
+    mapEditorSelectionFiltersStore,
+    mapEditorSelectionStore,
+    type MapEditorSelectionFilters,
+    type MapEditorSelectionState,
+} from "../../../../Stores/MapEditorSelectionStore";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { EntitiesManager } from "../../GameMap/EntitiesManager";
@@ -76,6 +81,9 @@ interface RectangleDrag {
 const logger = debug("map-editor:selection");
 const SELECTION_COLOR = 0x2474e8;
 const PLACEMENT_COLOR = 0x17a673;
+// Areas are hidden outside of the area tool: their outline shows what a rectangle may pick up.
+const AREA_OUTLINE_COLOR = 0xffffff;
+const AREA_OUTLINE_ALPHA = 0.5;
 
 export class SelectionEditorTool extends MapEditorTool {
     private readonly scene: GameScene;
@@ -228,6 +236,7 @@ export class SelectionEditorTool extends MapEditorTool {
             return;
         }
         this.cancelIncompleteGesture();
+        setArmedPattern(undefined);
         this.publishState({ mode: "paste" });
         this.drawVisuals();
     }
@@ -335,6 +344,12 @@ export class SelectionEditorTool extends MapEditorTool {
             const items = this.readSelectedItems();
             if (!context || !items || items.length === 0) {
                 this.setError("blocked");
+                return;
+            }
+            // The area tool asks what to do with the furniture of a personal desk before deleting it: the selection
+            // leaves that choice to it instead of deleting the desk silently.
+            if (items.some((item) => item.kind === "area" && this.isPersonalDeskArea(item.data))) {
+                this.setError("personalArea");
                 return;
             }
             const commands: FrontCommand[] = items.map((item) =>
@@ -565,7 +580,8 @@ export class SelectionEditorTool extends MapEditorTool {
             this.placementPointerId = undefined;
             this.placementPointerPosition = { x: pointer.worldX, y: pointer.worldY };
             if (!isPointerInsideCanvas(this.scene, pointer)) {
-                this.cancelPlacement();
+                // Only this press is dropped: the Move or Paste mode stays armed.
+                this.drawVisuals();
                 return;
             }
             this.confirmPlacement(pointer.worldX, pointer.worldY).catch((error: unknown) => {
@@ -580,26 +596,49 @@ export class SelectionEditorTool extends MapEditorTool {
         }
     }
 
+    /**
+     * Drops the press in progress (rectangle or placement click) when the pointer leaves the canvas or the window loses
+     * the focus. An armed Move or Paste mode stays armed: reaching the side panel crosses the canvas edge.
+     */
     private cancelIncompleteGesture(): void {
-        const placementWasArmed = this.isPlacementArmed();
         this.rectangleDrag = undefined;
         this.placementPointerId = undefined;
         this.placementPointerPosition = undefined;
         this.scene.input.setDefaultCursor("auto");
-        if (placementWasArmed) {
-            this.cancelPlacement();
+        this.drawVisuals();
+    }
+
+    /**
+     * Changes which kinds of content the selection picks up, and selects again what the current rectangle covers.
+     */
+    public setSelectionFilters(patch: Partial<MapEditorSelectionFilters>): void {
+        mapEditorSelectionFiltersStore.update((filters) => ({ ...filters, ...patch }));
+        if (this.active && this.selectionRectangle && !this.isPlacementArmed() && !this.isBusy()) {
+            this.selectRectangle(this.selectionRectangle);
             return;
         }
         this.drawVisuals();
     }
 
     private selectRectangle(rectangle: Phaser.Types.Math.RectangleLike): void {
+        const filters = get(mapEditorSelectionFiltersStore);
         const entities = Array.from(this.entitiesManager.getEntities().values()).filter((entity) => {
-            return entity.canEdit && this.hasPositiveOverlap(rectangle, entity.getCollisionRectangle());
+            const prefab = entity.getPrefab();
+            const isMapLayer = isMapLayerPrefab(prefab.collectionName, prefab.id);
+            return (
+                entity.canEdit &&
+                (isMapLayer ? filters.mapLayer : filters.objects) &&
+                this.hasPositiveOverlap(rectangle, entity.getCollisionRectangle())
+            );
         });
-        const areas = this.canEditAreas() ? (this.scene.getGameMapFrontWrapper().getAreas() ?? new Map()) : new Map();
+        const areas =
+            filters.areas && this.canEditAreas()
+                ? (this.scene.getGameMapFrontWrapper().getAreas() ?? new Map())
+                : new Map();
+        // An area is only taken when the rectangle holds it entirely: a large area (a room, a whole floor) touched by
+        // a rectangle drawn around some furniture would otherwise be moved or deleted with it.
         const areaIds = Array.from(areas.values())
-            .filter((area) => this.hasPositiveOverlap(rectangle, area))
+            .filter((area) => this.contains(rectangle, area))
             .map((area) => area.id);
         this.selectedEntityIds = entities.map((entity) => entity.entityId);
         this.selectedAreaIds = areaIds;
@@ -882,6 +921,38 @@ export class SelectionEditorTool extends MapEditorTool {
         this.drawVisuals();
     }
 
+    /**
+     * After an undo or a redo the selected items may stand elsewhere (an undone move) or be gone (an undone paste):
+     * the rectangle is fitted again to the items that remain, or cleared when none remains. A rectangle that still
+     * holds every selected item is kept, so that Fill keeps its target.
+     */
+    public refreshSelectionAfterHistory(): void {
+        this.refreshSelection();
+        const bounds = this.getSelectionVisuals();
+        if (bounds.length === 0) {
+            if (this.selectionRectangle !== undefined) {
+                this.selectionRectangle = undefined;
+                this.publishState({ hasRectangle: false });
+                this.drawVisuals();
+            }
+            return;
+        }
+        let union = new Phaser.Geom.Rectangle(bounds[0].x, bounds[0].y, bounds[0].width, bounds[0].height);
+        for (const item of bounds.slice(1)) {
+            union = Phaser.Geom.Rectangle.Union(
+                union,
+                new Phaser.Geom.Rectangle(item.x, item.y, item.width, item.height),
+            );
+        }
+        const fitted = { x: union.x, y: union.y, width: union.width, height: union.height };
+        if (this.selectionRectangle && this.contains(this.selectionRectangle, fitted)) {
+            return;
+        }
+        this.selectionRectangle = fitted;
+        this.publishState({ hasRectangle: true });
+        this.drawVisuals();
+    }
+
     private drawVisuals(): void {
         if (!this.active) {
             return;
@@ -924,9 +995,11 @@ export class SelectionEditorTool extends MapEditorTool {
             }
         }
 
+        const areaOutlines = this.getAreaOutlines();
         const signature = JSON.stringify({
             rectangleToDraw,
             visualItems,
+            areaOutlines,
             mode: state.mode,
             active: this.active,
         });
@@ -935,6 +1008,11 @@ export class SelectionEditorTool extends MapEditorTool {
         }
         this.previousVisualSignature = signature;
         this.graphics.clear();
+        for (const outline of areaOutlines) {
+            this.graphics
+                .lineStyle(1, AREA_OUTLINE_COLOR, AREA_OUTLINE_ALPHA)
+                .strokeRect(outline.x, outline.y, outline.width, outline.height);
+        }
         if (rectangleToDraw && rectangleToDraw.width > 0 && rectangleToDraw.height > 0) {
             this.graphics
                 .fillStyle(SELECTION_COLOR, 0.22)
@@ -949,6 +1027,19 @@ export class SelectionEditorTool extends MapEditorTool {
                 .strokeRect(item.bounds.x, item.bounds.y, item.bounds.width, item.bounds.height);
         }
         this.scene.markDirty();
+    }
+
+    private getAreaOutlines(): Phaser.Types.Math.RectangleLike[] {
+        if (!get(mapEditorSelectionFiltersStore).areas || !this.canEditAreas()) {
+            return [];
+        }
+        const areas = this.scene.getGameMapFrontWrapper().getAreas();
+        return Array.from(areas?.values() ?? []).map((area) => ({
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: area.height,
+        }));
     }
 
     private getSelectionVisuals(): Phaser.Types.Math.RectangleLike[] {
@@ -987,6 +1078,19 @@ export class SelectionEditorTool extends MapEditorTool {
             new Phaser.Geom.Rectangle(right.x, right.y, right.width, right.height),
         );
         return intersection.width > 0 && intersection.height > 0;
+    }
+
+    private contains(outer: Phaser.Types.Math.RectangleLike, inner: Phaser.Types.Math.RectangleLike): boolean {
+        return (
+            inner.x >= outer.x &&
+            inner.y >= outer.y &&
+            inner.x + inner.width <= outer.x + outer.width &&
+            inner.y + inner.height <= outer.y + outer.height
+        );
+    }
+
+    private isPersonalDeskArea(area: AreaData): boolean {
+        return area.properties.some((property) => property.type === "personalAreaPropertyData");
     }
 
     private getUnionBounds(items: SelectionItem[]): Phaser.Types.Math.RectangleLike | undefined {

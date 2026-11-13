@@ -440,6 +440,7 @@ export class MapEditorModeManager {
                 logger("Map editor command failed", { error });
                 Sentry.captureException(error);
             }
+            this.selectionEditorTool.refreshSelectionAfterHistory();
         });
     }
 
@@ -461,6 +462,7 @@ export class MapEditorModeManager {
                 logger("Map editor command failed", { error });
                 Sentry.captureException(error);
             }
+            this.selectionEditorTool.refreshSelectionAfterHistory();
         });
     }
 
