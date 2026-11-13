@@ -5,6 +5,7 @@ import { Command, WamFile } from "@workadventure/map-editor";
 import type { WAMEntityData } from "@workadventure/map-editor";
 import { Deferred } from "@workadventure/shared-utils";
 import type { EditMapCommandMessage } from "@workadventure/messages";
+import { get } from "svelte/store";
 import type { EntitiesManager } from "../../../../src/front/Phaser/Game/GameMap/EntitiesManager";
 import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
@@ -12,7 +13,12 @@ import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/Game
 import type { FrontCommandInterface } from "../../../../src/front/Phaser/Game/MapEditor/Commands/FrontCommandInterface";
 import type { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { EditorToolName, MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
-import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
+import {
+    mapEditorModeStore,
+    mapEditorSelectedToolStore,
+    mapEditorWamSettingsEditorToolCurrentMenuItemStore,
+    WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
+} from "../../../../src/front/Stores/MapEditorStore";
 import { mapEditorActivated } from "../../../../src/front/Stores/MenuStore";
 import { CreateEntityFrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/Entity/CreateEntityFrontCommand";
 import { DeleteEntityFrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/Entity/DeleteEntityFrontCommand";
@@ -49,6 +55,7 @@ const editorToolMocks = vi.hoisted(() => {
         EntityEditorTool: vi.fn().mockImplementation(createTool),
         ExplorerTool: vi.fn().mockImplementation(createTool),
         FloorEditorTool: vi.fn().mockImplementation(createTool),
+        MapLayerEditorTool: vi.fn().mockImplementation(createTool),
         SelectionEditorTool: vi.fn().mockImplementation(createTool),
         TrashEditorTool: vi.fn().mockImplementation(createTool),
         WAMSettingsEditorTool: vi.fn().mockImplementation(createTool),
@@ -69,6 +76,9 @@ vi.mock("../../../../src/front/Phaser/Game/MapEditor/Tools/ExplorerTool", () => 
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Tools/FloorEditorTool", () => ({
     FloorEditorTool: editorToolMocks.FloorEditorTool,
+}));
+vi.mock("../../../../src/front/Phaser/Game/MapEditor/Tools/MapLayerEditorTool", () => ({
+    MapLayerEditorTool: editorToolMocks.MapLayerEditorTool,
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Tools/SelectionEditorTool", () => ({
     SelectionEditorTool: editorToolMocks.SelectionEditorTool,
@@ -601,5 +611,109 @@ describe("MapEditorModeManager command groups", () => {
         expect(manager.handleKeyDownEvent(event)).toBe(false);
         expect(manager.currentlyActiveTool).toBe(activeTool);
         expect(editorToolMocks.keyDownEvents).toHaveLength(0);
+    });
+});
+
+describe("MapEditorModeManager tool shortcuts and map settings", () => {
+    let manager: MapEditorModeManager | undefined;
+
+    afterEach(() => {
+        manager?.destroy();
+        manager = undefined;
+        mapEditorModeStore.set(false);
+        mapEditorActivated.set(false);
+        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(undefined);
+        mapEditorSelectedToolStore.set(undefined);
+        editorToolMocks.keyDownEvents.length = 0;
+        vi.clearAllMocks();
+    });
+
+    // A French AZERTY keyboard types "_" (PC) or "!" (Mac) on the 8 key of the top row without Shift.
+    it.each([
+        ["PC", "_"],
+        ["Mac", "!"],
+    ])("opens the map tool with the 8 key of an AZERTY %s keyboard, without Shift", (_layout, key) => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+
+        expect(manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "Digit8", key }))).toBe(true);
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.MapLayerEditor);
+    });
+
+    it("opens the map tool with the 8 key of the numpad", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+
+        manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "Numpad8", key: "8" }));
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.MapLayerEditor);
+    });
+
+    it("keeps the editor open on the circumflex dead key of a French keyboard", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+        const toolBefore = get(mapEditorSelectedToolStore);
+
+        manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "BracketLeft", key: "Dead" }));
+        expect(get(mapEditorSelectedToolStore)).toBe(toolBefore);
+    });
+
+    it("still closes the editor with the backtick key", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+
+        manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "Backquote", key: "`" }));
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.CloseMapEditor);
+    });
+
+    it("keeps the editor open when a user without the edit right presses the area tool key", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(false);
+        mapEditorModeStore.set(true);
+        const toolBefore = get(mapEditorSelectedToolStore);
+
+        expect(manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "Digit2", key: "2" }))).toBe(true);
+        expect(get(mapEditorSelectedToolStore)).toBe(toolBefore);
+        expect(get(mapEditorSelectedToolStore)).not.toBe(EditorToolName.CloseMapEditor);
+    });
+
+    it("goes back to the previous tool when the map settings are closed", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+        manager.equipTool(EditorToolName.MapLayerEditor);
+        manager.equipTool(EditorToolName.WAMSettingsEditor);
+        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Weather);
+
+        manager.closeWamSettings();
+
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.MapLayerEditor);
+        expect(get(mapEditorWamSettingsEditorToolCurrentMenuItemStore)).toBeUndefined();
+    });
+
+    it("closes the map settings with Escape", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+        manager.equipTool(EditorToolName.SelectionEditor);
+        manager.equipTool(EditorToolName.WAMSettingsEditor);
+
+        expect(manager.handleKeyDownEvent(new KeyboardEvent("keydown", { code: "Escape", key: "Escape" }))).toBe(true);
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.SelectionEditor);
+    });
+
+    it("opens the objects tool when the map settings were opened first", () => {
+        manager = createManagerFixture().manager;
+        mapEditorActivated.set(true);
+        mapEditorModeStore.set(true);
+        manager.equipTool(undefined);
+        manager.equipTool(EditorToolName.WAMSettingsEditor);
+
+        manager.closeWamSettings();
+
+        expect(get(mapEditorSelectedToolStore)).toBe(EditorToolName.EntityEditor);
     });
 });

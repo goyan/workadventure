@@ -4,7 +4,6 @@
     import { fly } from "svelte/transition";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import {
         mapEditorWamSettingsEditorToolCurrentMenuItemStore,
         WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
@@ -58,8 +57,8 @@
     }
 
     function close() {
-        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(undefined);
-        gameManager.getCurrentGameScene().getMapEditorModeManager()?.equipTool(EditorToolName.EntityEditor);
+        // Back to the tool used before the settings; Escape does the same (MapEditorModeManager).
+        gameManager.getCurrentGameScene().getMapEditorModeManager()?.closeWamSettings();
     }
 </script>
 
@@ -154,7 +153,7 @@
                         close();
                     }}
                 >
-                    close
+                    {$LL.mapEditor.settings.close()}
                 </Button>
             </div>
         </div>

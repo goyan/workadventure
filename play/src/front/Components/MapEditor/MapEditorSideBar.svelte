@@ -5,6 +5,7 @@
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
+    import { editorToolShortcutDigit } from "../../Phaser/Game/MapEditor/EditorToolShortcuts";
     import { mapEditorSelectedToolStore, mapEditorVisibilityStore } from "../../Stores/MapEditorStore";
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { mapEditorActivated, mapEditorActivatedForThematics } from "../../Stores/MenuStore";
@@ -144,6 +145,7 @@
         <div class="p-2 retro-theme rounded-2xl flex flex-col gap-2">
             {#each availableTools as tool (tool.toolName)}
                 {@const ToolIcon = tool.iconComponent}
+                {@const shortcutDigit = editorToolShortcutDigit(tool.toolName)}
                 <div class="tool-button relative">
                     <button
                         class="peer p-3 aspect-square w-12 rounded {$mapEditorSelectedToolStore === tool.toolName
@@ -163,6 +165,11 @@
                         class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
                     >
                         {tool.tooltiptext}
+                        {#if shortcutDigit !== undefined}
+                            <span class="opacity-70" data-testid="mapEditorToolShortcut-{tool.toolName}">
+                                · {$LL.mapEditor.sideBar.shortcut({ key: String(shortcutDigit) })}
+                            </span>
+                        {/if}
                     </div>
                 </div>
             {/each}

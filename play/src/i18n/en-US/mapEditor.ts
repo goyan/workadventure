@@ -23,6 +23,7 @@ const mapEditor: BaseTranslation = {
         areaEditorActivated: "Area editor activated",
         entityEditorActivated: "Entity editor activated",
         configureMyRoomActivated: "Configure my room activated",
+        shortcut: "Shortcut: {key}",
     },
     selection: {
         title: "Select and edit in bulk",
@@ -714,6 +715,7 @@ const mapEditor: BaseTranslation = {
         },
     },
     settings: {
+        close: "Close",
         weather: {
             automatic: "Automatic (every 30 minutes)",
             title: "Weather",

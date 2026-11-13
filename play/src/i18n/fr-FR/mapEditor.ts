@@ -24,6 +24,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         areaEditorActivated: "Édition de zone activée",
         entityEditorActivated: "Édition d'objets activée",
         configureMyRoomActivated: "Configuration de la salle activée",
+        shortcut: "Raccourci : {key}",
     },
     selection: {
         title: "Sélection et édition en masse",
@@ -727,6 +728,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
     },
     settings: {
+        close: "Fermer",
         weather: {
             automatic: "Automatique (toutes les 30 minutes)",
             title: "Météo",
