@@ -1,7 +1,13 @@
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
 import { describe, expect, it } from "vitest";
 
-import { buildAgenda, meetingPlace, nextMeeting, overlapsWith } from "../../../../src/front/Components/Calendar/agenda";
+import {
+    buildAgenda,
+    meetingPlace,
+    nextMeeting,
+    overlapsWith,
+    reminderTiming,
+} from "../../../../src/front/Components/Calendar/agenda";
 
 // Local times on purpose: the agenda groups by the user's local day.
 const NOW = new Date(2026, 9, 12, 17, 5);
@@ -138,5 +144,22 @@ describe("overlapsWith", () => {
             event("hackathon", "17:45", "21:45"),
         ]);
         expect(ids(others)).toEqual(["b", "c"]);
+    });
+});
+
+describe("reminderTiming", () => {
+    // A meeting at 10:00 (2026-11-13): seen at 10:00:54, "Starting now" read as not started yet.
+    const start = new Date("2026-11-13T10:00:00+01:00");
+    const at = (time: string) => new Date(`2026-11-13T${time}+01:00`);
+
+    it("says it starts now only within the minute before it starts", () => {
+        expect(reminderTiming(start, at("09:59:30"))).toBe("startsNow");
+        expect(reminderTiming(start, at("09:58:30"))).toBe("until");
+    });
+
+    it("says it is in progress from its start, then how long ago it started from a minute on", () => {
+        expect(reminderTiming(start, at("10:00:00"))).toBe("inProgress");
+        expect(reminderTiming(start, at("10:00:54"))).toBe("inProgress");
+        expect(reminderTiming(start, at("10:01:30"))).toBe("startedAgo");
     });
 });
