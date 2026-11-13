@@ -49,6 +49,10 @@ export class LeafScatterLayer {
         this.graphics.setVisible(visible);
     }
 
+    setAlpha(alpha: number): void {
+        this.graphics.setAlpha(alpha);
+    }
+
     destroy(): void {
         this.graphics.destroy();
     }

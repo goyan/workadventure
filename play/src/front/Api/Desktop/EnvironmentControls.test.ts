@@ -65,7 +65,7 @@ describe("desktop environment settings", () => {
         await applyDesktopEnvironment({ setting: "weather", value: WeatherType.Snow });
         expect(save).toHaveBeenCalledExactlyOnceWith({
             $case: "updateWeatherSettingMessage",
-            updateWeatherSettingMessage: { weather: WeatherType.Snow },
+            updateWeatherSettingMessage: { weather: WeatherType.Snow, autoInclude: [] },
         });
     });
 
