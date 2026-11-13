@@ -4726,11 +4726,7 @@ ${escapedMessage}
         // player then aborts right before walking onto a blocking tile (see Player.onPathWaypointReached)
         // and we compute a new route to the destination.
         for (let attempt = 0; attempt <= MAX_PATH_REROUTES; attempt += 1) {
-            pathfindingManager.setCollisionGrid(
-                this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }),
-            );
-            pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
-            pathfindingManager.setObstacles(this.gameMapFrontWrapper.getPathObstacles(this.CurrentPlayer));
+            this.preparePathfinding(pathfindingManager);
             // Each attempt must fully complete (walk, then maybe reroute) before the next one starts.
             // eslint-disable-next-line no-await-in-loop
             const foundPath = await pathfindingManager.findPathFromGameCoordinates(
@@ -4769,6 +4765,30 @@ ${escapedMessage}
         // stands right before the blocking tile: warn about the area blocking the destination.
         this.displayPathBlockedWarning(position);
         return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: true };
+    }
+
+    /** The live collisions of the map for a computed walk of the player: tiles, walls, and object hitboxes. */
+    private preparePathfinding(pathfindingManager: PathfindingManager): void {
+        pathfindingManager.setCollisionGrid(this.gameMapFrontWrapper.getCollisionGrid({ emitMapChangedEvent: false }));
+        pathfindingManager.setBarriers(this.gameMapFrontWrapper.getWallBarriers());
+        pathfindingManager.setObstacles(this.gameMapFrontWrapper.getPathObstacles(this.CurrentPlayer));
+    }
+
+    /**
+     * The free point of a rectangle (an area) nearest to a target point that the player can walk to now, without
+     * walking (see PathfindingManager.nearestReachablePointIn). Undefined when no point of it can be reached.
+     */
+    public nearestReachablePointIn(
+        rectangle: { x: number; y: number; width: number; height: number },
+        target: { x: number; y: number },
+    ): { x: number; y: number } | undefined {
+        const pathfindingManager = this.getPathfindingManager();
+        this.preparePathfinding(pathfindingManager);
+        return pathfindingManager.nearestReachablePointIn(
+            { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y },
+            rectangle,
+            target,
+        );
     }
 
     /**
