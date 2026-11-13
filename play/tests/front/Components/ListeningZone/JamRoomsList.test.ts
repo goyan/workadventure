@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
     join: vi.fn(),
     playback: vi.fn(),
     update: vi.fn(),
+    audioLeave: vi.fn().mockResolvedValue(undefined),
     local: false,
 }));
 vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () => {
@@ -51,7 +52,7 @@ vi.mock("../../../../src/front/Stores/PlayersStore", async () => ({
 }));
 // Native Jam audio is covered separately; this suite exercises only the Spotify extension action.
 vi.mock("../../../../src/front/ListeningZone/GameJamAudioSession", () => ({
-    jamAudioSession: { leave: vi.fn().mockResolvedValue(undefined) },
+    jamAudioSession: { leave: mocks.audioLeave },
 }));
 vi.mock("../../../../src/front/Stores/MediaStore", async () => ({
     requestedMicrophoneDeviceIdStore: (await import("svelte/store")).readable(undefined),
@@ -251,6 +252,20 @@ describe("Jam invite link", () => {
             false,
         ]);
     });
+
+    it.each([true, false])(
+        "keeps the relayed audio when the host's room gets a new invite link (seen by its host: %s)",
+        (local) => {
+            mocks.local = local;
+            mocks.audioLeave.mockClear();
+            joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
+            render();
+            flushSync(() => mocks.setRooms([{ ...room, jam: { ...room.jam, url: "https://spotify.link/fresh" } }]));
+            flushSync(() => joinedJamStore.set(undefined));
+            expect(target.querySelectorAll('[data-testid="listening-zone-room"]')).toHaveLength(1);
+            expect(mocks.audioLeave).not.toHaveBeenCalled();
+        },
+    );
 });
 
 describe("Karaoke", () => {

@@ -45,6 +45,24 @@ describe("resolveJamSpaceAccess", () => {
         });
     });
 
+    it("keeps the same Jam space, host publishing and guest listening, after the host pastes a new invite link", async () => {
+        const expired: ListeningZoneJam = { url: "https://spotify.link/expired", hostUuid: HOST, hostName: "Hôte" };
+        const fresh: ListeningZoneJam = { ...expired, url: "https://spotify.link/fresh" };
+        // The space name holds the room, the zone and the host: never the invite link.
+        for (const jams of [[expired], [fresh]]) {
+            expect(await resolveJamSpaceAccess(spaceName, { uuid: HOST, playUri: ROOM }, directory({ jams }))).toEqual({
+                kind: "jam",
+                canPublishMusic: true,
+            });
+            expect(await resolveJamSpaceAccess(spaceName, { uuid: GUEST, playUri: ROOM }, directory({ jams }))).toEqual(
+                {
+                    kind: "jam",
+                    canPublishMusic: false,
+                },
+            );
+        }
+    });
+
     it("allows a Live host to publish and its guest only to listen", async () => {
         const live: ListeningZoneJam = { live: true, hostUuid: HOST, hostName: "Host" };
         const liveDirectory = directory({ jams: [live] });
