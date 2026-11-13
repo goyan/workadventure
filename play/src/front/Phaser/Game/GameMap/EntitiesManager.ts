@@ -76,7 +76,6 @@ export enum EntitiesManagerEvent {
     CopyEntity = "EntitiesManagerEvent:CopyEntity",
 }
 
-/** Opacity of the entities that are not the subject of the map editor tool in use. */
 /**
  * Releasing a dragged object with one of these keys drops a copy of it. Cmd and Option count on a Mac, where
  * Ctrl+click is the secondary click.
@@ -85,6 +84,7 @@ function isCopyModifier(event: MouseEvent | TouchEvent | WheelEvent | undefined)
     return event !== undefined && (event.ctrlKey || event.metaKey || event.altKey);
 }
 
+/** Opacity of the entities that are not the subject of the map editor tool in use. */
 const DIMMED_ENTITY_ALPHA = 0.4;
 // Floors and walls are made of sprites that overlap: fading each of them with an alpha stacks the opacity where they
 // overlap and draws a grid. They are darkened with a tint instead, which stays uniform.
