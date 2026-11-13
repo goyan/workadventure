@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { listeningZoneJamKey } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { karaokeStatesStore, readFailedText } from "../../Karaoke/JamKaraoke";
     import {
@@ -10,6 +11,7 @@
     } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import Button from "../UI/Button.svelte";
+    import { requestNewJamLink, sentJamLinkRequestsStore } from "../../ListeningZone/JamLinkRequest";
     import JamLinkForm from "./JamLinkForm.svelte";
     import { IconAlertTriangle } from "@wa-icons";
 
@@ -49,6 +51,7 @@
         }
     });
     // A position missing for a reason the host's browser knows is named; only otherwise has the Jam most likely stopped.
+    let asked = $derived($sentJamLinkRequestsStore.has(listeningZoneJamKey(room.jam)));
     let jamStopped = $derived(issue === undefined && hostState?.track !== null && hostState?.positionAt === 0);
     let positionUnavailable = $derived(
         hostState !== undefined && (issue !== undefined || (hostState.track !== null && !hostState.positionAt)),
@@ -132,11 +135,25 @@
     <p class="m-0 text-xs text-white/80" role="status" data-testid="jam-link-relinked">
         {$LL.spotify.listeningZone.jamStatus.relinked()}
     </p>
-{:else if issue === "noPlayback"}
-    <p class="m-0 flex items-start gap-1.5 text-xs text-white/70" role="status" data-testid="jam-link-warning">
-        <IconAlertTriangle
-            font-size="14"
-            class="mt-px shrink-0 text-warning"
-        />{$LL.spotify.listeningZone.jamStatus.noPlaybackGuest()}
-    </p>
+{:else if issue === "noPlayback" || jamStopped}
+    {#if issue === "noPlayback"}
+        <p class="m-0 flex items-start gap-1.5 text-xs text-white/70" role="status" data-testid="jam-link-warning">
+            <IconAlertTriangle
+                font-size="14"
+                class="mt-px shrink-0 text-warning"
+            />{$LL.spotify.listeningZone.jamStatus.noPlaybackGuest()}
+        </p>
+    {/if}
+    <!-- Spotify plays nothing for this Jam, or the host's position is missing for no known reason: ask them. -->
+    <Button
+        variant="light"
+        appearance="border"
+        size="sm"
+        disabled={asked}
+        onclick={() => requestNewJamLink(room)}
+        dataTestId="jam-link-ask"
+        >{asked
+            ? $LL.spotify.listeningZone.jamLinkRequest.sent()
+            : $LL.spotify.listeningZone.jamLinkRequest.ask()}</Button
+    >
 {/if}

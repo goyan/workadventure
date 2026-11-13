@@ -4,7 +4,7 @@ import { localUserStore } from "../Connection/LocalUserStore";
 import { availabilityStatusStore, requestedStatusStore } from "../Stores/MediaStore";
 import { defaultOptions } from "./Notification";
 
-export type SystemNotificationKind = "wave" | "privateMessage" | "knock" | "meeting";
+export type SystemNotificationKind = "wave" | "privateMessage" | "knock" | "meeting" | "jamLinkRequest";
 
 export interface NotifyContext {
     focused: boolean;

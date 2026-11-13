@@ -74,6 +74,7 @@
     import PrivateMessageNotification from "./PrivateMessage/PrivateMessageNotification.svelte";
     import KnockRequests from "./Knock/KnockRequests.svelte";
     import WaveCards from "./Wave/WaveCards.svelte";
+    import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
@@ -467,6 +468,7 @@
                 <PrivateMessageNotification />
                 <KnockRequests />
                 <WaveCards />
+                <JamLinkRequestCard />
                 <CoffeeCards />
                 {#each [...$toastStore.entries()] as toastEntry (toastEntry[0])}
                     {@const toast = toastEntry[1]}

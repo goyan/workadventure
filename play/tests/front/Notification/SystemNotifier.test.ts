@@ -25,7 +25,7 @@ import {
     type SystemNotificationKind,
 } from "../../../src/front/Notification/SystemNotifier";
 
-const kinds: SystemNotificationKind[] = ["wave", "privateMessage", "knock"];
+const kinds: SystemNotificationKind[] = ["wave", "privateMessage", "knock", "jamLinkRequest"];
 const base: NotifyContext = { focused: false, permission: "granted", enabled: true, doNotDisturb: false };
 
 describe("shouldNotify", () => {
@@ -47,6 +47,8 @@ describe("shouldNotify", () => {
         expect(shouldNotify("knock", dnd)).toBe(true);
         expect(shouldNotify("wave", dnd)).toBe(false);
         expect(shouldNotify("privateMessage", dnd)).toBe(false);
+        // Like a wave: a request for a new Jam link is not urgent.
+        expect(shouldNotify("jamLinkRequest", dnd)).toBe(false);
     });
 });
 

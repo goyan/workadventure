@@ -376,6 +376,30 @@ Recette : Jam expirée réelle (statut observé chez l'hôte : 204 ou lecture co
 navigateur sans Spotify lié, refresh refusé, collage d'un nouveau lien hors de la
 zone avec un auditeur audio et un invité Spotify, karaoké ouvert des deux côtés.
 
+### Demander un nouveau lien à l'hôte
+
+Sur la carte d'une Jam Spotify dont l'hôte publie « rien en lecture », ou une position
+manquante sans raison connue, un auditeur a **Demander un nouveau lien**. Une demande
+par auditeur et par Jam toutes les 2 minutes : le bouton passe à « Demande envoyée »
+pendant ce délai. L'hôte, seul destinataire, reçoit une carte en haut à droite
+(« Antoine demande un nouveau lien de Jam », « Antoine et 2 autres… » : une carte par
+Jam, dernier demandeur d'abord) avec **Coller un nouveau lien de Jam** (champ dans la
+carte, focalisé) et ×. Elle disparaît quand le lien change ou que le salon se ferme.
+
+Mécanisme du coucou réutilisé : événement de script de la salle
+`infogene.jam-link-request` (zone, propriété, lien), envoyé au seul hôte, expéditeur
+fixé par le serveur ; aucun protocole ni back changé. Son de bulle (coupé en « Ne pas
+déranger » par `GameScene.playSound`) et notification système (`SystemNotifier`, type
+`jamLinkRequest`) si l'onglet n'a pas le focus, avec le réglage et la permission du
+coucou ; comme le coucou et contrairement au toc toc, rien ne passe « Ne pas déranger »
+(la carte reste) : une demande de lien n'est pas urgente. Un même auditeur ne relance
+le son et la notification qu'au bout de 2 minutes.
+
+Recette : deux postes ; l'hôte arrête Spotify ; l'auditeur demande, voit « Demande
+envoyée » ; l'hôte voit la carte, le son, la notification onglet en arrière-plan, puis
+colle un lien : la carte disparaît. Refaire en « Ne pas déranger » et avec trois
+auditeurs.
+
 ## Compteur des Jams et écoute audio
 
 « Écouter l'audio » suffit pour apparaître parmi les participants d'un Jam Spotify :
