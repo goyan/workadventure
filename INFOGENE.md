@@ -47,10 +47,16 @@ compagnons animaux d'upstream.
 La propriété de zone `teamsMeetingRoomPropertyData` (« Salle de réunion Teams ») marque les salles ; elle est muette
 comme `silent`. Le rappel d'une réunion à clé propose **Y aller** : la salle est demandée (déjà prise par la réunion,
 sinon la première libre) et l'avatar y marche **sans ouvrir Teams** (un nouvel onglet dans le clic mettait le jeu en
-arrière-plan, ce qui annule la marche : il fallait recliquer). À l'arrivée dans cette salle (position réelle de
-l'avatar, vue à la fin de la marche ou dans les 2 s), une carte demande « Ouvrir la réunion dans Teams ? » : **Oui**
-ouvre le lien dans un nouvel onglet, **Non**, × ou Échap ferment. Sans salle libre, sans salle sur la carte ou si la
-salle ne peut être demandée ni atteinte, la même carte s'affiche aussitôt. Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
+arrière-plan, ce qui annule la marche : il fallait recliquer). La marche vise la case libre de la salle la plus proche
+de son centre qu'un chemin atteint (`PathfindingManager.nearestReachablePointIn`, toute la salle parcourue) : une table
+couvre souvent le centre et ses 8 voisines, seules regardées par une marche « au plus proche », qui échouait alors ; si
+aucune case n'est atteinte (salle verrouillée), le centre, comme avant (l'avatar s'arrête devant). À l'arrivée dans
+cette salle (position réelle de l'avatar, vue à la fin de la marche ou dans les 2 s), une carte demande « Ouvrir la
+réunion dans Teams ? » : **Oui** ouvre le lien dans un nouvel onglet, **Non**, × ou Échap ferment. Si l'avatar reste,
+la même carte s'affiche aussitôt et dit pourquoi : toutes les salles prises (`rooms-full`), aucun chemin vers la salle
+(`no-path`), réservation impossible (`claim-failed` : refus ou pusher injoignable) ; sans salle sur la carte
+(`teams-only`), rien de plus. La console garde la cause (`Cannot go to the meeting room <raison> <erreur>`). Une salle
+réservée sans y marcher reste tenue jusqu'à la fin de la réunion (+ 15 min). Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
 salles prises s'affiche au-dessus d'elles (« Réunion privée » le cas échéant) ; entrer à pied dans une salle pendant
 sa réunion réaffiche le rappel. Coupé tant que l'Admin API n'a pas `COMPANION_ENABLED=true`. Guide : repo d'infra,
 `docs/compagnon-mac.md`.
