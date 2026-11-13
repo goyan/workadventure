@@ -40,7 +40,7 @@ const PlaybackState = z.object({
     positionMs: z.number().finite().nonnegative().max(86_400_000),
     positionAt: z.number().finite().nonnegative(),
     // Optional: older hosts do not send it, older guests drop it.
-    issue: KaraokePlaybackIssueSchema.optional(),
+    issue: KaraokePlaybackIssueSchema.optional().catch(undefined),
 });
 const StateMessage = RoomIdentity.merge(PlaybackState);
 export type KaraokePlayback = z.infer<typeof PlaybackState>;
@@ -139,6 +139,8 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     let hasPlayer = false;
     let desktopPlaying = false;
     let accessDenied = false;
+    // The desktop Spotify app reported no track: nothing plays until it reports one again.
+    let desktopIdle = false;
     let lastPublished: KaraokePlayback | undefined;
     let hostGeneration = 0;
     let lastRequest = "";
@@ -173,7 +175,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
 
     /** Why no player of the host is read, the track coming from their presence only. */
     const unreadPlayerIssue = (): KaraokePlaybackIssue | undefined => {
-        if (stopPlayback) return undefined;
+        if (stopPlayback) return desktopIdle ? "noPlayback" : undefined;
         if (accessDenied) return "accessDenied";
         if (context.account && get(context.account.linked)) return undefined;
         return context.account?.authorizationExpired && get(context.account.authorizationExpired)
@@ -215,6 +217,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         hasPlayer = false;
         desktopPlaying = false;
         accessDenied = false;
+        desktopIdle = false;
         lastPublished = undefined;
         state = { track: null, next: null, playing: false, positionMs: 0, positionAt: 0 };
     };
@@ -313,6 +316,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         stopPlayback = context.desktop?.watchSpotifyPlayback?.((playback) => {
             if (!own || generation !== hostGeneration) return;
             desktopPlaying = playback?.track !== null && playback?.track !== undefined;
+            desktopIdle = !playback;
             if (!playback) {
                 hasPlayer = false;
                 publish({

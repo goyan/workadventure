@@ -157,8 +157,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             noPlayback:
                 "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin. Relancez la musique, ou collez le lien d’une nouvelle Jam.",
             noPlaybackGuest: "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin.",
-            noPlayer:
-                "WorkAdventure ne voit pas votre lecture Spotify : liez Spotify pour savoir si la Jam joue encore.",
+            noPlayer: "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour qu’il voie votre lecture.",
             authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",
             accessDenied:
                 "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",

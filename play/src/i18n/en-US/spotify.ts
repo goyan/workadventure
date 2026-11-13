@@ -154,8 +154,7 @@ const spotify: BaseTranslation = {
             noPlayback:
                 "Spotify no longer returns playback for this Jam: it may have ended. Start the music again, or paste the link of a new Jam.",
             noPlaybackGuest: "Spotify no longer returns playback for this Jam: it may have ended.",
-            noPlayer:
-                "WorkAdventure does not see your Spotify playback: link Spotify to know whether the Jam still plays.",
+            noPlayer: "WorkAdventure does not read your Spotify player: link Spotify so that it sees your playback.",
             authorizationExpired: "Your Spotify authorization expired: link Spotify again.",
             accessDenied:
                 "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",

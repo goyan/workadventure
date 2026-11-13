@@ -331,6 +331,12 @@ invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké 
 « position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile
 pour l'hôte (réglages Spotify ou tiroir des Jams), et reste ouvert sur le nouveau lien.
 
+Limites : si le Spotify de l'hôte continue de jouer après la fin de la Jam, rien ne
+le signale (seul le bouton de nouveau lien reste utile). Un hôte qui n'a jamais lié
+Spotify, hors client desktop, voit en permanence la mention « lecteur non lu ». Un
+invité arrivé après le début d'un 204 ne voit l'avertissement qu'au prochain
+changement d'état de l'hôte, ou en ouvrant le karaoké.
+
 Recette : Jam expirée réelle (statut observé chez l'hôte : 204 ou lecture continue),
 navigateur sans Spotify lié, refresh refusé, collage d'un nouveau lien hors de la
 zone avec un auditeur audio et un invité Spotify, karaoké ouvert des deux côtés.

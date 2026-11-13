@@ -51,11 +51,12 @@ function harness(
     } = {},
 ) {
     const rooms = writable(options.rooms ?? [room]);
+    const listening = options.listening ?? writable<ListeningByUserUuid>(new Map());
     let receive: ((name: string, data: unknown, senderId: number | undefined) => void) | undefined;
     const send = vi.fn();
     const stop = startJamKaraoke({
         rooms,
-        listeningByUserUuid: options.listening ?? writable<ListeningByUserUuid>(new Map()),
+        listeningByUserUuid: listening,
         localUuid: () => options.localUuid ?? "guest",
         userByUuid: (uuid) => ({ id: uuid === "host" ? 1 : 2, name: uuid }),
         userById: (id) => ({ uuid: id === 1 ? "host" : "guest", name: "Test" }),
@@ -74,6 +75,7 @@ function harness(
     });
     return {
         rooms,
+        listening,
         stop,
         send,
         receive: (name: string, data: unknown, senderId: number) => receive?.(name, data, senderId),
@@ -317,6 +319,10 @@ describe("Jam karaoke", () => {
         expect(get(karaokeStatesStore).size).toBe(0);
         game.receive(JAM_KARAOKE_STATE_EVENT, data, 1);
         expect(get(karaokeStatesStore).get("host")).toMatchObject(state);
+        // A newer host may send an issue this front does not know: the playback still reads, without it.
+        game.receive(JAM_KARAOKE_STATE_EVENT, { ...data, positionMs: 2000, issue: "somethingNew" }, 1);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ positionMs: 2000 });
+        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
         game.stop();
     });
 
@@ -489,6 +495,19 @@ describe("Jam karaoke", () => {
         expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
         notify?.(null);
         expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
+        // Another player's presence changes: the host's desktop still plays nothing.
+        game.listening.set(new Map([["guest", { ...EMPTY_SPOTIFY_LISTENING, trackTitle: "Other song" }]]));
+        expect(get(karaokeStatesStore).get("host")?.issue).toBe("noPlayback");
+        notify?.({
+            track: { uri: "spotify:track:test", title: "Test song", artist: "Test artist", artworkUrl: "" },
+            playing: true,
+            positionMs: 1000,
+            durationMs: 200_000,
+            volume: 50,
+            shuffle: false,
+            repeat: 0,
+        });
+        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
         game.stop();
     });
 
