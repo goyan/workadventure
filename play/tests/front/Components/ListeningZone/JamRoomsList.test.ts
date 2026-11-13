@@ -102,7 +102,6 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                 lightsEnable: () => "Turn on lights for me",
                 lightsDisableForAll: () => "Turn off lights for everyone",
                 lightsEnableForAll: () => "Turn lights back on for everyone",
-                lightsOffByHost: () => "Lights off by the host",
                 playbackEmpty: () => "No track",
                 playbackDisconnected: () => "Connecting to Spotify",
                 audioMute: () => "Mute",
@@ -177,34 +176,23 @@ describe("personal light switch", () => {
         flushSync(() => button.click());
         expect(get(lampEffectsEnabledStore)).toBe(false);
         expect(button.getAttribute("aria-label")).toBe("Turn on lights for me");
-        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')?.getAttribute("aria-pressed")).toBe(
-            "true",
-        );
         expect(mocks.update).not.toHaveBeenCalled();
         expect(mocks.join).not.toHaveBeenCalled();
         expect(mocks.playback).not.toHaveBeenCalled();
     });
 
-    it("lets the host separately turn the lights of their room off for everyone", () => {
+    it("offers the host no switch for everyone: lights are only turned off per person", () => {
         mocks.local = true;
-        lampEffectsEnabledStore.set(false);
         render();
-        const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle-all"]');
-        if (!button) throw new Error("Missing host light switch");
-        expect(button.getAttribute("aria-label")).toBe("Turn off lights for everyone");
-        flushSync(() => button.click());
-        expect(mocks.update).toHaveBeenCalledWith({ lightsOff: true });
-        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(target.querySelector('[data-testid="jam-lights-toggle-all"]')).toBeNull();
         expect(target.querySelector('[data-testid="jam-lights-toggle"]')).not.toBeNull();
     });
 
-    it("lets a guest choose their personal light preference even while the host has turned the room lights off", () => {
+    it("lets a guest choose their personal light preference, with no notice from an old switch for everyone", () => {
         mocks.setRooms([{ ...room, jam: { ...room.jam, lightsOff: true } }]);
         joinedJamStore.set({ ...room.zone, hostUuid: room.jam.hostUuid, url: listeningZoneJamKey(room.jam) });
         render();
-        expect(target.querySelector('[data-testid="jam-lights-off-by-host"]')?.textContent).toBe(
-            "Lights off by the host",
-        );
+        expect(target.querySelector('[data-testid="jam-lights-off-by-host"]')).toBeNull();
         const button = target.querySelector<HTMLButtonElement>('[data-testid="jam-lights-toggle"]');
         if (!button) throw new Error("Missing guest light switch");
         flushSync(() => button.click());

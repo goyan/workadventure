@@ -139,14 +139,12 @@ La boule disco avec un badge **personne** dans chaque carte de Jam coupe ou réa
 s'applique aux lampes de la page, sans couper la musique ni changer l'affichage
 des collègues. Il est conservé pendant la session de page.
 
-L'hôte dispose d'une seconde boule avec un badge **groupe**, à côté de la première :
-**Couper les effets lumineux (pour tous)**. Les infobulles précisent les deux portées.
-Les invités voient une indication lorsque l'hôte les a coupés ;
-leur choix personnel reste disponible et s'applique quand l'hôte rallume.
+Il n'y a plus de coupure **pour tous** (retirée le 2026-11-13 à la demande de l'utilisateur) : chacun coupe pour
+soi. Un salon où l'hôte avait coupé pour tous (`lightsOff` encore enregistré, champ gardé pour lire les anciennes
+valeurs) s'éclaire de nouveau, et les invités ne voient plus d'indication.
 
 Recette : hôte et invité coupent chacun pour soi ; l'autre garde ses effets et
-l'audio continue. L'hôte coupe puis rallume pour tous ; un invité qui avait coupé
-pour soi conserve ce choix.
+l'audio continue.
 
 ## Piste de danse
 
@@ -216,7 +214,7 @@ couleur choisie. Les murs et les meubles hauts arrêtent sa lumière et laissent
   celle du poste (le faisceau saute une fois à la réponse). Le faisceau reste **fixe** à sa direction pour les joueurs
   qui ont demandé moins d'animations (préférence système) ou coupé leurs effets lumineux **pour soi** (Paramètres →
   Ambiance, ou la boule « pour moi » d'un Jam : `lampEffectsEnabledStore`) ; rallumés, il reprend là où l'horloge
-  le place, en phase avec les autres (la coupure « pour tous » de l'hôte d'un Jam ne le fige pas), et **tant que l'éditeur est ouvert** pour soi : la poignée
+  le place, en phase avec les autres, et **tant que l'éditeur est ouvert** pour soi : la poignée
   du bout reste sur le faisceau et règle la phase sans ambiguïté (fermer l'éditeur pour voir tourner). Une lampe à 360°
   d'ouverture ne peut pas tourner (rien ne changerait à l'écran) : le réglage est grisé, avec l'explication.
   **Photosensibilité** : un seul faisceau passe sur un observateur immobile au plus 2 fois par seconde (120 tr/min),
