@@ -120,6 +120,17 @@ export function formatDayName(day: Date, now: Date): string {
     return name.charAt(0).toLocaleUpperCase() + name.slice(1);
 }
 
+/**
+ * What a reminder says of its start: "Starting now" only within the minute before it starts, "In progress" from its
+ * start for a minute, then how long ago it started; "in 5 minutes"… before that minute.
+ */
+export function reminderTiming(start: Date, now: Date): "until" | "startsNow" | "inProgress" | "startedAgo" {
+    const fromStart = now.getTime() - start.getTime();
+    if (fromStart <= -60_000) return "until";
+    if (fromStart < 0) return "startsNow";
+    return fromStart < 60_000 ? "inProgress" : "startedAgo";
+}
+
 /** "in 5 minutes", "in 2 hours"… */
 export function formatTimeUntil(date: Date, now: Date): string {
     const minutes = Math.max(1, Math.round((date.getTime() - now.getTime()) / 60_000));

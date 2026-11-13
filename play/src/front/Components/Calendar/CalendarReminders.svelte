@@ -5,7 +5,7 @@
     import { isTodoListVisibleStore } from "../../Stores/TodoListStore";
     import Button from "../UI/Button.svelte";
     import LL from "../../../i18n/i18n-svelte";
-    import { formatTimeAgo, formatTimeUntil, meetingPlace } from "./agenda";
+    import { formatTimeAgo, formatTimeUntil, meetingPlace, reminderTiming } from "./agenda";
     import { calendarRemindersStore, dismissReminder } from "./CalendarReminder";
     import CalendarJoinButton from "./CalendarJoinButton.svelte";
     import CalendarGoToMeetingButton from "./CalendarGoToMeetingButton.svelte";
@@ -19,10 +19,16 @@
     });
 
     function when(event: CalendarEventInterface): string {
-        const fromStart = now.getTime() - event.start.getTime();
-        if (Math.abs(fromStart) < 60_000) return $LL.externalModule.calendar.startsNow();
-        if (fromStart > 0) return $LL.externalModule.calendar.startedAgo({ ago: formatTimeAgo(event.start, now) });
-        return formatTimeUntil(event.start, now);
+        switch (reminderTiming(event.start, now)) {
+            case "startsNow":
+                return $LL.externalModule.calendar.startsNow();
+            case "inProgress":
+                return $LL.externalModule.calendar.inProgress();
+            case "startedAgo":
+                return $LL.externalModule.calendar.startedAgo({ ago: formatTimeAgo(event.start, now) });
+            case "until":
+                return formatTimeUntil(event.start, now);
+        }
     }
 
     // Opening the agenda settles the reminders (see startCalendarReminders): it shows the same meetings.

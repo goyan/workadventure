@@ -39,6 +39,8 @@ interface SharedMeetingRoom {
     areaId: string;
     title: string;
     endsAt: string;
+    /** The real end of the meeting (`endsAt` holds the room a little longer); absent from older claims. */
+    meetingEndsAt?: string;
     mine: boolean;
     meetingKey?: string;
 }
@@ -52,6 +54,7 @@ export const MeetingRoom = z
         areaId: z.string(),
         title: z.string(),
         endsAt: z.string(),
+        meetingEndsAt: z.string().optional(),
         mine: z.boolean().default(false),
         meetingKey: MeetingKey.optional(),
     })
