@@ -1678,3 +1678,24 @@ sur un objet de sol (une chaise sur un tapis), et par-dessus n'importe quel obje
 de ⟳ ▲ ▼ au-dessus de l'objet sélectionné, arme une copie de cet objet avec ses propriétés (`EntityDuplicate`) : chaque
 clic en pose un exemplaire, Échap ou clic droit arrête. La copie par Ctrl+glisser d'origine reste, mais Ctrl+clic est un
 clic droit sur Mac.
+
+## Éditeur d'objets : ergonomie de l'outil Objets
+
+Suite d'un audit de l'outil Objets (lu dans le code, puis corrigé) :
+
+- un clic droit (Ctrl+clic sur Mac) sur un objet de la carte ne l'ouvre plus : il lâche seulement l'objet armé
+  (`EntitiesManager`, bouton testé avant la sélection) ;
+- un objet supprimé pendant qu'il est ouvert (Ctrl+Z de sa pose ou de sa rotation, autre éditeur) ferme ses propriétés
+  et ses boutons ; un objet remplacé sous le même identifiant (rotation, redimensionnement) les garde
+  (`EntitiesManager.syncSelectionWithMap`, appelé après chaque commande de la file de `MapEditorModeManager`) ;
+- Ctrl+Z annule bien une modification de propriété : `addProperty`, `updateProperty` et `deleteProperty` créent une
+  nouvelle liste au lieu de modifier celle du WAM, que l'annulation relit (comme `setProperty`) ;
+- « Retour » de la bibliothèque ne supprime plus l'objet resté sélectionné, et déposer un fichier sur la carte quitte
+  l'objet sélectionné ;
+- Échap ou clic droit efface aussi le motif « Impossible de le poser ici » ;
+- les boutons ⟳ ▲ ▼ ⧉ suivent l'objet (glisser, annulation, autre éditeur), recalés à chaque image ;
+- un passage de gomme est une seule étape à annuler : les objets disparaissent aussitôt et sont supprimés ensemble au
+  relâchement (`executeCommands`), réaffichés si la suppression échoue ;
+- relâcher un objet glissé avec Cmd ou Option (en plus de Ctrl) pose une copie ; Ctrl+Y (ou Cmd+Y) rétablit ;
+- une ligne d'aide rappelle les raccourcis dans la bibliothèque (Maj, Échap / clic droit, Suppr, ⧉ / Cmd ou Ctrl +
+  glisser, Cmd ou Ctrl + Z).
