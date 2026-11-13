@@ -259,6 +259,7 @@ import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
+import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
@@ -432,6 +433,8 @@ export class GameScene extends DirtyScene {
     private listeningUserUuids = new Set<string>();
     private localVolumeStoreUnsubscriber: Unsubscriber | undefined;
     private unsubscribers: Unsubscriber[] = [];
+    /** Whether the map snow whitens the trees for this person: read once per change, not at every image. */
+    private mapSnowShown = true;
     private storesSubscribed = false;
     private entityPermissions: EntityPermissions | undefined;
     private entityPermissionsDeferred: Deferred<EntityPermissions> = new Deferred();
@@ -1770,7 +1773,7 @@ export class GameScene extends DirtyScene {
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
-                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()));
+                .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()), this.mapSnowShown);
             this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -3352,6 +3355,12 @@ export class GameScene extends DirtyScene {
             throw new Error("subscribeToStores: the stores are already subscribed.");
         }
         this.storesSubscribed = true;
+
+        this.unsubscribers.push(
+            mapSnowShownStore.subscribe((shown) => {
+                this.mapSnowShown = shown;
+            }),
+        );
 
         this.unsubscribers.push(
             userIsJitsiDominantSpeakerStore.subscribe((dominantSpeaker) => {

@@ -3,6 +3,7 @@ import { Season } from "@workadventure/map-editor";
 import {
     activeSeasonalTheme,
     forcedTreeSeason,
+    mapSnowShown,
     migrateChristmasMode,
     SeasonalTheme,
     SeasonalThemeMode,
@@ -48,5 +49,15 @@ describe("migrateChristmasMode", () => {
         expect(migrateChristmasMode("auto")).toBe(SeasonalThemeMode.Auto);
         expect(migrateChristmasMode(null)).toBeUndefined();
         expect(migrateChristmasMode("bogus")).toBeUndefined();
+    });
+});
+
+describe("mapSnowShown", () => {
+    it("lets the map snow whiten the ground and the trees only in auto, with the weather shown", () => {
+        expect(mapSnowShown(SeasonalThemeMode.Auto, true)).toBe(true);
+        expect(mapSnowShown(SeasonalThemeMode.Auto, false)).toBe(false);
+        expect(mapSnowShown(SeasonalThemeMode.Autumn, true)).toBe(false);
+        expect(mapSnowShown(SeasonalThemeMode.None, true)).toBe(false);
+        expect(mapSnowShown(SeasonalThemeMode.Christmas, true)).toBe(false);
     });
 });

@@ -1,5 +1,6 @@
-import { get, writable, type Writable } from "svelte/store";
-import { migrateChristmasMode, SeasonalThemeMode } from "../Phaser/Game/Seasonal/SeasonalTheme";
+import { derived, get, writable, type Readable, type Writable } from "svelte/store";
+import { mapSnowShown, migrateChristmasMode, SeasonalThemeMode } from "../Phaser/Game/Seasonal/SeasonalTheme";
+import { weatherEffectsEnabledStore } from "./WeatherStore";
 
 const SEASONAL_THEME_KEY = "seasonalTheme";
 /** Former settings replaced by the seasonal theme: the Christmas choice carries over, the ground choice goes. */
@@ -33,3 +34,9 @@ function createSeasonalThemeModeStore(): Writable<SeasonalThemeMode> {
 }
 
 export const seasonalThemeModeStore = createSeasonalThemeModeStore();
+
+/** Whether the snow of the map weather whitens the ground and the trees for this person (see mapSnowShown). */
+export const mapSnowShownStore: Readable<boolean> = derived(
+    [seasonalThemeModeStore, weatherEffectsEnabledStore],
+    ([mode, weatherShown]) => mapSnowShown(mode, weatherShown),
+);

@@ -103,6 +103,33 @@ describe("shared seasonal nature", () => {
         expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
     });
 
+    it("keeps the trees out of the map snow when it is not shown, and follows a switch at once", () => {
+        const setSeason = vi.fn();
+        const settings = { weather: WeatherType.Automatic };
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", { setSeason } as unknown as Entity]]),
+            season: Season.Summer,
+            nextSeasonCheck: 0,
+            scene: {
+                markDirty: vi.fn(),
+                getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
+            },
+        }) as EntitiesManager;
+        // 13:31 UTC: the automatic weather has covered the ground with snow.
+        const snowy = new Date("2026-11-08T13:31:00Z");
+        manager.updateSeason(0, snowy, Season.Autumn, false);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        // The same minute: showing the map snow again turns them white at once.
+        manager.updateSeason(10, snowy, Season.Autumn, true);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        // No theme and the snow hidden: the calendar season.
+        manager.updateSeason(20, snowy, undefined, false);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        settings.weather = WeatherType.Snow;
+        manager.updateSeason(30, snowy, undefined, false);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+    });
+
     it("snow covers trees, plants, rocks and trunks even with the autumn theme, then melts", () => {
         const entities = ["tree", "plant", "rock", "trunk"].map((id) => ({ id, setSeason: vi.fn() }));
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
