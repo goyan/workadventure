@@ -59,6 +59,12 @@ export class AutumnDecor implements SeasonalDecor {
         this.kicked.setVisible(visible);
     }
 
+    setAlpha(alpha: number): void {
+        this.scatter.setAlpha(alpha);
+        this.piles.setAlpha(alpha);
+        this.kicked.setAlpha(alpha);
+    }
+
     destroy(): void {
         this.scatter.destroy();
         this.piles.destroy();

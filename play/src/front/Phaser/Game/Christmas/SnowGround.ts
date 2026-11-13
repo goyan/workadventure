@@ -14,6 +14,7 @@ export class SnowGround {
     private image: Phaser.GameObjects.Image | undefined;
     private textureKey: string | undefined;
     private visible = true;
+    private alpha = 1;
 
     constructor(private readonly scene: Phaser.Scene) {}
 
@@ -58,11 +59,17 @@ export class SnowGround {
         // Between the map tiles (below 0) and the floor tiles (MAP_LAYER_FLOOR_DEPTH = 0.5): paving stays on top.
         this.image.setDepth(DEPTH_TILE_INDEX + 0.25);
         this.image.setVisible(this.visible);
+        this.image.setAlpha(this.alpha);
     }
 
     setVisible(visible: boolean): void {
         this.visible = visible;
         this.image?.setVisible(visible);
+    }
+
+    setAlpha(alpha: number): void {
+        this.alpha = alpha;
+        this.image?.setAlpha(alpha);
     }
 
     destroy(): void {

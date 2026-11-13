@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { WeatherType } from "@workadventure/map-editor";
 import { SnowGround } from "@wa/front/Phaser/Game/Weather/SnowGround";
 import type { GameScene } from "@wa/front/Phaser/Game/GameScene";
 
@@ -18,6 +17,7 @@ function fixture(exterior?: string): {
     addFrame: ReturnType<typeof vi.fn>;
     view: { x: number; y: number; width: number; height: number; readonly right: number; readonly bottom: number };
     entities: Map<string, unknown>;
+    superLoad: ReturnType<typeof vi.fn>;
 } {
     const canvas = {
         width: 1,
@@ -42,6 +42,7 @@ function fixture(exterior?: string): {
         destroy: vi.fn(),
     };
     const dirty = vi.fn();
+    const superLoad = vi.fn().mockResolvedValue(undefined);
     const addFrame = vi.fn();
     const tileset = (key: string) => ({ image: { key } });
     const view = {
@@ -71,7 +72,7 @@ function fixture(exterior?: string): {
     ]);
     const scene = {
         add: { renderTexture: () => canvas },
-        superLoad: { image: vi.fn().mockResolvedValue(undefined) },
+        superLoad: { image: superLoad },
         textures: {
             get(key: string) {
                 const frames = textures.get(key) ?? new Map<string, { width: number; height: number }>();
@@ -118,58 +119,44 @@ function fixture(exterior?: string): {
         }),
         markDirty: dirty,
     } as unknown as GameScene;
-    return { ground: new SnowGround(scene), canvas, dirty, view, addFrame, entities };
+    return { ground: new SnowGround(scene), canvas, dirty, view, addFrame, entities, superLoad };
 }
 
 describe("ground snow rendering", () => {
-    it("accumulates map snow without a ground setting", async () => {
+    it("leaves the snow to the Christmas decor: no snow patch is loaded or stamped", async () => {
+        const { ground, canvas, superLoad } = fixture("grass.png");
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+        ground.update(0, new Date("2026-02-08T10:00:00Z"), true);
+        expect(canvas.stamp.mock.calls.length).toBeGreaterThan(0);
+        expect(canvas.stamp.mock.calls.every((call) => String(call[0]).endsWith("terrain-green.png"))).toBe(true);
+        expect(superLoad.mock.calls.some((call) => String(call[0]).includes("terrain-snow"))).toBe(false);
+        ground.destroy();
+    });
+    it("uses the autumn texture for the autumn theme", async () => {
         const { ground, canvas } = fixture("grass.png");
         await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
         });
-        ground.update(0, new Date("2026-02-08T10:00:00Z"), WeatherType.Snow, true);
-        expect(canvas.stamp.mock.calls.some((call) => String(call[0]).endsWith("terrain-snow.png"))).toBe(true);
-        expect(canvas.stamp.mock.calls.some((call) => String(call[0]).endsWith("terrain-green.png"))).toBe(true);
+        ground.update(0, new Date("2026-07-08T10:00:00Z"), true, true);
+        expect(canvas.stamp.mock.calls.length).toBeGreaterThan(0);
+        expect(canvas.stamp.mock.calls.every((call) => String(call[0]).endsWith("terrain-autumn.png"))).toBe(true);
         ground.destroy();
     });
-    it.each([WeatherType.Clear, WeatherType.Rain, WeatherType.Storm])(
-        "uses the autumn texture for the autumn theme when weather is %s",
-        async (weather) => {
-            const { ground, canvas } = fixture("grass.png");
-            await new Promise<void>((resolve) => {
-                setTimeout(resolve, 0);
-            });
-            ground.update(0, new Date("2026-07-08T10:00:00Z"), weather, true, true);
-            expect(canvas.stamp.mock.calls.length).toBeGreaterThan(0);
-            expect(canvas.stamp.mock.calls.every((call) => String(call[0]).endsWith("terrain-autumn.png"))).toBe(true);
-            ground.destroy();
-        },
-    );
     it("keeps green grass without the autumn theme and redraws when the theme changes", async () => {
         const { ground, canvas } = fixture("grass.png");
         await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
         });
         const date = new Date("2026-10-08T10:00:00Z");
-        ground.update(0, date, WeatherType.Clear, true, false);
+        ground.update(0, date, true, false);
         expect(canvas.stamp.mock.calls.length).toBeGreaterThan(0);
         expect(canvas.stamp.mock.calls.every((call) => String(call[0]).endsWith("terrain-green.png"))).toBe(true);
         canvas.stamp.mockClear();
-        ground.update(10, date, WeatherType.Clear, true, true);
+        ground.update(10, date, true, true);
         expect(canvas.stamp.mock.calls.length).toBeGreaterThan(0);
         expect(canvas.stamp.mock.calls.every((call) => String(call[0]).endsWith("terrain-autumn.png"))).toBe(true);
-        ground.destroy();
-    });
-    it("applies forced snow immediately without revealing square snow patches", async () => {
-        const { ground, canvas } = fixture("grass.png");
-        await new Promise<void>((resolve) => {
-            setTimeout(resolve, 0);
-        });
-        const date = new Date("2026-11-08T10:00:00Z");
-        ground.update(0, date, WeatherType.Snow, true);
-        const snowCalls = canvas.stamp.mock.calls.filter((call) => String(call[0]).endsWith("terrain-snow.png"));
-        expect(snowCalls.length).toBeGreaterThan(0);
-        expect(snowCalls.every((call) => call[4].alpha === 1)).toBe(true);
         ground.destroy();
     });
     it("covers only grass, leaving stone and heated entity floors untouched, and releases its texture", async () => {
@@ -177,15 +164,15 @@ describe("ground snow rendering", () => {
         await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
         });
-        ground.update(0, new Date("2026-11-08T10:00:00Z"), WeatherType.Snow, true);
-        expect(canvas.stamp).toHaveBeenCalledTimes(2);
-        expect(canvas.stamp.mock.calls.map((call) => call[2])).toEqual([192, 192]);
-        expect(canvas.stamp.mock.calls[1]?.[0]).toMatch(/terrain-snow/);
+        ground.update(0, new Date("2026-11-08T10:00:00Z"), true);
+        expect(canvas.stamp).toHaveBeenCalledTimes(1);
+        expect(canvas.stamp.mock.calls.map((call) => call[2])).toEqual([192]);
+        expect(canvas.stamp.mock.calls[0]?.[0]).toMatch(/terrain-green/);
         expect(canvas.render).toHaveBeenCalledOnce();
-        ground.update(100, new Date("2026-11-08T10:00:00Z"), WeatherType.Snow, true);
-        ground.update(500, new Date("2026-11-08T10:00:00Z"), WeatherType.Snow, true);
+        ground.update(100, new Date("2026-11-08T10:00:00Z"), true);
+        ground.update(500, new Date("2026-11-08T10:00:00Z"), true);
         expect(canvas.render).toHaveBeenCalledOnce();
-        ground.update(600, undefined, WeatherType.Snow, true);
+        ground.update(600, undefined, true);
         expect(canvas.visible).toBe(false);
         ground.destroy();
         expect(canvas.destroy).toHaveBeenCalledOnce();
@@ -196,9 +183,9 @@ describe("ground snow rendering", () => {
             setTimeout(resolve, 0);
         });
         const date = new Date("2026-07-08T10:00:00Z");
-        ground.update(0, date, WeatherType.Clear, true);
+        ground.update(0, date, true);
         expect(canvas.render).toHaveBeenCalledOnce();
-        ground.update(10_000, date, WeatherType.Clear, true);
+        ground.update(10_000, date, true);
         expect(canvas.render).toHaveBeenCalledOnce();
         entities.set("rug", {
             x: 0,
@@ -207,7 +194,7 @@ describe("ground snow rendering", () => {
             displayHeight: 32,
             getPrefab: () => ({ collectionName: "custom", id: "rug", footstepSound: "carpet" }),
         });
-        ground.update(12_500, date, WeatherType.Clear, true);
+        ground.update(12_500, date, true);
         expect(canvas.render).toHaveBeenCalledTimes(2);
     });
 
@@ -216,7 +203,7 @@ describe("ground snow rendering", () => {
         await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
         });
-        ground.update(0, new Date("2026-07-08T10:00:00Z"), WeatherType.Snow, true);
+        ground.update(0, new Date("2026-07-08T10:00:00Z"), true);
         expect(canvas.setPosition).toHaveBeenLastCalledWith(-192, -160);
         const baseCalls = canvas.stamp.mock.calls.filter((call) => /terrain-green/.test(String(call[0])));
         expect(baseCalls).toHaveLength(36);
@@ -236,16 +223,16 @@ describe("ground snow rendering", () => {
             setTimeout(resolve, 0);
         });
         const date = new Date("2026-07-08T10:00:00Z");
-        ground.update(0, date, WeatherType.Clear, true);
+        ground.update(0, date, true);
         view.x = 32;
-        ground.update(16, date, WeatherType.Clear, true);
+        ground.update(16, date, true);
         expect(canvas.render).toHaveBeenCalledOnce();
         view.x = -256;
-        ground.update(32, date, WeatherType.Clear, true);
+        ground.update(32, date, true);
         expect(canvas.render).toHaveBeenCalledTimes(2);
         view.width = 4096;
         view.height = 4096;
-        ground.update(48, date, WeatherType.Clear, true);
+        ground.update(48, date, true);
         expect(canvas.render).toHaveBeenCalledTimes(3);
         expect(canvas.width).toBeLessThanOrEqual(2048);
         expect(canvas.height).toBeLessThanOrEqual(2048);
@@ -261,7 +248,7 @@ describe("ground snow rendering", () => {
         await new Promise<void>((resolve) => {
             setTimeout(resolve, 0);
         });
-        ground.update(0, new Date(), WeatherType.Snow, false);
+        ground.update(0, new Date(), false);
         expect(canvas.visible).toBe(false);
         expect(canvas.stamp).not.toHaveBeenCalled();
         ground.destroy();

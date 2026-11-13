@@ -2,7 +2,6 @@ import { WeatherType } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
-import { mapSnowShownStore } from "../../../Stores/SeasonalThemeStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
@@ -47,7 +46,6 @@ export class WeatherManager {
     private readonly unsubscribers: Unsubscriber[];
     private editing = false;
     private weatherShown = true;
-    private mapSnowShown = true;
 
     constructor(
         private readonly scene: GameScene,
@@ -58,7 +56,6 @@ export class WeatherManager {
         this.unsubscribers = [
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
             weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
-            mapSnowShownStore.subscribe((shown) => (this.mapSnowShown = shown)),
         ];
         this.graphics = scene.add
             .graphics()
@@ -73,16 +70,13 @@ export class WeatherManager {
         const weather = effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), theme);
         this.sounds.update(weather, serverDate, this.editing, night);
         const enabled = this.weatherShown && !this.editing;
+        // The snow of the map is the Christmas decor fading in (SeasonalThemeManager): this ground stays grass.
         this.snowGround.update(
             now,
             serverDate,
-            // A chosen theme keeps the map snow off the ground (see mapSnowShown).
-            enabled && this.mapSnowShown ? configured : WeatherType.Clear,
             // The Christmas theme draws its own snow ground over the whole outside: the seasonal ground steps aside.
             !this.editing && theme !== SeasonalTheme.Christmas,
             theme === SeasonalTheme.Autumn,
-            settings?.weatherStartedAt,
-            settings?.weatherAuto,
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.

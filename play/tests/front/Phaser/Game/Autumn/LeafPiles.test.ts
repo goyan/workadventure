@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { mockDeep } from "vitest-mock-extended";
+import { mockDeep, type DeepMockProxy } from "vitest-mock-extended";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import type { SnowEntity } from "../../../../../src/front/Phaser/Game/Christmas/SnowCaps";
 import { LeafPiles } from "../../../../../src/front/Phaser/Game/Autumn/LeafPiles";
@@ -92,5 +92,16 @@ describe("LeafPiles", () => {
         piles.rebuild([entity(0, 0), entity(0, 32)], grid);
         piles.rebuild([entity(0, 0)], grid);
         expect(readPixels.mock.calls).toHaveLength(1);
+    });
+
+    it("fades its piles, and gives new ones the current alpha", () => {
+        const { scene, piles } = setup();
+        piles.rebuild([entity(0, 0)], grid);
+        const first = scene.add.image.mock.results[0].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        piles.setAlpha(0.6);
+        expect(first.setAlpha.mock.lastCall).toEqual([0.6]);
+        piles.rebuild([entity(32, 0)], grid);
+        const next = scene.add.image.mock.results[1].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        expect(next.setAlpha.mock.lastCall).toEqual([0.6]);
     });
 });

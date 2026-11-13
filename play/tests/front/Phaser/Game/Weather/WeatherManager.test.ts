@@ -153,11 +153,10 @@ describe("weather rendering lifecycle", () => {
         manager.update(120, new Date(dry));
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(new Date(dry)));
         expect(sounds.update.mock.lastCall?.[0]).not.toBe(WeatherType.Snow);
-        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Automatic);
-        expect(ground.update.mock.lastCall?.[3]).toBe(true);
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
     });
 
-    it("hands the map's automatic settings to the schedule, the ground and the sounds", () => {
+    it("hands the map's automatic settings to the schedule and the sounds", () => {
         const { scene, wam } = fixture();
         const auto = { frequency: "stormy" as const, include: [WeatherType.Fog] };
         wam.settings = { weather: WeatherType.Automatic, weatherAuto: auto };
@@ -165,7 +164,6 @@ describe("weather rendering lifecycle", () => {
         const date = new Date("2026-01-12T07:00:00Z");
         manager.update(0, date);
         expect(sounds.update.mock.lastCall?.[0]).toBe(autoWeatherAt(date, auto));
-        expect(ground.update.mock.lastCall?.[6]).toBe(auto);
     });
 
     it("hides effects immediately for the personal preference and the editor, then restores them", () => {
@@ -175,39 +173,23 @@ describe("weather rendering lifecycle", () => {
         weatherEffectsEnabledStore.set(false);
         manager.update(1, new Date(1));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
-        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Clear);
-        expect(ground.update.mock.lastCall?.[3]).toBe(true);
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
         weatherEffectsEnabledStore.set(true);
         manager.update(2, new Date(2));
         expect(graphics.setVisible.mock.lastCall).toEqual([true]);
         mapEditorModeStore.set(true);
         manager.update(3, new Date(3));
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
-        expect(ground.update.mock.lastCall?.[3]).toBe(false);
+        expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
-    it("passes the server snow episode to the ground renderer, with green grass without a theme", () => {
+    it("draws green grass without a theme and never snow: the map snow is the Christmas decor", () => {
         const { scene, wam } = fixture();
         wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
         manager = new WeatherManager(scene);
         const date = new Date(456);
         manager.update(0, date);
-        expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, false, 123, undefined);
-    });
-
-    it("keeps the map snow off the ground when a theme is chosen", () => {
-        const { scene, wam } = fixture();
-        wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
-        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
-        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
-        manager.update(0, new Date(456));
-        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Clear);
-        seasonalThemeModeStore.set(SeasonalThemeMode.None);
-        manager.update(1, new Date(457));
-        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Clear);
-        seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
-        manager.update(2, new Date(458));
-        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Snow);
+        expect(ground.update).toHaveBeenLastCalledWith(0, date, true, false);
     });
 
     it("passes the autumn ground for the autumn theme", () => {
@@ -215,8 +197,8 @@ describe("weather rendering lifecycle", () => {
         wam.settings = { weather: WeatherType.Rain };
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
         manager.update(0, new Date(0));
+        expect(ground.update.mock.lastCall?.[2]).toBe(true);
         expect(ground.update.mock.lastCall?.[3]).toBe(true);
-        expect(ground.update.mock.lastCall?.[4]).toBe(true);
         expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Rain);
     });
 
@@ -234,7 +216,7 @@ describe("weather rendering lifecycle", () => {
         wam.settings = { weather: WeatherType.Clear };
         manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Christmas });
         manager.update(0, new Date(0));
-        expect(ground.update.mock.lastCall?.[3]).toBe(false);
+        expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
     it("tints only outdoor runs in a storm", () => {
