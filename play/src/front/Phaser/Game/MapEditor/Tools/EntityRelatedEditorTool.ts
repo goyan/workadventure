@@ -24,6 +24,7 @@ import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import { TexturesHelper } from "../../../Helpers/TexturesHelper";
 import type { Entity } from "../../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapLayer/MapLayerCatalog";
+import { armEntityDuplicate } from "../EntityDuplicate";
 import { MapEditorTool } from "./MapEditorTool";
 
 import Image = Phaser.GameObjects.Image;
@@ -44,7 +45,7 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
     protected mapEditorSelectedEntityStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorSelectedEntityDraggedStoreUnsubscriber: Unsubscriber | undefined;
     protected mapEditorEntityEraserStoreUnsubscriber: Unsubscriber | undefined;
-    /** Buttons shown above the selected entity: rotate, then bring forward / send backward. */
+    /** Buttons shown above the selected entity: rotate, bring forward / send backward, then duplicate. */
     private entityButtons: Phaser.GameObjects.Text[] = [];
 
     protected constructor(mapEditorModeManager: MapEditorModeManager) {
@@ -259,6 +260,10 @@ export abstract class EntityRelatedEditorTool extends MapEditorTool {
                 },
             );
         }
+        buttons.push({
+            label: "⧉",
+            onClick: () => armEntityDuplicate(entity),
+        });
         this.entityButtons = buttons.map(({ label, onClick }) =>
             this.scene.add
                 .text(0, entity.y - 8, label, {

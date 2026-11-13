@@ -38,6 +38,7 @@ import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
 import type { GameScene } from "../GameScene";
 import { EditorToolName } from "../MapEditor/MapEditorModeManager";
+import { clickSelectsEntity } from "../MapEditor/EntityClickIntent";
 import type { GameMapFrontWrapper } from "./GameMapFrontWrapper";
 
 import EventEmitter = Phaser.Events.EventEmitter;
@@ -528,7 +529,14 @@ export class EntitiesManager extends EventEmitter {
                 this.scene.getMapEditorModeManager()?.equipTool(EditorToolName.EntityEditor);
             }
 
-            if (get(mapEditorModeStore) && !get(mapEditorSelectedEntityPrefabStore)) {
+            if (
+                get(mapEditorModeStore) &&
+                clickSelectsEntity(
+                    get(mapEditorSelectedEntityPrefabStore),
+                    entity.getPrefab(),
+                    this.shiftKey?.isDown ?? false,
+                )
+            ) {
                 if (document.activeElement instanceof HTMLElement) {
                     document.activeElement.blur();
                 }
