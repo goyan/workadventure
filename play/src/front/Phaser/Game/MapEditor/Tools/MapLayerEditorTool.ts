@@ -190,6 +190,8 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     private async checkCatalogs(): Promise<void> {
         mapLayerCatalogAvailableStore.set(undefined);
+        // The doors of the previous room must not stay available while this room's catalogs are checked.
+        mapLayerDoorsAvailableStore.set(false);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -209,6 +211,8 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerPrefabId(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", "blanc", "g")),
         );
         mapLayerDoorsAvailableStore.set(door !== undefined);
+        // The door button is disabled without doors: leave a mode that could not draw anything.
+        if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -290,6 +294,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
         if (get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore)) {
+            mapLayerStatusStore.set("doorsUnavailable");
             return;
         }
         mapLayerStatusStore.set(undefined);
@@ -434,6 +439,11 @@ export class MapLayerEditorTool extends MapEditorTool {
             if (this.hover) {
                 const mode = get(mapLayerModeStore);
                 if (mode === "door") {
+                    // Without doors a click does nothing: no preview that would suggest otherwise.
+                    if (!get(mapLayerDoorsAvailableStore)) {
+                        this.scene.markDirty();
+                        return;
+                    }
                     this.hoverModel ??= this.readModel();
                     this.drawDoorPreview(graphics, this.hoverModel, this.hover);
                 } else if (mode === "erase") {

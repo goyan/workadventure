@@ -203,4 +203,33 @@ describe("MapLayerEditorTool gestures", () => {
         nativePointerDown();
         expect(capturedPointers.size).toBe(0);
     });
+
+    it("forgets the doors of the previous room as soon as the catalogs are checked again", () => {
+        mapLayerDoorsAvailableStore.set(true);
+        collectionsManager.getEntityPrefab.mockReturnValue(
+            new Promise(() => {
+                // Never answers: the check is still running.
+            }),
+        );
+        tool.activate();
+        expect(get(mapLayerDoorsAvailableStore)).toBe(false);
+    });
+
+    it("goes back to the wall mode when the room has no door catalog", async () => {
+        doorsInCatalog = false;
+        mapLayerModeStore.set("door");
+        await activate();
+        expect(get(mapLayerDoorsAvailableStore)).toBe(false);
+        expect(get(mapLayerModeStore)).toBe("wall");
+    });
+
+    it("explains a click in the door mode when doors are unavailable", async () => {
+        doorsInCatalog = false;
+        await activate();
+        mapLayerModeStore.set("door");
+        down(40, 40);
+        up(40, 40);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBe("doorsUnavailable");
+    });
 });

@@ -477,6 +477,7 @@ const mapEditor: BaseTranslation = {
             tooLarge: "This change is too large. Draw a smaller area.",
             fillTooLarge: "The area is not closed or too large to fill. Close it with walls first.",
             doorInvalid: "A door needs two free wall segments side by side. Click on a wall.",
+            doorsUnavailable: "This room has no door catalog: doors are not available.",
             failed: "The change could not be applied.",
         },
         families: {

@@ -486,6 +486,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             tooLarge: "Cette modification est trop grande. Dessinez une zone plus petite.",
             fillTooLarge: "La zone n'est pas fermée ou trop grande pour être remplie. Fermez-la d'abord avec des murs.",
             doorInvalid: "Une porte demande deux segments de mur libres côte à côte. Cliquez sur un mur.",
+            doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {
