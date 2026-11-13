@@ -68,7 +68,7 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             const { executeUpdateWAMSettings } = await import("../../Phaser/Game/MapEditor/Commands/Facades");
             await executeUpdateWAMSettings({
                 $case: "updateWeatherSettingMessage",
-                updateWeatherSettingMessage: { weather: request.value },
+                updateWeatherSettingMessage: { weather: request.value, autoInclude: [] },
             });
             break;
         }

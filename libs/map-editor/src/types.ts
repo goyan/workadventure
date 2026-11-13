@@ -686,15 +686,32 @@ export type CategorySettings = z.infer<typeof CategorySettings>;
 export enum WeatherType {
     Automatic = "automatic",
     Clear = "clear",
+    Fog = "fog",
     Rain = "rain",
     Snow = "snow",
     Storm = "storm",
 }
 export const Weather = z.nativeEnum(WeatherType);
 
+export const AutoWeatherFrequency = z.enum(["calm", "normal", "stormy"]);
+export type AutoWeatherFrequency = z.infer<typeof AutoWeatherFrequency>;
+
+/** Settings of the automatic weather: how often it changes and which weathers it may pick. */
+export const AutoWeather = z.object({
+    frequency: AutoWeatherFrequency,
+    include: z.array(Weather),
+});
+export type AutoWeatherSettings = z.infer<typeof AutoWeather>;
+
+export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
+    frequency: "normal",
+    include: [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog],
+};
+
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
     weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
+    weatherAuto: AutoWeather.optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
     /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */

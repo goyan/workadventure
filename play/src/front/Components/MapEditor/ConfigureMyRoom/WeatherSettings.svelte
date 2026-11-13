@@ -34,7 +34,7 @@
         try {
             await executeUpdateWAMSettings({
                 $case: "updateWeatherSettingMessage",
-                updateWeatherSettingMessage: { weather: Weather.parse(weather) },
+                updateWeatherSettingMessage: { weather: Weather.parse(weather), autoInclude: [] },
             });
             return $LL.mapEditor.settings.weather.success();
         } catch (error) {
