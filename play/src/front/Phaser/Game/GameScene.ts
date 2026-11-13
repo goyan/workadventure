@@ -2340,6 +2340,11 @@ export class GameScene extends DirtyScene {
         return (this.nightManager?.isNight() ?? false) && !this.mapEditorModeManager?.isActive();
     }
 
+    /** Server (Paris) time shared by every client, undefined until the clock is synchronised. */
+    public getServerDate(): Date | undefined {
+        return this.nightManager?.serverDate();
+    }
+
     public getDesktopWeather(): WeatherType {
         const settings = this.getGameMap().getWamFile()?.getWam().settings;
         const configured = settings?.weather ?? WeatherType.Clear;

@@ -728,10 +728,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
     },
     settings: {
         weather: {
-            automatic: "Automatique (toutes les 30 minutes)",
+            automatic: "Auto",
+            fog: "Brouillard",
             title: "Météo",
             description:
-                "Météo commune à tous sur cette carte. Vous pouvez masquer ses effets dans vos paramètres personnels.",
+                "Partagée par tout le monde sur cette carte. Chacun peut la masquer dans ses paramètres (Ambiance).",
             clear: "Ciel clair",
             rain: "Pluie",
             snow: "Neige",
@@ -739,6 +740,28 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             saving: "Enregistrement…",
             success: "Météo enregistrée",
             error: "Impossible d’enregistrer la météo",
+            auto: {
+                frequency: "Fréquence",
+                calm: "Calme",
+                normal: "Normale",
+                stormy: "Agitée",
+                include: "Temps possibles",
+                stormHint: "l'après-midi, surtout l'été",
+                snowHint: "de novembre à mars",
+                fogHint: "le matin",
+                now: "{season} · Maintenant : {weather} jusqu'à {time}",
+                then: "puis {weather} à {time}",
+            },
+            season: {
+                winter: "Hiver",
+                spring: "Printemps",
+                summer: "Été",
+                autumn: "Automne",
+            },
+            fixed: {
+                snowHint: "Hors novembre–mars, elle tombe en pluie.",
+                fogHint: "Toute la journée.",
+            },
         },
 
         loading: "Chargement en cours",

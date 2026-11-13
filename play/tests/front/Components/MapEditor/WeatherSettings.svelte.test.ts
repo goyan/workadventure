@@ -1,0 +1,187 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flushSync, mount, unmount } from "svelte";
+import { readable } from "svelte/store";
+
+const executeUpdateWAMSettings = vi.hoisted(() => vi.fn());
+const wamSettings = vi.hoisted(() => ({ value: {} }));
+
+vi.mock("../../../../src/i18n/i18n-svelte", () => {
+    const label = (text: string) => () => text;
+    const LL = readable({
+        menu: { settings: { save: label("Save") } },
+        mapEditor: {
+            settings: {
+                weather: {
+                    title: label("Weather"),
+                    description: label("desc"),
+                    automatic: label("Auto"),
+                    clear: label("Clear"),
+                    rain: label("Rain"),
+                    snow: label("Snow"),
+                    storm: label("Storm"),
+                    fog: label("Fog"),
+                    saving: label("Saving"),
+                    success: label("Saved"),
+                    error: label("Error"),
+                    auto: {
+                        frequency: label("Frequency"),
+                        calm: label("Calm"),
+                        normal: label("Normal"),
+                        stormy: label("Stormy"),
+                        include: label("Possible weather"),
+                        stormHint: label("storm hint"),
+                        snowHint: label("snow hint"),
+                        fogHint: label("fog hint"),
+                        now: ({ season, weather, time }: { season: string; weather: string; time: string }) =>
+                            `${season} | Now: ${weather} until ${time}`,
+                        then: ({ weather, time }: { weather: string; time: string }) => `then ${weather} at ${time}`,
+                    },
+                    season: {
+                        winter: label("Winter"),
+                        spring: label("Spring"),
+                        summer: label("Summer"),
+                        autumn: label("Autumn"),
+                    },
+                    fixed: { snowHint: label("fixed snow hint"), fogHint: label("fixed fog hint") },
+                },
+            },
+        },
+    });
+    return { LL, default: LL };
+});
+vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
+    gameManager: {
+        getCurrentGameScene: () => ({
+            connection: {},
+            getMapEditorModeManager: () => ({}),
+            getServerDate: () => new Date(),
+            getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings: wamSettings.value }) }) }),
+        }),
+    },
+}));
+vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings }));
+vi.mock("../../../../src/front/Stores/MenuStore", async () => {
+    const { writable } = await import("svelte/store");
+    return { mapEditorActivated: writable(true) };
+});
+
+import WeatherSettings from "../../../../src/front/Components/MapEditor/ConfigureMyRoom/WeatherSettings.svelte";
+
+let component: ReturnType<typeof mount> | undefined;
+let target: HTMLElement;
+
+function render(): void {
+    target = document.createElement("div");
+    document.body.appendChild(target);
+    component = mount(WeatherSettings, { target });
+    flushSync();
+}
+
+function tile(name: string): HTMLButtonElement {
+    const found = [
+        ...target.querySelectorAll<HTMLButtonElement>('[data-testid="map-weather-type"] [role="radio"]'),
+    ].find((b) => b.textContent?.trim() === name);
+    if (!found) throw new Error(`no tile ${name}`);
+    return found;
+}
+
+function frequency(name: string): HTMLButtonElement {
+    const found = [
+        ...target.querySelectorAll<HTMLButtonElement>('[data-testid="map-weather-frequency"] [role="radio"]'),
+    ].find((b) => b.textContent?.trim() === name);
+    if (!found) throw new Error(`no frequency ${name}`);
+    return found;
+}
+
+function saveButton(): HTMLButtonElement {
+    const found = target.querySelector<HTMLButtonElement>('[data-testid="save-map-weather"]');
+    if (!found) throw new Error("no save button");
+    return found;
+}
+
+function preview(): string {
+    return target.querySelector('[data-testid="map-weather-preview"]')?.textContent ?? "";
+}
+
+function checkbox(testId: string): HTMLInputElement {
+    const input = target.querySelector<HTMLInputElement>(`[data-testid="${testId}"] input`);
+    if (!input) throw new Error(`no checkbox ${testId}`);
+    return input;
+}
+
+function click(element: HTMLElement): void {
+    element.click();
+    flushSync();
+}
+
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-15T10:00:00Z"));
+    executeUpdateWAMSettings.mockReset();
+    executeUpdateWAMSettings.mockResolvedValue(undefined);
+    wamSettings.value = {};
+});
+
+afterEach(async () => {
+    const mounted = component;
+    component = undefined;
+    if (mounted) await unmount(mounted);
+    target.remove();
+    vi.useRealTimers();
+});
+
+describe("WeatherSettings", () => {
+    it("shows six weather tiles and selects the map weather", () => {
+        wamSettings.value = { weather: "rain" };
+        render();
+        const tiles = target.querySelectorAll('[data-testid="map-weather-type"] [role="radio"]');
+        expect(tiles).toHaveLength(6);
+        expect(tile("Rain").getAttribute("aria-checked")).toBe("true");
+        expect(tile("Clear").getAttribute("aria-checked")).toBe("false");
+        click(tile("Snow"));
+        expect(tile("Snow").getAttribute("aria-checked")).toBe("true");
+        expect(tile("Rain").getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("shows the auto settings only for Auto", () => {
+        wamSettings.value = { weather: "automatic" };
+        render();
+        expect(target.querySelector('[data-testid="map-weather-frequency"]')).not.toBeNull();
+        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(4);
+        click(tile("Clear"));
+        expect(target.querySelector('[data-testid="map-weather-frequency"]')).toBeNull();
+        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(0);
+    });
+
+    it("previews the next changes and updates them when the frequency changes", () => {
+        wamSettings.value = { weather: "automatic" };
+        render();
+        const normal = preview();
+        expect(normal).toContain("Summer");
+        expect(normal).toContain("Now:");
+        click(frequency("Calm"));
+        const calm = preview();
+        click(frequency("Stormy"));
+        const stormy = preview();
+        expect(new Set([normal, calm, stormy]).size).toBeGreaterThan(1);
+        expect(calm).not.toBe(stormy);
+    });
+
+    it("sends the weather with the auto settings when saved", async () => {
+        wamSettings.value = { weather: "clear" };
+        render();
+        click(tile("Auto"));
+        click(checkbox("map-weather-include-storm"));
+        click(frequency("Calm"));
+        click(saveButton());
+        await vi.waitFor(() => expect(executeUpdateWAMSettings).toHaveBeenCalledTimes(1));
+        expect(executeUpdateWAMSettings).toHaveBeenCalledWith({
+            $case: "updateWeatherSettingMessage",
+            updateWeatherSettingMessage: {
+                weather: "automatic",
+                autoFrequency: "calm",
+                autoInclude: ["rain", "snow", "fog"],
+            },
+        });
+    });
+});
