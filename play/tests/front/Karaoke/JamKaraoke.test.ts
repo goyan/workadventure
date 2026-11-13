@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { get, writable } from "svelte/store";
+import type { Writable } from "svelte/store";
+import { EMPTY_SPOTIFY_LISTENING } from "../../../src/common/SpotifyListening";
 import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneController";
 import type { SpotifyPlaybackState } from "../../../src/front/Interfaces/DesktopAppInterfaces";
 import type { ListeningByUserUuid } from "../../../src/front/Spotify/SpotifyListeningDirectory";
@@ -17,6 +19,18 @@ const room: JamRoom = {
     zone: { areaId: "area", propertyId: "property", areaName: "Test" },
     jam: { home: true, hostUuid: "host", hostName: "Host" },
 };
+const spotifyRoom: JamRoom = {
+    zone: { areaId: "area", propertyId: "property", areaName: "Test" },
+    jam: { url: "https://spotify.link/old", hostUuid: "host", hostName: "Host" },
+};
+function linkedAccount() {
+    return {
+        linked: writable(true),
+        getAccessToken: vi.fn().mockResolvedValue("test-token"),
+        expireAccessToken: vi.fn(),
+        reportAccessDenied: vi.fn(),
+    };
+}
 const state = {
     track: { title: "Test song", artist: "Test artist", durationMs: 200_000 },
     next: { title: "Next song", artist: "Test artist" },
@@ -33,6 +47,7 @@ function harness(
         memory?: JamKaraokeContext["memory"];
         now?: () => number;
         rooms?: JamRoom[];
+        listening?: Writable<ListeningByUserUuid>;
     } = {},
 ) {
     const rooms = writable(options.rooms ?? [room]);
@@ -40,7 +55,7 @@ function harness(
     const send = vi.fn();
     const stop = startJamKaraoke({
         rooms,
-        listeningByUserUuid: writable<ListeningByUserUuid>(new Map()),
+        listeningByUserUuid: options.listening ?? writable<ListeningByUserUuid>(new Map()),
         localUuid: () => options.localUuid ?? "guest",
         userByUuid: (uuid) => ({ id: uuid === "host" ? 1 : 2, name: uuid }),
         userById: (id) => ({ uuid: id === 1 ? "host" : "guest", name: "Test" }),
@@ -373,6 +388,121 @@ describe("Jam karaoke", () => {
 
         expect(get(selectedKaraokeRoomStore)).toBeUndefined();
         expect(memory.current()).toBeNull();
+        game.stop();
+    });
+
+    it("says why the host's position is unknown when WorkAdventure reads no player of theirs (the beta report)", () => {
+        // Host in a browser without the desktop player, Spotify not linked: only their presence names the track.
+        const linked = writable(false);
+        const authorizationExpired = writable(false);
+        const listening = writable<ListeningByUserUuid>(
+            new Map([
+                [
+                    "host",
+                    {
+                        ...EMPTY_SPOTIFY_LISTENING,
+                        trackTitle: "Pearl Necklace",
+                        artistName: "ZZ Top",
+                        trackUrl: "https://open.spotify.com/track/abc",
+                    },
+                ],
+            ]),
+        );
+        const game = harness({
+            localUuid: "host",
+            rooms: [spotifyRoom],
+            listening,
+            account: {
+                linked,
+                authorizationExpired,
+                getAccessToken: vi.fn().mockResolvedValue(undefined),
+                expireAccessToken: vi.fn(),
+                reportAccessDenied: vi.fn(),
+            },
+        });
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({
+            track: { title: "Pearl Necklace", artist: "ZZ Top" },
+            positionAt: 0,
+            issue: "noPlayer",
+        });
+        // Spotify rejected the refresh token: the link is gone, which the host is told apart.
+        authorizationExpired.set(true);
+        expect(get(karaokeStatesStore).get("host")?.issue).toBe("authorizationExpired");
+        expect(game.send).toHaveBeenLastCalledWith(
+            JAM_KARAOKE_STATE_EVENT,
+            expect.objectContaining({ issue: "authorizationExpired" }),
+            [],
+        );
+        game.stop();
+    });
+
+    it("reports a Spotify player with nothing to play (204), then clears it once a track plays", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(10_000);
+        let response = (): Response => new Response(null, { status: 204 });
+        vi.stubGlobal("fetch", (url: string) =>
+            Promise.resolve(url.endsWith("/queue") ? Response.json({ queue: [] }) : response()),
+        );
+        const game = harness({ localUuid: "host", rooms: [spotifyRoom], account: linkedAccount() });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
+
+        response = () =>
+            Response.json({
+                is_playing: true,
+                progress_ms: 1000,
+                currently_playing_type: "track",
+                item: { name: "Test song", artists: [{ name: "Test artist" }], external_urls: {} },
+            });
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(get(karaokeStatesStore).get("host")?.track?.title).toBe("Test song");
+        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
+        game.stop();
+    });
+
+    it("reports Spotify refusing to read the host's player (403) and waits the existing five minutes", async () => {
+        vi.useFakeTimers();
+        const current = vi.fn().mockResolvedValue(new Response(null, { status: 403 }));
+        vi.stubGlobal("fetch", (url: string) =>
+            url.endsWith("/queue") ? Promise.resolve(Response.json({ queue: [] })) : current(),
+        );
+        const game = harness({ localUuid: "host", rooms: [spotifyRoom], account: linkedAccount() });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(get(karaokeStatesStore).get("host")?.issue).toBe("accessDenied");
+        await vi.advanceTimersByTimeAsync(299_000);
+        expect(current).toHaveBeenCalledOnce();
+        game.stop();
+    });
+
+    it("reports a desktop Spotify app that plays nothing", () => {
+        let notify: ((state: SpotifyPlaybackState | null) => void) | undefined;
+        const game = harness({
+            localUuid: "host",
+            rooms: [spotifyRoom],
+            desktop: {
+                watchSpotifyPlayback: (callback) => {
+                    notify = callback;
+                    return () => undefined;
+                },
+            },
+        });
+        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
+        notify?.(null);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
+        game.stop();
+    });
+
+    it("keeps the karaoke open on a Spotify Jam whose host pastes a new invite link", () => {
+        const game = harness({ rooms: [spotifyRoom] });
+        selectedKaraokeRoomStore.set(spotifyRoom);
+        const replaced: JamRoom = { ...spotifyRoom, jam: { ...spotifyRoom.jam, url: "https://spotify.link/new" } };
+        game.rooms.set([replaced]);
+        expect(get(selectedKaraokeRoomStore)).toEqual(replaced);
+        expect(game.send).toHaveBeenLastCalledWith(
+            JAM_KARAOKE_REQUEST_EVENT,
+            { areaId: "area", propertyId: "property", jamKey: "https://spotify.link/new" },
+            [1],
+        );
         game.stop();
     });
 

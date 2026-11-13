@@ -72,6 +72,24 @@ describe("SpotifyAccount", () => {
         expect(get(account.linked)).toBe(false);
         expect(storage.items.has("spotifyAccount")).toBe(false);
     });
+
+    it("tells a link Spotify revoked from one the user removed or never made", async () => {
+        const revoked = new SpotifyAccount(
+            memoryStorage({ spotifyAccount: storedTokens(Date.now() - 1) }),
+            vi.fn<typeof fetch>().mockResolvedValue(new Response("{}", { status: 400 })),
+        );
+        expect(get(revoked.authorizationExpired)).toBe(false);
+        await revoked.getAccessToken();
+        expect(get(revoked.authorizationExpired)).toBe(true);
+
+        const removed = new SpotifyAccount(
+            memoryStorage({ spotifyAccount: storedTokens(Date.now() + 3_600_000) }),
+            vi.fn<typeof fetch>(),
+        );
+        removed.unlink();
+        expect(get(removed.authorizationExpired)).toBe(false);
+        expect(get(new SpotifyAccount(memoryStorage(), vi.fn<typeof fetch>()).authorizationExpired)).toBe(false);
+    });
 });
 
 describe("PKCE", () => {
