@@ -30,7 +30,7 @@ import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
-import { VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
@@ -161,7 +161,14 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.updateSkateLean();
         this.updateSwimEffect();
-        if (this.ridingVehicle) this.vehicleEffect ??= new VehicleEffect(this.scene, this);
+        const vehicle = this.vehicleState.vehicle;
+        if (this.vehicleEffect && this.vehicleEffect.vehicle !== vehicle) {
+            this.vehicleEffect.destroy();
+            this.vehicleEffect = undefined;
+        }
+        if (this.ridingVehicle && vehicle !== Vehicle.None) {
+            this.vehicleEffect ??= new VehicleEffect(this.scene, this, vehicle);
+        }
         this.vehicleEffect?.update(
             this.ridingVehicle,
             this._lastDirection,

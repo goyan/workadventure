@@ -221,7 +221,9 @@
         if (!wokaData) return;
         if (showVehicle && event.key.startsWith("Arrow")) {
             event.preventDefault();
-            selectedVehicle = selectedVehicle === Vehicle.None ? Vehicle.Skateboard : Vehicle.None;
+            const vehicles = Object.values(Vehicle);
+            const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
+            selectedVehicle = vehicles[(vehicles.indexOf(selectedVehicle) + step + vehicles.length) % vehicles.length];
             return;
         }
         if (showBath && event.key.startsWith("Arrow")) {
@@ -446,7 +448,7 @@
                                     </button>
                                 {/each}
                             </div>
-                            {#if selectedVehicle === Vehicle.Skateboard}
+                            {#if selectedVehicle !== Vehicle.None}
                                 <div class="vehicle-colors">
                                     <label>
                                         <span>{$LL.woka.vehicle.centerColor()}</span>

@@ -330,12 +330,18 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         });
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());
-        if (localUserStore.getVehicle() !== Vehicle.None && human) {
+        const vehicle = localUserStore.getVehicle();
+        if (vehicle !== Vehicle.None && human) {
             const equipped = player.vehicleMode === VehicleMode.Always;
+            const unicycle = vehicle === Vehicle.ElectricUnicycle;
             wokaMenuStore.addAction({
-                actionName: equipped ? get(LL).woka.vehicle.dismount() : get(LL).woka.vehicle.mount(),
-                emoji: "🛹",
-                icon: "skateboard",
+                actionName: equipped
+                    ? get(LL).woka.vehicle.dismount()
+                    : unicycle
+                      ? get(LL).woka.vehicle.mountElectricUnicycle()
+                      : get(LL).woka.vehicle.mount(),
+                emoji: unicycle ? "🛞" : "🛹",
+                icon: unicycle ? "electricUnicycle" : "skateboard",
                 testId: "avatar-vehicle",
                 callback: () => {
                     player.equipVehicle(equipped ? VehicleMode.Off : VehicleMode.Always);

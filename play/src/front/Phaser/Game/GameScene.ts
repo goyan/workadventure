@@ -36,7 +36,7 @@ import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFi
 import Debug from "debug";
 import { asError } from "catch-unknown";
 import { SkateboardSounds, SKATEBOARD_SOUNDS } from "@wa/front/Phaser/Vehicle/SkateboardSounds";
-import { VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, VEHICLE_VARIABLE } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { textMessageStore } from "@wa/front/Stores/TypeMessageStore/TextMessageStore";
 import { connectionManager } from "@wa/front/Connection/ConnectionManager";
 import { urlManager } from "@wa/front/Url/UrlManager";
@@ -1664,7 +1664,8 @@ export class GameScene extends DirtyScene {
             {
                 x: listener.x,
                 y: listener.y,
-                riding: this.CurrentPlayer.isRidingVehicle(),
+                // An electric unicycle rolls in silence: the rolling sound is the skateboard's.
+                riding: this.CurrentPlayer.isRidingVehicle() && localUserStore.getVehicle() === Vehicle.Skateboard,
                 moving: this.CurrentPlayer.isVehicleMoving(),
                 indoor:
                     (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition(listener)

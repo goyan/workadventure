@@ -9,8 +9,10 @@ const woka: DeepPartial<Translation["woka"]> = {
         title: "Véhicule",
         none: "Aucun",
         skateboard: "Skateboard",
-        hint: "Trois pressions rapides sur une direction pour sprinter en skateboard, ou équipez-le depuis la roue d’actions.",
+        electricUnicycle: "Gyroroue",
+        hint: "Trois pressions rapides sur une direction pour sprinter avec votre véhicule, ou équipez-le depuis la roue d’actions.",
         mount: "Monter sur le skateboard",
+        mountElectricUnicycle: "Monter sur la gyroroue",
         dismount: "Descendre",
     },
     customWoka: {

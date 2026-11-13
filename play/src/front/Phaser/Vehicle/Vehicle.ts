@@ -1,11 +1,13 @@
 export enum Vehicle {
     None = "none",
     Skateboard = "skateboard",
+    ElectricUnicycle = "electricUnicycle",
 }
 
 export const VEHICLE_PREFERENCE_KEY = "avatarVehicle";
 export const VEHICLE_VARIABLE = "_avatarVehicle";
 export const SKATEBOARD_TEXTURE = "avatar-skateboard";
+export const ELECTRIC_UNICYCLE_TEXTURE = "avatar-electric-unicycle";
 export const DEFAULT_VEHICLE_COLOR = "#39404f";
 export const VEHICLE_SPEED_FACTOR = 3.75;
 
@@ -37,7 +39,7 @@ export interface VehicleState extends VehicleColors {
 }
 
 export function readVehicle(value: unknown): Vehicle {
-    return value === Vehicle.Skateboard ? Vehicle.Skateboard : Vehicle.None;
+    return value === Vehicle.Skateboard || value === Vehicle.ElectricUnicycle ? value : Vehicle.None;
 }
 
 export function readVehicleColor(value: unknown): string {

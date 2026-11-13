@@ -1,8 +1,8 @@
 import type * as Phaser from "phaser";
 import type { PositionMessage_Direction } from "@workadventure/messages";
-import type { VehicleColors } from "./Vehicle";
-import { SKATEBOARD_TEXTURE, readVehicleColors } from "./Vehicle";
-import { createSkateboardSheet, SKATEBOARD_LAYERS } from "./SkateboardArtwork";
+import type { Vehicle, VehicleColors } from "./Vehicle";
+import { readVehicleColors } from "./Vehicle";
+import { vehicleArtwork, type VehicleArtwork } from "./VehicleAssets";
 import {
     VEHICLE_DIRECTIONS,
     VEHICLE_FRAME_SIZE,
@@ -18,15 +18,18 @@ export class VehicleEffect {
     private lastPosition: { x: number; y: number } | undefined;
     private heading: number | undefined;
     private targetHeading = 0;
+    private readonly artwork: VehicleArtwork;
 
     constructor(
         private readonly scene: Phaser.Scene,
         private readonly container: Phaser.GameObjects.Container,
+        public readonly vehicle: Exclude<Vehicle, Vehicle.None>,
     ) {
-        this.sprites = SKATEBOARD_LAYERS.map((part, index) => {
-            const key = `${SKATEBOARD_TEXTURE}-${part}`;
+        this.artwork = vehicleArtwork(vehicle);
+        this.sprites = this.artwork.layers.map((part, index) => {
+            const key = `${this.artwork.texture}-${part}`;
             if (!scene.textures.exists(key)) {
-                const texture = scene.textures.addCanvas(key, createSkateboardSheet(readVehicleColors(null), part));
+                const texture = scene.textures.addCanvas(key, this.artwork.createSheet(readVehicleColors(null), part));
                 for (let frame = 0; frame < 32; frame++)
                     texture?.add(
                         frame,
@@ -71,7 +74,7 @@ export class VehicleEffect {
                 .setFrame(frame)
                 .setAngle((this.heading - Math.round(this.heading)) * 45)
                 .setVisible(true);
-            const part = SKATEBOARD_LAYERS[index];
+            const part = this.artwork.layers[index];
             if (part !== "outline" && part !== "details") sprite.setTint(parseInt(colors[part].slice(1), 16));
         }
     }
