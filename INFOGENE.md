@@ -146,6 +146,15 @@ valeurs) s'éclaire de nouveau, et les invités ne voient plus d'indication.
 Recette : hôte et invité coupent chacun pour soi ; l'autre garde ses effets et
 l'audio continue.
 
+**Salons Live** (depuis le 2026-11-13) : un Live n'a pas de morceau Spotify, et les lampes et la piste ne le
+retenaient jamais (« en lecture » venait seulement du morceau de l'hôte). Un Live ouvert compte désormais comme en
+lecture : rien d'autre n'est partagé avec tous les postes (aucun message ajouté), et un Live existe pour partager son
+audio (« Terminer le Live » ferme le salon et arrête la capture). Là où on le voit, un Live sans audio reste éteint :
+l'hôte d'après sa propre capture, un auditeur de ce Live d'après la musique reçue dans son Space. Le rythme vient,
+comme pour une Jam Spotify, de la capture de l'hôte ou du flux reçu par l'auditeur ; un joueur de la zone qui
+n'écoute pas ne reçoit pas de rythme (même règle que les Jams Spotify). Plafond de trois flashs par seconde, mouvement
+réduit et coupure « pour moi » inchangés.
+
 ## Piste de danse
 
 L'objet **Piste de danse** (éditeur, section **Lampes**) est un sol de dalles carrées sombres aux joints néon, une

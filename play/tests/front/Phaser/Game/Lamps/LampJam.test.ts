@@ -3,6 +3,7 @@ import type { JamRoom } from "../../../../../src/front/ListeningZone/ListeningZo
 import { EMPTY_SPOTIFY_LISTENING } from "../../../../../src/common/SpotifyListening";
 import {
     lampJamsOf,
+    liveSharesAudio,
     defaultLampZone,
     jamOfSpaces,
     lampLightZone,
@@ -201,6 +202,56 @@ describe("lampJamsOf", () => {
 
     it("counts no one when nobody is known to take part", () => {
         expect(lampJamsOf([spotifyRoom("club", "a")], new Map(), new Map())[0].participants).toBe(0);
+    });
+
+    const liveRoom = (areaId: string, hostUuid: string): JamRoom => ({
+        zone: { areaId, areaName: areaId, propertyId: "music" },
+        jam: { live: true, hostUuid, hostName: hostUuid },
+    });
+
+    it("lights the lamps for a Live, which has no Spotify track (the Dancefloor report)", () => {
+        const jams = lampJamsOf([liveRoom("club", "max")], new Map([["max", silent]]), new Map([["max", 7]]));
+        expect(jams).toEqual([{ areaId: "club", hostUuid: "max", playing: true, participants: 7 }]);
+        expect(resolveLampJam({ source: inClub, zones: [club, lounge], jams, listening: undefined })).toEqual({
+            areaId: "club",
+            hostUuid: "max",
+        });
+    });
+
+    it("keeps a Live off where this client sees that no audio is shared", () => {
+        const jams = lampJamsOf(
+            [liveRoom("club", "max"), spotifyRoom("club", "a")],
+            new Map([["a", playingTrack]]),
+            new Map(),
+            (room) => room.jam.hostUuid !== "max",
+        );
+        expect(jams.map((jam) => jam.playing)).toEqual([false, true]);
+    });
+
+    it("leaves Spotify Jams to their host's track, whatever the Live rule says", () => {
+        const jams = lampJamsOf([spotifyRoom("club", "a")], new Map([["a", silent]]), new Map(), () => true);
+        expect(jams[0].playing).toBe(false);
+    });
+});
+
+describe("liveSharesAudio", () => {
+    const space = "jam:room:club:music:max";
+    const base = { spaceName: space, hostIsLocal: false, receivedSpaces: new Set<string>() };
+
+    it("tells the host from their own capture", () => {
+        expect(liveSharesAudio({ ...base, hostIsLocal: true, sharedSpace: space })).toBe(true);
+        expect(liveSharesAudio({ ...base, hostIsLocal: true, sharedSpace: undefined })).toBe(false);
+        expect(liveSharesAudio({ ...base, hostIsLocal: true, sharedSpace: "jam:other" })).toBe(false);
+    });
+
+    it("tells a listener of this Live from the music received in its space", () => {
+        expect(liveSharesAudio({ ...base, listenedSpace: space })).toBe(false);
+        expect(liveSharesAudio({ ...base, listenedSpace: space, receivedSpaces: new Set([space]) })).toBe(true);
+    });
+
+    it("trusts an open Live for anyone else: its room exists to share audio, and nothing more is shared", () => {
+        expect(liveSharesAudio(base)).toBe(true);
+        expect(liveSharesAudio({ ...base, listenedSpace: "jam:another" })).toBe(true);
     });
 });
 

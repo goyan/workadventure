@@ -1,3 +1,4 @@
+import { isLiveJam } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import { isPlayingTrack } from "../../../../common/SpotifyListening";
 import type { JamRoom } from "../../../ListeningZone/ListeningZoneController";
@@ -87,19 +88,44 @@ export function resolveLampJam(input: {
 }
 
 /**
- * The Jams of the map as candidates for the lamps: whether their host plays a track, and how many take part.
+ * The Jams of the map as candidates for the lamps: whether their host plays a track, and how many take part. A Live
+ * has no Spotify track: it plays while its host shares its audio (`liveSharesAudio`, an open Live by default).
  */
 export function lampJamsOf(
     rooms: readonly JamRoom[],
     listeningByUserUuid: ReadonlyMap<string, SpotifyListening>,
     participantsByHost: ReadonlyMap<string, number>,
+    liveSharesAudio: (room: JamRoom) => boolean = () => true,
 ): LampJam[] {
     return rooms.map((room) => ({
         areaId: room.zone.areaId,
         hostUuid: room.jam.hostUuid,
-        playing: isPlayingTrack(listeningByUserUuid.get(room.jam.hostUuid)),
+        playing: isLiveJam(room.jam)
+            ? liveSharesAudio(room)
+            : isPlayingTrack(listeningByUserUuid.get(room.jam.hostUuid)),
         participants: participantsByHost.get(room.jam.hostUuid) ?? 0,
     }));
+}
+
+/**
+ * Whether a Live shares its audio, as far as this client can see it. Nothing tells every client (a Live sends no
+ * track, and no new message is added): an open Live, which exists to share audio and stops its capture once ended,
+ * counts as sharing. Its host knows from their own capture, and a listener of that Live from the music received in its
+ * space: there, a Live without audio keeps the lamps off.
+ */
+export function liveSharesAudio(input: {
+    spaceName: string;
+    hostIsLocal: boolean;
+    /** The space whose music the local user shares, if any. */
+    sharedSpace?: string;
+    /** The space whose music the local user listens to, if any. */
+    listenedSpace?: string;
+    /** The spaces whose music this client receives. */
+    receivedSpaces: { has(space: string): boolean };
+}): boolean {
+    if (input.hostIsLocal) return input.sharedSpace === input.spaceName;
+    if (input.listenedSpace === input.spaceName) return input.receivedSpaces.has(input.spaceName);
+    return true;
 }
 
 /**
