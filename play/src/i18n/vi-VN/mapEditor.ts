@@ -686,8 +686,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         weather: {
             automatic: "Tự động (mỗi 30 phút)",
             title: "Thời tiết",
-            description:
-                "Thời tiết được chia sẻ cho mọi người trên bản đồ. Bạn có thể ẩn hiệu ứng trong cài đặt cá nhân.",
             clear: "Trời quang",
             rain: "Mưa",
             snow: "Tuyết",

@@ -680,7 +680,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         weather: {
             automatic: "تلقائي (كل 30 دقيقة)",
             title: "الطقس",
-            description: "الطقس مشترك للجميع على هذه الخريطة. يمكنك إخفاء التأثيرات من إعداداتك الشخصية.",
             clear: "سماء صافية",
             rain: "مطر",
             snow: "ثلج",

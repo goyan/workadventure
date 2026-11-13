@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockDeep } from "vitest-mock-extended";
+import { mockDeep, type DeepMockProxy } from "vitest-mock-extended";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { SnowGround } from "../../../../../src/front/Phaser/Game/Christmas/SnowGround";
 import { MAP_LAYER_FLOOR_DEPTH } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
@@ -47,5 +47,22 @@ describe("SnowGround", () => {
         expect(snowy.has("4,2")).toBe(true);
         expect(snowy.has("2,2")).toBe(false);
         expect(snowy.has("3,3")).toBe(false);
+    });
+
+    it("fades its image, kept when the ground is drawn again", () => {
+        const scene = mockDeep<Phaser.Scene>();
+        const canvas = mockDeep<Phaser.Textures.CanvasTexture>();
+        canvas.getContext.mockReturnValue(mockDeep<CanvasRenderingContext2D>());
+        scene.textures.createCanvas.mockReturnValue(canvas);
+        scene.add.image.mockImplementation(() => mockDeep<Phaser.GameObjects.Image>());
+        const ground = new SnowGround(scene);
+        const grid = OutdoorGrid.fromWalls(64, 64, 32, []);
+        ground.draw(grid);
+        const first = scene.add.image.mock.results[0].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        ground.setAlpha(0.3);
+        expect(first.setAlpha.mock.lastCall).toEqual([0.3]);
+        ground.draw(grid);
+        const next = scene.add.image.mock.results[1].value as DeepMockProxy<Phaser.GameObjects.Image>;
+        expect(next.setAlpha.mock.lastCall).toEqual([0.3]);
     });
 });

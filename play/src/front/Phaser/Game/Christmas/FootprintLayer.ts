@@ -13,6 +13,10 @@ const DEPTH_BELOW_FEET = 16;
 export class FootprintLayer {
     private readonly pool = new FadingPool<Phaser.GameObjects.Image>(FOOTPRINT_MAX, FOOTPRINT_FADE_MS);
     private visible = true;
+    /** The whole layer fades in and out with the snow; each print fades on its own on top of that. */
+    private alpha = 1;
+    /** The time of the last fade, used when the layer alpha changes between two updates. */
+    private now = 0;
 
     constructor(private readonly scene: Phaser.Scene) {
         this.createTexture(STEP_TEXTURE, 6, 4, (context) => {
@@ -29,6 +33,7 @@ export class FootprintLayer {
     }
 
     add(marks: FootprintMark[], now: number): void {
+        this.now = Math.max(this.now, now);
         for (const mark of marks) {
             const image =
                 mark.kind === "step"
@@ -40,7 +45,7 @@ export class FootprintLayer {
                           .setRotation(Math.atan2(mark.y2 - mark.y1, mark.x2 - mark.x1));
             const feetY = mark.kind === "step" ? mark.y : Math.max(mark.y1, mark.y2);
             image.setDepth(feetY - DEPTH_BELOW_FEET);
-            image.setAlpha(START_ALPHA);
+            image.setAlpha(START_ALPHA * this.alpha);
             image.setVisible(this.visible);
             this.pool.add(image, now)?.destroy();
         }
@@ -48,7 +53,13 @@ export class FootprintLayer {
 
     update(now: number): void {
         for (const image of this.pool.expire(now)) image.destroy();
-        for (const entry of this.pool.items) entry.item.setAlpha(this.pool.alphaAt(entry.addedAt, now, START_ALPHA));
+        this.now = Math.max(this.now, now);
+        this.applyAlpha();
+    }
+
+    setAlpha(alpha: number): void {
+        this.alpha = alpha;
+        this.applyAlpha();
     }
 
     setVisible(visible: boolean): void {
@@ -58,6 +69,12 @@ export class FootprintLayer {
 
     destroy(): void {
         for (const image of this.pool.clear()) image.destroy();
+    }
+
+    private applyAlpha(): void {
+        for (const entry of this.pool.items) {
+            entry.item.setAlpha(this.pool.alphaAt(entry.addedAt, this.now, START_ALPHA) * this.alpha);
+        }
     }
 
     private createTexture(

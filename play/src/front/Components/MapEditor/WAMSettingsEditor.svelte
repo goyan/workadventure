@@ -8,12 +8,10 @@
         mapEditorWamSettingsEditorToolCurrentMenuItemStore,
         WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
     } from "../../Stores/MapEditorStore";
-    import { mapEditorActivated } from "../../Stores/MenuStore";
     import { userIsAdminStore, userIsEditorStore } from "../../Stores/GameStore";
     import ButtonClose from "../Input/ButtonClose.svelte";
     import Button from "../UI/Button.svelte";
     import Megaphone from "./ConfigureMyRoom/Megaphone.svelte";
-    import WeatherSettings from "./ConfigureMyRoom/WeatherSettings.svelte";
     import RecordingSettings from "./ConfigureMyRoom/RecordingSettings.svelte";
     import RoomSettings from "./ConfigureMyRoom/RoomSettings.svelte";
 
@@ -40,9 +38,6 @@
         switch ($mapEditorWamSettingsEditorToolCurrentMenuItemStore) {
             case WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Megaphone: {
                 return Megaphone;
-            }
-            case WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Weather: {
-                return WeatherSettings;
             }
             case WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Recording: {
                 return RecordingSettings;
@@ -104,19 +99,6 @@
                         >
                             <span>{$LL.mapEditor.settings.megaphone.title()}</span>
                         </li>
-                        {#if $mapEditorActivated}
-                            <li>
-                                <button
-                                    type="button"
-                                    class="w-full text-left"
-                                    data-testid="map-weather-settings"
-                                    onclick={() =>
-                                        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(
-                                            WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Weather,
-                                        )}>{$LL.mapEditor.settings.weather.title()}</button
-                                >
-                            </li>
-                        {/if}
                         {#if $userIsEditorStore || $userIsAdminStore}
                             <!-- svelte-ignore a11y_click_events_have_key_events -->
                             <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

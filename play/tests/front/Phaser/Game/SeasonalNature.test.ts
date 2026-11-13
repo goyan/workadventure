@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { EntityCollectionRaw, Season, WeatherType } from "@workadventure/map-editor";
 import { seasonAt, treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { autoWeatherAt } from "@wa/front/Phaser/Game/Weather/WeatherSchedule";
 import { EntitiesManager } from "@wa/front/Phaser/Game/GameMap/EntitiesManager";
 import type { Entity } from "@wa/front/Phaser/ECS/Entity";
 import { getSolidRectangles } from "@wa/front/Utils/EntityHitbox";
@@ -13,6 +14,16 @@ const publicRoot = resolve("public/collections");
 const catalog = EntityCollectionRaw.parse(
     JSON.parse(readFileSync(resolve(publicRoot, "NatureCollection.json"), "utf8")),
 );
+
+const HALF_HOUR = 30 * 60 * 1000;
+/** Start of a November slot where the automatic schedule begins a snowfall that is followed by a dry slot. */
+const snowStart = (() => {
+    const isSnow = (t: number): boolean => autoWeatherAt(new Date(t)) === WeatherType.Snow;
+    for (let t = Date.parse("2026-11-01T00:00:00Z"); t < Date.parse("2026-12-01T00:00:00Z"); t += HALF_HOUR) {
+        if (!isSnow(t - 1) && isSnow(t) && !isSnow(t + HALF_HOUR)) return t;
+    }
+    throw new Error("no snowfall found in November 2026");
+})();
 
 describe("shared seasonal nature", () => {
     it.each([
@@ -115,8 +126,8 @@ describe("shared seasonal nature", () => {
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
-        // 13:31 UTC: the automatic weather has covered the ground with snow.
-        const snowy = new Date("2026-11-08T13:31:00Z");
+        // One minute into a snowy slot of the schedule: the automatic weather has begun to cover the ground.
+        const snowy = new Date(snowStart + 60_000);
         manager.updateSeason(0, snowy, Season.Autumn, false);
         expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
         // The same minute: showing the map snow again turns them white at once.
@@ -143,11 +154,11 @@ describe("shared seasonal nature", () => {
                 }),
             },
         }) as EntitiesManager;
-        manager.updateSeason(0, new Date("2026-11-08T13:31:00Z"), Season.Autumn);
+        manager.updateSeason(0, new Date(snowStart + 60_000), Season.Autumn);
         for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Winter);
-        manager.updateSeason(60_000, new Date("2026-11-08T14:01:00Z"), Season.Autumn);
+        manager.updateSeason(60_000, new Date(snowStart + HALF_HOUR + 60_000), Season.Autumn);
         for (const entity of entities) expect(entity.setSeason).toHaveBeenCalledTimes(1);
-        manager.updateSeason(120_000, new Date("2026-11-08T14:11:00Z"), Season.Autumn);
+        manager.updateSeason(120_000, new Date(snowStart + HALF_HOUR + 11 * 60_000), Season.Autumn);
         for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Autumn);
     });
 

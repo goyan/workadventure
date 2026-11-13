@@ -11,6 +11,8 @@ export interface SeasonalDecor {
     /** Every frame; walkers is empty while editing. Returns true when the scene must redraw. */
     update(time: number, walkers: WalkerSample[]): boolean;
     setVisible(visible: boolean): void;
+    /** Fades the whole decor (the map snow builds up and melts); 1 is fully shown. */
+    setAlpha(alpha: number): void;
     destroy(): void;
 }
 

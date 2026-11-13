@@ -24,7 +24,10 @@ describe("WAM Setting", () => {
         const wam: WAMFileFormat = { ...defaultWamFile, settings: { recording: { enableSounds: true } } };
         const setWeather = (weather: string): Promise<void> =>
             new UpdateWAMSettingCommand(wam, {
-                message: { $case: "updateWeatherSettingMessage", updateWeatherSettingMessage: { weather } },
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather, autoInclude: [] },
+                },
             }).execute();
         await setWeather(WeatherType.Automatic);
         expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Automatic);
@@ -34,6 +37,51 @@ describe("WAM Setting", () => {
         await expect(Promise.resolve().then(() => setWeather("invalid-weather"))).rejects.toThrow();
         expect(wam.settings?.weather).toBe(WeatherType.Storm);
         expect(WamSchema.parse({ ...wam, settings: { weather: "invalid" } }).settings?.weather).toBeUndefined();
+    });
+
+    it("accepts fog as map weather", () => {
+        expect(WamSchema.parse({ ...defaultWamFile, settings: { weather: "fog" } }).settings?.weather).toBe("fog");
+    });
+
+    it("reads the auto weather settings, and drops broken ones", () => {
+        expect(
+            WamSchema.parse({ ...defaultWamFile, settings: { weatherAuto: { frequency: "calm", include: ["rain"] } } })
+                .settings?.weatherAuto,
+        ).toEqual({ frequency: "calm", include: ["rain"] });
+        expect(
+            WamSchema.parse({ ...defaultWamFile, settings: { weatherAuto: { frequency: "loud" } } }).settings
+                ?.weatherAuto,
+        ).toBeUndefined();
+    });
+
+    it("stores the auto settings sent with the weather", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile };
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateWeatherSettingMessage",
+                updateWeatherSettingMessage: {
+                    weather: "automatic",
+                    autoFrequency: "stormy",
+                    autoInclude: ["rain", "fog"],
+                },
+            },
+        }).execute();
+        expect(wam.settings?.weatherAuto).toEqual({ frequency: "stormy", include: ["rain", "fog"] });
+    });
+
+    it("keeps the auto settings when an older client sends only the weather", async () => {
+        const wam: WAMFileFormat = {
+            ...defaultWamFile,
+            settings: { weather: WeatherType.Automatic, weatherAuto: { frequency: "calm", include: ["snow"] } },
+        };
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateWeatherSettingMessage",
+                updateWeatherSettingMessage: { weather: "clear", autoInclude: [] },
+            },
+        }).execute();
+        expect(wam.settings?.weather).toBe("clear");
+        expect(wam.settings?.weatherAuto).toEqual({ frequency: "calm", include: ["snow"] });
     });
 
     it("should change WAM file loaded when WAMSettingCommand received", async () => {

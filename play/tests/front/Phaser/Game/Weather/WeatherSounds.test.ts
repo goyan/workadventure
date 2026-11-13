@@ -8,6 +8,7 @@ vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
     localUserStore: { getBlockAudio: blockedAudio },
 }));
 const { WeatherSounds } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSounds");
+const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 
 afterEach(() => {
     vi.unstubAllGlobals();
@@ -50,6 +51,14 @@ describe("weather audio", () => {
         expect(rain.removeAttribute.mock.calls).toHaveLength(2);
         sounds.destroy();
     });
+    it("gives the fog the fine-weather ambience, the night one after dark", () => {
+        const { sounds, rain } = fixture();
+        sounds.update(WeatherType.Fog, undefined, false, false);
+        expect(rain.src).toContain("/sunny.mp3");
+        sounds.update(WeatherType.Fog, undefined, false, true);
+        expect(rain.src).toContain("/night.mp3");
+        sounds.destroy();
+    });
     it("updates the personal volume live and silences ambience for editing and mute", () => {
         const { sounds, rain } = fixture();
         sounds.update(WeatherType.Rain, undefined, false);
@@ -86,15 +95,17 @@ describe("weather audio", () => {
 
     it("plays thunder once per shared strike and stops it immediately when leaving the storm", () => {
         const { sounds, rain, thunder } = fixture();
-        sounds.update(WeatherType.Storm, new Date(5000), false);
+        // Thunder comes 1.8 s after the shared strike.
+        const strike = lastStrike(100_000).at;
+        sounds.update(WeatherType.Storm, new Date(strike + 1000), false);
         expect(thunder.play.mock.calls).toHaveLength(0);
-        sounds.update(WeatherType.Storm, new Date(25000), false);
-        sounds.update(WeatherType.Storm, new Date(25040), false);
+        sounds.update(WeatherType.Storm, new Date(strike + 2000), false);
+        sounds.update(WeatherType.Storm, new Date(strike + 2040), false);
         expect(thunder.play.mock.calls).toHaveLength(1);
         weatherVolumeStore.set(0.5);
-        sounds.update(WeatherType.Storm, new Date(26000), false);
+        sounds.update(WeatherType.Storm, new Date(strike + 2100), false);
         expect(thunder.setVolume.mock.lastCall).toEqual([0.15]);
-        sounds.update(WeatherType.Rain, new Date(26040), false);
+        sounds.update(WeatherType.Rain, new Date(strike + 2140), false);
         expect(thunder.stop.mock.calls).toHaveLength(1);
         sounds.destroy();
         expect(rain.removeAttribute.mock.calls).toHaveLength(1);

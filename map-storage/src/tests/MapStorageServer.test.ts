@@ -164,7 +164,7 @@ describe("MapStorageServer entity edit permissions", () => {
             updateWAMSettingsMessage: {
                 message: {
                     $case: "updateWeatherSettingMessage",
-                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999 },
+                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999, autoInclude: [] },
                 },
             },
         });

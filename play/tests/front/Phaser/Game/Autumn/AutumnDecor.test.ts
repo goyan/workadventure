@@ -4,14 +4,22 @@ import { mockDeep } from "vitest-mock-extended";
 const scatter = vi.hoisted(() => ({
     update: vi.fn((_view: unknown, _isOutdoor: unknown, _force: boolean) => false),
     setVisible: vi.fn(),
+    setAlpha: vi.fn(),
     destroy: vi.fn(),
 }));
-const piles = vi.hoisted(() => ({ rebuild: vi.fn(), setVisible: vi.fn(), destroy: vi.fn() }));
-const kicked = vi.hoisted(() => ({ add: vi.fn(), update: vi.fn(() => false), setVisible: vi.fn(), destroy: vi.fn() }));
+const piles = vi.hoisted(() => ({ rebuild: vi.fn(), setVisible: vi.fn(), setAlpha: vi.fn(), destroy: vi.fn() }));
+const kicked = vi.hoisted(() => ({
+    add: vi.fn(),
+    update: vi.fn(() => false),
+    setVisible: vi.fn(),
+    setAlpha: vi.fn(),
+    destroy: vi.fn(),
+}));
 vi.mock("../../../../../src/front/Phaser/Game/Autumn/LeafScatterLayer", () => ({
     LeafScatterLayer: class {
         public update = scatter.update;
         public setVisible = scatter.setVisible;
+        public setAlpha = scatter.setAlpha;
         public destroy = scatter.destroy;
     },
 }));
@@ -19,6 +27,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Autumn/LeafPiles", () => ({
     LeafPiles: class {
         public rebuild = piles.rebuild;
         public setVisible = piles.setVisible;
+        public setAlpha = piles.setAlpha;
         public destroy = piles.destroy;
     },
 }));
@@ -27,6 +36,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Autumn/KickedLeafLayer", () => ({
         public add = kicked.add;
         public update = kicked.update;
         public setVisible = kicked.setVisible;
+        public setAlpha = kicked.setAlpha;
         public destroy = kicked.destroy;
     },
 }));
@@ -80,5 +90,10 @@ describe("AutumnDecor", () => {
             expect(layer.setVisible.mock.calls).toContainEqual([false]);
             expect(layer.destroy.mock.calls).toHaveLength(1);
         }
+    });
+
+    it("fades its three layers", () => {
+        decor().setAlpha(0.6);
+        for (const layer of [scatter, piles, kicked]) expect(layer.setAlpha).toHaveBeenLastCalledWith(0.6);
     });
 });

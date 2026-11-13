@@ -685,7 +685,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         weather: {
             automatic: "自動（30分ごと）",
             title: "天気",
-            description: "このマップの天気は全員で共有されます。個人設定でエフェクトを非表示にできます。",
             clear: "晴れ",
             rain: "雨",
             snow: "雪",
