@@ -112,13 +112,14 @@ describe("canGoToMeeting", () => {
     });
 });
 
-describe("canGoToMeeting where the player stands", () => {
-    it("hides Go there for the meetings the room the player stands in already serves (see goToHidden)", () => {
+describe("canGoToMeeting in the meeting's own room", () => {
+    it("hides Go there while the feet stand in the room the meeting got, shows it again once out", () => {
         const goTo = () => undefined;
-        const started = event("started", -5 * MINUTE, { resource: { meetingKey: "a".repeat(64) } });
+        const key = "a".repeat(64);
+        const started = event("started", -5 * MINUTE, { resource: { meetingKey: key } });
 
-        expect(canGoToMeeting(started, goTo, NOW, new Set(["started"]))).toBe(false);
-        expect(canGoToMeeting(started, goTo, NOW, new Set(["other"]))).toBe(true);
+        expect(canGoToMeeting(started, goTo, NOW, key)).toBe(false);
+        expect(canGoToMeeting(started, goTo, NOW, "b".repeat(64))).toBe(true);
         expect(canGoToMeeting(started, goTo, NOW, undefined)).toBe(true);
     });
 });

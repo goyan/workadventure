@@ -168,94 +168,15 @@ export function meetingToOpenOnEntry(
     );
 }
 
-/** A Teams room claim is held this long after its meeting ends (Admin API `CLAIM_HOLD_AFTER_END_MS`). */
-const CLAIM_HOLD_AFTER_END_MS = 15 * 60 * 1000;
-
-/** The Teams room the player stands in, and the claim holding it if any. */
-export interface RoomHere {
-    areaId: string;
-    claim: MeetingRoom | undefined;
-}
-
-/** The Teams room a point (the feet of the player) is in, with its claim. */
-export function roomHere(
+/** The key of the user's own meeting whose taken room the point (the feet of the player) is in, if any. */
+export function meetingKeyHere(
     point: { x: number; y: number },
     areas: readonly AreaData[],
     rooms: readonly MeetingRoom[],
-): RoomHere | undefined {
-    const area = roomAt(point, areas);
-    return area ? { areaId: area.id, claim: rooms.find((room) => room.areaId === area.id) } : undefined;
-}
-
-/** When the meeting holding a room really ends: given by the room, else its hold minus the time held after. */
-function claimMeetingEnd(claim: MeetingRoom): number {
-    return claim.meetingEndsAt !== undefined
-        ? new Date(claim.meetingEndsAt).getTime()
-        : new Date(claim.endsAt).getTime() - CLAIM_HOLD_AFTER_END_MS;
-}
-
-/**
- * The next meeting of the user that takes over the room they stand in: the room is held by one of their own meetings,
- * which ends at the latest when the next one starts (back to back; a meeting running into the next one keeps its
- * room), and the next one is in progress or within its reminder lead. Never a room of someone else's meeting.
- */
-export function handoverMeeting(
-    here: RoomHere | undefined,
-    events: Iterable<CalendarEventInterface>,
-    now: Date,
-): CalendarEventInterface | undefined {
-    const claim = here?.claim;
-    if (!claim?.mine || !claim.meetingKey) return undefined;
-    const heldUntil = claimMeetingEnd(claim);
-    const time = now.getTime();
-    return [...events]
-        .filter((event) => {
-            const meetingKey = event.resource?.meetingKey;
-            return (
-                meetingKey !== undefined &&
-                meetingKey !== claim.meetingKey &&
-                heldUntil <= event.start.getTime() &&
-                event.start.getTime() - reminderLeadMs(event) <= time &&
-                time < event.end.getTime()
-            );
-        })
-        .sort((a, b) => a.start.getTime() - b.start.getTime())[0];
-}
-
-/**
- * The meetings "Go there" is pointless for, from the room the player stands in: the meeting holding it, the next one
- * taking it over, and those already handed this room (`handedOver`: event id to room) while they last. Nothing in a
- * room another user's meeting holds.
- */
-export function goToHidden(
-    here: RoomHere | undefined,
-    events: Iterable<CalendarEventInterface>,
-    now: Date,
-    handedOver: ReadonlyMap<string, string>,
-): Set<string> {
-    const hidden = new Set<string>();
-    if (!here || (here.claim && !here.claim.mine)) return hidden;
-    const list = [...events];
-    const roomKey = here.claim?.meetingKey;
-    for (const event of list) {
-        if (roomKey !== undefined && event.resource?.meetingKey === roomKey) hidden.add(event.id);
-        if (handedOver.get(event.id) === here.areaId && now < event.end) hidden.add(event.id);
-    }
-    const next = handoverMeeting(here, list, now);
-    if (next) hidden.add(next.id);
-    return hidden;
-}
-
-/**
- * Whether to ask now for the room the player stands in for a meeting handed it: once the meeting holding it is over,
- * or when the room is free; not when it already is that meeting's, nor when another user's meeting holds it.
- */
-export function handoverClaimDue(here: RoomHere | undefined, event: CalendarEventInterface, now: Date): boolean {
-    if (!here) return false;
-    const claim = here.claim;
-    if (!claim) return true;
-    if (!claim.mine || claim.meetingKey === event.resource?.meetingKey) return false;
-    return claimMeetingEnd(claim) <= now.getTime();
+): string | undefined {
+    const here = roomAt(point, areas);
+    const room = here && rooms.find((candidate) => candidate.areaId === here.id);
+    return room?.mine ? room.meetingKey : undefined;
 }
 
 /** Whether a point (the feet of the player) is inside one of the given rooms. */

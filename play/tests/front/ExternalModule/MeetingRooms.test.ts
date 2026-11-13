@@ -1,14 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AreaData } from "@workadventure/map-editor";
 import type { CalendarEventInterface } from "@workadventure/shared-utils";
-import type { MeetingRoom } from "../../../src/common/MacCompanion";
 import {
     goToMeeting,
     MeetingArrival,
-    goToHidden,
-    handoverClaimDue,
-    handoverMeeting,
-    roomHere,
+    meetingKeyHere,
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomsOfMap,
@@ -302,98 +298,27 @@ describe("meetingToOpenOnEntry", () => {
     });
 });
 
-describe("room handover to the user's next meeting", () => {
-    // 2026-11-13: "Daily Produit du Vendredi" (09:30-10:00) held the room, held until 10:15; the next meeting of the
-    // same user, "Daily Produit - Team Indigo", runs 10:00-10:30. At 10:00 the user still stands in the room.
-    const at = (time: string) => new Date(`2026-11-13T${time}:00+01:00`);
+describe("meetingKeyHere", () => {
     const rooms = [area("r1", 0), area("r2", 400)];
-    const inR2 = { x: 448, y: 132 };
-    const vendrediKey = "b".repeat(64);
-    const indigoKey = "c".repeat(64);
-    const vendredi: MeetingRoom = {
+    const mine = {
         areaId: "r2",
-        title: "Daily Produit du Vendredi",
-        endsAt: at("10:15").toISOString(),
-        meetingEndsAt: at("10:00").toISOString(),
+        title: "Daily standup",
+        endsAt: "2026-11-17T10:00:00.000Z",
         mine: true,
-        meetingKey: vendrediKey,
+        meetingKey: key,
     };
-    const meeting = (id: string, start: string, end: string, meetingKey: string): CalendarEventInterface => ({
-        id,
-        title: id,
-        description: "",
-        start: at(start),
-        end: at(end),
-        resource: { onlineMeeting: { joinUrl }, meetingKey },
-    });
-    const indigo = meeting("Daily Produit - Team Indigo", "10:00", "10:30", indigoKey);
-    const vendrediEvent = meeting("Daily Produit du Vendredi", "09:30", "10:00", vendrediKey);
-    /** The same room held by another user's meeting: no key reaches the player. */
-    const others: MeetingRoom = {
-        areaId: "r2",
-        title: "Réunion d'un autre",
-        endsAt: vendredi.endsAt,
-        meetingEndsAt: vendredi.meetingEndsAt,
-        mine: false,
-    };
-    const here = (claim: MeetingRoom | undefined) => roomHere(inR2, rooms, claim ? [claim] : []);
 
-    it("gives the Teams room the feet stand in, with its claim", () => {
-        expect(roomHere(inR2, rooms, [vendredi])).toEqual({ areaId: "r2", claim: vendredi });
-        expect(roomHere(inR2, rooms, [])).toEqual({ areaId: "r2", claim: undefined });
-        expect(roomHere({ x: 250, y: 132 }, rooms, [vendredi])).toBeUndefined();
+    it("gives the key of the user's meeting whose room the feet stand in", () => {
+        expect(meetingKeyHere({ x: 448, y: 132 }, rooms, [mine])).toBe(key);
     });
 
-    it("hands the room over to the next meeting that starts once the user's meeting there ends", () => {
-        expect(handoverMeeting(here(vendredi), [vendrediEvent, indigo], at("10:00"))?.id).toBe(indigo.id);
-        // Within the reminder lead of the next one, while the first one still runs: Go there is already pointless.
-        expect(handoverMeeting(here(vendredi), [vendrediEvent, indigo], at("09:55"))?.id).toBe(indigo.id);
-        expect(handoverMeeting(here(vendredi), [vendrediEvent, indigo], at("09:54"))).toBeUndefined();
-    });
-
-    it("reads the end of the meeting from the hold when the room does not give it (hold = end + 15 min)", () => {
-        const withoutEnd: MeetingRoom = {
-            areaId: "r2",
-            title: vendredi.title,
-            endsAt: vendredi.endsAt,
-            mine: true,
-            meetingKey: vendrediKey,
-        };
-        expect(handoverMeeting(here(withoutEnd), [indigo], at("10:00"))?.id).toBe(indigo.id);
-    });
-
-    it("never hands over a room still used by a meeting running into the next one, nor someone else's room", () => {
-        const overrunning = { ...vendredi, meetingEndsAt: at("10:20").toISOString() };
-        expect(handoverMeeting(here(overrunning), [indigo], at("10:00"))).toBeUndefined();
-
-        expect(handoverMeeting(here(others), [indigo], at("10:00"))).toBeUndefined();
-    });
-
-    it("hides Go there for the meeting of the room and for the one taking it over", () => {
-        const hidden = goToHidden(here(vendredi), [vendrediEvent, indigo], at("10:00"), new Map());
-        expect([...hidden].sort()).toEqual([vendrediEvent.id, indigo.id].sort());
-    });
-
-    it("keeps Go there hidden for a meeting handed this room once the old hold is gone, until the player leaves", () => {
-        const handedOver = new Map([[indigo.id, "r2"]]);
-
-        expect([...goToHidden(here(undefined), [indigo], at("10:16"), handedOver)]).toEqual([indigo.id]);
-        expect([...goToHidden(roomHere({ x: 48, y: 132 }, rooms, []), [indigo], at("10:16"), handedOver)]).toEqual([]);
-        expect([...goToHidden(undefined, [indigo], at("10:16"), handedOver)]).toEqual([]);
-        // Over: nothing more to hide.
-        expect([...goToHidden(here(undefined), [indigo], at("10:30"), handedOver)]).toEqual([]);
-    });
-
-    it("hides nothing in a room another user's meeting holds", () => {
-        expect([...goToHidden(here(others), [indigo], at("10:00"), new Map([[indigo.id, "r2"]]))]).toEqual([]);
-    });
-
-    it("asks for the room for the next meeting once the meeting there is over, or the room is free", () => {
-        expect(handoverClaimDue(here(vendredi), indigo, at("09:55"))).toBe(false);
-        expect(handoverClaimDue(here(vendredi), indigo, at("10:00"))).toBe(true);
-        expect(handoverClaimDue(here(undefined), indigo, at("10:16"))).toBe(true);
-        // Already the next meeting's room: nothing to ask.
-        expect(handoverClaimDue(here({ ...vendredi, meetingKey: indigoKey }), indigo, at("10:01"))).toBe(false);
-        expect(handoverClaimDue(here(others), indigo, at("10:16"))).toBe(false);
+    it("gives nothing out of the room, in another room, or in the room of someone else's meeting", () => {
+        expect(meetingKeyHere({ x: 250, y: 132 }, rooms, [mine])).toBeUndefined();
+        expect(meetingKeyHere({ x: 48, y: 132 }, rooms, [mine])).toBeUndefined();
+        expect(
+            meetingKeyHere({ x: 448, y: 132 }, rooms, [
+                { areaId: "r2", title: "Other", endsAt: mine.endsAt, mine: false },
+            ]),
+        ).toBeUndefined();
     });
 });

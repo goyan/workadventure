@@ -1,6 +1,6 @@
 <script lang="ts">
     import type { CalendarEventInterface } from "@workadventure/shared-utils";
-    import { goToMeetingStore, goToHiddenStore } from "../../Stores/CalendarStore";
+    import { goToMeetingStore, meetingKeyHereStore } from "../../Stores/CalendarStore";
     import Button from "../UI/Button.svelte";
     import LL from "../../../i18n/i18n-svelte";
     import { canGoToMeeting } from "./CalendarReminder";
@@ -17,7 +17,7 @@
 
 <!-- "Go there": walk to the meeting's room, Teams offered on arrival (Mac companion meetings), until it ends; hidden
      while the player stands in that room. -->
-{#if canGoToMeeting(event, $goToMeetingStore, new Date(), $goToHiddenStore)}
+{#if canGoToMeeting(event, $goToMeetingStore, new Date(), $meetingKeyHereStore)}
     <Button
         variant="secondary"
         class={className}

@@ -6,33 +6,24 @@ import { gameManager } from "../../Phaser/Game/GameManager";
 import type { GameScene } from "../../Phaser/Game/GameScene";
 import { DEPTH_DOOR_LOCK_INDEX } from "../../Phaser/Game/DepthIndexes";
 import { WOKA_SPEED } from "../../Enum/EnvironmentVariable";
-import { calendarEventsStore, goToHiddenStore, goToMeetingStore } from "../../Stores/CalendarStore";
+import { calendarEventsStore, goToMeetingStore, meetingKeyHereStore } from "../../Stores/CalendarStore";
 import { askToOpenInTeams, calendarRemindersStore, remindAgain } from "../../Components/Calendar/CalendarReminder";
 import { notifySystem } from "../../Notification/SystemNotifier";
 import type { MeetingRoom } from "../../../common/MacCompanion";
 import { claimMeetingRoom, listMeetingRooms } from "./CompanionApi";
 import {
-    goToHidden,
     goToMeeting,
-    handoverClaimDue,
-    handoverMeeting,
     MeetingArrival,
+    meetingKeyHere,
     meetingRoomLabels,
     meetingToOpenOnEntry,
     roomAt,
-    roomHere,
 } from "./meetingRooms";
 
 /** The titles of the taken rooms are read again twice a minute, as the agenda's busy status. */
 const LABELS_INTERVAL_MS = 30 * 1000;
 /** Walking into a room is noticed within two seconds. */
 const ENTRY_INTERVAL_MS = 2 * 1000;
-/** A room handed over to the next meeting is asked for again at most twice a minute until it is given. */
-const HANDOVER_RETRY_MS = 30 * 1000;
-
-function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-    return a.size === b.size && [...a].every((id) => b.has(id));
-}
 
 function sceneAreas(scene: GameScene): AreaData[] {
     return [...(scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [])];
@@ -59,13 +50,6 @@ export function startMeetingRooms(): () => void {
     const joined = new Set<string>();
     const arrival = new MeetingArrival();
     const abortController = new AbortController();
-    /**
-     * The room the player stood in when their next meeting took it over, by event id: they stay there, so "Go there"
-     * stays hidden for it and the room is asked for it (see handOverRoom), even once the old hold is gone.
-     */
-    const handedOver = new Map<string, string>();
-    /** When the room of a handed-over meeting was last asked for; `Infinity` once settled. */
-    const handoverAsked = new Map<string, number>();
 
     const arrived = (event: CalendarEventInterface | undefined) => {
         if (!event) return;
@@ -165,53 +149,13 @@ export function startMeetingRooms(): () => void {
             .catch(() => undefined);
     };
 
-    /**
-     * Back-to-back meetings in the same room: standing in the room of one of their meetings that ends by the start of
-     * the next, the player keeps it for the next one. "Go there" is hidden for it (it would send the player to the
-     * first free room, maybe another one), and the room is asked for it alone once the first meeting is over, so that
-     * its title changes. An Admin API holding the old claim (end + 15 min) refuses until then: asked again later.
-     */
-    const handOverRoom = (scene: GameScene, areas: readonly AreaData[]) => {
-        const now = new Date();
-        const events = [...get(calendarEventsStore).values()];
-        const here = roomHere(feet(scene), areas, rooms);
-        const next = handoverMeeting(here, events, now);
-        if (here && next && !handedOver.has(next.id)) handedOver.set(next.id, here.areaId);
-        for (const [eventId] of handedOver) {
-            const event = events.find((candidate) => candidate.id === eventId);
-            if (!event || now >= event.end) {
-                handedOver.delete(eventId);
-                handoverAsked.delete(eventId);
-            }
-        }
-        const hidden = goToHidden(here, events, now, handedOver);
-        if (!sameIds(hidden, get(goToHiddenStore))) goToHiddenStore.set(hidden);
-
-        for (const [eventId, areaId] of handedOver) {
-            const event = events.find((candidate) => candidate.id === eventId);
-            const meetingKey = event?.resource?.meetingKey;
-            if (!event || !meetingKey || here?.areaId !== areaId || !handoverClaimDue(here, event, now)) continue;
-            if (now.getTime() - (handoverAsked.get(eventId) ?? -Infinity) < HANDOVER_RETRY_MS) continue;
-            handoverAsked.set(eventId, now.getTime());
-            // This room alone: the meeting never gets another one from here.
-            claimMeetingRoom({ mapUrl: scene.roomUrl, meetingKey, roomAreaIds: [areaId] }, abortController.signal)
-                .then((claim) => {
-                    // Given (its title shows), or the meeting already had another room: settled either way.
-                    if (claim.areaId !== null) {
-                        handoverAsked.set(eventId, Infinity);
-                        refreshLabels();
-                    }
-                })
-                .catch(() => undefined);
-        }
-    };
-
     const watchEntry = () => {
         const scene = currentScene();
         const player = scene?.CurrentPlayer;
         if (!scene || !player) return;
         const areas = sceneAreas(scene);
-        handOverRoom(scene, areas);
+        // "Go there" is hidden for the meeting whose room the player stands in.
+        meetingKeyHereStore.set(meetingKeyHere(feet(scene), areas, rooms));
         // Before the entry below: arriving after "Go there" asks about Teams instead of reminding.
         arrived(arrival.check(feet(scene), areas, scene.roomUrl, new Date()));
         const room = roomAt(feet(scene), areas);
@@ -262,6 +206,6 @@ export function startMeetingRooms(): () => void {
         for (const text of labels.values()) text.destroy();
         labels.clear();
         goToMeetingStore.set(undefined);
-        goToHiddenStore.set(new Set());
+        meetingKeyHereStore.set(undefined);
     };
 }
