@@ -1,7 +1,7 @@
 import type * as Phaser from "phaser";
 import type { PositionMessage_Direction } from "@workadventure/messages";
-import type { Vehicle, VehicleColors } from "./Vehicle";
-import { readVehicleColors } from "./Vehicle";
+import type { VehicleColors } from "./Vehicle";
+import { readVehicleColors, Vehicle } from "./Vehicle";
 import { vehicleArtwork, type VehicleArtwork } from "./VehicleAssets";
 import {
     VEHICLE_DIRECTIONS,
@@ -67,6 +67,9 @@ export class VehicleEffect {
         if (this.heading === undefined) this.heading = this.targetHeading = cardinalVehicleHeading(direction);
         if (moving && (dx || dy)) this.targetHeading = vehicleHeading(dx, dy);
         this.heading = turnVehicleTowards(this.heading, this.targetHeading, delta);
+        // A unicycle stands under the avatar, which only faces four ways: it faces the same way, square.
+        const upright = this.vehicle === Vehicle.ElectricUnicycle;
+        if (upright) this.heading = cardinalVehicleHeading(direction);
         const heading = Math.round(this.heading) % VEHICLE_DIRECTIONS;
         const frame = heading + (moving ? (Math.floor(time / 70) % 4) * VEHICLE_DIRECTIONS : 0);
         for (const [index, sprite] of this.sprites.entries()) {

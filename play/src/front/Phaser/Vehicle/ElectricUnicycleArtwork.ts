@@ -54,20 +54,23 @@ function drawSide(paint: Paint, phase: number, colors: VehicleColors): void {
     // The motor hub fills the wheel: only a ring of rim shows around it.
     paint("details", "#4a4f5a", () => disc(wheel.x, wheel.y, 5));
     paint("details", OUTLINE, () => disc(wheel.x, wheel.y, 1));
-    paint("details", "#5b606c", () => {
-        // Tread blocks going round: four positions, one per animation phase.
-        const tread = [
-            [0, -9],
-            [7, -6],
-            [9, 0],
-            [7, 6],
-            [0, 9],
-            [-7, 6],
-            [-9, 0],
-            [-7, -6],
-        ];
-        for (const [index, [x, y]] of tread.entries()) {
-            if ((index + phase) % 2 === 0) rect(wheel.x + x, wheel.y + y, 1, 1);
+    paint("details", "#6b707c", () => {
+        // Four tread blocks a quarter turn apart, turned a sixteenth of a turn per phase: after four phases the wheel
+        // looks the same again, so the loop rolls without a jump. Facing left, the top of the wheel goes left.
+        for (let block = 0; block < 4; block++) {
+            const angle = -Math.PI / 2 - ((block * 4 + phase) * Math.PI) / 8;
+            rect(wheel.x + Math.round(Math.cos(angle) * 9), wheel.y + Math.round(Math.sin(angle) * 9), 1, 1);
+            rect(wheel.x + Math.round(Math.cos(angle) * 8), wheel.y + Math.round(Math.sin(angle) * 8), 1, 1);
+        }
+        // The hub's spokes turn with it.
+        const spoke = -((phase * Math.PI) / 8);
+        for (const offset of [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2]) {
+            rect(
+                wheel.x + Math.round(Math.cos(spoke + offset) * 3),
+                wheel.y + Math.round(Math.sin(spoke + offset) * 3),
+                1,
+                1,
+            );
         }
     });
     paint("edgeColor", colors.edgeColor, () => {
@@ -101,8 +104,9 @@ function drawFrontOrBack(paint: Paint, phase: number, colors: VehicleColors, fro
         rect(-3, 3, 6, 12);
         rect(-2, 15, 4, 1);
     });
-    paint("details", "#5b606c", () => {
-        for (let y = 4 + (phase % 2); y < 15; y += 2) rect(-2, y, 4, 1);
+    paint("details", "#6b707c", () => {
+        // Tread lines run down the tyre, one pixel per phase, four apart: the loop rolls on.
+        for (let y = 3 + phase; y < 15; y += 4) rect(-2, y, 4, 1);
     });
     paint("edgeColor", colors.edgeColor, () => {
         chamferedRect(-6, -11, 12, 13);
