@@ -74,6 +74,23 @@ export function canGoToMeeting(
     return goTo !== undefined && meetingKey !== undefined && meetingKey !== meetingKeyHere && now < event.end;
 }
 
+/**
+ * The meetings to join now, by start: those in progress and those starting within their reminder lead, long and
+ * all-day events aside (they would hold the spot all day).
+ */
+export function meetingsAtHand(events: Iterable<CalendarEventInterface>, now: Date): CalendarEventInterface[] {
+    const time = now.getTime();
+    return [...events]
+        .filter(
+            (event) =>
+                !event.allDay &&
+                !isLong(event) &&
+                event.start.getTime() - reminderLeadMs(event) <= time &&
+                time < event.end.getTime(),
+        )
+        .sort(byStart);
+}
+
 /** Shows a settled reminder again (the user walked into a Teams room during that meeting). */
 export function remindAgain(event: CalendarEventInterface): void {
     dismissed.delete(event.id);

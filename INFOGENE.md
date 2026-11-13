@@ -57,7 +57,10 @@ réunion dans Teams ? » : **Oui** ouvre le lien dans un nouvel onglet, **Non**,
 la même carte s'affiche aussitôt et dit pourquoi : toutes les salles prises (`rooms-full`), aucun chemin vers la salle
 (`no-path`), réservation impossible (`claim-failed` : refus ou pusher injoignable) ; sans salle sur la carte
 (`teams-only`), rien de plus. La console garde la cause (`Cannot go to the meeting room <raison> <erreur>`). Une salle
-réservée sans y marcher reste tenue jusqu'à la fin de la réunion (+ 15 min). Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
+réservée sans y marcher reste tenue jusqu'à la fin de la réunion (+ 15 min). Pieds dans la salle prise par une de ses réunions, **Y aller** est masqué pour
+cette réunion (rappel et Agenda ; seul Rejoindre reste) et revient en sortant (`meetingKeyHereStore`, relevé toutes
+les 2 s). En haut de l'Agenda, une carte par réunion en cours **ou** dans son délai de rappel (5 min par défaut,
+`meetingsAtHand`), chacune avec Rejoindre / Y aller : à 09:27, « 09:15–09:45 » et « 09:30–10:00 » s'y voient ensemble. Marche interrompue ou terminée hors de la salle : pas de carte. Le titre des
 salles prises s'affiche au-dessus d'elles (« Réunion privée » le cas échéant) ; entrer à pied dans une salle pendant
 sa réunion réaffiche le rappel. Coupé tant que l'Admin API n'a pas `COMPANION_ENABLED=true`. Guide : repo d'infra,
 `docs/compagnon-mac.md`.

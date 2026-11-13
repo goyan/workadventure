@@ -6,20 +6,22 @@
     import CalendarGoToMeetingButton from "./CalendarGoToMeetingButton.svelte";
 
     interface Props {
-        /** At least two meetings running at the same time. */
+        /** At least two meetings in progress or starting within their reminder lead. */
         events: CalendarEventInterface[];
+        now: Date;
     }
 
-    let { events }: Props = $props();
+    let { events, now }: Props = $props();
+
+    let heading = $derived(
+        events.every((event) => event.start <= now)
+            ? $LL.externalModule.calendar.meetingsInProgress({ count: events.length })
+            : $LL.externalModule.calendar.meetingsAtHand({ count: events.length }),
+    );
 </script>
 
-<section
-    aria-label={$LL.externalModule.calendar.meetingsInProgress({ count: events.length })}
-    class="flex flex-col gap-2 rounded-lg bg-contrast-600 p-3"
->
-    <span class="text-sm text-contrast-200">
-        {$LL.externalModule.calendar.meetingsInProgress({ count: events.length })}
-    </span>
+<section aria-label={heading} class="flex flex-col gap-2 rounded-lg bg-contrast-600 p-3">
+    <span class="text-sm text-contrast-200">{heading}</span>
     <ul class="m-0 flex list-none flex-col p-0">
         {#each events as event (event.id)}
             <li

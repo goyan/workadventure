@@ -123,6 +123,7 @@ const externalModule: BaseTranslation = {
         noMeetings: "No meetings in the next 7 days",
         days: "Days",
         meetingsInProgress: "{count:number} meetings in progress",
+        meetingsAtHand: "{count:number} meetings in progress or about to start",
         inProgressCount: "{count:number} in progress",
         reminder: "Meeting reminder",
         details: "Details",
