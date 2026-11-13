@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
     effectiveWeather,
+    fogPatches,
+    fogStrength,
     keepOutdoorParticles,
     leafParticles,
     stormGlow,
     weatherParticles,
     weatherAtTime,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
-import { autoWeatherAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
+import { autoWeatherAt, slotStart } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OutdoorGrid } from "../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme";
 
@@ -137,5 +139,89 @@ describe("leafParticles", () => {
         const after = leafParticles(5500, view);
         const fell = before.filter((particle, index) => after[index].y > particle.y).length;
         expect(fell).toBeGreaterThan(before.length * 0.9);
+    });
+});
+
+describe("fog", () => {
+    const foggy = { frequency: "stormy" as const, include: [WeatherType.Fog] };
+    const slot = 30 * 60 * 1000;
+    const minute = 60 * 1000;
+    const isFog = (time: number): boolean => autoWeatherAt(new Date(time), foggy) === WeatherType.Fog;
+    /** Start of a fog slot whose neighbours are `before` / `after` fog or not. */
+    const findSlot = (before: boolean, after: boolean): number => {
+        for (let t = Date.parse("2026-01-01T00:00:00Z"); t < Date.parse("2026-04-01T00:00:00Z"); t += slot) {
+            if (isFog(t) && isFog(t - slot) === before && isFog(t + slot) === after) return t;
+        }
+        throw new Error("no such fog slot");
+    };
+
+    it("is full strength all day for a fixed fog", () => {
+        expect(fogStrength(WeatherType.Fog, new Date("2026-01-12T07:10:00Z"))).toBe(1);
+        expect(fogStrength(WeatherType.Fog, new Date("2026-01-12T15:00:00Z"))).toBe(1);
+    });
+
+    it("is nothing without fog", () => {
+        expect(fogStrength(WeatherType.Rain, new Date("2026-01-12T07:10:00Z"))).toBe(0);
+        expect(fogStrength(WeatherType.Clear, new Date("2026-01-12T07:10:00Z"))).toBe(0);
+        expect(fogStrength(WeatherType.Automatic, new Date(Number.NaN), foggy)).toBe(0);
+    });
+
+    it("rises over three minutes when the fog follows another weather", () => {
+        const start = findSlot(false, true);
+        expect(fogStrength(WeatherType.Automatic, new Date(start), foggy)).toBe(0);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 1.5 * minute), foggy)).toBeCloseTo(0.5, 5);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 3 * minute), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(start + 20 * minute), foggy)).toBe(1);
+    });
+
+    it("fades over the last three minutes when the next slot has no fog", () => {
+        const start = findSlot(true, false);
+        const end = start + slot;
+        expect(fogStrength(WeatherType.Automatic, new Date(start), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 3 * minute), foggy)).toBe(1);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 1.5 * minute), foggy)).toBeCloseTo(0.5, 5);
+        expect(fogStrength(WeatherType.Automatic, new Date(end - 1), foggy)).toBeLessThan(0.001);
+    });
+
+    it("never jumps, midnight included", () => {
+        const step = 10_000;
+        let last = fogStrength(WeatherType.Automatic, new Date(Date.parse("2025-12-31T00:00:00Z")), foggy);
+        let seenFog = false;
+        for (let t = Date.parse("2025-12-31T00:00:00Z") + step; t < Date.parse("2026-02-10T00:00:00Z"); t += step) {
+            const strength = fogStrength(WeatherType.Automatic, new Date(t), foggy);
+            if (strength > 0) seenFog = true;
+            expect(Math.abs(strength - last)).toBeLessThanOrEqual(step / (3 * minute) + 1e-9);
+            last = strength;
+        }
+        expect(seenFog).toBe(true);
+        expect(slotStart(new Date(1)).getTime()).toBe(0);
+    });
+
+    describe("patches", () => {
+        const view = { x: 100, y: 50, width: 800, height: 600 };
+        it("are three or four", () => {
+            const count = fogPatches(123456, view, false).length;
+            expect(count).toBeGreaterThanOrEqual(3);
+            expect(count).toBeLessThanOrEqual(4);
+        });
+        it("are the same for everyone at the same time", () => {
+            expect(fogPatches(5000, view, false)).toEqual(fogPatches(5000, view, false));
+        });
+        it("drift about 4 px a second", () => {
+            const before = fogPatches(5000, view, false);
+            const after = fogPatches(6000, view, false);
+            for (const [index, patch] of before.entries()) {
+                expect(Math.hypot(after[index].x - patch.x, after[index].y - patch.y)).toBeCloseTo(4, 1);
+            }
+        });
+        it("stay world-fixed when the camera moves", () => {
+            const before = fogPatches(5000, view, false);
+            const moved = fogPatches(5000, { ...view, x: view.x + 10 }, false);
+            const same = before.filter((patch, index) => moved[index].x === patch.x).length;
+            expect(same).toBeGreaterThan(0);
+        });
+        it("stand still on request", () => {
+            expect(fogPatches(5000, view, true)).toEqual(fogPatches(90000, view, true));
+        });
     });
 });

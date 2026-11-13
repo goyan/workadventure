@@ -3,7 +3,7 @@ import type { AutoWeatherSettings } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import { hash01, leafColor } from "../Autumn/LeafPalette";
-import { autoWeatherAt } from "./WeatherSchedule";
+import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
 export interface WeatherView {
     x: number;
@@ -100,4 +100,59 @@ export function keepOutdoorParticles<T extends { x: number; y: number }>(
 /** The personal Christmas theme shows snow, whatever the map weather; autumn keeps the map weather. */
 export function effectiveWeather(weather: WeatherType, theme: SeasonalTheme | undefined): WeatherType {
     return theme === SeasonalTheme.Christmas ? WeatherType.Snow : weather;
+}
+
+const SLOT_MS = 30 * 60 * 1000;
+const FOG_FADE_MS = 3 * 60 * 1000;
+
+/**
+ * How thick the fog is, from 0 to 1. A fixed fog is always full; in a slot of automatic fog, it rises over three
+ * minutes when the previous slot has none and fades over the last three when the next one has none.
+ */
+export function fogStrength(configured: WeatherType, date: Date, auto?: AutoWeatherSettings): number {
+    if (configured === WeatherType.Fog) return 1;
+    if (configured !== WeatherType.Automatic) return 0;
+    const time = date.getTime();
+    if (!Number.isFinite(time) || autoWeatherAt(date, auto) !== WeatherType.Fog) return 0;
+    const start = slotStart(date).getTime();
+    let strength = 1;
+    if (autoWeatherAt(new Date(start - 1), auto) !== WeatherType.Fog) {
+        strength = Math.min(strength, (time - start) / FOG_FADE_MS);
+    }
+    if (autoWeatherAt(new Date(start + SLOT_MS), auto) !== WeatherType.Fog) {
+        strength = Math.min(strength, (start + SLOT_MS - time) / FOG_FADE_MS);
+    }
+    return Math.max(0, Math.min(1, strength));
+}
+
+export interface FogPatch {
+    x: number;
+    y: number;
+    radius: number;
+}
+
+const FOG_PATCHES = 4;
+const FOG_DRIFT = { x: 3.2, y: 2.4 };
+
+/**
+ * A few soft patches fixed to the world that drift slowly (4 px a second). Each one wraps around a window a little
+ * larger than the view, so there are always as many on screen whatever the camera does.
+ */
+export function fogPatches(epoch: number, view: WeatherView, still: boolean): FogPatch[] {
+    const radius = Math.max(120, Math.round(Math.max(view.width, view.height) * 0.3));
+    const windowWidth = view.width + 2 * radius;
+    const windowHeight = view.height + 2 * radius;
+    const time = still ? 0 : epoch / 1000;
+    const wrap = (value: number, period: number): number => ((value % period) + period) % period;
+    const patches: FogPatch[] = [];
+    for (let index = 0; index < FOG_PATCHES; index++) {
+        const x = hash01(index, 7) * windowWidth * 4 + time * FOG_DRIFT.x;
+        const y = hash01(index, 13) * windowHeight * 4 + time * FOG_DRIFT.y;
+        patches[index] = {
+            x: view.x - radius + wrap(x - (view.x - radius), windowWidth),
+            y: view.y - radius + wrap(y - (view.y - radius), windowHeight),
+            radius: Math.round(radius * (0.8 + 0.2 * hash01(index, 21))),
+        };
+    }
+    return patches;
 }

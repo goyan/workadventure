@@ -9,6 +9,8 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import {
     effectiveWeather,
+    fogPatches,
+    fogStrength,
     keepOutdoorParticles,
     leafParticles,
     stormGlow,
@@ -17,6 +19,16 @@ import {
 } from "./WeatherFrame";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
+
+/** The system asks for less motion: the fog patches stand still. */
+const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+
+/** Fog patches: three concentric rings, from the outside in, as a share of the radius and an alpha. */
+const FOG_RINGS = [
+    { scale: 1, alpha: 0.05 },
+    { scale: 0.75, alpha: 0.035 },
+    { scale: 0.5, alpha: 0.02 },
+];
 
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
@@ -73,8 +85,8 @@ export class WeatherManager {
             settings?.weatherAuto,
         );
         const showWeather = enabled && weather !== WeatherType.Clear;
-        // Autumn leaves fall on top of the map weather, even on a clear day.
-        const showLeaves = enabled && theme === SeasonalTheme.Autumn;
+        // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
+        const showLeaves = enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow;
         if (!showWeather && !showLeaves) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
@@ -85,8 +97,9 @@ export class WeatherManager {
             return;
         }
         // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
-        // falling leaves alone 15 times (each drawing makes the whole map drawn again).
-        if (now - this.lastFrameAt < 1000 / (showWeather ? 30 : 15)) return;
+        // falling leaves and fog 15 times (each drawing makes the whole map drawn again).
+        const falling = showWeather && weather !== WeatherType.Fog;
+        if (now - this.lastFrameAt < 1000 / (falling ? 30 : 15)) return;
         this.lastFrameAt = now;
         const view = this.scene.cameras.main.worldView;
         const grid = this.options.outdoorGrid?.();
@@ -105,7 +118,19 @@ export class WeatherManager {
         const epoch = serverDate?.getTime() ?? now;
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
-        if (showWeather) {
+        if (showWeather && weather === WeatherType.Fog) {
+            const strength = serverDate ? fogStrength(configured, serverDate, settings?.weatherAuto) : 1;
+            const density = strength * (night ? 0.5 : 1);
+            this.graphics.fillStyle(0xdfe6ee, 0.2 * density);
+            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+            const patches = fogPatches(epoch, view, REDUCED_MOTION);
+            for (const ring of FOG_RINGS) {
+                this.graphics.fillStyle(0xdfe6ee, ring.alpha * density);
+                for (const patch of keepOutdoorParticles(patches, isOutdoor)) {
+                    this.graphics.fillCircle(patch.x, patch.y, patch.radius * ring.scale);
+                }
+            }
+        } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
                 this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.12 : 0.05);
                 for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);

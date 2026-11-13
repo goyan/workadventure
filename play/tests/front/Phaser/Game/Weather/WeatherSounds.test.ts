@@ -50,6 +50,14 @@ describe("weather audio", () => {
         expect(rain.removeAttribute.mock.calls).toHaveLength(2);
         sounds.destroy();
     });
+    it("gives the fog the fine-weather ambience, the night one after dark", () => {
+        const { sounds, rain } = fixture();
+        sounds.update(WeatherType.Fog, undefined, false, false);
+        expect(rain.src).toContain("/sunny.mp3");
+        sounds.update(WeatherType.Fog, undefined, false, true);
+        expect(rain.src).toContain("/night.mp3");
+        sounds.destroy();
+    });
     it("updates the personal volume live and silences ambience for editing and mute", () => {
         const { sounds, rain } = fixture();
         sounds.update(WeatherType.Rain, undefined, false);

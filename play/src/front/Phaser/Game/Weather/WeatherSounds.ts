@@ -37,7 +37,7 @@ export class WeatherSounds {
         }
         if (this.sound.locked) return;
         const key =
-            weather === WeatherType.Clear
+            weather === WeatherType.Clear || weather === WeatherType.Fog
                 ? night
                     ? "audio-weather-night"
                     : "audio-weather-sunny"
