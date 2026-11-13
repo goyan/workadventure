@@ -94,7 +94,7 @@ describe("electric unicycle", () => {
             "avatar-electric-unicycle-details",
         ]);
         expect(vi.mocked(scene.add.sprite.mock.results[0].value.setFrame).mock.lastCall).toEqual([2]);
-        // Going down and to the left: the three-quarter view of that diagonal, upright, never turned like a board.
+        // Going down and to the left: the frame of that diagonal (front view turned 45°), never tilted further.
         for (let time = 100; time <= 1000; time += 100) {
             effect.update(true, PositionMessage_Direction.DOWN, readVehicleColors(null), true, time, { x: -1, y: 1 });
         }

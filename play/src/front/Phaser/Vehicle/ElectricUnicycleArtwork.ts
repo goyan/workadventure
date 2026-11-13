@@ -11,8 +11,8 @@ const TYRE = "#2b2e36";
 
 /**
  * An electric unicycle under the avatar's feet (origin): one big wheel, a tall shell between the legs with a handle on
- * top, pedals at the feet. Seen from the side when going left or right (and diagonally), from the front or the back
- * when going down or up. Native pixel art on the avatar grid; each paint part has a shared tint mask.
+ * top, pedals at the feet. Seen from the side when going left or right, from the front or the back when going down
+ * or up, and on a diagonal that front or back view turned 45°. Native pixel art on the avatar grid; each paint part has a shared tint mask.
  */
 export function drawElectricUnicycle(
     context: CanvasRenderingContext2D,
@@ -21,21 +21,26 @@ export function drawElectricUnicycle(
     colors: VehicleColors,
     layer?: UnicycleLayer,
 ): void {
-    const view =
-        heading === 0 ? "front" : heading === 4 ? "back" : heading === 2 || heading === 6 ? "side" : "threeQuarter";
+    const side = heading === 2 || heading === 6;
+    // Coming towards the viewer (down, down-left, down-right): its front; going away: its back.
+    const front = heading === 0 || heading === 1 || heading === 7;
     context.save();
     context.imageSmoothingEnabled = false;
-    // Drawn facing left; going right is the mirror image.
-    if (heading >= 5) context.scale(-1, 1);
+    if (side) {
+        // Drawn facing left; going right is the mirror image.
+        if (heading === 6) context.scale(-1, 1);
+    } else {
+        // On a diagonal, the front or back view turned 45° towards the way it goes, like the skateboard.
+        context.rotate(((front ? heading : heading - 4) * Math.PI) / 4);
+    }
     const paint = (part: UnicycleLayer, color: string, draw: () => void): void => {
         if (layer && part !== layer) return;
         context.fillStyle = layer && part !== "outline" && part !== "details" ? "#ffffff" : color;
         draw();
     };
     withContext(context, () => {
-        if (view === "side") drawSide(paint, phase, colors);
-        else if (view === "threeQuarter") drawThreeQuarter(paint, phase, colors, heading === 1 || heading === 7);
-        else drawFrontOrBack(paint, phase, colors, view === "front");
+        if (side) drawSide(paint, phase, colors);
+        else drawFrontOrBack(paint, phase, colors, front);
     });
     context.restore();
 }
@@ -93,42 +98,6 @@ function drawSide(paint: Paint, phase: number, colors: VehicleColors): void {
     });
 }
 
-/**
- * Going down or up and to the left (mirrored to the right): the wheel turned half way, an ellipse showing its rim and
- * hub, the shell in front of it, the pedals at an angle. `towards` is true when coming towards the viewer.
- */
-function drawThreeQuarter(paint: Paint, phase: number, colors: VehicleColors, towards: boolean): void {
-    const wheel = { x: 0, y: 6 };
-    paint("outline", OUTLINE, () => {
-        ellipse(wheel.x, wheel.y, 7, 11);
-        chamferedRect(-6, -12, 12, 16);
-        rect(-3, -15, 6, 3);
-        rect(-10, 1, 9, 3);
-        rect(2, 3, 9, 3);
-    });
-    paint("details", TYRE, () => ellipse(wheel.x, wheel.y, 6, 10));
-    paint("wheelsColor", colors.wheelsColor, () => ellipse(wheel.x, wheel.y, 4, 7));
-    paint("details", "#4a4f5a", () => ellipse(wheel.x, wheel.y, 3, 5));
-    paint("details", "#6b707c", () => {
-        // Tread blocks going round the ellipse, a sixteenth of a turn per phase.
-        for (let block = 0; block < 4; block++) {
-            const angle = -Math.PI / 2 - ((block * 4 + phase) * Math.PI) / 8;
-            rect(wheel.x + Math.round(Math.cos(angle) * 6), wheel.y + Math.round(Math.sin(angle) * 10), 1, 1);
-        }
-    });
-    paint("edgeColor", colors.edgeColor, () => {
-        chamferedRect(-5, -11, 10, 14);
-        rect(-9, 2, 7, 1);
-        rect(3, 4, 7, 1);
-    });
-    paint("color", colors.color, () => chamferedRect(-4, -10, 8, 12));
-    paint("details", OUTLINE, () => {
-        rect(-2, -14, 4, 1);
-        rect(1, -6, 2, 5);
-    });
-    paint("details", towards ? "#9fd3e6" : "#c0392b", () => rect(-3, -6, 3, 2));
-}
-
 function drawFrontOrBack(paint: Paint, phase: number, colors: VehicleColors, front: boolean): void {
     paint("outline", OUTLINE, () => {
         // Tyre seen edge on, shell around it, pedals across.
@@ -175,12 +144,6 @@ function rect(x: number, y: number, width: number, height: number): void {
 function chamferedRect(x: number, y: number, width: number, height: number): void {
     rect(x + 1, y, width - 2, height);
     rect(x, y + 1, width, height - 2);
-}
-function ellipse(cx: number, cy: number, radiusX: number, radiusY: number): void {
-    for (let dy = -radiusY; dy <= radiusY; dy++) {
-        const half = Math.round(radiusX * Math.sqrt(1 - (dy * dy) / (radiusY * radiusY)));
-        rect(cx - half, cy + dy, half * 2 + 1, 1);
-    }
 }
 function disc(cx: number, cy: number, radius: number): void {
     for (let dy = -radius; dy <= radius; dy++) {

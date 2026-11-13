@@ -67,8 +67,8 @@ export class VehicleEffect {
         if (this.heading === undefined) this.heading = this.targetHeading = cardinalVehicleHeading(direction);
         if (moving && (dx || dy)) this.targetHeading = vehicleHeading(dx, dy);
         this.heading = turnVehicleTowards(this.heading, this.targetHeading, delta);
-        // A unicycle stays upright: it is drawn for each of the eight headings (three-quarter views on the
-        // diagonals) instead of being turned like a board seen from above.
+        // A unicycle is drawn for each of the eight headings (its diagonals already turned 45°): the in-between
+        // turn of a board would tilt its side view.
         const upright = this.vehicle === Vehicle.ElectricUnicycle;
         const heading = Math.round(this.heading) % VEHICLE_DIRECTIONS;
         const frame = heading + (moving ? (Math.floor(time / 70) % 4) * VEHICLE_DIRECTIONS : 0);
