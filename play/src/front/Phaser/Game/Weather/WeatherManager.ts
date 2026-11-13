@@ -1,7 +1,8 @@
 import { WeatherType } from "@workadventure/map-editor";
-import { get } from "svelte/store";
+import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
+import { mapSnowShownStore } from "../../../Stores/SeasonalThemeStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
@@ -30,6 +31,11 @@ export class WeatherManager {
     private visible = false;
     private readonly sounds: WeatherSounds;
     private readonly snowGround: SnowGround;
+    // The settings, kept up to date by their stores rather than read at every image.
+    private readonly unsubscribers: Unsubscriber[];
+    private editing = false;
+    private weatherShown = true;
+    private mapSnowShown = true;
 
     constructor(
         private readonly scene: GameScene,
@@ -37,6 +43,11 @@ export class WeatherManager {
     ) {
         this.sounds = new WeatherSounds(scene.sound);
         this.snowGround = new SnowGround(scene);
+        this.unsubscribers = [
+            mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
+            weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
+            mapSnowShownStore.subscribe((shown) => (this.mapSnowShown = shown)),
+        ];
         this.graphics = scene.add
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
@@ -48,14 +59,15 @@ export class WeatherManager {
         const configured = settings?.weather ?? WeatherType.Clear;
         const theme = this.options.seasonalTheme?.();
         const weather = effectiveWeather(weatherAtTime(configured, serverDate), theme);
-        this.sounds.update(weather, serverDate, get(mapEditorModeStore), night);
-        const enabled = get(weatherEffectsEnabledStore) && !get(mapEditorModeStore);
+        this.sounds.update(weather, serverDate, this.editing, night);
+        const enabled = this.weatherShown && !this.editing;
         this.snowGround.update(
             now,
             serverDate,
-            enabled ? configured : WeatherType.Clear,
+            // A chosen theme keeps the map snow off the ground (see mapSnowShown).
+            enabled && this.mapSnowShown ? configured : WeatherType.Clear,
             // The Christmas theme draws its own snow ground over the whole outside: the seasonal ground steps aside.
-            !get(mapEditorModeStore) && theme !== SeasonalTheme.Christmas,
+            !this.editing && theme !== SeasonalTheme.Christmas,
             theme === SeasonalTheme.Autumn,
             settings?.weatherStartedAt,
         );
@@ -122,6 +134,7 @@ export class WeatherManager {
     }
 
     public destroy(): void {
+        for (const unsubscribe of this.unsubscribers) unsubscribe();
         this.sounds.destroy();
         this.snowGround.destroy();
         this.graphics.destroy();

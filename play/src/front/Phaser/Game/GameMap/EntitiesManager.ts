@@ -86,6 +86,7 @@ export class EntitiesManager extends EventEmitter {
     private nextSeasonCheck = 0;
     private lastConfiguredWeather: WeatherType | undefined;
     private lastForcedSeason: Season | undefined;
+    private lastMapSnow = true;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -228,26 +229,31 @@ export class EntitiesManager extends EventEmitter {
 
     /**
      * Follow shared weather each minute, and apply a live editor change immediately. The personal seasonal theme
-     * colours nature for this person only; shared snow cover takes priority over autumn.
+     * colours nature for this person only; shared snow cover takes priority over it, unless `mapSnow` is false
+     * (weather hidden, or a theme chosen rather than auto: see mapSnowShown).
      */
-    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season): void {
+    public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
         const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
         const configured = settings?.weather ?? WeatherType.Clear;
         if (
             time < this.nextSeasonCheck &&
             configured === this.lastConfiguredWeather &&
-            forcedSeason === this.lastForcedSeason
+            forcedSeason === this.lastForcedSeason &&
+            mapSnow === this.lastMapSnow
         )
             return;
         this.lastConfiguredWeather = configured;
         this.lastForcedSeason = forcedSeason;
+        this.lastMapSnow = mapSnow;
         this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
-        const weatherSeason = treeSeasonAt(
-            serverDate,
-            weatherAtTime(configured, serverDate),
-            snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
-        );
+        const weatherSeason = mapSnow
+            ? treeSeasonAt(
+                  serverDate,
+                  weatherAtTime(configured, serverDate),
+                  snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt),
+              )
+            : treeSeasonAt(serverDate, WeatherType.Clear, 0);
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
         if (season === this.season) return;

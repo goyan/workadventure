@@ -39,6 +39,15 @@ export function forcedTreeSeason(theme: SeasonalTheme | undefined): Season | und
     return undefined;
 }
 
+/**
+ * Whether the snow of the map weather may whiten the ground and the trees for this person: only with the weather shown
+ * and the theme following the calendar (auto). A chosen theme keeps its look whatever the weather: autumn stays orange,
+ * none stays green, and Christmas draws its own snow.
+ */
+export function mapSnowShown(mode: SeasonalThemeMode, weatherShown: boolean): boolean {
+    return weatherShown && mode === SeasonalThemeMode.Auto;
+}
+
 /** The former "Christmas theme" setting (auto, always, never) carries over to the seasonal theme. */
 export function migrateChristmasMode(saved: string | null): SeasonalThemeMode | undefined {
     if (saved === "always") return SeasonalThemeMode.Christmas;

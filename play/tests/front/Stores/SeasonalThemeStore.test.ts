@@ -38,3 +38,21 @@ describe("seasonalThemeModeStore", () => {
         expect(localStorage.getItem("seasonalTheme")).toBe("none");
     });
 });
+
+describe("mapSnowShownStore", () => {
+    beforeEach(() => localStorage.clear());
+
+    it("follows the theme mode and the weather switch", async () => {
+        const { mapSnowShownStore, seasonalThemeModeStore } = await load();
+        const { weatherEffectsEnabledStore } = await import("../../../src/front/Stores/WeatherStore");
+        const { SeasonalThemeMode } = await import("../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
+        const seen: boolean[] = [];
+        const unsubscribe = mapSnowShownStore.subscribe((shown) => seen.push(shown));
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
+        weatherEffectsEnabledStore.set(false);
+        weatherEffectsEnabledStore.set(true);
+        unsubscribe();
+        expect(seen).toEqual([true, false, true, false, true]);
+    });
+});

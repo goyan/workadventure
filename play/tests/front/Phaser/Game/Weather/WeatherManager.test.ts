@@ -22,7 +22,9 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
-const { SeasonalTheme } = await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
+const { SeasonalTheme, SeasonalThemeMode } =
+    await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
+const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
@@ -34,6 +36,7 @@ afterEach(() => {
     ground.destroy.mockClear();
     weatherEffectsEnabledStore.set(true);
     mapEditorModeStore.set(false);
+    seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
 });
 
 function fixture(): {
@@ -134,6 +137,21 @@ describe("weather rendering lifecycle", () => {
         const date = new Date(456);
         manager.update(0, date);
         expect(ground.update).toHaveBeenLastCalledWith(0, date, WeatherType.Snow, true, false, 123);
+    });
+
+    it("keeps the map snow off the ground when a theme is chosen", () => {
+        const { scene, wam } = fixture();
+        wam.settings = { weather: WeatherType.Snow, weatherStartedAt: 123 };
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+        manager.update(0, new Date(456));
+        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Clear);
+        seasonalThemeModeStore.set(SeasonalThemeMode.None);
+        manager.update(1, new Date(457));
+        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Clear);
+        seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
+        manager.update(2, new Date(458));
+        expect(ground.update.mock.lastCall?.[2]).toBe(WeatherType.Snow);
     });
 
     it("passes the autumn ground for the autumn theme", () => {
