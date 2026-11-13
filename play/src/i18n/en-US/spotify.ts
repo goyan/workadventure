@@ -153,6 +153,12 @@ const spotify: BaseTranslation = {
         lightsDisableForAll: "Turn off light effects (for everyone)",
         lightsEnableForAll: "Turn light effects back on (for everyone)",
         lightsOffByHost: "Light effects turned off by the host",
+        jamLinkRequest: {
+            ask: "Ask for a new link",
+            sent: "Request sent",
+            one: "{name:string} asks for a new Jam link",
+            many: "{name:string} and {count:number} other{{s}} ask for a new Jam link",
+        },
         jamStatus: {
             positionUnavailable:
                 "Playback position unavailable: the Jam has most likely stopped on Spotify. Paste the link of a new Jam.",

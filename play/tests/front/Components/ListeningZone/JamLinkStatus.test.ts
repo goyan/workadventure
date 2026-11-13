@@ -7,6 +7,8 @@ import JamLinkStatus from "../../../../src/front/Components/ListeningZone/JamLin
 
 const mocks = vi.hoisted(() => ({
     update: vi.fn().mockResolvedValue("saved"),
+    ask: vi.fn(),
+    setSent: vi.fn<(keys: ReadonlySet<string>) => void>(),
     setSave: vi.fn<(save: { status: "saving" | "saved" | "failed" } | undefined) => void>(),
     settings: vi.fn(),
     setRelinked: vi.fn<(hostUuid: string | undefined) => void>(),
@@ -23,6 +25,12 @@ vi.mock("../../../../src/front/ListeningZone/ListeningZoneController", async () 
         ownJamLinkSaveStore: save,
         forgetOwnJamLinkSave: vi.fn(),
     };
+});
+vi.mock("../../../../src/front/ListeningZone/JamLinkRequest", async () => {
+    const { writable } = await import("svelte/store");
+    const sent = writable<ReadonlySet<string>>(new Set());
+    mocks.setSent.mockImplementation(sent.set);
+    return { requestNewJamLink: mocks.ask, sentJamLinkRequestsStore: sent };
 });
 vi.mock("../../../../src/front/Stores/MenuStore", () => ({ openSpotifySettings: mocks.settings }));
 vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
@@ -52,6 +60,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                     replace: () => "Paste a new Jam link",
                     replaceSubmit: () => "Replace the link",
                     relinked: () => "New link: join again",
+                },
+                jamLinkRequest: {
+                    ask: () => "Ask for a new link",
+                    sent: () => "Request sent",
                 },
             },
         },
@@ -109,6 +121,8 @@ function testId(id: string): HTMLElement | null {
 
 beforeEach(() => {
     mocks.update.mockClear();
+    mocks.ask.mockClear();
+    mocks.setSent(new Set());
     mocks.setSave(undefined);
     mocks.settings.mockClear();
     mocks.setRelinked(undefined);
@@ -222,6 +236,30 @@ describe("Jam invite link status", () => {
         expect(testId("jam-link-replace")).toBeNull();
         hostReports("noPlayback");
         expect(testId("jam-link-warning")?.textContent).toContain("No playback (guest)");
+    });
+
+    it("lets a guest ask the host for a new link when Spotify returns no playback, once until the delay is over", () => {
+        render({ mine: false });
+        expect(testId("jam-link-ask")).toBeNull();
+        hostReports("noPlayback");
+        const ask = testId("jam-link-ask") as HTMLButtonElement | null;
+        expect(ask?.textContent).toContain("Ask for a new link");
+        flushSync(() => ask?.click());
+        expect(mocks.ask).toHaveBeenCalledExactlyOnceWith(room);
+
+        flushSync(() => mocks.setSent(new Set(["https://spotify.link/expired"])));
+        const sent = testId("jam-link-ask") as HTMLButtonElement | null;
+        expect(sent?.textContent).toContain("Request sent");
+        expect(sent?.disabled).toBe(true);
+    });
+
+    it("lets a guest ask for a new link when the host's position is missing for no known reason", () => {
+        render({ mine: false });
+        hostReports(undefined, undefined, { track: { title: "Pearl Necklace", artist: "ZZ Top" }, positionAt: 0 });
+        expect(testId("jam-link-ask")).not.toBeNull();
+        // A known account issue of the host is theirs to fix: no request.
+        hostReports("accessDenied");
+        expect(testId("jam-link-ask")).toBeNull();
     });
 
     it("tells a guest whose Jam got a new link to join it again", () => {

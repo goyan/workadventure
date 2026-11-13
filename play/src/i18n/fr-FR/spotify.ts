@@ -156,6 +156,12 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         lightsDisableForAll: "Couper les effets lumineux (pour tous)",
         lightsEnableForAll: "Rallumer les effets lumineux (pour tous)",
         lightsOffByHost: "Effets lumineux coupés par l’hôte",
+        jamLinkRequest: {
+            ask: "Demander un nouveau lien",
+            sent: "Demande envoyée",
+            one: "{name} demande un nouveau lien de Jam",
+            many: "{name} et {count} autre{{s}} demandent un nouveau lien de Jam",
+        },
         jamStatus: {
             positionUnavailable:
                 "Position de lecture indisponible : la Jam s’est sûrement arrêtée sur Spotify. Collez le lien d’une nouvelle Jam.",

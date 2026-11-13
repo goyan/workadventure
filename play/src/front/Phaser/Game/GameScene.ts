@@ -226,6 +226,8 @@ import { jamAudioSession } from "@wa/front/ListeningZone/GameJamAudioSession";
 import { startHomeJam } from "@wa/front/Spotify/HomeJam";
 import type { HomeJamContext } from "@wa/front/Spotify/HomeJam";
 import { startJamKaraoke } from "@wa/front/Karaoke/JamKaraoke";
+import { startJamLinkRequests } from "@wa/front/ListeningZone/JamLinkRequest";
+import { notifySystem } from "@wa/front/Notification/SystemNotifier";
 import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
 import { registerAdditionalMenuItem, unregisterAdditionalMenuItem } from "@wa/front/Stores/AdditionalItemsMenuStore";
 import { popupStore } from "@wa/front/Stores/PopupStore";
@@ -2150,9 +2152,29 @@ export class GameScene extends DirtyScene {
             account: spotifyAccount,
             sharingEnabled: spotifySharingEnabledStore,
         });
+        const stopJamLinkRequests = startJamLinkRequests({
+            ...context,
+            // Like a wave: a sound muted in "do not disturb" and a system notification only out of it.
+            alert: ([latest = "", ...others]) => {
+                this.playBubbleInSound();
+                const texts = get(LL).spotify.listeningZone.jamLinkRequest;
+                notifySystem({
+                    kind: "jamLinkRequest",
+                    title:
+                        others.length === 0
+                            ? texts.one({ name: latest })
+                            : texts.many({ name: latest, count: others.length }),
+                    body: "",
+                    tag: "jam-link-request",
+                    // The card is already in the page: bringing the tab to the front is enough.
+                    onClick: () => {},
+                });
+            },
+        });
         return () => {
             stopHomeJam();
             stopKaraoke();
+            stopJamLinkRequests();
         };
     }
 
