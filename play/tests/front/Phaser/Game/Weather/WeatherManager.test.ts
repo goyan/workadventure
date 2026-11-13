@@ -21,6 +21,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
+const { fogPatches } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { autoWeatherAt, slotStart } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
@@ -335,6 +336,29 @@ describe("weather rendering lifecycle", () => {
             manager = new WeatherManager(scene, { outdoorGrid: () => none });
             manager.update(0, new Date(0));
             expect(graphics.fillCircle.mock.calls).toHaveLength(0);
+        });
+
+        it("never lets a fog patch cover a room: centre and four edge points must be outdoors", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            const [first] = fogPatches(0, view800, false);
+            const gridWith = (blocked: ((x: number, y: number) => boolean) | undefined) =>
+                ({
+                    outdoorRunsInView: () => [view800],
+                    isOutdoorAt: (x: number, y: number) => !blocked?.(x, y),
+                }) as unknown as ReturnType<typeof OutdoorGrid.fromWalls>;
+            // Centre outdoors, but the right-hand edge point of the first patch is indoors.
+            const edgeIndoors = gridWith((x, y) => x === first.x + first.radius && y === first.y);
+            manager = new WeatherManager(scene, { outdoorGrid: () => edgeIndoors });
+            manager.update(0, new Date(0));
+            expect(graphics.fillCircle.mock.calls).toHaveLength(9);
+            expect(graphics.fillCircle.mock.calls.some(([x, y]) => x === first.x && y === first.y)).toBe(false);
+            manager.destroy();
+            graphics.fillCircle.mockClear();
+            const allOutdoors = gridWith(undefined);
+            manager = new WeatherManager(scene, { outdoorGrid: () => allOutdoors });
+            manager.update(0, new Date(0));
+            expect(graphics.fillCircle.mock.calls).toHaveLength(12);
         });
 
         it("fog moves 15 times a second", () => {

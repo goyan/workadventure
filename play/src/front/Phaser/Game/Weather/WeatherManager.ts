@@ -124,9 +124,21 @@ export class WeatherManager {
             this.graphics.fillStyle(0xdfe6ee, 0.2 * density);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             const patches = fogPatches(epoch, view, REDUCED_MOTION);
+            // A patch is only drawn when it covers no room: its centre and its four extreme points are outdoors.
+            const roomsKept = patches.filter(
+                (patch) =>
+                    !isOutdoor ||
+                    [
+                        [0, 0],
+                        [patch.radius, 0],
+                        [-patch.radius, 0],
+                        [0, patch.radius],
+                        [0, -patch.radius],
+                    ].every(([dx, dy]) => isOutdoor(patch.x + dx, patch.y + dy)),
+            );
             for (const ring of FOG_RINGS) {
                 this.graphics.fillStyle(0xdfe6ee, ring.alpha * density);
-                for (const patch of keepOutdoorParticles(patches, isOutdoor)) {
+                for (const patch of roomsKept) {
                     this.graphics.fillCircle(patch.x, patch.y, patch.radius * ring.scale);
                 }
             }
