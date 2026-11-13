@@ -100,7 +100,7 @@ describe("electric unicycle", () => {
         }
         const body = vi.mocked(scene.add.sprite.mock.results[0].value);
         expect(body.setFrame.mock.lastCall?.[0] % 8).toBe(1);
-        expect(body.setAngle.mock.calls.every(([angle]) => angle === 0)).toBe(true);
+        expect(body.setAngle.mock.calls.every(([angle]: [number]) => angle === 0)).toBe(true);
         effect.destroy();
     });
 });

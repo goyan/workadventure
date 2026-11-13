@@ -6,7 +6,7 @@ import {
     Vehicle,
     VehicleMode,
     VEHICLE_VARIABLE,
-    VEHICLE_SPEED_FACTOR,
+    vehicleSpeedFactor,
     readVehicleState,
     vehiclePhysicsFps,
 } from "@wa/front/Phaser/Vehicle/Vehicle";
@@ -283,7 +283,7 @@ export class Player extends Character {
 
     protected override getPathWalkingSpeed(): number {
         return this.vehicleMode !== VehicleMode.Off && !this.swimming && !this.isSlidingToSeat
-            ? WOKA_SPEED * VEHICLE_SPEED_FACTOR
+            ? WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle())
             : super.getPathWalkingSpeed();
     }
 
@@ -537,7 +537,7 @@ export class Player extends Character {
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
         if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming)
-            return WOKA_SPEED * VEHICLE_SPEED_FACTOR;
+            return WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle());
         const speed = this.pathWalkingSpeed
             ? this.pathWalkingSpeed
             : speedUp && !followMode
