@@ -34,6 +34,8 @@ export interface WeatherManagerOptions {
     outdoorGrid?: () => OutdoorGrid | undefined;
     /** The personal seasonal theme: Christmas shows snow instead of the map weather, autumn colours the grass. */
     seasonalTheme?: () => SeasonalTheme | undefined;
+    /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
+    reducedMotion?: boolean;
 }
 
 export class WeatherManager {
@@ -46,11 +48,15 @@ export class WeatherManager {
     private readonly unsubscribers: Unsubscriber[];
     private editing = false;
     private weatherShown = true;
+    private readonly reducedMotion: boolean;
+    // What the last fog image looked like: a still fog is not drawn again until one of these changes.
+    private lastFogKey: string | undefined;
 
     constructor(
         private readonly scene: GameScene,
         private readonly options: WeatherManagerOptions = {},
     ) {
+        this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.sounds = new WeatherSounds(scene.sound);
         this.snowGround = new SnowGround(scene);
         this.unsubscribers = [
@@ -88,14 +94,38 @@ export class WeatherManager {
                 this.scene.markDirty();
             }
             this.lastFrameAt = -Infinity;
+            this.lastFogKey = undefined;
             return;
         }
         // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
-        // falling leaves and fog 15 times (each drawing makes the whole map drawn again).
+        // falling leaves 15 times, a fog alone 5 times (each drawing makes the whole map drawn again).
         const falling = showWeather && weather !== WeatherType.Fog;
-        if (now - this.lastFrameAt < 1000 / (falling ? 30 : 15)) return;
+        const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
+        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
         const view = this.scene.cameras.main.worldView;
+        const fogStrengthNow =
+            showWeather && weather === WeatherType.Fog
+                ? serverDate
+                    ? fogStrength(configured, serverDate, settings?.weatherAuto)
+                    : 1
+                : 1;
+        if (fogOnly && this.reducedMotion) {
+            // Nothing moves: draw again only when the camera, the fog strength or the night changed.
+            const key = [
+                view.x,
+                view.y,
+                view.width,
+                view.height,
+                this.scene.cameras.main.zoom,
+                Math.round(fogStrengthNow * 40),
+                night,
+            ].join("|");
+            if (this.visible && key === this.lastFogKey) return;
+            this.lastFogKey = key;
+        } else {
+            this.lastFogKey = undefined;
+        }
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
         const veil = grid ? grid.outdoorRunsInView(view) : [view];
@@ -113,11 +143,10 @@ export class WeatherManager {
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
         if (showWeather && weather === WeatherType.Fog) {
-            const strength = serverDate ? fogStrength(configured, serverDate, settings?.weatherAuto) : 1;
-            const density = strength * (night ? 0.5 : 1);
+            const density = fogStrengthNow * (night ? 0.5 : 1);
             this.graphics.fillStyle(0xdfe6ee, 0.2 * density);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-            const patches = fogPatches(epoch, view, REDUCED_MOTION);
+            const patches = fogPatches(epoch, view, this.reducedMotion);
             // A patch is only drawn when it covers no room: its centre and its four extreme points are outdoors.
             const roomsKept = patches.filter(
                 (patch) =>

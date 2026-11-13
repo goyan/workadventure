@@ -305,7 +305,7 @@ describe("weather rendering lifecycle", () => {
             expect(graphics.fillCircle.mock.calls.length).toBeGreaterThanOrEqual(9);
             expect(graphics.setVisible.mock.lastCall).toEqual([true]);
             graphics.fillStyle.mockClear();
-            manager.update(100, new Date(100), true);
+            manager.update(200, new Date(200), true);
             expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.1]);
         });
 
@@ -343,15 +343,38 @@ describe("weather rendering lifecycle", () => {
             expect(graphics.fillCircle.mock.calls).toHaveLength(12);
         });
 
-        it("fog moves 15 times a second", () => {
+        it("fog alone moves 5 times a second", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
-            manager.update(40, new Date(40));
+            manager.update(100, new Date(100));
+            manager.update(199, new Date(199));
             expect(graphics.clear.mock.calls).toHaveLength(1);
-            manager.update(70, new Date(70));
+            expect(scene.markDirty.mock.calls).toHaveLength(1);
+            manager.update(200, new Date(200));
             expect(graphics.clear.mock.calls).toHaveLength(2);
+            expect(scene.markDirty.mock.calls).toHaveLength(2);
+        });
+
+        it("a still fog draws the map again only when something visible changes", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            manager = new WeatherManager(scene, { reducedMotion: true });
+            for (let time = 0; time <= 2000; time += 50) manager.update(time, new Date(time));
+            expect(graphics.clear.mock.calls).toHaveLength(1);
+            expect(scene.markDirty.mock.calls).toHaveLength(1);
+            scene.cameras.main.worldView.x = 32;
+            manager.update(2200, new Date(2200));
+            expect(graphics.clear.mock.calls).toHaveLength(2);
+            manager.update(2400, new Date(2400));
+            expect(graphics.clear.mock.calls).toHaveLength(2);
+            scene.cameras.main.zoom = 2;
+            manager.update(2600, new Date(2600));
+            expect(graphics.clear.mock.calls).toHaveLength(3);
+            manager.update(2800, new Date(2800), true);
+            expect(graphics.clear.mock.calls).toHaveLength(4);
+            expect(scene.markDirty.mock.calls).toHaveLength(4);
         });
 
         it("keeps the sound of fine weather", () => {
