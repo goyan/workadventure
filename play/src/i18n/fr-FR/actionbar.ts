@@ -114,6 +114,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             title: "Réagir avec un emoji",
             desc: "Exprimez ce que vous ressentez en un clic grâce aux réactions emoji. Un simple tap, et c’est parti !",
         },
+        personalDesk: {
+            desc: "Votre avatar marche jusqu’à votre bureau.",
+            insideTitle: "Vous êtes à votre bureau",
+            insideDesc: "Le bouton revient quand vous quittez votre bureau.",
+            findDesc: "Vous n’avez pas de bureau sur cette carte : choisissez-en un libre.",
+        },
         raiseHand: {
             title: "Lever la main",
             desc: "Signalez que vous souhaitez prendre la parole. Votre main levée s’affiche sur la carte et sur votre vidéo, pour que chacun sache à qui c’est le tour.",

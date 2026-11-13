@@ -111,6 +111,12 @@ const actionbar = {
             title: "Display an emoji",
             desc: "Express how you feel with just one click using emoji reactions. Just tap and go!",
         },
+        personalDesk: {
+            desc: "Your avatar walks to your desk.",
+            insideTitle: "You are at your desk",
+            insideDesc: "The button comes back when you leave your desk.",
+            findDesc: "You have no desk on this map: pick a free one.",
+        },
         raiseHand: {
             title: "Raise your hand",
             desc: "Signal that you want to speak. Your raised hand is shown on the map and on your video, so everyone knows whose turn is next.",

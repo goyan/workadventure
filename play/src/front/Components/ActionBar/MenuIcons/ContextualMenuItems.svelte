@@ -18,6 +18,7 @@
     import AppsMenuItem from "./AppsMenuItem.svelte";
     import FollowMenuItem from "./FollowMenuItem.svelte";
     import EmojiMenuItem from "./EmojiMenuItem.svelte";
+    import PersonalDeskMenuItem from "./PersonalDeskMenuItem.svelte";
     import LockDiscussionMenuItem from "./LockDiscussionMenuItem.svelte";
     import MusicMenuItem from "./MusicMenuItem.svelte";
     import HeaderMenuItem from "./HeaderMenuItem.svelte";
@@ -50,6 +51,8 @@
 
 {#if !inProfileMenu}
     <EmojiMenuItem />
+    <!-- Between emoji and apps: hidden on a narrow bar, it must not be the first or last of the rounded group. -->
+    <PersonalDeskMenuItem />
     <AppsMenuItem />
 {/if}
 

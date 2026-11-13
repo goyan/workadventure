@@ -20,6 +20,7 @@
     import ReleaseNotesModal from "../../Modal/ReleaseNotesModal.svelte";
     import UnclaimPersonalDeskModal from "./UnclaimPersonalDeskModal.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
+    import { goToPersonalDesk } from "./personalDeskActions";
     import { modals } from "@wa-modals";
     import { IconDesk, IconDeskExit, IconSpeakerPhone, IconMapEditor, IconHistory } from "@wa-icons";
 
@@ -64,19 +65,6 @@
 
     function closeMapMenu() {
         openedMenuStore.close("mapMenu");
-    }
-
-    async function goToPersonalDesk() {
-        // Close the menu
-        openedMenuStore.close("profileMenu");
-
-        // Walk to the personal desk using the GameScene method
-        try {
-            await gameManager.getCurrentGameScene()?.walkToPersonalDesk();
-        } catch (error) {
-            console.error("Error while walking to personal desk", error);
-            warningMessageStore.addWarningMessage($LL.actionbar.personalDesk.errorMoving(), { closable: true });
-        }
     }
 
     const unclaimState = { inProgress: false };

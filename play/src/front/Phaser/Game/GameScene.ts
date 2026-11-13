@@ -72,6 +72,8 @@ import { AVATAR_ACTION_VARIABLE } from "@wa/front/Phaser/Entity/AvatarAction";
 import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "@wa/front/Phaser/Entity/Swimwear";
 import { SelectCharacterScene, SelectCharacterSceneName } from "@wa/front/Phaser/Login/SelectCharacterScene";
 import { hasMovedEventName, Player, requestEmoteEventName } from "@wa/front/Phaser/Player/Player";
+import { findSeatOfCharacter, getSeats, isSeatTaken } from "@wa/front/Phaser/Player/Seat";
+import { walkToDesk } from "@wa/front/Phaser/Player/DeskSeat";
 import { ErrorSceneName } from "@wa/front/Phaser/Reconnecting/ErrorScene";
 import { ReconnectingSceneName } from "@wa/front/Phaser/Reconnecting/ReconnectingScene";
 import { TextUtils } from "@wa/front/Phaser/Components/TextUtils";
@@ -4936,13 +4938,10 @@ ${escapedMessage}
     }
 
     /**
-     * Walk the player to their personal desk.
+     * Walk the player to their personal desk and sit on its seat (see DeskSeat.walkToDesk).
      */
     public async walkToPersonalDesk(): Promise<void> {
         const isInsidePersonalArea = get(this._isInsidePersonalAreaStore);
-        if (isInsidePersonalArea) {
-            return;
-        }
         const userUUID = localUserStore.getLocalUser()?.uuid;
         if (!userUUID) {
             warningMessageStore.addWarningMessage(get(LL).actionbar.personalDesk.errorNoUser(), { closable: true });
@@ -4968,13 +4967,17 @@ ${escapedMessage}
             return;
         }
 
-        // Calculate center of the area
-        const centerX = personalAreaData.x + personalAreaData.width * 0.5;
-        const centerY = personalAreaData.y + personalAreaData.height * 0.5;
-
+        const player = this.CurrentPlayer;
         try {
-            await this.moveTo({ x: centerX, y: centerY }, true, WOKA_SPEED * 2.5);
-            analyticsClient.trackAdminEvent("personal_desk.entered");
+            const outcome = await walkToDesk(personalAreaData, {
+                seats: getSeats(this),
+                isFree: (seat) => !isSeatTaken(this, seat),
+                seatedSeatId: player.isSeated() ? findSeatOfCharacter(this, player)?.id : undefined,
+                inside: isInsidePersonalArea,
+                moveTo: (target) => this.moveTo(target, true, WOKA_SPEED * 2.5),
+                sitOnSeat: (seatId) => player.sitOnSeat(seatId),
+            });
+            if (outcome !== "none" && !isInsidePersonalArea) analyticsClient.trackAdminEvent("personal_desk.entered");
         } catch (error) {
             console.warn("Error while moving to personal desk", error);
             warningMessageStore.addWarningMessage(get(LL).actionbar.personalDesk.errorMoving(), { closable: true });

@@ -1,5 +1,6 @@
 import { derived, get, writable } from "svelte/store";
 import { z } from "zod";
+import { isMac } from "../WebRtc/DeviceUtils";
 
 // Shortcuts the user can rebind. Moving, running, interacting, the say/think bubbles and the emotes stay fixed:
 // Phaser polls the movement keys every frame and Space/Enter have listeners of their own.
@@ -104,6 +105,16 @@ export function bindingFromEvent(event: KeyboardEvent): KeyBinding | null {
     const printed = event.key.length === 1 && !event.altKey ? event.key.toUpperCase() : undefined;
     const label = printed ?? event.code.replace(/^(Key|Digit)/, "");
     return { code: event.code, label, mod: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
+}
+
+// The keys of a binding as shown to the user: ⌘/⌥ on a Mac, Ctrl/Alt elsewhere.
+export function bindingKeys(binding: KeyBinding, shiftLabel: string, mac = isMac()): string[] {
+    return [
+        ...(binding.mod ? [mac ? "⌘" : "Ctrl"] : []),
+        ...(binding.alt ? [mac ? "⌥" : "Alt"] : []),
+        ...(binding.shift ? [shiftLabel] : []),
+        binding.label,
+    ];
 }
 
 export function sameBinding(a: KeyBinding, b: KeyBinding): boolean {
