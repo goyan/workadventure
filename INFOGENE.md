@@ -456,8 +456,17 @@ barre. Outils garde donc « Aller à mon bureau » pour les petites largeurs, pa
 par réglage » (6d71e0378), qui avait retiré « Explorer le salon » d'Outils parce que son bouton flottant reste visible à
 toutes les largeurs.
 
-Recette : avec un bureau, cliquer (marche), entrer dans le bureau (bouton grisé, infobulle), réassigner le raccourci ;
-sans bureau, ouvrir la liste des bureaux libres ; réduire la fenêtre jusqu'au repli de la barre.
+À l'arrivée, l'avatar **s'assoit** sur le siège du bureau, comme après un double-clic sur ce siège (bouton, Cmd/Ctrl+D
+et Outils : `GameScene.walkToPersonalDesk`, logique dans `Player/DeskSeat.ts`). Le siège choisi est le siège libre dont
+la place est dans la zone du bureau, le plus proche du centre de la zone : une zone personnelle ne dit pas quelle chaise
+est la sienne, et elle entoure en général un seul poste, dont la chaise est au centre plutôt qu'une chaise de visiteur
+au bord. Siège pris : le suivant le plus proche. Aucun siège libre dans le bureau : marche jusqu'au centre, debout,
+comme avant. Déjà assis à son bureau : rien. Debout dans son bureau, Cmd/Ctrl+D fait asseoir (les boutons restent
+grisés). `Player.sitOnSeat` garde ses refus (nage, eau, suivi, siège hors de portée) : l'avatar reste alors debout.
+
+Recette : avec un bureau, cliquer (marche puis assise), entrer dans le bureau (bouton grisé, infobulle), réassigner le
+raccourci ; chaise du bureau prise par un collègue, bureau sans chaise ; sans bureau, ouvrir la liste des bureaux
+libres ; réduire la fenêtre jusqu'au repli de la barre.
 
 ## Le circuit
 
