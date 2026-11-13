@@ -18,7 +18,7 @@ import { Character } from "@wa/front/Phaser/Entity/Character";
 import type { PathFollowResult } from "@wa/front/Phaser/Entity/Character";
 import { PathTileType } from "@wa/front/Utils/PathfindingManager";
 import { isWaypointBlocked } from "@wa/front/Utils/PathValidation";
-import { userMovingStore } from "@wa/front/Stores/GameStore";
+import { userMovingStore, userSeatedStore } from "@wa/front/Stores/GameStore";
 import { followStateStore, followRoleStore, followUsersStore } from "@wa/front/Stores/FollowStore";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import { visibilityStore } from "@wa/front/Stores/VisibilityStore";
@@ -898,6 +898,17 @@ export class Player extends Character {
         }
     }
 
+    // The interface follows whether the local player is seated ("my desk" buttons).
+    public override sit(direction: PositionMessage_Direction): void {
+        super.sit(direction);
+        userSeatedStore.set(true);
+    }
+
+    public override standUp(): void {
+        super.standUp();
+        userSeatedStore.set(this.isSeated());
+    }
+
     public teleportTo(x: number, y: number): void {
         this.standUp();
         this.setPosition(x, y);
@@ -933,6 +944,7 @@ export class Player extends Character {
     }
 
     destroy(): void {
+        userSeatedStore.set(false);
         this.unsubscribeVisibilityStore();
         this.divePrompt.hide();
         this.sitPrompt.hide();

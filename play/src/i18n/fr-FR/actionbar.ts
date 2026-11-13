@@ -117,7 +117,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         personalDesk: {
             desc: "Votre avatar marche jusqu’à votre bureau.",
             insideTitle: "Vous êtes à votre bureau",
-            insideDesc: "Le bouton revient quand vous quittez votre bureau.",
+            insideDesc: "Le bouton revient quand vous vous levez.",
+            sitDesc: "Votre avatar s’assoit sur le siège libre de votre bureau.",
             findDesc: "Vous n’avez pas de bureau sur cette carte : choisissez-en un libre.",
         },
         raiseHand: {
@@ -241,6 +242,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         loginToClaim: "Connectez-vous pour prendre un bureau personnel.",
         visit: "Aller",
         label: "Aller à mon bureau",
+        sit: "S’asseoir à mon bureau",
         teleport: "Me téléporter à mon bureau",
         unclaim: "Libérer mon bureau",
         unclaimConfirmation: "Libérer le bureau « {name} » ? Il deviendra disponible pour les autres.",

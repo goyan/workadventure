@@ -114,7 +114,8 @@ const actionbar = {
         personalDesk: {
             desc: "Your avatar walks to your desk.",
             insideTitle: "You are at your desk",
-            insideDesc: "The button comes back when you leave your desk.",
+            insideDesc: "The button comes back when you stand up.",
+            sitDesc: "Your avatar sits on the free seat of your desk.",
             findDesc: "You have no desk on this map: pick a free one.",
         },
         raiseHand: {
@@ -236,6 +237,7 @@ const actionbar = {
         loginToClaim: "Sign in to claim a personal desk.",
         visit: "Go",
         label: "Walk to my desk",
+        sit: "Sit at my desk",
         teleport: "Teleport to my desk",
         unclaim: "Unclaim my desk",
         unclaimConfirmation: "Release the desk “{name}”? It will become available to others.",

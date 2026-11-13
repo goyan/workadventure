@@ -1,7 +1,7 @@
 <script lang="ts">
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { warningMessageStore } from "../../../Stores/ErrorStore";
-    import { isInsidePersonalAreaStore, personalAreaDataStore } from "../../../Stores/PersonalDeskStore";
+    import { personalAreaDataStore, personalDeskModeStore } from "../../../Stores/PersonalDeskStore";
     import { globalMessageVisibleStore, mapEditorMenuVisibleStore, openedMenuStore } from "../../../Stores/MenuStore";
     import { LL } from "../../../../i18n/i18n-svelte";
     import { analyticsClient } from "../../../Administration/AnalyticsClient";
@@ -168,9 +168,9 @@
 {#if $personalAreaDataStore}
     <ActionBarButton
         dataTestId="go-to-personal-desk-button"
-        label={$LL.actionbar.personalDesk.label()}
+        label={$personalDeskModeStore === "sit" ? $LL.actionbar.personalDesk.sit() : $LL.actionbar.personalDesk.label()}
         onclick={goToPersonalDesk}
-        state={$isInsidePersonalAreaStore ? "disabled" : "normal"}
+        state={$personalDeskModeStore === "seated" ? "disabled" : "normal"}
         classList="group/btn-personal-desk"
     >
         <IconDesk font-size="20" />

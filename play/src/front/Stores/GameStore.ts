@@ -3,6 +3,9 @@ import type { BannerEvent } from "./../Api/Events/Ui/BannerEvent";
 
 export const userMovingStore = writable(false);
 
+// Whether the local player is seated (set by Player when it sits down or stands up).
+export const userSeatedStore = writable(false);
+
 // This store is used to determine whether the user is currently in the personal area or has left before loading the business card.
 export const canRequestVisitCardsStore = writable(false);
 export const requestVisitCardsStore = writable<string | null>(null);
