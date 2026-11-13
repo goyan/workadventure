@@ -71,6 +71,7 @@ export function startMeetingRooms(): () => void {
                     { x: room.x, y: room.y, width: room.width, height: room.height },
                     { x: room.x + room.width / 2, y: room.y + room.height / 2 },
                 ),
+            standsIn: (room) => roomAt(feet(scene), [room]) !== undefined,
             walkTo: (point) => scene.moveTo(point, true, WOKA_SPEED * 2.5),
             mapUrl: scene.roomUrl,
             areas: () => sceneAreas(scene),

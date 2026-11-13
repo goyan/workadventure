@@ -50,7 +50,8 @@ sinon la première libre) et l'avatar y marche **sans ouvrir Teams** (un nouvel 
 arrière-plan, ce qui annule la marche : il fallait recliquer). La marche vise la case libre de la salle la plus proche
 de son centre qu'un chemin atteint (`PathfindingManager.nearestReachablePointIn`, toute la salle parcourue) : une table
 couvre souvent le centre et ses 8 voisines, seules regardées par une marche « au plus proche », qui échouait alors ; si
-aucune case n'est atteinte (salle verrouillée), le centre, comme avant (l'avatar s'arrête devant). À l'arrivée dans
+aucune case n'est atteinte (salle verrouillée), le centre, comme avant (l'avatar s'arrête devant) ; déjà dans la
+salle (second clic), pas de marche : la question vient aussitôt. À l'arrivée dans
 cette salle (position réelle de l'avatar, vue à la fin de la marche ou dans les 2 s), une carte demande « Ouvrir la
 réunion dans Teams ? » : **Oui** ouvre le lien dans un nouvel onglet, **Non**, × ou Échap ferment. Si l'avatar reste,
 la même carte s'affiche aussitôt et dit pourquoi : toutes les salles prises (`rooms-full`), aucun chemin vers la salle

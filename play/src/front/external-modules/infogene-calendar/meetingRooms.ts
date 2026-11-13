@@ -31,6 +31,8 @@ export interface GoToMeetingDeps {
     onRoom: (areaId: string) => void;
     /** The free point of the room nearest its center that a way leads to, if any (see PathfindingManager). */
     reachablePointIn: (room: AreaData) => { x: number; y: number } | undefined;
+    /** Whether the player (their feet) already stands in the room. */
+    standsIn: (room: AreaData) => boolean;
     walkTo: (point: { x: number; y: number }) => Promise<{ cancelled: boolean }>;
     mapUrl: string;
     areas: () => readonly AreaData[];
@@ -55,10 +57,15 @@ export async function goToMeeting(event: CalendarEventInterface, deps: GoToMeeti
     }
     const room = areas.find((area) => area.id === claim.areaId);
     if (!room) return { kind: "rooms-full" };
-    // No free point reached: the center, as a locked room is walked to and the avatar stops at its door.
-    const point = deps.reachablePointIn(room) ?? { x: room.x + room.width / 2, y: room.y + room.height / 2 };
-    deps.onRoom(room.id);
+    // Already there (a second "Go there"): no walk, which would find no path to its own tile; the arrival is seen.
+    if (deps.standsIn(room)) {
+        deps.onRoom(room.id);
+        return { kind: "walking", areaId: room.id, cancelled: false };
+    }
     try {
+        // No free point reached: the center, as a locked room is walked to and the avatar stops at its door.
+        const point = deps.reachablePointIn(room) ?? { x: room.x + room.width / 2, y: room.y + room.height / 2 };
+        deps.onRoom(room.id);
         const walk = await deps.walkTo(point);
         return { kind: "walking", areaId: room.id, cancelled: walk.cancelled };
     } catch (e) {

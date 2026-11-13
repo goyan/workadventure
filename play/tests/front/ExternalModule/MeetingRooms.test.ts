@@ -56,6 +56,7 @@ describe("goToMeeting", () => {
             }),
             onRoom: vi.fn((id: string) => calls.push(`room:${id}`)),
             reachablePointIn: vi.fn((_room: AreaData) => reachable ?? undefined),
+            standsIn: vi.fn((_room: AreaData) => false),
             walkTo: vi.fn((_point: { x: number; y: number }) => {
                 calls.push("walk");
                 return Promise.resolve({ cancelled });
@@ -105,6 +106,28 @@ describe("goToMeeting", () => {
         expect(d.onRoom).not.toHaveBeenCalled();
         expect(d.walkTo).not.toHaveBeenCalled();
         expect(outcome).toEqual({ kind: "claim-failed", error: "Mac companion request failed: 500" });
+    });
+
+    it("does not walk when the avatar already stands in the room: its arrival is noticed at once", async () => {
+        const d = deps("r2");
+        d.standsIn.mockReturnValue(true);
+        const outcome = await goToMeeting(daily, d);
+
+        expect(d.standsIn).toHaveBeenCalledWith(expect.objectContaining({ id: "r2" }));
+        expect(d.onRoom).toHaveBeenCalledWith("r2");
+        expect(d.walkTo).not.toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: "walking", areaId: "r2", cancelled: false });
+    });
+
+    it("says no way leads to the room when no point of it can be looked for", async () => {
+        const d = deps("r2");
+        d.reachablePointIn.mockImplementationOnce(() => {
+            throw new Error("No collision grid");
+        });
+        const outcome = await goToMeeting(daily, d);
+
+        expect(d.walkTo).not.toHaveBeenCalled();
+        expect(outcome).toEqual({ kind: "no-path", areaId: "r2", error: "No collision grid" });
     });
 
     it("says no way leads to the room when the walk cannot start", async () => {
