@@ -236,6 +236,8 @@ export class SelectionEditorTool extends MapEditorTool {
             return;
         }
         this.cancelIncompleteGesture();
+        // cancelIncompleteGesture no longer cancels an armed mode, so it no longer un-highlights a pattern: the
+        // clipboard pasted here is not that pattern any more.
         setArmedPattern(undefined);
         this.publishState({ mode: "paste" });
         this.drawVisuals();
