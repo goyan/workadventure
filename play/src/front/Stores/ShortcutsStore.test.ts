@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
 import {
     bindingFromEvent,
+    bindingKeys,
     findShortcutAction,
     fixedShortcutFor,
     isBrowserReserved,
@@ -23,6 +24,13 @@ describe("ShortcutsStore", () => {
         expect(findShortcutAction(keyDown("KeyD", "d", { metaKey: true }))).toBe("walkMyDesk");
         expect(findShortcutAction(keyDown("KeyD", "d"))).toBeUndefined();
         expect(findShortcutAction(keyDown("KeyC", "c", { ctrlKey: true }))).toBeUndefined();
+    });
+
+    it("spells a binding as keys, ⌘/⌥ on a Mac and Ctrl/Alt elsewhere", () => {
+        const binding = { code: "KeyD", label: "D", mod: true, alt: true, shift: true };
+        expect(bindingKeys(binding, "Maj", false)).toEqual(["Ctrl", "Alt", "Maj", "D"]);
+        expect(bindingKeys(binding, "Maj", true)).toEqual(["⌘", "⌥", "Maj", "D"]);
+        expect(bindingKeys({ ...binding, mod: false, alt: false, shift: false }, "Maj", true)).toEqual(["D"]);
     });
 
     it("moves a key from one action to another and saves it", () => {

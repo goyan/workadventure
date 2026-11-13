@@ -1,8 +1,8 @@
 <script lang="ts">
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { isMac } from "../../WebRtc/DeviceUtils";
     import {
         bindingFromEvent,
+        bindingKeys,
         editableShortcutActions,
         fixedShortcutFor,
         isBrowserReserved,
@@ -39,13 +39,8 @@
     const single = (...keys: string[]): Combo => ({ keys, join: "+" });
     const range = (from: string, to: string): Combo => ({ keys: [from, to], join: "…" });
 
-    function bindingKeys(binding: KeyBinding): string[] {
-        return [
-            ...(binding.mod ? [isMac() ? "⌘" : "Ctrl"] : []),
-            ...(binding.alt ? [isMac() ? "⌥" : "Alt"] : []),
-            ...(binding.shift ? [$LL.menu.shortcuts.keyNames.shift()] : []),
-            binding.label,
-        ];
+    function keysOf(binding: KeyBinding): string[] {
+        return bindingKeys(binding, $LL.menu.shortcuts.keyNames.shift());
     }
 
     let actionLabels: Record<ShortcutAction, string> = $derived({
@@ -67,7 +62,7 @@
 
     function editable(action: ShortcutAction, hint?: string): ShortcutRow {
         const binding = $shortcutsStore[action];
-        return { label: actionLabels[action], hint, action, combos: binding ? [single(...bindingKeys(binding))] : [] };
+        return { label: actionLabels[action], hint, action, combos: binding ? [single(...keysOf(binding))] : [] };
     }
 
     let groups: ShortcutGroup[] = $derived.by(() => {
@@ -133,7 +128,7 @@
 
     let problemText = $derived.by(() => {
         if (!problem) return "";
-        const keys = bindingKeys(problem.binding).join(" + ");
+        const keys = keysOf(problem.binding).join(" + ");
         const t = $LL.menu.shortcuts.edit;
         if (problem.kind === "reserved") return t.reserved({ keys });
         if (problem.kind === "fixed" && problem.fixed)

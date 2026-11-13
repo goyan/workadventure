@@ -443,6 +443,22 @@ Recette : déplacer le panneau en zone d'écoute et la liste des salons hors zon
 ouvrir une fiche utilisateur, redimensionner la fenêtre, puis utiliser les boutons
 de Jam et réordonner la file. Vérifier aussi le toucher et les flèches sur l'en-tête.
 
+## Bouton « Mon bureau » de la barre d'actions
+
+Comme dans Gather, un bouton bureau (`PersonalDeskMenuItem.svelte`) se trouve dans la barre du haut, entre l'émoji et
+les applications, avant le micro et la caméra. Avec un bureau réservé sur la carte, un clic **fait marcher** l'avatar
+jusqu'au bureau, comme Cmd/Ctrl+D (`personalDeskActions.ts`, partagé avec Outils). L'infobulle affiche le raccourci
+`walkMyDesk` tel qu'il est réglé dans le menu des raccourcis, ou n'affiche rien s'il est retiré. Dans son bureau, le
+bouton est grisé et dit « Vous êtes à votre bureau ». Sans bureau sur la carte, il propose « Trouver un bureau libre »
+(la liste des bureaux libres de l'explorateur). Le bouton n'apparaît qu'à partir de la largeur `@md` de la barre : le
+groupe de gauche ne rétrécit pas, et un bouton de plus juste au-dessus de `@sm` repousserait le menu profil hors de la
+barre. Outils garde donc « Aller à mon bureau » pour les petites largeurs, par exception à la règle « un seul endroit
+par réglage » (6d71e0378), qui avait retiré « Explorer le salon » d'Outils parce que son bouton flottant reste visible à
+toutes les largeurs.
+
+Recette : avec un bureau, cliquer (marche), entrer dans le bureau (bouton grisé, infobulle), réassigner le raccourci ;
+sans bureau, ouvrir la liste des bureaux libres ; réduire la fenêtre jusqu'au repli de la barre.
+
 ## Le circuit
 
 ```
