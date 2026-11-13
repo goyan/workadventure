@@ -320,12 +320,25 @@ fronts) :
 - **autorisation expirée** : Spotify a refusé le refresh token, ce qui a délié le
   compte (non retenu après un rechargement : il se lit alors « non lié ») ;
 - **accès refusé** : 403, compte absent de l'app Spotify du serveur.
+- **lecture limitée** : 429, Spotify demande d'attendre (`Retry-After`) ;
+- **lecture impossible** : réponse non OK (code affiché à l'hôte), réponse illisible,
+  ou Spotify injoignable (réseau, délai, demande de jeton).
+
+Un compte lié dont le lecteur n'est pas lu tombait auparavant, sans rien dire, sur
+« position inconnue » (le morceau venait alors de la présence, par exemple de l'app
+Spotify du Mac via le client desktop, sans position) : chacune de ces raisons est
+désormais nommée à l'hôte. Une demande de jeton à Spotify est abandonnée après 10 s :
+avant, un rafraîchissement sans réponse suspendait toutes les lectures du lecteur
+(karaoké et présence) jusqu'au rechargement.
 
 Sur la carte de sa Jam Spotify, l'hôte voit l'avertissement correspondant
 (« Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin »),
 un bouton **Réglages Spotify** quand il faut relier le compte, et **Coller un nouveau
 lien de Jam** à tout moment : le lien remplace l'ancien sans fermer le salon (titre,
-lumières, zone, audio relayé conservés, même hors de la zone). Les auditeurs voient
+lumières, zone conservés, même hors de la zone). L'audio relayé continue : le Space
+`jam:…` est nommé d'après la salle, la zone et l'hôte, jamais d'après le lien ; ni la
+capture de l'hôte ni l'écoute des auditeurs ne s'arrêtent, à l'expiration comme au
+remplacement du lien. Les auditeurs voient
 seulement « rien en lecture » ; ceux qui avaient rejoint par l'ancien lien sont
 invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké remplace
 « position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile

@@ -25,6 +25,7 @@ const spotify: BaseTranslation = {
             accessDenied: "Spotify refuses to read the host’s player: the playback position is unknown.",
             accessDeniedHost:
                 "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",
+            unreadable: "Spotify does not answer for the host’s player: the playback position is unknown.",
             openSettings: "Spotify settings",
         },
         paused: "Playback paused",
@@ -158,6 +159,11 @@ const spotify: BaseTranslation = {
             authorizationExpired: "Your Spotify authorization expired: link Spotify again.",
             accessDenied:
                 "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",
+            rateLimited:
+                "Spotify asks to wait before your player is read again: WorkAdventure retries after that delay.",
+            readFailedStatus: "WorkAdventure cannot read your Spotify player (answer {status:number}).",
+            readFailedUnreadable: "WorkAdventure cannot read your Spotify player: its answer is unreadable.",
+            readFailedNetwork: "WorkAdventure cannot reach Spotify to read your player.",
             openSettings: "Spotify settings",
             replace: "Paste a new Jam link",
             replaceSubmit: "Replace the link",

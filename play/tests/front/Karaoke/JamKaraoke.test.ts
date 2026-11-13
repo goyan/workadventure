@@ -480,6 +480,55 @@ describe("Jam karaoke", () => {
         game.stop();
     });
 
+    it.each([
+        [
+            "rate limited (429)",
+            () => new Response(null, { status: 429, headers: { "Retry-After": "30" } }),
+            "rateLimited",
+            undefined,
+        ],
+        ["a server error", () => new Response(null, { status: 502 }), "readFailed", 502],
+        ["an unreadable answer", () => Response.json({ unexpected: true }), "readFailed", 200],
+    ] as const)(
+        "tells a linked host whose player Spotify does not let WorkAdventure read: %s",
+        async (_case, response, issue, status) => {
+            vi.useFakeTimers();
+            vi.stubGlobal("fetch", (url: string) =>
+                Promise.resolve(url.endsWith("/queue") ? Response.json({ queue: [] }) : response()),
+            );
+            const game = harness({ localUuid: "host", rooms: [spotifyRoom], account: linkedAccount() });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(get(karaokeStatesStore).get("host")).toMatchObject({ issue });
+            expect(get(karaokeStatesStore).get("host")?.issueStatus).toBe(status);
+            game.stop();
+        },
+    );
+
+    it("tells a linked host that Spotify cannot be reached, then clears it once the player is read", async () => {
+        vi.useFakeTimers();
+        let fail = true;
+        vi.stubGlobal("fetch", (url: string) => {
+            if (url.endsWith("/queue")) return Promise.resolve(Response.json({ queue: [] }));
+            if (fail) return Promise.reject(new TypeError("Failed to fetch"));
+            return Promise.resolve(
+                Response.json({
+                    is_playing: true,
+                    progress_ms: 1000,
+                    currently_playing_type: "track",
+                    item: { name: "Test song", artists: [{ name: "Test artist" }], external_urls: {} },
+                }),
+            );
+        });
+        const game = harness({ localUuid: "host", rooms: [spotifyRoom], account: linkedAccount() });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ issue: "readFailed", issueStatus: 0 });
+        fail = false;
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
+        expect(get(karaokeStatesStore).get("host")?.positionAt).toBeGreaterThan(0);
+        game.stop();
+    });
+
     it("reports a desktop Spotify app that plays nothing", () => {
         let notify: ((state: SpotifyPlaybackState | null) => void) | undefined;
         const game = harness({

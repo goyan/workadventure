@@ -10,7 +10,7 @@
     import { fetchLyrics } from "../../Karaoke/LyricsApi";
     import { LyricsLoader } from "../../Karaoke/LyricsLoader";
     import { centeredScrollTop, lyricLineProgress } from "../../Karaoke/LyricsView";
-    import { karaokePositionMs } from "../../Karaoke/JamKaraoke";
+    import { karaokePositionMs, readFailedText } from "../../Karaoke/JamKaraoke";
     import type { KaraokePlayback } from "../../Karaoke/JamKaraoke";
     import type { JamRoom } from "../../ListeningZone/ListeningZoneController";
     import { chatSidebarWidthStore } from "../../Chat/ChatSidebarWidthStore";
@@ -105,6 +105,12 @@
                 return mine ? texts.authorizationExpiredHost() : texts.authorizationExpired();
             case "accessDenied":
                 return mine ? texts.accessDeniedHost() : texts.accessDenied();
+            case "rateLimited":
+                return mine ? $LL.spotify.listeningZone.jamStatus.rateLimited() : texts.unreadable();
+            case "readFailed":
+                return mine
+                    ? readFailedText($LL.spotify.listeningZone.jamStatus, playback.issueStatus)
+                    : texts.unreadable();
             default:
                 return undefined;
         }

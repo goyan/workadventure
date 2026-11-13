@@ -32,6 +32,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                         accessDenied: () => "Host access denied",
                         accessDeniedHost: () => "Your access denied",
                         openSettings: () => "Spotify settings",
+                        unreadable: () => "Host player unreadable",
                     },
                     paused: () => "Paused",
                     unsynced: () => "Unsynced",
@@ -45,7 +46,15 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     artist: () => "Artist",
                     search: () => "Search",
                 },
-                listeningZone: { roomsTitle: () => "Jams on the map" },
+                listeningZone: {
+                    roomsTitle: () => "Jams on the map",
+                    jamStatus: {
+                        rateLimited: () => "Your reads are rate limited",
+                        readFailedStatus: ({ status }: { status: number }) => `Your read failed (${status})`,
+                        readFailedUnreadable: () => "Your read is unreadable",
+                        readFailedNetwork: () => "Spotify unreachable for you",
+                    },
+                },
             },
         }),
     };
@@ -361,6 +370,14 @@ describe("KaraokePanel playback issues", () => {
         await remount(false, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
         expect(target.textContent).toContain("No playback for the host");
         expect(button("Jams on the map")).toBeUndefined();
+    });
+
+    it("names a failed read of the host's player: its status to the host, the unknown position to guests", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "readFailed", issueStatus: 502 });
+        expect(target.textContent).toContain("Your read failed (502)");
+        expect(target.textContent).not.toContain("No position");
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0, issue: "rateLimited" });
+        expect(target.textContent).toContain("Host player unreadable");
     });
 
     it("keeps the unknown position message when the host's browser knows no reason", async () => {

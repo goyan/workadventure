@@ -73,6 +73,32 @@ describe("SpotifyAccount", () => {
         expect(storage.items.has("spotifyAccount")).toBe(false);
     });
 
+    it("gives up a token refresh Spotify never answers, so that the players are read again on the next call", async () => {
+        // Spotify never answers: only the request's own abort signal ends it.
+        const fetchFn = vi.fn<typeof fetch>(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    const signal = init?.signal;
+                    if (!signal) return;
+                    const onAbort = (): void => {
+                        signal.removeEventListener("abort", onAbort);
+                        reject(new Error("Token request aborted"));
+                    };
+                    signal.addEventListener("abort", onAbort);
+                }),
+        );
+        const account = new SpotifyAccount(
+            memoryStorage({ spotifyAccount: storedTokens(Date.now() - 1) }),
+            fetchFn,
+            20,
+        );
+
+        await expect(account.getAccessToken()).rejects.toThrow();
+        expect(get(account.linked)).toBe(true);
+        await expect(account.getAccessToken()).rejects.toThrow();
+        expect(fetchFn).toHaveBeenCalledTimes(2);
+    });
+
     it("tells a link Spotify revoked from one the user removed or never made", async () => {
         const revoked = new SpotifyAccount(
             memoryStorage({ spotifyAccount: storedTokens(Date.now() - 1) }),

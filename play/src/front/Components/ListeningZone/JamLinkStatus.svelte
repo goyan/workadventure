@@ -1,7 +1,7 @@
 <script lang="ts">
     import { isSpotifyJamUrl } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
-    import { karaokeStatesStore } from "../../Karaoke/JamKaraoke";
+    import { karaokeStatesStore, readFailedText } from "../../Karaoke/JamKaraoke";
     import { relinkedJamHostStore, updateOwnRoom, type JamRoom } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import Input from "../Input/Input.svelte";
@@ -22,7 +22,8 @@
     let invalidLink = $state(false);
 
     // What the host's browser reads of their Spotify player, sent with the karaoke state of the room.
-    let issue = $derived($karaokeStatesStore.get(room.jam.hostUuid)?.issue);
+    let hostState = $derived($karaokeStatesStore.get(room.jam.hostUuid));
+    let issue = $derived(hostState?.issue);
     // Spotify's Web API knows nothing of Jams: an ended Jam is only seen as nothing playing on the host's side.
     let hostWarning = $derived.by(() => {
         switch (issue) {
@@ -34,6 +35,10 @@
                 return $LL.spotify.listeningZone.jamStatus.authorizationExpired();
             case "accessDenied":
                 return $LL.spotify.listeningZone.jamStatus.accessDenied();
+            case "rateLimited":
+                return $LL.spotify.listeningZone.jamStatus.rateLimited();
+            case "readFailed":
+                return readFailedText($LL.spotify.listeningZone.jamStatus, hostState?.issueStatus);
             default:
                 return undefined;
         }

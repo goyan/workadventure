@@ -26,6 +26,7 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             accessDenied: "Spotify refuse de lire le lecteur de l’hôte : la position de lecture est inconnue.",
             accessDeniedHost:
                 "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",
+            unreadable: "Spotify ne répond pas pour le lecteur de l’hôte : la position de lecture est inconnue.",
             openSettings: "Réglages Spotify",
         },
         paused: "Lecture en pause",
@@ -161,6 +162,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",
             accessDenied:
                 "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",
+            rateLimited:
+                "Spotify demande d’attendre avant de relire votre lecteur : WorkAdventure réessaie après le délai demandé.",
+            readFailedStatus: "WorkAdventure n’arrive pas à lire votre lecteur Spotify (réponse {status}).",
+            readFailedUnreadable: "WorkAdventure n’arrive pas à lire votre lecteur Spotify : sa réponse est illisible.",
+            readFailedNetwork: "WorkAdventure n’arrive pas à joindre Spotify pour lire votre lecteur.",
             openSettings: "Réglages Spotify",
             replace: "Coller un nouveau lien de Jam",
             replaceSubmit: "Remplacer le lien",

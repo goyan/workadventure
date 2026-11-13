@@ -30,6 +30,10 @@ vi.mock("../../../../src/i18n/i18n-svelte", async () => ({
                     noPlayer: () => "No player read",
                     authorizationExpired: () => "Authorization expired",
                     accessDenied: () => "Access denied",
+                    rateLimited: () => "Rate limited",
+                    readFailedStatus: ({ status }: { status: number }) => `Read failed (${status})`,
+                    readFailedUnreadable: () => "Unreadable answer",
+                    readFailedNetwork: () => "Spotify unreachable",
                     openSettings: () => "Spotify settings",
                     replace: () => "Paste a new Jam link",
                     replaceSubmit: () => "Replace the link",
@@ -53,7 +57,7 @@ function render(props: { mine: boolean; joined?: boolean }): void {
     });
 }
 
-function hostReports(issue: KaraokePlaybackIssue | undefined): void {
+function hostReports(issue: KaraokePlaybackIssue | undefined, issueStatus?: number): void {
     flushSync(() =>
         karaokeStatesStore.set(
             new Map([
@@ -69,6 +73,7 @@ function hostReports(issue: KaraokePlaybackIssue | undefined): void {
                         positionMs: 0,
                         positionAt: 1,
                         issue,
+                        issueStatus,
                     },
                 ],
             ]),
@@ -139,6 +144,18 @@ describe("Jam invite link status", () => {
         expect(testId("jam-link-warning")?.textContent).toContain(text);
         flushSync(() => testId("jam-link-open-settings")?.click());
         expect(mocks.settings).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+        ["rateLimited", undefined, "Rate limited"],
+        ["readFailed", 502, "Read failed (502)"],
+        ["readFailed", 200, "Unreadable answer"],
+        ["readFailed", 0, "Spotify unreachable"],
+    ] as const)("names to the host a %s read of their player (%s)", (issue, status, text) => {
+        render({ mine: true });
+        hostReports(issue, status);
+        expect(testId("jam-link-warning")?.textContent).toContain(text);
+        expect(testId("jam-link-open-settings")).toBeNull();
     });
 
     it("tells guests only that Spotify returns no playback, not the host's account issues", () => {
