@@ -34,6 +34,7 @@ export function surfaceOfFloor(family: FloorFamily): FootstepSurface {
 export class FootstepSurfaces {
     private cells = new Map<string, FootstepSurface>();
     private scannedAt = -Infinity;
+    private version = 0;
 
     constructor(
         private readonly readEntities: () => Iterable<FloorEntity>,
@@ -46,14 +47,32 @@ export class FootstepSurfaces {
         return this.getCells().get(cell) ?? (this.isInArea(x, y) ? "wood" : "grass");
     }
 
+    /** Changes only when a surface of the map changed (a rug laid, a floor removed), checked as often as the cells. */
+    public layoutVersion(): number {
+        this.getCells();
+        return this.version;
+    }
+
     private getCells(): Map<string, FootstepSurface> {
         const now = this.now();
         if (now - this.scannedAt >= RESCAN_PERIOD_MS) {
-            this.cells = indexSurfaces([...this.readEntities()]);
+            const cells = indexSurfaces([...this.readEntities()]);
+            if (!sameSurfaces(cells, this.cells)) {
+                this.cells = cells;
+                this.version++;
+            }
             this.scannedAt = now;
         }
         return this.cells;
     }
+}
+
+function sameSurfaces(a: ReadonlyMap<string, FootstepSurface>, b: ReadonlyMap<string, FootstepSurface>): boolean {
+    if (a.size !== b.size) return false;
+    for (const [cell, surface] of a) {
+        if (b.get(cell) !== surface) return false;
+    }
+    return true;
 }
 
 /** Surface of each map cell: map layer floors first, then entities with a `footstepSound` drawn over them (rugs). */

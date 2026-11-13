@@ -32,7 +32,7 @@ function setup(
     options: {
         serverDate?: () => Date | undefined;
         version?: () => number;
-        entities?: () => { visible: boolean; texture?: { key: string } }[];
+        entities?: () => { visible: boolean; texture?: { key: string }; getPrefab?: () => { seasonal?: unknown } }[];
     } = {},
 ) {
     manager = new SeasonalThemeManager(mockDeep<Phaser.Scene>(), {
@@ -131,7 +131,10 @@ describe("SeasonalThemeManager", () => {
 
     it("rebuilds objects when the visible count changes", () => {
         seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
-        const entities = [{ visible: true }, { visible: false }];
+        const entities = [
+            { visible: true, getPrefab: () => ({}) },
+            { visible: false, getPrefab: () => ({}) },
+        ];
         setup({ entities: () => entities }).update(0, walking);
         events.length = 0;
         entities[1].visible = true;
@@ -143,12 +146,28 @@ describe("SeasonalThemeManager", () => {
 
     it("rebuilds objects when an image changes, as when a tree turns to its season", () => {
         seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
-        const tree = { visible: true, texture: { key: "tree-summer" } };
+        const tree = { visible: true, texture: { key: "tree-summer" }, getPrefab: () => ({ seasonal: {} }) };
         setup({ entities: () => [tree] }).update(0, walking);
         events.length = 0;
         tree.texture.key = "tree-autumn";
         manager?.update(1000, walking);
         expect(events).toEqual(["autumn:objects"]);
+    });
+
+    it("does not decorate again for another frame of a door, but does once an image has loaded", () => {
+        seasonalThemeModeStore.set(SeasonalThemeMode.Autumn);
+        const door = { visible: true, texture: { key: "__MISSING" }, getPrefab: () => ({}) };
+        setup({ entities: () => [door] }).update(0, walking);
+        events.length = 0;
+        door.texture.key = "door.png";
+        manager?.update(1000, walking);
+        expect(events).toEqual(["autumn:objects"]);
+        events.length = 0;
+        door.texture.key = "door-3.png";
+        manager?.update(2000, walking);
+        door.texture.key = "door-0.png";
+        manager?.update(3000, walking);
+        expect(events).toEqual([]);
     });
 
     it("creates nothing for None", () => {

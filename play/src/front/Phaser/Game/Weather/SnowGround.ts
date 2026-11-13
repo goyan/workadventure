@@ -16,6 +16,8 @@ export class SnowGround {
     private drawnView: { left: number; top: number; right: number; bottom: number } | undefined;
     private readonly exteriorIsGrass: boolean;
     private lastDrawKey = "";
+    /** The time of the game at the last update: the surfaces are looked at again on this clock. */
+    private clock = 0;
     private ready = false;
     private destroyed = false;
 
@@ -35,6 +37,7 @@ export class SnowGround {
                     footstepSound: entity.getPrefab().footstepSound,
                 })),
             (x, y) => !this.isGrassTile(x, y),
+            () => this.clock,
         );
         Promise.all([SNOW_TEXTURE, GREEN_TEXTURE, AUTUMN_TEXTURE].map((key) => scene.superLoad.image(key, key)))
             .then(() => {
@@ -69,6 +72,7 @@ export class SnowGround {
         startedAt?: number,
     ): void {
         // Snow on the map settles on the grass for everyone: it is weather, not a decor.
+        this.clock = now;
         const coverage = serverDate ? snowCoverage(configured, serverDate.getTime(), startedAt) : 0;
         if (!enabled || !serverDate || !this.ready) {
             this.lastDrawKey = "";
@@ -83,7 +87,8 @@ export class SnowGround {
         const tileHeight = this.scene.Map.tileHeight;
         // The autumn theme colours the grass; the calendar is the theme's business.
         const groundTexture = autumnGround ? AUTUMN_TEXTURE : GREEN_TEXTURE;
-        const drawKey = `${groundTexture}:${Math.round(coverage * 240)}:${Math.floor(now / 2000)}:${this.scene.cameras.main.zoom}`;
+        // Drawn again only when what it shows changed: the ground, the snow on it, the surfaces of the map or the zoom.
+        const drawKey = `${groundTexture}:${Math.round(coverage * 240)}:${this.surfaces.layoutVersion()}:${this.scene.cameras.main.zoom}`;
         const previous = this.drawnView;
         if (
             drawKey === this.lastDrawKey &&

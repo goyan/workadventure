@@ -17,6 +17,7 @@ function fixture(exterior?: string): {
     dirty: ReturnType<typeof vi.fn>;
     addFrame: ReturnType<typeof vi.fn>;
     view: { x: number; y: number; width: number; height: number; readonly right: number; readonly bottom: number };
+    entities: Map<string, unknown>;
 } {
     const canvas = {
         width: 1,
@@ -56,6 +57,18 @@ function fixture(exterior?: string): {
         },
     };
     const textures = new Map<string, Map<string, { width: number; height: number }>>();
+    const entities = new Map<string, unknown>([
+        [
+            "floor",
+            {
+                x: 64,
+                y: 0,
+                displayWidth: 32,
+                displayHeight: 32,
+                getPrefab: () => ({ collectionName: "custom", id: "wood", footstepSound: "wood" }),
+            },
+        ],
+    ]);
     const scene = {
         add: { renderTexture: () => canvas },
         superLoad: { image: vi.fn().mockResolvedValue(undefined) },
@@ -100,24 +113,12 @@ function fixture(exterior?: string): {
         },
         getGameMapFrontWrapper: () => ({
             getEntitiesManager: () => ({
-                getEntities: () =>
-                    new Map([
-                        [
-                            "floor",
-                            {
-                                x: 64,
-                                y: 0,
-                                displayWidth: 32,
-                                displayHeight: 32,
-                                getPrefab: () => ({ collectionName: "custom", id: "wood", footstepSound: "wood" }),
-                            },
-                        ],
-                    ]),
+                getEntities: () => entities,
             }),
         }),
         markDirty: dirty,
     } as unknown as GameScene;
-    return { ground: new SnowGround(scene), canvas, dirty, view, addFrame };
+    return { ground: new SnowGround(scene), canvas, dirty, view, addFrame, entities };
 }
 
 describe("ground snow rendering", () => {
@@ -189,6 +190,27 @@ describe("ground snow rendering", () => {
         ground.destroy();
         expect(canvas.destroy).toHaveBeenCalledOnce();
     });
+    it("draws the ground again only when something changed, such as a rug laid on the grass", async () => {
+        const { ground, canvas, entities } = fixture();
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+        const date = new Date("2026-07-08T10:00:00Z");
+        ground.update(0, date, WeatherType.Clear, true);
+        expect(canvas.render).toHaveBeenCalledOnce();
+        ground.update(10_000, date, WeatherType.Clear, true);
+        expect(canvas.render).toHaveBeenCalledOnce();
+        entities.set("rug", {
+            x: 0,
+            y: 0,
+            displayWidth: 32,
+            displayHeight: 32,
+            getPrefab: () => ({ collectionName: "custom", id: "rug", footstepSound: "carpet" }),
+        });
+        ground.update(12_500, date, WeatherType.Clear, true);
+        expect(canvas.render).toHaveBeenCalledTimes(2);
+    });
+
     it("replaces the built-in exterior, including negative coordinates, while preserving indoor floors", async () => {
         const { ground, canvas } = fixture("grass.png");
         await new Promise<void>((resolve) => {
