@@ -12,6 +12,9 @@ const woka: BaseTranslation = {
         hint: "Tap a direction three times to sprint on your vehicle, or equip it from the action wheel.",
         mount: "Ride skateboard",
         mountElectricUnicycle: "Ride electric unicycle",
+        shellColor: "Shell",
+        sideColor: "Sides",
+        pedalsColor: "Pedals",
         dismount: "Dismount",
     },
     customWoka: {

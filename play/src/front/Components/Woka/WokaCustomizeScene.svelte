@@ -451,7 +451,11 @@
                             {#if selectedVehicle !== Vehicle.None}
                                 <div class="vehicle-colors">
                                     <label>
-                                        <span>{$LL.woka.vehicle.centerColor()}</span>
+                                        <span
+                                            >{selectedVehicle === Vehicle.ElectricUnicycle
+                                                ? $LL.woka.vehicle.shellColor()
+                                                : $LL.woka.vehicle.centerColor()}</span
+                                        >
                                         <input
                                             type="color"
                                             bind:value={selectedVehicleColors.color}
@@ -459,7 +463,11 @@
                                         />
                                     </label>
                                     <label>
-                                        <span>{$LL.woka.vehicle.edgeColor()}</span>
+                                        <span
+                                            >{selectedVehicle === Vehicle.ElectricUnicycle
+                                                ? $LL.woka.vehicle.sideColor()
+                                                : $LL.woka.vehicle.edgeColor()}</span
+                                        >
                                         <input
                                             type="color"
                                             bind:value={selectedVehicleColors.edgeColor}
@@ -467,7 +475,11 @@
                                         />
                                     </label>
                                     <label>
-                                        <span>{$LL.woka.vehicle.wheelsColor()}</span>
+                                        <span
+                                            >{selectedVehicle === Vehicle.ElectricUnicycle
+                                                ? $LL.woka.vehicle.pedalsColor()
+                                                : $LL.woka.vehicle.wheelsColor()}</span
+                                        >
                                         <input
                                             type="color"
                                             bind:value={selectedVehicleColors.wheelsColor}

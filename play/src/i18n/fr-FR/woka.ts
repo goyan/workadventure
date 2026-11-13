@@ -13,6 +13,9 @@ const woka: DeepPartial<Translation["woka"]> = {
         hint: "Trois pressions rapides sur une direction pour sprinter avec votre véhicule, ou équipez-le depuis la roue d’actions.",
         mount: "Monter sur le skateboard",
         mountElectricUnicycle: "Monter sur la gyroroue",
+        shellColor: "Coque",
+        sideColor: "Côtés",
+        pedalsColor: "Pédales",
         dismount: "Descendre",
     },
     customWoka: {
