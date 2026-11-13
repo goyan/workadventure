@@ -2,16 +2,21 @@ import * as Phaser from "phaser";
 import { EntityPrefab, WamFile } from "@workadventure/map-editor";
 import type { GameMap, WAMEntityData } from "@workadventure/map-editor";
 import { mock } from "vitest-mock-extended";
+import { get, readable } from "svelte/store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entity } from "../../../../src/front/Phaser/ECS/Entity";
 import type { EntitiesManager } from "../../../../src/front/Phaser/Game/GameMap/EntitiesManager";
+import { EntitiesManagerEvent } from "../../../../src/front/Phaser/Game/GameMap/EntitiesManager";
+import { DeleteEntityFrontCommand } from "../../../../src/front/Phaser/Game/MapEditor/Commands/Entity/DeleteEntityFrontCommand";
 import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import { EntityEditorTool } from "../../../../src/front/Phaser/Game/MapEditor/Tools/EntityEditorTool";
 import { TexturesHelper } from "../../../../src/front/Phaser/Helpers/TexturesHelper";
 import {
+    entityPlacementBlockerStore,
     mapEditorCopiedEntityDataPropertiesStore,
+    mapEditorEntityEraserStore,
     mapEditorEntityFileDroppedStore,
     mapEditorEntityModeStore,
     mapEditorModeStore,
@@ -108,6 +113,8 @@ describe("EntityEditorTool placement", () => {
     let mapEditorModeManager: ReturnType<typeof mock<MapEditorModeManager>>;
     let tool: EntityEditorTool;
     let input: ReturnType<typeof mock<Phaser.Input.InputPlugin>>;
+    let sceneEvents: Phaser.Events.EventEmitter;
+    let buttons: ReturnType<typeof mock<Phaser.GameObjects.Text>>[];
 
     async function selectPrefab(prefab: EntityPrefab): Promise<void> {
         mapEditorSelectedEntityPrefabStore.set(prefab);
@@ -184,6 +191,9 @@ describe("EntityEditorTool placement", () => {
             width: 32,
             height: 32,
         });
+        // The faded copy left at the old place of a selected object is drawn with the same image.
+        preview.setOrigin.mockReturnValue(preview);
+        preview.setAlpha.mockReturnValue(preview);
         let previewPosition = { x: 16, y: 16 };
         preview.setPosition.mockImplementation((x = 0, y = 0) => {
             previewPosition = { x, y };
@@ -195,12 +205,33 @@ describe("EntityEditorTool placement", () => {
         }));
         scene.add = mock<Phaser.GameObjects.GameObjectFactory>();
         Object.defineProperty(scene.add, "image", { value: vi.fn(() => preview) });
+        buttons = [];
+        Object.defineProperty(scene.add, "text", {
+            value: vi.fn(() => {
+                const button = mock<Phaser.GameObjects.Text>({ width: 20 });
+                button.setOrigin.mockReturnValue(button);
+                button.setDepth.mockReturnValue(button);
+                button.setInteractive.mockReturnValue(button);
+                button.setX.mockReturnValue(button);
+                button.setY.mockReturnValue(button);
+                button.setPosition.mockReturnValue(button);
+                button.on.mockReturnValue(button);
+                buttons.push(button);
+                return button;
+            }),
+        });
+        sceneEvents = new Phaser.Events.EventEmitter();
+        Object.defineProperty(scene, "events", { value: sceneEvents });
+        const collections = mock<ReturnType<GameScene["getEntitiesCollectionsManager"]>>();
+        collections.getEntitiesPrefabsVariantStore.mockReturnValue(readable([]));
+        scene.getEntitiesCollectionsManager.mockReturnValue(collections);
 
         mapEditorModeManager = mock<MapEditorModeManager>();
         mapEditorModeManager.getScene.mockReturnValue(scene);
         mapEditorModeManager.executeCommand.mockImplementation(async (command) => {
             await command.execute();
         });
+        mapEditorModeManager.executeCommands.mockResolvedValue(undefined);
 
         mapEditorSnapEnabledStore.set(true);
         mapEditorModeStore.set(true);
@@ -224,6 +255,8 @@ describe("EntityEditorTool placement", () => {
         mapEditorSelectedEntityStore.set(undefined);
         mapEditorCopiedEntityDataPropertiesStore.set(undefined);
         mapEditorEntityFileDroppedStore.set(false);
+        mapEditorEntityEraserStore.set(false);
+        entityPlacementBlockerStore.set(undefined);
         vi.useRealTimers();
         vi.restoreAllMocks();
     });
@@ -260,4 +293,79 @@ describe("EntityEditorTool placement", () => {
             expect(entityPositions(wamFile)).toEqual([[64, 96]]);
         },
     );
+
+    it("forgets why the dropped object could not be placed", async () => {
+        await selectPrefab(furniturePrefab);
+        gameMapFrontWrapper.getPlacementBlocker.mockReturnValue("obstacle");
+        input.emit(Phaser.Input.Events.POINTER_MOVE, pointerAt(canvas, 100, 70), []);
+        expect(get(entityPlacementBlockerStore)).toBe("obstacle");
+
+        tool.handleKeyDownEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+        expect(get(entityPlacementBlockerStore)).toBeUndefined();
+    });
+
+    function placedEntity(entityId: string, x: number, y: number): ReturnType<typeof mock<Entity>> {
+        const entity = mock<Entity>({ entityId, x, y, displayWidth: 32, active: true });
+        Object.defineProperty(entity, "canEdit", { value: true });
+        entity.getPrefab.mockReturnValue(furniturePrefab);
+        entities.set(entityId, entity);
+        wamFile.getGameMapEntities().addEntity(entityId, {
+            x,
+            y,
+            prefabRef: { id: furniturePrefab.id, collectionName: furniturePrefab.collectionName },
+            properties: [],
+        });
+        return entity;
+    }
+
+    function deleteEntityHandler(): (entity: Entity) => void {
+        const call = entitiesManager.on.mock.calls.find(([event]) => event === EntitiesManagerEvent.DeleteEntity);
+        if (!call) {
+            throw new Error("The tool listens to deleted entities");
+        }
+        return call[1] as (entity: Entity) => void;
+    }
+
+    it("erases every object of one eraser stroke as one step to undo", () => {
+        mapEditorEntityEraserStore.set(true);
+        const first = placedEntity("first", 32, 32);
+        const second = placedEntity("second", 64, 32);
+
+        deleteEntityHandler()(first);
+        deleteEntityHandler()(second);
+        expect(mapEditorModeManager.executeCommand.mock.calls).toHaveLength(0);
+        expect(first.setVisible.mock.calls).toEqual([[false]]);
+
+        input.emit(Phaser.Input.Events.POINTER_UP, pointerAt(canvas, 64, 32), []);
+
+        expect(mapEditorModeManager.executeCommands.mock.calls).toHaveLength(1);
+        const [commands] = mapEditorModeManager.executeCommands.mock.calls[0];
+        expect(
+            Array.isArray(commands) && commands.map((command) => command instanceof DeleteEntityFrontCommand),
+        ).toEqual([true, true]);
+    });
+
+    it("still deletes the selected object with the Delete key right away", () => {
+        const first = placedEntity("first", 32, 32);
+
+        deleteEntityHandler()(first);
+
+        expect(mapEditorModeManager.executeCommand.mock.calls).toHaveLength(1);
+    });
+
+    it("keeps the buttons above the selected object when it moves", () => {
+        const entity = placedEntity("chair", 32, 32);
+        mapEditorEntityModeStore.set("EDIT");
+        mapEditorSelectedEntityStore.set(entity);
+        // Bring forward, send backward and duplicate: 3 buttons of 20 px with 4 px between them, centred on the object.
+        expect(buttons.map((button) => button.setX.mock.calls.at(-1)?.[0])).toEqual([14, 38, 62]);
+
+        entity.x = 96;
+        entity.y = 64;
+        sceneEvents.emit(Phaser.Scenes.Events.PRE_UPDATE);
+
+        expect(buttons.map((button) => button.setX.mock.calls.at(-1)?.[0])).toEqual([78, 102, 126]);
+        expect(buttons.map((button) => button.setY.mock.calls.at(-1)?.[0])).toEqual([56, 56, 56]);
+    });
 });

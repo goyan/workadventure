@@ -17,6 +17,7 @@
         mapEditorEntityModeStore,
         mapEditorModeStore,
         mapEditorSelectedEntityPrefabStore,
+        mapEditorSelectedEntityStore,
     } from "../../Stores/MapEditorStore";
     import { isCalendarVisibleStore } from "../../Stores/CalendarStore";
     import { isTodoListVisibleStore } from "../../Stores/TodoListStore";
@@ -117,6 +118,8 @@
         mapEditorModeStore.switchMode(true);
         mapEditorModeManager?.equipTool(EditorToolName.EntityEditor);
         mapEditorEntityFileDroppedStore.set(true);
+        // The dropped file is placed as a new object: an object selected before is left.
+        mapEditorSelectedEntityStore.set(undefined);
         mapEditorEntityModeStore.set("ADD");
         mapEditorSelectedEntityPrefabStore.set($state.snapshot(entityPrefab || defaultEntityPrefab));
         isTodoListVisibleStore.set(false);

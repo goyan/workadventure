@@ -581,6 +581,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         header: {
             title: "Ajouter un objet",
             description: "Recherchez, téléchargez ou sélectionnez un objet existant et ajoutez-le à la carte.",
+            shortcuts:
+                "Maj : pose libre · Échap ou clic droit : lâcher l’objet · Suppr : supprimer · ⧉ ou Cmd/Ctrl + glisser : copier · Cmd/Ctrl + Z : annuler",
             choose: "Choisissez un objet",
         },
         title: "Outil d'édition d'entités",

@@ -571,6 +571,8 @@ const mapEditor: BaseTranslation = {
         header: {
             title: "Add object to your map",
             description: "Search, upload or select existing object and add it in the map.",
+            shortcuts:
+                "Shift: free placement · Esc or right click: drop the object · Delete: delete · ⧉ or Cmd/Ctrl + drag: copy · Cmd/Ctrl + Z: undo",
             choose: "Choose an object",
         },
         title: "Put your object",
