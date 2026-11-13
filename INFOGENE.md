@@ -1642,3 +1642,10 @@ WA restent identiques. Les anciens réglages `christmas` (auto, always, never �
 restent acceptés et rapportés pour les clients desktop antérieurs au thème saisonnier.
 L'état remonte à chaque changement, au plus une vérification par seconde dans la boucle du jeu, sans minuterie
 supplémentaire ; il inclut la météo affichée et la nuit effective pour les icônes. Sortir du salon désactive les contrôles.
+
+## Arrière-plan de caméra gardé
+
+Le choix d'arrière-plan (flou ou image) est gardé dans le navigateur par le code amont. Il était effacé pour de bon
+quand le fond ne pouvait pas s'appliquer (échec du moteur, par exemple pendant un redéploiement) ou quand le monde ne
+proposait pas l'image au chargement. `backgroundConfigStore.disableForSession()` le coupe désormais pour la page seule :
+le choix gardé est retenté au chargement suivant. Choisir « aucun » l'efface toujours (`reset`).
