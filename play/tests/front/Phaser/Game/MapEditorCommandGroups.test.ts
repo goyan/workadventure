@@ -686,7 +686,7 @@ describe("MapEditorModeManager tool shortcuts and map settings", () => {
         mapEditorModeStore.set(true);
         manager.equipTool(EditorToolName.MapLayerEditor);
         manager.equipTool(EditorToolName.WAMSettingsEditor);
-        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Weather);
+        mapEditorWamSettingsEditorToolCurrentMenuItemStore.set(WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM.Megaphone);
 
         manager.closeWamSettings();
 
