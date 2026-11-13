@@ -1668,3 +1668,13 @@ vignette se redessinait 60 fois par seconde. `gameManager.loadWokaData()` garde 
 la page (`WokaListCache` : une requête par salle, copie par appelant, échec oublié pour que « Réessayer » redemande) ;
 l'écran de choix l'utilise et le menu profil la précharge à son ouverture. `WokaImage` ne redessine plus qu'au
 chargement d'une image ou au changement de ce qu'elle montre (direction, taille, maillot, véhicule).
+
+## Éditeur d'objets : éditer l'objet posé et le dupliquer
+
+Après une pose, l'objet choisi reste armé pour en poser d'autres ; un clic sur un objet de la carte reposait alors un
+exemplaire (ou était refusé en rouge) au lieu de l'ouvrir. Désormais un clic sur un objet ouvre ses propriétés même
+quand un objet est armé (`EntityClickIntent.clickSelectsEntity`), un clic dans le vide pose toujours. On pose encore
+sur un objet de sol (une chaise sur un tapis), et par-dessus n'importe quel objet en maintenant Maj. Le bouton ⧉, à côté
+de ⟳ ▲ ▼ au-dessus de l'objet sélectionné, arme une copie de cet objet avec ses propriétés (`EntityDuplicate`) : chaque
+clic en pose un exemplaire, Échap ou clic droit arrête. La copie par Ctrl+glisser d'origine reste, mais Ctrl+clic est un
+clic droit sur Mac.
