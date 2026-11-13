@@ -33,6 +33,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                         accessDeniedHost: () => "Your access denied",
                         openSettings: () => "Spotify settings",
                         unreadable: () => "Host player unreadable",
+                        desktopNoPosition: () => "Host position not sent",
                     },
                     paused: () => "Paused",
                     unsynced: () => "Unsynced",
@@ -51,6 +52,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     jamStatus: {
                         positionUnavailable: () => "Position unavailable: the Jam has most likely stopped",
                         replace: () => "Paste a new Jam link",
+                        desktopNoPosition: () => "Desktop app gives no position",
                         rateLimited: () => "Your reads are rate limited",
                         readFailedStatus: ({ status }: { status: number }) => `Your read failed (${status})`,
                         readFailedUnreadable: () => "Your read is unreadable",
@@ -347,15 +349,25 @@ describe("KaraokePanel playback issues", () => {
         return [...target.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
     }
 
-    it("replaces the unknown position by the host's missing player, with the action to link Spotify (the beta report)", async () => {
+    it("replaces the unknown position by the host's missing player, with the action to link Spotify", async () => {
         await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "noPlayer" });
-        expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
         expect(target.textContent).toContain("Your player is not read");
+        expect(target.textContent).not.toContain("most likely stopped");
         expect(target.textContent).not.toContain("No position");
-        flushSync(() => button("Paste a new Jam link")?.click());
-        expect(onopenjams).toHaveBeenCalledOnce();
+        expect(button("Paste a new Jam link")).toBeUndefined();
         flushSync(() => button("Spotify settings")?.click());
         expect(onopensettings).toHaveBeenCalledOnce();
+    });
+
+    it("tells a desktop host that the desktop app gives no position, not that the Jam stopped (the beta report)", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "desktopNoPosition" });
+        expect(target.textContent).toContain("Desktop app gives no position");
+        expect(target.textContent).not.toContain("most likely stopped");
+        flushSync(() => button("Spotify settings")?.click());
+        expect(onopensettings).toHaveBeenCalledOnce();
+
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0, issue: "desktopNoPosition" });
+        expect(target.textContent).toContain("Host position not sent");
     });
 
     it("tells a guest why the host's position is unknown, without an action that is the host's", async () => {
@@ -367,7 +379,8 @@ describe("KaraokePanel playback issues", () => {
 
     it("says that Spotify returns no playback instead of no shared track, and points the host to the Jams", async () => {
         await remount(true, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
-        expect(target.textContent).toContain("Position unavailable: the Jam has most likely stopped");
+        expect(target.textContent).toContain("No playback: paste a new Jam");
+        expect(target.textContent).not.toContain("most likely stopped");
         expect(target.textContent).not.toContain("No track");
         flushSync(() => button("Paste a new Jam link")?.click());
         expect(onopenjams).toHaveBeenCalledOnce();

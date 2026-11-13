@@ -529,33 +529,113 @@ describe("Jam karaoke", () => {
         game.stop();
     });
 
-    it("reports a desktop Spotify app that plays nothing", () => {
+    // The desktop app (workadventure-desktop 1.1.4): `watchSpotifyPlayback` relays the WorkAdventure Spicetify
+    // extension only, and sends null while it reports nothing (`spicetifyPlayback()` on subscribing, ipc.ts);
+    // `watchSpotifyTrack` falls back to AppleScript, which reads the track without any position (spotify-player.ts).
+    const desktopTrack = {
+        ...EMPTY_SPOTIFY_LISTENING,
+        trackTitle: "Pearl Necklace",
+        artistName: "ZZ Top",
+        trackUrl: "https://open.spotify.com/track/abc",
+        source: "spotify",
+    };
+    const spicetifyState = (track: SpotifyPlaybackState["track"]): SpotifyPlaybackState => ({
+        track,
+        playing: track !== null,
+        positionMs: 1000,
+        durationMs: 200_000,
+        volume: 50,
+        shuffle: false,
+        repeat: 0,
+    });
+    function desktopHost(options: { presence?: typeof desktopTrack; account?: JamKaraokeContext["account"] } = {}) {
         let notify: ((state: SpotifyPlaybackState | null) => void) | undefined;
+        const listening = writable<ListeningByUserUuid>(new Map(options.presence ? [["host", options.presence]] : []));
         const game = harness({
             localUuid: "host",
             rooms: [spotifyRoom],
+            listening,
+            account: options.account,
             desktop: {
+                watchSpotifyTrack: () => () => undefined,
                 watchSpotifyPlayback: (callback) => {
                     notify = callback;
                     return () => undefined;
                 },
             },
         });
-        expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
-        notify?.(null);
-        expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
-        // Another player's presence changes: the host's desktop still plays nothing.
-        game.listening.set(new Map([["guest", { ...EMPTY_SPOTIFY_LISTENING, trackTitle: "Other song" }]]));
-        expect(get(karaokeStatesStore).get("host")?.issue).toBe("noPlayback");
-        notify?.({
-            track: { uri: "spotify:track:test", title: "Test song", artist: "Test artist", artworkUrl: "" },
-            playing: true,
-            positionMs: 1000,
-            durationMs: 200_000,
-            volume: 50,
-            shuffle: false,
-            repeat: 0,
+        return { game, notify: (state: SpotifyPlaybackState | null) => notify?.(state) };
+    }
+
+    it("keeps the desktop track and says the desktop app gives no position when Spicetify reports nothing (the beta report)", () => {
+        const { game, notify } = desktopHost({ presence: desktopTrack });
+        // The null arrives after subscribing, through IPC.
+        notify(null);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({
+            track: { title: "Pearl Necklace", artist: "ZZ Top" },
+            positionAt: 0,
+            issue: "desktopNoPosition",
         });
+        // Pasting a new invite link starts the host again: the same diagnosis, never "nothing plays".
+        game.rooms.set([{ ...spotifyRoom, jam: { ...spotifyRoom.jam, url: "https://spotify.link/new" } }]);
+        notify(null);
+        expect(get(karaokeStatesStore).get("host")?.issue).toBe("desktopNoPosition");
+        game.stop();
+    });
+
+    it("says the Spotify app of this computer plays nothing when the desktop app reads no track", () => {
+        const { game, notify } = desktopHost();
+        notify(null);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
+        game.stop();
+    });
+
+    it("says nothing plays when Spicetify reports a player without a track, and clears it once a track plays", () => {
+        const { game, notify } = desktopHost({ presence: desktopTrack });
+        notify(spicetifyState(null));
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ track: null, issue: "noPlayback" });
+        // Another player's presence changes: Spicetify still says nothing plays.
+        game.listening.update((map) => new Map(map).set("guest", { ...EMPTY_SPOTIFY_LISTENING, trackTitle: "Other" }));
+        expect(get(karaokeStatesStore).get("host")?.issue).toBe("noPlayback");
+        notify(
+            spicetifyState({ uri: "spotify:track:test", title: "Test song", artist: "Test artist", artworkUrl: "" }),
+        );
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ positionMs: 1000, issue: undefined });
+        game.stop();
+    });
+
+    it("reads the position from a linked account when the desktop app gives none, and keeps it on a later null", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(10_000);
+        vi.stubGlobal("fetch", (url: string) =>
+            Promise.resolve(
+                url.endsWith("/queue")
+                    ? Response.json({ queue: [] })
+                    : Response.json({
+                          is_playing: true,
+                          progress_ms: 42_000,
+                          currently_playing_type: "track",
+                          item: { name: "Pearl Necklace", artists: [{ name: "ZZ Top" }], external_urls: {} },
+                      }),
+            ),
+        );
+        const { game, notify } = desktopHost({ presence: desktopTrack, account: linkedAccount() });
+        notify(null);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({
+            positionMs: 42_000,
+            positionAt: 10_000,
+            issue: undefined,
+        });
+        notify(null);
+        expect(get(karaokeStatesStore).get("host")).toMatchObject({ positionMs: 42_000, issue: undefined });
+        game.stop();
+    });
+
+    it("names no reason while a linked account's first read is still on its way", () => {
+        vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+        const { game, notify } = desktopHost({ presence: desktopTrack, account: linkedAccount() });
+        notify(null);
         expect(get(karaokeStatesStore).get("host")?.issue).toBeUndefined();
         game.stop();
     });

@@ -32,6 +32,8 @@ const RoomIdentity = z.object({
  * - `accessDenied`: Spotify refuses to read the host's player (403: account not registered in the Spotify app).
  * - `rateLimited`: Spotify asks to wait (429) before the host's player is read again.
  * - `readFailed`: the host's player could not be read (network error, unexpected status or unreadable answer).
+ * - `desktopNoPosition`: the desktop app reads the track of this computer's Spotify app without its position
+ *   (AppleScript): only the WorkAdventure Spicetify extension, or a linked account, gives the position.
  */
 export const KaraokePlaybackIssueSchema = z.enum([
     "noPlayback",
@@ -40,6 +42,7 @@ export const KaraokePlaybackIssueSchema = z.enum([
     "accessDenied",
     "rateLimited",
     "readFailed",
+    "desktopNoPosition",
 ]);
 export type KaraokePlaybackIssue = z.infer<typeof KaraokePlaybackIssueSchema>;
 
@@ -99,7 +102,10 @@ export interface JamKaraokeContext extends Pick<
     HomeJamContext,
     "rooms" | "listeningByUserUuid" | "localUuid" | "userByUuid" | "userById" | "send" | "onEvent" | "now"
 > {
-    desktop?: Pick<NonNullable<HomeJamContext["desktop"]>, "watchSpotifyPlayback" | "watchSpotifyQueue">;
+    desktop?: Pick<
+        NonNullable<HomeJamContext["desktop"]>,
+        "watchSpotifyPlayback" | "watchSpotifyQueue" | "watchSpotifyTrack"
+    >;
     sharingEnabled?: Readable<boolean>;
     account?: Pick<SpotifyAccount, "linked" | "getAccessToken" | "expireAccessToken" | "reportAccessDenied"> &
         Partial<Pick<SpotifyAccount, "authorizationExpired">>;
@@ -164,8 +170,10 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     let desktopPlaying = false;
     // Why the last read of the host's player through the Web API failed, until one succeeds.
     let readIssue: { issue: "accessDenied" | "rateLimited" | "readFailed"; status?: number } | undefined;
-    // The desktop Spotify app reported no track: nothing plays until it reports one again.
+    // The Spicetify extension, through the desktop app, reported a player without a track: nothing plays.
     let desktopIdle = false;
+    // The Web API of a linked account read the host's player: a desktop app reporting nothing does not override it.
+    let webPlayer = false;
     let lastPublished: KaraokePlayback | undefined;
     let hostGeneration = 0;
     let lastRequest = "";
@@ -200,13 +208,19 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
 
     /** Why no player of the host is read, the track coming from their presence only. */
     const unreadPlayerIssue = (): KaraokePlaybackIssue | undefined => {
-        if (stopPlayback && desktopIdle) return "noPlayback";
+        if (desktopIdle) return "noPlayback";
         if (readIssue) return readIssue.issue;
-        if (stopPlayback) return undefined;
+        if (context.account?.authorizationExpired && get(context.account.authorizationExpired)) {
+            return "authorizationExpired";
+        }
+        // A linked account is read through the Web API: its first answer is on its way.
         if (context.account && get(context.account.linked)) return undefined;
-        return context.account?.authorizationExpired && get(context.account.authorizationExpired)
-            ? "authorizationExpired"
-            : "noPlayer";
+        // The desktop app reads this computer's Spotify app even without Spicetify, only without the position.
+        if (context.desktop?.watchSpotifyTrack) {
+            const host = own && get(context.listeningByUserUuid).get(own.jam.hostUuid);
+            return host?.trackTitle ? "desktopNoPosition" : "noPlayback";
+        }
+        return "noPlayer";
     };
 
     const publishListening = (): void => {
@@ -232,6 +246,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
     /** A read of the host's player failed: say why, keeping the last position read while it still moves on. */
     const failRead = (issue: "accessDenied" | "rateLimited" | "readFailed", status?: number): void => {
         readIssue = { issue, status };
+        webPlayer = false;
         if (hasPlayer && issue !== "accessDenied") {
             publish({ ...state, issue, issueStatus: status });
         } else {
@@ -256,6 +271,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         desktopPlaying = false;
         readIssue = undefined;
         desktopIdle = false;
+        webPlayer = false;
         lastPublished = undefined;
         state = { track: null, next: null, playing: false, positionMs: 0, positionAt: 0 };
     };
@@ -304,6 +320,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         if (endpoint === "currently-playing" && response.status === 204 && !desktopPlaying) {
             readIssue = undefined;
             hasPlayer = true;
+            webPlayer = true;
             publish({
                 ...state,
                 track: null,
@@ -323,6 +340,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
                 } else {
                     readIssue = undefined;
                     hasPlayer = true;
+                    webPlayer = true;
                     publish({ ...state, ...playback, positionAt: now(), issue: undefined, issueStatus: undefined });
                 }
             } else if (endpoint === "queue") {
@@ -376,9 +394,19 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
         stopPlayback = context.desktop?.watchSpotifyPlayback?.((playback) => {
             if (!own || generation !== hostGeneration) return;
             desktopPlaying = playback?.track !== null && playback?.track !== undefined;
-            desktopIdle = !playback;
             if (!playback) {
+                // Null: the Spicetify extension reports nothing (not connected), not "nothing plays". The track of
+                // the presence stays, and a linked account's Web API keeps giving the position.
+                desktopIdle = false;
+                if (webPlayer) return;
                 hasPlayer = false;
+                publishListening();
+                return;
+            }
+            desktopIdle = playback.track === null;
+            if (desktopIdle) {
+                hasPlayer = true;
+                webPlayer = false;
                 publish({
                     ...state,
                     track: null,
@@ -390,6 +418,7 @@ export function startJamKaraoke(context: JamKaraokeContext): Unsubscriber {
                 });
                 return;
             }
+            webPlayer = false;
             const parsed = LyricsTrackSchema.safeParse({
                 title: playback.track?.title,
                 artist: playback.track?.artist,

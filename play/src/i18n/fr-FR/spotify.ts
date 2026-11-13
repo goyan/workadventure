@@ -14,7 +14,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         noPosition: "La position de lecture est inconnue : faites défiler les paroles à la main.",
         issue: {
             noPlayback: "Spotify ne renvoie aucune lecture pour l’hôte : la Jam a peut-être pris fin.",
-            noPlaybackHost: "Spotify ne renvoie aucune lecture pour votre Jam.",
+            noPlaybackHost:
+                "Spotify ne lit rien chez vous (app Spotify de cet ordinateur ou compte lié) : relancez la musique, ou collez le lien d’une nouvelle Jam si elle s’est arrêtée.",
             noPlayer:
                 "WorkAdventure ne lit pas le lecteur Spotify de l’hôte : la position est inconnue, faites défiler les paroles à la main.",
             noPlayerHost:
@@ -25,6 +26,8 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             accessDenied: "Spotify refuse de lire le lecteur de l’hôte : la position de lecture est inconnue.",
             accessDeniedHost:
                 "Spotify refuse de lire votre lecteur : votre compte n’est pas ajouté à l’app Spotify de ce serveur.",
+            desktopNoPosition:
+                "L’app de bureau de l’hôte ne transmet pas la position de lecture : faites défiler les paroles à la main.",
             unreadable: "Spotify ne répond pas pour le lecteur de l’hôte : la position de lecture est inconnue.",
             openSettings: "Réglages Spotify",
         },
@@ -156,8 +159,11 @@ const spotify: DeepPartial<Translation["spotify"]> = {
         jamStatus: {
             positionUnavailable:
                 "Position de lecture indisponible : la Jam s’est sûrement arrêtée sur Spotify. Collez le lien d’une nouvelle Jam.",
-            noPlayback: "Spotify ne renvoie plus de lecture pour cette Jam.",
+            noPlayback:
+                "Spotify ne lit rien chez vous (app Spotify de cet ordinateur ou compte lié) : relancez la musique, ou collez le lien d’une nouvelle Jam si elle s’est arrêtée.",
             noPlaybackGuest: "Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin.",
+            desktopNoPosition:
+                "L’app de bureau lit votre morceau sans sa position (elle lit l’app Spotify du Mac sans l’extension Spicetify WorkAdventure) : connectez cette extension, ou liez Spotify dans l’app de bureau (Réglages → Spotify → « Partager aussi depuis un autre appareil » : une liaison faite dans un navigateur ne compte pas ici).",
             noPlayer: "WorkAdventure ne lit pas votre lecteur Spotify : liez Spotify pour qu’il voie votre lecture.",
             authorizationExpired: "Votre autorisation Spotify a expiré : liez Spotify à nouveau.",
             accessDenied:

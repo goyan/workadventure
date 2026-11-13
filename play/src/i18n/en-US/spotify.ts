@@ -13,7 +13,8 @@ const spotify: BaseTranslation = {
         noPosition: "Playback position is unknown: scroll through the lyrics manually.",
         issue: {
             noPlayback: "Spotify returns no playback for the host: the Jam may have ended.",
-            noPlaybackHost: "Spotify returns no playback for your Jam.",
+            noPlaybackHost:
+                "Spotify plays nothing on your side (the Spotify app of this computer or the linked account): start the music again, or paste the link of a new Jam if it stopped.",
             noPlayer:
                 "WorkAdventure does not read the host’s Spotify player: the position is unknown, scroll through the lyrics manually.",
             noPlayerHost:
@@ -24,6 +25,8 @@ const spotify: BaseTranslation = {
             accessDenied: "Spotify refuses to read the host’s player: the playback position is unknown.",
             accessDeniedHost:
                 "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",
+            desktopNoPosition:
+                "The host’s desktop app does not send the playback position: scroll through the lyrics manually.",
             unreadable: "Spotify does not answer for the host’s player: the playback position is unknown.",
             openSettings: "Spotify settings",
         },
@@ -153,8 +156,11 @@ const spotify: BaseTranslation = {
         jamStatus: {
             positionUnavailable:
                 "Playback position unavailable: the Jam has most likely stopped on Spotify. Paste the link of a new Jam.",
-            noPlayback: "Spotify no longer returns playback for this Jam.",
+            noPlayback:
+                "Spotify plays nothing on your side (the Spotify app of this computer or the linked account): start the music again, or paste the link of a new Jam if it stopped.",
             noPlaybackGuest: "Spotify no longer returns playback for this Jam: it may have ended.",
+            desktopNoPosition:
+                "The desktop app reads your track without its position (it reads the Mac Spotify app without the WorkAdventure Spicetify extension): connect that extension, or link Spotify in the desktop app (Settings → Spotify → “Also share from another device”: a link made in a browser does not count here).",
             noPlayer: "WorkAdventure does not read your Spotify player: link Spotify so that it sees your playback.",
             authorizationExpired: "Your Spotify authorization expired: link Spotify again.",
             accessDenied:
