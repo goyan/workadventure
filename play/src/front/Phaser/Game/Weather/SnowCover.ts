@@ -31,10 +31,27 @@ export function snowCoverage(
     return startedAt === undefined ? 1 : Math.max(0, Math.min(1, (epoch - startedAt) / SNOW_ACCUMULATION_MS));
 }
 
-/** Coherent patches rather than independent random tiles; stable for a world cell. */
-export function snowCell(column: number, row: number, coverage: number): { variant: number; alpha: number } {
-    const region = Math.abs(Math.sin(Math.floor(column / 4) * 127.1 + Math.floor(row / 4) * 311.7) * 43758.5453) % 1;
-    const detail = Math.abs(Math.sin(column * 73.7 + row * 183.3) * 19743.7241) % 1;
-    const threshold = region * 0.65 + detail * 0.15;
-    return { variant: Math.floor(detail * 8), alpha: Math.max(0, Math.min(1, (coverage - threshold) / 0.2)) };
+/** The map settings the snow cover depends on. */
+export interface MapSnowSettings {
+    weather?: WeatherType;
+    weatherStartedAt?: number;
+    weatherAuto?: AutoWeatherSettings;
+}
+
+/**
+ * How much the map snow covers the ground for this person, 0 to 1. `shown` is false with a chosen theme or the weather
+ * hidden (mapSnowShownStore): no map snow then, even while it snows on the map.
+ */
+export function mapSnowCoverage(
+    shown: boolean,
+    settings: MapSnowSettings | undefined,
+    serverDate: Date | undefined,
+): number {
+    if (!shown || !serverDate) return 0;
+    return snowCoverage(
+        settings?.weather ?? WeatherType.Clear,
+        serverDate.getTime(),
+        settings?.weatherStartedAt,
+        settings?.weatherAuto,
+    );
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
-    snowCell,
+    mapSnowCoverage,
     snowCoverage,
     SNOW_ACCUMULATION_MS,
     SNOW_MELT_MS,
@@ -63,22 +63,35 @@ describe("shared progressive ground snow", () => {
         expect(snowCoverage(WeatherType.Snow, NaN, start)).toBe(0);
         expect(snowCoverage(WeatherType.Snow, start)).toBe(1);
     });
-    it("keeps variants stable and patches monotonic across all accumulation levels", () => {
-        for (let row = -10; row < 10; row++) {
-            for (let col = -10; col < 10; col++) {
-                let previous = 0;
-                const variant = snowCell(col, row, 0).variant;
-                for (const coverage of [0, 0.1, 0.25, 0.5, 0.75, 1]) {
-                    const cell = snowCell(col, row, coverage);
-                    expect(cell.variant).toBe(variant);
-                    expect(cell.alpha).toBeGreaterThanOrEqual(previous);
-                    previous = cell.alpha;
-                }
-                expect(previous).toBe(1);
-                expect(variant).toBeGreaterThanOrEqual(0);
-                expect(variant).toBeLessThan(8);
-                expect(snowCell(col, row, 0).alpha).toBe(0);
-            }
-        }
+});
+
+describe("map snow shown to this person", () => {
+    const snowing = findSlot(true, true) + 60_000;
+    const auto = { weather: WeatherType.Automatic };
+
+    it("is the shared snow cover when the map snow is shown", () => {
+        expect(mapSnowCoverage(true, auto, new Date(snowing))).toBe(snowCoverage(WeatherType.Automatic, snowing));
+        expect(mapSnowCoverage(true, auto, new Date(snowing))).toBe(1);
+        const building = findSlot(false, true) + SNOW_ACCUMULATION_MS / 2;
+        expect(mapSnowCoverage(true, auto, new Date(building))).toBe(0.5);
+    });
+
+    it("is nothing with a chosen theme or the weather hidden, even while it snows", () => {
+        expect(mapSnowCoverage(false, auto, new Date(snowing))).toBe(0);
+    });
+
+    it("is nothing before the server time is known", () => {
+        expect(mapSnowCoverage(true, auto, undefined)).toBe(0);
+    });
+
+    it("follows the map settings: episode date, and automatic weathers", () => {
+        expect(
+            mapSnowCoverage(true, { weather: WeatherType.Snow, weatherStartedAt: start }, new Date(start + 60_000)),
+        ).toBe(snowCoverage(WeatherType.Snow, start + 60_000, start));
+        const noSnow = { frequency: "normal" as const, include: [WeatherType.Rain] };
+        expect(mapSnowCoverage(true, { weather: WeatherType.Automatic, weatherAuto: noSnow }, new Date(snowing))).toBe(
+            0,
+        );
+        expect(mapSnowCoverage(true, undefined, new Date(snowing))).toBe(0);
     });
 });
