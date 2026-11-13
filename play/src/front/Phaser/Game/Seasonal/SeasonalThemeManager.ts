@@ -17,6 +17,8 @@ const DATE_CHECK_MS = 60_000;
  * often, and decorate again when they changed.
  */
 const LOADED_CHECK_MS = 1000;
+/** The image Phaser shows while the real one has not loaded yet. */
+const MISSING_TEXTURE = "__MISSING";
 
 export interface SeasonalThemeDeps {
     outdoorGrid: () => OutdoorGrid | undefined;
@@ -117,12 +119,16 @@ export class SeasonalThemeManager {
         this.deps.markDirty();
     }
 
-    /** Changes when an image appears, disappears, or is swapped (a tree turning to its season). */
+    /**
+     * Changes when an image appears, disappears, finishes loading, or a tree turns to its season. Another frame of an
+     * animated object (a door opening) changes nothing: the decor is not built again for it.
+     */
     private visibleSignature(): number {
         let signature = 0;
         for (const entity of this.deps.entities()) {
             if (!entity.visible) continue;
-            const key = entity.texture?.key ?? "";
+            const textureKey = entity.texture?.key ?? "";
+            const key = entity.getPrefab().seasonal ? textureKey : textureKey === MISSING_TEXTURE ? "" : "loaded";
             let hash = 17;
             for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) | 0;
             signature = (signature * 33 + hash) | 0;

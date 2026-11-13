@@ -3,6 +3,7 @@ import * as Phaser from "phaser";
 import { SKIP_RENDER_OPTIMIZATIONS } from "../../Enum/EnvironmentVariable";
 import { ResizableScene } from "../Login/ResizableScene";
 import { preventBrowserPageZoom } from "../../Utils/PreventBrowserPageZoom";
+import { hasRunningTween } from "./RenderNeeds";
 
 /**
  * A specialization of the main Phaser Game scene.
@@ -105,7 +106,7 @@ export class Game extends Phaser.Game {
                 // @ts-ignore
                 if (typeof scene.isDirty === "function") {
                     // @ts-ignore
-                    const isDirty = scene.isDirty() || scene.tweens.getTweens().length > 0;
+                    const isDirty = scene.isDirty() || hasRunningTween(scene.tweens.getTweens());
                     if (isDirty) {
                         return true;
                     }

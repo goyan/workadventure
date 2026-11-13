@@ -83,14 +83,24 @@ export class WeatherManager {
             this.lastFrameAt = -Infinity;
             return;
         }
-        // Keep weather light on the CPU, including when the avatar is idle.
-        if (now - this.lastFrameAt < 1000 / 30) return;
+        // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
+        // falling leaves alone 15 times (each drawing makes the whole map drawn again).
+        if (now - this.lastFrameAt < 1000 / (showWeather ? 30 : 15)) return;
         this.lastFrameAt = now;
-        this.visible = true;
         const view = this.scene.cameras.main.worldView;
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
         const veil = grid ? grid.outdoorRunsInView(view) : [view];
+        if (veil.length === 0) {
+            // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
+            if (this.visible) {
+                this.graphics.clear().setVisible(false);
+                this.visible = false;
+                this.scene.markDirty();
+            }
+            return;
+        }
+        this.visible = true;
         const epoch = serverDate?.getTime() ?? now;
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);

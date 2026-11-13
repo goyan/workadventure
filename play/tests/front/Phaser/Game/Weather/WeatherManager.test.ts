@@ -93,6 +93,30 @@ describe("weather rendering lifecycle", () => {
         expect(ground.destroy).toHaveBeenCalledOnce();
     });
 
+    it("draws nothing and asks no redraw while no outside is in view", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        const indoors = { outdoorRunsInView: () => [], isOutdoorAt: () => false } as unknown as ReturnType<
+            typeof OutdoorGrid.fromWalls
+        >;
+        manager = new WeatherManager(scene, { outdoorGrid: () => indoors });
+        manager.update(0, new Date(0));
+        manager.update(40, new Date(40));
+        expect(graphics.setVisible.mock.calls).not.toContainEqual([true]);
+        expect(scene.markDirty.mock.calls).toHaveLength(0);
+    });
+
+    it("moves the leaves 15 times a second, the rain 30 times", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Clear };
+        manager = new WeatherManager(scene, { seasonalTheme: () => SeasonalTheme.Autumn });
+        manager.update(0, new Date(0));
+        manager.update(40, new Date(40));
+        expect(graphics.clear.mock.calls).toHaveLength(1);
+        manager.update(70, new Date(70));
+        expect(graphics.clear.mock.calls).toHaveLength(2);
+    });
+
     it("changes graphics and sounds together at the shared server boundary", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Automatic };
