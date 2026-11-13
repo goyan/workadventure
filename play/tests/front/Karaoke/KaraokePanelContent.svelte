@@ -10,12 +10,18 @@
         room,
         loader,
         onclose,
+        mine,
+        onopensettings,
+        onopenjams,
     }: {
         playback: Writable<KaraokePlayback>;
         room: JamRoom;
         loader: LyricsLoader;
         onclose: () => void;
+        mine?: boolean;
+        onopensettings?: () => void;
+        onopenjams?: () => void;
     } = $props();
 </script>
 
-<KaraokePanel playback={$playback} {room} {loader} {onclose} />
+<KaraokePanel playback={$playback} {room} {loader} {onclose} {mine} {onopensettings} {onopenjams} />

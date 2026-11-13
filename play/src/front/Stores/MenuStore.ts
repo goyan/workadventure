@@ -260,6 +260,12 @@ export function handleOpenMenuEvent(key: string) {
     menuVisiblilityStore.set(true);
 }
 
+/** Opens the menu on the Spotify section of the settings, to link (again) a Spotify account. */
+export function openSpotifySettings(): void {
+    settingsSubMenuTargetStore.set("spotify");
+    handleOpenMenuEvent(SubMenusInterface.settings);
+}
+
 export function getProfileUrl() {
     return new URL(
         `profile-callback?token=${localUserStore.getAuthToken()}&playUri=${connectionManager.currentRoom?.key}`,

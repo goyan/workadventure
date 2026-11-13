@@ -303,6 +303,38 @@ pause/reprise/recherche, file réordonnée et saut, lecture manuelle/reprise,
 réglage du délai, autre version et morceau introuvable, fermeture et saisie sans
 déplacement de l'avatar. Aucun compte fournisseur, dépendance ou protobuf ajouté.
 
+## Jam Spotify terminée ou sans lecture
+
+L'API Web Spotify ne connaît pas les Jams : aucune route ne dit qu'une Jam a pris fin
+ni qu'un lien d'invitation a expiré, et la page d'aide « Jam » de Spotify ne précise
+ni durée ni expiration. WorkAdventure ne voit donc que le lecteur de l'hôte, lu par
+la boucle existante du karaoké (Web API toutes les 5 s, `Retry-After` respecté, 403
+relu après 5 min ; aucune requête ajoutée). Le navigateur de l'hôte joint un statut
+facultatif à l'état du karaoké (événement de salle existant, ignoré par les anciens
+fronts) :
+
+- **rien en lecture** : réponse 204 (« Playback not available or active ») ou app
+  Spotify du desktop sans morceau ;
+- **lecteur non lu** : ni lecteur desktop ni compte Spotify lié, le morceau ne vient
+  que de la présence, sans position (le cas « position inconnue » vu en beta) ;
+- **autorisation expirée** : Spotify a refusé le refresh token, ce qui a délié le
+  compte (non retenu après un rechargement : il se lit alors « non lié ») ;
+- **accès refusé** : 403, compte absent de l'app Spotify du serveur.
+
+Sur la carte de sa Jam Spotify, l'hôte voit l'avertissement correspondant
+(« Spotify ne renvoie plus de lecture pour cette Jam : elle a peut-être pris fin »),
+un bouton **Réglages Spotify** quand il faut relier le compte, et **Coller un nouveau
+lien de Jam** à tout moment : le lien remplace l'ancien sans fermer le salon (titre,
+lumières, zone, audio relayé conservés, même hors de la zone). Les auditeurs voient
+seulement « rien en lecture » ; ceux qui avaient rejoint par l'ancien lien sont
+invités à rejoindre à nouveau (Rejoindre ouvre le nouveau lien). Le karaoké remplace
+« position inconnue » ou « pas de morceau » par la raison connue, avec l'action utile
+pour l'hôte (réglages Spotify ou tiroir des Jams), et reste ouvert sur le nouveau lien.
+
+Recette : Jam expirée réelle (statut observé chez l'hôte : 204 ou lecture continue),
+navigateur sans Spotify lié, refresh refusé, collage d'un nouveau lien hors de la
+zone avec un auditeur audio et un invité Spotify, karaoké ouvert des deux côtés.
+
 ## Compteur des Jams et écoute audio
 
 « Écouter l'audio » suffit pour apparaître parmi les participants d'un Jam Spotify :

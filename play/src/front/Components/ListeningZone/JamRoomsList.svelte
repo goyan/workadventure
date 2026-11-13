@@ -27,6 +27,7 @@
     import { toggleKaraokeRoom } from "../../Karaoke/JamKaraoke";
     import Button from "../UI/Button.svelte";
     import JamAudioControls from "./JamAudioControls.svelte";
+    import JamLinkStatus from "./JamLinkStatus.svelte";
     import JukeboxPlaybackControls from "./JukeboxPlaybackControls.svelte";
     import LightEffectsToggle from "./LightEffectsToggle.svelte";
     import JukeboxQueue from "./JukeboxQueue.svelte";
@@ -130,6 +131,9 @@
             <p class="m-0 text-xs text-white/50" data-testid="jam-lights-off-by-host">
                 {$LL.spotify.listeningZone.lightsOffByHost()}
             </p>
+        {/if}
+        {#if !home && !live}
+            <JamLinkStatus {room} {mine} {joined} />
         {/if}
         {#if !live}
             <Button

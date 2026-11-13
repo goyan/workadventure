@@ -59,6 +59,9 @@ vi.mock("../../../../src/front/Stores/MediaStore", async () => ({
 vi.mock("../../../../src/front/Components/ListeningZone/JamAudioControls.svelte", async () => ({
     default: (await import("../JamRoomsListStub.svelte")).default,
 }));
+vi.mock("../../../../src/front/Components/ListeningZone/JamLinkStatus.svelte", async () => ({
+    default: (await import("../JamLinkStatusStub.svelte")).default,
+}));
 vi.mock("../../../../src/front/Spotify/HomeJam", async () => ({
     controlJukeboxPlayback: mocks.playback,
     jukeboxQueuesStore: (await import("svelte/store")).writable(new Map()),
@@ -233,6 +236,23 @@ afterEach(async () => {
     lampEffectsEnabledStore.set(true);
     selectedKaraokeRoomStore.set(undefined);
 });
+describe("Jam invite link", () => {
+    it("shows the invite link status on a Spotify Jam only, not on a Jukebox nor a Live", () => {
+        mocks.setRooms([
+            room,
+            { ...room, jam: { home: true, hostUuid: "other-host", hostName: "Other host" } },
+            { ...room, jam: { live: true, hostUuid: "live-host", hostName: "Live host" } },
+        ]);
+        render();
+        const cards = [...target.querySelectorAll('[data-testid="listening-zone-room"]')];
+        expect(cards.map((card) => card.querySelector('[data-testid="jam-link-status"]') !== null)).toEqual([
+            true,
+            false,
+            false,
+        ]);
+    });
+});
+
 describe("Karaoke", () => {
     it.each([room, { ...room, jam: { home: true, hostUuid: "host", hostName: "Host" } } satisfies JamRoom])(
         "toggles the selected Spotify or Jukebox room without changing playback or membership",

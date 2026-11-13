@@ -2,6 +2,7 @@
     import { onDestroy, onMount, untrack } from "svelte";
     import type { Component } from "svelte";
     import * as Sentry from "@sentry/svelte";
+    import { isHomeJam } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { LyricsTrackSchema, lyricsRecordingKey } from "../../../common/Lyrics";
     import type { LyricsTrack } from "../../../common/Lyrics";
@@ -35,11 +36,20 @@
         playback,
         onclose,
         loader = new LyricsLoader(fetchLyrics),
+        mine = false,
+        onopensettings,
+        onopenjams,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
         onclose: () => void;
         loader?: LyricsLoader;
+        /** The local user hosts this room: the issue is theirs to fix. */
+        mine?: boolean;
+        /** Opens the Spotify settings, to link Spotify again. */
+        onopensettings?: () => void;
+        /** Opens the Jam rooms, where the host pastes the link of a new Jam. */
+        onopenjams?: () => void;
     } = $props();
 
     /** The panel's width (26rem) and its margin, kept on screen beside an open chat. */
@@ -79,6 +89,32 @@
         playback.track?.durationMs && playback.positionAt > 0
             ? karaokePositionMs(playback, now) / playback.track.durationMs
             : undefined,
+    );
+    // Why the host's playback is missing, as their browser reported it; an ended Jam only shows as nothing playing.
+    let issue = $derived(
+        playback.issue === "noPlayback" && isHomeJam(room.jam) ? undefined : (playback.issue ?? undefined),
+    );
+    let issueText = $derived.by(() => {
+        const texts = $LL.spotify.karaoke.issue;
+        switch (issue) {
+            case "noPlayback":
+                return mine ? texts.noPlaybackHost() : texts.noPlayback();
+            case "noPlayer":
+                return mine ? texts.noPlayerHost() : texts.noPlayer();
+            case "authorizationExpired":
+                return mine ? texts.authorizationExpiredHost() : texts.authorizationExpired();
+            case "accessDenied":
+                return mine ? texts.accessDeniedHost() : texts.accessDenied();
+            default:
+                return undefined;
+        }
+    });
+    let issueAction = $derived(
+        !mine || !issue
+            ? undefined
+            : issue === "noPlayback"
+              ? onopenjams && { label: $LL.spotify.listeningZone.roomsTitle(), run: onopenjams }
+              : onopensettings && { label: $LL.spotify.karaoke.issue.openSettings(), run: onopensettings },
     );
     let offsetLabel = $derived(`${offsetMs > 0 ? "+" : ""}${(offsetMs / 1000).toFixed(2)} s`);
 
@@ -163,6 +199,17 @@
         if (event.target instanceof Node && lyricsContainer?.contains(event.target)) manualScroll = true;
     }
 </script>
+
+{#snippet issueNotice(text: string)}
+    <div class="flex flex-col items-start gap-2 px-4 pt-3" data-testid="karaoke-issue">
+        <p class="m-0 flex items-start gap-1.5 text-xs text-white/80" role="status">
+            <IconAlertTriangle font-size="14" class="mt-px shrink-0 text-warning" />{text}
+        </p>
+        {#if issueAction}
+            <Button size="sm" variant="light" appearance="border" onclick={issueAction.run}>{issueAction.label}</Button>
+        {/if}
+    </div>
+{/snippet}
 
 {#snippet notice(Icon: Component, text: string)}
     <div class="flex flex-col items-center gap-3 px-6 py-8 text-center">
@@ -256,6 +303,8 @@
             <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
                 <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.unsynced()}
             </p>
+        {:else if issueText}
+            {@render issueNotice(issueText)}
         {:else if !playback.positionAt}
             <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
                 <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.noPosition()}
@@ -324,6 +373,8 @@
                 </div>
             {/if}
         </div>
+    {:else if !track && issueText}
+        {@render issueNotice(issueText)}
     {:else}
         {@render notice(IconMusic, track ? $LL.spotify.karaoke.missing() : $LL.spotify.karaoke.noTrack())}
     {/if}

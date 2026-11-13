@@ -22,6 +22,17 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     missing: () => "Missing",
                     noTrack: () => "No track",
                     noPosition: () => "No position",
+                    issue: {
+                        noPlayback: () => "No playback for the host",
+                        noPlaybackHost: () => "No playback: paste a new Jam",
+                        noPlayer: () => "Host player not read",
+                        noPlayerHost: () => "Your player is not read",
+                        authorizationExpired: () => "Host authorization expired",
+                        authorizationExpiredHost: () => "Your authorization expired",
+                        accessDenied: () => "Host access denied",
+                        accessDeniedHost: () => "Your access denied",
+                        openSettings: () => "Spotify settings",
+                    },
                     paused: () => "Paused",
                     unsynced: () => "Unsynced",
                     follow: () => "Follow",
@@ -34,6 +45,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     artist: () => "Artist",
                     search: () => "Search",
                 },
+                listeningZone: { roomsTitle: () => "Jams on the map" },
             },
         }),
     };
@@ -286,5 +298,73 @@ describe("KaraokePanel", () => {
         component = undefined;
         if (mounted) await unmount(mounted);
         expect(get(karaokeInputFocusStore)).toBe(false);
+    });
+});
+
+describe("KaraokePanel playback issues", () => {
+    const spotifyRoom = {
+        zone: { areaId: "area", propertyId: "property", areaName: "Dancefloor" },
+        jam: { url: "https://spotify.link/expired", hostUuid: "host", hostName: "Host" },
+    };
+    const onopensettings = vi.fn();
+    const onopenjams = vi.fn();
+
+    async function remount(mine: boolean, state: KaraokePlayback): Promise<void> {
+        const mounted = component;
+        component = undefined;
+        if (mounted) await unmount(mounted);
+        target.replaceChildren();
+        playback.set(state);
+        flushSync(() => {
+            component = mount(KaraokePanelContent, {
+                target,
+                props: {
+                    playback,
+                    loader: new LyricsLoader(request),
+                    onclose,
+                    room: spotifyRoom,
+                    mine,
+                    onopensettings,
+                    onopenjams,
+                },
+            });
+        });
+        await settle();
+    }
+
+    function button(text: string): HTMLButtonElement | undefined {
+        return [...target.querySelectorAll("button")].find((candidate) => candidate.textContent?.trim() === text);
+    }
+
+    it("replaces the unknown position by the host's missing player, with the action to link Spotify (the beta report)", async () => {
+        await remount(true, { ...initial, positionMs: 0, positionAt: 0, issue: "noPlayer" });
+        expect(target.textContent).toContain("Your player is not read");
+        expect(target.textContent).not.toContain("No position");
+        flushSync(() => button("Spotify settings")?.click());
+        expect(onopensettings).toHaveBeenCalledOnce();
+    });
+
+    it("tells a guest why the host's position is unknown, without an action that is the host's", async () => {
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0, issue: "authorizationExpired" });
+        expect(target.textContent).toContain("Host authorization expired");
+        expect(target.textContent).not.toContain("No position");
+        expect(button("Spotify settings")).toBeUndefined();
+    });
+
+    it("says that Spotify returns no playback instead of no shared track, and points the host to the Jams", async () => {
+        await remount(true, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
+        expect(target.textContent).toContain("No playback: paste a new Jam");
+        expect(target.textContent).not.toContain("No track");
+        flushSync(() => button("Jams on the map")?.click());
+        expect(onopenjams).toHaveBeenCalledOnce();
+
+        await remount(false, { ...initial, track: null, playing: false, positionMs: 0, issue: "noPlayback" });
+        expect(target.textContent).toContain("No playback for the host");
+        expect(button("Jams on the map")).toBeUndefined();
+    });
+
+    it("keeps the unknown position message when the host's browser knows no reason", async () => {
+        await remount(false, { ...initial, positionMs: 0, positionAt: 0 });
+        expect(target.textContent).toContain("No position");
     });
 });

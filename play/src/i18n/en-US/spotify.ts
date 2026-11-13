@@ -11,6 +11,22 @@ const spotify: BaseTranslation = {
         missing: "No lyrics found for this recording. You can try another title or artist.",
         noTrack: "The host has not shared a track yet. You can choose a title to read its lyrics.",
         noPosition: "Playback position is unknown: scroll through the lyrics manually.",
+        issue: {
+            noPlayback: "Spotify returns no playback for the host: the Jam may have ended.",
+            noPlaybackHost:
+                "Spotify returns no playback: start the music again, or paste the link of a new Jam in “Jams on the map”.",
+            noPlayer:
+                "WorkAdventure does not read the host’s Spotify player: the position is unknown, scroll through the lyrics manually.",
+            noPlayerHost:
+                "WorkAdventure does not read your Spotify player: link Spotify so that the lyrics follow playback.",
+            authorizationExpired: "The host’s Spotify authorization expired: the playback position is unknown.",
+            authorizationExpiredHost:
+                "Your Spotify authorization expired: link Spotify again so that the lyrics follow playback.",
+            accessDenied: "Spotify refuses to read the host’s player: the playback position is unknown.",
+            accessDeniedHost:
+                "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",
+            openSettings: "Spotify settings",
+        },
         paused: "Playback paused",
         unsynced: "These lyrics have no timing: scroll through them manually.",
         follow: "Follow playback",
@@ -134,6 +150,20 @@ const spotify: BaseTranslation = {
         lightsDisableForAll: "Turn off light effects (for everyone)",
         lightsEnableForAll: "Turn light effects back on (for everyone)",
         lightsOffByHost: "Light effects turned off by the host",
+        jamStatus: {
+            noPlayback:
+                "Spotify no longer returns playback for this Jam: it may have ended. Start the music again, or paste the link of a new Jam.",
+            noPlaybackGuest: "Spotify no longer returns playback for this Jam: it may have ended.",
+            noPlayer:
+                "WorkAdventure does not see your Spotify playback: link Spotify to know whether the Jam still plays.",
+            authorizationExpired: "Your Spotify authorization expired: link Spotify again.",
+            accessDenied:
+                "Spotify refuses to read your player: your account is not added to this server’s Spotify app.",
+            openSettings: "Spotify settings",
+            replace: "Paste a new Jam link",
+            replaceSubmit: "Replace the link",
+            relinked: "The host shared a new link: join the Jam again.",
+        },
         playbackEmpty: "No track selected",
         playbackDisconnected: "Connecting to Spotify… Open Spotify with the WorkAdventure Spicetify extension.",
         queueEmpty: "Nothing in the queue yet.",
