@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { IconUser, IconUsers } from "../Icons";
+    import { IconUser } from "../Icons";
     import TooltipAbove from "./TooltipAbove.svelte";
 
     let {
@@ -8,14 +8,12 @@
         onclick,
         testid,
         disabled = false,
-        everyone = false,
     }: {
         on: boolean;
         label: string;
         onclick?: () => void;
         testid: string;
         disabled?: boolean;
-        everyone?: boolean;
     } = $props();
 </script>
 
@@ -66,11 +64,7 @@
             class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-white/60 bg-slate-900 text-white"
             aria-hidden="true"
         >
-            {#if everyone}
-                <IconUsers class="h-3 w-3" />
-            {:else}
-                <IconUser class="h-3 w-3" />
-            {/if}
+            <IconUser class="h-3 w-3" />
         </span>
     </button>
 </TooltipAbove>

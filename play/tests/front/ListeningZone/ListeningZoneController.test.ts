@@ -224,11 +224,10 @@ describe("Jam rooms", () => {
         unsubscribe();
     });
 
-    it("lets the host paste a new invite link from anywhere, keeping the room, its title and its lights", () => {
+    it("lets the host paste a new invite link from anywhere, keeping the room and its title", () => {
         const unsubscribe = syncJoinedJam();
         setRooms(lounge, [homeJam]);
         shareJam("https://spotify.link/expired", "Vendredi rock");
-        updateOwnRoom({ lightsOff: true });
         currentListeningZoneStore.set(undefined);
 
         updateOwnRoom({ url: "https://spotify.link/fresh" });
@@ -240,7 +239,6 @@ describe("Jam rooms", () => {
                 hostUuid: "me",
                 hostName: "Me",
                 title: "Vendredi rock",
-                lightsOff: true,
             },
         ]);
         expect(get(joinedJamStore)).toMatchObject({ areaId: "lounge", url: "https://spotify.link/fresh" });

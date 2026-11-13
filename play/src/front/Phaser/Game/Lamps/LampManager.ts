@@ -398,7 +398,7 @@ export class LampManager {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
             // The host turned the effects of their room off: off for everyone, the room keeps its own light.
-            lamp.jam = jam && !this.lightsOffIn(jam) ? jam : undefined;
+            lamp.jam = jam;
             // The room put out while it plays: the smallest area it stands in, as for its light.
             lamp.room = zoneOf(source, areaZones);
         }
@@ -437,7 +437,7 @@ export class LampManager {
             const bounds = this.floorBounds(floor.entity);
             const source = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
-            floor.jam = jam && !this.lightsOffIn(jam) ? jam : undefined;
+            floor.jam = jam;
         }
     }
 
@@ -681,15 +681,6 @@ export class LampManager {
                 },
             };
         });
-    }
-
-    private lightsOffIn(choice: LampJamChoice): boolean {
-        return this.rooms.some(
-            (room) =>
-                room.zone.areaId === choice.areaId &&
-                room.jam.hostUuid === choice.hostUuid &&
-                room.jam.lightsOff === true,
-        );
     }
 
     private setPartyRooms(rooms: readonly LampZone[]): void {

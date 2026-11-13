@@ -140,11 +140,11 @@ export function startLiveJam(title = ""): void {
 }
 
 /**
- * Renames our room (an empty title names it after us again), switches the DJ mode of our Jukebox, turns the light
- * effects of our room off or on for everyone in it, or gives our Spotify Jam a new invite link (Spotify ended the
- * previous Jam): the room stays where it was opened, wherever we stand.
+ * Renames our room (an empty title names it after us again), switches the DJ mode of our Jukebox, or gives our
+ * Spotify Jam a new invite link (Spotify ended the previous Jam): the room stays where it was opened, wherever we
+ * stand. Light effects are turned off per person only (lampEffectsEnabledStore), never for the whole room.
  */
-export function updateOwnRoom(change: { title?: string; djMode?: boolean; lightsOff?: boolean; url?: string }): void {
+export function updateOwnRoom(change: { title?: string; djMode?: boolean; url?: string }): void {
     const own = get(ownJamRoomStore);
     if (!own) {
         return;
@@ -157,7 +157,6 @@ export function updateOwnRoom(change: { title?: string; djMode?: boolean; lights
         ...own.jam,
         ...(change.title !== undefined && { title: titled(change.title).title }),
         ...(change.djMode !== undefined && isHomeJam(own.jam) && { djMode: change.djMode }),
-        ...(change.lightsOff !== undefined && { lightsOff: change.lightsOff }),
         ...(change.url !== undefined && { url: change.url }),
     };
     const rooms = roomsInZone(get(allJamRoomsStore), own.zone).map((room) =>

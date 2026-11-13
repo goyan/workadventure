@@ -12,7 +12,6 @@
         leaveJam,
         localPlayerName,
         stopSharingJam,
-        updateOwnRoom,
         type JamRoom,
     } from "../../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../../ListeningZone/ListeningZoneStore";
@@ -102,17 +101,6 @@
                     onclick={() => lampEffectsEnabledStore.update((enabled) => !enabled)}
                     testid="jam-lights-toggle"
                 />
-                {#if mine}
-                    <LightEffectsToggle
-                        on={room.jam.lightsOff !== true}
-                        label={room.jam.lightsOff
-                            ? $LL.spotify.listeningZone.lightsEnableForAll()
-                            : $LL.spotify.listeningZone.lightsDisableForAll()}
-                        onclick={() => updateOwnRoom({ lightsOff: room.jam.lightsOff !== true })}
-                        testid="jam-lights-toggle-all"
-                        everyone
-                    />
-                {/if}
             </div>
         </div>
         {#if jam.title}
@@ -127,11 +115,6 @@
                 ? ` · ${room.zone.areaName}`
                 : ""}
         </p>
-        {#if !mine && room.jam.lightsOff}
-            <p class="m-0 text-xs text-white/50" data-testid="jam-lights-off-by-host">
-                {$LL.spotify.listeningZone.lightsOffByHost()}
-            </p>
-        {/if}
         {#if !home && !live}
             <JamLinkStatus {room} {mine} {joined} />
         {/if}

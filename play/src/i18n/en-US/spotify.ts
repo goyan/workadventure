@@ -150,9 +150,6 @@ const spotify: BaseTranslation = {
         playbackSeek: "Playback position",
         lightsDisable: "Turn off light effects (for me)",
         lightsEnable: "Turn on light effects (for me)",
-        lightsDisableForAll: "Turn off light effects (for everyone)",
-        lightsEnableForAll: "Turn light effects back on (for everyone)",
-        lightsOffByHost: "Light effects turned off by the host",
         jamLinkRequest: {
             ask: "Ask for a new link",
             sent: "Request sent",
