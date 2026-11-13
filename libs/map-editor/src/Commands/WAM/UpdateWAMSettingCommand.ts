@@ -1,6 +1,13 @@
 import type { UpdateWAMSettingsMessage } from "@workadventure/messages";
 import type { WAMFileFormat, WAMSettings } from "../../types";
-import { AutoWeather, CategorySettings, MegaphoneSettings, PrefabOverride, RecordingSettings, Weather } from "../../types";
+import {
+    AutoWeather,
+    CategorySettings,
+    MegaphoneSettings,
+    PrefabOverride,
+    RecordingSettings,
+    Weather,
+} from "../../types";
 import { Command } from "../Command";
 
 export class UpdateWAMSettingCommand extends Command {

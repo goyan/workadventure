@@ -24,7 +24,10 @@ describe("WAM Setting", () => {
         const wam: WAMFileFormat = { ...defaultWamFile, settings: { recording: { enableSounds: true } } };
         const setWeather = (weather: string): Promise<void> =>
             new UpdateWAMSettingCommand(wam, {
-                message: { $case: "updateWeatherSettingMessage", updateWeatherSettingMessage: { weather, autoInclude: [] } },
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather, autoInclude: [] },
+                },
             }).execute();
         await setWeather(WeatherType.Automatic);
         expect(WamSchema.parse(wam).settings?.weather).toBe(WeatherType.Automatic);
