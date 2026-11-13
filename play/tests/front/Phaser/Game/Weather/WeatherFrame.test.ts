@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
     effectiveWeather,
+    FOG_LEVELS,
+    fogBlocks,
     fogPatches,
     fogStrength,
     keepOutdoorParticles,
+    lastStrike,
     leafParticles,
-    stormGlow,
+    lightningBolt,
+    stormFlash,
     weatherParticles,
     weatherAtTime,
 } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
@@ -33,11 +37,77 @@ describe("world weather", () => {
             500,
         );
     });
-    it("uses a gentle single storm glow and the same phase for every client", () => {
-        expect(stormGlow(600)).toBeCloseTo(0.12);
-        expect(stormGlow(23600)).toBeCloseTo(stormGlow(600));
-        expect(stormGlow(2000)).toBe(0);
-        expect(stormGlow(22999)).toBe(0);
+});
+
+describe("storm", () => {
+    it("strikes every 12 to 30 seconds, at the same times for everyone, without a fixed rhythm", () => {
+        let previous = lastStrike(0).at;
+        const gaps: number[] = [];
+        for (let time = 0; time < 3_600_000; time += 250) {
+            const strike = lastStrike(time);
+            expect(strike.at).toBeLessThanOrEqual(time);
+            if (strike.at !== previous) {
+                gaps.push(strike.at - previous);
+                previous = strike.at;
+            }
+        }
+        expect(gaps.length).toBeGreaterThan(100);
+        expect(Math.min(...gaps)).toBeGreaterThanOrEqual(12000);
+        expect(Math.max(...gaps)).toBeLessThanOrEqual(30000);
+        expect(new Set(gaps).size).toBeGreaterThan(20);
+        expect(lastStrike(1_234_567)).toEqual(lastStrike(1_234_567));
+    });
+
+    it("flashes twice in less than half a second after a strike", () => {
+        const samples = Array.from({ length: 80 }, (_, index) => stormFlash(index * 10, false));
+        expect(Math.max(...samples)).toBeCloseTo(0.45, 2);
+        const peaks = samples.filter(
+            (value, index) => value > 0 && value >= (samples[index - 1] ?? 0) && value > (samples[index + 1] ?? 0),
+        );
+        expect(peaks).toHaveLength(2);
+        expect(stormFlash(450, false)).toBe(0);
+        expect(stormFlash(5000, false)).toBe(0);
+        expect(stormFlash(-10, false)).toBe(0);
+    });
+
+    it("only glows gently when motion is reduced", () => {
+        const samples = Array.from({ length: 160 }, (_, index) => stormFlash(index * 10, true));
+        expect(Math.max(...samples)).toBeGreaterThan(0.1);
+        expect(Math.max(...samples)).toBeLessThanOrEqual(0.12);
+    });
+
+    describe("bolt", () => {
+        const outdoors = () => true;
+        const strike = lastStrike(500_000);
+
+        it("goes down to a point outdoors in the view, for about a third of a second", () => {
+            const bolt = lightningBolt(strike, 100, view, outdoors);
+            expect(bolt).toBeDefined();
+            expect(bolt!.length).toBeGreaterThanOrEqual(6);
+            for (const point of bolt!) {
+                expect(point.x).toBeGreaterThanOrEqual(view.x);
+                expect(point.x).toBeLessThanOrEqual(view.x + view.width);
+                expect(point.y).toBeGreaterThanOrEqual(view.y);
+                expect(point.y).toBeLessThanOrEqual(view.y + view.height);
+            }
+            const end = bolt![bolt!.length - 1];
+            expect(end.y).toBeGreaterThan(bolt![0].y);
+            expect(lightningBolt(strike, 400, view, outdoors)).toBeUndefined();
+            expect(lightningBolt(strike, -1, view, outdoors)).toBeUndefined();
+        });
+
+        it("is the same for everyone and changes from one strike to the next", () => {
+            expect(lightningBolt(strike, 100, view, outdoors)).toEqual(lightningBolt(strike, 200, view, outdoors));
+            const next = lastStrike(strike.at + 31000);
+            expect(lightningBolt(next, 100, view, outdoors)).not.toEqual(lightningBolt(strike, 100, view, outdoors));
+        });
+
+        it("never crosses a room: no bolt when no place outdoors fits it", () => {
+            expect(lightningBolt(strike, 100, view, () => false)).toBeUndefined();
+            const leftOnly = (x: number) => x < 400;
+            const bolt = lightningBolt(strike, 100, view, leftOnly);
+            if (bolt) for (const point of bolt) expect(point.x).toBeLessThan(400);
+        });
     });
 });
 
@@ -222,6 +292,48 @@ describe("fog", () => {
         });
         it("stand still on request", () => {
             expect(fogPatches(5000, view, true)).toEqual(fogPatches(90000, view, true));
+        });
+    });
+
+    describe("blocks", () => {
+        const inside = (block: { x: number; y: number; width: number; height: number }, run: typeof view) =>
+            block.x >= run.x &&
+            block.y >= run.y &&
+            block.x + block.width <= run.x + run.width &&
+            block.y + block.height <= run.y + run.height;
+
+        it("stay inside the outdoor runs, so a patch stops at the walls", () => {
+            const runs = [
+                { x: 0, y: 0, width: 40, height: 32 },
+                { x: 96, y: 32, width: 64, height: 32 },
+            ];
+            const blocks = fogBlocks(runs, [{ x: 80, y: 32, radius: 200 }], 16);
+            expect(blocks.length).toBeGreaterThan(0);
+            for (const block of blocks) expect(runs.some((run) => inside(block, run))).toBe(true);
+        });
+
+        it("are thickest at the centre of a patch and absent beyond its edge", () => {
+            const run = { x: 0, y: 0, width: 640, height: 16 };
+            const blocks = fogBlocks([run], [{ x: 200, y: 8, radius: 100 }], 16);
+            const at = (x: number) => blocks.find((block) => block.x <= x && x < block.x + block.width)?.level ?? 0;
+            expect(at(200)).toBe(FOG_LEVELS);
+            expect(at(200)).toBeGreaterThan(at(260));
+            expect(at(260)).toBeGreaterThan(0);
+            expect(at(320)).toBe(0);
+            expect(at(90)).toBe(0);
+        });
+
+        it("merge neighbours of the same thickness into one rectangle", () => {
+            const run = { x: 0, y: 0, width: 320, height: 32 };
+            const blocks = fogBlocks([run], [{ x: 160, y: 16, radius: 100000 }], 16);
+            expect(blocks).toEqual([
+                { x: 0, y: 0, width: 320, height: 16, level: FOG_LEVELS },
+                { x: 0, y: 16, width: 320, height: 16, level: FOG_LEVELS },
+            ]);
+        });
+
+        it("are none without a patch", () => {
+            expect(fogBlocks([view], [], 16)).toEqual([]);
         });
     });
 });

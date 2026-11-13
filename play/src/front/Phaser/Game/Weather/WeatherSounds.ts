@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { weatherVolumeStore } from "../../../Stores/SoundEffectsStore";
+import { lastStrike } from "./WeatherFrame";
 
 export const WEATHER_SOUNDS = [
     { key: "audio-weather-night-rain", url: "/resources/objects/weather/night_rain.mp3" },
@@ -75,10 +76,11 @@ export class WeatherSounds {
         }
         this.thunder?.setVolume(volume * 0.3);
         const epoch = serverDate.getTime();
-        const cycle = Math.floor(epoch / 23000);
-        // Thunder follows the shared glow; joining midway never replays an old strike.
-        if (epoch % 23000 >= 1800 && epoch % 23000 < 2800 && cycle !== this.lastStormCycle) {
-            this.lastStormCycle = cycle;
+        const strike = lastStrike(epoch);
+        const since = epoch - strike.at;
+        // Thunder comes 1.8 s after the shared strike; joining midway never replays an old strike.
+        if (since >= 1800 && since < 2800 && strike.at !== this.lastStormCycle) {
+            this.lastStormCycle = strike.at;
             this.thunder ??= this.sound.add("audio-weather-thunder") as WeatherSound;
             this.thunder.setVolume(volume * 0.3);
             this.thunder.play();

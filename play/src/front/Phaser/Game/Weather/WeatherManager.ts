@@ -8,26 +8,33 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import {
     effectiveWeather,
+    FOG_LEVELS,
+    fogBlocks,
     fogPatches,
     fogStrength,
     keepOutdoorParticles,
     leafParticles,
-    stormGlow,
+    lastStrike,
+    lightningBolt,
+    stormFlash,
     weatherParticles,
     weatherAtTime,
 } from "./WeatherFrame";
+import type { WeatherView } from "./WeatherFrame";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
 /** The system asks for less motion: the fog patches stand still. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
-/** Fog patches: three concentric rings, from the outside in, as a share of the radius and an alpha. */
-const FOG_RINGS = [
-    { scale: 1, alpha: 0.05 },
-    { scale: 0.75, alpha: 0.035 },
-    { scale: 0.5, alpha: 0.02 },
-];
+const FOG_COLOR = 0xdfe6ee;
+/** The fog veil over everything outdoors, and how much thicker the centre of a patch is. */
+const FOG_VEIL_ALPHA = 0.6;
+const FOG_PATCH_ALPHA = 0.3;
+/** At night the fog is lighter, so the night stays dark. */
+const FOG_NIGHT_FACTOR = 0.6;
+/** Size of a fog block, in pixels of the map: small enough to look soft, big enough to stay cheap. */
+const FOG_BLOCK = 16;
 
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
@@ -143,31 +150,20 @@ export class WeatherManager {
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
         if (showWeather && weather === WeatherType.Fog) {
-            const density = fogStrengthNow * (night ? 0.5 : 1);
-            this.graphics.fillStyle(0xdfe6ee, 0.2 * density);
+            const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
+            this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-            const patches = fogPatches(epoch, view, this.reducedMotion);
-            // A patch is only drawn when it covers no room: its centre and its four extreme points are outdoors.
-            const roomsKept = patches.filter(
-                (patch) =>
-                    !isOutdoor ||
-                    [
-                        [0, 0],
-                        [patch.radius, 0],
-                        [-patch.radius, 0],
-                        [0, patch.radius],
-                        [0, -patch.radius],
-                    ].every(([dx, dy]) => isOutdoor(patch.x + dx, patch.y + dy)),
-            );
-            for (const ring of FOG_RINGS) {
-                this.graphics.fillStyle(0xdfe6ee, ring.alpha * density);
-                for (const patch of roomsKept) {
-                    this.graphics.fillCircle(patch.x, patch.y, patch.radius * ring.scale);
-                }
+            // The patches are cut into blocks inside the outdoor runs, so they stop at the walls.
+            const blocks = fogBlocks(veil, fogPatches(epoch, view, this.reducedMotion), FOG_BLOCK);
+            for (let level = 1; level <= FOG_LEVELS; level++) {
+                const ofLevel = blocks.filter((block) => block.level === level);
+                if (ofLevel.length === 0) continue;
+                this.graphics.fillStyle(FOG_COLOR, ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density);
+                for (const block of ofLevel) this.graphics.fillRect(block.x, block.y, block.width, block.height);
             }
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
-                this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.12 : 0.05);
+                this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.2 : 0.05);
                 for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
             if (weather === WeatherType.Snow) {
@@ -185,10 +181,7 @@ export class WeatherManager {
                 }
             }
             if (weather !== WeatherType.Snow) this.graphics.strokePath();
-            if (weather === WeatherType.Storm && serverDate) {
-                this.graphics.fillStyle(0xe3eaff, stormGlow(epoch));
-                for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-            }
+            if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
         if (showLeaves) {
             const leaves = leafParticles(epoch, view).map((leaf) => ({
@@ -202,6 +195,36 @@ export class WeatherManager {
             }
         }
         this.scene.markDirty();
+    }
+
+    /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */
+    private drawLightning(
+        epoch: number,
+        view: WeatherView,
+        veil: readonly WeatherView[],
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+    ): void {
+        const strike = lastStrike(epoch);
+        const elapsed = epoch - strike.at;
+        const flash = stormFlash(elapsed, this.reducedMotion);
+        if (flash > 0) {
+            this.graphics.fillStyle(0xe3eaff, flash);
+            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+        }
+        if (this.reducedMotion) return;
+        const bolt = lightningBolt(strike, elapsed, view, isOutdoor);
+        if (!bolt) return;
+        // A wide pale halo, then the bright core.
+        for (const [width, color, alpha] of [
+            [6, 0xb8c8ff, 0.35],
+            [2, 0xffffff, 0.95],
+        ] as const) {
+            this.graphics.lineStyle(width, color, alpha);
+            this.graphics.beginPath();
+            this.graphics.moveTo(bolt[0].x, bolt[0].y);
+            for (const point of bolt.slice(1)) this.graphics.lineTo(point.x, point.y);
+            this.graphics.strokePath();
+        }
     }
 
     public destroy(): void {

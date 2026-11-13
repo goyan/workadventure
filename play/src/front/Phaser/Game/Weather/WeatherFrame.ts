@@ -68,10 +68,82 @@ export function leafParticles(epoch: number, view: WeatherView): LeafParticle[] 
     return particles;
 }
 
-/** One gentle glow every 23 seconds, at the same server time for everyone. */
-export function stormGlow(epoch: number): number {
-    const phase = ((epoch % 23000) + 23000) % 23000;
-    return phase < 1200 ? Math.sin((phase / 1200) * Math.PI) * 0.12 : 0;
+export interface StormStrike {
+    /** Server time of the strike, in milliseconds. */
+    at: number;
+    /** Picks the shape and place of the bolt. */
+    seed: number;
+}
+
+/** One strike about every 21 seconds, moved by up to 4.5 s either way: 12 to 30 s apart, never a fixed rhythm. */
+const STRIKE_SPACING = 21000;
+const STRIKE_JITTER = 4500;
+
+function strikeAt(index: number): StormStrike {
+    return { at: index * STRIKE_SPACING + Math.round((hash01(index, 5, 9) * 2 - 1) * STRIKE_JITTER), seed: index };
+}
+
+/** The last strike at or before this server time: the same for everyone, nothing stored. */
+export function lastStrike(epoch: number): StormStrike {
+    const index = Math.floor(epoch / STRIKE_SPACING);
+    for (const candidate of [index + 1, index]) {
+        const strike = strikeAt(candidate);
+        if (strike.at <= epoch) return strike;
+    }
+    return strikeAt(index - 1);
+}
+
+function triangle(elapsed: number, start: number, end: number, peak: number): number {
+    if (elapsed <= start || elapsed >= end) return 0;
+    const middle = (start + end) / 2;
+    return peak * (elapsed < middle ? (elapsed - start) / (middle - start) : (end - elapsed) / (end - middle));
+}
+
+/**
+ * How bright the storm flash is, this long after a strike: two quick flashes within 0.4 s. When motion is reduced,
+ * a single gentle glow over 1.2 s instead.
+ */
+export function stormFlash(elapsed: number, reducedMotion: boolean): number {
+    if (reducedMotion) {
+        return elapsed > 0 && elapsed < 1200 ? Math.sin((elapsed / 1200) * Math.PI) * 0.12 : 0;
+    }
+    return Math.max(triangle(elapsed, 0, 120, 0.45), triangle(elapsed, 200, 400, 0.3));
+}
+
+const BOLT_MS = 300;
+const BOLT_SEGMENTS = 8;
+const BOLT_TRIES = 6;
+
+/**
+ * The bolt of a strike, from the sky down to a point outdoors in the view, for 0.3 s; undefined otherwise. Several
+ * places are tried; a bolt is only drawn where all its points are outdoors, so it never crosses a room.
+ */
+export function lightningBolt(
+    strike: StormStrike,
+    elapsed: number,
+    view: WeatherView,
+    isOutdoor: ((x: number, y: number) => boolean) | undefined,
+): { x: number; y: number }[] | undefined {
+    if (elapsed < 0 || elapsed >= BOLT_MS) return undefined;
+    const clampX = (x: number): number => Math.min(view.x + view.width, Math.max(view.x, x));
+    for (let attempt = 0; attempt < BOLT_TRIES; attempt++) {
+        const targetX = view.x + view.width * (0.15 + 0.7 * hash01(strike.seed, attempt, 31));
+        const targetY = view.y + view.height * (0.45 + 0.4 * hash01(strike.seed, attempt, 37));
+        const length = view.height * 0.35;
+        const drift = (hash01(strike.seed, attempt, 41) * 2 - 1) * 60;
+        const points: { x: number; y: number }[] = [];
+        for (let step = 0; step <= BOLT_SEGMENTS; step++) {
+            const share = step / BOLT_SEGMENTS;
+            const jitter =
+                step === 0 || step === BOLT_SEGMENTS ? 0 : (hash01(strike.seed, attempt * 16 + step, 43) * 2 - 1) * 18;
+            points.push({
+                x: Math.round(clampX(targetX + drift * (1 - share) + jitter)),
+                y: Math.round(targetY - length * (1 - share)),
+            });
+        }
+        if (!isOutdoor || points.every((point) => isOutdoor(point.x, point.y))) return points;
+    }
+    return undefined;
 }
 
 /** The seasonal schedule is shared by every client: same Paris date and settings, same weather. */
@@ -155,4 +227,54 @@ export function fogPatches(epoch: number, view: WeatherView, still: boolean): Fo
         };
     }
     return patches;
+}
+
+/** How many thicknesses a fog block can have, from 1 (thin) to this value (the centre of a patch). */
+export const FOG_LEVELS = 8;
+
+export interface FogBlock {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** From 1 to FOG_LEVELS. */
+    level: number;
+}
+
+/**
+ * The fog patches cut into square blocks inside the outdoor runs, so a patch stops at the walls instead of covering
+ * a room. Each block takes the thickness at its centre (soft towards the edge of a patch); neighbours of the same
+ * thickness on a row are merged into one rectangle.
+ */
+export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPatch[], block: number): FogBlock[] {
+    const blocks: FogBlock[] = [];
+    if (patches.length === 0) return blocks;
+    for (const run of runs) {
+        const right = run.x + run.width;
+        const bottom = run.y + run.height;
+        for (let y = run.y; y < bottom; y += block) {
+            const height = Math.min(block, bottom - y);
+            let current: FogBlock | undefined;
+            for (let x = run.x; x < right; x += block) {
+                const width = Math.min(block, right - x);
+                const centreX = x + width / 2;
+                const centreY = y + height / 2;
+                let thickness = 0;
+                for (const patch of patches) {
+                    const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
+                    if (share > 0) thickness += share * share;
+                }
+                const level = Math.round(Math.min(1, thickness) * FOG_LEVELS);
+                if (level === 0) {
+                    current = undefined;
+                } else if (current && current.level === level) {
+                    current.width += width;
+                } else {
+                    current = { x, y, width, height, level };
+                    blocks.push(current);
+                }
+            }
+        }
+    }
+    return blocks;
 }

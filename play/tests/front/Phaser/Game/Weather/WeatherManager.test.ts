@@ -21,13 +21,12 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
-const { fogPatches } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
+const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { autoWeatherAt, slotStart } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
-const view800 = { x: 0, y: 0, width: 800, height: 600 };
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
@@ -219,6 +218,36 @@ describe("weather rendering lifecycle", () => {
         expect(ground.update.mock.lastCall?.[2]).toBe(false);
     });
 
+    describe("storm", () => {
+        it("darkens more than rain, and flashes with a bolt right after a strike", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Storm };
+            manager = new WeatherManager(scene, { reducedMotion: false });
+            const strike = lastStrike(100_000).at;
+            manager.update(0, new Date(strike + 60));
+            expect(graphics.fillStyle.mock.calls).toContainEqual([0x27344b, 0.2]);
+            const flash = graphics.fillStyle.mock.calls.find(([color]) => color === 0xe3eaff);
+            expect(flash?.[1]).toBeGreaterThan(0.2);
+            expect(graphics.lineStyle.mock.calls.some(([, color]) => color === 0xffffff)).toBe(true);
+            graphics.fillStyle.mockClear();
+            graphics.lineStyle.mockClear();
+            manager.update(1000, new Date(strike + 5000));
+            expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0xe3eaff)).toBe(false);
+            expect(graphics.lineStyle.mock.calls.some(([, color]) => color === 0xffffff)).toBe(false);
+        });
+
+        it("keeps a gentle glow and no bolt when motion is reduced", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Storm };
+            manager = new WeatherManager(scene, { reducedMotion: true });
+            manager.update(0, new Date(lastStrike(100_000).at + 600));
+            const flash = graphics.fillStyle.mock.calls.find(([color]) => color === 0xe3eaff);
+            expect(flash?.[1]).toBeGreaterThan(0);
+            expect(flash?.[1]).toBeLessThanOrEqual(0.12);
+            expect(graphics.lineStyle.mock.calls.some(([, color]) => color === 0xffffff)).toBe(false);
+        });
+    });
+
     it("tints only outdoor runs in a storm", () => {
         const { scene, graphics, wam } = fixture();
         wam.settings = { weather: WeatherType.Storm };
@@ -231,8 +260,8 @@ describe("weather rendering lifecycle", () => {
             { x: 192, y: 96, width: 32, height: 96 },
         ]);
         manager = new WeatherManager(scene, { outdoorGrid: () => grid });
-        // 500 ms into the 23 s cycle: the storm glow is drawn too.
-        manager.update(0, new Date(500));
+        // Just after a strike: the flash is drawn too.
+        manager.update(0, new Date(lastStrike(100_000).at + 60));
         const rects = graphics.fillRect.mock.calls;
         expect(rects.length).toBeGreaterThan(0);
         for (const [x, y, width, height] of rects) {
@@ -295,52 +324,43 @@ describe("weather rendering lifecycle", () => {
         const fogFill = (graphics: ReturnType<typeof fixture>["graphics"]) =>
             graphics.fillStyle.mock.calls.filter(([color]) => color === 0xdfe6ee);
 
-        it("draws a fog veil outdoors, lighter at night", () => {
+        it("draws a fog veil outdoors, lighter at night, and thicker patches over it", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
-            expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.2]);
-            expect(graphics.fillRect.mock.calls).toContainEqual([0, 0, 800, 600]);
-            expect(graphics.fillCircle.mock.calls.length).toBeGreaterThanOrEqual(9);
+            expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.6]);
+            expect(graphics.fillRect.mock.calls[0]).toEqual([0, 0, 800, 600]);
+            // The patches are drawn as blocks on top of the veil, at most 0.3 thicker.
+            const patchAlphas = fogFill(graphics)
+                .slice(1)
+                .map(([, alpha]) => alpha ?? 0);
+            expect(patchAlphas.length).toBeGreaterThan(0);
+            expect(Math.min(...patchAlphas)).toBeGreaterThan(0);
+            expect(Math.max(...patchAlphas)).toBeLessThanOrEqual(0.3 + 1e-9);
+            expect(graphics.fillRect.mock.calls.length).toBeGreaterThan(1);
             expect(graphics.setVisible.mock.lastCall).toEqual([true]);
             graphics.fillStyle.mockClear();
             manager.update(200, new Date(200), true);
-            expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.1]);
+            expect(fogFill(graphics)[0][1]).toBeCloseTo(0.36, 5);
         });
 
-        it("draws the fog patches only over outdoor cells", () => {
+        it("draws the fog only inside the outdoor runs", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Fog };
-            const none = { outdoorRunsInView: () => [view800], isOutdoorAt: () => false } as unknown as ReturnType<
+            const run = { x: 64, y: 32, width: 96, height: 32 };
+            const grid = { outdoorRunsInView: () => [run], isOutdoorAt: () => true } as unknown as ReturnType<
                 typeof OutdoorGrid.fromWalls
             >;
-            manager = new WeatherManager(scene, { outdoorGrid: () => none });
+            manager = new WeatherManager(scene, { outdoorGrid: () => grid });
             manager.update(0, new Date(0));
-            expect(graphics.fillCircle.mock.calls).toHaveLength(0);
-        });
-
-        it("never lets a fog patch cover a room: centre and four edge points must be outdoors", () => {
-            const { scene, graphics, wam } = fixture();
-            wam.settings = { weather: WeatherType.Fog };
-            const [first] = fogPatches(0, view800, false);
-            const gridWith = (blocked: ((x: number, y: number) => boolean) | undefined) =>
-                ({
-                    outdoorRunsInView: () => [view800],
-                    isOutdoorAt: (x: number, y: number) => !blocked?.(x, y),
-                }) as unknown as ReturnType<typeof OutdoorGrid.fromWalls>;
-            // Centre outdoors, but the right-hand edge point of the first patch is indoors.
-            const edgeIndoors = gridWith((x, y) => x === first.x + first.radius && y === first.y);
-            manager = new WeatherManager(scene, { outdoorGrid: () => edgeIndoors });
-            manager.update(0, new Date(0));
-            expect(graphics.fillCircle.mock.calls).toHaveLength(9);
-            expect(graphics.fillCircle.mock.calls.some(([x, y]) => x === first.x && y === first.y)).toBe(false);
-            manager.destroy();
-            graphics.fillCircle.mockClear();
-            const allOutdoors = gridWith(undefined);
-            manager = new WeatherManager(scene, { outdoorGrid: () => allOutdoors });
-            manager.update(0, new Date(0));
-            expect(graphics.fillCircle.mock.calls).toHaveLength(12);
+            expect(graphics.fillRect.mock.calls.length).toBeGreaterThan(0);
+            for (const [x, y, width, height] of graphics.fillRect.mock.calls) {
+                expect(x).toBeGreaterThanOrEqual(run.x);
+                expect(y).toBeGreaterThanOrEqual(run.y);
+                expect(x + width).toBeLessThanOrEqual(run.x + run.width);
+                expect(y + height).toBeLessThanOrEqual(run.y + run.height);
+            }
         });
 
         it("fog alone moves 5 times a second", () => {
