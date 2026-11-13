@@ -49,10 +49,19 @@ function createBackgroundConfigStore() {
                 return newConfig;
             });
         },
+        /** The user chose no background: forgotten for the next loads too. */
         reset: () => {
             const resetConfig = { ...initialConfig, mode: "none" as BackgroundMode };
             set(resetConfig);
             localUserStore.setBackgroundMode("none");
+        },
+        /**
+         * The background cannot be used on this page (it failed to apply, or the world does not offer the image now):
+         * turned off here, while the saved choice is kept and tried again on the next load. A failure during a
+         * redeploy used to erase it for good.
+         */
+        disableForSession: () => {
+            update((config) => ({ ...config, mode: "none" }));
         },
     };
 }
@@ -109,6 +118,6 @@ currentRoomStore.subscribe(($room) => {
     if (config.mode !== "image") return;
     const images = $room.cameraBackgrounds ?? defaultBackgroundImages;
     if (!images.some((image) => image.url === config.backgroundImage)) {
-        backgroundConfigStore.reset();
+        backgroundConfigStore.disableForSession();
     }
 });

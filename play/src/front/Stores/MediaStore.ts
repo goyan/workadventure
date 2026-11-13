@@ -1210,7 +1210,7 @@ async function runLocalVideoTrackUpdate(
                 backgroundTransformer = undefined;
                 backgroundPipe = undefined;
                 lastBackgroundConfig = undefined;
-                backgroundConfigStore.reset();
+                backgroundConfigStore.disableForSession();
             },
             (sample) => analyticsClient.trackAdminEvent("media.background_effect.sample", sample),
         );
@@ -1252,7 +1252,7 @@ async function runLocalVideoTrackUpdate(
             Sentry.captureException(error);
             warningMessageStore.addWarningMessage(get(LL).warning.backgroundProcessing.failedToApply());
         }
-        backgroundConfigStore.reset();
+        backgroundConfigStore.disableForSession();
         setIfCurrent({
             type: "error",
             error: error instanceof Error ? error : new Error("Background transform failed"),
