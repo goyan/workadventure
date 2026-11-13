@@ -1,13 +1,22 @@
 export enum Vehicle {
     None = "none",
     Skateboard = "skateboard",
+    ElectricUnicycle = "electricUnicycle",
 }
 
 export const VEHICLE_PREFERENCE_KEY = "avatarVehicle";
 export const VEHICLE_VARIABLE = "_avatarVehicle";
 export const SKATEBOARD_TEXTURE = "avatar-skateboard";
+export const ELECTRIC_UNICYCLE_TEXTURE = "avatar-electric-unicycle";
 export const DEFAULT_VEHICLE_COLOR = "#39404f";
 export const VEHICLE_SPEED_FACTOR = 3.75;
+/** Faster than the skateboard; the physics steps follow the fastest vehicle (vehiclePhysicsFps). */
+export const ELECTRIC_UNICYCLE_SPEED_FACTOR = 5;
+
+/** How many times the walking speed a vehicle rides at. */
+export function vehicleSpeedFactor(vehicle: Vehicle): number {
+    return vehicle === Vehicle.ElectricUnicycle ? ELECTRIC_UNICYCLE_SPEED_FACTOR : VEHICLE_SPEED_FACTOR;
+}
 
 export enum VehicleMode {
     Off = "off",
@@ -37,7 +46,7 @@ export interface VehicleState extends VehicleColors {
 }
 
 export function readVehicle(value: unknown): Vehicle {
-    return value === Vehicle.Skateboard ? Vehicle.Skateboard : Vehicle.None;
+    return value === Vehicle.Skateboard || value === Vehicle.ElectricUnicycle ? value : Vehicle.None;
 }
 
 export function readVehicleColor(value: unknown): string {
@@ -64,5 +73,6 @@ export function readVehicleState(value: unknown): VehicleState {
 /** Arcade can separate a fast body on the far side of a thin obstacle once it crosses its midpoint. */
 export function vehiclePhysicsFps(walkingSpeed: number, body: { width: number; height: number }): number {
     const maxStep = Math.min(body.width, body.height) / 2;
-    return Math.max(60, Math.ceil((walkingSpeed * 20 * VEHICLE_SPEED_FACTOR) / maxStep));
+    const fastest = Math.max(VEHICLE_SPEED_FACTOR, ELECTRIC_UNICYCLE_SPEED_FACTOR);
+    return Math.max(60, Math.ceil((walkingSpeed * 20 * fastest) / maxStep));
 }

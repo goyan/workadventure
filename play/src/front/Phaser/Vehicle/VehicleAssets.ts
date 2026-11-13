@@ -1,10 +1,26 @@
 import { SEATED_DIRECTIONS } from "@wa/front/Phaser/Entity/SeatedPose";
-import type { VehicleColors } from "./Vehicle";
-import { createSkateboardSheet } from "./SkateboardArtwork";
+import { ELECTRIC_UNICYCLE_TEXTURE, SKATEBOARD_TEXTURE, Vehicle, type VehicleColors } from "./Vehicle";
+import { createSkateboardSheet, SKATEBOARD_LAYERS } from "./SkateboardArtwork";
+import { createElectricUnicycleSheet } from "./ElectricUnicycleArtwork";
 import { cardinalVehicleHeading, VEHICLE_FRAME_SIZE, VEHICLE_FEET_Y } from "./VehicleFrames";
 
-export function createVehicleSheet(colors: VehicleColors): HTMLCanvasElement {
-    return createSkateboardSheet(colors);
+type VehicleLayer = (typeof SKATEBOARD_LAYERS)[number];
+
+/** How a ridden vehicle is drawn: its texture and its sheet, whole or one paint part (tint mask) at a time. */
+export interface VehicleArtwork {
+    texture: string;
+    layers: readonly VehicleLayer[];
+    createSheet: (colors: VehicleColors, layer?: VehicleLayer) => HTMLCanvasElement;
+}
+
+export function vehicleArtwork(vehicle: Exclude<Vehicle, Vehicle.None>): VehicleArtwork {
+    return vehicle === Vehicle.ElectricUnicycle
+        ? { texture: ELECTRIC_UNICYCLE_TEXTURE, layers: SKATEBOARD_LAYERS, createSheet: createElectricUnicycleSheet }
+        : { texture: SKATEBOARD_TEXTURE, layers: SKATEBOARD_LAYERS, createSheet: createSkateboardSheet };
+}
+
+export function createVehicleSheet(colors: VehicleColors, vehicle: Vehicle = Vehicle.Skateboard): HTMLCanvasElement {
+    return vehicleArtwork(vehicle === Vehicle.None ? Vehicle.Skateboard : vehicle).createSheet(colors);
 }
 
 export function drawVehiclePreview(

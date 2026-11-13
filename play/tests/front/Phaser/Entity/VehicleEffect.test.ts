@@ -3,7 +3,7 @@ import { PositionMessage_Direction } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { mock, mockDeep } from "vitest-mock-extended";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
-import { readVehicleColors } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { readVehicle, readVehicleColors, Vehicle } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { vehicleHeading, turnVehicleTowards } from "@wa/front/Phaser/Vehicle/VehicleFrames";
 
 describe("skateboard movement and lifetime", () => {
@@ -36,7 +36,7 @@ describe("skateboard movement and lifetime", () => {
         });
         const container = mock<Phaser.GameObjects.Container>();
         Object.assign(container, { x: 0, y: 0 });
-        const effect = new VehicleEffect(scene, container);
+        const effect = new VehicleEffect(scene, container, Vehicle.Skateboard);
         effect.update(
             true,
             PositionMessage_Direction.DOWN,
@@ -62,5 +62,45 @@ describe("skateboard movement and lifetime", () => {
         effect.destroy();
         for (const result of results) expect(vi.mocked(result.value.destroy).mock.calls).toHaveLength(1);
         expect(scene.textures.remove.mock.calls).toHaveLength(0);
+    });
+});
+
+describe("electric unicycle", () => {
+    it("is a vehicle people can choose, kept as such from the saved preference or a map script", () => {
+        expect(readVehicle("electricUnicycle")).toBe(Vehicle.ElectricUnicycle);
+        expect(readVehicle("hoverboard")).toBe(Vehicle.None);
+    });
+
+    it("uses its own texture under the feet, with the same three paint parts as the skateboard", () => {
+        const scene = mockDeep<Phaser.Scene>();
+        scene.textures.exists.mockReturnValue(true);
+        scene.add.sprite.mockImplementation(() => {
+            const sprite = mock<Phaser.GameObjects.Sprite>();
+            sprite.setVisible.mockReturnValue(sprite);
+            sprite.setFrame.mockReturnValue(sprite);
+            sprite.setAngle.mockReturnValue(sprite);
+            sprite.setTint.mockReturnValue(sprite);
+            return sprite;
+        });
+        const container = mock<Phaser.GameObjects.Container>();
+        Object.assign(container, { x: 0, y: 0 });
+        const effect = new VehicleEffect(scene, container, Vehicle.ElectricUnicycle);
+        effect.update(true, PositionMessage_Direction.LEFT, readVehicleColors(null), false, 0);
+        expect(scene.add.sprite.mock.calls.map((call) => call[2])).toEqual([
+            "avatar-electric-unicycle-outline",
+            "avatar-electric-unicycle-edgeColor",
+            "avatar-electric-unicycle-color",
+            "avatar-electric-unicycle-wheelsColor",
+            "avatar-electric-unicycle-details",
+        ]);
+        expect(vi.mocked(scene.add.sprite.mock.results[0].value.setFrame).mock.lastCall).toEqual([2]);
+        // Going down and to the left: the frame of that diagonal (front view turned 45°), never tilted further.
+        for (let time = 100; time <= 1000; time += 100) {
+            effect.update(true, PositionMessage_Direction.DOWN, readVehicleColors(null), true, time, { x: -1, y: 1 });
+        }
+        const body = vi.mocked(scene.add.sprite.mock.results[0].value);
+        expect(body.setFrame.mock.lastCall?.[0] % 8).toBe(1);
+        expect(body.setAngle.mock.calls.every(([angle]: [number]) => angle === 0)).toBe(true);
+        effect.destroy();
     });
 });

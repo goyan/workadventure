@@ -40,8 +40,8 @@
 
     let vehicleCanvas: HTMLCanvasElement | undefined;
     $effect(() => {
-        if (vehicle !== Vehicle.Skateboard) return;
-        vehicleCanvas = createVehicleSheet(vehicleColors);
+        if (vehicle === undefined || vehicle === Vehicle.None) return;
+        vehicleCanvas = createVehicleSheet(vehicleColors, vehicle);
         return () => {
             vehicleCanvas = undefined;
         };
@@ -96,7 +96,7 @@
     }
 
     function draw() {
-        if (vehicle === Vehicle.Skateboard && vehicleCanvas) {
+        if (vehicle !== undefined && vehicle !== Vehicle.None && vehicleCanvas) {
             const layers = bodyPartOrder.flatMap((part) =>
                 images[part] ? [{ image: images[part], head: ["hair", "hat", "eyes"].includes(part) }] : [],
             );
