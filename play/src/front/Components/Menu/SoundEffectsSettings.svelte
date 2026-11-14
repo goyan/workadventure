@@ -8,6 +8,7 @@
     import {
         doorVolumeStore,
         footstepVolumeStore,
+        jungleVolumeStore,
         mapSoundsVolumeStore,
         nerfVolumeStore,
         notificationSoundVolumeStore,
@@ -83,6 +84,14 @@
                     store: nerfVolumeStore,
                     value: $nerfVolumeStore,
                     family: "nerf",
+                },
+                {
+                    id: "jungle-volume",
+                    label: $LL.menu.settings.soundEffects.jungle(),
+                    icon: "paw",
+                    store: jungleVolumeStore,
+                    value: $jungleVolumeStore,
+                    family: "jungle",
                 },
                 {
                     id: "map-sounds-volume",

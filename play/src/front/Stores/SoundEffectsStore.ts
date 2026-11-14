@@ -37,6 +37,8 @@ export const weatherVolumeStore = createVolumeStore("weatherVolume", DEFAULT_VOL
 export const doorVolumeStore = createVolumeStore("doorVolume", DEFAULT_VOLUME, "environmentVolume");
 /** Foam-blaster pops, heard from the local player and nearby colleagues. */
 export const nerfVolumeStore = createVolumeStore("nerfVolume", DEFAULT_VOLUME, "environmentVolume");
+/** Calls of the jungle animals, heard near them. */
+export const jungleVolumeStore = createVolumeStore("jungleVolume", DEFAULT_VOLUME, "environmentVolume");
 /** The audio zones placed on the map with the editor. */
 export const mapSoundsVolumeStore = createVolumeStore("mapSoundsVolume", DEFAULT_VOLUME, "environmentVolume");
 /** New message, wave, entering a bubble, meeting, knock on a door. */

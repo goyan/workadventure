@@ -68,6 +68,8 @@ export class WanderSchedule {
         private readonly entityId: string,
         private nest: Point,
         private readonly map: WanderMap,
+        /** How far from the nest the destinations and the seats may be, in tiles. */
+        private readonly radiusTiles: number = RADIUS_TILES,
     ) {
         this.legOffset = wanderLegOffset(entityId);
     }
@@ -155,8 +157,8 @@ export class WanderSchedule {
         const nestTile = { x: Math.floor(nest.x / TILE_SIZE), y: Math.floor(nest.y / TILE_SIZE) };
         for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
             const random = mulberry32(wanderSeed(this.entityId, leg, attempt));
-            const dx = Math.floor(random() * (2 * RADIUS_TILES + 1)) - RADIUS_TILES;
-            const dy = Math.floor(random() * (2 * RADIUS_TILES + 1)) - RADIUS_TILES;
+            const dx = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
+            const dy = Math.floor(random() * (2 * this.radiusTiles + 1)) - this.radiusTiles;
             const tile = { x: nestTile.x + dx, y: nestTile.y + dy };
             if (!this.safeIsWalkable(tile)) {
                 continue;
@@ -183,7 +185,7 @@ export class WanderSchedule {
     private async computeSeatDestination(leg: number): Promise<Destination | undefined> {
         const random = mulberry32(wanderSeed(this.entityId, leg, 1000));
         if (random() >= SEAT_CHANCE) return undefined;
-        const radius = RADIUS_TILES * TILE_SIZE;
+        const radius = this.radiusTiles * TILE_SIZE;
         const seats = (this.map.seats?.() ?? [])
             .filter((seat) => Math.abs(seat.x - this.nest.x) <= radius && Math.abs(seat.y - this.nest.y) <= radius)
             .sort((a, b) => a.x - b.x || a.y - b.y);

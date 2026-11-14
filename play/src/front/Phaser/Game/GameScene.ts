@@ -312,6 +312,7 @@ import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { WeatherManager } from "./Weather/WeatherManager";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
+import { GameJungle } from "./Jungle/GameJungle";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, type SeasonalTheme } from "./Seasonal/SeasonalTheme";
@@ -476,6 +477,8 @@ export class GameScene extends DirtyScene {
     private locateManager!: LocateManager;
     private duckRushManager: DuckRushManager | undefined;
     private wanderingCharactersManager: WanderingCharactersManager | undefined;
+    // Lions and tigers around the outdoor trees, given to the wandering characters (see GameJungle).
+    private gameJungle: GameJungle | undefined;
     private nightManager: NightManager | undefined;
     private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
@@ -1520,6 +1523,9 @@ export class GameScene extends DirtyScene {
         torchEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
+        // Before the wandering characters it gives its animals to.
+        this.gameJungle?.destroy();
+        this.gameJungle = undefined;
         this.wanderingCharactersManager?.destroy();
 
         gameSceneIsLoadedStore.set(false);
@@ -2952,9 +2958,11 @@ export class GameScene extends DirtyScene {
 
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
-                // Its listeners are on the scene: never two of them at once.
+                // Its listeners are on the scene: never two of them at once. The jungle gives it its animals.
+                this.gameJungle?.destroy();
                 this.wanderingCharactersManager?.destroy();
                 this.wanderingCharactersManager = new WanderingCharactersManager(this);
+                this.gameJungle = new GameJungle(this, this.wanderingCharactersManager);
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this);

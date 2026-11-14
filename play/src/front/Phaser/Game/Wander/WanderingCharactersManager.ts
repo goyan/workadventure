@@ -9,6 +9,8 @@ import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRect
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
+import { JUNGLE_RADIUS_TILES } from "../Jungle/JunglePlan";
+import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
@@ -37,9 +39,12 @@ const DESTINATION_TILE_TYPES: ReadonlySet<number> = new Set([
 ]);
 
 interface WanderingCharacter {
-    entity: Entity;
+    /** Undefined for a free character (a jungle animal): no object of the map stands for it. */
+    entity: Entity | undefined;
     sheetPath: string;
     nest: Point;
+    /** The map its schedule walks on: the one of the manager, or the own map of the free characters. */
+    map: WanderMap;
     schedule: WanderSchedule;
     // Created once the sheet is loaded.
     sprite: Phaser.GameObjects.Sprite | undefined;
@@ -47,6 +52,8 @@ interface WanderingCharacter {
     hasPose: boolean;
     // Center of the character, in the coordinates of the characters: this is what opens the doors.
     opener: Point;
+    // Whether the last pose applied to the sprite was a walk.
+    moving: boolean;
 }
 
 /**
@@ -54,6 +61,8 @@ interface WanderingCharacter {
  * (their nest). Outside of the map editor the entity is hidden and replaced by an animated sprite following a
  * WanderSchedule; in the map editor the entity is shown still, where it is, so that it can be edited.
  * Nothing goes through the network: every client computes the same positions from the same schedule.
+ * Free characters (the jungle animals, see setFreeCharacters) have no entity: they are given by their owner, walk on
+ * their own map, never open doors, and are hidden in the map editor.
  */
 export class WanderingCharactersManager {
     private characters = new Map<string, WanderingCharacter>();
@@ -66,6 +75,8 @@ export class WanderingCharactersManager {
     private readonly pathfindingManager: PathfindingManager;
     private readonly tileDimensions: { width: number; height: number };
     private isEditorMode = false;
+    // Set once the map is asked for (by the jungle): the collisions are then kept up to date even without characters.
+    private mapWanted = false;
     private readonly map: WanderMap;
     private readonly reconcileTimer: Phaser.Time.TimerEvent;
     private readonly unsubscribeEditorMode: Unsubscriber;
@@ -103,10 +114,81 @@ export class WanderingCharactersManager {
      */
     public forEachDoorOpener(callback: (position: Point) => void): void {
         for (const character of this.characters.values()) {
-            if (character.sprite?.visible) {
+            // Free characters stay outdoors: they open no door.
+            if (character.entity && character.sprite?.visible) {
                 callback(character.opener);
             }
         }
+    }
+
+    /** The map the placed characters walk on, with the current collisions (read now if they never were). */
+    public getWanderMap(): WanderMap {
+        this.mapWanted = true;
+        if (this.collisionGrid === undefined) {
+            this.refreshMap();
+        }
+        return this.map;
+    }
+
+    /**
+     * Replaces the free characters (characters without an entity) by these: the missing ones are added, the others are
+     * removed with their sprite, a moved nest is followed like the one of a moved entity. A new `map` gives every
+     * free character a new schedule on it.
+     */
+    public setFreeCharacters(animals: readonly JungleAnimal[], map: WanderMap): void {
+        const wanted = new Map(animals.map((animal) => [animal.id, animal]));
+        let removed = false;
+        for (const [id, character] of this.characters) {
+            if (character.entity) {
+                continue;
+            }
+            const animal = wanted.get(id);
+            if (!animal || animal.sheetPath !== character.sheetPath) {
+                this.forget(id, character);
+                removed = true;
+            }
+        }
+        for (const animal of animals) {
+            const character = this.characters.get(animal.id);
+            if (!character) {
+                this.characters.set(animal.id, {
+                    entity: undefined,
+                    sheetPath: animal.sheetPath,
+                    nest: animal.nest,
+                    map,
+                    schedule: new WanderSchedule(animal.id, animal.nest, map, JUNGLE_RADIUS_TILES),
+                    sprite: undefined,
+                    hasPose: false,
+                    opener: { x: animal.nest.x, y: animal.nest.y - WANDER_FRAME_SIZE / 2 },
+                    moving: false,
+                });
+                this.loadSheet(animal.sheetPath);
+            } else if (character.entity) {
+                // An entity with that id: never, the ids of the free characters are not entity ids.
+                continue;
+            } else if (character.map !== map) {
+                character.map = map;
+                character.nest = animal.nest;
+                character.schedule = new WanderSchedule(animal.id, animal.nest, map, JUNGLE_RADIUS_TILES);
+                character.hasPose = false;
+            } else if (character.nest.x !== animal.nest.x || character.nest.y !== animal.nest.y) {
+                character.nest = animal.nest;
+                character.schedule.setNest(animal.nest);
+                character.hasPose = false;
+            }
+        }
+        if (removed) {
+            this.scene.markDirty();
+        }
+    }
+
+    /** Where a free character is shown, undefined while it is not (sheet loading or failed, map editor). */
+    public freeCharacterPose(id: string): { x: number; y: number; moving: boolean } | undefined {
+        const character = this.characters.get(id);
+        if (!character || character.entity || !character.sprite?.visible) {
+            return undefined;
+        }
+        return { x: character.sprite.x, y: character.sprite.y, moving: character.moving };
     }
 
     public destroy(): void {
@@ -136,6 +218,10 @@ export class WanderingCharactersManager {
     private reconcile(): void {
         const entities = this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities();
         for (const [entityId, character] of this.characters) {
+            // Free characters are managed by setFreeCharacters.
+            if (!character.entity) {
+                continue;
+            }
             const entity = entities.get(entityId);
             if (entity !== character.entity || entity.getPrefab().wander?.sheetPath !== character.sheetPath) {
                 this.forget(entityId, character);
@@ -153,10 +239,12 @@ export class WanderingCharactersManager {
                     entity,
                     sheetPath,
                     nest,
+                    map: this.map,
                     schedule: new WanderSchedule(entityId, nest, this.map),
                     sprite: undefined,
                     hasPose: false,
                     opener: { x: nest.x, y: nest.y - WANDER_FRAME_SIZE / 2 },
+                    moving: false,
                 });
                 this.loadSheet(sheetPath);
             } else if (character.nest.x !== nest.x || character.nest.y !== nest.y) {
@@ -166,7 +254,7 @@ export class WanderingCharactersManager {
                 character.hasPose = false;
             }
         }
-        if (this.characters.size > 0) {
+        if (this.characters.size > 0 || this.mapWanted) {
             this.refreshMap();
         }
     }
@@ -236,7 +324,7 @@ export class WanderingCharactersManager {
         character.sprite?.destroy();
         this.characters.delete(entityId);
         // The entity is still there but does not wander anymore: show it again.
-        if (character.entity.active) {
+        if (character.entity?.active) {
             this.showEntity(character.entity, true);
         }
     }
@@ -334,6 +422,7 @@ export class WanderingCharactersManager {
                 const pose = character.schedule.poseAt(now);
                 if (pose) {
                     character.hasPose = true;
+                    character.moving = pose.moving;
                     if (sprite.x !== pose.x || sprite.y !== pose.y) {
                         sprite.setPosition(pose.x, pose.y);
                         character.opener.x = pose.x;
@@ -374,7 +463,7 @@ export class WanderingCharactersManager {
                 sprite.setVisible(showSprite);
                 changed = true;
             }
-            if (this.showEntity(character.entity, !showSprite)) {
+            if (character.entity && this.showEntity(character.entity, !showSprite)) {
                 changed = true;
             }
         }

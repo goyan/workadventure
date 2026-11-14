@@ -1,0 +1,3 @@
+lion.mp3 (a lion's roar) and tigre.mp3 (a tiger's roar) were generated with the ElevenLabs sound effects
+generator by the owner of this fork on 2026-11-14, who states they are free of rights for this use.
+No recording of a third party is included.

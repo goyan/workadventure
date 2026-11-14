@@ -25,6 +25,7 @@ describe("PixelIcons", () => {
                 "nerf",
                 "onePiece",
                 "outfit",
+                "paw",
                 "shorts",
                 "skateboard",
                 "swimwear",

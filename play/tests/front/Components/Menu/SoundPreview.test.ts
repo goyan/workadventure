@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSoundPreview, SOUND_PREVIEWS } from "../../../../src/front/Components/Menu/SoundPreview";
+import { JUNGLE_MAX_VOLUME, JUNGLE_SOUNDS } from "../../../../src/front/Phaser/Game/Jungle/JungleCries";
 
 function fakeAudio() {
     const created: {
@@ -41,12 +42,17 @@ describe("SoundPreview", () => {
 
     it("has an example for every family that has a typical sound", () => {
         expect(Object.keys(SOUND_PREVIEWS).sort()).toEqual(
-            ["doors", "footsteps", "nerf", "notifications", "skateboard", "weather"].sort(),
+            ["doors", "footsteps", "jungle", "nerf", "notifications", "skateboard", "weather"].sort(),
         );
         for (const { url, baseVolume } of Object.values(SOUND_PREVIEWS)) {
             expect(url).toMatch(/^\/resources\/.+\.(ogg|mp3|wav)$/);
             expect(baseVolume).toBeGreaterThan(0);
             expect(baseVolume).toBeLessThanOrEqual(1);
         }
+    });
+
+    it("previews the jungle with the lion, as loud as in game next to it", () => {
+        const lion = JUNGLE_SOUNDS.find((sound) => sound.key === "jungle-lion");
+        expect(SOUND_PREVIEWS.jungle).toEqual({ url: lion?.url, baseVolume: JUNGLE_MAX_VOLUME });
     });
 });
