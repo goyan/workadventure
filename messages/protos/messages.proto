@@ -389,6 +389,8 @@ message UpdateWeatherSettingMessage {
   optional MapLocationMessage location = 5;
   // Back to the default place (Paris): the place of the map is removed. Sent without `location`.
   optional bool clearLocation = 6;
+  // Clouds in the automatic weather (AutoWeather.clouds). Absent from older clients: the existing choice is kept.
+  optional bool autoClouds = 7;
 }
 
 message MapLocationMessage {

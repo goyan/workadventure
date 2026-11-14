@@ -23,6 +23,21 @@ export const FREQUENCY_FACTORS: Readonly<Record<AutoWeatherFrequency, number>> =
     stormy: 1.6,
 };
 
+/**
+ * Normal-frequency share (in %) of the clear slots that carry clouds, per season (game values chosen by the user, not
+ * climate statistics). Scaled by the frequency like the other weathers.
+ */
+export const CLOUD_SHARES: Readonly<Record<Season, number>> = {
+    [Season.Winter]: 50,
+    [Season.Spring]: 35,
+    [Season.Summer]: 20,
+    [Season.Autumn]: 40,
+};
+/** How cloudy a clouded slot of the automatic weather is (0 to 1). */
+export const AUTO_CLOUDINESS = 0.5;
+/** Clouds come and go over the first three minutes of a slot. */
+export const CLOUD_FADE_MS = 3 * 60 * 1000;
+
 /** Probability that a 30-minute slot keeps the weather of the previous one. */
 export const PERSISTENCE = 0.6;
 /** Fog only exists before this Paris hour. */
@@ -112,6 +127,64 @@ export function autoWeatherChanges(
         }
     }
     return changes;
+}
+
+/** The cloudiness from `previous` to `current`, `elapsed` ms into a slot: the change takes CLOUD_FADE_MS. */
+export function fadedCloudiness(previous: number, current: number, elapsed: number): number {
+    const progress = Math.max(0, Math.min(1, elapsed / CLOUD_FADE_MS));
+    return previous + (current - previous) * progress;
+}
+
+/**
+ * How cloudy the automatic weather is at `date`, 0 to 1, identical for every client with the same settings. Clouds are
+ * a chain of their own over the clear slots of the schedule: the schedule itself (rain, storms, snow, fog) is the same
+ * with or without them. None when the map turns them off (`clouds: false`).
+ */
+export function cloudinessAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUTO_WEATHER): number {
+    const time = date.getTime();
+    if (!Number.isFinite(time) || auto.clouds === false) return 0;
+    const start = slotStart(date).getTime();
+    return fadedCloudiness(slotCloudiness(new Date(start - 1), auto), slotCloudiness(date, auto), time - start);
+}
+
+function slotCloudiness(date: Date, auto: AutoWeatherSettings): number {
+    if (autoWeatherAt(date, auto) !== WeatherType.Clear) return 0;
+    const { day, slot } = parisSlot(date);
+    return cloudDay(day, auto.frequency)[slot] ? AUTO_CLOUDINESS : 0;
+}
+
+const cloudCache = new Map<string, boolean[]>();
+
+/** Which slots of a Paris day have clouds; like the schedule, the day starts from the end of its eve. */
+function cloudDay(day: string, frequency: AutoWeatherFrequency): boolean[] {
+    const key = `${day}|${frequency}`;
+    const cached = cloudCache.get(key);
+    if (cached) return cached;
+    const eve = computeCloudDay(shiftDay(day, -1), frequency, false);
+    const clouds = computeCloudDay(day, frequency, eve[SLOTS_PER_DAY - 1]);
+    cloudCache.set(key, clouds);
+    while (cloudCache.size > CACHE_SIZE) {
+        const oldest = cloudCache.keys().next().value;
+        if (oldest === undefined) break;
+        cloudCache.delete(oldest);
+    }
+    return clouds;
+}
+
+function computeCloudDay(day: string, frequency: AutoWeatherFrequency, start: boolean): boolean[] {
+    const noon = new Date(`${day}T12:00:00Z`);
+    const chance = Math.min(1, (CLOUD_SHARES[seasonAt(noon)] * FREQUENCY_FACTORS[frequency]) / 100);
+    // A seed of its own: the clouds never consume the draws of the schedule.
+    const random = mulberry32(fnv1a(`${day}|${frequency}|clouds`));
+    const clouds: boolean[] = [];
+    let previous = start;
+    for (let slot = 0; slot < SLOTS_PER_DAY; slot++) {
+        const keep = random() < PERSISTENCE;
+        const drawn = random() < chance;
+        previous = keep ? previous : drawn;
+        clouds.push(previous);
+    }
+    return clouds;
 }
 
 type Normalised = { frequency: AutoWeatherFrequency; include: BadWeather[] };

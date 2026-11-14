@@ -43,6 +43,37 @@ describe("WAM Setting", () => {
         expect(WamSchema.parse({ ...defaultWamFile, settings: { weather: "fog" } }).settings?.weather).toBe("fog");
     });
 
+    it("accepts cloudy as map weather, and the clouds of the automatic weather", () => {
+        const wam = WamSchema.parse({
+            ...defaultWamFile,
+            settings: { weather: "cloudy", weatherAuto: { frequency: "calm", include: [], clouds: false } },
+        });
+        expect(wam.settings?.weather).toBe(WeatherType.Cloudy);
+        expect(wam.settings?.weatherAuto).toEqual({ frequency: "calm", include: [], clouds: false });
+    });
+
+    it("stores the clouds of the automatic weather, and keeps them when an older client sends none", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile };
+        const send = (autoClouds?: boolean): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: {
+                        weather: "automatic",
+                        autoFrequency: "normal",
+                        autoInclude: ["rain"],
+                        autoClouds,
+                    },
+                },
+            }).execute();
+        await send(false);
+        expect(wam.settings?.weatherAuto).toEqual({ frequency: "normal", include: ["rain"], clouds: false });
+        await send();
+        expect(wam.settings?.weatherAuto?.clouds).toBe(false);
+        await send(true);
+        expect(wam.settings?.weatherAuto?.clouds).toBe(true);
+    });
+
     it("reads the auto weather settings, and drops broken ones", () => {
         expect(
             WamSchema.parse({ ...defaultWamFile, settings: { weatherAuto: { frequency: "calm", include: ["rain"] } } })

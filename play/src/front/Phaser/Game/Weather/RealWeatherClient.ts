@@ -12,6 +12,7 @@ import { realWeatherStateAt, withRealWeather, withWeatherPreview } from "./RealW
 import type { RealForecastState, RealWeatherState, WeatherPreview } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 import { weatherForecast } from "./WeatherForecast";
+import { AUTO_CLOUDINESS, cloudinessAt, fadedCloudiness } from "./WeatherSchedule";
 import type { ForecastCell } from "./WeatherForecast";
 
 const debug = Debug("front:real-weather");
@@ -134,6 +135,15 @@ export function shownWeatherSettings(
     date: Date | undefined,
 ): MapSnowSettings | undefined {
     const tried = withWeatherPreview(settings, preview);
+    if (tried?.weather === WeatherType.Cloudy) {
+        // The Cloudy tile is a clear sky with clouds, faded in from the start of its episode (at once when tried).
+        const elapsed =
+            date && tried.weatherStartedAt !== undefined ? date.getTime() - tried.weatherStartedAt : Infinity;
+        return { ...tried, weather: WeatherType.Clear, cloudiness: fadedCloudiness(0, AUTO_CLOUDINESS, elapsed) };
+    }
+    if (tried?.weather === WeatherType.Automatic) {
+        return date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried;
+    }
     if (tried?.weather !== WeatherType.Real) return tried;
     follow(tried.weatherLocation);
     const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
@@ -150,7 +160,12 @@ export function shownWeatherSettings(
     ) {
         return memo.shown;
     }
-    const shown = withRealWeather(tried, realWeatherStateAt(state, date));
+    const real = withRealWeather(tried, realWeatherStateAt(state, date));
+    // While the real weather is unavailable, the automatic one shows, with its clouds.
+    const shown =
+        real?.weather === WeatherType.Automatic && date
+            ? { ...real, cloudiness: cloudinessAt(date, real.weatherAuto) }
+            : real;
     memo = {
         settings,
         weather: settings?.weather,

@@ -152,6 +152,8 @@ export function weatherAtTime(
     serverDate: Date | undefined,
     auto?: AutoWeatherSettings,
 ): WeatherType {
+    // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
+    if (configured === WeatherType.Cloudy) return WeatherType.Clear;
     if (configured === WeatherType.Snow) {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
         return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;

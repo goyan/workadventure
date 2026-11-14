@@ -41,6 +41,8 @@ export const RealWeatherSlot = z.object({
     at: z.number().int().nonnegative(),
     weather: ObservedWeather.nullable(),
     temperature: z.number().finite().nullable(),
+    /** Clouds of a clear quarter hour, 0 to 1 (absent: none). */
+    cloudiness: z.number().min(0).max(1).optional(),
 });
 export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
 
@@ -70,10 +72,12 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
     return time.map((seconds, index) => {
         const code = weather_code[index];
+        const cloudiness = code === null ? undefined : cloudinessFromWmoCode(code);
         return {
             at: seconds * 1000,
             weather: (code === null ? undefined : weatherFromWmoCode(code)) ?? null,
             temperature: temperature_2m[index],
+            ...(cloudiness === undefined ? {} : { cloudiness }),
         };
     });
 }
@@ -88,6 +92,10 @@ export interface RealWeatherAt {
     until: number | undefined;
     before: ObservedWeather | undefined;
     temperature: number | null;
+    /** Start of the quarter hour under way, its clouds and those of the quarter hour before (0 if none). */
+    slotAt: number;
+    cloudiness: number;
+    cloudinessBefore: number;
 }
 
 /**
@@ -116,7 +124,18 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
         until: next?.weather ? next.at : undefined,
         before: previous?.weather ?? undefined,
         temperature: current.temperature,
+        slotAt: current.at,
+        cloudiness: current.cloudiness ?? 0,
+        cloudinessBefore: index > 0 && follows(index, index - 1) ? (slots[index - 1].cloudiness ?? 0) : 0,
     };
+}
+
+/** Clouds of a WMO code that the game draws as clear: 1 (mainly clear) a few, 2 half the sky, 3 overcast. */
+export function cloudinessFromWmoCode(code: number): number | undefined {
+    if (code === 1) return 0.2;
+    if (code === 2) return 0.5;
+    if (code === 3) return 0.9;
+    return undefined;
 }
 
 /**

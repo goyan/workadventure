@@ -2,6 +2,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import { realWeatherAt } from "../../../../common/RealWeather";
 import type { ObservedWeather, RealWeatherSlot } from "../../../../common/RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
+import { fadedCloudiness } from "./WeatherSchedule";
 
 /** What this browser knows of the weather timeline at the place of the map (RealWeatherClient). */
 export type RealForecastState =
@@ -20,6 +21,8 @@ export type RealWeatherState =
           until?: number;
           /** When a snow just before this weather stopped, for the ground to melt. */
           snowMeltFrom?: number;
+          /** Clouds of a clear sky, 0 to 1, faded in from those of the quarter hour before. */
+          cloudiness?: number;
       }
     | { status: "unavailable" };
 
@@ -33,7 +36,15 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const now = realWeatherAt(forecast.slots, date.getTime());
     if (!now) return { status: "unavailable" };
     const snowMeltFrom = now.before === WeatherType.Snow && now.weather !== WeatherType.Snow ? now.since : undefined;
-    return { status: "known", weather: now.weather, since: now.since, until: now.until, snowMeltFrom };
+    const cloudiness = fadedCloudiness(now.cloudinessBefore, now.cloudiness, date.getTime() - now.slotAt);
+    return {
+        status: "known",
+        weather: now.weather,
+        since: now.since,
+        until: now.until,
+        snowMeltFrom,
+        ...(cloudiness > 0 ? { cloudiness } : {}),
+    };
 }
 
 /**
@@ -54,6 +65,7 @@ export function withRealWeather(
                 weatherStartedAt: real.since,
                 weatherEndsAt: real.until,
                 snowMeltFrom: real.snowMeltFrom,
+                cloudiness: real.cloudiness,
                 weatherAuto,
                 weatherLocation,
             };

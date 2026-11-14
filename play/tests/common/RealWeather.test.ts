@@ -1,6 +1,7 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
+    cloudinessFromWmoCode,
     RealWeatherForecast,
     realWeatherAt,
     slotsFromOpenMeteo,
@@ -58,7 +59,8 @@ describe("slotsFromOpenMeteo", () => {
         const slots = slotsFromOpenMeteo(OPEN_METEO_PARIS);
         expect(slots).toHaveLength(32);
         expect(slots?.[0]).toEqual({ at: 1794647700000, weather: "clear", temperature: 4.9 });
-        expect(slots?.[31]).toEqual({ at: 1794675600000, weather: "clear", temperature: 8.1 });
+        // Code 1 (mainly clear): a clear quarter hour with a few clouds.
+        expect(slots?.[31]).toEqual({ at: 1794675600000, weather: "clear", temperature: 8.1, cloudiness: 0.2 });
     });
 
     it("keeps a quarter hour without a usable code or temperature, without its weather or temperature", () => {
@@ -76,11 +78,58 @@ describe("slotsFromOpenMeteo", () => {
     });
 });
 
+describe("cloudinessFromWmoCode", () => {
+    it("gives clouds to the clear codes: 1 a few, 2 half the sky, 3 overcast; none otherwise", () => {
+        expect(cloudinessFromWmoCode(0)).toBeUndefined();
+        expect(cloudinessFromWmoCode(1)).toBe(0.2);
+        expect(cloudinessFromWmoCode(2)).toBe(0.5);
+        expect(cloudinessFromWmoCode(3)).toBe(0.9);
+        expect(cloudinessFromWmoCode(61)).toBeUndefined();
+    });
+
+    it("keeps a cloudy quarter hour clear, with its clouds", () => {
+        expect(
+            slotsFromOpenMeteo({ minutely_15: { time: [0, 900], weather_code: [3, 0], temperature_2m: [5, 5] } }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.9 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ]);
+    });
+
+    it("gives the clouds of the quarter hour under way and of the one before, for fading", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Rain, temperature: 5 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.9 },
+            { at: 2 * SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.2 },
+        ];
+        expect(realWeatherAt(slots, SLOT)).toMatchObject({ slotAt: SLOT, cloudiness: 0.9, cloudinessBefore: 0 });
+        expect(realWeatherAt(slots, 2 * SLOT + 1)).toMatchObject({
+            slotAt: 2 * SLOT,
+            cloudiness: 0.2,
+            cloudinessBefore: 0.9,
+        });
+        // A change of clouds does not break the run of clear weather.
+        expect(realWeatherAt(slots, 2 * SLOT + 1)).toMatchObject({ since: SLOT });
+    });
+
+    it("lets an older tab read a quarter hour with clouds", () => {
+        expect(
+            RealWeatherForecast.safeParse({ slots: [{ at: 0, weather: "clear", temperature: 1, cloudiness: 0.5 }] })
+                .success,
+        ).toBe(true);
+    });
+});
+
 describe("realWeatherAt", () => {
     const paris = slotsFromOpenMeteo(OPEN_METEO_PARIS) ?? [];
 
     it("gives the weather of the quarter hour under way, now, in one hour and in four hours", () => {
-        expect(realWeatherAt(paris, NOW)).toEqual({ weather: "clear", since: 1794647700000, temperature: 8.2 });
+        expect(realWeatherAt(paris, NOW)).toMatchObject({
+            weather: "clear",
+            since: 1794647700000,
+            temperature: 8.2,
+            cloudiness: 0,
+        });
         expect(realWeatherAt(paris, NOW + HOUR)).toMatchObject({ weather: "clear", temperature: 9.4 });
         expect(realWeatherAt(paris, NOW + 4 * HOUR)).toMatchObject({ weather: "clear", temperature: 10 });
     });

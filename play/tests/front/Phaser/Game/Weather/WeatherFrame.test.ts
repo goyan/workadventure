@@ -118,6 +118,9 @@ describe("common automatic weather", () => {
             expect(weatherAtTime(WeatherType.Snow, new Date(date))).toBe(WeatherType.Rain);
         }
         expect(weatherAtTime(WeatherType.Snow, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        // A cloudy sky is a clear one with clouds: never rain, sound or particles.
+        expect(weatherAtTime(WeatherType.Cloudy, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Clear);
+        expect(weatherParticles(WeatherType.Clear, 1000, { x: 0, y: 0, width: 800, height: 600 })).toEqual([]);
         for (const month of ["2026-04", "2026-07", "2026-10"]) {
             for (let t = Date.parse(`${month}-01T00:00:00Z`); t < Date.parse(`${month}-28T00:00:00Z`); t += halfHour) {
                 expect(weatherAtTime(WeatherType.Automatic, new Date(t))).not.toBe(WeatherType.Snow);

@@ -34,6 +34,7 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
 /** The weather mode shown by the desktop app, which knows no "real" mode (and is not changed): the closest one. */
 export function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
     if (weather === WeatherType.Real) return WeatherType.Automatic;
+    if (weather === WeatherType.Cloudy) return WeatherType.Clear;
     return weather ?? WeatherType.Clear;
 }
 
