@@ -22,3 +22,16 @@ export function weatherName(labels: TranslationFunctions["mapEditor"]["settings"
             return labels.clear();
     }
 }
+
+/** From this cloudiness, a clear sky is called cloudy; from the second, overcast (a cloud alone). */
+export const CLOUDY_FROM = 0.2;
+export const OVERCAST_FROM = 0.8;
+
+/**
+ * How a weather with its clouds is shown: a clear sky with clouds is named Cloudy, drawn as the sun behind a cloud, or
+ * a cloud alone when overcast. Every other weather is shown as it is.
+ */
+export function weatherLook(weather: WeatherType, cloudiness = 0): { icon: WeatherType; name: WeatherType } {
+    if (weather !== WeatherType.Clear || cloudiness < CLOUDY_FROM) return { icon: weather, name: weather };
+    return { icon: cloudiness >= OVERCAST_FROM ? WeatherType.Cloudy : WeatherType.Automatic, name: WeatherType.Cloudy };
+}

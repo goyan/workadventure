@@ -11,6 +11,7 @@ const cells = vi.hoisted(
 );
 const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => ({ settings: [], dates: [] }));
 const wamSettings = vi.hoisted((): { value: unknown } => ({ value: {} }));
+const place = vi.hoisted((): { value: { name: string } | undefined } => ({ value: undefined }));
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
 
 vi.mock("../../../../src/i18n/i18n-svelte", () => {
@@ -52,7 +53,7 @@ vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
     },
 }));
 vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({
-    shownMapPlace: (settings: { weatherLocation?: unknown } | undefined) => settings?.weatherLocation,
+    shownMapPlace: (settings: { weatherLocation?: unknown } | undefined) => place.value ?? settings?.weatherLocation,
     shownWeatherForecast: (settings: unknown, date: Date) => {
         forecastAsked.settings.push(settings);
         forecastAsked.dates.push(date);
@@ -89,6 +90,7 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    place.value = undefined;
     weatherBannerStore.set(true);
     nightDate().set(NOW);
     wamSettings.value = { weather: "real" };
@@ -195,5 +197,29 @@ describe("WeatherForecastBanner", () => {
         wamSettings.value = { weather: "automatic" };
         render();
         expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+    });
+
+    it("follows a town tried in the panel at the next tick, the map settings being the same object", () => {
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+        place.value = { name: "Perpignan, Occitanie, France" };
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Perpignan");
+    });
+
+    it("calls a clear sky with a few clouds clear, from 0.2 cloudy", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "clear", cloudiness: 0.1 },
+            { at: NOW.getTime() + HOUR, weather: "clear", cloudiness: 0.2 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "rain", cloudiness: 1 },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Clear",
+            "+1 h: Cloudy",
+            "+4 h: Rain",
+        ]);
     });
 });

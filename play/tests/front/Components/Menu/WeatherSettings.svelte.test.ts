@@ -4,7 +4,7 @@ import { readable } from "svelte/store";
 
 const executeUpdateWAMSettings = vi.hoisted(() => vi.fn());
 const wamSettings = vi.hoisted(() => ({ value: {} }));
-const realWeather = vi.hoisted((): { value: { status: string; weather?: string } } => ({
+const realWeather = vi.hoisted((): { value: { status: string; weather?: string; cloudiness?: number } } => ({
     value: { status: "pending" },
 }));
 
@@ -221,6 +221,13 @@ describe("WeatherSettings", () => {
 });
 
 describe("WeatherSettings, clouds", () => {
+    it("says Cloudy, not Clear, for a real clear sky with clouds", () => {
+        realWeather.value = { status: "known", weather: "clear", cloudiness: 0.6 };
+        wamSettings.value = { weather: "real" };
+        render();
+        expect(target.querySelector('[data-testid="map-weather-real"]')?.textContent).toContain("Paris now: Cloudy");
+    });
+
     function clouds(): HTMLInputElement {
         const input = target.querySelector<HTMLInputElement>('[data-testid="map-weather-include-clouds"] input');
         if (!input) throw new Error("no clouds checkbox");

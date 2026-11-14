@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { WeatherType } from "@workadventure/map-editor";
+    import type { WeatherType } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { shownMapPlace, shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
@@ -8,33 +8,25 @@
     import { nightDateStore } from "../../Stores/NightStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
-    import { weatherName } from "../Menu/WeatherName";
+    import { weatherLook, weatherName } from "../Menu/WeatherName";
     import { IconX } from "@wa-icons";
 
-    /** From this cloudiness, the banner shows a cloud alone (an overcast sky). */
-    const OVERCAST_CLOUDINESS = 0.8;
-
-    // Read again at each tick of the game clock (every second): a saved or tried weather shows within a second.
-    const settings = $derived(
-        $weatherBannerStore && $nightDateStore
-            ? gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings
-            : undefined,
-    );
+    // Read again at each tick of the game clock (every second): a saved or tried weather or town shows within a
+    // second (the map settings are changed in place, so they cannot be followed by themselves).
+    function mapSettings() {
+        return gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings;
+    }
     const cells = $derived(
-        $weatherBannerStore && $nightDateStore ? shownWeatherForecast(settings, $nightDateStore) : [],
+        $weatherBannerStore && $nightDateStore ? shownWeatherForecast(mapSettings(), $nightDateStore) : [],
     );
     /** The town of the map (the place tried, if any) without its region and country; Paris by default. */
-    const city = $derived(
-        shownMapPlace(settings)?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity(),
-    );
-    /** A clear sky with clouds is shown Cloudy: the sun behind a cloud, or a cloud alone when overcast. */
+    const city = $derived.by(() => {
+        if (!$weatherBannerStore || !$nightDateStore) return "";
+        return shownMapPlace(mapSettings())?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity();
+    });
+
     function shown(cell: ForecastCell): { icon: WeatherType; name: WeatherType } | undefined {
-        if (!cell.weather) return undefined;
-        if (cell.weather !== WeatherType.Clear || !cell.cloudiness) return { icon: cell.weather, name: cell.weather };
-        return {
-            icon: cell.cloudiness >= OVERCAST_CLOUDINESS ? WeatherType.Cloudy : WeatherType.Automatic,
-            name: WeatherType.Cloudy,
-        };
+        return cell.weather ? weatherLook(cell.weather, cell.cloudiness) : undefined;
     }
 
     function when(index: number): string {

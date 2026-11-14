@@ -15,7 +15,7 @@
     import MapLocationPicker from "./MapLocationPicker.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
-    import { weatherName as sharedWeatherName } from "./WeatherName";
+    import { weatherLook, weatherName as sharedWeatherName } from "./WeatherName";
 
     type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
     const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
@@ -233,7 +233,9 @@
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.realMode.hint()}</p>
         <div class="rounded-lg bg-black/30 p-3 text-sm text-white/80" data-testid="map-weather-real">
             {#if $realWeatherStore.status === "known"}
-                {$LL.mapEditor.settings.weather.realMode.now({ weather: weatherName($realWeatherStore.weather) })}
+                {$LL.mapEditor.settings.weather.realMode.now({
+                    weather: weatherName(weatherLook($realWeatherStore.weather, $realWeatherStore.cloudiness).name),
+                })}
             {:else if $realWeatherStore.status === "unavailable"}
                 {$LL.mapEditor.settings.weather.realMode.unavailable()}
             {:else}
