@@ -253,6 +253,7 @@ describe("fog", () => {
         expect(fogStrength(WeatherType.Automatic, new Date(end - 1), foggy)).toBeLessThan(0.001);
     });
 
+    // About 350,000 steps: 1.4 s on a laptop, close to the default 5 s on the CI runners (timed out on PR #229 and #231).
     it("never jumps, midnight included", () => {
         const step = 10_000;
         let last = fogStrength(WeatherType.Automatic, new Date(Date.parse("2025-12-31T00:00:00Z")), foggy);
@@ -265,7 +266,7 @@ describe("fog", () => {
         }
         expect(seenFog).toBe(true);
         expect(slotStart(new Date(1)).getTime()).toBe(0);
-    });
+    }, 20_000);
 
     describe("patches", () => {
         const view = { x: 100, y: 50, width: 800, height: 600 };

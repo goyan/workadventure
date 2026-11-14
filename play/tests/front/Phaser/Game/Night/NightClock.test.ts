@@ -6,6 +6,7 @@ import {
     parisWallClockToInstant,
     parseNightAt,
     sunElevationInParis,
+    sunPlaceOf,
 } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const MINUTE = 60_000;
@@ -131,5 +132,39 @@ describe("parseNightAt", () => {
         expect(parseNightAt("?nightAt=12:60", true)).toBeUndefined();
         expect(parseNightAt("?nightAt=abc", true)).toBeUndefined();
         expect(parseNightAt("", true)).toBeUndefined();
+    });
+});
+
+/*
+ * Night at the place of the map. Sunsets on 2026-11-14, local time (CET), published by timeanddate.com
+ * (https://www.timeanddate.com/sun/france/{paris,brest}?month=11&year=2026), read on 2026-11-14:
+ * Paris 17:11, Brest 17:40.
+ */
+describe("night at the place of the map", () => {
+    const brest = { latitude: 48.3904, longitude: -4.4861 };
+
+    it("uses Paris when the map has no place", () => {
+        const date = paris("2026-11-14", "17:35");
+        expect(nightOpacityAt(date)).toBe(nightOpacityAt(date, undefined));
+    });
+
+    it("falls later in Brest, west of Paris", () => {
+        expect(nightOpacityAt(paris("2026-11-14", "17:35"))).toBeGreaterThan(0);
+        expect(nightOpacityAt(paris("2026-11-14", "17:35"), brest)).toBe(0);
+        expect(nightOpacityAt(paris("2026-11-14", "17:44"), brest)).toBeGreaterThan(0);
+    });
+});
+
+describe("sunPlaceOf", () => {
+    const montreal = { latitude: 45.5, longitude: -73.57 };
+
+    it("lights the map with the sun of its place on the server clock", () => {
+        expect(sunPlaceOf(false, montreal)).toBe(montreal);
+        expect(sunPlaceOf(false, undefined)).toBeUndefined();
+    });
+
+    it("keeps the sun of Paris for a clock read as Paris time (computer clock, ?nightAt)", () => {
+        // 21:00 on a computer in Montréal is read as 21:00 in Paris: the sun of Montréal then would be 15:00's.
+        expect(sunPlaceOf(true, montreal)).toBeUndefined();
     });
 });

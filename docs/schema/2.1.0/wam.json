@@ -1385,6 +1385,7 @@
                 "automatic",
                 "clear",
                 "fog",
+                "real",
                 "rain",
                 "snow",
                 "storm"
@@ -1415,6 +1416,32 @@
               "required": [
                 "frequency",
                 "include"
+              ],
+              "additionalProperties": false
+            },
+            "weatherLocation": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "latitude": {
+                  "type": "number",
+                  "minimum": -90,
+                  "maximum": 90
+                },
+                "longitude": {
+                  "type": "number",
+                  "minimum": -180,
+                  "maximum": 180
+                }
+              },
+              "required": [
+                "name",
+                "latitude",
+                "longitude"
               ],
               "additionalProperties": false
             },

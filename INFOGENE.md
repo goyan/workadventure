@@ -1680,6 +1680,37 @@ restent acceptés et rapportés pour les clients desktop antérieurs au thème s
 L'état remonte à chaque changement, au plus une vérification par seconde dans la boucle du jeu, sans minuterie
 supplémentaire ; il inclut la météo affichée et la nuit effective pour les icônes. Sortir du salon désactive les contrôles.
 
+### Météo réelle, lieu de la carte et bandeau
+
+**Mode « Réel »** (Paramètres → Météo de la carte) : le temps prévu au lieu de la carte, quart d'heure par quart
+d'heure. Le pusher (`RealWeatherService`) demande à Open-Meteo `minutely_15` (code WMO et température, 2 h passées et
+6 h à venir), au plus toutes les 30 min par lieu (2 min tant qu'il n'a rien pour maintenant). Chaque navigateur lit le
+quart d'heure en cours à l'heure du jeu (`realWeatherAt`) : la météo change à la même heure pour tous, un épisode est
+daté du début de sa série (fondu d'entrée et de sortie du brouillard, neige qui tient puis fond comme en Automatique).
+Un quart d'heure commencé, ou qui commence avant le prochain relevé des navigateurs (5 min), n'est jamais réécrit.
+Sans réponse, la carte passe en Automatique. Neige hors saison dessinée en pluie, comme pour les autres modes.
+
+**Lieu de la carte** (`weatherLocation` du WAM, Paris par défaut) : recherche de ville par le géocodage Open-Meteo
+via le pusher, « Revenir à Paris » (`clearLocation` du protobuf). Le jour/nuit suit ce lieu sur l'heure du serveur ;
+avec « Heure de mon ordinateur » ou `?nightAt`, l'heure est lue comme celle de Paris et le soleil reste celui de Paris.
+
+**Aperçu** : tuile, fréquence ou ville essayées s'affichent tout de suite pour soi seul, jusqu'à la fermeture du
+panneau ; sauvegarder les applique à tous.
+
+**Bandeau** (menu des applications → « Météo », choix gardé dans le navigateur) : maintenant, +1 h et +4 h sous
+l'horloge, températures et lien Open-Meteo en mode Réel, programme saisonnier en Automatique.
+
+**Pusher** : `/real-weather` et `/real-weather/places`, authentifiés, 30 requêtes par minute et par joueur
+(`PerUserRateLimiter`, partagé avec les paroles) ; 20 nouveaux lieux et 30 recherches par minute pour tout le pusher,
+50 lieux suivis (le moins récemment demandé est oublié) ; pannes d'Open-Meteo journalisées et envoyées à Sentry.
+
+**Compatibilité** : `play`, `back` et `map-storage` ensemble (valeur `real` du `WeatherType`, champs protobuf
+`location` et `clearLocation`). L'app de bureau, inchangée, voit une carte en Réel comme Automatique ; y choisir
+Automatique ne change rien (choix volontaire : on ne sait pas si l'app renvoie d'elle-même sa valeur affichée).
+
+**Licence** : l'API gratuite d'Open-Meteo est réservée à un usage non commercial, données CC BY 4.0 (source citée
+dans le panneau et le bandeau).
+
 ## Arrière-plan de caméra gardé
 
 Le choix d'arrière-plan (flou ou image) est gardé dans le navigateur par le code amont. Il était effacé pour de bon

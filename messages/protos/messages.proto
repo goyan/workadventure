@@ -384,6 +384,17 @@ message UpdateWeatherSettingMessage {
   // Automatic weather settings (AutoWeather in libs/map-editor). Absent from older clients.
   optional string autoFrequency = 3;
   repeated string autoInclude = 4;
+  // Place of the map (WeatherLocation in libs/map-editor), for its real weather and its day/night. Absent from older
+  // clients: the existing place is kept.
+  optional MapLocationMessage location = 5;
+  // Back to the default place (Paris): the place of the map is removed. Sent without `location`.
+  optional bool clearLocation = 6;
+}
+
+message MapLocationMessage {
+  string name = 1;
+  double latitude = 2;
+  double longitude = 3;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in

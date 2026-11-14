@@ -1,6 +1,7 @@
 <script lang="ts">
     import { DEFAULT_AUTO_WEATHER, Season, Weather, WeatherType } from "@workadventure/map-editor";
-    import type { AutoWeatherFrequency, AutoWeatherSettings } from "@workadventure/map-editor";
+    import type { AutoWeatherFrequency, AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
+    import { onDestroy } from "svelte";
     import { get } from "svelte/store";
     import { mapEditorActivated } from "../../Stores/MenuStore";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -10,8 +11,11 @@
     import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
     import ButtonState from "../Input/ButtonState.svelte";
     import InputCheckbox from "../Input/InputCheckbox.svelte";
+    import { realWeatherStore, weatherPreviewStore } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import MapLocationPicker from "./MapLocationPicker.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
+    import { weatherName as sharedWeatherName } from "./WeatherName";
 
     type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
     const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
@@ -30,7 +34,37 @@
         [WeatherType.Fog]: initialAuto.include.includes(WeatherType.Fog),
     });
 
+    // Raw: the chosen place is replaced, never edited. Compared with the saved one by value: the same town found again is
+    // a new object.
+    function samePlace(a: WeatherLocation | undefined, b: WeatherLocation | undefined): boolean {
+        return a?.name === b?.name && a?.latitude === b?.latitude && a?.longitude === b?.longitude;
+    }
+    let location = $state.raw<WeatherLocation | undefined>(settings?.weatherLocation);
+
     const autoInclude = $derived(BAD_WEATHERS.filter((w) => included[w]));
+
+    // What is being tried shows at once, for this person only, until the panel closes (weatherPreviewStore).
+    let saved = $state.raw({
+        weather: settings?.weather ?? WeatherType.Clear,
+        frequency: initialAuto.frequency,
+        include: BAD_WEATHERS.filter((w) => initialAuto.include.includes(w)).join(),
+        location: settings?.weatherLocation,
+    });
+    const changed = $derived(
+        weather !== saved.weather ||
+            frequency !== saved.frequency ||
+            autoInclude.join() !== saved.include ||
+            !samePlace(location, saved.location),
+    );
+    const placeRemoved = $derived(location === undefined && saved.location !== undefined);
+    $effect(() => {
+        weatherPreviewStore.set(
+            changed
+                ? { weather, weatherAuto: { frequency, include: autoInclude }, weatherLocation: location }
+                : undefined,
+        );
+    });
+    onDestroy(() => weatherPreviewStore.set(undefined));
 
     const tiles = $derived([
         {
@@ -43,6 +77,7 @@
         { value: WeatherType.Storm, label: $LL.mapEditor.settings.weather.storm(), icon: WeatherType.Storm },
         { value: WeatherType.Snow, label: $LL.mapEditor.settings.weather.snow(), icon: WeatherType.Snow },
         { value: WeatherType.Fog, label: $LL.mapEditor.settings.weather.fog(), icon: WeatherType.Fog },
+        { value: WeatherType.Real, label: $LL.mapEditor.settings.weather.real(), icon: WeatherType.Real },
     ]);
     const frequencies = $derived([
         { value: "calm" as AutoWeatherFrequency, label: $LL.mapEditor.settings.weather.auto.calm() },
@@ -51,21 +86,7 @@
     ]);
 
     function weatherName(w: WeatherType): string {
-        const labels = $LL.mapEditor.settings.weather;
-        switch (w) {
-            case WeatherType.Rain:
-                return labels.rain();
-            case WeatherType.Snow:
-                return labels.snow();
-            case WeatherType.Storm:
-                return labels.storm();
-            case WeatherType.Fog:
-                return labels.fog();
-            case WeatherType.Automatic:
-                return labels.automatic();
-            default:
-                return labels.clear();
-        }
+        return sharedWeatherName($LL.mapEditor.settings.weather, w);
     }
 
     function seasonName(season: Season): string {
@@ -135,8 +156,11 @@
                     weather: Weather.parse(weather),
                     autoFrequency: frequency,
                     autoInclude,
+                    // Place removed: back to the default one (Paris), which an absent place alone would not do.
+                    ...(location ? { location } : placeRemoved ? { clearLocation: true } : {}),
                 },
             });
+            saved = { weather, frequency, include: autoInclude.join(), location };
             return $LL.mapEditor.settings.weather.success();
         } catch (error) {
             throw new Error($LL.mapEditor.settings.weather.error(), { cause: error });
@@ -194,6 +218,32 @@
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.snowHint()}</p>
     {:else if weather === WeatherType.Fog}
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.fogHint()}</p>
+    {:else if weather === WeatherType.Real}
+        <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.realMode.hint()}</p>
+        <div class="rounded-lg bg-black/30 p-3 text-sm text-white/80" data-testid="map-weather-real">
+            {#if $realWeatherStore.status === "known"}
+                {$LL.mapEditor.settings.weather.realMode.now({ weather: weatherName($realWeatherStore.weather) })}
+            {:else if $realWeatherStore.status === "unavailable"}
+                {$LL.mapEditor.settings.weather.realMode.unavailable()}
+            {:else}
+                {$LL.mapEditor.settings.weather.realMode.pending()}
+            {/if}
+        </div>
+        <!-- CC BY 4.0: the data source is credited wherever the real weather is shown. -->
+        <a
+            class="text-xs text-white/50 underline"
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noopener noreferrer">{$LL.mapEditor.settings.weather.realMode.attribution()}</a
+        >
+    {/if}
+
+    <MapLocationPicker bind:location />
+
+    {#if changed}
+        <p class="text-xs text-white/60" data-testid="map-weather-preview-hint">
+            {$LL.mapEditor.settings.weather.previewHint()}
+        </p>
     {/if}
 
     <ButtonState

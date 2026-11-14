@@ -1,5 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
@@ -13,6 +13,7 @@ export function snowCoverage(
     epoch: number,
     startedAt?: number,
     auto?: AutoWeatherSettings,
+    meltFrom?: number,
 ): number {
     if (!Number.isFinite(epoch)) return 0;
     if (configured === WeatherType.Automatic) {
@@ -26,7 +27,10 @@ export function snowCoverage(
         return wasSnowing ? Math.max(0, 1 - elapsed / SNOW_MELT_MS) : 0;
     }
     if (!snowPossibleAt(new Date(epoch))) return 0;
-    if (configured !== WeatherType.Snow) return 0;
+    // A real snow that stopped melts as an automatic one does.
+    if (configured !== WeatherType.Snow) {
+        return meltFrom === undefined ? 0 : Math.max(0, Math.min(1, 1 - (epoch - meltFrom) / SNOW_MELT_MS));
+    }
     // Legacy maps without an episode date keep their snowy ground until their weather is edited.
     return startedAt === undefined ? 1 : Math.max(0, Math.min(1, (epoch - startedAt) / SNOW_ACCUMULATION_MS));
 }
@@ -36,6 +40,12 @@ export interface MapSnowSettings {
     weather?: WeatherType;
     weatherStartedAt?: number;
     weatherAuto?: AutoWeatherSettings;
+    /** Place of the map, for its real weather. */
+    weatherLocation?: WeatherLocation;
+    /** Real weather only (never saved): end of the weather under way, when a fog fades out. */
+    weatherEndsAt?: number;
+    /** Real weather only (never saved): when the last snow stopped, the ground melting from then. */
+    snowMeltFrom?: number;
 }
 
 /**
@@ -53,5 +63,6 @@ export function mapSnowCoverage(
         serverDate.getTime(),
         settings?.weatherStartedAt,
         settings?.weatherAuto,
+        settings?.snowMeltFrom,
     );
 }

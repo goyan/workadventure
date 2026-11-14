@@ -747,6 +747,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         weather: {
             automatic: "Auto",
             fog: "Brouillard",
+            real: "Réel",
             title: "Météo",
             clear: "Ciel clair",
             rain: "Pluie",
@@ -776,6 +777,24 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             fixed: {
                 snowHint: "Hors novembre–mars, elle tombe en pluie.",
                 fogHint: "Toute la journée.",
+            },
+            previewHint: "Aperçu pour vous seul. Sauvegarder l'applique à tout le monde.",
+            location: {
+                title: "Lieu de la carte",
+                default: "Paris (par défaut)",
+                search: "Chercher une ville",
+                searching: "Recherche…",
+                noResult: "Aucune ville trouvée",
+                error: "Recherche indisponible",
+                hint: "La météo réelle et le jour/nuit suivent ce lieu.",
+                reset: "Revenir à Paris (par défaut)",
+            },
+            realMode: {
+                hint: "Le temps prévu au lieu de la carte, quart d'heure par quart d'heure : il change à la même heure pour tous. Si le service ne répond pas, la météo Auto prend le relais.",
+                now: "Maintenant sur place : {weather}",
+                pending: "Relevé de la météo…",
+                unavailable: "Service météo indisponible : météo Auto en attendant.",
+                attribution: "Données météo : Open-Meteo.com",
             },
         },
 

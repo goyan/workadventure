@@ -24,9 +24,10 @@
     import { chatVisibilityStore } from "../../../Stores/ChatStore";
     import { userIsAdminStore } from "../../../Stores/GameStore";
     import { showRecordingList } from "../../../Stores/RecordingStore";
+    import { weatherBannerStore } from "../../../Stores/WeatherBannerStore";
     import RecordingIcon from "../../Icons/RecordingIcon.svelte";
     import AdditionalMenuItems from "./AdditionalMenuItems.svelte";
-    import { IconCalendar, IconCheckList, IconWorldSearch } from "@wa-icons";
+    import { IconCalendar, IconCheckList, IconCloud, IconWorldSearch } from "@wa-icons";
 
     // The ActionBarButton component is displayed differently in the menu.
     // We use the context to decide how to render it.
@@ -73,6 +74,12 @@
             analyticsClient.trackAdminEvent("external_module.todo_list_opened");
         }
         mapEditorModeStore.switchMode(false);
+        openedMenuStore.closeAll();
+    }
+
+    // The weather banner (now, in one hour, in four hours) next to the clock, kept in the browser.
+    function toggleWeatherBanner() {
+        weatherBannerStore.update((shown) => !shown);
         openedMenuStore.closeAll();
     }
 </script>
@@ -125,6 +132,15 @@
         <IconCheckList width="20" height="20" />
     </ActionBarButton>
 {/if}
+
+<ActionBarButton
+    onclick={toggleWeatherBanner}
+    label={$LL.actionbar.weather()}
+    state={$weatherBannerStore ? "active" : "normal"}
+    dataTestId="weatherBannerButton"
+>
+    <IconCloud width="20" height="20" />
+</ActionBarButton>
 
 <!-- External module action bar -->
 <ExternalComponents zone="actionBarAppsMenu" />

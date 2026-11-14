@@ -76,6 +76,7 @@
     import WaveCards from "./Wave/WaveCards.svelte";
     import JamLinkRequestCard from "./ListeningZone/JamLinkRequestCard.svelte";
     import NerfHearts from "./Nerf/NerfHearts.svelte";
+    import WeatherForecastBanner from "./Weather/WeatherForecastBanner.svelte";
     import CoffeeCards from "./Coffee/CoffeeCards.svelte";
     import HelpPopUpBlocked from "./HelpSettings/HelpPopUpBlocked.svelte";
     import Notification from "./UI/Notification.svelte";
@@ -499,6 +500,8 @@
                 bind:offsetHeight={jamDockHeight}
             >
                 <div class="pointer-events-auto"><WorldClock /></div>
+                <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
+                <WeatherForecastBanner />
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
             </div>
 

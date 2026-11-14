@@ -266,6 +266,7 @@ import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
+import { shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -2346,18 +2347,17 @@ export class GameScene extends DirtyScene {
     }
 
     public getDesktopWeather(): WeatherType {
-        const settings = this.getGameMap().getWamFile()?.getWam().settings;
+        const serverDate = this.nightManager?.serverDate();
+        const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(
-            weatherAtTime(configured, this.nightManager?.serverDate(), settings?.weatherAuto),
-            this.getSeasonalTheme(),
-        );
+        return effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), this.getSeasonalTheme());
     }
 
     /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */
     public getMapSnowCoverage(): number {
-        const settings = this.getGameMap().getWamFile()?.getWam().settings;
-        return mapSnowCoverage(this.mapSnowShown, settings, this.nightManager?.serverDate());
+        const serverDate = this.nightManager?.serverDate();
+        const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
+        return mapSnowCoverage(this.mapSnowShown, settings, serverDate);
     }
 
     public getGameMap(): GameMap {
