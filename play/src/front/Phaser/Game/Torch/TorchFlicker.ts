@@ -46,43 +46,56 @@ export function torchFlickerPhase(id: string): number {
     return (hash % 1000) / 1000;
 }
 
-/** How fast a torch goes to the intensity its bearer set: from 10 % to 100 % in one second. */
-const TORCH_STRENGTH_PER_SECOND = 0.9;
+/** How fast a torch dims or brightens when its bearer changes its intensity: from 10 % to 100 % in one second. */
+const TORCH_FADE_PER_SECOND = 0.9;
 /**
  * The light only turns back (dimmer after brighter, or the other way) a third of a second after it last did: however
- * fast the intensity is changed (a held key, a colleague clicking), at most three marked variations a second.
+ * fast the intensity is changed (a held key, a colleague clicking), at most three marked variations a second. The slow
+ * flicker turns far less often, and moves far slower than the fade: it goes through unchanged.
  */
-const TORCH_STRENGTH_TURN_MS = 1000 / 3;
+const TORCH_FADE_TURN_MS = 1000 / 3;
+/** A turn this close to the previous one is no marked variation (as counted for the flicker): it may come sooner. */
+const TORCH_FADE_MARKED = 0.02;
 
-/** The share of its full light a torch is drawn at now, on its way to the intensity its bearer set. */
-export interface TorchStrength {
+/** A brightness of a torch as it is drawn now, on its way to the one asked (see torchFadeTowards). */
+export interface TorchFade {
     value: number;
     /** The way it last moved; undefined until it has moved. */
     rising: boolean | undefined;
-    /** When it last started moving one way. */
+    /** When it last started moving one way, and from where. */
     turnedAt: number;
+    turnedFrom: number;
     /** When it was last looked at. */
     at: number;
 }
 
-/** A torch seen for the first time: at once at the intensity its bearer set. */
-export function startTorchStrength(target: number, now: number): TorchStrength {
-    return { value: target, rising: undefined, turnedAt: now, at: now };
+/** A torch seen for the first time: at once at the brightness asked. */
+export function startTorchFade(target: number, now: number): TorchFade {
+    return { value: target, rising: undefined, turnedAt: now, turnedFrom: target, at: now };
 }
 
-/** Moves a torch towards the intensity set (from 0 to 1), slowly, and never turning back too soon (see above). */
-export function torchStrengthTowards(state: TorchStrength, target: number, now: number): TorchStrength {
+/**
+ * Moves a brightness (from 0 to 1) towards the one asked, at most TORCH_FADE_PER_SECOND, and never turning back
+ * sooner than TORCH_FADE_TURN_MS after it last turned, unless it barely moved since: what is drawn stays safe for
+ * photosensitivity (WCAG 2.3.1) whatever is asked of it.
+ */
+export function torchFadeTowards(state: TorchFade, target: number, now: number): TorchFade {
     const elapsed = Math.max(0, now - state.at);
     if (state.value === target) {
         return { ...state, at: now };
     }
     const rising = target > state.value;
     const turning = rising !== state.rising;
-    if (turning && state.rising !== undefined && now - state.turnedAt < TORCH_STRENGTH_TURN_MS) {
+    if (
+        turning &&
+        state.rising !== undefined &&
+        now - state.turnedAt < TORCH_FADE_TURN_MS &&
+        Math.abs(state.value - state.turnedFrom) >= TORCH_FADE_MARKED
+    ) {
         // Held where it is until it may turn back.
         return { ...state, at: now };
     }
-    const reach = (TORCH_STRENGTH_PER_SECOND * elapsed) / 1000;
+    const reach = (TORCH_FADE_PER_SECOND * elapsed) / 1000;
     const value = rising ? Math.min(target, state.value + reach) : Math.max(target, state.value - reach);
-    return { value, rising, turnedAt: turning ? now : state.turnedAt, at: now };
+    return turning ? { value, rising, turnedAt: now, turnedFrom: state.value, at: now } : { ...state, value, at: now };
 }

@@ -23,9 +23,9 @@ export interface TorchBearer {
     y: number;
     direction: PositionMessage_Direction;
     seated: boolean;
-    /** How bright the flame is now (see torchFlicker). */
+    /** How bright the light is now: the flicker within the intensity its bearer set (see TorchManager). */
     intensity: number;
-    /** The share of its full light the bearer set, 0.1 to 1 (see torchStrengthTowards): the flicker is within it. */
+    /** The intensity its bearer set, 0.1 to 1, on its way to it (see torchFadeTowards): the night veil follows it. */
     strength: number;
     /** The local player: their light is always drawn first. */
     local: boolean;
@@ -42,7 +42,6 @@ interface LitTorch {
     revision: number;
     /** The image of the last drawing: the lights drawn longest ago come first when too many wait. */
     drawnAt: number;
-    /** The brightness of the glow last set: the flicker times the strength. */
     intensity: number | undefined;
     /** The strength last told to the night veil. */
     strength: number;
@@ -194,18 +193,17 @@ export class Torches {
         return changed;
     }
 
-    /** Sets the brightness of each light, its flicker within its strength; true when one on the screen changed. */
+    /** Sets the brightness of each light; true when one on the screen changed. */
     private flicker(bearers: readonly TorchBearer[]): boolean {
         const view = this.scene.cameras.main.worldView;
         let seen = false;
         for (const bearer of bearers) {
             const torch = this.torches.get(bearer.id);
-            const intensity = bearer.intensity * bearer.strength;
-            if (!torch || torch.intensity === intensity) {
+            if (!torch || torch.intensity === bearer.intensity) {
                 continue;
             }
-            torch.intensity = intensity;
-            torch.visual.setIntensity(intensity);
+            torch.intensity = bearer.intensity;
+            torch.visual.setIntensity(bearer.intensity);
             const light = torch.light;
             if (
                 light &&

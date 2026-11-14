@@ -115,9 +115,12 @@ reste possible).
   client continue de lire `_torchEquipped` seul et voit la torche à pleine lumière ; une torche d'un ancien client
   (variable absente) ou une valeur illisible est à 100 %. L'intensité règle la luminosité de la lumière (multipliée
   par le scintillement) et la part du voile de nuit qu'elle perce ; ni la portée, ni la forme, ni la flamme dans la
-  main ne changent. Un changement se fait en fondu (10 % → 100 % en 1 s, au rythme des 15 pas du scintillement) et la
-  lumière ne repart dans l'autre sens que 1/3 s après son dernier changement de sens : même une touche maintenue ou
-  des clics rapides d'un collègue ne font pas plus de trois variations marquées par seconde.
+  main ne changent. Ce qui est dessiné passe par un fondu (`torchFadeTowards`, 10 % → 100 % en 1 s, au rythme des
+  15 pas du scintillement) qui ne repart dans l'autre sens que 1/3 s après son dernier changement de sens marqué
+  (≥ 0,02) : la lueur (scintillement × intensité) et le voile chacun le leur. Même une touche maintenue ou des clics
+  rapides d'un collègue (10 % ↔ 100 % à chaque pas, testé) ne font pas plus de trois variations marquées par seconde ;
+  à intensité fixe, le scintillement passe inchangé (testé). En mouvement réduit, le fondu reste (il n'y a plus de
+  scintillement).
 - **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
   100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées
   par seconde (photosensibilité, WCAG 2.3.1) ; la forme et la portée de la lumière restent fixes : son polygone part de la flamme sans tenir compte de son

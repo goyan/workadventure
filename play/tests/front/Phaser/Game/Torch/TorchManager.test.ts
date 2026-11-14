@@ -29,7 +29,8 @@ vi.mock("../../../../../src/front/Phaser/Game/GameManager", () => ({
 const { TorchManager } = await import("../../../../../src/front/Phaser/Game/Torch/TorchManager");
 const { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } =
     await import("../../../../../src/front/Phaser/Game/Torch/TorchProtocol");
-const { torchFlicker, torchFlickerPhase } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlicker");
+const { torchFlicker, torchFlickerPhase, torchFlickerStep } =
+    await import("../../../../../src/front/Phaser/Game/Torch/TorchFlicker");
 const { torchFlameShape } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlameShape");
 const { torchEquippedStore, torchIntensityStore } = await import("../../../../../src/front/Stores/TorchStore");
 const { nerfEquippedStore } = await import("../../../../../src/front/Stores/NerfStore");
@@ -112,16 +113,17 @@ describe("TorchManager", () => {
         ]);
     });
 
-    it("lights each torch at the intensity its bearer set, the flicker kept within it", () => {
+    it("lights each torch at the intensity its bearer set, the flicker within it", () => {
         player.isTorchLit.mockReturnValue(true);
         player.getTorchIntensity.mockReturnValue(30);
         remote.getTorchIntensity.mockReturnValue(100);
         manager.update(1000);
         const [me, colleague] = updates[0].bearers;
+        // The glow: the flicker times the intensity; the night veil: the intensity alone.
+        expect(me.intensity).toBeCloseTo(0.3 * torchFlicker(1000, torchFlickerPhase("me"), false));
         expect(me.strength).toBeCloseTo(0.3);
-        expect(colleague.strength).toBe(1);
-        // The flicker itself is unchanged: the torches multiply both.
         expect(colleague.intensity).toBe(torchFlicker(1000, torchFlickerPhase("2"), false));
+        expect(colleague.strength).toBe(1);
     });
 
     it("moves a torch to a new intensity in steps, from full to the dimmest in one second", () => {
@@ -132,8 +134,13 @@ describe("TorchManager", () => {
         const stepMs = 1000 / 15;
         manager.update(1000 + stepMs);
         expect(colleague(1)?.strength).toBeCloseTo(1 - 0.9 / 15);
-        for (let step = 2; step <= 16; step++) manager.update(1000 + step * stepMs);
+        expect(colleague(1)?.intensity).toBeCloseTo((colleague(0)?.intensity ?? 0) - 0.9 / 15);
+        for (let step = 2; step <= 20; step++) manager.update(1000 + step * stepMs);
+        const last = 1000 + 20 * stepMs;
         expect(colleague(updates.length - 1)?.strength).toBeCloseTo(0.1);
+        expect(colleague(updates.length - 1)?.intensity).toBeCloseTo(
+            0.1 * torchFlicker(torchFlickerStep(last), torchFlickerPhase("2"), false),
+        );
     });
 
     it("puts the Nerf away when the torch is equipped", () => {
