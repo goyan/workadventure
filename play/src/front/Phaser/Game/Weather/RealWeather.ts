@@ -1,16 +1,34 @@
 import { WeatherType } from "@workadventure/map-editor";
-import type { ObservedWeather } from "../../../../common/RealWeather";
+import { realWeatherAt } from "../../../../common/RealWeather";
+import type { ObservedWeather, RealWeatherSlot } from "../../../../common/RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 
-/** What this browser knows of the weather in Paris (RealWeatherClient). */
+/** What this browser knows of the weather timeline at the place of the map (RealWeatherClient). */
+export type RealForecastState =
+    | { status: "pending" }
+    | { status: "known"; slots: RealWeatherSlot[] }
+    | { status: "unavailable" };
+
+/** The real weather at one instant, as the map shows it. */
 export type RealWeatherState =
     | { status: "pending" }
     | { status: "known"; weather: ObservedWeather; since: number }
     | { status: "unavailable" };
 
 /**
- * The map weather settings with "real" replaced by what it shows: the observed weather, begun when the pusher first
- * saw it (so fog and snow fade in); clear until the first answer, so no drawn weather flashes on load; the seasonal
+ * The real weather at the game date: pending until the first answer and the date are known, unavailable when the
+ * timeline does not cover that date (the map then falls back to the seasonal draw).
+ */
+export function realWeatherStateAt(forecast: RealForecastState, date: Date | undefined): RealWeatherState {
+    if (forecast.status !== "known") return forecast;
+    if (!date) return { status: "pending" };
+    const now = realWeatherAt(forecast.slots, date.getTime());
+    return now ? { status: "known", weather: now.weather, since: now.since } : { status: "unavailable" };
+}
+
+/**
+ * The map weather settings with "real" replaced by what it shows: the weather of the quarter hour under way, begun at
+ * the start of its run (so fog and snow fade in); clear until the first answer, so no drawn weather flashes on load; the seasonal
  * draw with the map's Auto settings while the weather service is unavailable. Other modes are returned untouched.
  */
 export function withRealWeather(

@@ -15,15 +15,83 @@ export const ObservedWeather = z.enum([
 ]);
 export type ObservedWeather = z.infer<typeof ObservedWeather>;
 
+/** Length of a slot of the Open-Meteo timeline (minutely_15): a quarter of an hour. */
+export const REAL_WEATHER_SLOT_MS = 15 * 60 * 1000;
+
 /**
- * What the pusher answers on /real-weather: the weather in Paris and the time (epoch ms) the pusher first saw it, or
- * nulls when the weather service gave nothing usable for an hour.
+ * A quarter hour of the weather at the place of a map: from `at` (epoch ms) for REAL_WEATHER_SLOT_MS, its game weather
+ * and its temperature (°C), each null when the weather service gave nothing usable for it.
  */
-export const RealWeatherReport = z.union([
-    z.object({ weather: ObservedWeather, since: z.number().int().nonnegative() }),
-    z.object({ weather: z.null(), since: z.null() }),
-]);
-export type RealWeatherReport = z.infer<typeof RealWeatherReport>;
+export const RealWeatherSlot = z.object({
+    at: z.number().int().nonnegative(),
+    weather: ObservedWeather.nullable(),
+    temperature: z.number().finite().nullable(),
+});
+export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
+
+/**
+ * What the pusher answers on /real-weather: the timeline of the weather at a place, a couple of hours back and some
+ * hours ahead, in order. Every browser reads the same timeline at the same time, so the weather changes at once for all.
+ */
+export const RealWeatherForecast = z.object({ slots: z.array(RealWeatherSlot).max(96) });
+export type RealWeatherForecast = z.infer<typeof RealWeatherForecast>;
+
+const OpenMeteoTimeline = z.object({
+    minutely_15: z.object({
+        time: z.array(z.number().int().nonnegative()).max(96),
+        weather_code: z.array(z.number().nullable()).max(96),
+        temperature_2m: z.array(z.number().finite().nullable()).max(96),
+    }),
+});
+
+/**
+ * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m and timeformat=unixtime.
+ * Each value is taken for the quarter hour starting at its time. Undefined when the answer has no such timeline.
+ */
+export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
+    const parsed = OpenMeteoTimeline.safeParse(answer);
+    if (!parsed.success) return undefined;
+    const { time, weather_code, temperature_2m } = parsed.data.minutely_15;
+    if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
+    return time.map((seconds, index) => {
+        const code = weather_code[index];
+        return {
+            at: seconds * 1000,
+            weather: (code === null ? undefined : weatherFromWmoCode(code)) ?? null,
+            temperature: temperature_2m[index],
+        };
+    });
+}
+
+/** The real weather at one instant: its game weather, since when it lasts (epoch ms), and its temperature (°C). */
+export interface RealWeatherAt {
+    weather: ObservedWeather;
+    since: number;
+    temperature: number | null;
+}
+
+/**
+ * The weather of the quarter hour of `slots` (in order) under way at `epoch`, dated from the start of its unbroken run
+ * of the same weather: every browser finds the same start, so fog and snow fade in alike for everyone. Undefined
+ * outside the timeline, in a hole, or for a quarter hour without weather.
+ */
+export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number): RealWeatherAt | undefined {
+    let index = slots.length - 1;
+    while (index >= 0 && slots[index].at > epoch) index--;
+    if (index < 0) return undefined;
+    const current = slots[index];
+    const weather = current.weather;
+    if (weather === null || epoch >= current.at + REAL_WEATHER_SLOT_MS) return undefined;
+    let first = index;
+    while (
+        first > 0 &&
+        slots[first - 1].weather === weather &&
+        slots[first - 1].at === slots[first].at - REAL_WEATHER_SLOT_MS
+    ) {
+        first--;
+    }
+    return { weather, since: slots[first].at, temperature: current.temperature };
+}
 
 /**
  * The game weather for a WMO weather interpretation code, as reported by Open-Meteo. Clouds count as clear; freezing

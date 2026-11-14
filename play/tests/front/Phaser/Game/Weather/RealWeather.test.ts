@@ -1,10 +1,15 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { withRealWeather, withWeatherPreview } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
+import {
+    realWeatherStateAt,
+    withRealWeather,
+    withWeatherPreview,
+} from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { snowCoverage } from "../../../../../src/front/Phaser/Game/Weather/SnowCover";
 
 const auto = { frequency: "calm" as const, include: [WeatherType.Rain] };
+const SLOT = 15 * 60 * 1000;
 
 describe("withRealWeather", () => {
     it("leaves every other mode as configured", () => {
@@ -73,5 +78,36 @@ describe("withWeatherPreview", () => {
         expect(
             withWeatherPreview({ weather: WeatherType.Clear }, { weather: WeatherType.Real, weatherLocation: lyon }),
         ).toEqual({ weather: WeatherType.Real, weatherLocation: lyon });
+    });
+});
+
+describe("realWeatherStateAt", () => {
+    const slots = [
+        { at: 0, weather: WeatherType.Rain, temperature: 3 },
+        { at: SLOT, weather: WeatherType.Rain, temperature: 3 },
+        { at: 2 * SLOT, weather: WeatherType.Snow, temperature: -1 },
+    ] as const;
+
+    it("reads the weather of the timeline at the game date, dated from the start of its run", () => {
+        const forecast = { status: "known" as const, slots: [...slots] };
+        expect(realWeatherStateAt(forecast, new Date(SLOT + 1))).toEqual({
+            status: "known",
+            weather: WeatherType.Rain,
+            since: 0,
+        });
+        expect(realWeatherStateAt(forecast, new Date(2 * SLOT))).toEqual({
+            status: "known",
+            weather: WeatherType.Snow,
+            since: 2 * SLOT,
+        });
+    });
+
+    it("is pending before the first answer or the game date, unavailable out of the timeline", () => {
+        const forecast = { status: "known" as const, slots: [...slots] };
+        expect(realWeatherStateAt({ status: "pending" }, new Date(0))).toEqual({ status: "pending" });
+        expect(realWeatherStateAt(forecast, undefined)).toEqual({ status: "pending" });
+        expect(realWeatherStateAt({ status: "unavailable" }, new Date(0))).toEqual({ status: "unavailable" });
+        expect(realWeatherStateAt(forecast, new Date(3 * SLOT))).toEqual({ status: "unavailable" });
+        expect(realWeatherStateAt({ status: "known", slots: [] }, new Date(0))).toEqual({ status: "unavailable" });
     });
 });

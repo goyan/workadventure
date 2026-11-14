@@ -1,17 +1,22 @@
 import Debug from "debug";
 import { z } from "zod";
 import type { WeatherLocation } from "@workadventure/map-editor";
-import { PARIS_LATITUDE, PARIS_LONGITUDE, weatherFromWmoCode } from "../../common/RealWeather";
-import type { ObservedWeather, RealWeatherReport } from "../../common/RealWeather";
+import { PARIS_LATITUDE, PARIS_LONGITUDE, REAL_WEATHER_SLOT_MS, slotsFromOpenMeteo } from "../../common/RealWeather";
+import type { RealWeatherForecast, RealWeatherSlot } from "../../common/RealWeather";
 
 type Place = Pick<WeatherLocation, "latitude" | "longitude">;
 
 const debug = Debug("pusher:real-weather");
 
-/** One call to Open-Meteo every ten minutes at most per place, whatever the number of players (data refresh every 15). */
-const REFRESH_MS = 10 * 60 * 1000;
-/** Past this age, the last weather is no longer shown: the players fall back to the seasonal draw. */
-const MAX_AGE_MS = 60 * 60 * 1000;
+/**
+ * One call to Open-Meteo every half hour at most per place, whatever the number of players: the timeline runs six hours
+ * ahead, so the weather keeps changing on time between calls, and through a failed one.
+ */
+const REFRESH_MS = 30 * 60 * 1000;
+/** Quarter hours asked before and after now: two hours back (the start of the weather under way), six ahead. */
+const PAST_SLOTS = 8;
+const FORECAST_SLOTS = 24;
+const KEPT_PAST_MS = PAST_SLOTS * REAL_WEATHER_SLOT_MS;
 const TIMEOUT_MS = 5000;
 /** Places followed at once (one per map with a place, in practice a handful): the oldest is forgotten beyond. */
 const MAX_PLACES = 50;
@@ -19,7 +24,6 @@ const MAX_SEARCHES = 200;
 
 const PARIS: Place = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
 
-const OpenMeteoCurrent = z.object({ current: z.object({ weather_code: z.number() }) });
 const OpenMeteoPlaces = z.object({
     results: z
         .array(
@@ -41,12 +45,28 @@ function rounded(value: number): number {
 }
 
 interface PlaceWeather {
-    current: { weather: ObservedWeather; since: number; observedAt: number } | undefined;
+    slots: RealWeatherSlot[];
     lastAttemptAt: number;
     pending: Promise<void> | undefined;
 }
 
-/** The current weather at the places of the maps, shared by every player of this pusher. */
+/** Whether a quarter hour ended less than two hours ago, or is still to come. */
+function recent(slot: RealWeatherSlot, now: number): boolean {
+    return slot.at + REAL_WEATHER_SLOT_MS >= now - KEPT_PAST_MS;
+}
+
+/**
+ * A new forecast for the quarter hours to come, the ones already begun as they were given: browsers ask at different
+ * times, and a quarter hour must show the same weather to everyone. Quarter hours ended over two hours ago are forgotten.
+ */
+function merged(kept: readonly RealWeatherSlot[], fresh: readonly RealWeatherSlot[], now: number): RealWeatherSlot[] {
+    const byStart = new Map<number, RealWeatherSlot>();
+    for (const slot of fresh) byStart.set(slot.at, slot);
+    for (const slot of kept) if (slot.at <= now) byStart.set(slot.at, slot);
+    return [...byStart.values()].filter((slot) => recent(slot, now)).sort((a, b) => a.at - b.at);
+}
+
+/** The weather timeline at the places of the maps, shared by every player of this pusher. */
 export class RealWeatherService {
     private readonly places = new Map<string, PlaceWeather>();
 
@@ -55,7 +75,7 @@ export class RealWeatherService {
         private readonly now: () => number = Date.now,
     ) {}
 
-    public async get(place: Place = PARIS): Promise<RealWeatherReport> {
+    public async get(place: Place = PARIS): Promise<RealWeatherForecast> {
         const latitude = rounded(place.latitude);
         const longitude = rounded(place.longitude);
         const key = `${latitude},${longitude}`;
@@ -65,7 +85,7 @@ export class RealWeatherService {
                 const oldest = this.places.keys().next().value;
                 if (oldest !== undefined) this.places.delete(oldest);
             }
-            entry = { current: undefined, lastAttemptAt: -Infinity, pending: undefined };
+            entry = { slots: [], lastAttemptAt: -Infinity, pending: undefined };
             this.places.set(key, entry);
         }
         const followed = entry;
@@ -76,9 +96,9 @@ export class RealWeatherService {
             });
         }
         if (followed.pending) await followed.pending;
-        const current = followed.current;
-        if (!current || this.now() - current.observedAt > MAX_AGE_MS) return { weather: null, since: null };
-        return { weather: current.weather, since: current.since };
+        const now = this.now();
+        followed.slots = followed.slots.filter((slot) => recent(slot, now));
+        return { slots: followed.slots };
     }
 
     private async refresh(entry: PlaceWeather, latitude: number, longitude: number): Promise<void> {
@@ -86,21 +106,21 @@ export class RealWeatherService {
             const url = new URL("https://api.open-meteo.com/v1/forecast");
             url.searchParams.set("latitude", String(latitude));
             url.searchParams.set("longitude", String(longitude));
-            url.searchParams.set("current", "weather_code");
+            url.searchParams.set("minutely_15", "weather_code,temperature_2m");
+            url.searchParams.set("past_minutely_15", String(PAST_SLOTS));
+            url.searchParams.set("forecast_minutely_15", String(FORECAST_SLOTS));
+            url.searchParams.set("timeformat", "unixtime");
             const response = await this.fetchFn(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
             if (!response.ok) {
                 debug("Open-Meteo answered %d", response.status);
                 return;
             }
-            const parsed = OpenMeteoCurrent.safeParse(await response.json());
-            const weather = parsed.success ? weatherFromWmoCode(parsed.data.current.weather_code) : undefined;
-            if (!weather) {
-                debug("Open-Meteo gave no usable weather code");
+            const slots = slotsFromOpenMeteo(await response.json());
+            if (!slots) {
+                debug("Open-Meteo gave no usable timeline");
                 return;
             }
-            const observedAt = this.now();
-            const since = entry.current?.weather === weather ? entry.current.since : observedAt;
-            entry.current = { weather, since, observedAt };
+            entry.slots = merged(entry.slots, slots, this.now());
         } catch (error) {
             debug("Open-Meteo request failed: %O", error);
         }

@@ -79,7 +79,7 @@ export class WeatherManager {
 
     public update(now: number, serverDate: Date | undefined, night = false): void {
         const mapSettings = this.scene.getGameMap().getWamFile()?.getWam().settings;
-        const settings = shownWeatherSettings(mapSettings);
+        const settings = shownWeatherSettings(mapSettings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
         // Only a real fog fades in from its start: a fixed fog keeps its full thickness, as before.
         const realFogSince = mapSettings?.weather === WeatherType.Real ? settings?.weatherStartedAt : undefined;

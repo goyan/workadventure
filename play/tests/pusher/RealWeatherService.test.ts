@@ -1,20 +1,24 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PlaceSearchService, RealWeatherService } from "../../src/pusher/services/RealWeatherService";
+import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "../common/OpenMeteoFixture";
 
-/** Shape of a real Open-Meteo answer for Paris (2026-11-14). */
-function openMeteo(code: number): Response {
+/** The real Open-Meteo answer for Paris (2026-11-14), with every quarter hour given `code` if any. */
+function openMeteo(code?: number): Response {
+    const timeline = OPEN_METEO_PARIS.minutely_15;
     return new Response(
         JSON.stringify({
-            latitude: 48.853382,
-            longitude: 2.355208,
-            timezone: "Europe/Paris",
-            current_units: { time: "iso8601", interval: "seconds", weather_code: "wmo code" },
-            current: { time: "2026-11-14T10:15", interval: 900, weather_code: code },
+            ...OPEN_METEO_PARIS,
+            minutely_15: {
+                ...timeline,
+                weather_code: code === undefined ? timeline.weather_code : timeline.weather_code.map(() => code),
+            },
         }),
     );
 }
 
 const MINUTE = 60_000;
+const NOW = OPEN_METEO_ASKED_AT * 1000;
+const FIRST = OPEN_METEO_PARIS.minutely_15.time[0] * 1000;
 
 function urlOf(input: string | URL | Request): URL {
     return input instanceof Request ? new URL(input.url) : new URL(input);
@@ -25,77 +29,95 @@ afterEach(() => {
 });
 
 describe("RealWeatherService", () => {
-    it("asks Open-Meteo for the current weather code in Paris, once for simultaneous colleagues", async () => {
-        const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(openMeteo(45));
-        const service = new RealWeatherService(fetchFn, () => 1_000);
+    it("asks Open-Meteo for the quarter-hour timeline in Paris, once for simultaneous colleagues", async () => {
+        const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(openMeteo());
+        const service = new RealWeatherService(fetchFn, () => NOW);
         const [first, second] = await Promise.all([service.get(), service.get()]);
-        expect(first).toEqual({ weather: "fog", since: 1_000 });
+        expect(first.slots).toHaveLength(32);
+        expect(first.slots[8]).toEqual({ at: 1794654900000, weather: "clear", temperature: 8.2 });
         expect(second).toEqual(first);
         expect(fetchFn).toHaveBeenCalledOnce();
-        const input = fetchFn.mock.calls[0][0];
-        const url = input instanceof Request ? new URL(input.url) : new URL(input);
-        expect(url.origin).toBe("https://api.open-meteo.com");
-        expect(url.searchParams.get("current")).toBe("weather_code");
+        const url = urlOf(fetchFn.mock.calls[0][0]);
+        expect(url.origin + url.pathname).toBe("https://api.open-meteo.com/v1/forecast");
+        expect(url.searchParams.get("minutely_15")).toBe("weather_code,temperature_2m");
+        expect(url.searchParams.get("past_minutely_15")).toBe("8");
+        expect(url.searchParams.get("forecast_minutely_15")).toBe("24");
+        expect(url.searchParams.get("timeformat")).toBe("unixtime");
         expect(Number(url.searchParams.get("latitude"))).toBeCloseTo(48.8566);
         expect(Number(url.searchParams.get("longitude"))).toBeCloseTo(2.3522);
     });
 
-    it("keeps its answer ten minutes, then asks again and keeps the start of an unchanged weather", async () => {
-        let now = 0;
-        const fetchFn = vi
-            .fn<typeof fetch>()
-            .mockResolvedValueOnce(openMeteo(61))
-            .mockResolvedValueOnce(openMeteo(63))
-            .mockResolvedValueOnce(openMeteo(0));
+    it("keeps its timeline half an hour, then asks again", async () => {
+        let now = NOW;
+        const fetchFn = vi.fn<typeof fetch>().mockImplementation(() => Promise.resolve(openMeteo()));
         const service = new RealWeatherService(fetchFn, () => now);
-        expect(await service.get()).toEqual({ weather: "rain", since: 0 });
-        now = 9 * MINUTE;
-        expect(await service.get()).toEqual({ weather: "rain", since: 0 });
+        await service.get();
+        now = NOW + 29 * MINUTE;
+        await service.get();
         expect(fetchFn).toHaveBeenCalledOnce();
-        now = 10 * MINUTE;
-        expect(await service.get()).toEqual({ weather: "rain", since: 0 });
-        now = 20 * MINUTE;
-        expect(await service.get()).toEqual({ weather: "clear", since: 20 * MINUTE });
-        expect(fetchFn).toHaveBeenCalledTimes(3);
+        now = NOW + 30 * MINUTE;
+        await service.get();
+        expect(fetchFn).toHaveBeenCalledTimes(2);
     });
 
-    it("keeps the last weather through a failure, and gives none once it is an hour old", async () => {
-        let now = 0;
+    it("never changes a quarter hour already begun: a new forecast only changes the ones to come", async () => {
+        let now = NOW;
+        const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(openMeteo()).mockResolvedValueOnce(openMeteo(61));
+        const service = new RealWeatherService(fetchFn, () => now);
+        await service.get();
+        now = NOW + 30 * MINUTE;
+        const { slots } = await service.get();
+        const begun = slots.filter((slot) => slot.at <= now);
+        const coming = slots.filter((slot) => slot.at > now);
+        expect(begun.length).toBeGreaterThan(0);
+        expect(coming.length).toBeGreaterThan(0);
+        expect(begun.every((slot) => slot.weather === "clear")).toBe(true);
+        expect(coming.every((slot) => slot.weather === "rain")).toBe(true);
+    });
+
+    it("keeps its timeline through a failure, and forgets the quarter hours ended over two hours ago", async () => {
+        let now = NOW;
         const fetchFn = vi
             .fn<typeof fetch>()
-            .mockResolvedValueOnce(openMeteo(71))
+            .mockResolvedValueOnce(openMeteo())
             .mockRejectedValueOnce(new Error("offline"))
             .mockResolvedValueOnce(new Response("busy", { status: 503 }))
-            .mockResolvedValue(new Response(JSON.stringify({ current: { weather_code: "fog" } })));
+            .mockResolvedValue(new Response(JSON.stringify({ current: { weather_code: 0 } })));
         const service = new RealWeatherService(fetchFn, () => now);
-        expect(await service.get()).toEqual({ weather: "snow", since: 0 });
-        now = 10 * MINUTE;
-        expect(await service.get()).toEqual({ weather: "snow", since: 0 });
-        now = 20 * MINUTE;
-        expect(await service.get()).toEqual({ weather: "snow", since: 0 });
-        // A failed attempt is not retried at once: one call per ten minutes at most.
-        expect(await service.get()).toEqual({ weather: "snow", since: 0 });
-        expect(fetchFn).toHaveBeenCalledTimes(3);
-        now = 60 * MINUTE + 1;
-        expect(await service.get()).toEqual({ weather: null, since: null });
+        expect((await service.get()).slots).toHaveLength(32);
+        now = NOW + 30 * MINUTE;
+        const afterFailure = (await service.get()).slots;
+        expect(afterFailure[afterFailure.length - 1].at).toBe(1794675600000);
+        expect(afterFailure[0].at).toBeGreaterThanOrEqual(NOW - 105 * MINUTE);
+        expect(afterFailure.some((slot) => slot.at === FIRST)).toBe(false);
+        now = NOW + 60 * MINUTE;
+        await service.get();
+        now = NOW + 90 * MINUTE;
+        await service.get();
+        // A failed attempt is not retried at once: one call per half hour at most.
+        await service.get();
+        expect(fetchFn).toHaveBeenCalledTimes(4);
     });
 
-    it("gives no weather for a code it does not know", async () => {
-        const service = new RealWeatherService(vi.fn<typeof fetch>().mockResolvedValue(openMeteo(42)), () => 0);
-        expect(await service.get()).toEqual({ weather: null, since: null });
+    it("gives an empty timeline until Open-Meteo answers something usable", async () => {
+        const service = new RealWeatherService(
+            vi.fn<typeof fetch>().mockResolvedValue(new Response("busy", { status: 503 })),
+            () => NOW,
+        );
+        expect(await service.get()).toEqual({ slots: [] });
     });
 });
 
 describe("RealWeatherService, place of the map", () => {
-    it("asks for the given place, and keeps one answer per place (to about a kilometre)", async () => {
+    it("asks for the given place, and keeps one timeline per place (to about a kilometre)", async () => {
         const fetchFn = vi.fn<typeof fetch>().mockImplementation((input) => {
-            const url = new URL(input instanceof Request ? input.url : input);
+            const url = urlOf(input);
             return Promise.resolve(openMeteo(url.searchParams.get("latitude") === "45.75" ? 61 : 0));
         });
-        const service = new RealWeatherService(fetchFn, () => 0);
-        expect(await service.get({ latitude: 45.74906, longitude: 4.84789 })).toEqual({ weather: "rain", since: 0 });
-        expect(await service.get({ latitude: 45.7501, longitude: 4.8502 })).toEqual({ weather: "rain", since: 0 });
-        expect(await service.get()).toEqual({ weather: "clear", since: 0 });
+        const service = new RealWeatherService(fetchFn, () => NOW);
+        expect((await service.get({ latitude: 45.74906, longitude: 4.84789 })).slots[8].weather).toBe("rain");
+        expect((await service.get({ latitude: 45.7501, longitude: 4.8502 })).slots[8].weather).toBe("rain");
+        expect((await service.get()).slots[8].weather).toBe("clear");
         expect(fetchFn).toHaveBeenCalledTimes(2);
         const lyon = urlOf(fetchFn.mock.calls[0][0]);
         expect(lyon.searchParams.get("longitude")).toBe("4.85");

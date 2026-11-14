@@ -244,7 +244,7 @@ export class EntitiesManager extends EventEmitter {
      */
     public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
-        const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings);
+        const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
         if (
             time < this.nextSeasonCheck &&
