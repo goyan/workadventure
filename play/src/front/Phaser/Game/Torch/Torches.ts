@@ -25,6 +25,8 @@ export interface TorchBearer {
     seated: boolean;
     /** How bright the flame is now (see torchFlicker). */
     intensity: number;
+    /** The share of its full light the bearer set, 0.1 to 1 (see torchStrengthTowards): the flicker is within it. */
+    strength: number;
     /** The local player: their light is always drawn first. */
     local: boolean;
 }
@@ -40,7 +42,10 @@ interface LitTorch {
     revision: number;
     /** The image of the last drawing: the lights drawn longest ago come first when too many wait. */
     drawnAt: number;
+    /** The brightness of the glow last set: the flicker times the strength. */
     intensity: number | undefined;
+    /** The strength last told to the night veil. */
+    strength: number;
 }
 
 /**
@@ -83,6 +88,7 @@ export class Torches {
                 this.obstacles.read(this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities());
             }
             changed = this.redraw(bearers) || changed;
+            changed = this.setStrengths(bearers) || changed;
             if (this.flicker(bearers)) {
                 this.scene.markDirty();
             }
@@ -123,6 +129,7 @@ export class Torches {
                     revision: 0,
                     drawnAt: 0,
                     intensity: undefined,
+                    strength: bearer.strength,
                 };
                 this.torches.set(bearer.id, torch);
             }
@@ -171,17 +178,34 @@ export class Torches {
         return drawn;
     }
 
-    /** Sets the brightness of each light; true when one on the screen changed. */
+    /**
+     * Keeps the strength each bearer set, for the night veil: true when one changed (the veil is pierced by it, not by
+     * the flicker, which would draw the veil again 15 times a second).
+     */
+    private setStrengths(bearers: readonly TorchBearer[]): boolean {
+        let changed = false;
+        for (const bearer of bearers) {
+            const torch = this.torches.get(bearer.id);
+            if (torch && torch.strength !== bearer.strength) {
+                torch.strength = bearer.strength;
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Sets the brightness of each light, its flicker within its strength; true when one on the screen changed. */
     private flicker(bearers: readonly TorchBearer[]): boolean {
         const view = this.scene.cameras.main.worldView;
         let seen = false;
         for (const bearer of bearers) {
             const torch = this.torches.get(bearer.id);
-            if (!torch || torch.intensity === bearer.intensity) {
+            const intensity = bearer.intensity * bearer.strength;
+            if (!torch || torch.intensity === intensity) {
                 continue;
             }
-            torch.intensity = bearer.intensity;
-            torch.visual.setIntensity(bearer.intensity);
+            torch.intensity = intensity;
+            torch.visual.setIntensity(intensity);
             const light = torch.light;
             if (
                 light &&
@@ -209,6 +233,7 @@ export class Torches {
                         size: torch.light.radius * 2,
                         textureKey: torch.visual.textureKey,
                         revision: torch.revision,
+                        intensity: torch.strength,
                     });
                 }
             }

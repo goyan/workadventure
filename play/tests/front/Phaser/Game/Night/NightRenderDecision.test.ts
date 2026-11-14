@@ -125,6 +125,16 @@ describe("nightRenderAction", () => {
         expect(nightRenderAction(reshaped, frame())).toBe("draw");
     });
 
+    it("draws when a light got dimmer or brighter, though its shape did not change (a torch set by its bearer)", () => {
+        const dimmed = frame({
+            lamps: [
+                { id: "lamp", x: 10, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1, intensity: 0.5 },
+            ],
+        });
+        expect(nightRenderAction(dimmed, frame())).toBe("draw");
+        expect(nightRenderAction(dimmed, dimmed)).toBe("keep");
+    });
+
     it("draws when an RGB lamp moved, appeared or went away", () => {
         const moved = frame({
             lamps: [{ id: "lamp", x: 11, y: 20, size: 384, textureKey: "rgb-lamp:lamp:96", revision: 1 }],

@@ -19,6 +19,10 @@ const actionbar = {
     torch: {
         equip: "Equip the torch",
         unequip: "Put away the torch",
+        intensity: "Torch intensity",
+        dim: "Dim the torch",
+        brighten: "Brighten the torch",
+        percent: "{percent}%",
     },
     participantListPlaceholder: "Participants list",
     participantSendMessage: "Send a message",

@@ -21,6 +21,10 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     torch: {
         equip: "Équiper la torche",
         unequip: "Ranger la torche",
+        intensity: "Intensité de la torche",
+        dim: "Baisser l’intensité de la torche",
+        brighten: "Augmenter l’intensité de la torche",
+        percent: "{percent} %",
     },
     participantListPlaceholder: "Liste des participants",
     participantSendMessage: "Écrire un message",

@@ -45,3 +45,44 @@ export function torchFlickerPhase(id: string): number {
     }
     return (hash % 1000) / 1000;
 }
+
+/** How fast a torch goes to the intensity its bearer set: from 10 % to 100 % in one second. */
+const TORCH_STRENGTH_PER_SECOND = 0.9;
+/**
+ * The light only turns back (dimmer after brighter, or the other way) a third of a second after it last did: however
+ * fast the intensity is changed (a held key, a colleague clicking), at most three marked variations a second.
+ */
+const TORCH_STRENGTH_TURN_MS = 1000 / 3;
+
+/** The share of its full light a torch is drawn at now, on its way to the intensity its bearer set. */
+export interface TorchStrength {
+    value: number;
+    /** The way it last moved; undefined until it has moved. */
+    rising: boolean | undefined;
+    /** When it last started moving one way. */
+    turnedAt: number;
+    /** When it was last looked at. */
+    at: number;
+}
+
+/** A torch seen for the first time: at once at the intensity its bearer set. */
+export function startTorchStrength(target: number, now: number): TorchStrength {
+    return { value: target, rising: undefined, turnedAt: now, at: now };
+}
+
+/** Moves a torch towards the intensity set (from 0 to 1), slowly, and never turning back too soon (see above). */
+export function torchStrengthTowards(state: TorchStrength, target: number, now: number): TorchStrength {
+    const elapsed = Math.max(0, now - state.at);
+    if (state.value === target) {
+        return { ...state, at: now };
+    }
+    const rising = target > state.value;
+    const turning = rising !== state.rising;
+    if (turning && state.rising !== undefined && now - state.turnedAt < TORCH_STRENGTH_TURN_MS) {
+        // Held where it is until it may turn back.
+        return { ...state, at: now };
+    }
+    const reach = (TORCH_STRENGTH_PER_SECOND * elapsed) / 1000;
+    const value = rising ? Math.min(target, state.value + reach) : Math.max(target, state.value - reach);
+    return { value, rising, turnedAt: turning ? now : state.turnedAt, at: now };
+}

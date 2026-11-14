@@ -108,6 +108,16 @@ reste possible).
   celui du pied du mur (collision de 6 px en bas de la façade) où se tient l'avatar : collé au mur par le nord, son
   corps est sous le chapeau du mur, mais c'est la pièce nord qu'il éclaire. La lumière ne traverse jamais un mur
   (positions limites calculées d'après les collisions du catalogue, pas observées en jeu).
+- **Intensité** : la torche équipée, la roue de son avatar montre sous elle « Intensité de la torche » avec − et +
+  (de 10 % à 100 % par pas de 10 %, 100 % par défaut ; la roue reste ouverte ; flèches/Tab pour y aller, Entrée ou
+  Espace pour changer). La dernière valeur est gardée dans le navigateur (`torchIntensity`). Elle est partagée par
+  une seconde variable de joueur publique et non sauvegardée, `_torchIntensity` (pourcentage entier) : un ancien
+  client continue de lire `_torchEquipped` seul et voit la torche à pleine lumière ; une torche d'un ancien client
+  (variable absente) ou une valeur illisible est à 100 %. L'intensité règle la luminosité de la lumière (multipliée
+  par le scintillement) et la part du voile de nuit qu'elle perce ; ni la portée, ni la forme, ni la flamme dans la
+  main ne changent. Un changement se fait en fondu (10 % → 100 % en 1 s, au rythme des 15 pas du scintillement) et la
+  lumière ne repart dans l'autre sens que 1/3 s après son dernier changement de sens : même une touche maintenue ou
+  des clics rapides d'un collègue ne font pas plus de trois variations marquées par seconde.
 - **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
   100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées
   par seconde (photosensibilité, WCAG 2.3.1) ; la forme et la portée de la lumière restent fixes : son polygone part de la flamme sans tenir compte de son

@@ -27,10 +27,11 @@ vi.mock("../../../../../src/front/Phaser/Game/GameManager", () => ({
 }));
 
 const { TorchManager } = await import("../../../../../src/front/Phaser/Game/Torch/TorchManager");
-const { TORCH_EQUIPPED_VARIABLE } = await import("../../../../../src/front/Phaser/Game/Torch/TorchProtocol");
+const { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } =
+    await import("../../../../../src/front/Phaser/Game/Torch/TorchProtocol");
 const { torchFlicker, torchFlickerPhase } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlicker");
 const { torchFlameShape } = await import("../../../../../src/front/Phaser/Game/Torch/TorchFlameShape");
-const { torchEquippedStore } = await import("../../../../../src/front/Stores/TorchStore");
+const { torchEquippedStore, torchIntensityStore } = await import("../../../../../src/front/Stores/TorchStore");
 const { nerfEquippedStore } = await import("../../../../../src/front/Stores/NerfStore");
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 
@@ -46,14 +47,17 @@ describe("TorchManager", () => {
         updates.length = 0;
         destroyed.count = 0;
         torchEquippedStore.set(false);
+        torchIntensityStore.set(100);
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
         player = mock<Player>({ x: 100, y: 120, lastDirection: PositionMessage_Direction.RIGHT });
         player.isSeated.mockReturnValue(false);
         player.isTorchLit.mockReturnValue(false);
+        player.getTorchIntensity.mockReturnValue(100);
         remote = mock<RemotePlayer>({ x: 300, y: 320, lastDirection: PositionMessage_Direction.UP });
         remote.isSeated.mockReturnValue(true);
         remote.isTorchLit.mockReturnValue(true);
+        remote.getTorchIntensity.mockReturnValue(100);
         scene = mock<GameScene>();
         scene.CurrentPlayer = player;
         scene.MapPlayersByKey = new MapStore<number, RemotePlayer>();
@@ -70,8 +74,10 @@ describe("TorchManager", () => {
     afterEach(() => {
         manager.destroy();
         torchEquippedStore.set(false);
+        torchIntensityStore.set(100);
         nerfEquippedStore.set(false);
         mapEditorModeStore.set(false);
+        localStorage.clear();
     });
 
     it("equips the local avatar and publishes nonpersistent equipment for colleagues and late arrivals", () => {
@@ -88,6 +94,46 @@ describe("TorchManager", () => {
         expect(get(torchEquippedStore)).toBe(false);
         expect(player.setTorchEquipped.mock.calls.at(-1)).toEqual([false]);
         expect(variables.setVariableFromApp.mock.calls.at(-1)?.[1]).toBe(false);
+    });
+
+    it("publishes the intensity set by the local player as a nonpersistent variable of its own", () => {
+        expect(player.setTorchIntensity.mock.calls.at(-1)).toEqual([100]);
+        expect(variables.setVariableFromApp.mock.calls).toContainEqual([
+            TORCH_INTENSITY_VARIABLE,
+            100,
+            { public: true, persist: false, scope: "room" },
+        ]);
+        torchIntensityStore.set(60);
+        expect(player.setTorchIntensity.mock.calls.at(-1)).toEqual([60]);
+        expect(variables.setVariableFromApp.mock.calls.at(-1)).toEqual([
+            TORCH_INTENSITY_VARIABLE,
+            60,
+            { public: true, persist: false, scope: "room" },
+        ]);
+    });
+
+    it("lights each torch at the intensity its bearer set, the flicker kept within it", () => {
+        player.isTorchLit.mockReturnValue(true);
+        player.getTorchIntensity.mockReturnValue(30);
+        remote.getTorchIntensity.mockReturnValue(100);
+        manager.update(1000);
+        const [me, colleague] = updates[0].bearers;
+        expect(me.strength).toBeCloseTo(0.3);
+        expect(colleague.strength).toBe(1);
+        // The flicker itself is unchanged: the torches multiply both.
+        expect(colleague.intensity).toBe(torchFlicker(1000, torchFlickerPhase("2"), false));
+    });
+
+    it("moves a torch to a new intensity in steps, from full to the dimmest in one second", () => {
+        const colleague = (index: number) => updates[index].bearers.find((bearer) => bearer.id === "2");
+        manager.update(1000);
+        expect(colleague(0)?.strength).toBe(1);
+        remote.getTorchIntensity.mockReturnValue(10);
+        const stepMs = 1000 / 15;
+        manager.update(1000 + stepMs);
+        expect(colleague(1)?.strength).toBeCloseTo(1 - 0.9 / 15);
+        for (let step = 2; step <= 16; step++) manager.update(1000 + step * stepMs);
+        expect(colleague(updates.length - 1)?.strength).toBeCloseTo(0.1);
     });
 
     it("puts the Nerf away when the torch is equipped", () => {

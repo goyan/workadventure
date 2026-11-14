@@ -12,6 +12,8 @@ export interface RgbLampLight {
     textureKey: string;
     /** Changes whenever the texture is drawn again: the shape of the light changed, though it may not have moved. */
     revision: number;
+    /** How much of the night veil the light takes away, from 0 to 1 (full when unset): a torch can be dimmed. */
+    intensity?: number;
 }
 
 /**

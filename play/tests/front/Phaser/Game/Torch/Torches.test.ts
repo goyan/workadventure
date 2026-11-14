@@ -96,6 +96,7 @@ const bearer = (id: string, x: number, y: number, overrides: Partial<TorchBearer
     direction: PositionMessage_Direction.DOWN,
     seated: false,
     intensity: 1,
+    strength: 1,
     local: false,
     ...overrides,
 });
@@ -120,8 +121,28 @@ describe("Torches", () => {
         expect(light).toEqual({ x: 645, y: 638, radius: 176, direction: 90, angle: 360 });
         expect(isLit(polygon, { x: 645, y: 760 })).toBe(true);
         expect(get(torchLightsStore)).toEqual([
-            { id: "torch:7", x: 469, y: 462, size: 352, textureKey: "rgb-lamp:torch:7", revision: 1 },
+            { id: "torch:7", x: 469, y: 462, size: 352, textureKey: "rgb-lamp:torch:7", revision: 1, intensity: 1 },
         ]);
+    });
+
+    it("lights at the intensity its bearer set: the glow by it and the flicker, the night veil by it alone", () => {
+        const { scene, torches } = setup();
+        torches.update(0, [bearer("7", 640, 640, { intensity: 0.9, strength: 0.5 })], false);
+        expect(visuals[0].intensities).toEqual([0.45]);
+        expect(get(torchLightsStore)[0].intensity).toBe(0.5);
+
+        // Set again by a bearer standing still: the veil is told, the shape is not drawn again.
+        scene.markDirty.mockClear();
+        torches.update(16, [bearer("7", 640, 640, { intensity: 0.9, strength: 0.3 })], false);
+        expect(visuals[0].draws).toHaveLength(1);
+        expect(visuals[0].intensities.at(-1)).toBeCloseTo(0.27);
+        expect(get(torchLightsStore)[0]).toMatchObject({ revision: 1, intensity: 0.3 });
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+
+        // The flicker alone does not tell the veil again.
+        const published = get(torchLightsStore);
+        torches.update(32, [bearer("7", 640, 640, { intensity: 0.85, strength: 0.3 })], false);
+        expect(get(torchLightsStore)).toBe(published);
     });
 
     it("costs nothing for a bearer standing still", () => {
