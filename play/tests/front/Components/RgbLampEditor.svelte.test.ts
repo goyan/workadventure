@@ -24,6 +24,7 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     radius: label("Reach"),
                     angle: label("Opening"),
                     direction: label("Direction"),
+                    intensity: label("Intensity"),
                     rotation: label("Turn like a rotating beacon"),
                     rotationSpeed: label("Speed"),
                     rotationSpeedUnit: label("rpm"),
@@ -119,23 +120,24 @@ describe("RgbLampEditor", () => {
     it("shows the defaults of a lamp nothing was set on: warm white, 6 tiles, all around, downwards", () => {
         render();
         expect(colour()?.value).toBe("#ffd9a0");
-        const [radius, angle, direction] = sliders();
+        const [radius, angle, direction, intensity] = sliders();
         // The speed of the rotation comes last.
-        expect(sliders()).toHaveLength(4);
+        expect(sliders()).toHaveLength(5);
         expect([radius.min, radius.max, radius.value]).toEqual(["1", "20", "6"]);
         expect([angle.min, angle.max, angle.value]).toEqual(["10", "360", "360"]);
         expect([direction.min, direction.max, direction.value]).toEqual(["0", "359", "90"]);
+        expect([intensity.min, intensity.max, intensity.step, intensity.value]).toEqual(["10", "100", "5", "100"]);
     });
 
     it("shows what was set on the lamp", () => {
         render([{ id: "p", type: "rgbLampPropertyData", color: "#00ff00", radius: 10, direction: 180, angle: 45 }]);
         expect(colour()?.value).toBe("#00ff00");
-        expect(sliders().map((slider) => slider.value)).toEqual(["10", "45", "180", "30"]);
+        expect(sliders().map((slider) => slider.value)).toEqual(["10", "45", "180", "100", "30"]);
     });
 
     it("names what each control sets", () => {
         render();
-        for (const text of ["Light of the lamp", "Colour", "Reach", "Opening", "Direction"]) {
+        for (const text of ["Light of the lamp", "Colour", "Reach", "Opening", "Direction", "Intensity"]) {
             expect(target.textContent).toContain(text);
         }
     });
@@ -202,7 +204,7 @@ describe("RgbLampEditor", () => {
         const [handle] = handles;
         handle.onPreview({ color: "#ffd9a0", radius: 4.5, direction: 200, angle: 80 });
         flushSync();
-        expect(sliders().map((slider) => slider.value)).toEqual(["4.5", "80", "200", "30"]);
+        expect(sliders().map((slider) => slider.value)).toEqual(["4.5", "80", "200", "100", "30"]);
         expect(handle.settings()).toEqual({ color: "#ffd9a0", radius: 4.5, direction: 200, angle: 80 });
         expect(get(rgbLampPreviewStore)?.settings.radius).toBe(4.5);
         expect(saved).toHaveLength(0);
@@ -220,7 +222,7 @@ describe("RgbLampEditor", () => {
         handle.onPreview({ color: "#ffd9a0", radius: 6, direction: 90, angle: 360 });
         flushSync();
         expect(get(rgbLampPreviewStore)).toBeUndefined();
-        expect(sliders().map((slider) => slider.value)).toEqual(["6", "360", "90", "30"]);
+        expect(sliders().map((slider) => slider.value)).toEqual(["6", "360", "90", "100", "30"]);
     });
 
     it("saves nothing for someone who cannot edit the lamp, and shows the saved settings again", () => {
@@ -239,6 +241,53 @@ describe("RgbLampEditor", () => {
         if (mounted) await unmount(mounted);
         expect(handles[0].destroyed).toBe(true);
         expect(get(rgbLampPreviewStore)).toBeUndefined();
+    });
+
+    describe("intensity", () => {
+        const intensity = () => sliders()[3];
+
+        it("shows the intensity that was set, in percent", () => {
+            render([
+                {
+                    id: "p",
+                    type: "rgbLampPropertyData",
+                    color: "#00ff00",
+                    radius: 10,
+                    direction: 180,
+                    angle: 45,
+                    intensity: 0.4,
+                },
+            ]);
+            expect(intensity().value).toBe("40");
+        });
+
+        it("shows an intensity being dragged on the map, and saves it when the slider is released", () => {
+            const { saved } = render();
+            slide(intensity(), "55", false);
+            expect(saved).toHaveLength(0);
+            expect(get(rgbLampPreviewStore)?.settings).toMatchObject({ intensity: 0.55, radius: 6 });
+            intensity().dispatchEvent(new Event("change", { bubbles: true }));
+            flushSync();
+            expect(saved[0]).toMatchObject({ type: "rgbLampPropertyData", intensity: 0.55, radius: 6 });
+        });
+
+        it("writes no intensity on a lamp at full strength, as on a lamp that never had one", () => {
+            const { saved } = render([
+                {
+                    id: "p",
+                    type: "rgbLampPropertyData",
+                    color: "#00ff00",
+                    radius: 10,
+                    direction: 180,
+                    angle: 45,
+                    intensity: 0.4,
+                },
+            ]);
+            slide(intensity(), "100");
+            expect(saved.at(-1)).not.toHaveProperty("intensity");
+            slide(sliders()[0], "12");
+            expect(saved.at(-1)).not.toHaveProperty("intensity");
+        });
     });
 
     describe("colour code", () => {
@@ -392,7 +441,7 @@ describe("RgbLampEditor", () => {
         ];
         const rotationSwitch = () => target.querySelector<HTMLInputElement>('input[type="checkbox"]');
         const radios = () => [...target.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
-        const speed = () => sliders()[3];
+        const speed = () => sliders()[4];
         function click(input: HTMLInputElement | null | undefined): void {
             if (!input) throw new Error("no input");
             input.click();

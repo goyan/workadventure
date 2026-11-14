@@ -355,6 +355,7 @@ const mapEditor: BaseTranslation = {
             radius: "Reach (tiles)",
             angle: "Opening",
             direction: "Direction",
+            intensity: "Intensity",
             rotation: "Turn like a rotating beacon",
             rotationSpeed: "Speed",
             rotationSpeedUnit: "rpm",

@@ -22,6 +22,12 @@ describe("rgbLampSettingsOf", () => {
         ).toEqual({ color: "#00ff00", radius: 10, direction: 180, angle: 45 });
     });
 
+    it("reads the intensity that was set, and none on a lamp that never had one", () => {
+        const property = { id: "a", type: "rgbLampPropertyData" as const, color: "#00ff00", radius: 10 };
+        expect(rgbLampSettingsOf([{ ...property, direction: 180, angle: 45, intensity: 0.4 }]).intensity).toBe(0.4);
+        expect(rgbLampSettingsOf([{ ...property, direction: 180, angle: 45 }]).intensity).toBeUndefined();
+    });
+
     it("ignores the other properties of the object", () => {
         expect(rgbLampSettingsOf([{ id: "a", type: "lampPropertyData", width: 4, height: 4 }]).radius).toBe(6);
     });

@@ -367,6 +367,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             radius: "Portée (cases)",
             angle: "Ouverture",
             direction: "Direction",
+            intensity: "Intensité",
             rotation: "Tourner comme un gyrophare",
             rotationSpeed: "Vitesse",
             rotationSpeedUnit: "tr/min",
