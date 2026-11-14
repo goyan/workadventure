@@ -460,15 +460,32 @@ describe("weather rendering lifecycle", () => {
             expect(scene.markDirty.mock.calls).toHaveLength(1);
         });
 
-        it("moves 5 times a second", () => {
+        it("moves 15 times a second, so they glide", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Cloudy };
             manager = new WeatherManager(scene);
             manager.update(0, at, false, sun);
-            manager.update(150, new Date(at.getTime() + 150), false, sun);
+            manager.update(50, new Date(at.getTime() + 50), false, sun);
             expect(graphics.clear.mock.calls).toHaveLength(1);
-            manager.update(200, new Date(at.getTime() + 200), false, sun);
+            manager.update(70, new Date(at.getTime() + 70), false, sun);
             expect(graphics.clear.mock.calls).toHaveLength(2);
+        });
+
+        it("covers rain with grey clouds and a storm with dark ones, the rain falling under them, without shadows", () => {
+            const { scene, graphics, wam } = fixture();
+            const of = (color: number) => graphics.fillStyle.mock.calls.filter(([fill]) => fill === color).length;
+            wam.settings = { weather: WeatherType.Rain };
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, sun);
+            expect(of(0x7d8794)).toBeGreaterThan(0);
+            expect(of(0x2b3240)).toBe(0);
+            expect(shadows(graphics)).toBe(0);
+            expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
+            graphics.fillStyle.mockClear();
+            wam.settings = { weather: WeatherType.Storm };
+            manager.update(1000, new Date(at.getTime() + 1000), false, sun);
+            expect(of(0x2b3240)).toBeGreaterThan(0);
+            expect(shadows(graphics)).toBe(0);
         });
 
         it("has no shadow with a low sun, and nothing at night", () => {

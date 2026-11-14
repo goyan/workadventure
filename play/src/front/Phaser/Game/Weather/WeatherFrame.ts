@@ -222,26 +222,37 @@ export interface FogPatch {
 
 const FOG_PATCHES = 4;
 const FOG_DRIFT = { x: 3.2, y: 2.4 };
+/** The fog patches are a square repeated over the map, fixed to it like the clouds (map pixels). */
+const FOG_PERIOD = 1400;
+const FOG_RADIUS = 340;
 
 /**
- * A few soft patches fixed to the world that drift slowly (4 px a second). Each one wraps around a window a little
- * larger than the view, so there are always as many on screen whatever the camera does.
+ * A few soft patches fixed to the map that drift slowly (4 px a second): a square of patches repeated over the whole
+ * map, so the camera, its zoom and the size of the screen never move nor resize them.
  */
 export function fogPatches(epoch: number, view: WeatherView, still: boolean): FogPatch[] {
-    const radius = Math.max(120, Math.round(Math.max(view.width, view.height) * 0.3));
-    const windowWidth = view.width + 2 * radius;
-    const windowHeight = view.height + 2 * radius;
     const time = still ? 0 : epoch / 1000;
     const wrap = (value: number, period: number): number => ((value % period) + period) % period;
+    const margin = FOG_RADIUS;
+    const left = view.x - margin;
+    const top = view.y - margin;
+    const right = view.x + view.width + margin;
+    const bottom = view.y + view.height + margin;
     const patches: FogPatch[] = [];
     for (let index = 0; index < FOG_PATCHES; index++) {
-        const x = hash01(index, 7) * windowWidth * 4 + time * FOG_DRIFT.x;
-        const y = hash01(index, 13) * windowHeight * 4 + time * FOG_DRIFT.y;
-        patches[index] = {
-            x: view.x - radius + wrap(x - (view.x - radius), windowWidth),
-            y: view.y - radius + wrap(y - (view.y - radius), windowHeight),
-            radius: Math.round(radius * (0.8 + 0.2 * hash01(index, 21))),
-        };
+        const radius = Math.round(FOG_RADIUS * (0.8 + 0.2 * hash01(index, 21)));
+        const squareX = wrap(hash01(index, 7) * FOG_PERIOD + time * FOG_DRIFT.x, FOG_PERIOD);
+        const squareY = wrap(hash01(index, 13) * FOG_PERIOD + time * FOG_DRIFT.y, FOG_PERIOD);
+        for (let x = squareX + Math.floor((left - squareX) / FOG_PERIOD) * FOG_PERIOD; x <= right; x += FOG_PERIOD) {
+            if (x < left) continue;
+            for (
+                let y = squareY + Math.floor((top - squareY) / FOG_PERIOD) * FOG_PERIOD;
+                y <= bottom;
+                y += FOG_PERIOD
+            ) {
+                if (y >= top) patches.push({ x, y, radius });
+            }
+        }
     }
     return patches;
 }

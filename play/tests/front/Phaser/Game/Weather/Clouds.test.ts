@@ -48,13 +48,36 @@ describe("cloudSunlight", () => {
 describe("cloudPatches", () => {
     it("shows more clouds for a cloudier sky, one after the other", () => {
         const weight = (cloudiness: number) =>
-            cloudPatches(0, view, cloudiness, false).reduce((sum, patch) => sum + (patch.weight ?? 1), 0);
+            // Over a view bigger than the repeated square of the sky, every cloud is there.
+            cloudPatches(0, { x: 0, y: 0, width: 2400, height: 2400 }, cloudiness, false).reduce(
+                (sum, patch) => sum + (patch.weight ?? 1),
+                0,
+            );
         expect(weight(0)).toBe(0);
         expect(weight(0.2)).toBeLessThan(weight(0.5));
         expect(weight(0.5)).toBeLessThan(weight(0.9));
     });
 
-    it("drifts about 8 px a second, and stands still when motion is reduced", () => {
+    it("are fixed to the map: zooming or moving the camera never moves nor resizes them", () => {
+        const near = (patches: ReturnType<typeof cloudPatches>) =>
+            patches
+                .filter((patch) => patch.x > 300 && patch.x < 500 && patch.y > 200 && patch.y < 400)
+                .map((patch) => [Math.round(patch.x * 1000), Math.round(patch.y * 1000), patch.radius, patch.weight])
+                .sort();
+        const zoomedOut = { x: -2000, y: -1500, width: 4800, height: 3600 };
+        const zoomedIn = { x: 350, y: 250, width: 100, height: 100 };
+        expect(near(cloudPatches(42_000, zoomedIn, 0.9, false))).toEqual(
+            near(cloudPatches(42_000, zoomedOut, 0.9, false)),
+        );
+        expect(near(cloudPatches(42_000, view, 0.9, false))).toEqual(near(cloudPatches(42_000, zoomedOut, 0.9, false)));
+    });
+
+    it("cover a big view as a small one: clouds all over the map", () => {
+        const big = { x: 0, y: 0, width: 4800, height: 3600 };
+        expect(cloudPatches(0, big, 0.9, false).length).toBeGreaterThan(cloudPatches(0, view, 0.9, false).length);
+    });
+
+    it("drift with the wind, and stand still when motion is reduced", () => {
         const before = cloudPatches(10_000, view, 0.5, false);
         const after = cloudPatches(11_000, view, 0.5, false);
         const moved = before.map((patch, index) => Math.hypot(after[index].x - patch.x, after[index].y - patch.y));

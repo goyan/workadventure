@@ -1,10 +1,16 @@
 import { hash01 } from "../Autumn/LeafPalette";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
-/** Clouds in the sky at most (a cloudiness of 1); they appear one after the other as it grows. */
+/** Clouds per square of the sky at most (a cloudiness of 1); they appear one after the other as it grows. */
 const MAX_CLOUDS = 6;
-/** Drift of the clouds, the same direction for everyone (about 8 px a second, towards the south-east). */
-const CLOUD_DRIFT = { x: 6.4, y: 4.8 };
+/**
+ * The sky is one square of clouds repeated over the whole map, fixed to the map: the camera, its zoom and the size of
+ * the screen never move nor resize them. In map pixels.
+ */
+const SKY_PERIOD = 2400;
+const CLOUD_RADIUS = 150;
+/** Drift of the clouds, the same direction for everyone: 60 px a second, a screen crossed in about 30 s. */
+const CLOUD_DRIFT = { x: 48, y: 36 };
 export const CLOUD_DRIFT_PER_SECOND = Math.hypot(CLOUD_DRIFT.x, CLOUD_DRIFT.y);
 /** Each cloud is a main puff and two smaller lobes. */
 const LOBES: readonly { dx: number; dy: number; scale: number }[] = [
@@ -60,33 +66,40 @@ export function overcastVeil(cloudiness: number): number {
 }
 
 /**
- * The puffs of the clouds around the view, drifting with the server time like the fog patches: each one wraps around a
- * window a little larger than the view, so there are always as many on screen. A cloudier sky has more clouds, the last
- * one fading in (its `weight`).
+ * The puffs of the clouds over the view (and a margin around it), drifting with the server time: a square of the sky
+ * repeated over the map, so the clouds are the same for any camera, zoom or screen. A cloudier sky has more clouds,
+ * the last one fading in (its `weight`).
  */
 export function cloudPatches(epoch: number, view: WeatherView, cloudiness: number, still: boolean): FogPatch[] {
-    const base = Math.max(70, Math.round(Math.max(view.width, view.height) * 0.16));
-    const margin = 2 * base;
-    const windowWidth = view.width + 2 * margin;
-    const windowHeight = view.height + 2 * margin;
     const time = still ? 0 : epoch / 1000;
     const wrap = (value: number, period: number): number => ((value % period) + period) % period;
+    // Far enough for a puff whose centre is out of the view to still reach into it.
+    const margin = 2.5 * CLOUD_RADIUS;
+    const left = view.x - margin;
+    const top = view.y - margin;
+    const right = view.x + view.width + margin;
+    const bottom = view.y + view.height + margin;
     const patches: FogPatch[] = [];
     for (let index = 0; index < MAX_CLOUDS; index++) {
         const weight = clamp01(cloudiness * MAX_CLOUDS - index);
         if (weight === 0) break;
-        const radius = base * (0.8 + 0.4 * hash01(index, 31));
-        const x = hash01(index, 37) * windowWidth * 4 + time * CLOUD_DRIFT.x;
-        const y = hash01(index, 41) * windowHeight * 4 + time * CLOUD_DRIFT.y;
-        const centreX = view.x - margin + wrap(x - (view.x - margin), windowWidth);
-        const centreY = view.y - margin + wrap(y - (view.y - margin), windowHeight);
-        for (const lobe of LOBES) {
-            patches.push({
-                x: centreX + lobe.dx * radius,
-                y: centreY + lobe.dy * radius,
-                radius: Math.round(radius * lobe.scale),
-                weight,
-            });
+        const radius = CLOUD_RADIUS * (0.8 + 0.4 * hash01(index, 31));
+        // Where this cloud is in the square of the sky, then every copy of the square over the view.
+        const skyX = wrap(hash01(index, 37) * SKY_PERIOD + time * CLOUD_DRIFT.x, SKY_PERIOD);
+        const skyY = wrap(hash01(index, 41) * SKY_PERIOD + time * CLOUD_DRIFT.y, SKY_PERIOD);
+        for (let x = skyX + Math.floor((left - skyX) / SKY_PERIOD) * SKY_PERIOD; x <= right; x += SKY_PERIOD) {
+            if (x < left) continue;
+            for (let y = skyY + Math.floor((top - skyY) / SKY_PERIOD) * SKY_PERIOD; y <= bottom; y += SKY_PERIOD) {
+                if (y < top) continue;
+                for (const lobe of LOBES) {
+                    patches.push({
+                        x: x + lobe.dx * radius,
+                        y: y + lobe.dy * radius,
+                        radius: Math.round(radius * lobe.scale),
+                        weight,
+                    });
+                }
+            }
         }
     }
     return patches;

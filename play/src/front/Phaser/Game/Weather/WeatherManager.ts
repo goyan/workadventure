@@ -20,7 +20,7 @@ import {
     weatherParticles,
     weatherAtTime,
 } from "./WeatherFrame";
-import type { WeatherView } from "./WeatherFrame";
+import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
 import { cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
 import type { SunPosition } from "./Clouds";
@@ -39,8 +39,13 @@ const FOG_NIGHT_FACTOR = 0.6;
 /** Size of a fog block, in pixels of the map: small enough to look soft, big enough to stay cheap. */
 const FOG_BLOCK = 16;
 /** White clouds at their thickest, and their shadows: shadows first, the clouds over them. */
-const CLOUD_ALPHA = 0.25;
-const CLOUD_SHADOW_ALPHA = 0.15;
+const CLOUD_ALPHA = 0.45;
+const CLOUD_SHADOW_ALPHA = 0.3;
+/** Clouds over the rain (grey) and the storm (dark): a covered sky, no sun, so no shadows. */
+const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.4, cloudiness: 0.9 };
+const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.45, cloudiness: 1 };
+/** Size of a cloud block on the screen: fine enough for a cloud to glide, whatever the zoom. */
+const CLOUD_BLOCK_ON_SCREEN = 12;
 const OVERCAST_COLOR = 0x8a94a3;
 
 export interface WeatherManagerOptions {
@@ -128,9 +133,9 @@ export class WeatherManager {
         // falling leaves 15 times, a fog alone 5 times (each drawing makes the whole map drawn again).
         const falling = showWeather && weather !== WeatherType.Fog;
         const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
-        // Clouds drift 8 px a second: 5 images a second are enough, as for the fog.
+        // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
         const cloudsOnly = showClouds && !showLeaves;
-        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly || cloudsOnly ? 5 : 15)) return;
+        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
         const view = this.scene.cameras.main.worldView;
         const fogStrengthNow =
@@ -194,6 +199,13 @@ export class WeatherManager {
                 this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.2 : 0.05);
                 for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
+            // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
+            const covering =
+                weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
+            if (covering && this.cloudsShown && sunlight.clouds > 0) {
+                const patches = cloudPatches(epoch, view, covering.cloudiness, this.reducedMotion);
+                this.drawCloudLayer(veil, patches, covering.color, covering.alpha * sunlight.clouds);
+            }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
             } else {
@@ -228,7 +240,8 @@ export class WeatherManager {
 
     /**
      * Clouds of a clear sky, outdoors only and over everything (avatars and objects too): the grey veil of an overcast
-     * sky, the shadows cast away from the sun, then the white clouds over them.
+     * sky, the shadows cast away from the sun, then the white clouds over them. Fixed to the map, they glide with the
+     * wind whatever the camera or its zoom.
      */
     private drawClouds(
         epoch: number,
@@ -243,27 +256,32 @@ export class WeatherManager {
             this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
         }
-        const layers: [number, number, ReturnType<typeof cloudPatches>][] = [];
         if (shadowOffset) {
             const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset);
-            layers.push([0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows, patches]);
+            this.drawCloudLayer(veil, patches, 0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows);
         }
         if (sunlight.clouds > 0) {
-            layers.push([
-                0xffffff,
-                CLOUD_ALPHA * sunlight.clouds,
-                cloudPatches(epoch, view, cloudiness, this.reducedMotion),
-            ]);
+            const patches = cloudPatches(epoch, view, cloudiness, this.reducedMotion);
+            this.drawCloudLayer(veil, patches, 0xffffff, CLOUD_ALPHA * sunlight.clouds);
         }
-        for (const [color, alpha, patches] of layers) {
-            // Soft edges, stopped at the walls like the fog.
-            const blocks = fogBlocks(veil, patches, FOG_BLOCK);
-            for (let level = 1; level <= FOG_LEVELS; level++) {
-                const ofLevel = blocks.filter((block) => block.level === level);
-                if (ofLevel.length === 0) continue;
-                this.graphics.fillStyle(color, (alpha * level) / FOG_LEVELS);
-                for (const block of ofLevel) this.graphics.fillRect(block.x, block.y, block.width, block.height);
-            }
+    }
+
+    /** Clouds or their shadows cut into blocks inside the outdoor runs: soft edges, stopped at the walls like the fog. */
+    private drawCloudLayer(
+        veil: readonly WeatherView[],
+        patches: readonly FogPatch[],
+        color: number,
+        alpha: number,
+    ): void {
+        const zoom = this.scene.cameras.main.zoom;
+        const block =
+            Number.isFinite(zoom) && zoom > 0 ? Math.max(4, Math.round(CLOUD_BLOCK_ON_SCREEN / zoom)) : FOG_BLOCK;
+        const blocks = fogBlocks(veil, patches, block);
+        for (let level = 1; level <= FOG_LEVELS; level++) {
+            const ofLevel = blocks.filter((cloud) => cloud.level === level);
+            if (ofLevel.length === 0) continue;
+            this.graphics.fillStyle(color, (alpha * level) / FOG_LEVELS);
+            for (const cloud of ofLevel) this.graphics.fillRect(cloud.x, cloud.y, cloud.width, cloud.height);
         }
     }
 
