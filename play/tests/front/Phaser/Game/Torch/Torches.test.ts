@@ -13,6 +13,7 @@ interface FakeVisual {
     id: string;
     draws: { light: LightCone; polygon: Point[]; colour: number }[];
     intensities: number[];
+    colours: number[];
     visible: boolean;
     destroyed: boolean;
 }
@@ -25,7 +26,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
         public textureKey = "";
         constructor(_scene: unknown, id: string) {
             // Like the real one, the image is hidden until it is shown.
-            this.fake = { id, draws: [], intensities: [], visible: false, destroyed: false };
+            this.fake = { id, draws: [], intensities: [], colours: [], visible: false, destroyed: false };
             this.textureKey = `rgb-lamp:${id}`;
             visuals.push(this.fake);
         }
@@ -34,6 +35,9 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
         }
         setIntensity(intensity: number): void {
             this.fake.intensities.push(intensity);
+        }
+        setColour(colour: number): void {
+            this.fake.colours.push(colour);
         }
         setVisible(visible: boolean): void {
             this.fake.visible = visible;
@@ -46,7 +50,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
 
 const { Torches } = await import("../../../../../src/front/Phaser/Game/Torch/Torches");
 const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
-const { TORCH_COLOUR } = await import("../../../../../src/front/Phaser/Game/Torch/TorchProtocol");
+/** A warm orange, as a torch at its usual brightness. */
+const ORANGE = 0xff8a2a;
 
 /** A map of 40 by 40 free tiles. */
 const freeGrid = (): number[][] => Array.from({ length: 40 }, () => Array.from({ length: 40 }, () => 0));
@@ -96,6 +101,8 @@ const bearer = (id: string, x: number, y: number, overrides: Partial<TorchBearer
     direction: PositionMessage_Direction.DOWN,
     seated: false,
     intensity: 1,
+    strength: 1,
+    colour: ORANGE,
     local: false,
     ...overrides,
 });
@@ -116,12 +123,44 @@ describe("Torches", () => {
         expect(visuals[0].visible).toBe(true);
         expect(visuals[0].draws).toHaveLength(1);
         const { light, colour, polygon } = visuals[0].draws[0];
-        expect(colour).toBe(TORCH_COLOUR);
+        expect(colour).toBe(ORANGE);
         expect(light).toEqual({ x: 645, y: 638, radius: 176, direction: 90, angle: 360 });
         expect(isLit(polygon, { x: 645, y: 760 })).toBe(true);
         expect(get(torchLightsStore)).toEqual([
-            { id: "torch:7", x: 469, y: 462, size: 352, textureKey: "rgb-lamp:torch:7", revision: 1 },
+            { id: "torch:7", x: 469, y: 462, size: 352, textureKey: "rgb-lamp:torch:7", revision: 1, intensity: 1 },
         ]);
+    });
+
+    it("turns more yellow or more red with its brightness, without drawing its shape again", () => {
+        const { torches } = setup();
+        torches.update(0, [bearer("7", 640, 640)], false);
+        expect(visuals[0].colours).toEqual([]);
+        torches.update(16, [bearer("7", 640, 640, { intensity: 0.6, colour: 0xff6020 })], false);
+        expect(visuals[0].colours).toEqual([0xff6020]);
+        expect(visuals[0].draws).toHaveLength(1);
+        // A shape drawn again keeps the colour of now.
+        torches.update(32, [bearer("7", 700, 640, { intensity: 0.6, colour: 0xff6020 })], false);
+        expect(visuals[0].draws.at(-1)?.colour).toBe(0xff6020);
+    });
+
+    it("lights at the intensity its bearer set: the glow as given, the night veil by the intensity alone", () => {
+        const { scene, torches } = setup();
+        torches.update(0, [bearer("7", 640, 640, { intensity: 0.45, strength: 0.5 })], false);
+        expect(visuals[0].intensities).toEqual([0.45]);
+        expect(get(torchLightsStore)[0].intensity).toBe(0.5);
+
+        // Set again by a bearer standing still: the veil is told, the shape is not drawn again.
+        scene.markDirty.mockClear();
+        torches.update(16, [bearer("7", 640, 640, { intensity: 0.27, strength: 0.3 })], false);
+        expect(visuals[0].draws).toHaveLength(1);
+        expect(visuals[0].intensities.at(-1)).toBe(0.27);
+        expect(get(torchLightsStore)[0]).toMatchObject({ revision: 1, intensity: 0.3 });
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+
+        // The flicker alone does not tell the veil again.
+        const published = get(torchLightsStore);
+        torches.update(32, [bearer("7", 640, 640, { intensity: 0.25, strength: 0.3 })], false);
+        expect(get(torchLightsStore)).toBe(published);
     });
 
     it("costs nothing for a bearer standing still", () => {

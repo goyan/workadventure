@@ -101,6 +101,11 @@ export class RgbLampVisual {
         this.image.setAlpha(LIGHT_ALPHA * Math.min(1, Math.max(0, intensity)));
     }
 
+    /** The colour of the light, without drawing it again (a torch turns more yellow when brighter). */
+    public setColour(colour: number): void {
+        this.image.setTint(colour);
+    }
+
     public setVisible(visible: boolean): void {
         this.image.setVisible(visible);
     }

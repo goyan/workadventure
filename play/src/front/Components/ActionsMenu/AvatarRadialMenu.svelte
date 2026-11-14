@@ -3,6 +3,12 @@
     import { wokaMenuStore } from "@wa/front/Stores/WokaMenuStore";
     import type { WokaMenuData } from "@wa/front/Stores/WokaMenuStore";
     import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore";
+    import { torchEquippedStore, torchIntensityStore } from "@wa/front/Stores/TorchStore";
+    import {
+        TORCH_INTENSITY_MAX,
+        TORCH_INTENSITY_MIN,
+        TORCH_INTENSITY_STEP,
+    } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
     import LL from "@wa/i18n/i18n-svelte";
     import { WHEEL_GRID, wheelCell } from "./PixelWheel";
     import PixelIcon from "./PixelIcon.svelte";
@@ -10,14 +16,30 @@
     let { menu }: { menu: WokaMenuData } = $props();
     const profileAction = $derived(menu.actions.find((action) => action.testId === "avatar-profile"));
     const actions = $derived(menu.actions.filter((action) => action !== profileAction));
-    const buttonCount = $derived(actions.length + (profileAction ? 1 : 0));
+    // While the torch is held, its intensity can be set under the wheel (not in a submenu, which has no torch).
+    const torchIntensityShown = $derived(
+        $torchEquippedStore && menu.actions.some((action) => action.testId === "avatar-torch"),
+    );
+    /** The two buttons of the intensity come after the actions and the profile, when going around the wheel. */
+    const intensityIndex = $derived(actions.length + (profileAction ? 1 : 0));
+    const buttonCount = $derived(intensityIndex + (torchIntensityShown ? 2 : 0));
+    /** The height the intensity takes under the wheel, kept on the screen with it. */
+    const INTENSITY_HEIGHT = 40;
     let width = $state(0);
     let height = $state(0);
     let selected = $state(0);
     let buttons: HTMLButtonElement[] = [];
     const size = $derived(Math.min(300, width - 16, height - 16));
     const x = $derived(Math.max(size / 2 + 8, Math.min(menu.menuPosition?.x ?? width / 2, width - size / 2 - 8)));
-    const y = $derived(Math.max(size / 2 + 8, Math.min(menu.menuPosition?.y ?? height / 2, height - size / 2 - 8)));
+    const y = $derived(
+        Math.max(
+            size / 2 + 8,
+            Math.min(
+                menu.menuPosition?.y ?? height / 2,
+                height - size / 2 - 8 - (torchIntensityShown ? INTENSITY_HEIGHT : 0),
+            ),
+        ),
+    );
 
     function point(radius: number, angle: number): { x: number; y: number } {
         return { x: 150 + Math.cos(angle) * radius, y: 150 + Math.sin(angle) * radius };
@@ -91,6 +113,23 @@
         drawWheel(context, getComputedStyle(wheelElement));
     });
 
+    // While the intensity is being set, the rest of the wheel almost vanishes: the avatar and its light show through.
+    let intensityHovered = $state(false);
+    let intensityFocused = $state(false);
+    const faded = $derived(torchIntensityShown && (intensityHovered || intensityFocused));
+
+    function onIntensityFocusOut(event: FocusEvent): void {
+        const group = event.currentTarget;
+        // From one of its buttons to the other: still focused.
+        intensityFocused =
+            group instanceof HTMLElement && event.relatedTarget instanceof Node && group.contains(event.relatedTarget);
+    }
+
+    /** One step dimmer or brighter; the wheel stays open to take several. */
+    function stepTorchIntensity(direction: -1 | 1): void {
+        torchIntensityStore.update((percent) => percent + direction * TORCH_INTENSITY_STEP);
+    }
+
     function close(): void {
         wokaMenuStore.clear();
     }
@@ -127,6 +166,7 @@
 <button class="wheel-dismiss" aria-label={$LL.woka.menu.closeActions()} onclick={close}></button>
 <div
     class="avatar-wheel retro-theme"
+    class:faded
     bind:this={wheelElement}
     style:left="{x}px"
     style:top="{y}px"
@@ -181,6 +221,45 @@
             </span>
         </button>
     {/each}
+    {#if torchIntensityShown}
+        <div
+            class="wheel-intensity"
+            role="group"
+            aria-label={$LL.actionbar.torch.intensity()}
+            data-testid="avatar-torch-intensity"
+            onpointerenter={() => (intensityHovered = true)}
+            onpointerleave={() => (intensityHovered = false)}
+            onfocusin={() => (intensityFocused = true)}
+            onfocusout={onIntensityFocusOut}
+        >
+            <PixelIcon name="torch" size={16} />
+            <button
+                bind:this={buttons[intensityIndex]}
+                class="wheel-step"
+                class:selected={selected === intensityIndex}
+                aria-label={$LL.actionbar.torch.dim()}
+                aria-disabled={$torchIntensityStore <= TORCH_INTENSITY_MIN}
+                data-testid="avatar-torch-intensity-lower"
+                onpointerenter={() => (selected = intensityIndex)}
+                onfocus={() => (selected = intensityIndex)}
+                onclick={() => stepTorchIntensity(-1)}>−</button
+            >
+            <output aria-live="polite" data-testid="avatar-torch-intensity-value"
+                >{$LL.actionbar.torch.percent({ percent: $torchIntensityStore })}</output
+            >
+            <button
+                bind:this={buttons[intensityIndex + 1]}
+                class="wheel-step"
+                class:selected={selected === intensityIndex + 1}
+                aria-label={$LL.actionbar.torch.brighten()}
+                aria-disabled={$torchIntensityStore >= TORCH_INTENSITY_MAX}
+                data-testid="avatar-torch-intensity-raise"
+                onpointerenter={() => (selected = intensityIndex + 1)}
+                onfocus={() => (selected = intensityIndex + 1)}
+                onclick={() => stepTorchIntensity(1)}>+</button
+            >
+        </div>
+    {/if}
 </div>
 
 <style>
@@ -291,6 +370,70 @@
         display: flex;
         font-size: 25px;
         line-height: 1;
+    }
+    /*
+     * Faded while the intensity is set: only seen, the wheel still takes the clicks (nothing reaches the map) and keeps
+     * its keyboard navigation. The control stays opaque; its own shadow replaces the wheel's.
+     */
+    .avatar-wheel > :not(.wheel-intensity) {
+        transition: opacity 150ms ease-out;
+    }
+    .avatar-wheel.faded {
+        filter: none;
+    }
+    .avatar-wheel.faded > :not(.wheel-intensity) {
+        opacity: 0.12;
+    }
+    .avatar-wheel.faded .wheel-intensity {
+        filter: drop-shadow(0 4px 0 #0007);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .avatar-wheel > :not(.wheel-intensity) {
+            transition: none;
+        }
+    }
+    /* The intensity of the torch, just under the wheel, in the colors of its sectors. */
+    .wheel-intensity {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        background: var(--rt-surface-raised);
+        border: 2px solid var(--rt-bg-deep);
+        color: var(--rt-text);
+        font-size: 11px;
+        white-space: nowrap;
+    }
+    .wheel-intensity output {
+        min-width: 4ch;
+        text-align: center;
+    }
+    .wheel-step {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--rt-bg-deep);
+        background: var(--rt-bg);
+        color: var(--rt-text);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .wheel-step.selected {
+        background: var(--rt-accent);
+        border-color: var(--rt-text);
+        color: #fff;
+    }
+    .wheel-step[aria-disabled="true"] {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .wheel-step:focus-visible {
+        outline: 2px solid var(--rt-highlight);
     }
     /* Up to three short lines under the name, so it stays inside its sector. */
     .wheel-detail {

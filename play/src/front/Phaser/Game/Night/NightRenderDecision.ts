@@ -74,7 +74,8 @@ function sameLamps(a: readonly RgbLampLight[], b: readonly RgbLampLight[]): bool
             lamp.x === other.x &&
             lamp.y === other.y &&
             lamp.size === other.size &&
-            lamp.textureKey === other.textureKey
+            lamp.textureKey === other.textureKey &&
+            lamp.intensity === other.intensity
         );
     });
 }

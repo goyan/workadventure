@@ -108,10 +108,55 @@ reste possible).
   celui du pied du mur (collision de 6 px en bas de la façade) où se tient l'avatar : collé au mur par le nord, son
   corps est sous le chapeau du mur, mais c'est la pièce nord qu'il éclaire. La lumière ne traverse jamais un mur
   (positions limites calculées d'après les collisions du catalogue, pas observées en jeu).
-- **Scintillement** : seule l'intensité varie, lentement (somme de trois ondes de moins de 1 Hz, entre 80 % et
-  100 %, par pas de 15 par seconde de 2,4 % au plus), sans alternance brusque ni plus de trois variations marquées
-  par seconde (photosensibilité, WCAG 2.3.1) ; la forme et la portée de la lumière restent fixes : son polygone part de la flamme sans tenir compte de son
-  mouvement (un halo qui bouge ferait glisser le bord des ombres sur les murs).
+- **Intensité** : la torche équipée, la roue de son avatar montre sous elle « Intensité de la torche » avec − et +
+  (de 10 % à 100 % par pas de 10 %, 100 % par défaut ; la roue reste ouverte ; flèches/Tab pour y aller, Entrée ou
+  Espace pour changer ; tant que la commande est survolée ou a le focus, le reste de la roue passe à 12 % d'opacité
+  pour laisser voir l'avatar et sa lumière, sans laisser passer les clics vers la carte). La dernière valeur est
+  gardée avec le compte et dans le navigateur (`torchIntensity`) ; au chargement, celle du compte l'emporte. Elle est
+  partagée par une seconde variable de joueur publique, sauvegardée au niveau du monde, `_torchIntensity` (pourcentage
+  entier) : un ancien
+  client continue de lire `_torchEquipped` seul et voit la torche à pleine lumière ; une torche d'un ancien client
+  (variable absente) ou une valeur illisible est à 100 %. L'intensité règle la luminosité de la lumière (multipliée
+  par le scintillement) et la part du voile de nuit qu'elle perce ; ni la portée, ni la forme, ni la flamme dans la
+  main ne changent. Ce qui est dessiné passe par un fondu (`torchFadeTowards`, 10 % → 100 % en 1 s, au rythme des
+  15 pas du scintillement) qui ne repart dans l'autre sens que 1/3 s après son dernier changement de sens marqué :
+  la lueur (flamme × intensité, demi-tour marqué dès 0,1, voir « Scintillement ») et le voile (intensité seule,
+  dès 0,02) chacun le leur. Même une touche maintenue ou des clics
+  rapides d'un collègue (10 % ↔ 100 % à chaque pas, testé) ne font pas plus de trois variations marquées par seconde ;
+  à intensité fixe, le scintillement passe inchangé (testé). En mouvement réduit, le fondu reste (il n'y a plus de
+  scintillement).
+- **Scintillement** : la luminosité de la lueur est le produit de couches, toutes calculées sur l'**heure du
+  serveur** (`/server-time`, l'horloge de la nuit ; l'heure du poste en attendant) et d'une graine tirée de l'**id
+  utilisateur** du porteur (`torchFlickerSeed`, jamais `Math.random`) : chaque navigateur voit la même flamme pour la
+  même personne, et deux torches ne battent pas ensemble.
+  - *Respiration* : bruit de valeur lissé (smoothstep), deux octaves de 0,35 et 0,9 Hz, ±10 % autour de 87 %.
+  - *Crépitement* : bruit de 6 Hz, ±3 %. La lumière est échantillonnée 15 fois par seconde : au-delà de 7,5 Hz un
+    bruit se replierait en un plus lent (repliement), d'où 6 Hz, soit 2 à 3 échantillons par alternance.
+  - *Rafales* : temps découpé en créneaux de 8 s, au plus une rafale par créneau, qui commence dans ses 3 premières
+    secondes (deux rafales à 5 s d'écart au moins) ; chute de 30 à 35 % en 150 ms puis retour exponentiel en 1,7 s.
+    Uniquement **dehors** (grille extérieure de la météo, aux pieds de l'avatar ; sans grille, dehors), selon la
+    météo de la carte telle qu'elle est affichée, sans le thème saisonnier personnel (`GameScene.getMapWeather`) :
+    brise 0,25 (chance 37,5 % par créneau), pluie 0,6 (62 %), orage 1 (90 %, chute 35 %), brouillard 0,1 (air
+    calme). Dedans, aucun vent. `torchWind(weather, outdoor, knownWind)` prend déjà un vent réel de 0 à 1 :
+    l'emplacement prévu pour la vitesse du vent d'Open-Meteo, non branchée.
+  - *Allumage* : équipée, la torche monte de 0 à sa lumière en 0,5 s, chez soi et chez ceux qui voient la variable
+    changer ; une torche déjà allumée quand on la voit pour la première fois (arrivée dans la salle) l'est tout de
+    suite. Le voile de nuit suit l'allumage, pas le scintillement ni les rafales.
+  - *Couleur* : la teinte de la lumière suit sa luminosité, rouge orangé `#ff4a14` jusqu'à 40 %, jaune chaud
+    `#ffa83a` à 100 % (vers `#ff9432` à la luminosité habituelle de 87 %) ; changée par une teinte, sans redessiner la forme.
+    La flamme dans la main garde ses couleurs (dessinée en `Graphics`, sans teinte).
+
+  Photosensibilité (WCAG 2.3.1) : une **variation marquée** est un changement d'au moins 0,1 de la lumière entre deux
+  demi-tours (`TORCH_MARKED_VARIATION`) ; la lueur n'ajoute que 55 % de sa couleur, donc 0,1 change environ 5 % de la
+  luminance, la moitié d'un flash au sens WCAG. Le crépitement n'en fait jamais à lui seul. Ce qui est dessiné passe
+  par le fondu de la lueur (3 par seconde, assez pour une rafale ou l'allumage) qui interdit deux demi-tours marqués à
+  moins de 1/3 s : au plus 3 variations marquées dans toute seconde, testé (fenêtres glissantes d'une seconde, une
+  minute, cinq graines, sans vent, brise et orage, intensité fixe ou changée à chaque pas). Mesuré sur 20 graines et
+  10 minutes : 2 au plus sur ce qui est dessiné ; la flamme seule, sans garde-fou, 1 sans vent et 3 au plus avec
+  rafales. Au seuil strict de 0,02 de la première version, le crépitement demandé (±3 %) en fait 5 : c'est pour lui
+  que le seuil de la lueur est 0,1 (raisonnement sur la luminance, non mesuré à l'écran). Mouvement réduit : lumière fixe (ni respiration, ni
+  crépitement, ni rafales, ni allumage), couleur fixe selon l'intensité. La forme et la portée de la lumière restent
+  fixes : son polygone part de la flamme sans tenir compte de son mouvement.
 - **Flamme dans la main** : elle ondule, 30 images par seconde, sur son propre pas (indépendant des 15 pas de la
   lumière, sans recalcul du polygone) : sa pointe penche de 1,8 px au plus, sa hauteur varie de 13 % et sa largeur de
   10 % (sommes d'ondes de 1,7 à 4,4 Hz sans mesure commune, décalées par porteur : deux flammes ne battent pas

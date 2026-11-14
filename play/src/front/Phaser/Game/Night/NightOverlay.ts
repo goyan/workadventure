@@ -188,7 +188,9 @@ export class NightOverlay {
             light
                 .setTexture(lamp.textureKey)
                 .setDisplaySize(lamp.size * zoom, lamp.size * zoom)
-                .setPosition((lamp.x - view.x) * zoom, (lamp.y - view.y) * zoom);
+                .setPosition((lamp.x - view.x) * zoom, (lamp.y - view.y) * zoom)
+                // A dimmed torch takes less of the veil away; the images are shared by all lights, set each time.
+                .setAlpha(lamp.intensity ?? 1);
             this.texture.erase(light);
         }
 

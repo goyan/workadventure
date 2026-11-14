@@ -6,7 +6,6 @@ import { LightObstacleReader } from "../Lamps/LightObstacleReader";
 import type { LightCone } from "../Lamps/RgbLampGeometry";
 import { RgbLampVisual } from "../Lamps/RgbLampVisual";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
-import { TORCH_COLOUR } from "./TorchProtocol";
 import { torchLightShape } from "./TorchLight";
 
 /** The objects of the map (walls, doors, tall objects) are looked at this often while a torch is lit. */
@@ -23,8 +22,12 @@ export interface TorchBearer {
     y: number;
     direction: PositionMessage_Direction;
     seated: boolean;
-    /** How bright the flame is now (see torchFlicker). */
+    /** How bright the light is now: the flicker within the intensity its bearer set (see TorchManager). */
     intensity: number;
+    /** The intensity its bearer set, 0.1 to 1, on its way to it (see torchFadeTowards): the night veil follows it. */
+    strength: number;
+    /** The colour of the light now: more orange red when dim, more yellow when bright (see torchColour). */
+    colour: number;
     /** The local player: their light is always drawn first. */
     local: boolean;
 }
@@ -41,6 +44,10 @@ interface LitTorch {
     /** The image of the last drawing: the lights drawn longest ago come first when too many wait. */
     drawnAt: number;
     intensity: number | undefined;
+    /** The strength last told to the night veil. */
+    strength: number;
+    /** The colour last given to the light. */
+    colour: number;
 }
 
 /**
@@ -83,6 +90,7 @@ export class Torches {
                 this.obstacles.read(this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities());
             }
             changed = this.redraw(bearers) || changed;
+            changed = this.setStrengths(bearers) || changed;
             if (this.flicker(bearers)) {
                 this.scene.markDirty();
             }
@@ -123,6 +131,8 @@ export class Torches {
                     revision: 0,
                     drawnAt: 0,
                     intensity: undefined,
+                    strength: bearer.strength,
+                    colour: bearer.colour,
                 };
                 this.torches.set(bearer.id, torch);
             }
@@ -161,7 +171,7 @@ export class Torches {
                 // Hidden until it has a shape: a new light shows when it is drawn.
                 torch.visual.setVisible(!this.editorOpen);
             }
-            torch.visual.draw(light, polygon, TORCH_COLOUR);
+            torch.visual.draw(light, polygon, torch.colour);
             torch.light = light;
             torch.key = key;
             torch.segmentsKey = segmentsKey;
@@ -169,6 +179,22 @@ export class Torches {
             drawn = true;
         }
         return drawn;
+    }
+
+    /**
+     * Keeps the strength each bearer set, for the night veil: true when one changed (the veil is pierced by it, not by
+     * the flicker, which would draw the veil again 15 times a second).
+     */
+    private setStrengths(bearers: readonly TorchBearer[]): boolean {
+        let changed = false;
+        for (const bearer of bearers) {
+            const torch = this.torches.get(bearer.id);
+            if (torch && torch.strength !== bearer.strength) {
+                torch.strength = bearer.strength;
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /** Sets the brightness of each light; true when one on the screen changed. */
@@ -182,6 +208,11 @@ export class Torches {
             }
             torch.intensity = bearer.intensity;
             torch.visual.setIntensity(bearer.intensity);
+            // The colour follows the brightness: a tint of the light, its shape is not drawn again.
+            if (torch.colour !== bearer.colour) {
+                torch.colour = bearer.colour;
+                torch.visual.setColour(bearer.colour);
+            }
             const light = torch.light;
             if (
                 light &&
@@ -209,6 +240,7 @@ export class Torches {
                         size: torch.light.radius * 2,
                         textureKey: torch.visual.textureKey,
                         revision: torch.revision,
+                        intensity: torch.strength,
                     });
                 }
             }
