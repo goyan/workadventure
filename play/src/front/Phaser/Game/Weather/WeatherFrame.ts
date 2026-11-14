@@ -216,6 +216,8 @@ export interface FogPatch {
     x: number;
     y: number;
     radius: number;
+    /** How much the patch counts, 0 to 1 (a cloud fading in); 1 when absent. */
+    weight?: number;
 }
 
 const FOG_PATCHES = 4;
@@ -277,7 +279,7 @@ export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPat
                 let thickness = 0;
                 for (const patch of patches) {
                     const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
-                    if (share > 0) thickness += share * share;
+                    if (share > 0) thickness += (patch.weight ?? 1) * share * share;
                 }
                 const level = Math.round(Math.min(1, thickness) * FOG_LEVELS);
                 if (level === 0) {

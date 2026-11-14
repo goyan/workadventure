@@ -733,6 +733,7 @@ const mapEditor: BaseTranslation = {
             automatic: "Auto",
             fog: "Fog",
             real: "Real",
+            cloudy: "Cloudy",
             title: "Weather",
             clear: "Clear sky",
             rain: "Rain",

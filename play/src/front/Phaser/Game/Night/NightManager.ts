@@ -8,7 +8,16 @@ import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampSt
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { nightOpacityAt, parisCalendarDay, parisWallClockToInstant, parseNightAt, sunPlaceOf } from "./NightClock";
+import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
+import type { SunPosition } from "../Weather/Clouds";
+import {
+    nightOpacityAt,
+    parisCalendarDay,
+    parisWallClockToInstant,
+    parseNightAt,
+    sunPlaceOf,
+    sunPositionAt,
+} from "./NightClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -50,6 +59,7 @@ export class NightManager {
     private disabled = false;
     private opacity = 0;
     private lastClockAt: number | undefined;
+    private sun: SunPosition | undefined;
     private previous: NightFrame | undefined;
 
     constructor(private readonly scene: GameScene) {
@@ -97,6 +107,11 @@ export class NightManager {
                 shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
             );
             this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
+            // The same sun lights the clouds and casts their shadows (WeatherManager).
+            this.sun =
+                sunAt === undefined
+                    ? undefined
+                    : sunPositionAt(sunAt, place ?? { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE });
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -152,6 +167,11 @@ export class NightManager {
 
     public isNight(): boolean {
         return this.opacity > 0 && !this.disabled;
+    }
+
+    /** Where the sun of the map is, at the instant and place of the night (updated once a second). */
+    public sunPosition(): SunPosition | undefined {
+        return this.sun;
     }
 
     public serverDate(): Date | undefined {

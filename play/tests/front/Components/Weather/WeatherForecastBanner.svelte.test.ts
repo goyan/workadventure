@@ -6,7 +6,9 @@ import type { Writable } from "svelte/store";
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date("2026-11-14T11:22:12Z");
 
-const cells = vi.hoisted((): { value: { at: number; weather?: string; temperature?: number }[] } => ({ value: [] }));
+const cells = vi.hoisted(
+    (): { value: { at: number; weather?: string; temperature?: number; cloudiness?: number }[] } => ({ value: [] }),
+);
 const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => ({ settings: [], dates: [] }));
 const wamSettings = vi.hoisted((): { value: unknown } => ({ value: {} }));
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
@@ -34,6 +36,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     storm: label("Storm"),
                     fog: label("Fog"),
                     real: label("Real"),
+                    cloudy: label("Cloudy"),
                 },
             },
         },
@@ -155,5 +158,25 @@ describe("WeatherForecastBanner", () => {
         expect(banner()).toBeNull();
         expect(get(weatherBannerStore)).toBe(false);
         expect(localStorage.getItem("weatherBannerShown")).toBe("false");
+    });
+
+    it("names a clear sky with clouds Cloudy, with the sun behind a cloud or a cloud alone when overcast", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "clear", cloudiness: 0.5 },
+            { at: NOW.getTime() + HOUR, weather: "clear", cloudiness: 0.9 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "clear" },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Cloudy",
+            "+1 h: Cloudy",
+            "+4 h: Clear",
+        ]);
+        expect(shown.map((cell) => cell.querySelector("svg")?.getAttribute("data-icon"))).toEqual([
+            "automatic",
+            "cloudy",
+            "clear",
+        ]);
     });
 });

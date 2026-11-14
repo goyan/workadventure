@@ -16,6 +16,8 @@ export function weatherName(labels: TranslationFunctions["mapEditor"]["settings"
             return labels.automatic();
         case WeatherType.Real:
             return labels.real();
+        case WeatherType.Cloudy:
+            return labels.cloudy();
         default:
             return labels.clear();
     }

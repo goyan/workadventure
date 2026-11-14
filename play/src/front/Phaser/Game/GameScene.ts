@@ -1781,7 +1781,12 @@ export class GameScene extends DirtyScene {
             this.gameMapFrontWrapper
                 .getEntitiesManager()
                 .updateSeason(time, serverDate, forcedTreeSeason(this.getSeasonalTheme()), this.mapSnowShown);
-            this.weatherManager?.update(time, serverDate, this.nightManager?.isNight());
+            this.weatherManager?.update(
+                time,
+                serverDate,
+                this.nightManager?.isNight(),
+                this.nightManager?.sunPosition(),
+            );
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }

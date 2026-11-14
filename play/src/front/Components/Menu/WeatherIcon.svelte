@@ -11,7 +11,15 @@
 </script>
 
 <!-- 16x16 pixel art drawn with rects, scaled up without smoothing. -->
-<svg width={size} height={size} viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true" class="shrink-0">
+<svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    shape-rendering="crispEdges"
+    aria-hidden="true"
+    class="shrink-0"
+    data-icon={icon}
+>
     {#if icon === WeatherType.Automatic}
         <!-- sun peeking behind a cloud -->
         <g fill="#ffd54a">
@@ -93,6 +101,18 @@
         </g>
         <rect x="5" y="6" width="2" height="2" fill="#ffffff" />
         <rect x="2" y="15" width="8" height="1" fill="#aab6c4" />
+    {:else if icon === WeatherType.Cloudy}
+        <!-- a big cloud and a smaller one behind it -->
+        <g fill="#aab6c4">
+            <rect x="9" y="3" width="5" height="3" />
+            <rect x="8" y="4" width="7" height="3" />
+        </g>
+        <g fill="#e8eef5">
+            <rect x="2" y="7" width="11" height="5" />
+            <rect x="1" y="8" width="13" height="3" />
+            <rect x="4" y="5" width="6" height="3" />
+        </g>
+        <rect x="2" y="12" width="11" height="1" fill="#aab6c4" />
     {:else if icon === WeatherType.Fog}
         <g fill="#dfe6ee">
             <rect x="2" y="3" width="10" height="2" />

@@ -1,7 +1,7 @@
 import { WeatherType } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
+import { cloudsShownStore, weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
@@ -22,6 +22,8 @@ import {
 } from "./WeatherFrame";
 import type { WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
+import { cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
+import type { SunPosition } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -36,6 +38,10 @@ const FOG_PATCH_ALPHA = 0.3;
 const FOG_NIGHT_FACTOR = 0.6;
 /** Size of a fog block, in pixels of the map: small enough to look soft, big enough to stay cheap. */
 const FOG_BLOCK = 16;
+/** White clouds at their thickest, and their shadows: shadows first, the clouds over them. */
+const CLOUD_ALPHA = 0.25;
+const CLOUD_SHADOW_ALPHA = 0.15;
+const OVERCAST_COLOR = 0x8a94a3;
 
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
@@ -56,6 +62,7 @@ export class WeatherManager {
     private readonly unsubscribers: Unsubscriber[];
     private editing = false;
     private weatherShown = true;
+    private cloudsShown = true;
     private readonly reducedMotion: boolean;
     // What the last fog image looked like: a still fog is not drawn again until one of these changes.
     private lastFogKey: string | undefined;
@@ -70,6 +77,7 @@ export class WeatherManager {
         this.unsubscribers = [
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
             weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
+            cloudsShownStore.subscribe((shown) => (this.cloudsShown = shown)),
         ];
         this.graphics = scene.add
             .graphics()
@@ -77,7 +85,8 @@ export class WeatherManager {
             .setVisible(false);
     }
 
-    public update(now: number, serverDate: Date | undefined, night = false): void {
+    /** `sun`: where the sun of the map is (NightManager), for the shadows of the clouds and their fading at dusk. */
+    public update(now: number, serverDate: Date | undefined, night = false, sun?: SunPosition): void {
         const mapSettings = this.scene.getGameMap().getWamFile()?.getWam().settings;
         const settings = shownWeatherSettings(mapSettings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
@@ -100,7 +109,12 @@ export class WeatherManager {
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
         const showLeaves = enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow;
-        if (!showWeather && !showLeaves) {
+        // Clouds of a clear sky, faded out at dusk: none at night.
+        const cloudiness = weather === WeatherType.Clear ? (settings?.cloudiness ?? 0) : 0;
+        const sunlight = cloudSunlight(sun?.elevation);
+        const veilAlpha = overcastVeil(cloudiness);
+        const showClouds = enabled && this.cloudsShown && cloudiness > 0 && (sunlight.clouds > 0 || veilAlpha > 0);
+        if (!showWeather && !showLeaves && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
                 this.visible = false;
@@ -114,7 +128,9 @@ export class WeatherManager {
         // falling leaves 15 times, a fog alone 5 times (each drawing makes the whole map drawn again).
         const falling = showWeather && weather !== WeatherType.Fog;
         const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
-        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
+        // Clouds drift 8 px a second: 5 images a second are enough, as for the fog.
+        const cloudsOnly = showClouds && !showLeaves;
+        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly || cloudsOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
         const view = this.scene.cameras.main.worldView;
         const fogStrengthNow =
@@ -123,8 +139,9 @@ export class WeatherManager {
                     ? fogStrength(configured, serverDate, settings?.weatherAuto, realFogSince, realFogUntil)
                     : 1
                 : 1;
-        if (fogOnly && this.reducedMotion) {
-            // Nothing moves: draw again only when the camera, the fog strength or the night changed.
+        const shadowOffset = showClouds && sunlight.shadows > 0 ? cloudShadowOffset(sun) : undefined;
+        if ((fogOnly || cloudsOnly) && this.reducedMotion) {
+            // Nothing moves: draw again only when the camera, the fog or clouds, the sun or the night changed.
             const key = [
                 view.x,
                 view.y,
@@ -133,6 +150,11 @@ export class WeatherManager {
                 this.scene.cameras.main.zoom,
                 Math.round(fogStrengthNow * 40),
                 night,
+                Math.round(cloudiness * 40),
+                Math.round(sunlight.clouds * 20),
+                Math.round(sunlight.shadows * 20),
+                Math.round((shadowOffset?.x ?? 0) / 4),
+                Math.round((shadowOffset?.y ?? 0) / 4),
             ].join("|");
             if (this.visible && key === this.lastFogKey) return;
             this.lastFogKey = key;
@@ -189,6 +211,7 @@ export class WeatherManager {
             if (weather !== WeatherType.Snow) this.graphics.strokePath();
             if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
+        if (showClouds) this.drawClouds(epoch, view, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
         if (showLeaves) {
             const leaves = leafParticles(epoch, view).map((leaf) => ({
                 ...leaf,
@@ -201,6 +224,47 @@ export class WeatherManager {
             }
         }
         this.scene.markDirty();
+    }
+
+    /**
+     * Clouds of a clear sky, outdoors only and over everything (avatars and objects too): the grey veil of an overcast
+     * sky, the shadows cast away from the sun, then the white clouds over them.
+     */
+    private drawClouds(
+        epoch: number,
+        view: WeatherView,
+        veil: readonly WeatherView[],
+        cloudiness: number,
+        sunlight: { clouds: number; shadows: number },
+        shadowOffset: { x: number; y: number } | undefined,
+        veilAlpha: number,
+    ): void {
+        if (veilAlpha > 0) {
+            this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
+            for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
+        }
+        const layers: [number, number, ReturnType<typeof cloudPatches>][] = [];
+        if (shadowOffset) {
+            const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset);
+            layers.push([0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows, patches]);
+        }
+        if (sunlight.clouds > 0) {
+            layers.push([
+                0xffffff,
+                CLOUD_ALPHA * sunlight.clouds,
+                cloudPatches(epoch, view, cloudiness, this.reducedMotion),
+            ]);
+        }
+        for (const [color, alpha, patches] of layers) {
+            // Soft edges, stopped at the walls like the fog.
+            const blocks = fogBlocks(veil, patches, FOG_BLOCK);
+            for (let level = 1; level <= FOG_LEVELS; level++) {
+                const ofLevel = blocks.filter((block) => block.level === level);
+                if (ofLevel.length === 0) continue;
+                this.graphics.fillStyle(color, (alpha * level) / FOG_LEVELS);
+                for (const block of ofLevel) this.graphics.fillRect(block.x, block.y, block.width, block.height);
+            }
+        }
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */

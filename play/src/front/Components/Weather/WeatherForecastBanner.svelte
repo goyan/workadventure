@@ -1,13 +1,18 @@
 <script lang="ts">
+    import { WeatherType } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
     import { FORECAST_HOURS } from "../../Phaser/Game/Weather/WeatherForecast";
+    import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
     import { nightDateStore } from "../../Stores/NightStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
     import { weatherName } from "../Menu/WeatherName";
     import { IconX } from "@wa-icons";
+
+    /** From this cloudiness, the banner shows a cloud alone (an overcast sky). */
+    const OVERCAST_CLOUDINESS = 0.8;
 
     // Read again at each tick of the game clock (every second): a saved or tried weather shows within a second.
     const cells = $derived(
@@ -18,6 +23,16 @@
               )
             : [],
     );
+    /** A clear sky with clouds is shown Cloudy: the sun behind a cloud, or a cloud alone when overcast. */
+    function shown(cell: ForecastCell): { icon: WeatherType; name: WeatherType } | undefined {
+        if (!cell.weather) return undefined;
+        if (cell.weather !== WeatherType.Clear || !cell.cloudiness) return { icon: cell.weather, name: cell.weather };
+        return {
+            icon: cell.cloudiness >= OVERCAST_CLOUDINESS ? WeatherType.Cloudy : WeatherType.Automatic,
+            name: WeatherType.Cloudy,
+        };
+    }
+
     function when(index: number): string {
         const hours = FORECAST_HOURS[index] ?? 0;
         return hours === 0 ? $LL.actionbar.weatherBanner.now() : $LL.actionbar.weatherBanner.inHours({ hours });
@@ -32,20 +47,21 @@
         data-testid="weather-banner"
     >
         {#each cells as cell, index (index)}
+            {@const look = shown(cell)}
             <div
                 class="flex items-center gap-1"
                 role="img"
                 aria-label={$LL.actionbar.weatherBanner.cell({
                     when: when(index),
-                    weather: cell.weather
-                        ? weatherName($LL.mapEditor.settings.weather, cell.weather)
+                    weather: look
+                        ? weatherName($LL.mapEditor.settings.weather, look.name)
                         : $LL.actionbar.weatherBanner.unknown(),
                 })}
                 data-testid="weather-banner-cell"
             >
                 <span class="text-white/60">{when(index)}</span>
-                {#if cell.weather}
-                    <WeatherIcon icon={cell.weather} size={16} />
+                {#if look}
+                    <WeatherIcon icon={look.icon} size={16} />
                 {:else}
                     <span class="w-4 text-center text-white/60">?</span>
                 {/if}

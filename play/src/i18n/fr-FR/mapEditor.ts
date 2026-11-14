@@ -748,6 +748,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             automatic: "Auto",
             fog: "Brouillard",
             real: "Réel",
+            cloudy: "Nuageux",
             title: "Météo",
             clear: "Ciel clair",
             rain: "Pluie",

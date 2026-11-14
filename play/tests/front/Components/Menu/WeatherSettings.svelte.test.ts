@@ -23,6 +23,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     storm: label("Storm"),
                     fog: label("Fog"),
                     real: label("Real"),
+                    cloudy: label("Cloudy"),
                     saving: label("Saving"),
                     success: label("Saved"),
                     error: label("Error"),
@@ -162,11 +163,11 @@ afterEach(async () => {
 });
 
 describe("WeatherSettings", () => {
-    it("shows seven weather tiles and selects the map weather", () => {
+    it("shows eight weather tiles and selects the map weather", () => {
         wamSettings.value = { weather: "rain" };
         render();
         const tiles = target.querySelectorAll('[data-testid="map-weather-type"] [role="radio"]');
-        expect(tiles).toHaveLength(7);
+        expect(tiles).toHaveLength(8);
         expect(tile("Rain").getAttribute("aria-checked")).toBe("true");
         expect(tile("Clear").getAttribute("aria-checked")).toBe("false");
         click(tile("Snow"));
@@ -178,7 +179,8 @@ describe("WeatherSettings", () => {
         wamSettings.value = { weather: "automatic" };
         render();
         expect(target.querySelector('[data-testid="map-weather-frequency"]')).not.toBeNull();
-        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(4);
+        // Rain, storm, snow, fog, and the clouds.
+        expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(5);
         click(tile("Clear"));
         expect(target.querySelector('[data-testid="map-weather-frequency"]')).toBeNull();
         expect(target.querySelectorAll('[data-testid^="map-weather-include-"]')).toHaveLength(0);
@@ -212,8 +214,44 @@ describe("WeatherSettings", () => {
                 weather: "automatic",
                 autoFrequency: "calm",
                 autoInclude: ["rain", "snow", "fog"],
+                autoClouds: true,
             },
         });
+    });
+});
+
+describe("WeatherSettings, clouds", () => {
+    function clouds(): HTMLInputElement {
+        const input = target.querySelector<HTMLInputElement>('[data-testid="map-weather-include-clouds"] input');
+        if (!input) throw new Error("no clouds checkbox");
+        return input;
+    }
+
+    it("offers the Cloudy tile, tried at once", () => {
+        wamSettings.value = { weather: "clear" };
+        render();
+        click(tile("Cloudy"));
+        expect(tried.value).toMatchObject({ weather: "cloudy" });
+    });
+
+    it("has clouds in Auto by default, and sends the choice of the map", async () => {
+        wamSettings.value = { weather: "automatic", weatherAuto: { frequency: "normal", include: ["rain"] } };
+        render();
+        expect(clouds().checked).toBe(true);
+        click(clouds());
+        expect(tried.value).toMatchObject({ weatherAuto: { clouds: false } });
+        click(saveButton());
+        await vi.waitFor(() => expect(executeUpdateWAMSettings).toHaveBeenCalledTimes(1));
+        expect(executeUpdateWAMSettings.mock.calls[0][0]).toMatchObject({
+            updateWeatherSettingMessage: { weather: "automatic", autoClouds: false },
+        });
+    });
+
+    it("shows the clouds turned off for a map that has them off", () => {
+        wamSettings.value = { weather: "automatic", weatherAuto: { frequency: "normal", include: [], clouds: false } };
+        render();
+        expect(clouds().checked).toBe(false);
+        expect(tried.value).toBeUndefined();
     });
 });
 
