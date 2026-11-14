@@ -116,8 +116,9 @@ reste possible).
   (variable absente) ou une valeur illisible est à 100 %. L'intensité règle la luminosité de la lumière (multipliée
   par le scintillement) et la part du voile de nuit qu'elle perce ; ni la portée, ni la forme, ni la flamme dans la
   main ne changent. Ce qui est dessiné passe par un fondu (`torchFadeTowards`, 10 % → 100 % en 1 s, au rythme des
-  15 pas du scintillement) qui ne repart dans l'autre sens que 1/3 s après son dernier changement de sens marqué
-  (≥ 0,1, voir « Scintillement ») : la lueur (flamme × intensité) et le voile chacun le leur. Même une touche maintenue ou des clics
+  15 pas du scintillement) qui ne repart dans l'autre sens que 1/3 s après son dernier changement de sens marqué :
+  la lueur (flamme × intensité, demi-tour marqué dès 0,1, voir « Scintillement ») et le voile (intensité seule,
+  dès 0,02) chacun le leur. Même une touche maintenue ou des clics
   rapides d'un collègue (10 % ↔ 100 % à chaque pas, testé) ne font pas plus de trois variations marquées par seconde ;
   à intensité fixe, le scintillement passe inchangé (testé). En mouvement réduit, le fondu reste (il n'y a plus de
   scintillement).
@@ -146,9 +147,11 @@ reste possible).
   demi-tours (`TORCH_MARKED_VARIATION`) ; la lueur n'ajoute que 55 % de sa couleur, donc 0,1 change environ 5 % de la
   luminance, la moitié d'un flash au sens WCAG. Le crépitement n'en fait jamais à lui seul. Ce qui est dessiné passe
   par le fondu de la lueur (3 par seconde, assez pour une rafale ou l'allumage) qui interdit deux demi-tours marqués à
-  moins de 1/3 s : au plus 3 variations marquées dans toute seconde, mesuré (fenêtres glissantes d'une seconde, une
-  minute, cinq graines, sans vent, brise et orage, intensité fixe ou changée à chaque pas) ; sans ce garde-fou, la
-  flamme seule en fait déjà au plus 3 (orage), 2 sans vent. Mouvement réduit : lumière fixe (ni respiration, ni
+  moins de 1/3 s : au plus 3 variations marquées dans toute seconde, testé (fenêtres glissantes d'une seconde, une
+  minute, cinq graines, sans vent, brise et orage, intensité fixe ou changée à chaque pas). Mesuré sur 20 graines et
+  10 minutes : 2 au plus sur ce qui est dessiné ; la flamme seule, sans garde-fou, 1 sans vent et 3 au plus avec
+  rafales. Au seuil strict de 0,02 de la première version, le crépitement demandé (±3 %) en fait 5 : c'est pour lui
+  que le seuil de la lueur est 0,1 (raisonnement sur la luminance, non mesuré à l'écran). Mouvement réduit : lumière fixe (ni respiration, ni
   crépitement, ni rafales, ni allumage), couleur fixe selon l'intensité. La forme et la portée de la lumière restent
   fixes : son polygone part de la flamme sans tenir compte de son mouvement.
 - **Flamme dans la main** : elle ondule, 30 images par seconde, sur son propre pas (indépendant des 15 pas de la

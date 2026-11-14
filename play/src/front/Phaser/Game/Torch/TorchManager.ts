@@ -7,6 +7,7 @@ import type { GameScene } from "../GameScene";
 import { toggleHandTool } from "../../../Stores/HandToolStore";
 import { CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
 import {
+    TORCH_MARKED_VARIATION,
     startTorchFade,
     torchFadeTowards,
     torchFlickerPhase,
@@ -45,7 +46,8 @@ export class TorchManager {
      */
     private readonly fades = new Map<string, { glow: TorchFade; veil: TorchFade }>();
     /**
-     * When each torch seen was lit (server time), to light it up from nothing: undefined while it is out, -Infinity
+     * When each torch seen was lit (the page's clock: an observation of this browser, not shaken when the server clock
+     * arrives), to light it up from nothing: undefined while it is out, -Infinity
      * when it was already lit the first time it was seen (a player found with a lit torch shows it lit at once).
      */
     private readonly litAt = new Map<string, number | undefined>();
@@ -108,15 +110,15 @@ export class TorchManager {
                 this.litAt.set(id, Number.NEGATIVE_INFINITY);
             } else if (this.litAt.get(id) === undefined) {
                 // Seen out, now lit: it lights up from now.
-                this.litAt.set(id, step);
+                this.litAt.set(id, time);
             }
-            const litAt = this.litAt.get(id) ?? step;
+            const litAt = this.litAt.get(id) ?? time;
             const seed = torchFlickerSeed(userId);
             const phase = torchFlickerPhase(userId);
             // Weather falls where there is no grid: the wind blows there too (see keepOutdoorParticles).
             const outdoor = outdoorGrid?.isOutdoorAt(character.x, character.y + CHARACTER_BODY_OFFSET_Y) ?? true;
             const wind = torchWind(weather, outdoor);
-            const litForMs = step - litAt;
+            const litForMs = time - litAt;
             // On the steps of the flicker: a torch set dimmer or brighter is rendered 15 times a second at most.
             const strength = character.getTorchIntensity() / TORCH_INTENSITY_MAX;
             const previous = this.fades.get(id);
@@ -124,7 +126,7 @@ export class TorchManager {
             const glowTarget =
                 veil.value * torchGlow({ epochMs: step, seed, wind, litForMs, reducedMotion: REDUCED_MOTION });
             const glow = previous
-                ? torchFadeTowards(previous.glow, glowTarget, step, GLOW_FADE_PER_SECOND)
+                ? torchFadeTowards(previous.glow, glowTarget, step, GLOW_FADE_PER_SECOND, TORCH_MARKED_VARIATION)
                 : startTorchFade(glowTarget, step);
             this.fades.set(id, { glow, veil });
             character.setTorchFlame(torchFlameShape(flameTime, phase, REDUCED_MOTION));

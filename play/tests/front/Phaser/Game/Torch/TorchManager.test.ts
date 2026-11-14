@@ -174,12 +174,27 @@ describe("TorchManager", () => {
         expect(me(1)?.intensity).toBe(0);
         expect(me(1)?.strength).toBe(0);
         tick(1000 + 3 * stepMs + 250);
-        const half = torchFlickerStep(1000 + 3 * stepMs + 250);
-        const lit = half - (1000 + 3 * stepMs);
-        expect(me(2)?.intensity).toBeCloseTo((lit / 500) * torchFlicker(half, seedOf("1"), false));
-        expect(me(2)?.strength).toBeCloseTo(lit / 500);
+        // Half lit, 250 ms later on the page's clock; the flame itself on the step of the server clock.
+        const half = torchFlickerStep(Math.ceil(1000 + 3 * stepMs + 250));
+        expect(me(2)?.intensity).toBeCloseTo(0.5 * torchFlicker(half, seedOf("1"), false));
+        expect(me(2)?.strength).toBeCloseTo(0.5);
         for (let step = 1; step <= 15; step++) tick(1000 + 3 * stepMs + 250 + step * stepMs);
         expect(me(updates.length - 1)?.strength).toBe(1);
+    });
+
+    it("lights up on the page's own clock: a server clock known later, even earlier, does not put it out", () => {
+        const me = () => updates.at(-1)?.bearers.find((bearer) => bearer.id === "me");
+        serverNow = undefined;
+        manager.update(1000);
+        player.isTorchLit.mockReturnValue(true);
+        manager.update(1100);
+        expect(me()?.strength).toBe(0);
+        // The server clock arrives, behind the computer's.
+        serverNow = 5000;
+        manager.update(1350);
+        expect(me()?.strength).toBeCloseTo(0.5);
+        manager.update(1700);
+        expect(me()?.strength).toBe(1);
     });
 
     it("feels the wind outdoors, more in a storm, and none indoors", () => {

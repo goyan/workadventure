@@ -119,7 +119,7 @@ describe("torchFadeTowards", () => {
             for (let step = 1; step <= 30 * TORCH_FLICKER_STEPS_PER_SECOND; step++) {
                 const now = EPOCH + step * stepMs;
                 const flicker = strength * torchFlicker(now, seed, false);
-                state = torchFadeTowards(state, flicker, now, 3);
+                state = torchFadeTowards(state, flicker, now, 3, TORCH_MARKED_VARIATION);
                 expect(state.value).toBeCloseTo(flicker, 9);
             }
         }
@@ -132,7 +132,13 @@ describe("torchFadeTowards", () => {
             for (let step = 1; step <= 30 * TORCH_FLICKER_STEPS_PER_SECOND; step++) {
                 const now = EPOCH + step * stepMs;
                 // The intensity changed from 10 % to 100 % and back at every step, as fast as it can be.
-                state = torchFadeTowards(state, (step % 2 === 0 ? 1 : 0.1) * torchFlicker(now, seed, false), now, 3);
+                state = torchFadeTowards(
+                    state,
+                    (step % 2 === 0 ? 1 : 0.1) * torchFlicker(now, seed, false),
+                    now,
+                    3,
+                    TORCH_MARKED_VARIATION,
+                );
                 drawn.push(state.value);
             }
             expect(worstSecond(drawn, TORCH_FLICKER_STEPS_PER_SECOND)).toBeLessThanOrEqual(3);
@@ -175,7 +181,8 @@ describe("torchFadeTowards", () => {
             state = torchFadeTowards(state, step % 2 === 0 ? 1 : 0.1, step * stepMs);
             values.push(state.value);
         }
-        expect(worstSecond(values, TORCH_FLICKER_STEPS_PER_SECOND)).toBeLessThanOrEqual(3);
+        // The intensity has no crackle to let through: counted from a change of 0.02, as for the first flicker.
+        expect(worstSecond(values, TORCH_FLICKER_STEPS_PER_SECOND, 0.02)).toBeLessThanOrEqual(3);
         for (let index = 1; index < values.length; index++) {
             expect(Math.abs(values[index] - values[index - 1])).toBeLessThanOrEqual(
                 0.9 / TORCH_FLICKER_STEPS_PER_SECOND + 1e-9,

@@ -77,7 +77,8 @@ describe("torchGlow", () => {
      * glow, as TorchManager does. `wildIntensity`: the intensity changed from 10 % to 100 % and back at every step.
      */
     function drawn(seed: number, wind: number, wildIntensity: boolean, seconds = 60): number[] {
-        let state = startTorchFade(0, EPOCH);
+        let veil = startTorchFade(1, EPOCH);
+        let glow = startTorchFade(0, EPOCH);
         let litAt = EPOCH;
         const values: number[] = [];
         for (let step = 0; step <= seconds * TORCH_FLICKER_STEPS_PER_SECOND; step++) {
@@ -85,10 +86,12 @@ describe("torchGlow", () => {
             // Lit again every 10 s: the ignition is in the minute too.
             if (step % 150 === 0) litAt = now;
             const strength = wildIntensity ? (step % 2 === 0 ? 1 : 0.1) : 1;
-            const glow =
-                strength * torchGlow({ epochMs: now, seed, wind, litForMs: now - litAt, reducedMotion: false });
-            state = torchFadeTowards(state, glow, now, 3);
-            values.push(state.value);
+            // As TorchManager: the intensity through the fade of the veil, then the glow through its own.
+            veil = torchFadeTowards(veil, strength, now);
+            const target =
+                veil.value * torchGlow({ epochMs: now, seed, wind, litForMs: now - litAt, reducedMotion: false });
+            glow = torchFadeTowards(glow, target, now, 3, TORCH_MARKED_VARIATION);
+            values.push(glow.value);
         }
         return values;
     }

@@ -102,6 +102,11 @@ export function torchFlickerPhase(id: string): number {
 /** How fast a torch dims or brightens when its bearer changes its intensity: from 10 % to 100 % in one second. */
 export const TORCH_FADE_PER_SECOND = 0.9;
 /**
+ * A turn of the intensity alone counts from this change: it has no crackle, so it is kept to the strict measure of
+ * the first flicker. The glow, which crackles, counts from TORCH_MARKED_VARIATION.
+ */
+export const TORCH_FADE_MARKED = 0.02;
+/**
  * The light only turns back (dimmer after brighter, or the other way) a third of a second after it last did: however
  * fast the intensity is changed (a held key, a colleague clicking), at most three marked variations a second. The slow
  * flicker turns far less often, and moves far slower than the fade: it goes through unchanged.
@@ -135,6 +140,7 @@ export function torchFadeTowards(
     target: number,
     now: number,
     perSecond = TORCH_FADE_PER_SECOND,
+    marked = TORCH_FADE_MARKED,
 ): TorchFade {
     const elapsed = Math.max(0, now - state.at);
     if (state.value === target) {
@@ -146,7 +152,7 @@ export function torchFadeTowards(
         turning &&
         state.rising !== undefined &&
         now - state.turnedAt < TORCH_FADE_TURN_MS &&
-        Math.abs(state.value - state.turnedFrom) >= TORCH_MARKED_VARIATION
+        Math.abs(state.value - state.turnedFrom) >= marked
     ) {
         // Held where it is until it may turn back.
         return { ...state, at: now };
