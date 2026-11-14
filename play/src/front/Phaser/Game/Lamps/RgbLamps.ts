@@ -39,6 +39,15 @@ interface PlacedRgbLamp {
     drawnAt: number;
 }
 
+/** The beam of a turning lamp, to be drawn: where it points now, in the colour and at the intensity that were set. */
+interface TurningBeam {
+    lamp: PlacedRgbLamp;
+    light: LightCone;
+    colour: number;
+    intensity: number;
+    direction: number;
+}
+
 /** What the lamps are given in place of the clock of the server and of the preference of the system (tests). */
 export interface RgbLampsOptions {
     /** Milliseconds since the Unix epoch, as all players see them. */
@@ -152,7 +161,7 @@ export class RgbLamps {
         this.frame += 1;
         const tileSize = this.tileSize();
         const still = this.reducedMotion || editorOpen || !effectsEnabled;
-        const turning: { lamp: PlacedRgbLamp; light: LightCone; colour: number; direction: number }[] = [];
+        const turning: TurningBeam[] = [];
         let time: number | undefined;
         let changed = false;
         for (const [id, lamp] of this.lamps) {
@@ -161,18 +170,20 @@ export class RgbLamps {
             const settings =
                 this.preview?.entityId === id ? this.preview.settings : rgbLampSettingsOf(entity.getProperties());
             const light = rgbLampLight(lampSource(entity, entity.getPrefab().lamp?.anchor), settings, tileSize);
+            const intensity = settings.intensity ?? 1;
             if (isTurning(settings, still)) {
                 time ??= this.now();
                 const direction = rgbLampBeamDirection(settings, time, still);
-                if (this.castFullTurn(id, lamp, light, settings.color)) {
+                const beam = { lamp, light, colour: rgbLampColour(settings.color), intensity, direction };
+                if (this.castFullTurn(id, lamp, light, settings.color, intensity)) {
                     // Set, moved, or newly turning: its first beam is drawn now, whatever the budget.
-                    this.drawBeam(lamp, light, rgbLampColour(settings.color), direction);
+                    this.drawBeam(beam);
                     changed = true;
                 } else {
-                    turning.push({ lamp, light, colour: rgbLampColour(settings.color), direction });
+                    turning.push(beam);
                 }
             } else {
-                changed = this.drawStill(id, lamp, light, settings.color) || changed;
+                changed = this.drawStill(id, lamp, light, settings.color, intensity) || changed;
             }
             if (lamp.visible !== entity.visible) {
                 lamp.visible = entity.visible;
@@ -206,15 +217,15 @@ export class RgbLamps {
     }
 
     /** A lamp that does not turn: drawn again when it was moved or set, or when what stops its light changed. */
-    private drawStill(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string): boolean {
-        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color}`;
+    private drawStill(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
+        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity}`;
         if (key === lamp.key && lamp.obstaclesVersion === this.obstacles.version) {
             return false;
         }
         const { segments, segmentsKey } = this.segmentsFor(id, light);
         let drawn = false;
         if (key !== lamp.key || segmentsKey !== lamp.segmentsKey) {
-            lamp.visual.draw(light, litPolygon(light, segments), rgbLampColour(color));
+            lamp.visual.draw(light, litPolygon(light, segments), rgbLampColour(color), intensity);
             lamp.revision = ++this.revisions;
             lamp.light = light;
             drawn = true;
@@ -232,8 +243,8 @@ export class RgbLamps {
      * A turning lamp: casts its full turn of light again when it was moved or set, or when what stops its light
      * changed. True when its beam must be drawn now (its full turn is new).
      */
-    private castFullTurn(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string): boolean {
-        const turnKey = `${light.x},${light.y},${light.radius},${light.angle},${color}`;
+    private castFullTurn(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
+        const turnKey = `${light.x},${light.y},${light.radius},${light.angle},${color},${intensity}`;
         if (turnKey === lamp.turnKey && lamp.obstaclesVersion === this.obstacles.version && lamp.fullTurn) {
             return false;
         }
@@ -252,9 +263,9 @@ export class RgbLamps {
     }
 
     /** Draws the beam of a turning lamp, cut out of its full turn. */
-    private drawBeam(lamp: PlacedRgbLamp, light: LightCone, colour: number, direction: number): void {
+    private drawBeam({ lamp, light, colour, intensity, direction }: TurningBeam): void {
         const beam = { ...light, direction };
-        lamp.visual.draw(beam, coneOfLitPolygon(lamp.fullTurn ?? [], beam), colour);
+        lamp.visual.draw(beam, coneOfLitPolygon(lamp.fullTurn ?? [], beam), colour, intensity);
         lamp.revision = ++this.revisions;
         lamp.light = beam;
         lamp.drawnAt = this.frame;
@@ -264,7 +275,7 @@ export class RgbLamps {
      * Draws again the turning beams that moved, while their light is on the screen: an angle that comes from the clock
      * has nothing to catch up on when it comes back. Those drawn longest ago first, a few per image.
      */
-    private turn(turning: { lamp: PlacedRgbLamp; light: LightCone; colour: number; direction: number }[]): boolean {
+    private turn(turning: TurningBeam[]): boolean {
         const view = this.scene.cameras.main.worldView;
         const waiting = turning.filter(({ lamp, light, direction }) => {
             const away = Math.abs(
@@ -280,8 +291,8 @@ export class RgbLamps {
             );
         });
         waiting.sort((a, b) => a.lamp.drawnAt - b.lamp.drawnAt);
-        for (const { lamp, light, colour, direction } of waiting.slice(0, MAX_TURNING_REDRAWS_PER_FRAME)) {
-            this.drawBeam(lamp, light, colour, direction);
+        for (const beam of waiting.slice(0, MAX_TURNING_REDRAWS_PER_FRAME)) {
+            this.drawBeam(beam);
         }
         return waiting.length > 0;
     }

@@ -9,7 +9,7 @@ import { isLit } from "./LightTestUtils";
 
 interface FakeVisual {
     id: string;
-    draws: { light: LightCone; polygon: Point[]; colour: number }[];
+    draws: { light: LightCone; polygon: Point[]; colour: number; intensity: number | undefined }[];
     visible: boolean;
     destroyed: boolean;
 }
@@ -25,8 +25,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
             this.textureKey = `rgb-lamp:${id}`;
             visuals.push(this.fake);
         }
-        draw(light: LightCone, polygon: Point[], colour: number): void {
-            this.fake.draws.push({ light, polygon, colour });
+        draw(light: LightCone, polygon: Point[], colour: number, intensity?: number): void {
+            this.fake.draws.push({ light, polygon, colour, intensity });
         }
         setVisible(visible: boolean): void {
             this.fake.visible = visible;
@@ -180,6 +180,28 @@ describe("RgbLamps", () => {
         const last = visuals[0].draws[1];
         expect(last.colour).toBe(0x00ff00);
         expect(last.light).toEqual({ x: 640, y: 640, radius: 64, direction: 0, angle: 90 });
+    });
+
+    it("shines at full strength without an intensity, and dims by the intensity that was set", () => {
+        const { fake, entity: object } = lamp("a", 624, 624);
+        const { lamps } = start([object]);
+        expect(visuals[0].draws[0].intensity ?? 1).toBe(1);
+        fake.properties = [
+            {
+                id: "p",
+                type: "rgbLampPropertyData",
+                color: "#00ff00",
+                radius: 6,
+                direction: 90,
+                angle: 360,
+                intensity: 0.4,
+            },
+        ];
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(2);
+        expect(visuals[0].draws[1].intensity).toBe(0.4);
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(2);
     });
 
     it("shows the settings being dragged in the editor before they are saved", () => {
@@ -337,6 +359,19 @@ describe("RgbLamps that turn like a rotating beacon", () => {
         clock.now = 2000;
         lamps.update();
         expect(visuals[0].draws[2].light.direction).toBeCloseTo(90, 6);
+    });
+
+    it("dims its beam by the intensity that was set, and draws it again when the intensity changes", () => {
+        const made = turningLamp("a", 624, 624, { intensity: 0.5 });
+        const { lamps } = start([made.entity]);
+        expect(visuals[0].draws[0].intensity).toBe(0.5);
+        made.fake.properties = turningProperty({ intensity: 0.25 });
+        lamps.update();
+        expect(visuals[0].draws).toHaveLength(2);
+        expect(visuals[0].draws[1].intensity).toBe(0.25);
+        clock.now = 500;
+        lamps.update();
+        expect(visuals[0].draws[2].intensity).toBe(0.25);
     });
 
     it("keeps the shadows as it turns: the walls of the map stop the beam in every direction", () => {

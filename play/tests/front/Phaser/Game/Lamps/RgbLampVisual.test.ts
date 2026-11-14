@@ -155,6 +155,20 @@ describe("RgbLampVisual", () => {
         expect(stops.at(-1)).toEqual({ offset: 1, colour: "rgba(255, 255, 255, 0)" });
     });
 
+    it("draws a dimmer lamp with less light all along: its colour on the map and the hole in the night veil", () => {
+        const { textures, visual } = setup();
+        visual.draw(light, square, 0xffffff, 0.5);
+        const { stops } = textures[0];
+        expect(stops[0]).toEqual({ offset: 0, colour: "rgba(255, 255, 255, 0.5)" });
+        expect(stops.at(-1)).toEqual({ offset: 1, colour: "rgba(255, 255, 255, 0)" });
+        const full = setup();
+        full.visual.draw(light, square, 0xffffff);
+        stops.forEach((stop, index) => {
+            const alpha = (colour: string) => Number(/, ([\d.e-]+)\)$/.exec(colour)?.[1]);
+            expect(alpha(stop.colour)).toBeCloseTo(alpha(full.textures[0].stops[index].colour) * 0.5, 9);
+        });
+    });
+
     it("draws again into the same texture while the reach does not change: a lamp that moves or turns", () => {
         const { textures, visual } = setup();
         visual.draw(light, square, 0xffffff);

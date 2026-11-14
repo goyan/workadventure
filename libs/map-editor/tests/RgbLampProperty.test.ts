@@ -3,6 +3,8 @@ import {
     EntityDataProperty,
     EntityRawPrefab,
     RGB_LAMP_DEFAULT_ROTATION_SPEED,
+    RGB_LAMP_MAX_INTENSITY,
+    RGB_LAMP_MIN_INTENSITY,
     RGB_LAMP_MAX_ROTATION_SPEED,
     RGB_LAMP_MIN_ROTATION_SPEED,
     RgbLampPropertyData,
@@ -108,5 +110,32 @@ describe("rotation of an RGB lamp", () => {
         expect(RGB_LAMP_MAX_ROTATION_SPEED / 60).toBeLessThanOrEqual(2);
         expect(RGB_LAMP_MIN_ROTATION_SPEED).toBe(10);
         expect(RGB_LAMP_DEFAULT_ROTATION_SPEED).toBe(30);
+    });
+});
+
+describe("intensity of an RGB lamp", () => {
+    const base = { id: "rgb-1", type: "rgbLampPropertyData" as const };
+
+    it("goes from 10 % to 100 % of the light", () => {
+        expect([RGB_LAMP_MIN_INTENSITY, RGB_LAMP_MAX_INTENSITY]).toEqual([0.1, 1]);
+    });
+
+    it("fails open: a lamp saved without an intensity shines at full strength, as before", () => {
+        expect(RgbLampPropertyData.parse(base).intensity).toBeUndefined();
+    });
+
+    it("keeps the intensity that was set", () => {
+        for (const intensity of [0.1, 0.55, 1]) {
+            expect(RgbLampPropertyData.parse({ ...base, intensity }).intensity).toBe(intensity);
+        }
+    });
+
+    it("drops an intensity that is not valid instead of refusing the whole map", () => {
+        for (const intensity of [0, 0.05, 1.5, -1, "half", null]) {
+            const parsed = RgbLampPropertyData.safeParse({ ...base, radius: 10, intensity });
+            expect(parsed.success).toBe(true);
+            expect(parsed.data?.intensity).toBeUndefined();
+            expect(parsed.data?.radius).toBe(10);
+        }
     });
 });
