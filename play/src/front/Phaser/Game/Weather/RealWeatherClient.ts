@@ -12,7 +12,7 @@ import { realWeatherStateAt, withRealWeather, withWeatherPreview } from "./RealW
 import type { RealForecastState, RealWeatherState, WeatherPreview } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 import { weatherForecast } from "./WeatherForecast";
-import { AUTO_CLOUDINESS, cloudinessAt, fadedCloudiness } from "./WeatherSchedule";
+import { AUTO_CLOUDINESS, cloudinessAt } from "./WeatherSchedule";
 import type { ForecastCell } from "./WeatherForecast";
 
 const debug = Debug("front:real-weather");
@@ -136,10 +136,8 @@ export function shownWeatherSettings(
 ): MapSnowSettings | undefined {
     const tried = withWeatherPreview(settings, preview);
     if (tried?.weather === WeatherType.Cloudy) {
-        // The Cloudy tile is a clear sky with clouds, faded in from the start of its episode (at once when tried).
-        const elapsed =
-            date && tried.weatherStartedAt !== undefined ? date.getTime() - tried.weatherStartedAt : Infinity;
-        return { ...tried, weather: WeatherType.Clear, cloudiness: fadedCloudiness(0, AUTO_CLOUDINESS, elapsed) };
+        // The Cloudy tile is a clear sky with clouds, at once like the other fixed tiles.
+        return { ...tried, weather: WeatherType.Clear, cloudiness: AUTO_CLOUDINESS };
     }
     if (tried?.weather === WeatherType.Automatic) {
         return date ? { ...tried, cloudiness: cloudinessAt(date, tried.weatherAuto) } : tried;

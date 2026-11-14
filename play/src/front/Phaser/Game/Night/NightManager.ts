@@ -8,16 +8,16 @@ import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampSt
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
-import type { SunPosition } from "../Weather/Clouds";
 import {
     nightOpacityAt,
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
+    sunForClouds,
     sunPlaceOf,
     sunPositionAt,
 } from "./NightClock";
+import type { SunPosition } from "./NightClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -108,10 +108,7 @@ export class NightManager {
             );
             this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
-            this.sun =
-                sunAt === undefined
-                    ? undefined
-                    : sunPositionAt(sunAt, place ?? { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE });
+            this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -171,7 +168,7 @@ export class NightManager {
 
     /** Where the sun of the map is, at the instant and place of the night (updated once a second). */
     public sunPosition(): SunPosition | undefined {
-        return this.sun;
+        return sunForClouds(this.sun, this.disabled);
     }
 
     public serverDate(): Date | undefined {

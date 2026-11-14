@@ -80,11 +80,25 @@ export function sunElevationAt(date: Date, place: MapPlace): number {
     return sunPositionAt(date, place).elevation;
 }
 
+/** Where the sun is, in degrees: elevation above the horizon, azimuth from the north, clockwise. */
+export interface SunPosition {
+    elevation: number;
+    azimuth: number;
+}
+
+/**
+ * The sun the clouds are drawn with: as it is while the night is drawn; with the night turned off the map stays in
+ * daylight, so below 2° the clouds keep showing, without shadows (no sun).
+ */
+export function sunForClouds(sun: SunPosition | undefined, nightDisabled: boolean): SunPosition | undefined {
+    return nightDisabled && sun && sun.elevation < 2 ? undefined : sun;
+}
+
 /**
  * Where the sun is seen from a place: geometric elevation above the horizon and azimuth, both in degrees, the azimuth
  * from the north, clockwise (90 = east). Azimuth by Meeus 13.5, valid at any longitude and latitude.
  */
-export function sunPositionAt(date: Date, place: MapPlace): { elevation: number; azimuth: number } {
+export function sunPositionAt(date: Date, place: MapPlace = PARIS): SunPosition {
     const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
     const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
 

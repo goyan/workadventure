@@ -18,7 +18,7 @@
     shape-rendering="crispEdges"
     aria-hidden="true"
     class="shrink-0"
-    data-icon={icon}
+    data-testid={`weather-icon-${icon}`}
 >
     {#if icon === WeatherType.Automatic}
         <!-- sun peeking behind a cloud -->

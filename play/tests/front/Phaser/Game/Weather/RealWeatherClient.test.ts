@@ -133,11 +133,10 @@ describe("RealWeatherClient", () => {
         expect(fetchMock).not.toHaveBeenCalled();
     });
 
-    it("draws the Cloudy tile as a clear sky with clouds, faded in from the start of its episode", () => {
-        const startedAt = START;
+    it("draws the Cloudy tile as a clear sky with clouds, at once like the other fixed tiles", () => {
         expect(
-            client.shownWeatherSettings({ weather: WeatherType.Cloudy, weatherStartedAt: startedAt }, at(90_000)),
-        ).toMatchObject({ weather: WeatherType.Clear, cloudiness: 0.25 });
+            client.shownWeatherSettings({ weather: WeatherType.Cloudy, weatherStartedAt: START }, at(90_000)),
+        ).toMatchObject({ weather: WeatherType.Clear, cloudiness: 0.5 });
         expect(client.shownWeatherSettings({ weather: WeatherType.Cloudy }, at())).toMatchObject({
             weather: WeatherType.Clear,
             cloudiness: 0.5,

@@ -8,6 +8,7 @@ import {
     shadowPatches,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
 import { fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const TILE = 32;
 const view = { x: 0, y: 0, width: 800, height: 600 };
@@ -49,7 +50,7 @@ describe("cloudPatches", () => {
     it("shows more clouds for a cloudier sky, one after the other", () => {
         const weight = (cloudiness: number) =>
             // Over a view bigger than the repeated square of the sky, every cloud is there.
-            cloudPatches(0, { x: 0, y: 0, width: 2400, height: 2400 }, cloudiness, false).reduce(
+            cloudPatches(0, { x: 0, y: 0, width: 1400, height: 1400 }, cloudiness, false).reduce(
                 (sum, patch) => sum + (patch.weight ?? 1),
                 0,
             );
@@ -111,5 +112,22 @@ describe("overcastVeil", () => {
         expect(overcastVeil(0.75)).toBeCloseTo(0.04, 6);
         expect(overcastVeil(0.9)).toBeCloseTo(0.08, 6);
         expect(overcastVeil(1)).toBeCloseTo(0.08, 6);
+    });
+
+    it("fades out at dusk with the clouds: no grey veil over the night", () => {
+        expect(overcastVeil(0.9, 0)).toBe(0);
+        expect(overcastVeil(0.9, 0.5)).toBeCloseTo(0.04, 6);
+    });
+});
+
+describe("sunForClouds", () => {
+    it("gives the sun as it is while the night is drawn", () => {
+        expect(sunForClouds({ elevation: -10, azimuth: 270 }, false)).toEqual({ elevation: -10, azimuth: 270 });
+    });
+
+    it("keeps the clouds, without shadows, through a night that is turned off (the map stays in daylight)", () => {
+        expect(sunForClouds({ elevation: -10, azimuth: 270 }, true)).toBeUndefined();
+        expect(sunForClouds({ elevation: 1, azimuth: 250 }, true)).toBeUndefined();
+        expect(sunForClouds({ elevation: 30, azimuth: 180 }, true)).toEqual({ elevation: 30, azimuth: 180 });
     });
 });

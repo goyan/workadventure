@@ -6,6 +6,7 @@ import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
+import type { SunPosition } from "../Night/NightClock";
 import {
     effectiveWeather,
     FOG_LEVELS,
@@ -23,7 +24,6 @@ import {
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
 import { cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
-import type { SunPosition } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -114,11 +114,12 @@ export class WeatherManager {
         const showWeather = enabled && weather !== WeatherType.Clear;
         // Autumn leaves fall on top of the map weather, even on a clear day, but not while it snows.
         const showLeaves = enabled && theme === SeasonalTheme.Autumn && weather !== WeatherType.Snow;
-        // Clouds of a clear sky, faded out at dusk: none at night.
-        const cloudiness = weather === WeatherType.Clear ? (settings?.cloudiness ?? 0) : 0;
+        // Clouds of a clear sky, still fading out over the first minutes of a bad weather; none at night, nor in the
+        // Christmas snow.
+        const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);
         const sunlight = cloudSunlight(sun?.elevation);
-        const veilAlpha = overcastVeil(cloudiness);
-        const showClouds = enabled && this.cloudsShown && cloudiness > 0 && (sunlight.clouds > 0 || veilAlpha > 0);
+        const veilAlpha = overcastVeil(cloudiness, sunlight.clouds);
+        const showClouds = enabled && this.cloudsShown && cloudiness > 0 && sunlight.clouds > 0;
         if (!showWeather && !showLeaves && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);

@@ -173,10 +173,10 @@ describe("WeatherForecastBanner", () => {
             "+1 h: Cloudy",
             "+4 h: Clear",
         ]);
-        expect(shown.map((cell) => cell.querySelector("svg")?.getAttribute("data-icon"))).toEqual([
-            "automatic",
-            "cloudy",
-            "clear",
+        expect(shown.map((cell) => cell.querySelector("svg")?.getAttribute("data-testid"))).toEqual([
+            "weather-icon-automatic",
+            "weather-icon-cloudy",
+            "weather-icon-clear",
         ]);
     });
 });

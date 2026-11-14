@@ -147,10 +147,23 @@ export function cloudinessAt(date: Date, auto: AutoWeatherSettings = DEFAULT_AUT
     return fadedCloudiness(slotCloudiness(new Date(start - 1), auto), slotCloudiness(date, auto), time - start);
 }
 
+// Asked several times per image: the clouds are constant within a slot, so skip the Paris-time formatting.
+const cloudSlotMemo = new Map<string, number>();
+
 function slotCloudiness(date: Date, auto: AutoWeatherSettings): number {
     if (autoWeatherAt(date, auto) !== WeatherType.Clear) return 0;
+    const key = `${Math.floor(date.getTime() / SLOT_MS)}|${auto.frequency}`;
+    const known = cloudSlotMemo.get(key);
+    if (known !== undefined) return known;
     const { day, slot } = parisSlot(date);
-    return cloudDay(day, auto.frequency)[slot] ? AUTO_CLOUDINESS : 0;
+    const cloudiness = cloudDay(day, auto.frequency)[slot] ? AUTO_CLOUDINESS : 0;
+    cloudSlotMemo.set(key, cloudiness);
+    while (cloudSlotMemo.size > MEMO_SIZE) {
+        const oldest = cloudSlotMemo.keys().next().value;
+        if (oldest === undefined) break;
+        cloudSlotMemo.delete(oldest);
+    }
+    return cloudiness;
 }
 
 const cloudCache = new Map<string, boolean[]>();
@@ -159,7 +172,11 @@ const cloudCache = new Map<string, boolean[]>();
 function cloudDay(day: string, frequency: AutoWeatherFrequency): boolean[] {
     const key = `${day}|${frequency}`;
     const cached = cloudCache.get(key);
-    if (cached) return cached;
+    if (cached) {
+        cloudCache.delete(key);
+        cloudCache.set(key, cached);
+        return cached;
+    }
     const eve = computeCloudDay(shiftDay(day, -1), frequency, false);
     const clouds = computeCloudDay(day, frequency, eve[SLOTS_PER_DAY - 1]);
     cloudCache.set(key, clouds);

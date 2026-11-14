@@ -22,7 +22,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
 const { cloudsShownStore, weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
-const { autoWeatherAt, slotStart } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
+const { autoWeatherAt, cloudinessAt, slotStart } =
+    await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
@@ -469,6 +470,32 @@ describe("weather rendering lifecycle", () => {
             expect(graphics.clear.mock.calls).toHaveLength(1);
             manager.update(70, new Date(at.getTime() + 70), false, sun);
             expect(graphics.clear.mock.calls).toHaveLength(2);
+        });
+
+        it("lets the clouds of a clear sky fade out over the first minutes of a rain", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Automatic };
+            // On the real schedule: a clouded clear slot followed by a rainy one.
+            const slot = 30 * 60 * 1000;
+            let rainStart: number | undefined;
+            for (let t = Date.parse("2026-01-05T00:00:00Z"); t < Date.parse("2026-03-01T00:00:00Z"); t += slot) {
+                if (
+                    autoWeatherAt(new Date(t)) === WeatherType.Rain &&
+                    autoWeatherAt(new Date(t - 1)) === WeatherType.Clear &&
+                    cloudinessAt(new Date(t - 1)) > 0
+                ) {
+                    rainStart = t;
+                    break;
+                }
+            }
+            if (rainStart === undefined) throw new Error("no clouded clear slot before a rain");
+            // A view as big as the repeated square of the sky: every cloud is in it.
+            scene.cameras.main.worldView.width = 1400;
+            scene.cameras.main.worldView.height = 1400;
+            manager = new WeatherManager(scene);
+            manager.update(0, new Date(rainStart + 60_000), false, sun);
+            expect(whites(graphics)).toBeGreaterThan(0);
+            expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
         });
 
         it("covers rain with grey clouds and a storm with dark ones, the rain falling under them, without shadows", () => {

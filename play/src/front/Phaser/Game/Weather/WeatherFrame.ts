@@ -232,29 +232,43 @@ const FOG_RADIUS = 340;
  */
 export function fogPatches(epoch: number, view: WeatherView, still: boolean): FogPatch[] {
     const time = still ? 0 : epoch / 1000;
-    const wrap = (value: number, period: number): number => ((value % period) + period) % period;
-    const margin = FOG_RADIUS;
+    const patches: FogPatch[] = [];
+    for (let index = 0; index < FOG_PATCHES; index++) {
+        const radius = Math.round(FOG_RADIUS * (0.8 + 0.2 * hash01(index, 21)));
+        const square = {
+            x: hash01(index, 7) * FOG_PERIOD + time * FOG_DRIFT.x,
+            y: hash01(index, 13) * FOG_PERIOD + time * FOG_DRIFT.y,
+        };
+        for (const centre of repeatedOverView(square, FOG_PERIOD, view, FOG_RADIUS)) {
+            patches.push({ ...centre, radius });
+        }
+    }
+    return patches;
+}
+
+/**
+ * Every copy, over the view and a margin around it, of a point of a square repeated over the whole map (period in map
+ * pixels): what the fog patches and the clouds are made of, so the camera and its zoom never move them.
+ */
+export function repeatedOverView(
+    point: { x: number; y: number },
+    period: number,
+    view: WeatherView,
+    margin: number,
+): { x: number; y: number }[] {
+    const wrap = (value: number): number => ((value % period) + period) % period;
     const left = view.x - margin;
     const top = view.y - margin;
     const right = view.x + view.width + margin;
     const bottom = view.y + view.height + margin;
-    const patches: FogPatch[] = [];
-    for (let index = 0; index < FOG_PATCHES; index++) {
-        const radius = Math.round(FOG_RADIUS * (0.8 + 0.2 * hash01(index, 21)));
-        const squareX = wrap(hash01(index, 7) * FOG_PERIOD + time * FOG_DRIFT.x, FOG_PERIOD);
-        const squareY = wrap(hash01(index, 13) * FOG_PERIOD + time * FOG_DRIFT.y, FOG_PERIOD);
-        for (let x = squareX + Math.floor((left - squareX) / FOG_PERIOD) * FOG_PERIOD; x <= right; x += FOG_PERIOD) {
-            if (x < left) continue;
-            for (
-                let y = squareY + Math.floor((top - squareY) / FOG_PERIOD) * FOG_PERIOD;
-                y <= bottom;
-                y += FOG_PERIOD
-            ) {
-                if (y >= top) patches.push({ x, y, radius });
-            }
+    const inSquare = { x: wrap(point.x), y: wrap(point.y) };
+    const copies: { x: number; y: number }[] = [];
+    for (let x = inSquare.x + Math.ceil((left - inSquare.x) / period) * period; x <= right; x += period) {
+        for (let y = inSquare.y + Math.ceil((top - inSquare.y) / period) * period; y <= bottom; y += period) {
+            copies.push({ x, y });
         }
     }
-    return patches;
+    return copies;
 }
 
 /** How many thicknesses a fog block can have, from 1 (thin) to this value (the centre of a patch). */
