@@ -59,9 +59,19 @@
 
 <div class="flex flex-col gap-2" data-testid="map-location">
     <span class="text-sm font-bold">{$LL.mapEditor.settings.weather.location.title()}</span>
-    <span class="text-sm text-white/80" data-testid="map-location-current">
-        {location?.name ?? $LL.mapEditor.settings.weather.location.default()}
-    </span>
+    <div class="flex items-center justify-between gap-2">
+        <span class="text-sm text-white/80" data-testid="map-location-current">
+            {location?.name ?? $LL.mapEditor.settings.weather.location.default()}
+        </span>
+        {#if location}
+            <button
+                type="button"
+                class="shrink-0 text-xs text-white/60 underline hover:text-white"
+                onclick={() => (location = undefined)}
+                data-testid="map-location-reset">{$LL.mapEditor.settings.weather.location.reset()}</button
+            >
+        {/if}
+    </div>
     <input
         type="search"
         class="rounded-lg border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40"

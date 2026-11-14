@@ -89,6 +89,22 @@ describe("WAM Setting", () => {
         expect(WamSchema.parse(wam).settings?.weatherLocation).toEqual(lyon);
     });
 
+    it("goes back to the default place when asked to, whatever place is sent with it", async () => {
+        const lyon = { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.74906, longitude: 4.84789 };
+        const wam: WAMFileFormat = {
+            ...defaultWamFile,
+            settings: { weather: WeatherType.Real, weatherLocation: lyon },
+        };
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateWeatherSettingMessage",
+                updateWeatherSettingMessage: { weather: "real", autoInclude: [], clearLocation: true, location: lyon },
+            },
+        }).execute();
+        expect(wam.settings?.weatherLocation).toBeUndefined();
+        expect(wam.settings?.weather).toBe(WeatherType.Real);
+    });
+
     it("drops a broken place of the map when reading it", () => {
         expect(
             WamSchema.parse({

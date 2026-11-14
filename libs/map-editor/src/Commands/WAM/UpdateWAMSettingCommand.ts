@@ -72,9 +72,12 @@ export class UpdateWAMSettingCommand extends Command {
             case "updateWeatherSettingMessage": {
                 this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
                 this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt;
-                // Older clients send no place: keep the existing one. A broken place is ignored.
+                // Back to the default place on request. Otherwise older clients send no place: keep the existing one.
+                // A broken place is ignored.
                 const location = WeatherLocation.safeParse(message.updateWeatherSettingMessage.location);
-                if (location.success) {
+                if (message.updateWeatherSettingMessage.clearLocation) {
+                    delete this.wam.settings.weatherLocation;
+                } else if (location.success) {
                     this.wam.settings.weatherLocation = location.data;
                 }
                 const { autoFrequency, autoInclude } = message.updateWeatherSettingMessage;

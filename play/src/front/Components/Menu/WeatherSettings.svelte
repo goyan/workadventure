@@ -34,7 +34,11 @@
         [WeatherType.Fog]: initialAuto.include.includes(WeatherType.Fog),
     });
 
-    // Raw: the chosen place is replaced, never edited, and is compared with the saved one.
+    // Raw: the chosen place is replaced, never edited. Compared with the saved one by value: the same town found again is
+    // a new object.
+    function samePlace(a: WeatherLocation | undefined, b: WeatherLocation | undefined): boolean {
+        return a?.name === b?.name && a?.latitude === b?.latitude && a?.longitude === b?.longitude;
+    }
     let location = $state.raw<WeatherLocation | undefined>(settings?.weatherLocation);
 
     const autoInclude = $derived(BAD_WEATHERS.filter((w) => included[w]));
@@ -50,8 +54,9 @@
         weather !== saved.weather ||
             frequency !== saved.frequency ||
             autoInclude.join() !== saved.include ||
-            location !== saved.location,
+            !samePlace(location, saved.location),
     );
+    const placeRemoved = $derived(location === undefined && saved.location !== undefined);
     $effect(() => {
         weatherPreviewStore.set(
             changed
@@ -151,7 +156,8 @@
                     weather: Weather.parse(weather),
                     autoFrequency: frequency,
                     autoInclude,
-                    location,
+                    // Place removed: back to the default one (Paris), which an absent place alone would not do.
+                    ...(location ? { location } : placeRemoved ? { clearLocation: true } : {}),
                 },
             });
             saved = { weather, frequency, include: autoInclude.join(), location };
@@ -223,7 +229,7 @@
                 {$LL.mapEditor.settings.weather.realMode.pending()}
             {/if}
         </div>
-        <!-- CC BY 4.0: the data source is credited wherever the weather in Paris is shown. -->
+        <!-- CC BY 4.0: the data source is credited wherever the real weather is shown. -->
         <a
             class="text-xs text-white/50 underline"
             href="https://open-meteo.com/"

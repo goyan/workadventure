@@ -687,7 +687,7 @@ export enum WeatherType {
     Automatic = "automatic",
     Clear = "clear",
     Fog = "fog",
-    /** The weather observed in Paris right now, from Open-Meteo through the pusher (falls back to Automatic). */
+    /** The weather at the place of the map (Paris by default), from Open-Meteo through the pusher (else Automatic). */
     Real = "real",
     Rain = "rain",
     Snow = "snow",

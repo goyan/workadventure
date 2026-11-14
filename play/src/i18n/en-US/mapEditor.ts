@@ -772,9 +772,10 @@ const mapEditor: BaseTranslation = {
                 noResult: "No town found",
                 error: "Search unavailable",
                 hint: "The real weather and the day/night follow this place.",
+                reset: "Back to Paris (default)",
             },
             realMode: {
-                hint: "The weather at the place of the map right now, checked every 10 minutes. If the service does not answer, the Auto weather takes over.",
+                hint: "The weather forecast at the place of the map, quarter hour by quarter hour: it changes at the same time for everyone. If the service does not answer, the Auto weather takes over.",
                 now: "Now there: {weather}",
                 pending: "Checking the weather…",
                 unavailable: "Weather service unavailable: Auto weather in the meantime.",

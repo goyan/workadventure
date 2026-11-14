@@ -120,6 +120,15 @@ describe("withWeatherPreview", () => {
         ).toEqual({ weather: WeatherType.Storm, weatherAuto: auto, weatherLocation: lyon });
     });
 
+    it("tries going back to the default place, unlike a preview that says nothing of the place", () => {
+        expect(
+            withWeatherPreview(
+                { weather: WeatherType.Real, weatherLocation: lyon },
+                { weather: WeatherType.Real, weatherLocation: undefined },
+            ),
+        ).toEqual({ weather: WeatherType.Real });
+    });
+
     it("tries a place before it is saved", () => {
         expect(
             withWeatherPreview({ weather: WeatherType.Clear }, { weather: WeatherType.Real, weatherLocation: lyon }),

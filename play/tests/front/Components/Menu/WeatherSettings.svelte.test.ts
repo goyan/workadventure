@@ -55,6 +55,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         noResult: label("No town"),
                         error: label("Search error"),
                         hint: label("place hint"),
+                        reset: label("Back to Paris"),
                     },
                     realMode: {
                         hint: label("real hint"),
@@ -299,5 +300,45 @@ describe("WeatherSettings, live preview and place", () => {
         expect(executeUpdateWAMSettings.mock.calls[0][0]).toMatchObject({
             updateWeatherSettingMessage: { weather: "real", location: lyon },
         });
+    });
+
+    it("goes back to Paris, tried at once and saved as no place", async () => {
+        vi.useRealTimers();
+        wamSettings.value = { weather: "real", weatherLocation: lyon };
+        render();
+        const reset = target.querySelector<HTMLButtonElement>('[data-testid="map-location-reset"]');
+        if (!reset) throw new Error("no reset button");
+        click(reset);
+        expect(target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim()).toBe(
+            "Paris (default)",
+        );
+        expect(target.querySelector('[data-testid="map-location-reset"]')).toBeNull();
+        expect(tried.value).toHaveProperty("weatherLocation", undefined);
+        click(saveButton());
+        await vi.waitFor(() => expect(executeUpdateWAMSettings).toHaveBeenCalledTimes(1));
+        const sent = executeUpdateWAMSettings.mock.calls[0][0] as {
+            updateWeatherSettingMessage: { clearLocation?: boolean; location?: unknown };
+        };
+        expect(sent.updateWeatherSettingMessage.clearLocation).toBe(true);
+        expect(sent.updateWeatherSettingMessage.location).toBeUndefined();
+    });
+
+    it("tries nothing when the saved town is chosen again", async () => {
+        vi.useRealTimers();
+        searchPlaces.mockResolvedValue([{ ...lyon }]);
+        wamSettings.value = { weather: "real", weatherLocation: lyon };
+        render();
+        const input = target.querySelector<HTMLInputElement>('[data-testid="map-location-search"]');
+        if (!input) throw new Error("no search field");
+        input.value = "Lyon";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await vi.waitFor(() =>
+            expect(target.querySelector('[data-testid="map-location-results"] button')).not.toBeNull(),
+        );
+        click(
+            target.querySelector<HTMLButtonElement>('[data-testid="map-location-results"] button') as HTMLButtonElement,
+        );
+        expect(tried.value).toBeUndefined();
+        expect(target.querySelector('[data-testid="map-weather-preview-hint"]')).toBeNull();
     });
 });

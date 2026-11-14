@@ -64,7 +64,10 @@ export function withRealWeather(
     }
 }
 
-/** What the map settings panel shows to the person trying a weather, before it is saved. */
+/**
+ * What the map settings panel shows to the person trying a weather, before it is saved. Without `weatherLocation`, the
+ * saved place stays; with it undefined, the default place (Paris) is tried.
+ */
 export interface WeatherPreview {
     weather: WeatherType;
     weatherAuto?: MapSnowSettings["weatherAuto"];
@@ -83,6 +86,7 @@ export function withWeatherPreview(
     return {
         weather: preview.weather,
         weatherAuto: preview.weatherAuto ?? settings?.weatherAuto,
-        weatherLocation: preview.weatherLocation ?? settings?.weatherLocation,
+        // A preview may try going back to the default place (weatherLocation present but undefined).
+        weatherLocation: "weatherLocation" in preview ? preview.weatherLocation : settings?.weatherLocation,
     };
 }

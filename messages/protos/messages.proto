@@ -387,6 +387,8 @@ message UpdateWeatherSettingMessage {
   // Place of the map (WeatherLocation in libs/map-editor), for its real weather and its day/night. Absent from older
   // clients: the existing place is kept.
   optional MapLocationMessage location = 5;
+  // Back to the default place (Paris): the place of the map is removed. Sent without `location`.
+  optional bool clearLocation = 6;
 }
 
 message MapLocationMessage {
