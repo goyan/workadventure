@@ -52,7 +52,10 @@
                     <span class="w-4 text-center text-white/60">?</span>
                 {/if}
                 {#if cell.temperature !== undefined}
-                    <span class="tabular-nums">{Math.round(cell.temperature)}°</span>
+                    <!-- In the pixel font, a 5 reads as an S and a 7 as a 1: the temperature uses the system font. -->
+                    <span class="tabular-nums" style:font-family="var(--ui-font-system)"
+                        >{Math.round(cell.temperature)}°</span
+                    >
                 {/if}
             </div>
         {/each}
