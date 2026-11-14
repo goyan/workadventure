@@ -31,12 +31,18 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
     return "never";
 }
 
+function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
+    if (weather === WeatherType.Real) return WeatherType.Automatic;
+    return weather ?? WeatherType.Clear;
+}
+
 /** The same settings and editing rights as the web controls, read without opening their panels. */
 export function readDesktopEnvironment(busy = false, error = ""): DesktopEnvironmentState | null {
     const scene = get(gameSceneStore);
     if (!scene) return null;
     return {
-        weather: scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
+        // The desktop app knows no "real" mode (and is not changed): it sees the closest one, the automatic weather.
+        weather: desktopWeatherMode(scene.getGameMap().getWamFile()?.getWam().settings?.weather),
         displayWeather: scene.getDesktopWeather(),
         night: get(nightModeStore),
         isNight: scene.getNightActive(),

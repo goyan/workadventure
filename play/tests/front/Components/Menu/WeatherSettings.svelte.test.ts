@@ -4,6 +4,9 @@ import { readable } from "svelte/store";
 
 const executeUpdateWAMSettings = vi.hoisted(() => vi.fn());
 const wamSettings = vi.hoisted(() => ({ value: {} }));
+const realWeather = vi.hoisted((): { value: { status: string; weather?: string } } => ({
+    value: { status: "pending" },
+}));
 
 vi.mock("../../../../src/i18n/i18n-svelte", () => {
     const label = (text: string) => () => text;
@@ -19,6 +22,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     snow: label("Snow"),
                     storm: label("Storm"),
                     fog: label("Fog"),
+                    real: label("Real"),
                     saving: label("Saving"),
                     success: label("Saved"),
                     error: label("Error"),
@@ -42,6 +46,13 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         autumn: label("Autumn"),
                     },
                     fixed: { snowHint: label("fixed snow hint"), fogHint: label("fixed fog hint") },
+                    realMode: {
+                        hint: label("real hint"),
+                        now: ({ weather }: { weather: string }) => `Paris now: ${weather}`,
+                        pending: label("real pending"),
+                        unavailable: label("real unavailable"),
+                        attribution: label("Open-Meteo"),
+                    },
                 },
             },
         },
@@ -57,6 +68,9 @@ vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
             getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings: wamSettings.value }) }) }),
         }),
     },
+}));
+vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({
+    realWeatherStore: readable(undefined, (set) => set(realWeather.value)),
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings }));
 vi.mock("../../../../src/front/Stores/MenuStore", async () => {
@@ -119,6 +133,7 @@ beforeEach(() => {
     executeUpdateWAMSettings.mockReset();
     executeUpdateWAMSettings.mockResolvedValue(undefined);
     wamSettings.value = {};
+    realWeather.value = { status: "pending" };
 });
 
 afterEach(async () => {
@@ -130,11 +145,11 @@ afterEach(async () => {
 });
 
 describe("WeatherSettings", () => {
-    it("shows six weather tiles and selects the map weather", () => {
+    it("shows seven weather tiles and selects the map weather", () => {
         wamSettings.value = { weather: "rain" };
         render();
         const tiles = target.querySelectorAll('[data-testid="map-weather-type"] [role="radio"]');
-        expect(tiles).toHaveLength(6);
+        expect(tiles).toHaveLength(7);
         expect(tile("Rain").getAttribute("aria-checked")).toBe("true");
         expect(tile("Clear").getAttribute("aria-checked")).toBe("false");
         click(tile("Snow"));
@@ -182,5 +197,41 @@ describe("WeatherSettings", () => {
                 autoInclude: ["rain", "snow", "fog"],
             },
         });
+    });
+});
+
+describe("WeatherSettings, real weather", () => {
+    function realPanel(): string {
+        return target.querySelector('[data-testid="map-weather-real"]')?.textContent?.trim() ?? "";
+    }
+
+    it("shows the weather now in Paris, credits its source and saves the real mode", async () => {
+        realWeather.value = { status: "known", weather: "fog" };
+        wamSettings.value = { weather: "clear" };
+        render();
+        expect(realPanel()).toBe("");
+        click(tile("Real"));
+        expect(realPanel()).toBe("Paris now: Fog");
+        expect(target.querySelector('a[href="https://open-meteo.com/"]')?.textContent?.trim()).toBe("Open-Meteo");
+        expect(target.querySelector('[data-testid="map-weather-frequency"]')).toBeNull();
+        click(saveButton());
+        await vi.waitFor(() => expect(executeUpdateWAMSettings).toHaveBeenCalledTimes(1));
+        expect(executeUpdateWAMSettings.mock.calls[0][0]).toMatchObject({
+            updateWeatherSettingMessage: { weather: "real" },
+        });
+    });
+
+    it("says when the weather is still being checked or the service is down", () => {
+        wamSettings.value = { weather: "real" };
+        render();
+        expect(tile("Real").getAttribute("aria-checked")).toBe("true");
+        expect(realPanel()).toBe("real pending");
+    });
+
+    it("says the Auto weather takes over while the service is down", () => {
+        realWeather.value = { status: "unavailable" };
+        wamSettings.value = { weather: "real" };
+        render();
+        expect(realPanel()).toBe("real unavailable");
     });
 });

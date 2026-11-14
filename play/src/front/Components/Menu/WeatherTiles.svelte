@@ -104,6 +104,21 @@
                         <rect x="5" y="10" width="1" height="1" />
                         <rect x="10" y="10" width="1" height="1" />
                     </g>
+                {:else if option.icon === WeatherType.Real}
+                    <!-- small sun and a map pin: the weather of a real place -->
+                    <g fill="#ffd54a">
+                        <rect x="10" y="1" width="4" height="4" />
+                        <rect x="9" y="2" width="6" height="2" />
+                        <rect x="11" y="0" width="2" height="6" />
+                    </g>
+                    <g fill="#ff6b6b">
+                        <rect x="3" y="4" width="6" height="6" />
+                        <rect x="2" y="5" width="8" height="4" />
+                        <rect x="4" y="10" width="4" height="2" />
+                        <rect x="5" y="12" width="2" height="2" />
+                    </g>
+                    <rect x="5" y="6" width="2" height="2" fill="#ffffff" />
+                    <rect x="2" y="15" width="8" height="1" fill="#aab6c4" />
                 {:else if option.icon === WeatherType.Fog}
                     <g fill="#dfe6ee">
                         <rect x="2" y="3" width="10" height="2" />

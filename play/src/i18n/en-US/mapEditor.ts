@@ -732,6 +732,7 @@ const mapEditor: BaseTranslation = {
         weather: {
             automatic: "Auto",
             fog: "Fog",
+            real: "Real",
             title: "Weather",
             clear: "Clear sky",
             rain: "Rain",
@@ -761,6 +762,13 @@ const mapEditor: BaseTranslation = {
             fixed: {
                 snowHint: "Outside November–March, it falls as rain.",
                 fogHint: "All day long.",
+            },
+            realMode: {
+                hint: "The weather in Paris right now, checked every 10 minutes. If the service does not answer, the Auto weather takes over.",
+                now: "Now in Paris: {weather}",
+                pending: "Checking the weather in Paris…",
+                unavailable: "Weather service unavailable: Auto weather in the meantime.",
+                attribution: "Weather data by Open-Meteo.com",
             },
         },
 

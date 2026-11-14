@@ -1386,6 +1386,7 @@
                 "clear",
                 "fog",
                 "rain",
+                "real",
                 "snow",
                 "storm"
               ]

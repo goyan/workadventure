@@ -18,6 +18,7 @@ import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
 import { weatherAtTime } from "../Weather/WeatherFrame";
+import { shownWeatherSettings } from "../Weather/RealWeatherClient";
 import { snowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
@@ -243,7 +244,7 @@ export class EntitiesManager extends EventEmitter {
      */
     public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
-        const settings = this.scene.getGameMap().getWamFile()?.getWam().settings;
+        const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings);
         const configured = settings?.weather ?? WeatherType.Clear;
         if (
             time < this.nextSeasonCheck &&

@@ -10,6 +10,7 @@
     import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
     import ButtonState from "../Input/ButtonState.svelte";
     import InputCheckbox from "../Input/InputCheckbox.svelte";
+    import { realWeatherStore } from "../../Phaser/Game/Weather/RealWeatherClient";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
 
@@ -43,6 +44,7 @@
         { value: WeatherType.Storm, label: $LL.mapEditor.settings.weather.storm(), icon: WeatherType.Storm },
         { value: WeatherType.Snow, label: $LL.mapEditor.settings.weather.snow(), icon: WeatherType.Snow },
         { value: WeatherType.Fog, label: $LL.mapEditor.settings.weather.fog(), icon: WeatherType.Fog },
+        { value: WeatherType.Real, label: $LL.mapEditor.settings.weather.real(), icon: WeatherType.Real },
     ]);
     const frequencies = $derived([
         { value: "calm" as AutoWeatherFrequency, label: $LL.mapEditor.settings.weather.auto.calm() },
@@ -63,6 +65,8 @@
                 return labels.fog();
             case WeatherType.Automatic:
                 return labels.automatic();
+            case WeatherType.Real:
+                return labels.real();
             default:
                 return labels.clear();
         }
@@ -194,6 +198,24 @@
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.snowHint()}</p>
     {:else if weather === WeatherType.Fog}
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.fixed.fogHint()}</p>
+    {:else if weather === WeatherType.Real}
+        <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.realMode.hint()}</p>
+        <div class="rounded-lg bg-black/30 p-3 text-sm text-white/80" data-testid="map-weather-real">
+            {#if $realWeatherStore.status === "known"}
+                {$LL.mapEditor.settings.weather.realMode.now({ weather: weatherName($realWeatherStore.weather) })}
+            {:else if $realWeatherStore.status === "unavailable"}
+                {$LL.mapEditor.settings.weather.realMode.unavailable()}
+            {:else}
+                {$LL.mapEditor.settings.weather.realMode.pending()}
+            {/if}
+        </div>
+        <!-- CC BY 4.0: the data source is credited wherever the weather in Paris is shown. -->
+        <a
+            class="text-xs text-white/50 underline"
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noopener noreferrer">{$LL.mapEditor.settings.weather.realMode.attribution()}</a
+        >
     {/if}
 
     <ButtonState
