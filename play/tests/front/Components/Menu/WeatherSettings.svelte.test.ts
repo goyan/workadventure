@@ -46,6 +46,16 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         autumn: label("Autumn"),
                     },
                     fixed: { snowHint: label("fixed snow hint"), fogHint: label("fixed fog hint") },
+                    previewHint: label("preview hint"),
+                    location: {
+                        title: label("Place"),
+                        default: label("Paris (default)"),
+                        search: label("Search"),
+                        searching: label("Searching"),
+                        noResult: label("No town"),
+                        error: label("Search error"),
+                        hint: label("place hint"),
+                    },
                     realMode: {
                         hint: label("real hint"),
                         now: ({ weather }: { weather: string }) => `Paris now: ${weather}`,
@@ -69,8 +79,12 @@ vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
         }),
     },
 }));
+const tried = vi.hoisted((): { value: unknown } => ({ value: undefined }));
+const searchPlaces = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({
-    realWeatherStore: readable(undefined, (set) => set(realWeather.value)),
+    realWeatherStore: readable<unknown>(undefined, (set) => set(realWeather.value)),
+    weatherPreviewStore: { set: (value: unknown) => (tried.value = value) },
+    searchPlaces,
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings }));
 vi.mock("../../../../src/front/Stores/MenuStore", async () => {
@@ -134,6 +148,8 @@ beforeEach(() => {
     executeUpdateWAMSettings.mockResolvedValue(undefined);
     wamSettings.value = {};
     realWeather.value = { status: "pending" };
+    tried.value = undefined;
+    searchPlaces.mockReset();
 });
 
 afterEach(async () => {
@@ -233,5 +249,55 @@ describe("WeatherSettings, real weather", () => {
         wamSettings.value = { weather: "real" };
         render();
         expect(realPanel()).toBe("real unavailable");
+    });
+});
+
+describe("WeatherSettings, live preview and place", () => {
+    const lyon = { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.74906, longitude: 4.84789 };
+
+    it("shows the tile being tried at once, for this person only, and stops when the panel closes", async () => {
+        wamSettings.value = { weather: "clear" };
+        render();
+        expect(tried.value).toBeUndefined();
+        click(tile("Storm"));
+        expect(tried.value).toMatchObject({ weather: "storm" });
+        expect(target.querySelector('[data-testid="map-weather-preview-hint"]')?.textContent?.trim()).toBe(
+            "preview hint",
+        );
+        click(tile("Clear"));
+        expect(tried.value).toBeUndefined();
+        click(tile("Snow"));
+        const mounted = component;
+        component = undefined;
+        if (mounted) await unmount(mounted);
+        expect(tried.value).toBeUndefined();
+    });
+
+    it("finds a town, tries it and saves it as the place of the map", async () => {
+        vi.useRealTimers();
+        searchPlaces.mockResolvedValue([lyon]);
+        wamSettings.value = { weather: "real" };
+        render();
+        expect(target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim()).toBe(
+            "Paris (default)",
+        );
+        const input = target.querySelector<HTMLInputElement>('[data-testid="map-location-search"]');
+        if (!input) throw new Error("no search field");
+        input.value = "Lyon";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        await vi.waitFor(() =>
+            expect(target.querySelector('[data-testid="map-location-results"] button')).not.toBeNull(),
+        );
+        expect(searchPlaces).toHaveBeenCalledWith("Lyon", expect.any(AbortSignal));
+        click(
+            target.querySelector<HTMLButtonElement>('[data-testid="map-location-results"] button') as HTMLButtonElement,
+        );
+        expect(target.querySelector('[data-testid="map-location-current"]')?.textContent?.trim()).toBe(lyon.name);
+        expect(tried.value).toMatchObject({ weather: "real", weatherLocation: lyon });
+        click(saveButton());
+        await vi.waitFor(() => expect(executeUpdateWAMSettings).toHaveBeenCalledTimes(1));
+        expect(executeUpdateWAMSettings.mock.calls[0][0]).toMatchObject({
+            updateWeatherSettingMessage: { weather: "real", location: lyon },
+        });
     });
 });

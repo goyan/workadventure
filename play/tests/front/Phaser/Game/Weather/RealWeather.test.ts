@@ -1,6 +1,6 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { withRealWeather } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
+import { withRealWeather, withWeatherPreview } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { snowCoverage } from "../../../../../src/front/Phaser/Game/Weather/SnowCover";
 
@@ -49,5 +49,29 @@ describe("a real weather fades in from the moment it began", () => {
 
     it("builds up snow on the ground over ten minutes", () => {
         expect(snowCoverage(WeatherType.Snow, since + 5 * 60_000, since)).toBeCloseTo(0.5);
+    });
+});
+
+describe("withWeatherPreview", () => {
+    const lyon = { name: "Lyon, France", latitude: 45.74906, longitude: 4.84789 };
+
+    it("shows the map as saved without a preview", () => {
+        const settings = { weather: WeatherType.Rain, weatherStartedAt: 5 };
+        expect(withWeatherPreview(settings, undefined)).toBe(settings);
+    });
+
+    it("shows the tile being tried at once, without the start of the saved episode", () => {
+        expect(
+            withWeatherPreview(
+                { weather: WeatherType.Clear, weatherStartedAt: 5, weatherLocation: lyon },
+                { weather: WeatherType.Storm, weatherAuto: auto },
+            ),
+        ).toEqual({ weather: WeatherType.Storm, weatherAuto: auto, weatherLocation: lyon });
+    });
+
+    it("tries a place before it is saved", () => {
+        expect(
+            withWeatherPreview({ weather: WeatherType.Clear }, { weather: WeatherType.Real, weatherLocation: lyon }),
+        ).toEqual({ weather: WeatherType.Real, weatherLocation: lyon });
     });
 });

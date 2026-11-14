@@ -1,5 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
-import type { AutoWeatherSettings } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
 import { snowPossibleAt } from "../Nature/SeasonClock";
 import { autoWeatherAt, slotStart } from "./WeatherSchedule";
 
@@ -36,6 +36,8 @@ export interface MapSnowSettings {
     weather?: WeatherType;
     weatherStartedAt?: number;
     weatherAuto?: AutoWeatherSettings;
+    /** Place of the map, for its real weather. */
+    weatherLocation?: WeatherLocation;
 }
 
 /**

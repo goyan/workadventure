@@ -20,7 +20,6 @@ import {
     ASSETS_URL,
 } from "../enums/EnvironmentVariable";
 import { validateQuery } from "../services/QueryValidator";
-import { realWeatherService } from "../services/RealWeatherService";
 import type { FrontAssets } from "../services/FrontAssets";
 import { BaseHttpController } from "./BaseHttpController";
 
@@ -98,11 +97,6 @@ export class FrontController extends BaseHttpController {
     front(): void {
         this.app.get("/server-time", (_req: Request, res: Response) => {
             res.set("Cache-Control", "no-store").json({ now: Date.now() });
-        });
-
-        // The weather in Paris for maps set to "real": one Open-Meteo call every ten minutes, shared by everyone.
-        this.app.get("/real-weather", async (_req: Request, res: Response) => {
-            res.set("Cache-Control", "no-store").json(await realWeatherService.get());
         });
 
         this.app.get("/build-version", (_req: Request, res: Response) => {

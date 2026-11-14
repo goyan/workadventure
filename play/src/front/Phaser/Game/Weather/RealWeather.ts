@@ -18,13 +18,36 @@ export function withRealWeather(
     real: RealWeatherState,
 ): MapSnowSettings | undefined {
     if (settings?.weather !== WeatherType.Real) return settings;
-    const { weatherAuto } = settings;
+    const { weatherAuto, weatherLocation } = settings;
     switch (real.status) {
         case "known":
-            return { weather: real.weather, weatherStartedAt: real.since, weatherAuto };
+            return { weather: real.weather, weatherStartedAt: real.since, weatherAuto, weatherLocation };
         case "unavailable":
-            return { weather: WeatherType.Automatic, weatherAuto };
+            return { weather: WeatherType.Automatic, weatherAuto, weatherLocation };
         default:
-            return { weather: WeatherType.Clear, weatherAuto };
+            return { weather: WeatherType.Clear, weatherAuto, weatherLocation };
     }
+}
+
+/** What the map settings panel shows to the person trying a weather, before it is saved. */
+export interface WeatherPreview {
+    weather: WeatherType;
+    weatherAuto?: MapSnowSettings["weatherAuto"];
+    weatherLocation?: MapSnowSettings["weatherLocation"];
+}
+
+/**
+ * The map weather settings with the weather being tried in the settings panel, for this person only: shown at once,
+ * without the start of the saved episode (so it does not fade in), and with the place being tried if any.
+ */
+export function withWeatherPreview(
+    settings: MapSnowSettings | undefined,
+    preview: WeatherPreview | undefined,
+): MapSnowSettings | undefined {
+    if (!preview) return settings;
+    return {
+        weather: preview.weather,
+        weatherAuto: preview.weatherAuto ?? settings?.weatherAuto,
+        weatherLocation: preview.weatherLocation ?? settings?.weatherLocation,
+    };
 }

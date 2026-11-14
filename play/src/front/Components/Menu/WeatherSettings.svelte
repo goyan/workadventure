@@ -1,6 +1,7 @@
 <script lang="ts">
     import { DEFAULT_AUTO_WEATHER, Season, Weather, WeatherType } from "@workadventure/map-editor";
-    import type { AutoWeatherFrequency, AutoWeatherSettings } from "@workadventure/map-editor";
+    import type { AutoWeatherFrequency, AutoWeatherSettings, WeatherLocation } from "@workadventure/map-editor";
+    import { onDestroy } from "svelte";
     import { get } from "svelte/store";
     import { mapEditorActivated } from "../../Stores/MenuStore";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -10,7 +11,8 @@
     import { seasonAt } from "../../Phaser/Game/Nature/SeasonClock";
     import ButtonState from "../Input/ButtonState.svelte";
     import InputCheckbox from "../Input/InputCheckbox.svelte";
-    import { realWeatherStore } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import { realWeatherStore, weatherPreviewStore } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import MapLocationPicker from "./MapLocationPicker.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
 
@@ -31,7 +33,32 @@
         [WeatherType.Fog]: initialAuto.include.includes(WeatherType.Fog),
     });
 
+    // Raw: the chosen place is replaced, never edited, and is compared with the saved one.
+    let location = $state.raw<WeatherLocation | undefined>(settings?.weatherLocation);
+
     const autoInclude = $derived(BAD_WEATHERS.filter((w) => included[w]));
+
+    // What is being tried shows at once, for this person only, until the panel closes (weatherPreviewStore).
+    let saved = $state.raw({
+        weather: settings?.weather ?? WeatherType.Clear,
+        frequency: initialAuto.frequency,
+        include: BAD_WEATHERS.filter((w) => initialAuto.include.includes(w)).join(),
+        location: settings?.weatherLocation,
+    });
+    const changed = $derived(
+        weather !== saved.weather ||
+            frequency !== saved.frequency ||
+            autoInclude.join() !== saved.include ||
+            location !== saved.location,
+    );
+    $effect(() => {
+        weatherPreviewStore.set(
+            changed
+                ? { weather, weatherAuto: { frequency, include: autoInclude }, weatherLocation: location }
+                : undefined,
+        );
+    });
+    onDestroy(() => weatherPreviewStore.set(undefined));
 
     const tiles = $derived([
         {
@@ -139,8 +166,10 @@
                     weather: Weather.parse(weather),
                     autoFrequency: frequency,
                     autoInclude,
+                    location,
                 },
             });
+            saved = { weather, frequency, include: autoInclude.join(), location };
             return $LL.mapEditor.settings.weather.success();
         } catch (error) {
             throw new Error($LL.mapEditor.settings.weather.error(), { cause: error });
@@ -216,6 +245,14 @@
             target="_blank"
             rel="noopener noreferrer">{$LL.mapEditor.settings.weather.realMode.attribution()}</a
         >
+    {/if}
+
+    <MapLocationPicker bind:location />
+
+    {#if changed}
+        <p class="text-xs text-white/60" data-testid="map-weather-preview-hint">
+            {$LL.mapEditor.settings.weather.previewHint()}
+        </p>
     {/if}
 
     <ButtonState

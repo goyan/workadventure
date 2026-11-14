@@ -7,6 +7,7 @@ import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
+import { shownMapPlace } from "../Weather/RealWeatherClient";
 import { nightOpacityAt, parisCalendarDay, parisWallClockToInstant, parseNightAt } from "./NightClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
@@ -90,7 +91,9 @@ export class NightManager {
             const date = this.mode === NightMode.Computer ? new Date() : this.clock.now();
             nightDateStore.set(date);
             const sunAt = this.sunInstant(date);
-            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt);
+            // The sun of the place of the map (Paris when it has none), shared with its real weather.
+            const place = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
+            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.

@@ -1,9 +1,16 @@
+import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
+
 /** Darkness of the night veil once night has fully fallen. */
 export const NIGHT_MAX_OPACITY = 0.6;
 
-// The night follows the real sun of Paris, for everybody, as the clock does.
-const PARIS_LATITUDE = 48.8566;
-const PARIS_LONGITUDE = 2.3522;
+// The night follows the real sun of the place of the map (Paris by default), for everybody, as the clock does.
+const PARIS = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
+
+/** A point on Earth, in degrees (WeatherLocation of the map). */
+export interface SunPlace {
+    latitude: number;
+    longitude: number;
+}
 // Geometric elevations of the sun's centre. Sunrise and sunset: the upper limb on the horizon, with the standard
 // refraction (34′) and the sun's semi-diameter (16′) already counted. Civil twilight: 6° below the horizon.
 const SUNSET_ELEVATION = -0.833;
@@ -69,6 +76,11 @@ const DEG = Math.PI / 180;
  * and sunset: a few trigonometric functions, cheap enough to be called every second.
  */
 export function sunElevationInParis(date: Date): number {
+    return sunElevationAt(date, PARIS);
+}
+
+/** Same as sunElevationInParis, above the horizon of any place. */
+export function sunElevationAt(date: Date, place: SunPlace): number {
     const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
     const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
 
@@ -96,22 +108,23 @@ export function sunElevationInParis(date: Date): number {
             1.25 * eccentricity * eccentricity * Math.sin(2 * meanAnomaly * DEG));
 
     const utcMinutes = (((date.getTime() / 60_000) % 1440) + 1440) % 1440;
-    const trueSolarMinutes = utcMinutes + equationOfTime + 4 * PARIS_LONGITUDE;
+    const trueSolarMinutes = utcMinutes + equationOfTime + 4 * place.longitude;
     const hourAngle = (trueSolarMinutes / 4 - 180) * DEG;
 
-    const latitude = PARIS_LATITUDE * DEG;
+    const latitude = place.latitude * DEG;
     const cosZenith =
         Math.sin(latitude) * Math.sin(declination) + Math.cos(latitude) * Math.cos(declination) * Math.cos(hourAngle);
     return 90 - Math.acos(Math.min(1, Math.max(-1, cosZenith))) / DEG;
 }
 
 /**
- * Darkness of the night veil at this instant (0 = day, NIGHT_MAX_OPACITY = night), on the sun of Paris: none while
+ * Darkness of the night veil at this instant (0 = day, NIGHT_MAX_OPACITY = night), on the sun of the place (Paris by
+ * default): none while
  * the sun is up, darkening from sunset to the end of the civil dusk, full until the civil dawn, fading out until
  * sunrise. The ramp is linear in the sun's elevation, which is almost linear in time over those 30 to 40 minutes.
  */
-export function nightOpacityAt(date: Date): number {
-    const elevation = sunElevationInParis(date);
+export function nightOpacityAt(date: Date, place: SunPlace = PARIS): number {
+    const elevation = sunElevationAt(date, place);
     if (elevation >= SUNSET_ELEVATION) {
         return 0;
     }

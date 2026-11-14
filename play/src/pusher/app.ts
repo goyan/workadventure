@@ -40,6 +40,7 @@ import { LocalScriptController } from "./controllers/LocalScriptController";
 import { LivekitWebhookController } from "./controllers/LivekitWebhookController";
 import { analyticsEventsQueue } from "./services/AnalyticsEventsQueue";
 import { LyricsController } from "./controllers/LyricsController";
+import { RealWeatherController } from "./controllers/RealWeatherController";
 
 class App {
     private readonly app: Application;
@@ -113,6 +114,7 @@ class App {
         new NpcRegisterController(this.app);
         new SpotifyCallbackController(this.app);
         new LyricsController(this.app);
+        new RealWeatherController(this.app);
         new MatrixRoomAreaController(this.app);
 
         frontAssets.registerStaticRoutes(this.app);

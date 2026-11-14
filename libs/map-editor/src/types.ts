@@ -710,10 +710,19 @@ export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
     include: [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog],
 };
 
+/** Where the map is: its real weather and its day/night follow this place (Paris when absent). */
+export const WeatherLocation = z.object({
+    name: z.string().trim().min(1).max(200),
+    latitude: z.number().finite().min(-90).max(90),
+    longitude: z.number().finite().min(-180).max(180),
+});
+export type WeatherLocation = z.infer<typeof WeatherLocation>;
+
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
     weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
     weatherAuto: AutoWeather.optional().catch(undefined),
+    weatherLocation: WeatherLocation.optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),
     recording: RecordingSettings.optional(),
     /** Per prefab id. Fail open: a broken entry must not make the whole map unreadable. */

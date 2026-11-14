@@ -133,3 +133,23 @@ describe("parseNightAt", () => {
         expect(parseNightAt("", true)).toBeUndefined();
     });
 });
+
+/*
+ * Night at the place of the map. Sunsets on 2026-11-14, local time (CET), published by timeanddate.com
+ * (https://www.timeanddate.com/sun/france/{paris,brest}?month=11&year=2026), read on 2026-11-14:
+ * Paris 17:11, Brest 17:40.
+ */
+describe("night at the place of the map", () => {
+    const brest = { latitude: 48.3904, longitude: -4.4861 };
+
+    it("uses Paris when the map has no place", () => {
+        const date = paris("2026-11-14", "17:35");
+        expect(nightOpacityAt(date)).toBe(nightOpacityAt(date, undefined));
+    });
+
+    it("falls later in Brest, west of Paris", () => {
+        expect(nightOpacityAt(paris("2026-11-14", "17:35"))).toBeGreaterThan(0);
+        expect(nightOpacityAt(paris("2026-11-14", "17:35"), brest)).toBe(0);
+        expect(nightOpacityAt(paris("2026-11-14", "17:44"), brest)).toBeGreaterThan(0);
+    });
+});

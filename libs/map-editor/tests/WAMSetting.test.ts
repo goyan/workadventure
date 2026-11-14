@@ -69,6 +69,35 @@ describe("WAM Setting", () => {
         expect(wam.settings?.weatherAuto).toEqual({ frequency: "stormy", include: ["rain", "fog"] });
     });
 
+    it("stores the place of the map sent with the weather, and keeps it when none or a broken one is sent", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile };
+        const send = (location?: { name: string; latitude: number; longitude: number }): Promise<void> =>
+            new UpdateWAMSettingCommand(wam, {
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather: "real", autoInclude: [], location },
+                },
+            }).execute();
+        await send({ name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.74906, longitude: 4.84789 });
+        expect(wam.settings?.weather).toBe(WeatherType.Real);
+        const lyon = { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.74906, longitude: 4.84789 };
+        expect(wam.settings?.weatherLocation).toEqual(lyon);
+        await send();
+        expect(wam.settings?.weatherLocation).toEqual(lyon);
+        await send({ name: "Nowhere", latitude: 123, longitude: 4 });
+        expect(wam.settings?.weatherLocation).toEqual(lyon);
+        expect(WamSchema.parse(wam).settings?.weatherLocation).toEqual(lyon);
+    });
+
+    it("drops a broken place of the map when reading it", () => {
+        expect(
+            WamSchema.parse({
+                ...defaultWamFile,
+                settings: { weatherLocation: { name: "", latitude: 0, longitude: 500 } },
+            }).settings?.weatherLocation,
+        ).toBeUndefined();
+    });
+
     it("keeps the auto settings when an older client sends only the weather", async () => {
         const wam: WAMFileFormat = {
             ...defaultWamFile,
