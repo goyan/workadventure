@@ -6,6 +6,7 @@ import {
     parisWallClockToInstant,
     parseNightAt,
     sunElevationInParis,
+    sunPlaceOf,
 } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const MINUTE = 60_000;
@@ -151,5 +152,19 @@ describe("night at the place of the map", () => {
         expect(nightOpacityAt(paris("2026-11-14", "17:35"))).toBeGreaterThan(0);
         expect(nightOpacityAt(paris("2026-11-14", "17:35"), brest)).toBe(0);
         expect(nightOpacityAt(paris("2026-11-14", "17:44"), brest)).toBeGreaterThan(0);
+    });
+});
+
+describe("sunPlaceOf", () => {
+    const montreal = { latitude: 45.5, longitude: -73.57 };
+
+    it("lights the map with the sun of its place on the server clock", () => {
+        expect(sunPlaceOf(false, montreal)).toBe(montreal);
+        expect(sunPlaceOf(false, undefined)).toBeUndefined();
+    });
+
+    it("keeps the sun of Paris for a clock read as Paris time (computer clock, ?nightAt)", () => {
+        // 21:00 on a computer in Montréal is read as 21:00 in Paris: the sun of Montréal then would be 15:00's.
+        expect(sunPlaceOf(true, montreal)).toBeUndefined();
     });
 });

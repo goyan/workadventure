@@ -81,8 +81,10 @@ export class WeatherManager {
         const mapSettings = this.scene.getGameMap().getWamFile()?.getWam().settings;
         const settings = shownWeatherSettings(mapSettings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
-        // Only a real fog fades in from its start: a fixed fog keeps its full thickness, as before.
-        const realFogSince = mapSettings?.weather === WeatherType.Real ? settings?.weatherStartedAt : undefined;
+        // Only a real fog fades in and out with its run: a fixed fog keeps its full thickness, as before.
+        const real = mapSettings?.weather === WeatherType.Real;
+        const realFogSince = real ? settings?.weatherStartedAt : undefined;
+        const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
         const weather = effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), theme);
         this.sounds.update(weather, serverDate, this.editing, night);
@@ -118,7 +120,7 @@ export class WeatherManager {
         const fogStrengthNow =
             showWeather && weather === WeatherType.Fog
                 ? serverDate
-                    ? fogStrength(configured, serverDate, settings?.weatherAuto, realFogSince)
+                    ? fogStrength(configured, serverDate, settings?.weatherAuto, realFogSince, realFogUntil)
                     : 1
                 : 1;
         if (fogOnly && this.reducedMotion) {

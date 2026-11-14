@@ -2,6 +2,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import { realWeatherAt } from "../../../../common/RealWeather";
 import type { RealForecastState } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
+import { weatherAtTime } from "./WeatherFrame";
 import { autoWeatherAt } from "./WeatherSchedule";
 
 /** The hours ahead shown by the weather banner: now, in one hour, in four hours. */
@@ -19,7 +20,7 @@ export interface ForecastCell {
 /**
  * The weather the map will show at each of `hours` from `epoch`, as the game draws it: the real timeline (blank past
  * its end, nothing before the first answer), the seasonal schedule in Automatic or while the real weather is unavailable
- * (the same fallback as the sky), the fixed weather otherwise.
+ * (the same fallback as the sky), the fixed weather otherwise. A snow out of season is drawn as rain, as in the sky.
  */
 export function weatherForecast(
     settings: MapSnowSettings | undefined,
@@ -36,11 +37,15 @@ export function weatherForecast(
         }
         if (weather === WeatherType.Real && real.status === "known" && realNow) {
             const then = realWeatherAt(real.slots, at);
-            return { at, weather: then?.weather, temperature: then?.temperature ?? undefined };
+            return {
+                at,
+                weather: then ? weatherAtTime(then.weather, new Date(at)) : undefined,
+                temperature: then?.temperature ?? undefined,
+            };
         }
         if (weather === WeatherType.Real || weather === WeatherType.Automatic) {
             return { at, weather: autoWeatherAt(new Date(at), settings?.weatherAuto), temperature: undefined };
         }
-        return { at, weather, temperature: undefined };
+        return { at, weather: weatherAtTime(weather, new Date(at)), temperature: undefined };
     });
 }

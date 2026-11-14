@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlaceSearchService, RealWeatherService } from "../../src/pusher/services/RealWeatherService";
 import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "../common/OpenMeteoFixture";
 
@@ -23,6 +23,11 @@ const FIRST = OPEN_METEO_PARIS.minutely_15.time[0] * 1000;
 function urlOf(input: string | URL | Request): URL {
     return input instanceof Request ? new URL(input.url) : new URL(input);
 }
+
+beforeEach(() => {
+    // Failures of Open-Meteo are logged: kept out of the test output.
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+});
 
 afterEach(() => {
     vi.restoreAllMocks();
@@ -60,15 +65,40 @@ describe("RealWeatherService", () => {
         expect(fetchFn).toHaveBeenCalledTimes(2);
     });
 
-    it("never changes a quarter hour already begun: a new forecast only changes the ones to come", async () => {
+    it("tries again two minutes after a failure while it has no weather for now, half an hour once it has", async () => {
+        let now = NOW;
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockRejectedValueOnce(new Error("offline"))
+            .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+            .mockImplementation(() => Promise.resolve(openMeteo()));
+        const service = new RealWeatherService(fetchFn, () => now);
+        expect(await service.get()).toEqual({ slots: [] });
+        now = NOW + MINUTE;
+        await service.get();
+        expect(fetchFn).toHaveBeenCalledOnce();
+        now = NOW + 2 * MINUTE;
+        expect(await service.get()).toEqual({ slots: [] });
+        now = NOW + 4 * MINUTE;
+        expect((await service.get()).slots.length).toBeGreaterThan(0);
+        expect(fetchFn).toHaveBeenCalledTimes(3);
+        now = NOW + 30 * MINUTE;
+        await service.get();
+        expect(fetchFn).toHaveBeenCalledTimes(3);
+    });
+
+    it("never changes a quarter hour begun or starting within five minutes: a new forecast only changes later ones", async () => {
         let now = NOW;
         const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(openMeteo()).mockResolvedValueOnce(openMeteo(61));
         const service = new RealWeatherService(fetchFn, () => now);
         await service.get();
-        now = NOW + 30 * MINUTE;
+        // 11:57:12 UTC: the quarter hour of 12:00 starts in 2:48, before the next poll of every browser.
+        now = NOW + 35 * MINUTE;
         const { slots } = await service.get();
-        const begun = slots.filter((slot) => slot.at <= now);
-        const coming = slots.filter((slot) => slot.at > now);
+        expect(slots.find((slot) => slot.at === 1794657600000)?.weather).toBe("clear");
+        expect(slots.find((slot) => slot.at === 1794658500000)?.weather).toBe("rain");
+        const begun = slots.filter((slot) => slot.at <= now + 5 * MINUTE);
+        const coming = slots.filter((slot) => slot.at > now + 5 * MINUTE);
         expect(begun.length).toBeGreaterThan(0);
         expect(coming.length).toBeGreaterThan(0);
         expect(begun.every((slot) => slot.weather === "clear")).toBe(true);
@@ -90,11 +120,12 @@ describe("RealWeatherService", () => {
         expect(afterFailure[afterFailure.length - 1].at).toBe(1794675600000);
         expect(afterFailure[0].at).toBeGreaterThanOrEqual(NOW - 105 * MINUTE);
         expect(afterFailure.some((slot) => slot.at === FIRST)).toBe(false);
+        expect(console.error).toHaveBeenCalledWith("Open-Meteo forecast failed", new Error("offline"));
         now = NOW + 60 * MINUTE;
         await service.get();
         now = NOW + 90 * MINUTE;
         await service.get();
-        // A failed attempt is not retried at once: one call per half hour at most.
+        // With a timeline covering now, a failed attempt is not retried before half an hour.
         await service.get();
         expect(fetchFn).toHaveBeenCalledTimes(4);
     });
@@ -121,6 +152,45 @@ describe("RealWeatherService, place of the map", () => {
         expect(fetchFn).toHaveBeenCalledTimes(2);
         const lyon = urlOf(fetchFn.mock.calls[0][0]);
         expect(lyon.searchParams.get("longitude")).toBe("4.85");
+    });
+});
+
+describe("RealWeatherService, protection of the free quota", () => {
+    it("asks for twenty new places a minute at most, whoever asks, and keeps serving the places it follows", async () => {
+        let now = NOW;
+        const fetchFn = vi.fn<typeof fetch>().mockImplementation(() => Promise.resolve(openMeteo()));
+        const service = new RealWeatherService(fetchFn, () => now);
+        for (let index = 0; index < 20; index++) {
+            // eslint-disable-next-line no-await-in-loop -- places and searches counted in order
+            expect((await service.get({ latitude: index, longitude: 0 })).slots.length).toBeGreaterThan(0);
+        }
+        expect(await service.get({ latitude: 30, longitude: 0 })).toEqual({ slots: [] });
+        expect((await service.get({ latitude: 0, longitude: 0 })).slots.length).toBeGreaterThan(0);
+        expect(fetchFn).toHaveBeenCalledTimes(20);
+        now = NOW + MINUTE;
+        expect((await service.get({ latitude: 30, longitude: 0 })).slots.length).toBeGreaterThan(0);
+        expect(fetchFn).toHaveBeenCalledTimes(21);
+    });
+
+    it("forgets the place asked least recently beyond fifty, not the first one", async () => {
+        let now = NOW;
+        const fetchFn = vi.fn<typeof fetch>().mockImplementation(() => Promise.resolve(openMeteo()));
+        const service = new RealWeatherService(fetchFn, () => now);
+        await service.get();
+        for (let index = 0; index < 49; index++) {
+            // Twenty new places a minute at most.
+            if (index % 20 === 0) now += MINUTE;
+            // eslint-disable-next-line no-await-in-loop -- places and searches counted in order
+            await service.get({ latitude: index, longitude: 1 });
+        }
+        // Paris, asked first, is asked again: the place 0 is now the one asked least recently.
+        await service.get();
+        await service.get({ latitude: 49, longitude: 1 });
+        const calls = fetchFn.mock.calls.length;
+        await service.get();
+        expect(fetchFn).toHaveBeenCalledTimes(calls);
+        await service.get({ latitude: 0, longitude: 1 });
+        expect(fetchFn).toHaveBeenCalledTimes(calls + 1);
     });
 });
 
@@ -159,15 +229,35 @@ describe("PlaceSearchService", () => {
         expect(fetchFn).toHaveBeenCalledOnce();
     });
 
-    it("finds nothing for a single letter, an unknown town or a failing service", async () => {
-        const fetchFn = vi
-            .fn<typeof fetch>()
-            .mockResolvedValueOnce(geocoding())
-            .mockRejectedValueOnce(new Error("offline"));
+    it("finds nothing for a single letter or an unknown town", async () => {
+        const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(geocoding());
         const service = new PlaceSearchService(fetchFn);
         expect(await service.search("L")).toEqual([]);
         expect(await service.search("zzqqxx")).toEqual([]);
-        expect(await service.search("Brest")).toEqual([]);
-        expect(fetchFn).toHaveBeenCalledTimes(2);
+        expect(fetchFn).toHaveBeenCalledOnce();
+    });
+
+    it("tells a failing service apart from an unknown town, and does not keep the failure", async () => {
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockRejectedValueOnce(new Error("offline"))
+            .mockResolvedValueOnce(new Response("busy", { status: 503 }))
+            .mockResolvedValueOnce(geocoding([{ name: "Brest", latitude: 48.39, longitude: -4.49 }]));
+        const service = new PlaceSearchService(fetchFn);
+        expect(await service.search("Brest")).toBeUndefined();
+        expect(await service.search("Brest")).toBeUndefined();
+        expect(await service.search("Brest")).toEqual([{ name: "Brest", latitude: 48.39, longitude: -4.49 }]);
+    });
+
+    it("asks the geocoding thirty times a minute at most, whoever asks", async () => {
+        const fetchFn = vi.fn<typeof fetch>().mockImplementation(() => Promise.resolve(geocoding()));
+        let now = 0;
+        const service = new PlaceSearchService(fetchFn, () => now);
+        // eslint-disable-next-line no-await-in-loop -- places and searches counted in order
+        for (let index = 0; index < 30; index++) expect(await service.search(`ville ${index}`)).toEqual([]);
+        expect(await service.search("ville 30")).toBeUndefined();
+        expect(fetchFn).toHaveBeenCalledTimes(30);
+        now = MINUTE;
+        expect(await service.search("ville 30")).toEqual([]);
     });
 });

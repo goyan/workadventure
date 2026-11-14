@@ -5,6 +5,7 @@ import {
     withRealWeather,
     withWeatherPreview,
 } from "../../../../../src/front/Phaser/Game/Weather/RealWeather";
+import type { RealWeatherSlot } from "../../../../../src/common/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { snowCoverage } from "../../../../../src/front/Phaser/Game/Weather/SnowCover";
 
@@ -57,6 +58,51 @@ describe("a real weather fades in from the moment it began", () => {
     });
 });
 
+describe("a real weather fades out when its run ends", () => {
+    const since = Date.UTC(2026, 10, 14, 9, 0);
+    const until = since + 4 * SLOT;
+
+    it("thins a fog over the last three minutes of its run", () => {
+        expect(fogStrength(WeatherType.Fog, new Date(until - 90_000), undefined, since, until)).toBeCloseTo(0.5);
+        expect(fogStrength(WeatherType.Fog, new Date(until - 10 * 60_000), undefined, since, until)).toBe(1);
+    });
+
+    it("melts the snow on the ground over ten minutes after it stopped", () => {
+        expect(snowCoverage(WeatherType.Clear, since + 5 * 60_000, undefined, undefined, since)).toBeCloseTo(0.5);
+        expect(snowCoverage(WeatherType.Rain, since + 10 * 60_000, undefined, undefined, since)).toBe(0);
+        expect(snowCoverage(WeatherType.Clear, since + 5 * 60_000)).toBe(0);
+    });
+
+    it("gives the end of the run and the end of a snow to the map settings", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: since - SLOT, weather: WeatherType.Snow, temperature: -1 },
+            { at: since, weather: WeatherType.Fog, temperature: 0 },
+            { at: since + SLOT, weather: WeatherType.Clear, temperature: 1 },
+        ];
+        const state = realWeatherStateAt({ status: "known", slots }, new Date(since + 1));
+        expect(state).toEqual({
+            status: "known",
+            weather: WeatherType.Fog,
+            since,
+            until: since + SLOT,
+            snowMeltFrom: since,
+        });
+        expect(withRealWeather({ weather: WeatherType.Real }, state)).toEqual({
+            weather: WeatherType.Fog,
+            weatherStartedAt: since,
+            weatherEndsAt: since + SLOT,
+            snowMeltFrom: since,
+        });
+        expect(realWeatherStateAt({ status: "known", slots }, new Date(since - 1))).toEqual({
+            status: "known",
+            weather: WeatherType.Snow,
+            since: since - SLOT,
+            until: since,
+            snowMeltFrom: undefined,
+        });
+    });
+});
+
 describe("withWeatherPreview", () => {
     const lyon = { name: "Lyon, France", latitude: 45.74906, longitude: 4.84789 };
 
@@ -94,6 +140,7 @@ describe("realWeatherStateAt", () => {
             status: "known",
             weather: WeatherType.Rain,
             since: 0,
+            until: 2 * SLOT,
         });
         expect(realWeatherStateAt(forecast, new Date(2 * SLOT))).toEqual({
             status: "known",

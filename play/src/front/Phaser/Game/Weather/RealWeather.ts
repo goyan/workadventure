@@ -12,7 +12,15 @@ export type RealForecastState =
 /** The real weather at one instant, as the map shows it. */
 export type RealWeatherState =
     | { status: "pending" }
-    | { status: "known"; weather: ObservedWeather; since: number }
+    | {
+          status: "known";
+          weather: ObservedWeather;
+          since: number;
+          /** End of the run when known, for a fog to fade out. */
+          until?: number;
+          /** When a snow just before this weather stopped, for the ground to melt. */
+          snowMeltFrom?: number;
+      }
     | { status: "unavailable" };
 
 /**
@@ -23,7 +31,9 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     if (forecast.status !== "known") return forecast;
     if (!date) return { status: "pending" };
     const now = realWeatherAt(forecast.slots, date.getTime());
-    return now ? { status: "known", weather: now.weather, since: now.since } : { status: "unavailable" };
+    if (!now) return { status: "unavailable" };
+    const snowMeltFrom = now.before === WeatherType.Snow && now.weather !== WeatherType.Snow ? now.since : undefined;
+    return { status: "known", weather: now.weather, since: now.since, until: now.until, snowMeltFrom };
 }
 
 /**
@@ -39,7 +49,14 @@ export function withRealWeather(
     const { weatherAuto, weatherLocation } = settings;
     switch (real.status) {
         case "known":
-            return { weather: real.weather, weatherStartedAt: real.since, weatherAuto, weatherLocation };
+            return {
+                weather: real.weather,
+                weatherStartedAt: real.since,
+                weatherEndsAt: real.until,
+                snowMeltFrom: real.snowMeltFrom,
+                weatherAuto,
+                weatherLocation,
+            };
         case "unavailable":
             return { weather: WeatherType.Automatic, weatherAuto, weatherLocation };
         default:

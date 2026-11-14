@@ -58,4 +58,23 @@ describe("weatherForecast", () => {
             WeatherType.Clear,
         ]);
     });
+
+    it("draws a snow as rain out of the snow season of Paris, as the sky does", () => {
+        const july = Date.UTC(2026, 6, 14, 12);
+        const snowing = {
+            status: "known" as const,
+            slots: Array.from({ length: 24 }, (_, index) => ({
+                at: july + (index - 1) * 15 * 60 * 1000,
+                weather: WeatherType.Snow as const,
+                temperature: 1,
+            })),
+        };
+        expect(weatherForecast({ weather: WeatherType.Snow }, july, paris)[0].weather).toBe(WeatherType.Rain);
+        expect(weatherForecast({ weather: WeatherType.Real }, july, snowing)[0]).toEqual({
+            at: july,
+            weather: WeatherType.Rain,
+            temperature: 1,
+        });
+        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris)[0].weather).toBe(WeatherType.Snow);
+    });
 });

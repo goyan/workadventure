@@ -1,4 +1,5 @@
 import { PARIS_LATITUDE, PARIS_LONGITUDE } from "../../../../common/RealWeather";
+import type { MapPlace } from "../../../../common/RealWeather";
 
 /** Darkness of the night veil once night has fully fallen. */
 export const NIGHT_MAX_OPACITY = 0.6;
@@ -6,11 +7,6 @@ export const NIGHT_MAX_OPACITY = 0.6;
 // The night follows the real sun of the place of the map (Paris by default), for everybody, as the clock does.
 const PARIS = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
 
-/** A point on Earth, in degrees (WeatherLocation of the map). */
-export interface SunPlace {
-    latitude: number;
-    longitude: number;
-}
 // Geometric elevations of the sun's centre. Sunrise and sunset: the upper limb on the horizon, with the standard
 // refraction (34′) and the sun's semi-diameter (16′) already counted. Civil twilight: 6° below the horizon.
 const SUNSET_ELEVATION = -0.833;
@@ -80,7 +76,7 @@ export function sunElevationInParis(date: Date): number {
 }
 
 /** Same as sunElevationInParis, above the horizon of any place. */
-export function sunElevationAt(date: Date, place: SunPlace): number {
+export function sunElevationAt(date: Date, place: MapPlace): number {
     const julianDay = date.getTime() / 86_400_000 + 2_440_587.5;
     const t = (julianDay - 2_451_545) / 36_525; // Julian centuries since J2000.0
 
@@ -118,12 +114,20 @@ export function sunElevationAt(date: Date, place: SunPlace): number {
 }
 
 /**
+ * The place whose sun lights the map: its own on the server clock; Paris (undefined) for a clock read as Paris time
+ * (the computer clock, `?nightAt`), whose instant is only right for the sun of Paris.
+ */
+export function sunPlaceOf(clockReadAsParis: boolean, mapPlace: MapPlace | undefined): MapPlace | undefined {
+    return clockReadAsParis ? undefined : mapPlace;
+}
+
+/**
  * Darkness of the night veil at this instant (0 = day, NIGHT_MAX_OPACITY = night), on the sun of the place (Paris by
  * default): none while
  * the sun is up, darkening from sunset to the end of the civil dusk, full until the civil dawn, fading out until
  * sunrise. The ramp is linear in the sun's elevation, which is almost linear in time over those 30 to 40 minutes.
  */
-export function nightOpacityAt(date: Date, place: SunPlace = PARIS): number {
+export function nightOpacityAt(date: Date, place: MapPlace = PARIS): number {
     const elevation = sunElevationAt(date, place);
     if (elevation >= SUNSET_ELEVATION) {
         return 0;

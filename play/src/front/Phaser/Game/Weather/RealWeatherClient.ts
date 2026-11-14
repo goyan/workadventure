@@ -6,7 +6,8 @@ import { z } from "zod";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { ABSOLUTE_PUSHER_URL } from "../../../Enum/ComputedConst";
 import { nightDateStore } from "../../../Stores/NightStore";
-import { RealWeatherForecast } from "../../../../common/RealWeather";
+import { REAL_WEATHER_POLL_MS, RealWeatherForecast, roundedCoordinate } from "../../../../common/RealWeather";
+import type { MapPlace } from "../../../../common/RealWeather";
 import { realWeatherStateAt, withRealWeather, withWeatherPreview } from "./RealWeather";
 import type { RealForecastState, RealWeatherState, WeatherPreview } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
@@ -14,24 +15,20 @@ import { weatherForecast } from "./WeatherForecast";
 import type { ForecastCell } from "./WeatherForecast";
 
 const debug = Debug("front:real-weather");
-/**
- * The weather changes on time from the timeline already received (six hours ahead); asking again every five minutes
- * only picks up the forecast the pusher renews every half hour.
- */
-const POLL_MS = 5 * 60 * 1000;
-
-type Place = Pick<WeatherLocation, "latitude" | "longitude">;
 
 // The place followed (undefined: Paris, the default of the pusher) and what is known of its weather timeline.
 let followedKey: string | undefined;
-let followed: Place | undefined;
+let followed: MapPlace | undefined;
 let state: RealForecastState = { status: "pending" };
+/** Whether the place followed has answered yet: until then, the weather of the previous place stays shown. */
+let answered = false;
+let lastAskedAt = 0;
 const store = writable<RealForecastState>(state);
 let interval: ReturnType<typeof setInterval> | undefined;
 let generation = 0;
 
-function placeKey(place: Place | undefined): string {
-    return place ? `${place.latitude.toFixed(2)},${place.longitude.toFixed(2)}` : "paris";
+function placeKey(place: MapPlace | undefined): string {
+    return place ? `${roundedCoordinate(place.latitude)},${roundedCoordinate(place.longitude)}` : "paris";
 }
 
 function set(next: RealForecastState): void {
@@ -56,31 +53,42 @@ async function poll(): Promise<void> {
         const forecast = RealWeatherForecast.parse(await response.json());
         // The place changed while asking: this answer is for the old one.
         if (asked !== generation) return;
+        answered = true;
         set({ status: "known", slots: forecast.slots });
     } catch (error) {
         debug("Real weather request failed: %O", error);
-        // A pusher restart keeps the timeline already known; only a first failure falls back to the seasonal draw.
-        if (asked === generation && state.status === "pending") set({ status: "unavailable" });
+        // A failed poll keeps the timeline already known; a first failure for a place falls back to the seasonal draw.
+        if (asked === generation && !answered) set({ status: "unavailable" });
     }
 }
 
-function follow(place: Place | undefined): void {
+/** Polls again every REAL_WEATHER_POLL_MS while a map shows the real weather; stops once none has for that long. */
+function tick(): void {
+    if (Date.now() - lastAskedAt > REAL_WEATHER_POLL_MS) {
+        clearInterval(interval);
+        interval = undefined;
+        // Asked again later, the place is followed anew: polled at once, its last timeline shown meanwhile.
+        followedKey = undefined;
+        return;
+    }
+    poll().catch((error: unknown) => debug("Real weather poll failed: %O", error));
+}
+
+function follow(place: MapPlace | undefined): void {
+    lastAskedAt = Date.now();
     const key = placeKey(place);
     if (key === followedKey) return;
+    if (followedKey !== undefined) answered = false;
     followedKey = key;
     followed = place;
     generation++;
-    set({ status: "pending" });
     poll().catch((error: unknown) => debug("Real weather poll failed: %O", error));
-    interval ??= setInterval(() => {
-        poll().catch((error: unknown) => debug("Real weather poll failed: %O", error));
-    }, POLL_MS);
+    interval ??= setInterval(tick, REAL_WEATHER_POLL_MS);
 }
 
-/** The weather timeline at this place (Paris when absent) as last received; asking starts with the first call. */
-function forecastFor(place: Place | undefined): RealForecastState {
-    follow(place);
-    return state;
+/** The weather timeline known for this place (Paris when absent), without asking: pending for a place not followed. */
+function knownFor(place: MapPlace | undefined): RealForecastState {
+    return placeKey(place) === followedKey || state.status === "known" ? state : { status: "pending" };
 }
 
 /** The weather at the place followed, at the clock of the game (ticking each second), for the settings panel. */
@@ -100,6 +108,22 @@ export const weatherPreviewStore = {
     },
 };
 
+// Asked several times per image (sky, trees, snow on the ground): computed again only when something it reads changed,
+// or once per second of the game clock.
+let memo:
+    | {
+          settings: MapSnowSettings | undefined;
+          weather: WeatherType | undefined;
+          location: unknown;
+          auto: unknown;
+          startedAt: number | undefined;
+          preview: WeatherPreview | undefined;
+          state: RealForecastState;
+          second: number | undefined;
+          shown: MapSnowSettings | undefined;
+      }
+    | undefined;
+
 /**
  * The map weather settings as they are shown to this person at `date` (the game clock): the weather being tried in the
  * settings panel if any, then a map set to "real" gets the weather of its place at that date (withRealWeather). Only
@@ -109,16 +133,46 @@ export function shownWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {
-    const shown = withWeatherPreview(settings, preview);
-    if (shown?.weather !== WeatherType.Real) return shown;
-    return withRealWeather(shown, realWeatherStateAt(forecastFor(shown.weatherLocation), date));
+    const tried = withWeatherPreview(settings, preview);
+    if (tried?.weather !== WeatherType.Real) return tried;
+    follow(tried.weatherLocation);
+    const second = date === undefined ? undefined : Math.floor(date.getTime() / 1000);
+    if (
+        memo &&
+        memo.settings === settings &&
+        memo.weather === settings?.weather &&
+        memo.location === settings?.weatherLocation &&
+        memo.auto === settings?.weatherAuto &&
+        memo.startedAt === settings?.weatherStartedAt &&
+        memo.preview === preview &&
+        memo.state === state &&
+        memo.second === second
+    ) {
+        return memo.shown;
+    }
+    const shown = withRealWeather(tried, realWeatherStateAt(state, date));
+    memo = {
+        settings,
+        weather: settings?.weather,
+        location: settings?.weatherLocation,
+        auto: settings?.weatherAuto,
+        startedAt: settings?.weatherStartedAt,
+        preview,
+        state,
+        second,
+        shown,
+    };
+    return shown;
 }
 
-/** The weather this person will see now, in one hour and in four hours (the weather banner), the tried one included. */
+/**
+ * The weather this person will see now, in one hour and in four hours (the weather banner), the tried one included.
+ * It only reads what the game already asked for (the game follows the place of a map in Real at every image).
+ */
 export function shownWeatherForecast(settings: MapSnowSettings | undefined, date: Date): ForecastCell[] {
     const shown = withWeatherPreview(settings, preview);
     const real: RealForecastState =
-        shown?.weather === WeatherType.Real ? forecastFor(shown.weatherLocation) : { status: "unavailable" };
+        shown?.weather === WeatherType.Real ? knownFor(shown.weatherLocation) : { status: "unavailable" };
     return weatherForecast(shown, date.getTime(), real);
 }
 

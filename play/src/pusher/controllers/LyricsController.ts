@@ -1,10 +1,10 @@
 import type { Application, Request } from "express";
-import { RateLimiter } from "limiter";
 import { z } from "zod";
 import { LyricsTrackSchema } from "../../common/Lyrics";
 import { authenticated } from "../middlewares/Authenticated";
 import type { ResponseWithUserIdentifier } from "../middlewares/Authenticated";
 import { LyricsService } from "../services/LyricsService";
+import { PerUserRateLimiter } from "../services/PerUserRateLimiter";
 import { validateQuery } from "../services/QueryValidator";
 import { BaseHttpController } from "./BaseHttpController";
 
@@ -16,7 +16,7 @@ const LyricsQuery = LyricsTrackSchema.extend({
 });
 
 export class LyricsController extends BaseHttpController {
-    private readonly clients = new Map<string, { limiter: RateLimiter; at: number }>();
+    private readonly limiter = new PerUserRateLimiter(30);
 
     public constructor(
         app: Application,
@@ -27,29 +27,9 @@ export class LyricsController extends BaseHttpController {
 
     public routes(): void {
         this.app.get("/lyrics", [authenticated], async (req: Request, res: ResponseWithUserIdentifier) => {
-            if (!res.userIdentifier) return;
             const query = validateQuery(req, res, LyricsQuery);
             if (!query) return;
-            const now = Date.now();
-            for (const [id, client] of this.clients) {
-                if (now - client.at > 60_000) this.clients.delete(id);
-            }
-            let client = this.clients.get(res.userIdentifier);
-            if (!client) {
-                if (this.clients.size >= 4096) {
-                    res.setHeader("Retry-After", "60");
-                    res.status(429).json({ error: "limited" });
-                    return;
-                }
-                client = { limiter: new RateLimiter({ tokensPerInterval: 30, interval: "minute" }), at: now };
-                this.clients.set(res.userIdentifier, client);
-            }
-            client.at = now;
-            if (!client.limiter.tryRemoveTokens(1)) {
-                res.setHeader("Retry-After", "60");
-                res.status(429).json({ error: "limited" });
-                return;
-            }
+            if (!this.limiter.allow(res)) return;
             const result = await this.service.get(query);
             if (res.destroyed) return;
             res.setHeader("Cache-Control", "private, no-store");

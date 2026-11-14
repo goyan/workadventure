@@ -180,17 +180,21 @@ const FOG_FADE_MS = 3 * 60 * 1000;
 /**
  * How thick the fog is, from 0 to 1. A fixed fog is always full; in a slot of automatic fog, it rises over three
  * minutes when the previous slot has none and fades over the last three when the next one has none. A real fog
- * (`startedAt`, see withRealWeather) rises over three minutes from the moment it was first observed.
+ * (`startedAt`, `endsAt`, see withRealWeather) does the same over its run of quarter hours.
  */
 export function fogStrength(
     configured: WeatherType,
     date: Date,
     auto?: AutoWeatherSettings,
     startedAt?: number,
+    endsAt?: number,
 ): number {
     if (configured === WeatherType.Fog) {
         if (startedAt === undefined || !Number.isFinite(date.getTime())) return 1;
-        return Math.max(0, Math.min(1, (date.getTime() - startedAt) / FOG_FADE_MS));
+        const time = date.getTime();
+        const fadeIn = (time - startedAt) / FOG_FADE_MS;
+        const fadeOut = endsAt === undefined ? 1 : (endsAt - time) / FOG_FADE_MS;
+        return Math.max(0, Math.min(1, fadeIn, fadeOut));
     }
     if (configured !== WeatherType.Automatic) return 0;
     const time = date.getTime();

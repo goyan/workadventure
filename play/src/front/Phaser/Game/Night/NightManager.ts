@@ -8,7 +8,7 @@ import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampSt
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { nightOpacityAt, parisCalendarDay, parisWallClockToInstant, parseNightAt } from "./NightClock";
+import { nightOpacityAt, parisCalendarDay, parisWallClockToInstant, parseNightAt, sunPlaceOf } from "./NightClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -92,7 +92,10 @@ export class NightManager {
             nightDateStore.set(date);
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
-            const place = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
+            const place = sunPlaceOf(
+                this.mode === NightMode.Computer || this.forcedMinutes !== undefined,
+                shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
+            );
             this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
         }
 
@@ -167,9 +170,10 @@ export class NightManager {
     }
 
     /**
-     * The instant whose sun of Paris lights the map. Server: the server's instant. Computer: the date and time shown
-     * by the computer, in its own time zone, read as if they were Paris time (a computer showing 22:00 sees the
-     * night of Paris at 22:00 that day). `?nightAt=HH:MM` (development): that Paris time, on today's date in Paris.
+     * The instant whose sun lights the map. Server: the server's instant, for the sun of the place of the map.
+     * Computer: the date and time shown by the computer, in its own time zone, read as if they were Paris time (a
+     * computer showing 22:00 sees the night of Paris at 22:00 that day, whatever the place of the map: sunPlaceOf).
+     * `?nightAt=HH:MM` (development): that Paris time, on today's date in Paris, for the sun of Paris too.
      */
     private sunInstant(date: Date | undefined): Date | undefined {
         if (this.forcedMinutes !== undefined) {

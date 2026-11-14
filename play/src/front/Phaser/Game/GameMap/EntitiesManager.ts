@@ -261,7 +261,13 @@ export class EntitiesManager extends EventEmitter {
             ? treeSeasonAt(
                   serverDate,
                   weatherAtTime(configured, serverDate, settings?.weatherAuto),
-                  snowCoverage(configured, serverDate.getTime(), settings?.weatherStartedAt, settings?.weatherAuto),
+                  snowCoverage(
+                      configured,
+                      serverDate.getTime(),
+                      settings?.weatherStartedAt,
+                      settings?.weatherAuto,
+                      settings?.snowMeltFrom,
+                  ),
               )
             : treeSeasonAt(serverDate, WeatherType.Clear, 0);
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.

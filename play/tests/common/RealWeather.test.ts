@@ -99,6 +99,22 @@ describe("realWeatherAt", () => {
         expect(realWeatherAt(holed, 2 * SLOT)).toMatchObject({ since: 2 * SLOT });
     });
 
+    it("tells when the run ends and what came before it, for fading out and melting", () => {
+        const slots = [
+            slot(0, WeatherType.Snow),
+            slot(SLOT, WeatherType.Fog),
+            slot(2 * SLOT, WeatherType.Fog),
+            slot(3 * SLOT, WeatherType.Clear),
+        ];
+        expect(realWeatherAt(slots, SLOT + 1)).toMatchObject({ until: 3 * SLOT, before: WeatherType.Snow });
+        // The last run, or a run before a hole, has no known end; the first one, nothing known before it.
+        expect(realWeatherAt(slots, 3 * SLOT)).toMatchObject({ until: undefined, before: WeatherType.Fog });
+        expect(realWeatherAt(slots, 0)).toMatchObject({ until: SLOT, before: undefined });
+        expect(realWeatherAt([slot(0, WeatherType.Rain), slot(2 * SLOT, WeatherType.Clear)], 0)).toMatchObject({
+            until: undefined,
+        });
+    });
+
     it("gives nothing outside the timeline, in a hole, or for a quarter hour without weather", () => {
         expect(realWeatherAt(paris, 1794647700000 - 1)).toBeUndefined();
         expect(realWeatherAt(paris, 1794675600000 + SLOT)).toBeUndefined();

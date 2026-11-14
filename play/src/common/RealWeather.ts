@@ -1,9 +1,24 @@
 import { WeatherType } from "@workadventure/map-editor";
+import type { WeatherLocation } from "@workadventure/map-editor";
 import { z } from "zod";
 
-/** Paris, whose real weather the "real" map weather shows: the same point as the night clock. */
+/** Paris, the place of a map without one (real weather and night clock). */
 export const PARIS_LATITUDE = 48.8566;
 export const PARIS_LONGITUDE = 2.3522;
+
+/** A point on the globe: the place of a map, for its real weather and its sun. */
+export type MapPlace = Pick<WeatherLocation, "latitude" | "longitude">;
+
+/** Two decimals, about a kilometre: the weather is the same there, and nearby maps share one timeline. */
+export function roundedCoordinate(value: number): number {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * How often a browser asks the pusher for the timeline again. The pusher never changes a quarter hour that starts
+ * before every browser has asked again, so all of them show the same weather.
+ */
+export const REAL_WEATHER_POLL_MS = 5 * 60 * 1000;
 
 /** A weather that can be observed: the map modes (Automatic, Real) are not. */
 export const ObservedWeather = z.enum([
@@ -63,16 +78,21 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
     });
 }
 
-/** The real weather at one instant: its game weather, since when it lasts (epoch ms), and its temperature (°C). */
+/**
+ * The real weather at one instant: its game weather, since when it lasts and until when (epoch ms; no end when the
+ * run reaches the end of the timeline or a hole), the weather just before it if known, and its temperature (°C).
+ */
 export interface RealWeatherAt {
     weather: ObservedWeather;
     since: number;
+    until: number | undefined;
+    before: ObservedWeather | undefined;
     temperature: number | null;
 }
 
 /**
- * The weather of the quarter hour of `slots` (in order) under way at `epoch`, dated from the start of its unbroken run
- * of the same weather: every browser finds the same start, so fog and snow fade in alike for everyone. Undefined
+ * The weather of the quarter hour of `slots` (in order) under way at `epoch`, dated from the start to the end of its
+ * unbroken run of the same weather: every browser finds the same dates, so fog and snow fade alike for everyone. Undefined
  * outside the timeline, in a hole, or for a quarter hour without weather.
  */
 export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number): RealWeatherAt | undefined {
@@ -82,15 +102,21 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
     const current = slots[index];
     const weather = current.weather;
     if (weather === null || epoch >= current.at + REAL_WEATHER_SLOT_MS) return undefined;
+    const follows = (later: number, earlier: number): boolean =>
+        slots[later].at === slots[earlier].at + REAL_WEATHER_SLOT_MS;
     let first = index;
-    while (
-        first > 0 &&
-        slots[first - 1].weather === weather &&
-        slots[first - 1].at === slots[first].at - REAL_WEATHER_SLOT_MS
-    ) {
-        first--;
-    }
-    return { weather, since: slots[first].at, temperature: current.temperature };
+    while (first > 0 && slots[first - 1].weather === weather && follows(first, first - 1)) first--;
+    let last = index;
+    while (last < slots.length - 1 && slots[last + 1].weather === weather && follows(last + 1, last)) last++;
+    const next = last < slots.length - 1 && follows(last + 1, last) ? slots[last + 1] : undefined;
+    const previous = first > 0 && follows(first, first - 1) ? slots[first - 1] : undefined;
+    return {
+        weather,
+        since: slots[first].at,
+        until: next?.weather ? next.at : undefined,
+        before: previous?.weather ?? undefined,
+        temperature: current.temperature,
+    };
 }
 
 /**
