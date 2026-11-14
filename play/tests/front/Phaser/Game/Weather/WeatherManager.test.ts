@@ -29,6 +29,7 @@ const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
+const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game/Weather/Clouds");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
 afterEach(() => {
@@ -515,15 +516,22 @@ describe("weather rendering lifecycle", () => {
             expect(shadows(graphics)).toBe(0);
         });
 
-        it("has no shadow with a low sun, and nothing at night", () => {
+        it("has no shadow with a low sun, and dark clouds without shadows at night", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Cloudy };
             manager = new WeatherManager(scene);
             manager.update(0, at, false, { elevation: 1, azimuth: 240 });
-            expect(whites(graphics)).toBeGreaterThan(0);
+            // Already a little tinted by the dusk: clouds, not shadows.
+            expect(graphics.fillStyle.mock.calls.length).toBeGreaterThan(0);
             expect(shadows(graphics)).toBe(0);
+            graphics.fillStyle.mockClear();
             manager.update(1000, new Date(at.getTime() + 1000), true, { elevation: -10, azimuth: 260 });
-            expect(graphics.setVisible.mock.lastCall).toEqual([false]);
+            expect(graphics.setVisible.mock.lastCall).toEqual([true]);
+            expect(
+                graphics.fillStyle.mock.calls.filter(([color]) => color === NIGHT_CLOUD_COLOR).length,
+            ).toBeGreaterThan(0);
+            expect(whites(graphics)).toBe(0);
+            expect(shadows(graphics)).toBe(0);
         });
 
         it("draws nothing with the personal switch off, the weather hidden or the editor open", () => {

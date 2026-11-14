@@ -5,6 +5,8 @@ import {
     cloudShadowOffset,
     cloudBlockSize,
     cloudSunlight,
+    cloudTint,
+    NIGHT_CLOUD_COLOR,
     overcastVeil,
     shadowPatches,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
@@ -37,13 +39,24 @@ describe("cloudShadowOffset (north up, y down)", () => {
 });
 
 describe("cloudSunlight", () => {
-    it("fades the clouds from sunset (-0.833°) to 2° and their shadows from 2° to 6°", () => {
-        expect(cloudSunlight(-1)).toEqual({ clouds: 0, shadows: 0 });
-        expect(cloudSunlight(2)).toEqual({ clouds: 1, shadows: 0 });
+    it("darkens the clouds from 2° to the end of dusk (-6°), and fades their shadows from 6° to 2°", () => {
+        expect(cloudSunlight(30)).toEqual({ night: 0, shadows: 1 });
         expect(cloudSunlight(4).shadows).toBeCloseTo(0.5, 6);
-        expect(cloudSunlight(30)).toEqual({ clouds: 1, shadows: 1 });
-        // Without a sun (no clock yet): clouds, no shadow.
-        expect(cloudSunlight(undefined)).toEqual({ clouds: 1, shadows: 0 });
+        expect(cloudSunlight(2)).toEqual({ night: 0, shadows: 0 });
+        expect(cloudSunlight(-2).night).toBeCloseTo(0.5, 6);
+        expect(cloudSunlight(-10)).toEqual({ night: 1, shadows: 0 });
+        // Without a sun (no clock yet, or the night turned off at night): daylight clouds, no shadow.
+        expect(cloudSunlight(undefined)).toEqual({ night: 0, shadows: 0 });
+    });
+});
+
+describe("cloudTint", () => {
+    it("keeps a cloud as it is by day and turns it dark grey-blue and lighter at night", () => {
+        expect(cloudTint(0xffffff, 0.45, 0)).toEqual({ color: 0xffffff, alpha: 0.45 });
+        expect(cloudTint(0xffffff, 0.45, 1)).toEqual({ color: NIGHT_CLOUD_COLOR, alpha: 0.45 * 0.7 });
+        const dusk = cloudTint(0xffffff, 0.45, 0.5);
+        expect(dusk.color).not.toBe(0xffffff);
+        expect(dusk.color).not.toBe(NIGHT_CLOUD_COLOR);
     });
 });
 

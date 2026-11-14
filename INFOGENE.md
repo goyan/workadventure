@@ -1725,8 +1725,8 @@ la densité de ses nuages gris ou sombres (0,6 au moins). Fondu de 3 min.
 (`sunPositionAt`, azimut Meeus ; ombre de 3 cases de haut, 6 au plus), **dehors seulement et au-dessus de tout**
 (avatars compris) ; voile gris en ciel couvert ; nuages gris sur la pluie, sombres sur l'orage, sans ombre. Ciel et
 brouillard **fixés à la carte** (motif répété, `repeatedOverView`) : le zoom et la caméra ne les déplacent pas. 60 px/s,
-15 images/s, blocs d'environ 12 px à l'écran ; effacés au coucher (rien la nuit), visibles sans ombre si la nuit est
-désactivée ; immobiles en mouvement réduit. Interrupteur personnel « Afficher les nuages et leurs ombres »
+15 images/s, blocs d'environ 12 px à l'écran ; la nuit, nuages gris-bleu sombre (teinte progressive de 2° à −6°,
+comme le voile de nuit), sans ombre ni voile couvert, sous les lumières des lampes ; immobiles en mouvement réduit. Interrupteur personnel « Afficher les nuages et leurs ombres »
 (Paramètres → Ambiance). Bandeau : soleil et nuage, ou nuage seul au-dessus de 0,8.
 
 ## Arrière-plan de caméra gardé

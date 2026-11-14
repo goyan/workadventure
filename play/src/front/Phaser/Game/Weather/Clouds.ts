@@ -25,10 +25,13 @@ const LOBES: readonly { dx: number; dy: number; scale: number }[] = [
 /** Height of the clouds and longest shadow, in tiles. */
 const CLOUD_HEIGHT_TILES = 3;
 const MAX_SHADOW_TILES = 6;
-/** Sun elevations (degrees): clouds fade from sunset to 2°, their shadows from 2° to 6°. */
-const SUNSET_ELEVATION = -0.833;
-const CLOUDS_FULL_ELEVATION = 2;
+/** Sun elevations (degrees): clouds darken from 2° to the end of civil dusk (-6°); shadows fade from 6° to 2°. */
+const DAYLIGHT_ELEVATION = 2;
+const NIGHT_ELEVATION = -6;
 const SHADOWS_FULL_ELEVATION = 6;
+/** Clouds at night: dark grey-blue, a little lighter, so they pass over the night veil without lighting it. */
+export const NIGHT_CLOUD_COLOR = 0x3b4560;
+const NIGHT_CLOUD_ALPHA_FACTOR = 0.7;
 /** The grey veil of an overcast sky, rising with the cloudiness from 0.6 to 0.9. */
 const OVERCAST_FROM = 0.6;
 const OVERCAST_FULL = 0.9;
@@ -42,17 +45,34 @@ const DEG = Math.PI / 180;
  * it is low (3 tiles of height, 6 tiles at most). None with the sun under 2°.
  */
 export function cloudShadowOffset(sun: SunPosition | undefined): { x: number; y: number } | undefined {
-    if (!sun || sun.elevation < CLOUDS_FULL_ELEVATION) return undefined;
+    if (!sun || sun.elevation < DAYLIGHT_ELEVATION) return undefined;
     const length = Math.min(MAX_SHADOW_TILES, CLOUD_HEIGHT_TILES / Math.tan(sun.elevation * DEG)) * TILE_SIZE;
     return { x: -length * Math.sin(sun.azimuth * DEG), y: length * Math.cos(sun.azimuth * DEG) };
 }
 
-/** How visible the clouds and their shadows are with the sun at this elevation (no clouds at night, no cut at dusk). */
-export function cloudSunlight(elevation: number | undefined): { clouds: number; shadows: number } {
-    if (elevation === undefined) return { clouds: 1, shadows: 0 };
+/**
+ * How night it is for the clouds (0 by day, 1 once dusk is over: they darken as the night veil does) and how visible
+ * their shadows are (only with a sun high enough). Without a sun: daylight clouds, no shadow.
+ */
+export function cloudSunlight(elevation: number | undefined): { night: number; shadows: number } {
+    if (elevation === undefined) return { night: 0, shadows: 0 };
     return {
-        clouds: clamp01((elevation - SUNSET_ELEVATION) / (CLOUDS_FULL_ELEVATION - SUNSET_ELEVATION)),
-        shadows: clamp01((elevation - CLOUDS_FULL_ELEVATION) / (SHADOWS_FULL_ELEVATION - CLOUDS_FULL_ELEVATION)),
+        night: clamp01((DAYLIGHT_ELEVATION - elevation) / (DAYLIGHT_ELEVATION - NIGHT_ELEVATION)),
+        shadows: clamp01((elevation - DAYLIGHT_ELEVATION) / (SHADOWS_FULL_ELEVATION - DAYLIGHT_ELEVATION)),
+    };
+}
+
+/** A cloud colour and opacity for how night it is: as it is by day, dark grey-blue and lighter at night. */
+export function cloudTint(color: number, alpha: number, night: number): { color: number; alpha: number } {
+    if (night <= 0) return { color, alpha };
+    const mix = (shift: number): number => {
+        const day = (color >> shift) & 0xff;
+        const dark = (NIGHT_CLOUD_COLOR >> shift) & 0xff;
+        return Math.round(day + (dark - day) * clamp01(night)) << shift;
+    };
+    return {
+        color: mix(16) | mix(8) | mix(0),
+        alpha: alpha * (1 + (NIGHT_CLOUD_ALPHA_FACTOR - 1) * clamp01(night)),
     };
 }
 

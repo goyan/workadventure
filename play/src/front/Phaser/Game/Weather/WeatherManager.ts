@@ -23,7 +23,15 @@ import {
 } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
-import { cloudBlockSize, cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
+import {
+    cloudBlockSize,
+    cloudPatches,
+    cloudShadowOffset,
+    cloudSunlight,
+    cloudTint,
+    overcastVeil,
+    shadowPatches,
+} from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -117,8 +125,9 @@ export class WeatherManager {
         // Christmas snow.
         const cloudiness = theme === SeasonalTheme.Christmas ? 0 : (settings?.cloudiness ?? 0);
         const sunlight = cloudSunlight(sun?.elevation);
-        const veilAlpha = overcastVeil(cloudiness, sunlight.clouds);
-        const showClouds = enabled && this.cloudsShown && cloudiness > 0 && sunlight.clouds > 0;
+        // The grey veil of an overcast sky only by day: at night it would light the night veil up.
+        const veilAlpha = overcastVeil(cloudiness, 1 - sunlight.night);
+        const showClouds = enabled && this.cloudsShown && cloudiness > 0;
         if (!showWeather && !showLeaves && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
@@ -156,7 +165,7 @@ export class WeatherManager {
                 Math.round(fogStrengthNow * 40),
                 night,
                 Math.round(cloudiness * 40),
-                Math.round(sunlight.clouds * 20),
+                Math.round(sunlight.night * 20),
                 Math.round(sunlight.shadows * 20),
                 Math.round((shadowOffset?.x ?? 0) / 4),
                 Math.round((shadowOffset?.y ?? 0) / 4),
@@ -202,14 +211,15 @@ export class WeatherManager {
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
-            if (covering && this.cloudsShown && sunlight.clouds > 0) {
+            if (covering && this.cloudsShown) {
                 // The real cover when known, never so thin that the rain seems to fall from a clear sky.
                 const cover =
                     settings?.cloudCover === undefined
                         ? covering.cloudiness
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
                 const patches = cloudPatches(epoch, view, cover, this.reducedMotion);
-                this.drawCloudLayer(veil, patches, covering.color, covering.alpha * sunlight.clouds);
+                const tint = cloudTint(covering.color, covering.alpha, sunlight.night);
+                this.drawCloudLayer(veil, patches, tint.color, tint.alpha);
             }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
@@ -245,7 +255,7 @@ export class WeatherManager {
 
     /**
      * Clouds of a clear sky, outdoors only and over everything (avatars and objects too): the grey veil of an overcast
-     * sky, the shadows cast away from the sun, then the white clouds over them. Fixed to the map, they glide with the
+     * sky, the shadows cast away from the sun, then the clouds over them, white by day and dark at night. Fixed to the map, they glide with the
      * wind whatever the camera or its zoom.
      */
     private drawClouds(
@@ -253,7 +263,7 @@ export class WeatherManager {
         view: WeatherView,
         veil: readonly WeatherView[],
         cloudiness: number,
-        sunlight: { clouds: number; shadows: number },
+        sunlight: { night: number; shadows: number },
         shadowOffset: { x: number; y: number } | undefined,
         veilAlpha: number,
     ): void {
@@ -265,10 +275,8 @@ export class WeatherManager {
             const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset);
             this.drawCloudLayer(veil, patches, 0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows);
         }
-        if (sunlight.clouds > 0) {
-            const patches = cloudPatches(epoch, view, cloudiness, this.reducedMotion);
-            this.drawCloudLayer(veil, patches, 0xffffff, CLOUD_ALPHA * sunlight.clouds);
-        }
+        const tint = cloudTint(0xffffff, CLOUD_ALPHA, sunlight.night);
+        this.drawCloudLayer(veil, cloudPatches(epoch, view, cloudiness, this.reducedMotion), tint.color, tint.alpha);
     }
 
     /** Clouds or their shadows cut into blocks inside the outdoor runs: soft edges, stopped at the walls like the fog. */
