@@ -249,6 +249,9 @@ export const RGB_LAMP_MAX_ANGLE = 360;
 export const RGB_LAMP_MIN_ROTATION_SPEED = 10;
 export const RGB_LAMP_MAX_ROTATION_SPEED = 120;
 export const RGB_LAMP_DEFAULT_ROTATION_SPEED = 30;
+/** How strong the light of an RGB lamp is, as a share of its full light (1, the default). */
+export const RGB_LAMP_MIN_INTENSITY = 0.1;
+export const RGB_LAMP_MAX_INTENSITY = 1;
 
 /**
  * The light of an RGB lamp: a cone of the colour `color`, `radius` tiles long, `angle` degrees wide (360: a full disc)
@@ -282,6 +285,9 @@ export const RgbLampPropertyData = PropertyBase.extend({
         .catch(undefined),
     /** Clockwise on the screen when absent. */
     rotationClockwise: z.boolean().optional().catch(undefined),
+    // The share of its full light the lamp gives, on the map and through the night veil. Optional and failing open
+    // like the rotation: a lamp saved without it, or with a value that is not valid, shines at full strength.
+    intensity: z.number().min(RGB_LAMP_MIN_INTENSITY).max(RGB_LAMP_MAX_INTENSITY).optional().catch(undefined),
 });
 
 export const MatrixRoomPropertyData = PropertyBase.extend({

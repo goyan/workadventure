@@ -39,8 +39,13 @@ export class RgbLampVisual {
             .setVisible(false);
     }
 
-    /** Draws the light again: its place, its reach, its shape and its colour. */
-    public draw(light: LightCone, polygon: readonly Point[], colour: number): void {
+    /**
+     * Draws the light again: its place, its reach, its shape, its colour and its intensity (the share of its full
+     * light, 0 to 1). The intensity is drawn into the texture: the night veil is pierced with it as much as the map is
+     * lit.
+     */
+    public draw(light: LightCone, polygon: readonly Point[], colour: number, intensity = 1): void {
+        const strength = Math.min(1, Math.max(0, intensity));
         const size = light.radius * 2;
         const texels = Math.max(2, Math.ceil(size * TEXELS_PER_PIXEL));
         if (texels !== this.texels || !this.texture) {
@@ -57,7 +62,7 @@ export class RgbLampVisual {
                 const gradient = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
                 for (let stop = 0; stop <= GRADIENT_STOPS; stop++) {
                     const distance = stop / GRADIENT_STOPS;
-                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${lightFalloff(distance)})`);
+                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${lightFalloff(distance) * strength})`);
                 }
                 context.beginPath();
                 polygon.forEach((point, index) => {

@@ -26,6 +26,8 @@ export interface RgbLampSettings {
     rotationSpeed?: number;
     /** Absent: clockwise on the screen. */
     rotationClockwise?: boolean;
+    /** The share of its full light the lamp gives, 0.1 to 1; absent: 1. */
+    intensity?: number;
 }
 
 export const RGB_LAMP_PROPERTY = "rgbLampPropertyData";
@@ -39,8 +41,8 @@ const RADIUS_STEP_TILES = 0.5;
 export function rgbLampSettingsOf(properties: EntityDataProperties): RgbLampSettings {
     for (const property of properties) {
         if (property.type === RGB_LAMP_PROPERTY) {
-            const { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise } = property;
-            return { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise };
+            const { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise, intensity } = property;
+            return { color, radius, direction, angle, rotation, rotationSpeed, rotationClockwise, intensity };
         }
     }
     return {
@@ -49,6 +51,36 @@ export function rgbLampSettingsOf(properties: EntityDataProperties): RgbLampSett
         direction: RGB_LAMP_DEFAULT_DIRECTION,
         angle: RGB_LAMP_MAX_ANGLE,
     };
+}
+
+/** The name a temperature preset is given in the editor. */
+export type RgbLampTemperatureName = "warmWhite" | "neutralWhite" | "coolWhite" | "daylight";
+
+/**
+ * The colours of light bulbs, by colour temperature: the colour of a blackbody at that temperature. Taken from the
+ * CIE 1964 10° rows (sRGB, normalized) of Mitchell Charity's table "What color is a blackbody?", version 2001-Jun-22,
+ * read on 2026-11-14: http://www.vendian.org/mncharity/dir3/blackbody/UnstableURLs/bbr_color.txt
+ */
+export const RGB_LAMP_TEMPERATURE_PRESETS: readonly {
+    kelvin: number;
+    color: string;
+    name: RgbLampTemperatureName;
+}[] = [
+    { kelvin: 2700, color: "#ffa957", name: "warmWhite" },
+    { kelvin: 3000, color: "#ffb46b", name: "warmWhite" },
+    { kelvin: 4000, color: "#ffd1a3", name: "neutralWhite" },
+    { kelvin: 5000, color: "#ffe4ce", name: "coolWhite" },
+    { kelvin: 6500, color: "#fff9fd", name: "daylight" },
+];
+
+/**
+ * A colour code as typed or pasted (`#rrggbb` or `#rgb`, the `#` optional, any case, spaces around ignored), as the
+ * lowercase `#rrggbb` a lamp keeps; undefined for anything else.
+ */
+export function parseRgbLampColour(text: string): string | undefined {
+    const hex = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text.trim())?.[1]?.toLowerCase();
+    if (hex === undefined) return undefined;
+    return `#${hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex}`;
 }
 
 /** `#rrggbb` as a number, for a tint; the default colour for anything else. */
