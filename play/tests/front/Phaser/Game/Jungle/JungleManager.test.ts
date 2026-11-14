@@ -1,0 +1,155 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { JungleManager } from "../../../../../src/front/Phaser/Game/Jungle/JungleManager";
+import type { JungleSource } from "../../../../../src/front/Phaser/Game/Jungle/JungleManager";
+import { jungleTreePicked, parisDay } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
+import type { JungleAnimal, JunglePrefab } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
+import type { WanderMap } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
+import { jungleEnabledStore } from "../../../../../src/front/Stores/JungleStore";
+
+const NOW = new Date("2026-11-14T12:00:00Z");
+const LION: JunglePrefab = { id: "lion", tags: ["Animaux", "Jungle"], wander: { sheetPath: "lion-sheet.png" } };
+const TIGRE: JunglePrefab = { id: "tigre", tags: ["Animaux", "Jungle"], wander: { sheetPath: "tigre-sheet.png" } };
+const MARKER: JunglePrefab = { id: "panneau-jungle", tags: ["Animaux", "Jungle"] };
+const TREE: JunglePrefab = { id: "Nature:tree-1-2:Default:Down", tags: [] };
+
+type Placed = ReturnType<JungleSource["placedEntities"]> extends Iterable<infer T> ? T : never;
+
+/** Ids of trees that have an animal today. */
+const pickedTrees = Array.from({ length: 60 }, (_, i) => `tree-${i}`)
+    .filter((id) => jungleTreePicked(id, parisDay(NOW)))
+    .slice(0, 3);
+
+function tree(id: string, index: number): Placed {
+    return { id, prefab: TREE, x: index * 160, y: 0, width: 32, height: 64 };
+}
+
+function makeSource(options: { marker?: boolean; species?: JunglePrefab[]; outdoor?: boolean } = {}) {
+    const { marker = true, species = [LION, TIGRE], outdoor = true } = options;
+    const wanderMap: WanderMap = { isWalkable: () => true, findPath: () => Promise.resolve([]) };
+    const state = {
+        placed: [
+            ...pickedTrees.map(tree),
+            ...(marker ? [{ id: "marker", prefab: MARKER, x: 0, y: 300, width: 32, height: 32 }] : []),
+        ] as Placed[],
+        species,
+        outdoor,
+        outdoorVersion: 1,
+    };
+    const source: JungleSource = {
+        placedEntities: () => state.placed,
+        loadedPrefabs: () => state.species,
+        outdoor: () => (state.outdoor ? { isOutdoorAt: () => true } : undefined),
+        outdoorVersion: () => state.outdoorVersion,
+        wanderMap: () => wanderMap,
+        tileSize: () => 32,
+        now: () => NOW,
+    };
+    const apply = vi.fn<(animals: JungleAnimal[], map: WanderMap) => void>();
+    return { source, state, apply };
+}
+
+describe("JungleManager", () => {
+    let manager: JungleManager | undefined;
+
+    afterEach(() => {
+        manager?.destroy();
+        manager = undefined;
+        jungleEnabledStore.set(true);
+    });
+
+    it("no marker, no jungle", () => {
+        const { source, apply } = makeSource({ marker: false });
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        expect(apply).not.toHaveBeenCalled();
+        expect(manager.animals).toEqual([]);
+    });
+
+    it("marker + species + outdoor trees: animals applied once", () => {
+        const { source, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        manager.refresh();
+        expect(apply).toHaveBeenCalledOnce();
+        const [animals, map] = apply.mock.calls[0];
+        expect(animals.map((animal) => animal.id).sort()).toEqual(pickedTrees.map((id) => `jungle:${id}`).sort());
+        expect(manager.animals).toEqual(animals);
+        // The animals walk outdoors only, and never sit.
+        expect(map).not.toBe(source.wanderMap());
+        expect("seats" in map).toBe(false);
+    });
+
+    it("removing the marker applies an empty list", () => {
+        const { source, state, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        state.placed = state.placed.filter((entity) => entity.id !== "marker");
+        manager.refresh();
+        expect(apply).toHaveBeenCalledTimes(2);
+        expect(apply.mock.calls[1][0]).toEqual([]);
+    });
+
+    it("no species, no jungle", () => {
+        const { source, apply } = makeSource({ species: [MARKER] });
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        expect(apply).not.toHaveBeenCalled();
+    });
+
+    it("switching the personal setting off applies an empty list, on brings the same animals back", () => {
+        const { source, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        const animals = apply.mock.calls[0][0];
+        jungleEnabledStore.set(false);
+        manager.refresh();
+        expect(apply.mock.calls[1][0]).toEqual([]);
+        jungleEnabledStore.set(true);
+        manager.refresh();
+        expect(apply.mock.calls[2][0]).toEqual(animals);
+    });
+
+    it("no outdoor grid yet: nothing, then animals once it exists", () => {
+        const { source, state, apply } = makeSource({ outdoor: false });
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        expect(apply).not.toHaveBeenCalled();
+        state.outdoor = true;
+        manager.refresh();
+        expect(apply).toHaveBeenCalledOnce();
+        expect(apply.mock.calls[0][0]).toHaveLength(pickedTrees.length);
+    });
+
+    it("a moved tree changes the plan", () => {
+        const { source, state, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        const moved = state.placed[0];
+        state.placed = [{ ...moved, x: moved.x + 64 }, ...state.placed.slice(1)];
+        manager.refresh();
+        expect(apply).toHaveBeenCalledTimes(2);
+        const before = apply.mock.calls[0][0].find((animal) => animal.id === `jungle:${moved.id}`);
+        const after = apply.mock.calls[1][0].find((animal) => animal.id === `jungle:${moved.id}`);
+        expect(after?.nest.x).toBe((before?.nest.x ?? 0) + 64);
+    });
+
+    it("a new outdoor grid gives the animals a new map", () => {
+        const { source, state, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        state.outdoorVersion = 2;
+        manager.refresh();
+        expect(apply).toHaveBeenCalledTimes(2);
+        expect(apply.mock.calls[1][0]).toEqual(apply.mock.calls[0][0]);
+        expect(apply.mock.calls[1][1]).not.toBe(apply.mock.calls[0][1]);
+    });
+
+    it("destroy applies an empty list", () => {
+        const { source, apply } = makeSource();
+        manager = new JungleManager(source, apply);
+        manager.refresh();
+        manager.destroy();
+        manager = undefined;
+        expect(apply).toHaveBeenLastCalledWith([], expect.anything());
+    });
+});

@@ -47,6 +47,7 @@ const menu: BaseTranslation = {
         lampEffects: "Light effects of lamps and dance floors",
         clouds: "Show clouds and their shadows",
         lampDemo: "Show the demo lamps next to my avatar",
+        jungle: "Show the jungle animals",
         ambiance: {
             title: "Ambiance",
             description: "What you see on the map. Nothing changes for others.",

@@ -20,6 +20,7 @@
     import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
+    import { jungleEnabledStore } from "../../Stores/JungleStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
@@ -359,6 +360,12 @@
             id="lamp-effects-enabled"
             bind:value={$lampEffectsEnabledStore}
             label={$LL.menu.settings.lampEffects()}
+            labelPosition="right"
+        />
+        <InputSwitch
+            id="jungle-enabled"
+            bind:value={$jungleEnabledStore}
+            label={$LL.menu.settings.jungle()}
             labelPosition="right"
         />
         <InputSwitch

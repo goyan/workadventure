@@ -48,6 +48,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         lampEffects: "Effets lumineux des lampes et des pistes de danse",
         clouds: "Afficher les nuages et leurs ombres",
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
+        jungle: "Afficher les animaux de la jungle",
         ambiance: {
             title: "Ambiance",
             description: "Ce que vous voyez sur la carte. Rien ne change pour les autres.",
