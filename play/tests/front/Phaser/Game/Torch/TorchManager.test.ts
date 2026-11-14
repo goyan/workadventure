@@ -49,6 +49,8 @@ describe("TorchManager", () => {
     /** The server time the scene gives (see GameScene.getServerDate); the light follows it, not the page's clock. */
     let serverNow: number | undefined;
     let outdoor: boolean;
+    /** The player variables known at start, those saved with the account included. */
+    let saved: Map<string, unknown>;
     /** An image of the game at `time`, the server clock on the same time. */
     const tick = (time: number): void => {
         // A Date keeps whole milliseconds.
@@ -82,6 +84,8 @@ describe("TorchManager", () => {
             value: { main: { worldView: { x: 0, y: 0, width: 1000, height: 1000 } } },
         });
         scene.getPlayerVariablesManager.mockReturnValue(variables);
+        saved = new Map();
+        Object.defineProperty(variables, "variables", { get: () => saved, configurable: true });
         scene.connection = mock<NonNullable<GameScene["connection"]>>({ getUserId: () => 1 });
         serverNow = undefined;
         outdoor = false;
@@ -118,20 +122,37 @@ describe("TorchManager", () => {
         expect(variables.setVariableFromApp.mock.calls.at(-1)?.[1]).toBe(false);
     });
 
-    it("publishes the intensity set by the local player as a nonpersistent variable of its own", () => {
+    it("publishes the intensity set by the local player as a variable saved with the account", () => {
         expect(player.setTorchIntensity.mock.calls.at(-1)).toEqual([100]);
         expect(variables.setVariableFromApp.mock.calls).toContainEqual([
             TORCH_INTENSITY_VARIABLE,
             100,
-            { public: true, persist: false, scope: "room" },
+            { public: true, persist: true, scope: "world" },
         ]);
         torchIntensityStore.set(60);
         expect(player.setTorchIntensity.mock.calls.at(-1)).toEqual([60]);
         expect(variables.setVariableFromApp.mock.calls.at(-1)).toEqual([
             TORCH_INTENSITY_VARIABLE,
             60,
-            { public: true, persist: false, scope: "room" },
+            { public: true, persist: true, scope: "world" },
         ]);
+    });
+
+    it("takes the intensity saved with the account over the one of this browser", () => {
+        manager.destroy();
+        torchIntensityStore.set(90);
+        saved.set(TORCH_INTENSITY_VARIABLE, 40);
+        manager = new TorchManager(scene);
+        expect(get(torchIntensityStore)).toBe(40);
+        expect(player.setTorchIntensity.mock.calls.at(-1)).toEqual([40]);
+    });
+
+    it("keeps the intensity of this browser when the saved one cannot be read", () => {
+        manager.destroy();
+        torchIntensityStore.set(70);
+        saved.set(TORCH_INTENSITY_VARIABLE, "beaucoup");
+        manager = new TorchManager(scene);
+        expect(get(torchIntensityStore)).toBe(70);
     });
 
     const seedOf = (id: string) => torchFlickerSeed(id);

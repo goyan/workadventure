@@ -111,8 +111,10 @@ reste possible).
 - **Intensité** : la torche équipée, la roue de son avatar montre sous elle « Intensité de la torche » avec − et +
   (de 10 % à 100 % par pas de 10 %, 100 % par défaut ; la roue reste ouverte ; flèches/Tab pour y aller, Entrée ou
   Espace pour changer ; tant que la commande est survolée ou a le focus, le reste de la roue passe à 12 % d'opacité
-  pour laisser voir l'avatar et sa lumière, sans laisser passer les clics vers la carte). La dernière valeur est gardée dans le navigateur (`torchIntensity`). Elle est partagée par
-  une seconde variable de joueur publique et non sauvegardée, `_torchIntensity` (pourcentage entier) : un ancien
+  pour laisser voir l'avatar et sa lumière, sans laisser passer les clics vers la carte). La dernière valeur est
+  gardée avec le compte et dans le navigateur (`torchIntensity`) ; au chargement, celle du compte l'emporte. Elle est
+  partagée par une seconde variable de joueur publique, sauvegardée au niveau du monde, `_torchIntensity` (pourcentage
+  entier) : un ancien
   client continue de lire `_torchEquipped` seul et voit la torche à pleine lumière ; une torche d'un ancien client
   (variable absente) ou une valeur illisible est à 100 %. L'intensité règle la luminosité de la lumière (multipliée
   par le scintillement) et la part du voile de nuit qu'elle perce ; ni la portée, ni la forme, ni la flamme dans la

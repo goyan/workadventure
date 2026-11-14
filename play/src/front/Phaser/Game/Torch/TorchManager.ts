@@ -18,7 +18,12 @@ import {
 import { torchColour, torchGlow, torchIgnition } from "./TorchGlow";
 import { torchWind } from "./TorchGust";
 import { TORCH_FLAME_FRAMES_PER_SECOND, torchFlameShape, torchFlameStep } from "./TorchFlameShape";
-import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_MAX, TORCH_INTENSITY_VARIABLE } from "./TorchProtocol";
+import {
+    decodeTorchIntensity,
+    TORCH_EQUIPPED_VARIABLE,
+    TORCH_INTENSITY_MAX,
+    TORCH_INTENSITY_VARIABLE,
+} from "./TorchProtocol";
 import { Torches, type TorchBearer } from "./Torches";
 
 /** The id of the local player among the bearers (the others go by their numeric key). */
@@ -65,12 +70,16 @@ export class TorchManager {
                 scope: "room",
             });
         });
+        // The intensity saved with the account (any computer, any map of the world) wins over the one of this browser;
+        // an unreadable saved value is ignored.
+        const saved = scene.getPlayerVariablesManager()?.variables.get(TORCH_INTENSITY_VARIABLE);
+        if (typeof saved === "number" && Number.isFinite(saved)) torchIntensityStore.set(decodeTorchIntensity(saved));
         this.intensityUnsubscribe = torchIntensityStore.subscribe((percent) => {
             scene.CurrentPlayer.setTorchIntensity(percent);
             scene.getPlayerVariablesManager()?.setVariableFromApp(TORCH_INTENSITY_VARIABLE, percent, {
                 public: true,
-                persist: false,
-                scope: "room",
+                persist: true,
+                scope: "world",
             });
         });
     }
