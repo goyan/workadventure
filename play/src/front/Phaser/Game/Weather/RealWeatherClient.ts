@@ -10,8 +10,8 @@ import type { RealWeatherState } from "./RealWeather";
 import type { MapSnowSettings } from "./SnowCover";
 
 const debug = Debug("front:real-weather");
-/** The pusher asks Open-Meteo every ten minutes: asking it every five keeps players at most a few minutes apart. */
-const POLL_MS = 5 * 60 * 1000;
+/** The pusher asks Open-Meteo every ten minutes; asking it every minute keeps players at most a minute apart. */
+const POLL_MS = 60 * 1000;
 
 let state: RealWeatherState = { status: "pending" };
 const store = writable<RealWeatherState>(state);
@@ -51,7 +51,7 @@ function start(): void {
     }, POLL_MS);
 }
 
-/** The weather in Paris as last reported by the pusher. The first call starts asking, every five minutes. */
+/** The weather in Paris as last reported by the pusher. The first call starts asking, every minute. */
 export function realWeatherNow(): RealWeatherState {
     start();
     return state;
