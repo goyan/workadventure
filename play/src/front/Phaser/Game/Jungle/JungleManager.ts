@@ -1,6 +1,8 @@
 import type { Unsubscriber } from "svelte/store";
 import { jungleEnabledStore } from "../../../Stores/JungleStore";
-import type { WanderMap } from "../Wander/WanderSchedule";
+import type { Point, WanderMap } from "../Wander/WanderSchedule";
+import { JUNGLE_MAX_VOLUME, JungleCryGate, jungleCryLeg, jungleCryVolume, jungleSoundKey } from "./JungleCries";
+import type { JungleSoundKey } from "./JungleCries";
 import { isJungleMarker, isJungleTree, jungleSpecies, parisDay, planJungle } from "./JunglePlan";
 import type { JungleAnimal, JunglePrefab, JungleTree } from "./JunglePlan";
 import { outdoorWanderMap } from "./JungleWanderMap";
@@ -26,6 +28,19 @@ export interface JungleSource {
     now(): Date;
 }
 
+/** What the calls need from the game: injected too. */
+export interface JungleHearing {
+    /** Where the local player is, undefined before they exist. */
+    listener(): Point | undefined;
+    /** Where an animal is shown, undefined while it is not. */
+    pose(animalId: string): { x: number; y: number; moving: boolean } | undefined;
+    /** The tab is hidden: nothing is heard. */
+    hidden(): boolean;
+    /** The personal volume of the jungle calls, from 0 to 1. */
+    volume(): number;
+    play(key: JungleSoundKey, volume: number): void;
+}
+
 /**
  * Lights the jungle up on a map where a jungle marker is placed: the animals drawn by planJungle around the outdoor
  * trees are handed to `apply` (the wandering characters), with a map that keeps them outdoors. Nothing is applied
@@ -38,10 +53,12 @@ export class JungleManager {
     private mapVersion: number | undefined;
     private enabled = true;
     private readonly unsubscribeEnabled: Unsubscriber;
+    private readonly cryGate = new JungleCryGate();
 
     constructor(
         private readonly source: JungleSource,
         private readonly apply: (animals: JungleAnimal[], map: WanderMap) => void,
+        private readonly hearing?: JungleHearing,
     ) {
         this.unsubscribeEnabled = jungleEnabledStore.subscribe((enabled) => {
             this.enabled = enabled;
@@ -67,7 +84,33 @@ export class JungleManager {
         this.applied = animals;
         this.appliedKey = key;
         this.map = map;
+        this.cryGate.keepOnly(new Set(animals.map((animal) => animal.id)));
         this.apply(animals, map);
+    }
+
+    /**
+     * Called every frame: an animal standing still in a leg that has a call (the same legs for every client) calls
+     * out, heard up to 12 tiles away, at most once every 20 seconds for this player.
+     */
+    public update(nowMs: number): void {
+        const hearing = this.hearing;
+        if (!hearing || this.applied.length === 0 || hearing.hidden()) return;
+        const listener = hearing.listener();
+        if (!listener) return;
+        for (const animal of this.applied) {
+            const leg = jungleCryLeg(animal.id, nowMs);
+            if (leg === undefined) continue;
+            const key = jungleSoundKey(animal.sheetPath);
+            if (!key) continue;
+            const pose = hearing.pose(animal.id);
+            if (!pose || pose.moving) continue;
+            const volume =
+                jungleCryVolume(Math.hypot(pose.x - listener.x, pose.y - listener.y)) *
+                JUNGLE_MAX_VOLUME *
+                hearing.volume();
+            if (volume <= 0 || !this.cryGate.shouldPlay(animal.id, leg, nowMs)) continue;
+            hearing.play(key, volume);
+        }
     }
 
     public destroy(): void {

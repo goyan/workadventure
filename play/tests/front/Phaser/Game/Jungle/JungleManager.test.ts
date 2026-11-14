@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JungleManager } from "../../../../../src/front/Phaser/Game/Jungle/JungleManager";
-import type { JungleSource } from "../../../../../src/front/Phaser/Game/Jungle/JungleManager";
+import type { JungleHearing, JungleSource } from "../../../../../src/front/Phaser/Game/Jungle/JungleManager";
+import {
+    JUNGLE_MAX_VOLUME,
+    jungleCryLeg,
+    jungleSoundKey,
+} from "../../../../../src/front/Phaser/Game/Jungle/JungleCries";
+import { LEG_MS, wanderLegOffset } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
 import { jungleTreePicked, parisDay } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
 import type { JungleAnimal, JunglePrefab } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
 import type { WanderMap } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
@@ -151,5 +157,83 @@ describe("JungleManager", () => {
         manager.destroy();
         manager = undefined;
         expect(apply).toHaveBeenLastCalledWith([], expect.anything());
+    });
+
+    describe("calls", () => {
+        /** A moment when this animal has a call: in the middle of one of its legs that has one. */
+        function cryMoment(animalId: string): number {
+            for (let leg = 1000; leg < 3000; leg++) {
+                const now = leg * LEG_MS - wanderLegOffset(animalId) + 10_000;
+                if (jungleCryLeg(animalId, now) !== undefined) return now;
+            }
+            throw new Error("no call found");
+        }
+
+        function setUp(options: { moving?: boolean; distance?: number; hidden?: boolean } = {}) {
+            const { moving = false, distance = 0, hidden = false } = options;
+            const { source, apply } = makeSource();
+            const play = vi.fn<JungleHearing["play"]>();
+            // Filled once the plan is applied: the first animal of the plan.
+            const shown: { caller?: JungleAnimal } = {};
+            const hearing: JungleHearing = {
+                listener: () =>
+                    shown.caller ? { x: shown.caller.nest.x + distance, y: shown.caller.nest.y } : undefined,
+                // Only the first animal is shown: the others are still loading.
+                pose: (id) =>
+                    shown.caller && id === shown.caller.id
+                        ? { x: shown.caller.nest.x, y: shown.caller.nest.y, moving }
+                        : undefined,
+                hidden: () => hidden,
+                volume: () => 0.5,
+                play,
+            };
+            manager = new JungleManager(source, apply, hearing);
+            manager.refresh();
+            const caller = manager.animals[0];
+            shown.caller = caller;
+            return { play, caller, now: cryMoment(caller.id) };
+        }
+
+        it("a stopped animal near the player calls once in a leg that has a call", () => {
+            const { play, caller, now } = setUp();
+            manager?.update(now);
+            manager?.update(now + 1_000);
+            expect(play).toHaveBeenCalledOnce();
+            expect(play).toHaveBeenCalledWith(jungleSoundKey(caller.sheetPath), JUNGLE_MAX_VOLUME * 0.5);
+        });
+
+        it("quieter with the distance, silent from 12 tiles on", () => {
+            const half = setUp({ distance: 6 * 32 });
+            manager?.update(half.now);
+            expect(half.play.mock.calls[0][1]).toBeCloseTo(JUNGLE_MAX_VOLUME * 0.5 * 0.5);
+            manager?.destroy();
+            const far = setUp({ distance: 12 * 32 });
+            manager?.update(far.now);
+            expect(far.play).not.toHaveBeenCalled();
+        });
+
+        it("no call while walking, in a hidden tab, or once the jungle is off", () => {
+            const walking = setUp({ moving: true });
+            manager?.update(walking.now);
+            expect(walking.play).not.toHaveBeenCalled();
+            manager?.destroy();
+            const hidden = setUp({ hidden: true });
+            manager?.update(hidden.now);
+            expect(hidden.play).not.toHaveBeenCalled();
+            manager?.destroy();
+            const off = setUp();
+            jungleEnabledStore.set(false);
+            manager?.refresh();
+            manager?.update(off.now);
+            expect(off.play).not.toHaveBeenCalled();
+        });
+
+        it("no call in a leg without one", () => {
+            const { play, caller, now } = setUp();
+            let quiet = now;
+            while (jungleCryLeg(caller.id, quiet) !== undefined) quiet += LEG_MS;
+            manager?.update(quiet);
+            expect(play).not.toHaveBeenCalled();
+        });
     });
 });

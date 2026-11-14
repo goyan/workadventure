@@ -2,7 +2,12 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { get } from "svelte/store";
 import SoundEffectsSettings from "@wa/front/Components/Menu/SoundEffectsSettings.svelte";
-import { doorVolumeStore, nerfVolumeStore, weatherVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import {
+    doorVolumeStore,
+    jungleVolumeStore,
+    nerfVolumeStore,
+    weatherVolumeStore,
+} from "@wa/front/Stores/SoundEffectsStore";
 import { loadLocaleAsync } from "@wa/i18n/i18n-util.async";
 import { setLocale } from "@wa/i18n/i18n-svelte";
 
@@ -38,6 +43,7 @@ describe("SoundEffectsSettings", () => {
             "weather-volume",
             "door-volume",
             "nerf-volume",
+            "jungle-volume",
             "map-sounds-volume",
             "notification-sound-volume",
         ]);
@@ -55,6 +61,7 @@ describe("SoundEffectsSettings", () => {
             "listen-weather",
             "listen-doors",
             "listen-nerf",
+            "listen-jungle",
             "listen-notifications",
         ]);
         doorVolumeStore.set(0.4);
@@ -77,6 +84,19 @@ describe("SoundEffectsSettings", () => {
             expect(preview.play).toHaveBeenCalledWith("nerf", 0.4);
         } finally {
             nerfVolumeStore.set(previous);
+        }
+    });
+
+    it("previews the jungle calls at their own chosen volume", () => {
+        const previous = get(jungleVolumeStore);
+        try {
+            jungleVolumeStore.set(0.3);
+            const { target, preview } = open();
+            expect(target.textContent).toContain("Jungle animal calls");
+            flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="listen-jungle"]')?.click());
+            expect(preview.play).toHaveBeenCalledWith("jungle", 0.3);
+        } finally {
+            jungleVolumeStore.set(previous);
         }
     });
 

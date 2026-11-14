@@ -1094,6 +1094,36 @@ carte en cours d'édition, peuvent montrer brièvement des positions différente
 
 Catalogue de démonstration côté infra : `workadventure-beta/maps/infogene-animaux/` (collection « Infogène Animaux »).
 
+### Jungle : lions et tigres près des arbres
+
+Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de protocole ni de schéma de catalogue.
+
+- **Allumage** : la jungle vit sur une carte où un objet « Panneau jungle » est posé, c'est-à-dire une entrée de
+  catalogue au tag `Jungle` **sans** champ `wander`. Les **espèces** sont les entrées chargées au tag `Jungle` **avec**
+  `wander` (lion, tigre). Sans panneau, sans espèce chargée ou avant le calcul de la grille « dehors » : rien.
+- **Tirage** (`JunglePlan.ts`, pur) : un arbre est un objet posé dont le prefab commence par `Nature:tree-`, pied (milieu
+  du bas de l'image) dehors selon `OutdoorGrid`. Un hash (`wanderSeed`) de l'arbre et du jour à Paris retient un arbre
+  sur trois et choisit l'espèce ; nid = case libre dehors la plus proche du pied, à 3 cases au plus, sinon pas d'animal ;
+  10 animaux au plus par carte, triés par hash. Le même pour tous, quel que soit l'ordre de lecture des arbres ; il
+  change chaque jour (horloge du poste, comme les promenades).
+- **Promenade** : `WanderingCharactersManager.setFreeCharacters`, des promeneurs **sans objet** : rayon de 5 cases au lieu
+  de 10, cases et chemins limités au dehors (`JungleWanderMap.ts` : un chemin qui passe par un bâtiment n'est pas un
+  chemin), pas de sièges, jamais ouvreurs de portes, masqués en mode éditeur. Les animaux posés à la main (canard, lion
+  posé depuis le catalogue) ne changent pas.
+- **Recalage** : `JungleManager` relit la carte toutes les 500 ms (`GameJungle.ts`) et n'applique le tirage que s'il
+  change ; une nouvelle grille « dehors » donne une nouvelle carte de promenade.
+- **Cris** (`JungleCries.ts`, pur) : une étape de 20 s sur 12 a un cri (en moyenne un cri toutes les 4 min par animal),
+  tirée de l'identifiant de l'animal et du numéro d'étape, joué quand l'animal est à l'arrêt ; entendu à moins de
+  12 cases, plus faible avec la distance (linéaire) ; au plus un cri toutes les 20 s par joueur ; rien onglet caché, son
+  bloqué ou audio verrouillé. Sons `play/public/resources/objects/jungle/{lion,tigre}.mp3`, chargés après le
+  préchargement de la scène (pendant celui-ci, un fichier manquant afficherait l'écran d'erreur réseau), une fois par
+  page : un son absent ou illisible ne joue rien et ne casse rien.
+- **Réglages** : Paramètres → Ambiance « Afficher les animaux de la jungle » (`jungleEnabledStore`, activé par défaut,
+  gardé dans le navigateur ; éteint : ni animaux ni cris). Paramètres → Sons « Cris des animaux de la jungle »
+  (`jungleVolumeStore`, issu de `environmentVolume`), avec écoute du lion.
+- **Non vérifié** : rendu en jeu (de jour, de nuit, sous la pluie), présence d'arbres `Nature:tree-*` dehors sur les cartes
+  de la beta, qualité et volume réels des cris, coût de 10 calculs de chemin de plus ; deux clients côte à côte.
+
 ### Gobeur (retiré)
 
 Le Gobeur (mini-jeu de poursuite) a été retiré le 2026-11-06. Le WAM continue de tolérer la propriété

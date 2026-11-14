@@ -1,9 +1,17 @@
 import { FOOTSTEP_MAX_VOLUME } from "../../Phaser/Game/FootstepSounds";
 import { DOOR_MAX_VOLUME, DOOR_SOUND_URLS } from "../../Phaser/Game/MapEditor/MapLayer/DoorAnimator";
 import { NERF_MAX_VOLUME, NERF_SOUND_URL } from "../../Phaser/Game/Nerf/NerfProtocol";
+import { JUNGLE_MAX_VOLUME, JUNGLE_SOUNDS } from "../../Phaser/Game/Jungle/JungleCries";
 
 /** The families of sound effects that have a typical sound to listen to (the map's own sounds have none). */
-export type PreviewedSoundFamily = "footsteps" | "skateboard" | "weather" | "doors" | "nerf" | "notifications";
+export type PreviewedSoundFamily =
+    | "footsteps"
+    | "skateboard"
+    | "weather"
+    | "doors"
+    | "nerf"
+    | "jungle"
+    | "notifications";
 
 /**
  * An example per family, at the loudness the game uses for it: the slider then sounds as it will in game.
@@ -19,6 +27,11 @@ export const SOUND_PREVIEWS: Record<
     weather: { url: "/resources/objects/weather/rain.mp3", baseVolume: 0.14, durationMs: 3000 },
     doors: { url: DOOR_SOUND_URLS.open, baseVolume: DOOR_MAX_VOLUME },
     nerf: { url: NERF_SOUND_URL, baseVolume: NERF_MAX_VOLUME },
+    // The lion, as heard right next to it.
+    jungle: {
+        url: JUNGLE_SOUNDS.find((sound) => sound.key === "jungle-lion")?.url ?? JUNGLE_SOUNDS[0].url,
+        baseVolume: JUNGLE_MAX_VOLUME,
+    },
     // GameScene.playSound plays notification sounds at 20 %.
     notifications: { url: "/resources/objects/new-message.mp3", baseVolume: 0.2 },
 };

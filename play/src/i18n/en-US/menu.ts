@@ -28,6 +28,7 @@ const menu: BaseTranslation = {
     settings: {
         soundEffects: {
             nerf: "Nerf",
+            jungle: "Jungle animal calls",
             title: "Sounds",
             movement: "Movement",
             aroundMe: "Around me",

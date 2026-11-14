@@ -29,6 +29,7 @@ const menu: DeepPartial<Translation["menu"]> = {
     settings: {
         soundEffects: {
             nerf: "Nerf",
+            jungle: "Cris des animaux de la jungle",
             title: "Sons",
             movement: "Déplacements",
             aroundMe: "Autour de moi",
