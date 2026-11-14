@@ -18,8 +18,6 @@
               )
             : [],
     );
-    const real = $derived(cells.some((cell) => cell.temperature !== undefined));
-
     function when(index: number): string {
         const hours = FORECAST_HOURS[index] ?? 0;
         return hours === 0 ? $LL.actionbar.weatherBanner.now() : $LL.actionbar.weatherBanner.inHours({ hours });
@@ -59,16 +57,6 @@
                 {/if}
             </div>
         {/each}
-        {#if real}
-            <!-- Open-Meteo data are under CC BY 4.0: their source is named wherever they are shown. -->
-            <a
-                href="https://open-meteo.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="text-white/50 underline hover:text-white"
-                title={$LL.actionbar.weatherBanner.attribution()}>Open-Meteo</a
-            >
-        {/if}
         <button
             type="button"
             class="rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white"

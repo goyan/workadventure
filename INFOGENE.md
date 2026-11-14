@@ -1698,7 +1698,7 @@ avec « Heure de mon ordinateur » ou `?nightAt`, l'heure est lue comme celle de
 panneau ; sauvegarder les applique à tous.
 
 **Bandeau** (menu des applications → « Météo », choix gardé dans le navigateur) : maintenant, +1 h et +4 h sous
-l'horloge, températures et lien Open-Meteo en mode Réel, programme saisonnier en Automatique.
+l'horloge, températures en mode Réel, programme saisonnier en Automatique.
 
 **Pusher** : `/real-weather` et `/real-weather/places`, authentifiés, 30 requêtes par minute et par joueur
 (`PerUserRateLimiter`, partagé avec les paroles) ; 20 nouveaux lieux et 30 recherches par minute pour tout le pusher,
@@ -1709,7 +1709,7 @@ l'horloge, températures et lien Open-Meteo en mode Réel, programme saisonnier 
 Automatique ne change rien (choix volontaire : on ne sait pas si l'app renvoie d'elle-même sa valeur affichée).
 
 **Licence** : l'API gratuite d'Open-Meteo est réservée à un usage non commercial, données CC BY 4.0 (source citée
-dans le panneau et le bandeau).
+dans le panneau des réglages, pas dans le bandeau).
 
 ## Arrière-plan de caméra gardé
 

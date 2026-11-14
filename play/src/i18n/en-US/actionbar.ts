@@ -37,7 +37,6 @@ const actionbar = {
         cell: "{when}: {weather}",
         unknown: "Unknown forecast",
         close: "Hide the weather",
-        attribution: "Real weather: Open-Meteo",
     },
     woka: "Customize your avatar",
     companion: "Add companion",
