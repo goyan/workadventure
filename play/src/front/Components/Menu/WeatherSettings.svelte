@@ -15,6 +15,7 @@
     import MapLocationPicker from "./MapLocationPicker.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
+    import { weatherName as sharedWeatherName } from "./WeatherName";
 
     type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
     const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
@@ -80,23 +81,7 @@
     ]);
 
     function weatherName(w: WeatherType): string {
-        const labels = $LL.mapEditor.settings.weather;
-        switch (w) {
-            case WeatherType.Rain:
-                return labels.rain();
-            case WeatherType.Snow:
-                return labels.snow();
-            case WeatherType.Storm:
-                return labels.storm();
-            case WeatherType.Fog:
-                return labels.fog();
-            case WeatherType.Automatic:
-                return labels.automatic();
-            case WeatherType.Real:
-                return labels.real();
-            default:
-                return labels.clear();
-        }
+        return sharedWeatherName($LL.mapEditor.settings.weather, w);
     }
 
     function seasonName(season: Season): string {
