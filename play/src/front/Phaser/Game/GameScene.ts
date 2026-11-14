@@ -2352,11 +2352,16 @@ export class GameScene extends DirtyScene {
         return this.nightManager?.serverDate();
     }
 
-    public getDesktopWeather(): WeatherType {
+    /** The weather of the map shown now, the same for everyone (without one's own seasonal theme). */
+    public getMapWeather(): WeatherType {
         const serverDate = this.nightManager?.serverDate();
         const settings = shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
-        return effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), this.getSeasonalTheme());
+        return weatherAtTime(configured, serverDate, settings?.weatherAuto);
+    }
+
+    public getDesktopWeather(): WeatherType {
+        return effectiveWeather(this.getMapWeather(), this.getSeasonalTheme());
     }
 
     /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */

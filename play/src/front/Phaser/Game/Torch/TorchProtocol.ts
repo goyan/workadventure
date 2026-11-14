@@ -14,8 +14,6 @@ export const TORCH_INTENSITY_MAX = 100;
 export const TORCH_INTENSITY_STEP = 10;
 /** How far the light of a torch reaches, in tiles. */
 export const TORCH_RADIUS_TILES = 5.5;
-/** A warm orange. */
-export const TORCH_COLOUR = 0xff8a2a;
 /** From the hand to the flame, upwards: the torch is held upright. */
 const FLAME_ABOVE_HAND_PX = 9;
 /** A seated avatar holds things 4 px higher (see NerfGunEffect). */
