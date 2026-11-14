@@ -9,7 +9,7 @@ export const JUNGLE_TAG = "Jungle";
 export const JUNGLE_TREE_PREFIX = "Nature:tree-";
 /** Share of the outdoor trees that have an animal on a given day. */
 export const JUNGLE_TREE_SHARE = 1 / 3;
-export const JUNGLE_MAX_ANIMALS = 10;
+export const JUNGLE_MAX_ANIMALS = 50;
 /** How far from the foot of its tree the nest of an animal may be, in tiles. */
 export const JUNGLE_NEST_SEARCH_TILES = 3;
 /** Wandering radius of the jungle animals around their nest, in tiles. */

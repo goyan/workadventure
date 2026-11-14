@@ -1104,7 +1104,7 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
 - **Tirage** (`JunglePlan.ts`, pur) : un arbre est un objet posé dont le prefab commence par `Nature:tree-`, pied (milieu
   du bas de l'image) dehors selon `OutdoorGrid`. Un hash (`wanderSeed`) de l'arbre et du jour à Paris retient un arbre
   sur trois et choisit l'espèce ; nid = case libre dehors la plus proche du pied, à 3 cases au plus, sinon pas d'animal ;
-  10 animaux au plus par carte, triés par hash. Le même pour tous, quel que soit l'ordre de lecture des arbres ; il
+  50 animaux au plus par carte, triés par hash. Le même pour tous, quel que soit l'ordre de lecture des arbres ; il
   change chaque jour (horloge du poste, comme les promenades).
 - **Promenade** : `WanderingCharactersManager.setFreeCharacters`, des promeneurs **sans objet** : rayon de 5 cases au lieu
   de 10, cases et chemins limités au dehors (`JungleWanderMap.ts` : un chemin qui passe par un bâtiment n'est pas un

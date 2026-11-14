@@ -62,10 +62,11 @@ describe("JunglePlan", () => {
         expect(picked.length).toBeLessThanOrEqual(130);
     });
 
-    it("never more than ten, whatever the order of the trees", () => {
-        const trees = treesInARow(60);
+    it("never more than fifty, whatever the order of the trees", () => {
+        const trees = treesInARow(300);
         const forward = planJungle({ trees, species: SPECIES, day: DAY, ...everywhere });
         const backward = planJungle({ trees: [...trees].reverse(), species: SPECIES, day: DAY, ...everywhere });
+        expect(JUNGLE_MAX_ANIMALS).toBe(50);
         expect(forward).toHaveLength(JUNGLE_MAX_ANIMALS);
         expect(backward.map((animal) => animal.id)).toEqual(forward.map((animal) => animal.id));
         expect(backward).toEqual(forward);
@@ -73,12 +74,12 @@ describe("JunglePlan", () => {
             expect(animal.id).toMatch(/^jungle:tree-\d+$/);
             expect(SPECIES).toContain(animal.sheetPath);
         }
-        // Both species show up among ten animals.
+        // Both species show up among fifty animals.
         expect(new Set(forward.map((animal) => animal.sheetPath)).size).toBe(2);
     });
 
     it("changes with the day and not with the client", () => {
-        const trees = treesInARow(60);
+        const trees = treesInARow(300);
         const today = planJungle({ trees, species: SPECIES, day: DAY, ...everywhere });
         expect(planJungle({ trees, species: SPECIES, day: DAY, ...everywhere })).toEqual(today);
         const tomorrow = planJungle({ trees, species: SPECIES, day: "2026-11-15", ...everywhere });
