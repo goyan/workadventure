@@ -22,7 +22,6 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
-                attribution: label("Real weather: Open-Meteo"),
             },
         },
         mapEditor: {
@@ -105,7 +104,7 @@ afterEach(async () => {
 });
 
 describe("WeatherForecastBanner", () => {
-    it("shows the weather now, in one hour and in four hours, with the real temperature and its source", () => {
+    it("shows the weather now, in one hour and in four hours, with the real temperature and no link", () => {
         render();
         expect(forecastAsked.settings.at(-1)).toEqual({ weather: "real" });
         expect(forecastAsked.dates.at(-1)).toEqual(NOW);
@@ -120,12 +119,11 @@ describe("WeatherForecastBanner", () => {
             "+1 h 10°",
             "+4 h ?",
         ]);
-        const source = banner()?.querySelector("a");
-        expect(source?.getAttribute("href")).toBe("https://open-meteo.com/");
-        expect(source?.getAttribute("title")).toBe("Real weather: Open-Meteo");
+        // The source is credited in the map weather settings, not in the banner.
+        expect(banner()?.querySelector("a")).toBeNull();
     });
 
-    it("has no temperature nor source for a weather that is not real", () => {
+    it("has no temperature for a weather that is not real", () => {
         cells.value = cells.value.map((cell) => ({ ...cell, weather: "snow", temperature: undefined }));
         render();
         const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
