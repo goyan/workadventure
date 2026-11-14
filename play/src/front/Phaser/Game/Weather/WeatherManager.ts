@@ -44,6 +44,7 @@ const CLOUD_SHADOW_ALPHA = 0.3;
 /** Clouds over the rain (grey) and the storm (dark): a covered sky, no sun, so no shadows. */
 const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.4, cloudiness: 0.9 };
 const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.45, cloudiness: 1 };
+const MIN_RAIN_COVER = 0.6;
 const OVERCAST_COLOR = 0x8a94a3;
 
 export interface WeatherManagerOptions {
@@ -202,7 +203,12 @@ export class WeatherManager {
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
             if (covering && this.cloudsShown && sunlight.clouds > 0) {
-                const patches = cloudPatches(epoch, view, covering.cloudiness, this.reducedMotion);
+                // The real cover when known, never so thin that the rain seems to fall from a clear sky.
+                const cover =
+                    settings?.cloudCover === undefined
+                        ? covering.cloudiness
+                        : Math.max(MIN_RAIN_COVER, settings.cloudCover);
+                const patches = cloudPatches(epoch, view, cover, this.reducedMotion);
                 this.drawCloudLayer(veil, patches, covering.color, covering.alpha * sunlight.clouds);
             }
             if (weather === WeatherType.Snow) {

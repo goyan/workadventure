@@ -44,7 +44,7 @@ describe("RealWeatherService", () => {
         expect(fetchFn).toHaveBeenCalledOnce();
         const url = urlOf(fetchFn.mock.calls[0][0]);
         expect(url.origin + url.pathname).toBe("https://api.open-meteo.com/v1/forecast");
-        expect(url.searchParams.get("minutely_15")).toBe("weather_code,temperature_2m");
+        expect(url.searchParams.get("minutely_15")).toBe("weather_code,temperature_2m,cloud_cover");
         expect(url.searchParams.get("past_minutely_15")).toBe("8");
         expect(url.searchParams.get("forecast_minutely_15")).toBe("24");
         expect(url.searchParams.get("timeformat")).toBe("unixtime");

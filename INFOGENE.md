@@ -1717,7 +1717,9 @@ dans le panneau des réglages, pas dans le bandeau).
 les nuages sont une intensité (0 à 1) d'un ciel clair, jamais un temps rendu par le programme. Tuile fixe « Nuageux »
 (`WeatherType.Cloudy`, dessinée en ciel clair à 0,5) ; en Auto, chaîne à part sur les tranches claires (hiver 50 %,
 printemps 35 %, été 20 %, automne 40 % en Normale ; pluie/orage/neige/brouillard inchangés), case « Nuageux »
-(`weatherAuto.clouds`, absent = oui ; proto `autoClouds`) ; en Réel, codes WMO 1/2/3 → 0,2/0,5/0,9. Fondu de 3 min.
+(`weatherAuto.clouds`, absent = oui ; proto `autoClouds`) ; en Réel, couverture nuageuse d'Open-Meteo (`cloud_cover`, %
+par quart d'heure, même appel), codes WMO 1/2/3 → 0,2/0,5/0,9 en secours ; la couverture d'une pluie ou d'un orage règle
+la densité de ses nuages gris ou sombres (0,6 au moins). Fondu de 3 min.
 
 **Rendu** (`Weather/Clouds.ts`) : nuages blancs et leurs ombres décalées à l'opposé du soleil du lieu de la carte
 (`sunPositionAt`, azimut Meeus ; ombre de 3 cases de haut, 6 au plus), **dehors seulement et au-dessus de tout**

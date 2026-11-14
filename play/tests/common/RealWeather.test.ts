@@ -87,6 +87,32 @@ describe("cloudinessFromWmoCode", () => {
         expect(cloudinessFromWmoCode(61)).toBeUndefined();
     });
 
+    it("takes the cloud cover (%) of each quarter hour when Open-Meteo gives it, the code otherwise", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900, 1800, 2700],
+                    weather_code: [0, 2, 61, 3],
+                    temperature_2m: [5, 5, 5, 5],
+                    cloud_cover: [35, 80, 100, null],
+                },
+            }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.35 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.8 },
+            { at: 2 * SLOT, weather: WeatherType.Rain, temperature: 5, cloudiness: 1 },
+            { at: 3 * SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.9 },
+        ]);
+    });
+
+    it("refuses a cloud cover column of another length", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: { time: [0, 900], weather_code: [0, 0], temperature_2m: [1, 1], cloud_cover: [10] },
+            }),
+        ).toBeUndefined();
+    });
+
     it("keeps a cloudy quarter hour clear, with its clouds", () => {
         expect(
             slotsFromOpenMeteo({ minutely_15: { time: [0, 900], weather_code: [3, 0], temperature_2m: [5, 5] } }),

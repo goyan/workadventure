@@ -23,6 +23,8 @@ export type RealWeatherState =
           snowMeltFrom?: number;
           /** Clouds of a clear sky, 0 to 1, faded in from those of the quarter hour before. */
           cloudiness?: number;
+          /** Cloud cover of a rain or a storm, 0 to 1: how dense its grey or dark clouds are. */
+          cloudCover?: number;
       }
     | { status: "unavailable" };
 
@@ -36,7 +38,12 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const now = realWeatherAt(forecast.slots, date.getTime());
     if (!now) return { status: "unavailable" };
     const snowMeltFrom = now.before === WeatherType.Snow && now.weather !== WeatherType.Snow ? now.since : undefined;
-    const cloudiness = fadedCloudiness(now.cloudinessBefore, now.cloudiness, date.getTime() - now.slotAt);
+    // White clouds belong to a clear sky: those of the quarter hour before count only if it was clear too.
+    const weatherBefore = now.slotAt === now.since ? now.before : now.weather;
+    const clearBefore = weatherBefore === WeatherType.Clear ? now.cloudinessBefore : 0;
+    const clearNow = now.weather === WeatherType.Clear ? now.cloudiness : 0;
+    const cloudiness = fadedCloudiness(clearBefore, clearNow, date.getTime() - now.slotAt);
+    const raining = now.weather === WeatherType.Rain || now.weather === WeatherType.Storm;
     return {
         status: "known",
         weather: now.weather,
@@ -44,6 +51,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
         until: now.until,
         snowMeltFrom,
         ...(cloudiness > 0 ? { cloudiness } : {}),
+        ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
     };
 }
 
@@ -66,6 +74,7 @@ export function withRealWeather(
                 weatherEndsAt: real.until,
                 snowMeltFrom: real.snowMeltFrom,
                 cloudiness: real.cloudiness,
+                cloudCover: real.cloudCover,
                 weatherAuto,
                 weatherLocation,
             };
