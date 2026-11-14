@@ -23,7 +23,7 @@ import {
 } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
-import { cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
+import { cloudBlockSize, cloudPatches, cloudShadowOffset, cloudSunlight, overcastVeil, shadowPatches } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -44,8 +44,6 @@ const CLOUD_SHADOW_ALPHA = 0.3;
 /** Clouds over the rain (grey) and the storm (dark): a covered sky, no sun, so no shadows. */
 const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.4, cloudiness: 0.9 };
 const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.45, cloudiness: 1 };
-/** Size of a cloud block on the screen: fine enough for a cloud to glide, whatever the zoom. */
-const CLOUD_BLOCK_ON_SCREEN = 12;
 const OVERCAST_COLOR = 0x8a94a3;
 
 export interface WeatherManagerOptions {
@@ -274,9 +272,7 @@ export class WeatherManager {
         color: number,
         alpha: number,
     ): void {
-        const zoom = this.scene.cameras.main.zoom;
-        const block =
-            Number.isFinite(zoom) && zoom > 0 ? Math.max(4, Math.round(CLOUD_BLOCK_ON_SCREEN / zoom)) : FOG_BLOCK;
+        const block = cloudBlockSize(this.scene.cameras.main.zoom);
         const blocks = fogBlocks(veil, patches, block);
         for (let level = 1; level <= FOG_LEVELS; level++) {
             const ofLevel = blocks.filter((cloud) => cloud.level === level);

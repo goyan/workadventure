@@ -3,6 +3,7 @@ import {
     CLOUD_DRIFT_PER_SECOND,
     cloudPatches,
     cloudShadowOffset,
+    cloudBlockSize,
     cloudSunlight,
     overcastVeil,
     shadowPatches,
@@ -94,6 +95,25 @@ describe("cloudPatches", () => {
         const shadows = shadowPatches(5_000, view, 0.5, false, offset);
         const shifted = cloudPatches(5_000, { ...view, x: view.x - offset.x, y: view.y - offset.y }, 0.5, false);
         expect(shadows).toEqual(shifted.map((patch) => ({ ...patch, x: patch.x + offset.x, y: patch.y + offset.y })));
+    });
+
+    it("cuts the blocks on a grid fixed to the map: moving the view never shifts them", () => {
+        const patches = [{ x: 400, y: 300, radius: 200 }];
+        const inside = (blocks: ReturnType<typeof fogBlocks>) =>
+            blocks
+                .filter((b) => b.x >= 320 && b.x + b.width <= 480 && b.y >= 240 && b.y + b.height <= 360)
+                .map((b) => `${b.x},${b.y},${b.width},${b.height},${b.level}`)
+                .sort();
+        const a = fogBlocks([{ x: 0, y: 0, width: 800, height: 600 }], patches, 16);
+        const b = fogBlocks([{ x: 7, y: 3, width: 800, height: 600 }], patches, 16);
+        expect(inside(b)).toEqual(inside(a));
+    });
+
+    it("changes the size of the blocks only at a few steps of zoom", () => {
+        expect(cloudBlockSize(1)).toBe(cloudBlockSize(1.1));
+        expect(cloudBlockSize(0.9)).toBe(cloudBlockSize(1));
+        expect(cloudBlockSize(0.25)).toBeGreaterThan(cloudBlockSize(1));
+        expect(cloudBlockSize(4)).toBeLessThan(cloudBlockSize(1));
     });
 
     it("weighs a fading cloud less in the blocks", () => {

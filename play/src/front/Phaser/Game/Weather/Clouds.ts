@@ -110,3 +110,16 @@ export function shadowPatches(
         y: patch.y + offset.y,
     }));
 }
+
+/** Size of a cloud block on the screen, about: fine enough for a cloud to glide. */
+const CLOUD_BLOCK_ON_SCREEN = 12;
+
+/**
+ * Size of a cloud block in map pixels for a zoom: a power of two, about 12 screen pixels, so it changes only at a few
+ * steps of zoom (not at every notch) and the cost stays the same zoomed out.
+ */
+export function cloudBlockSize(zoom: number): number {
+    if (!Number.isFinite(zoom) || zoom <= 0) return 16;
+    const exponent = Math.floor(Math.log2(CLOUD_BLOCK_ON_SCREEN / zoom));
+    return Math.min(64, Math.max(4, 2 ** exponent));
+}

@@ -294,13 +294,17 @@ export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPat
     for (const run of runs) {
         const right = run.x + run.width;
         const bottom = run.y + run.height;
-        for (let y = run.y; y < bottom; y += block) {
-            const height = Math.min(block, bottom - y);
+        // On a grid fixed to the map, cut by the run: moving or zooming the view never shifts a block.
+        for (let gridY = Math.floor(run.y / block) * block; gridY < bottom; gridY += block) {
+            const y = Math.max(gridY, run.y);
+            const height = Math.min(gridY + block, bottom) - y;
             let current: FogBlock | undefined;
-            for (let x = run.x; x < right; x += block) {
-                const width = Math.min(block, right - x);
-                const centreX = x + width / 2;
-                const centreY = y + height / 2;
+            for (let gridX = Math.floor(run.x / block) * block; gridX < right; gridX += block) {
+                const x = Math.max(gridX, run.x);
+                const width = Math.min(gridX + block, right) - x;
+                // The thickness of the whole grid block, whatever part of it the run keeps.
+                const centreX = gridX + block / 2;
+                const centreY = gridY + block / 2;
                 let thickness = 0;
                 for (const patch of patches) {
                     const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
