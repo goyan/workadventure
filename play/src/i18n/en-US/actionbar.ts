@@ -37,6 +37,7 @@ const actionbar = {
         cell: "{when}: {weather}",
         unknown: "Unknown forecast",
         close: "Hide the weather",
+        defaultCity: "Paris",
     },
     woka: "Customize your avatar",
     companion: "Add companion",

@@ -42,6 +42,7 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         cell: "{when} : {weather}",
         unknown: "Prévision inconnue",
         close: "Masquer la météo",
+        defaultCity: "Paris",
     },
     editCamMic: "Caméra / micro",
     allSettings: "Tous les paramètres",

@@ -2,7 +2,7 @@
     import { WeatherType } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import { shownMapPlace, shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
     import { FORECAST_HOURS } from "../../Phaser/Game/Weather/WeatherForecast";
     import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
     import { nightDateStore } from "../../Stores/NightStore";
@@ -15,13 +15,17 @@
     const OVERCAST_CLOUDINESS = 0.8;
 
     // Read again at each tick of the game clock (every second): a saved or tried weather shows within a second.
-    const cells = $derived(
+    const settings = $derived(
         $weatherBannerStore && $nightDateStore
-            ? shownWeatherForecast(
-                  gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings,
-                  $nightDateStore,
-              )
-            : [],
+            ? gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings
+            : undefined,
+    );
+    const cells = $derived(
+        $weatherBannerStore && $nightDateStore ? shownWeatherForecast(settings, $nightDateStore) : [],
+    );
+    /** The town of the map (the place tried, if any) without its region and country; Paris by default. */
+    const city = $derived(
+        shownMapPlace(settings)?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity(),
     );
     /** A clear sky with clouds is shown Cloudy: the sun behind a cloud, or a cloud alone when overcast. */
     function shown(cell: ForecastCell): { icon: WeatherType; name: WeatherType } | undefined {
@@ -46,6 +50,7 @@
         aria-label={$LL.actionbar.weatherBanner.label()}
         data-testid="weather-banner"
     >
+        <span class="font-bold" data-testid="weather-banner-city">{city}</span>
         {#each cells as cell, index (index)}
             {@const look = shown(cell)}
             <div

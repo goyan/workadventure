@@ -24,6 +24,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
+                defaultCity: label("Paris"),
             },
         },
         mapEditor: {
@@ -51,6 +52,7 @@ vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
     },
 }));
 vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({
+    shownMapPlace: (settings: { weatherLocation?: unknown } | undefined) => settings?.weatherLocation,
     shownWeatherForecast: (settings: unknown, date: Date) => {
         forecastAsked.settings.push(settings);
         forecastAsked.dates.push(date);
@@ -178,5 +180,20 @@ describe("WeatherForecastBanner", () => {
             "weather-icon-cloudy",
             "weather-icon-clear",
         ]);
+    });
+
+    it("names the town of the map first, Paris without one", () => {
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.75, longitude: 4.85 },
+        };
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Lyon");
+    });
+
+    it("names Paris for a map without a place", () => {
+        wamSettings.value = { weather: "automatic" };
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
     });
 });
