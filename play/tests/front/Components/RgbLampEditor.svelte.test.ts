@@ -17,6 +17,11 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     description: label("desc"),
                     color: label("Colour"),
                     colorCode: label("Colour code"),
+                    temperatures: label("Colour temperature"),
+                    warmWhite: label("warm white"),
+                    neutralWhite: label("neutral white"),
+                    coolWhite: label("cool white"),
+                    daylight: label("daylight"),
                     colorCodeInvalid: label("Expected: #rrggbb or #rgb"),
                     copyColor: label("Copy the colour code"),
                     copy: label("Copy"),
@@ -287,6 +292,79 @@ describe("RgbLampEditor", () => {
             expect(saved.at(-1)).not.toHaveProperty("intensity");
             slide(sliders()[0], "12");
             expect(saved.at(-1)).not.toHaveProperty("intensity");
+        });
+    });
+
+    describe("colour temperature presets", () => {
+        // CIE 1964 10° rows of Mitchell Charity's blackbody table (sRGB), read on 2026-11-14:
+        // http://www.vendian.org/mncharity/dir3/blackbody/UnstableURLs/bbr_color.txt (version 2001-Jun-22).
+        const sourced = [
+            ["2700 K", "#ffa957"],
+            ["3000 K", "#ffb46b"],
+            ["4000 K", "#ffd1a3"],
+            ["5000 K", "#ffe4ce"],
+            ["6500 K", "#fff9fd"],
+        ];
+        const presets = () =>
+            [...target.querySelectorAll<HTMLButtonElement>("button")].filter((button) =>
+                / K$/.test(button.textContent?.trim() ?? ""),
+            );
+        const preset = (kelvin: string) => {
+            const button = presets().find((candidate) => candidate.textContent?.trim() === kelvin);
+            if (!button) throw new Error(`no ${kelvin} button`);
+            return button;
+        };
+
+        it("offers five bulb temperatures, named", () => {
+            render();
+            expect(presets().map((button) => button.textContent?.trim())).toEqual(sourced.map(([kelvin]) => kelvin));
+            expect(preset("2700 K").getAttribute("aria-label")).toBe("2700 K, warm white");
+            expect(preset("4000 K").getAttribute("aria-label")).toBe("4000 K, neutral white");
+            expect(preset("6500 K").getAttribute("aria-label")).toBe("6500 K, daylight");
+            expect(preset("2700 K").title).toBe("2700 K, warm white");
+            expect(target.textContent).toContain("Colour temperature");
+        });
+
+        it.each(sourced)(
+            "applies the colour of the blackbody at %s (%s), saved like a code that is entered",
+            (kelvin, colour) => {
+                const { saved } = render();
+                preset(kelvin).click();
+                flushSync();
+                expect(saved).toHaveLength(1);
+                expect(saved[0]).toMatchObject({ type: "rgbLampPropertyData", color: colour, radius: 6 });
+                expect(target.querySelector<HTMLInputElement>('input[type="text"]')?.value).toBe(colour);
+                expect(get(rgbLampPreviewStore)).toBeUndefined();
+            },
+        );
+
+        it("shows the preset of the current colour as pressed, and none for another colour", () => {
+            render([{ id: "p", type: "rgbLampPropertyData", color: "#FFD1A3", radius: 6, direction: 90, angle: 360 }]);
+            expect(presets().map((button) => button.getAttribute("aria-pressed"))).toEqual([
+                "false",
+                "false",
+                "true",
+                "false",
+                "false",
+            ]);
+            preset("6500 K").click();
+            flushSync();
+            expect(preset("6500 K").getAttribute("aria-pressed")).toBe("true");
+            expect(preset("4000 K").getAttribute("aria-pressed")).toBe("false");
+            const picker = colour();
+            if (!picker) throw new Error("no colour input");
+            picker.value = "#123456";
+            picker.dispatchEvent(new Event("input", { bubbles: true }));
+            flushSync();
+            expect(presets().every((button) => button.getAttribute("aria-pressed") === "false")).toBe(true);
+        });
+
+        it("saves nothing for someone who cannot edit the lamp", () => {
+            const { saved } = render([], false);
+            preset("2700 K").click();
+            flushSync();
+            expect(saved).toHaveLength(0);
+            expect(colour()?.value).toBe("#ffd9a0");
         });
     });
 

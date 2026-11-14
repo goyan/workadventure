@@ -19,6 +19,7 @@
     import {
         parseRgbLampColour,
         RGB_LAMP_PROPERTY,
+        RGB_LAMP_TEMPERATURE_PRESETS,
         rgbLampSettingsOf,
         type RgbLampSettings,
     } from "../../../Phaser/Game/Lamps/RgbLampSettings";
@@ -70,6 +71,12 @@
     function enterColorCode(): void {
         const parsed = parseRgbLampColour(colorCode);
         if (parsed !== undefined) colorCode = parsed;
+    }
+
+    /** A temperature preset is applied like a code that is entered: shown, then saved as one step to undo. */
+    function applyPreset(presetColor: string): void {
+        color = presetColor;
+        save();
     }
 
     /** Whether the copy button last worked: it says so for a moment. */
@@ -237,6 +244,31 @@
             {$LL.mapEditor.properties.rgbLamp.colorCodeInvalid()}
         </p>
     {/if}
+    <div class="flex flex-col gap-1">
+        <span class="text-sm">{$LL.mapEditor.properties.rgbLamp.temperatures()}</span>
+        <div class="flex flex-wrap gap-1">
+            {#each RGB_LAMP_TEMPERATURE_PRESETS as preset (preset.kelvin)}
+                {@const name = `${preset.kelvin} K, ${$LL.mapEditor.properties.rgbLamp[preset.name]()}`}
+                <Button
+                    variant={color.toLowerCase() === preset.color ? "secondary" : "light"}
+                    appearance="border"
+                    size="xs"
+                    class="m-0"
+                    aria-label={name}
+                    aria-pressed={color.toLowerCase() === preset.color}
+                    title={name}
+                    onclick={() => applyPreset(preset.color)}
+                >
+                    <span
+                        class="inline-block h-3 w-3 shrink-0 rounded-full border border-solid border-white/30"
+                        style:background-color={preset.color}
+                        aria-hidden="true"
+                    ></span>
+                    {preset.kelvin} K
+                </Button>
+            {/each}
+        </div>
+    </div>
     <RangeSlider
         label={$LL.mapEditor.properties.rgbLamp.radius()}
         unit=""

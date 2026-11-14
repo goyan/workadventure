@@ -53,6 +53,26 @@ export function rgbLampSettingsOf(properties: EntityDataProperties): RgbLampSett
     };
 }
 
+/** The name a temperature preset is given in the editor. */
+export type RgbLampTemperatureName = "warmWhite" | "neutralWhite" | "coolWhite" | "daylight";
+
+/**
+ * The colours of light bulbs, by colour temperature: the colour of a blackbody at that temperature. Taken from the
+ * CIE 1964 10° rows (sRGB, normalized) of Mitchell Charity's table "What color is a blackbody?", version 2001-Jun-22,
+ * read on 2026-11-14: http://www.vendian.org/mncharity/dir3/blackbody/UnstableURLs/bbr_color.txt
+ */
+export const RGB_LAMP_TEMPERATURE_PRESETS: readonly {
+    kelvin: number;
+    color: string;
+    name: RgbLampTemperatureName;
+}[] = [
+    { kelvin: 2700, color: "#ffa957", name: "warmWhite" },
+    { kelvin: 3000, color: "#ffb46b", name: "warmWhite" },
+    { kelvin: 4000, color: "#ffd1a3", name: "neutralWhite" },
+    { kelvin: 5000, color: "#ffe4ce", name: "coolWhite" },
+    { kelvin: 6500, color: "#fff9fd", name: "daylight" },
+];
+
 /**
  * A colour code as typed or pasted (`#rrggbb` or `#rgb`, the `#` optional, any case, spaces around ignored), as the
  * lowercase `#rrggbb` a lamp keeps; undefined for anything else.
