@@ -46,6 +46,10 @@ export interface MapSnowSettings {
     weatherEndsAt?: number;
     /** Real weather only (never saved): when the last snow stopped, the ground melting from then. */
     snowMeltFrom?: number;
+    /** Shown weather only (never saved): clouds of a clear sky, 0 to 1 (shownWeatherSettings). */
+    cloudiness?: number;
+    /** Real weather only (never saved): cloud cover of a rain or a storm, 0 to 1. */
+    cloudCover?: number;
 }
 
 /**

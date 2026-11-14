@@ -80,10 +80,14 @@ export class UpdateWAMSettingCommand extends Command {
                 } else if (location.success) {
                     this.wam.settings.weatherLocation = location.data;
                 }
-                const { autoFrequency, autoInclude } = message.updateWeatherSettingMessage;
-                // Older clients send no auto settings: keep the existing ones.
+                const { autoFrequency, autoInclude, autoClouds } = message.updateWeatherSettingMessage;
+                // Older clients send no auto settings: keep the existing ones. Clouds alike when not sent.
                 if (autoFrequency !== undefined && autoFrequency !== "") {
-                    const auto = AutoWeather.safeParse({ frequency: autoFrequency, include: autoInclude });
+                    const auto = AutoWeather.safeParse({
+                        frequency: autoFrequency,
+                        include: autoInclude,
+                        clouds: autoClouds ?? this.wam.settings.weatherAuto?.clouds,
+                    });
                     if (auto.success) {
                         this.wam.settings.weatherAuto = auto.data;
                     }

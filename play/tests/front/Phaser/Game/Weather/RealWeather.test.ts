@@ -167,3 +167,38 @@ describe("realWeatherStateAt", () => {
         expect(realWeatherStateAt({ status: "known", slots: [] }, new Date(0))).toEqual({ status: "unavailable" });
     });
 });
+
+describe("clouds of the real weather", () => {
+    it("fades the clouds of a quarter hour in over three minutes, from those of the one before", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.2 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.8 },
+        ];
+        const state = (offset: number) => realWeatherStateAt({ status: "known", slots }, new Date(SLOT + offset));
+        expect(state(0)).toMatchObject({ cloudiness: 0.2 });
+        expect(state(90_000)).toMatchObject({ cloudiness: 0.5 });
+        expect(state(3 * 60_000)).toMatchObject({ cloudiness: 0.8 });
+        expect(withRealWeather({ weather: WeatherType.Real }, state(3 * 60_000))).toMatchObject({
+            weather: WeatherType.Clear,
+            cloudiness: 0.8,
+        });
+    });
+
+    it("keeps the cover of a rain for its grey clouds, never as white clouds", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.4 },
+            { at: SLOT, weather: WeatherType.Rain, temperature: 5, cloudiness: 0.95 },
+            { at: 2 * SLOT, weather: WeatherType.Clear, temperature: 5, cloudiness: 0.6 },
+        ];
+        const state = (time: number) => realWeatherStateAt({ status: "known", slots }, new Date(time));
+        const raining = state(SLOT + 3 * 60_000);
+        expect(raining).toMatchObject({ weather: WeatherType.Rain, cloudCover: 0.95 });
+        expect(raining).not.toHaveProperty("cloudiness");
+        // The white clouds of the clear sky before fade out over the first minutes of the rain.
+        expect(state(SLOT + 90_000)).toMatchObject({ cloudiness: 0.2 });
+        // After the rain, the white clouds fade in from none.
+        expect(state(2 * SLOT + 90_000)).toMatchObject({ cloudiness: 0.3 });
+        expect(state(2 * SLOT + 90_000)).not.toHaveProperty("cloudCover");
+        expect(withRealWeather({ weather: WeatherType.Real }, raining)).toMatchObject({ cloudCover: 0.95 });
+    });
+});

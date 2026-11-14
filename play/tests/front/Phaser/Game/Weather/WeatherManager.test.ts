@@ -20,14 +20,16 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     },
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
-const { weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
+const { cloudsShownStore, weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
-const { autoWeatherAt, slotStart } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
+const { autoWeatherAt, cloudinessAt, slotStart } =
+    await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
 const { WeatherManager } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherManager");
 const { SeasonalTheme, SeasonalThemeMode } =
     await import("../../../../../src/front/Phaser/Game/Seasonal/SeasonalTheme");
 const { seasonalThemeModeStore } = await import("../../../../../src/front/Stores/SeasonalThemeStore");
 const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdoor/OutdoorGrid");
+const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game/Weather/Clouds");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
 afterEach(() => {
@@ -37,6 +39,7 @@ afterEach(() => {
     ground.update.mockClear();
     ground.destroy.mockClear();
     weatherEffectsEnabledStore.set(true);
+    cloudsShownStore.set(true);
     mapEditorModeStore.set(false);
     seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
 });
@@ -436,6 +439,131 @@ describe("weather rendering lifecycle", () => {
             );
             expect(graphics.fillRect.mock.calls).toContainEqual([expect.any(Number), expect.any(Number), 2, 2]);
             expect(leaves).toHaveLength(0);
+        });
+    });
+
+    describe("clouds", () => {
+        const sun = { elevation: 30, azimuth: 180 };
+        const at = new Date("2026-11-14T11:00:00Z");
+        const whites = (graphics: ReturnType<typeof fixture>["graphics"]) =>
+            graphics.fillStyle.mock.calls.filter(([color]) => color === 0xffffff).length;
+        const shadows = (graphics: ReturnType<typeof fixture>["graphics"]) =>
+            graphics.fillStyle.mock.calls.filter(([color]) => color === 0x000000).length;
+
+        it("draws white clouds and their shadows for a cloudy sky, with no rain and the sound of fine weather", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Cloudy };
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, sun);
+            expect(whites(graphics)).toBeGreaterThan(0);
+            expect(shadows(graphics)).toBeGreaterThan(0);
+            expect(graphics.lineTo.mock.calls).toHaveLength(0);
+            expect(sounds.update.mock.lastCall?.[0]).toBe(WeatherType.Clear);
+            expect(scene.markDirty.mock.calls).toHaveLength(1);
+        });
+
+        it("moves 15 times a second, so they glide", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Cloudy };
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, sun);
+            manager.update(50, new Date(at.getTime() + 50), false, sun);
+            expect(graphics.clear.mock.calls).toHaveLength(1);
+            manager.update(70, new Date(at.getTime() + 70), false, sun);
+            expect(graphics.clear.mock.calls).toHaveLength(2);
+        });
+
+        it("lets the clouds of a clear sky fade out over the first minutes of a rain", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Automatic };
+            // On the real schedule: a clouded clear slot followed by a rainy one.
+            const slot = 30 * 60 * 1000;
+            let rainStart: number | undefined;
+            for (let t = Date.parse("2026-01-05T00:00:00Z"); t < Date.parse("2026-03-01T00:00:00Z"); t += slot) {
+                if (
+                    autoWeatherAt(new Date(t)) === WeatherType.Rain &&
+                    autoWeatherAt(new Date(t - 1)) === WeatherType.Clear &&
+                    cloudinessAt(new Date(t - 1)) > 0
+                ) {
+                    rainStart = t;
+                    break;
+                }
+            }
+            if (rainStart === undefined) throw new Error("no clouded clear slot before a rain");
+            // A view as big as the repeated square of the sky: every cloud is in it.
+            scene.cameras.main.worldView.width = 1400;
+            scene.cameras.main.worldView.height = 1400;
+            manager = new WeatherManager(scene);
+            manager.update(0, new Date(rainStart + 60_000), false, sun);
+            expect(whites(graphics)).toBeGreaterThan(0);
+            expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
+        });
+
+        it("covers rain with grey clouds and a storm with dark ones, the rain falling under them, without shadows", () => {
+            const { scene, graphics, wam } = fixture();
+            const of = (color: number) => graphics.fillStyle.mock.calls.filter(([fill]) => fill === color).length;
+            wam.settings = { weather: WeatherType.Rain };
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, sun);
+            expect(of(0x7d8794)).toBeGreaterThan(0);
+            expect(of(0x2b3240)).toBe(0);
+            expect(shadows(graphics)).toBe(0);
+            expect(graphics.lineTo.mock.calls.length).toBeGreaterThan(0);
+            graphics.fillStyle.mockClear();
+            wam.settings = { weather: WeatherType.Storm };
+            manager.update(1000, new Date(at.getTime() + 1000), false, sun);
+            expect(of(0x2b3240)).toBeGreaterThan(0);
+            expect(shadows(graphics)).toBe(0);
+        });
+
+        it("has no shadow with a low sun, and dark clouds without shadows at night", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Cloudy };
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, { elevation: 1, azimuth: 240 });
+            // Already a little tinted by the dusk: clouds, not shadows.
+            expect(graphics.fillStyle.mock.calls.length).toBeGreaterThan(0);
+            expect(shadows(graphics)).toBe(0);
+            graphics.fillStyle.mockClear();
+            manager.update(1000, new Date(at.getTime() + 1000), true, { elevation: -10, azimuth: 260 });
+            expect(graphics.setVisible.mock.lastCall).toEqual([true]);
+            expect(
+                graphics.fillStyle.mock.calls.filter(([color]) => color === NIGHT_CLOUD_COLOR).length,
+            ).toBeGreaterThan(0);
+            expect(whites(graphics)).toBe(0);
+            expect(shadows(graphics)).toBe(0);
+        });
+
+        it("draws nothing with the personal switch off, the weather hidden or the editor open", () => {
+            for (const hide of [
+                () => cloudsShownStore.set(false),
+                () => weatherEffectsEnabledStore.set(false),
+                () => mapEditorModeStore.set(true),
+            ]) {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Cloudy };
+                hide();
+                manager = new WeatherManager(scene);
+                manager.update(0, at, false, sun);
+                expect(whites(graphics)).toBe(0);
+                expect(graphics.setVisible.mock.calls).not.toContainEqual([true]);
+                manager.destroy();
+                manager = undefined;
+                cloudsShownStore.set(true);
+                weatherEffectsEnabledStore.set(true);
+                mapEditorModeStore.set(false);
+            }
+        });
+
+        it("stands still when motion is reduced, drawing again only when something visible changes", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Cloudy };
+            manager = new WeatherManager(scene, { reducedMotion: true });
+            manager.update(0, at, false, sun);
+            manager.update(1000, new Date(at.getTime() + 1000), false, sun);
+            expect(graphics.clear.mock.calls).toHaveLength(1);
+            manager.update(2000, new Date(at.getTime() + 2000), false, { elevation: 20, azimuth: 200 });
+            expect(graphics.clear.mock.calls).toHaveLength(2);
         });
     });
 });

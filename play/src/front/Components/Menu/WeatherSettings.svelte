@@ -15,7 +15,7 @@
     import MapLocationPicker from "./MapLocationPicker.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import WeatherTiles from "./WeatherTiles.svelte";
-    import { weatherName as sharedWeatherName } from "./WeatherName";
+    import { weatherLook, weatherName as sharedWeatherName } from "./WeatherName";
 
     type BadWeather = WeatherType.Rain | WeatherType.Storm | WeatherType.Snow | WeatherType.Fog;
     const BAD_WEATHERS: BadWeather[] = [WeatherType.Rain, WeatherType.Storm, WeatherType.Snow, WeatherType.Fog];
@@ -40,6 +40,8 @@
         return a?.name === b?.name && a?.latitude === b?.latitude && a?.longitude === b?.longitude;
     }
     let location = $state.raw<WeatherLocation | undefined>(settings?.weatherLocation);
+    // Clouds of the automatic weather: on unless the map turned them off (absent = on).
+    let clouds = $state(initialAuto.clouds !== false);
 
     const autoInclude = $derived(BAD_WEATHERS.filter((w) => included[w]));
 
@@ -48,19 +50,21 @@
         weather: settings?.weather ?? WeatherType.Clear,
         frequency: initialAuto.frequency,
         include: BAD_WEATHERS.filter((w) => initialAuto.include.includes(w)).join(),
+        clouds: initialAuto.clouds !== false,
         location: settings?.weatherLocation,
     });
     const changed = $derived(
         weather !== saved.weather ||
             frequency !== saved.frequency ||
             autoInclude.join() !== saved.include ||
+            clouds !== saved.clouds ||
             !samePlace(location, saved.location),
     );
     const placeRemoved = $derived(location === undefined && saved.location !== undefined);
     $effect(() => {
         weatherPreviewStore.set(
             changed
-                ? { weather, weatherAuto: { frequency, include: autoInclude }, weatherLocation: location }
+                ? { weather, weatherAuto: { frequency, include: autoInclude, clouds }, weatherLocation: location }
                 : undefined,
         );
     });
@@ -73,6 +77,7 @@
             icon: WeatherType.Automatic,
         },
         { value: WeatherType.Clear, label: $LL.mapEditor.settings.weather.clear(), icon: WeatherType.Clear },
+        { value: WeatherType.Cloudy, label: $LL.mapEditor.settings.weather.cloudy(), icon: WeatherType.Cloudy },
         { value: WeatherType.Rain, label: $LL.mapEditor.settings.weather.rain(), icon: WeatherType.Rain },
         { value: WeatherType.Storm, label: $LL.mapEditor.settings.weather.storm(), icon: WeatherType.Storm },
         { value: WeatherType.Snow, label: $LL.mapEditor.settings.weather.snow(), icon: WeatherType.Snow },
@@ -156,11 +161,12 @@
                     weather: Weather.parse(weather),
                     autoFrequency: frequency,
                     autoInclude,
+                    autoClouds: clouds,
                     // Place removed: back to the default one (Paris), which an absent place alone would not do.
                     ...(location ? { location } : placeRemoved ? { clearLocation: true } : {}),
                 },
             });
-            saved = { weather, frequency, include: autoInclude.join(), location };
+            saved = { weather, frequency, include: autoInclude.join(), clouds, location };
             return $LL.mapEditor.settings.weather.success();
         } catch (error) {
             throw new Error($LL.mapEditor.settings.weather.error(), { cause: error });
@@ -208,6 +214,11 @@
                 label={`${$LL.mapEditor.settings.weather.fog()} (${$LL.mapEditor.settings.weather.auto.fogHint()})`}
                 dataTestId="map-weather-include-fog"
             />
+            <InputCheckbox
+                bind:value={clouds}
+                label={$LL.mapEditor.settings.weather.cloudy()}
+                dataTestId="map-weather-include-clouds"
+            />
         </div>
         <div class="rounded-lg bg-black/30 p-3 text-sm text-white/80" data-testid="map-weather-preview">
             {#each preview as line, index (index)}
@@ -222,7 +233,9 @@
         <p class="text-sm text-white/60">{$LL.mapEditor.settings.weather.realMode.hint()}</p>
         <div class="rounded-lg bg-black/30 p-3 text-sm text-white/80" data-testid="map-weather-real">
             {#if $realWeatherStore.status === "known"}
-                {$LL.mapEditor.settings.weather.realMode.now({ weather: weatherName($realWeatherStore.weather) })}
+                {$LL.mapEditor.settings.weather.realMode.now({
+                    weather: weatherName(weatherLook($realWeatherStore.weather, $realWeatherStore.cloudiness).name),
+                })}
             {:else if $realWeatherStore.status === "unavailable"}
                 {$LL.mapEditor.settings.weather.realMode.unavailable()}
             {:else}

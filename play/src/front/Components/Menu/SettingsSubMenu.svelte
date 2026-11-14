@@ -17,7 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
@@ -347,6 +347,12 @@
             id="weather-effects-enabled"
             bind:value={$weatherEffectsEnabledStore}
             label={$LL.menu.settings.weatherEffects()}
+            labelPosition="right"
+        />
+        <InputSwitch
+            id="weather-clouds-shown"
+            bind:value={$cloudsShownStore}
+            label={$LL.menu.settings.clouds()}
             labelPosition="right"
         />
         <InputSwitch

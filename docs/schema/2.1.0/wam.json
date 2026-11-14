@@ -1384,6 +1384,7 @@
               "enum": [
                 "automatic",
                 "clear",
+                "cloudy",
                 "fog",
                 "real",
                 "rain",
@@ -1411,6 +1412,9 @@
                   "items": {
                     "$ref": "#/definitions/WAMFileFormat/properties/settings/properties/weather"
                   }
+                },
+                "clouds": {
+                  "type": "boolean"
                 }
               },
               "required": [

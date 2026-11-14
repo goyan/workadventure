@@ -1711,6 +1711,24 @@ Automatique ne change rien (choix volontaire : on ne sait pas si l'app renvoie d
 **Licence** : l'API gratuite d'Open-Meteo est réservée à un usage non commercial, données CC BY 4.0 (source citée
 dans le panneau des réglages, pas dans le bandeau).
 
+### Nuages
+
+**Nuages et ombres portées** (conception : `docs/superpowers/specs/2026-11-14-nuages-design.md` du repo d'infra) :
+les nuages sont une intensité (0 à 1) d'un ciel clair, jamais un temps rendu par le programme. Tuile fixe « Nuageux »
+(`WeatherType.Cloudy`, dessinée en ciel clair à 0,5) ; en Auto, chaîne à part sur les tranches claires (hiver 50 %,
+printemps 35 %, été 20 %, automne 40 % en Normale ; pluie/orage/neige/brouillard inchangés), case « Nuageux »
+(`weatherAuto.clouds`, absent = oui ; proto `autoClouds`) ; en Réel, couverture nuageuse d'Open-Meteo (`cloud_cover`, %
+par quart d'heure, même appel), codes WMO 1/2/3 → 0,2/0,5/0,9 en secours ; la couverture d'une pluie ou d'un orage règle
+la densité de ses nuages gris ou sombres (0,6 au moins). Fondu de 3 min.
+
+**Rendu** (`Weather/Clouds.ts`) : nuages blancs et leurs ombres décalées à l'opposé du soleil du lieu de la carte
+(`sunPositionAt`, azimut Meeus ; ombre de 3 cases de haut, 6 au plus), **dehors seulement et au-dessus de tout**
+(avatars compris) ; voile gris en ciel couvert ; nuages gris sur la pluie, sombres sur l'orage, sans ombre. Ciel et
+brouillard **fixés à la carte** (motif répété, `repeatedOverView`) : le zoom et la caméra ne les déplacent pas. 60 px/s,
+15 images/s, blocs d'environ 12 px à l'écran ; la nuit, nuages gris-bleu sombre (teinte progressive de 2° à −6°,
+comme le voile de nuit), sans ombre ni voile couvert, sous les lumières des lampes ; immobiles en mouvement réduit. Interrupteur personnel « Afficher les nuages et leurs ombres »
+(Paramètres → Ambiance). Bandeau : soleil et nuage, ou nuage seul au-dessus de 0,8.
+
 ## Arrière-plan de caméra gardé
 
 Le choix d'arrière-plan (flou ou image) est gardé dans le navigateur par le code amont. Il était effacé pour de bon

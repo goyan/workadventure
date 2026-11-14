@@ -2,7 +2,7 @@ import { WeatherType } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import { slotsFromOpenMeteo } from "../../../../../src/common/RealWeather";
 import { weatherForecast } from "../../../../../src/front/Phaser/Game/Weather/WeatherForecast";
-import { autoWeatherAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
+import { autoWeatherAt, cloudinessAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "../../../../common/OpenMeteoFixture";
 
 const HOUR = 60 * 60 * 1000;
@@ -76,5 +76,29 @@ describe("weatherForecast", () => {
             temperature: 1,
         });
         expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris)[0].weather).toBe(WeatherType.Snow);
+    });
+
+    it("gives the clouds of each hour: real quarter hours, the automatic chain, the Cloudy tile", () => {
+        const cloudy = {
+            status: "known" as const,
+            slots: Array.from({ length: 24 }, (_, index) => ({
+                at: NOW + (index - 1) * 15 * 60 * 1000,
+                weather: WeatherType.Clear as const,
+                temperature: 5,
+                cloudiness: 0.9,
+            })),
+        };
+        expect(weatherForecast({ weather: WeatherType.Real }, NOW, cloudy)[0]).toMatchObject({
+            weather: WeatherType.Clear,
+            cloudiness: 0.9,
+        });
+        expect(weatherForecast({ weather: WeatherType.Cloudy }, NOW, paris).map((cell) => cell)).toEqual([
+            { at: NOW, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
+            { at: NOW + HOUR, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
+            { at: NOW + 4 * HOUR, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
+        ]);
+        expect(
+            weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, paris)[1].cloudiness ?? 0,
+        ).toBe(cloudinessAt(new Date(NOW + HOUR), auto));
     });
 });

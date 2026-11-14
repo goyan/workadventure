@@ -6,9 +6,12 @@ import type { Writable } from "svelte/store";
 const HOUR = 60 * 60 * 1000;
 const NOW = new Date("2026-11-14T11:22:12Z");
 
-const cells = vi.hoisted((): { value: { at: number; weather?: string; temperature?: number }[] } => ({ value: [] }));
+const cells = vi.hoisted(
+    (): { value: { at: number; weather?: string; temperature?: number; cloudiness?: number }[] } => ({ value: [] }),
+);
 const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => ({ settings: [], dates: [] }));
 const wamSettings = vi.hoisted((): { value: unknown } => ({ value: {} }));
+const place = vi.hoisted((): { value: { name: string } | undefined } => ({ value: undefined }));
 const clock = vi.hoisted((): { store: Writable<Date | undefined> | undefined } => ({ store: undefined }));
 
 vi.mock("../../../../src/i18n/i18n-svelte", () => {
@@ -22,6 +25,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
+                defaultCity: label("Paris"),
             },
         },
         mapEditor: {
@@ -34,6 +38,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     storm: label("Storm"),
                     fog: label("Fog"),
                     real: label("Real"),
+                    cloudy: label("Cloudy"),
                 },
             },
         },
@@ -48,6 +53,7 @@ vi.mock("../../../../src/front/Phaser/Game/GameManager", () => ({
     },
 }));
 vi.mock("../../../../src/front/Phaser/Game/Weather/RealWeatherClient", () => ({
+    shownMapPlace: (settings: { weatherLocation?: unknown } | undefined) => place.value ?? settings?.weatherLocation,
     shownWeatherForecast: (settings: unknown, date: Date) => {
         forecastAsked.settings.push(settings);
         forecastAsked.dates.push(date);
@@ -84,6 +90,7 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    place.value = undefined;
     weatherBannerStore.set(true);
     nightDate().set(NOW);
     wamSettings.value = { weather: "real" };
@@ -155,5 +162,64 @@ describe("WeatherForecastBanner", () => {
         expect(banner()).toBeNull();
         expect(get(weatherBannerStore)).toBe(false);
         expect(localStorage.getItem("weatherBannerShown")).toBe("false");
+    });
+
+    it("names a clear sky with clouds Cloudy, with the sun behind a cloud or a cloud alone when overcast", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "clear", cloudiness: 0.5 },
+            { at: NOW.getTime() + HOUR, weather: "clear", cloudiness: 0.9 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "clear" },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Cloudy",
+            "+1 h: Cloudy",
+            "+4 h: Clear",
+        ]);
+        expect(shown.map((cell) => cell.querySelector("svg")?.getAttribute("data-testid"))).toEqual([
+            "weather-icon-automatic",
+            "weather-icon-cloudy",
+            "weather-icon-clear",
+        ]);
+    });
+
+    it("names the town of the map first, Paris without one", () => {
+        wamSettings.value = {
+            weather: "real",
+            weatherLocation: { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.75, longitude: 4.85 },
+        };
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Lyon");
+    });
+
+    it("names Paris for a map without a place", () => {
+        wamSettings.value = { weather: "automatic" };
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+    });
+
+    it("follows a town tried in the panel at the next tick, the map settings being the same object", () => {
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Paris");
+        place.value = { name: "Perpignan, Occitanie, France" };
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-banner-city"]')?.textContent?.trim()).toBe("Perpignan");
+    });
+
+    it("calls a clear sky with a few clouds clear, from 0.2 cloudy", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "clear", cloudiness: 0.1 },
+            { at: NOW.getTime() + HOUR, weather: "clear", cloudiness: 0.2 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "rain", cloudiness: 1 },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Clear",
+            "+1 h: Cloudy",
+            "+4 h: Rain",
+        ]);
     });
 });

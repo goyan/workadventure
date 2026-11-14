@@ -152,6 +152,8 @@ export function weatherAtTime(
     serverDate: Date | undefined,
     auto?: AutoWeatherSettings,
 ): WeatherType {
+    // A cloudy sky is a clear one: its clouds are drawn apart (cloudiness), never as rain.
+    if (configured === WeatherType.Cloudy) return WeatherType.Clear;
     if (configured === WeatherType.Snow) {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return WeatherType.Clear;
         return snowPossibleAt(serverDate) ? WeatherType.Snow : WeatherType.Rain;
@@ -214,32 +216,59 @@ export interface FogPatch {
     x: number;
     y: number;
     radius: number;
+    /** How much the patch counts, 0 to 1 (a cloud fading in); 1 when absent. */
+    weight?: number;
 }
 
 const FOG_PATCHES = 4;
 const FOG_DRIFT = { x: 3.2, y: 2.4 };
+/** The fog patches are a square repeated over the map, fixed to it like the clouds (map pixels). */
+const FOG_PERIOD = 1400;
+const FOG_RADIUS = 340;
 
 /**
- * A few soft patches fixed to the world that drift slowly (4 px a second). Each one wraps around a window a little
- * larger than the view, so there are always as many on screen whatever the camera does.
+ * A few soft patches fixed to the map that drift slowly (4 px a second): a square of patches repeated over the whole
+ * map, so the camera, its zoom and the size of the screen never move nor resize them.
  */
 export function fogPatches(epoch: number, view: WeatherView, still: boolean): FogPatch[] {
-    const radius = Math.max(120, Math.round(Math.max(view.width, view.height) * 0.3));
-    const windowWidth = view.width + 2 * radius;
-    const windowHeight = view.height + 2 * radius;
     const time = still ? 0 : epoch / 1000;
-    const wrap = (value: number, period: number): number => ((value % period) + period) % period;
     const patches: FogPatch[] = [];
     for (let index = 0; index < FOG_PATCHES; index++) {
-        const x = hash01(index, 7) * windowWidth * 4 + time * FOG_DRIFT.x;
-        const y = hash01(index, 13) * windowHeight * 4 + time * FOG_DRIFT.y;
-        patches[index] = {
-            x: view.x - radius + wrap(x - (view.x - radius), windowWidth),
-            y: view.y - radius + wrap(y - (view.y - radius), windowHeight),
-            radius: Math.round(radius * (0.8 + 0.2 * hash01(index, 21))),
+        const radius = Math.round(FOG_RADIUS * (0.8 + 0.2 * hash01(index, 21)));
+        const square = {
+            x: hash01(index, 7) * FOG_PERIOD + time * FOG_DRIFT.x,
+            y: hash01(index, 13) * FOG_PERIOD + time * FOG_DRIFT.y,
         };
+        for (const centre of repeatedOverView(square, FOG_PERIOD, view, FOG_RADIUS)) {
+            patches.push({ ...centre, radius });
+        }
     }
     return patches;
+}
+
+/**
+ * Every copy, over the view and a margin around it, of a point of a square repeated over the whole map (period in map
+ * pixels): what the fog patches and the clouds are made of, so the camera and its zoom never move them.
+ */
+export function repeatedOverView(
+    point: { x: number; y: number },
+    period: number,
+    view: WeatherView,
+    margin: number,
+): { x: number; y: number }[] {
+    const wrap = (value: number): number => ((value % period) + period) % period;
+    const left = view.x - margin;
+    const top = view.y - margin;
+    const right = view.x + view.width + margin;
+    const bottom = view.y + view.height + margin;
+    const inSquare = { x: wrap(point.x), y: wrap(point.y) };
+    const copies: { x: number; y: number }[] = [];
+    for (let x = inSquare.x + Math.ceil((left - inSquare.x) / period) * period; x <= right; x += period) {
+        for (let y = inSquare.y + Math.ceil((top - inSquare.y) / period) * period; y <= bottom; y += period) {
+            copies.push({ x, y });
+        }
+    }
+    return copies;
 }
 
 /** How many thicknesses a fog block can have, from 1 (thin) to this value (the centre of a patch). */
@@ -265,17 +294,21 @@ export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPat
     for (const run of runs) {
         const right = run.x + run.width;
         const bottom = run.y + run.height;
-        for (let y = run.y; y < bottom; y += block) {
-            const height = Math.min(block, bottom - y);
+        // On a grid fixed to the map, cut by the run: moving or zooming the view never shifts a block.
+        for (let gridY = Math.floor(run.y / block) * block; gridY < bottom; gridY += block) {
+            const y = Math.max(gridY, run.y);
+            const height = Math.min(gridY + block, bottom) - y;
             let current: FogBlock | undefined;
-            for (let x = run.x; x < right; x += block) {
-                const width = Math.min(block, right - x);
-                const centreX = x + width / 2;
-                const centreY = y + height / 2;
+            for (let gridX = Math.floor(run.x / block) * block; gridX < right; gridX += block) {
+                const x = Math.max(gridX, run.x);
+                const width = Math.min(gridX + block, right) - x;
+                // The thickness of the whole grid block, whatever part of it the run keeps.
+                const centreX = gridX + block / 2;
+                const centreY = gridY + block / 2;
                 let thickness = 0;
                 for (const patch of patches) {
                     const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
-                    if (share > 0) thickness += share * share;
+                    if (share > 0) thickness += (patch.weight ?? 1) * share * share;
                 }
                 const level = Math.round(Math.min(1, thickness) * FOG_LEVELS);
                 if (level === 0) {

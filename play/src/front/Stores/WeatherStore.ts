@@ -1,4 +1,5 @@
 import { get, writable, type Writable } from "svelte/store";
+import { createPersistedSwitchStore } from "./PersistedSwitchStore";
 
 const WEATHER_ENABLED_KEY = "weatherEffectsEnabled";
 
@@ -16,3 +17,9 @@ function createWeatherEffectsStore(): Writable<boolean> {
 }
 
 export const weatherEffectsEnabledStore = createWeatherEffectsStore();
+
+/**
+ * Personal switch for the clouds of the map weather and their shadows: on until turned off, kept in the browser. It
+ * never changes the weather of the map for the others.
+ */
+export const cloudsShownStore = createPersistedSwitchStore("weatherCloudsShown", true);

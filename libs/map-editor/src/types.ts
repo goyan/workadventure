@@ -686,6 +686,8 @@ export type CategorySettings = z.infer<typeof CategorySettings>;
 export enum WeatherType {
     Automatic = "automatic",
     Clear = "clear",
+    /** A clear sky with passing clouds (fixed choice): drawn as Clear with clouds, never a bad weather. */
+    Cloudy = "cloudy",
     Fog = "fog",
     /** The weather at the place of the map (Paris by default), from Open-Meteo through the pusher (else Automatic). */
     Real = "real",
@@ -698,10 +700,12 @@ export const Weather = z.nativeEnum(WeatherType);
 export const AutoWeatherFrequency = z.enum(["calm", "normal", "stormy"]);
 export type AutoWeatherFrequency = z.infer<typeof AutoWeatherFrequency>;
 
-/** Settings of the automatic weather: how often it changes and which weathers it may pick. */
+/** Settings of the automatic weather: how often it changes, which weathers it may pick, and clouds on clear slots. */
 export const AutoWeather = z.object({
     frequency: AutoWeatherFrequency,
     include: z.array(Weather),
+    /** Clouds over some clear slots; absent means yes (maps saved before clouds existed have them). */
+    clouds: z.boolean().optional(),
 });
 export type AutoWeatherSettings = z.infer<typeof AutoWeather>;
 

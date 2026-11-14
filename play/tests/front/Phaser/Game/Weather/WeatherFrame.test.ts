@@ -118,6 +118,9 @@ describe("common automatic weather", () => {
             expect(weatherAtTime(WeatherType.Snow, new Date(date))).toBe(WeatherType.Rain);
         }
         expect(weatherAtTime(WeatherType.Snow, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Snow);
+        // A cloudy sky is a clear one with clouds: never rain, sound or particles.
+        expect(weatherAtTime(WeatherType.Cloudy, new Date("2026-11-01T01:30:00Z"))).toBe(WeatherType.Clear);
+        expect(weatherParticles(WeatherType.Clear, 1000, { x: 0, y: 0, width: 800, height: 600 })).toEqual([]);
         for (const month of ["2026-04", "2026-07", "2026-10"]) {
             for (let t = Date.parse(`${month}-01T00:00:00Z`); t < Date.parse(`${month}-28T00:00:00Z`); t += halfHour) {
                 expect(weatherAtTime(WeatherType.Automatic, new Date(t))).not.toBe(WeatherType.Snow);
@@ -270,10 +273,33 @@ describe("fog", () => {
 
     describe("patches", () => {
         const view = { x: 100, y: 50, width: 800, height: 600 };
-        it("are three or four", () => {
-            const count = fogPatches(123456, view, false).length;
-            expect(count).toBeGreaterThanOrEqual(3);
-            expect(count).toBeLessThanOrEqual(4);
+        it("always lie over the view, wherever the camera is", () => {
+            for (const at of [
+                { x: 0, y: 0 },
+                { x: 5_000, y: -3_000 },
+                { x: -12_345, y: 6_789 },
+            ]) {
+                const shown = { ...view, ...at };
+                const over = fogPatches(123456, shown, false).filter(
+                    (patch) =>
+                        patch.x + patch.radius > shown.x &&
+                        patch.x - patch.radius < shown.x + shown.width &&
+                        patch.y + patch.radius > shown.y &&
+                        patch.y - patch.radius < shown.y + shown.height,
+                );
+                expect(over.length).toBeGreaterThanOrEqual(1);
+            }
+        });
+        it("are fixed to the map: zooming or moving the camera never moves nor resizes them", () => {
+            const near = (patches: ReturnType<typeof fogPatches>) =>
+                patches
+                    .filter((patch) => patch.x > 300 && patch.x < 500 && patch.y > 200 && patch.y < 400)
+                    .map((patch) => [Math.round(patch.x * 1000), Math.round(patch.y * 1000), patch.radius])
+                    .sort();
+            const zoomedOut = { x: -2000, y: -1500, width: 4800, height: 3600 };
+            const zoomedIn = { x: 350, y: 250, width: 100, height: 100 };
+            expect(near(fogPatches(9_000, zoomedIn, false))).toEqual(near(fogPatches(9_000, zoomedOut, false)));
+            expect(near(fogPatches(9_000, view, false))).toEqual(near(fogPatches(9_000, zoomedOut, false)));
         });
         it("are the same for everyone at the same time", () => {
             expect(fogPatches(5000, view, false)).toEqual(fogPatches(5000, view, false));

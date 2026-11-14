@@ -8,6 +8,10 @@ describe("desktopWeatherMode", () => {
         expect(desktopWeatherMode(WeatherType.Real)).toBe(WeatherType.Automatic);
     });
 
+    it("shows a map in Cloudy as Clear to the desktop app, which has no Cloudy mode", () => {
+        expect(desktopWeatherMode(WeatherType.Cloudy)).toBe(WeatherType.Clear);
+    });
+
     it("shows the other modes as they are, clear for a map without weather", () => {
         expect(desktopWeatherMode(WeatherType.Snow)).toBe(WeatherType.Snow);
         expect(desktopWeatherMode(WeatherType.Automatic)).toBe(WeatherType.Automatic);

@@ -41,6 +41,8 @@ export const RealWeatherSlot = z.object({
     at: z.number().int().nonnegative(),
     weather: ObservedWeather.nullable(),
     temperature: z.number().finite().nullable(),
+    /** Clouds of the quarter hour, 0 to 1 (absent: none): the cloud cover, over a clear sky or a rain. */
+    cloudiness: z.number().min(0).max(1).optional(),
 });
 export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
 
@@ -56,24 +58,37 @@ const OpenMeteoTimeline = z.object({
         time: z.array(z.number().int().nonnegative()).max(96),
         weather_code: z.array(z.number().nullable()).max(96),
         temperature_2m: z.array(z.number().finite().nullable()).max(96),
+        /** Cloud cover in %, asked since the clouds; absent from older answers. */
+        cloud_cover: z.array(z.number().finite().nullable()).max(96).optional(),
     }),
 });
 
 /**
- * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m and timeformat=unixtime.
+ * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover and
+ * timeformat=unixtime.
  * Each value is taken for the quarter hour starting at its time. Undefined when the answer has no such timeline.
  */
 export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
     const parsed = OpenMeteoTimeline.safeParse(answer);
     if (!parsed.success) return undefined;
-    const { time, weather_code, temperature_2m } = parsed.data.minutely_15;
+    const { time, weather_code, temperature_2m, cloud_cover } = parsed.data.minutely_15;
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
+    if (cloud_cover && cloud_cover.length !== time.length) return undefined;
     return time.map((seconds, index) => {
         const code = weather_code[index];
+        // The cloud cover itself when given (any weather: it sets the clouds over the rain too), else the WMO code.
+        const cover = cloud_cover?.[index];
+        const cloudiness =
+            cover !== undefined && cover !== null
+                ? Math.max(0, Math.min(1, cover / 100))
+                : code === null
+                  ? undefined
+                  : cloudinessFromWmoCode(code);
         return {
             at: seconds * 1000,
             weather: (code === null ? undefined : weatherFromWmoCode(code)) ?? null,
             temperature: temperature_2m[index],
+            ...(cloudiness ? { cloudiness } : {}),
         };
     });
 }
@@ -88,6 +103,10 @@ export interface RealWeatherAt {
     until: number | undefined;
     before: ObservedWeather | undefined;
     temperature: number | null;
+    /** Start of the quarter hour under way, its clouds and those of the quarter hour before (0 if none). */
+    slotAt: number;
+    cloudiness: number;
+    cloudinessBefore: number;
 }
 
 /**
@@ -116,7 +135,18 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
         until: next?.weather ? next.at : undefined,
         before: previous?.weather ?? undefined,
         temperature: current.temperature,
+        slotAt: current.at,
+        cloudiness: current.cloudiness ?? 0,
+        cloudinessBefore: index > 0 && follows(index, index - 1) ? (slots[index - 1].cloudiness ?? 0) : 0,
     };
+}
+
+/** Clouds of a WMO code that the game draws as clear: 1 (mainly clear) a few, 2 half the sky, 3 overcast. */
+export function cloudinessFromWmoCode(code: number): number | undefined {
+    if (code === 1) return 0.2;
+    if (code === 2) return 0.5;
+    if (code === 3) return 0.9;
+    return undefined;
 }
 
 /**

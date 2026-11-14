@@ -1,5 +1,6 @@
 import { WeatherType } from "@workadventure/map-editor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cloudinessAt } from "../../../../../src/front/Phaser/Game/Weather/WeatherSchedule";
 import type * as ClientModule from "../../../../../src/front/Phaser/Game/Weather/RealWeatherClient";
 
 vi.mock("../../../../../src/front/Connection/LocalUserStore", () => ({
@@ -130,5 +131,24 @@ describe("RealWeatherClient", () => {
         client.weatherPreviewStore.set(undefined);
         expect(client.shownWeatherSettings({ weather: WeatherType.Clear }, at())?.weather).toBe(WeatherType.Clear);
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("draws the Cloudy tile as a clear sky with clouds, at once like the other fixed tiles", () => {
+        expect(
+            client.shownWeatherSettings({ weather: WeatherType.Cloudy, weatherStartedAt: START }, at(90_000)),
+        ).toMatchObject({ weather: WeatherType.Clear, cloudiness: 0.5 });
+        expect(client.shownWeatherSettings({ weather: WeatherType.Cloudy }, at())).toMatchObject({
+            weather: WeatherType.Clear,
+            cloudiness: 0.5,
+        });
+    });
+
+    it("gives the clouds of the automatic weather, none for the other weathers", () => {
+        const auto = { frequency: "normal" as const, include: [] };
+        expect(client.shownWeatherSettings({ weather: WeatherType.Automatic, weatherAuto: auto }, at())).toMatchObject({
+            weather: WeatherType.Automatic,
+            cloudiness: cloudinessAt(at(), auto),
+        });
+        expect(client.shownWeatherSettings({ weather: WeatherType.Rain }, at())?.cloudiness).toBeUndefined();
     });
 });

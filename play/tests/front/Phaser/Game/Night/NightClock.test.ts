@@ -5,8 +5,10 @@ import {
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
+    sunElevationAt,
     sunElevationInParis,
     sunPlaceOf,
+    sunPositionAt,
 } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const MINUTE = 60_000;
@@ -166,5 +168,33 @@ describe("sunPlaceOf", () => {
     it("keeps the sun of Paris for a clock read as Paris time (computer clock, ?nightAt)", () => {
         // 21:00 on a computer in Montréal is read as 21:00 in Paris: the sun of Montréal then would be 15:00's.
         expect(sunPlaceOf(true, montreal)).toBeUndefined();
+    });
+});
+
+describe("sunPositionAt", () => {
+    // Published by timeanddate.com for 2026-11-14 (read on 2026-11-14): sunrise and sunset azimuths, solar noon altitude.
+    const paris = { latitude: 48.8566, longitude: 2.3522 };
+    const sydney = { latitude: -33.8688, longitude: 151.2093 };
+
+    it("finds the sun of Paris: rising at 117° (07:57), setting at 242° (17:11), 22.9° high at 12:35", () => {
+        expect(Math.abs(sunPositionAt(new Date("2026-11-14T06:57:00Z"), paris).azimuth - 117)).toBeLessThanOrEqual(1);
+        expect(Math.abs(sunPositionAt(new Date("2026-11-14T16:11:00Z"), paris).azimuth - 242)).toBeLessThanOrEqual(1);
+        const noon = sunPositionAt(new Date("2026-11-14T11:35:00Z"), paris);
+        expect(Math.abs(noon.elevation - 22.9)).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(noon.azimuth - 180)).toBeLessThanOrEqual(1);
+    });
+
+    it("finds the sun of Sydney (UTC+11): rising at 113° (05:44), setting at 247° (19:35), 74.3° high at 12:39", () => {
+        expect(Math.abs(sunPositionAt(new Date("2026-11-13T18:44:00Z"), sydney).azimuth - 113)).toBeLessThanOrEqual(1);
+        expect(Math.abs(sunPositionAt(new Date("2026-11-14T08:35:00Z"), sydney).azimuth - 247)).toBeLessThanOrEqual(1);
+        const noon = sunPositionAt(new Date("2026-11-14T01:39:00Z"), sydney);
+        expect(Math.abs(noon.elevation - 74.3)).toBeLessThanOrEqual(0.5);
+        // North at noon in the southern hemisphere: 0° or 360°.
+        expect(Math.min(noon.azimuth, 360 - noon.azimuth)).toBeLessThanOrEqual(2);
+    });
+
+    it("gives the same elevation as sunElevationAt", () => {
+        const at = new Date("2026-11-14T14:00:00Z");
+        expect(sunPositionAt(at, paris).elevation).toBe(sunElevationAt(at, paris));
     });
 });

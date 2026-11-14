@@ -1,23 +1,34 @@
 <script lang="ts">
+    import type { WeatherType } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { gameManager } from "../../Phaser/Game/GameManager";
-    import { shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
+    import { shownMapPlace, shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
     import { FORECAST_HOURS } from "../../Phaser/Game/Weather/WeatherForecast";
+    import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
     import { nightDateStore } from "../../Stores/NightStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
-    import { weatherName } from "../Menu/WeatherName";
+    import { weatherLook, weatherName } from "../Menu/WeatherName";
     import { IconX } from "@wa-icons";
 
-    // Read again at each tick of the game clock (every second): a saved or tried weather shows within a second.
+    // Read again at each tick of the game clock (every second): a saved or tried weather or town shows within a
+    // second (the map settings are changed in place, so they cannot be followed by themselves).
+    function mapSettings() {
+        return gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings;
+    }
     const cells = $derived(
-        $weatherBannerStore && $nightDateStore
-            ? shownWeatherForecast(
-                  gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings,
-                  $nightDateStore,
-              )
-            : [],
+        $weatherBannerStore && $nightDateStore ? shownWeatherForecast(mapSettings(), $nightDateStore) : [],
     );
+    /** The town of the map (the place tried, if any) without its region and country; Paris by default. */
+    const city = $derived.by(() => {
+        if (!$weatherBannerStore || !$nightDateStore) return "";
+        return shownMapPlace(mapSettings())?.name.split(",")[0]?.trim() || $LL.actionbar.weatherBanner.defaultCity();
+    });
+
+    function shown(cell: ForecastCell): { icon: WeatherType; name: WeatherType } | undefined {
+        return cell.weather ? weatherLook(cell.weather, cell.cloudiness) : undefined;
+    }
+
     function when(index: number): string {
         const hours = FORECAST_HOURS[index] ?? 0;
         return hours === 0 ? $LL.actionbar.weatherBanner.now() : $LL.actionbar.weatherBanner.inHours({ hours });
@@ -31,21 +42,23 @@
         aria-label={$LL.actionbar.weatherBanner.label()}
         data-testid="weather-banner"
     >
+        <span class="font-bold" data-testid="weather-banner-city">{city}</span>
         {#each cells as cell, index (index)}
+            {@const look = shown(cell)}
             <div
                 class="flex items-center gap-1"
                 role="img"
                 aria-label={$LL.actionbar.weatherBanner.cell({
                     when: when(index),
-                    weather: cell.weather
-                        ? weatherName($LL.mapEditor.settings.weather, cell.weather)
+                    weather: look
+                        ? weatherName($LL.mapEditor.settings.weather, look.name)
                         : $LL.actionbar.weatherBanner.unknown(),
                 })}
                 data-testid="weather-banner-cell"
             >
                 <span class="text-white/60">{when(index)}</span>
-                {#if cell.weather}
-                    <WeatherIcon icon={cell.weather} size={16} />
+                {#if look}
+                    <WeatherIcon icon={look.icon} size={16} />
                 {:else}
                     <span class="w-4 text-center text-white/60">?</span>
                 {/if}
