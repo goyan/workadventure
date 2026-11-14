@@ -347,6 +347,11 @@ const mapEditor: BaseTranslation = {
             description:
                 "On the map, drag the handle at the tip of the cone to turn the light and set its reach, and the two diamonds to open or close it. Walls and tall furniture stop the light.",
             color: "Colour",
+            colorCode: "Colour code",
+            colorCodeInvalid: "Expected: #rrggbb or #rgb",
+            copyColor: "Copy the colour code",
+            copy: "Copy",
+            copied: "Copied ✓",
             radius: "Reach (tiles)",
             angle: "Opening",
             direction: "Direction",

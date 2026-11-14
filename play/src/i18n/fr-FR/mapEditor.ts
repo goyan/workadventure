@@ -359,6 +359,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             description:
                 "Sur la carte, tirez la poignée au bout du cône pour orienter la lumière et régler sa portée, et les deux losanges pour l'ouvrir ou la refermer. Les murs et les meubles hauts arrêtent la lumière.",
             color: "Couleur",
+            colorCode: "Code couleur",
+            colorCodeInvalid: "Code attendu : #rrggbb ou #rgb",
+            copyColor: "Copier le code couleur",
+            copy: "Copier",
+            copied: "Copié ✓",
             radius: "Portée (cases)",
             angle: "Ouverture",
             direction: "Direction",

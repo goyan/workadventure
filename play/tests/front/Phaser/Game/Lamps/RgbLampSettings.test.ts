@@ -3,6 +3,7 @@ import {
     coneFromTip,
     coneOpeningFromEdge,
     coneTip,
+    parseRgbLampColour,
     rgbLampColour,
     rgbLampLight,
     rgbLampSettingsOf,
@@ -85,5 +86,25 @@ describe("handles of the cone", () => {
     it("keeps the opening within 10 to 360 degrees", () => {
         expect(coneOpeningFromEdge(source, { x: 100, y: 200 }, 90)).toBe(10);
         expect(coneOpeningFromEdge(source, { x: 101, y: 0 }, 90)).toBe(359);
+    });
+});
+
+describe("parseRgbLampColour", () => {
+    it("reads #rrggbb and #rgb, with or without #, whatever the case, as lowercase #rrggbb", () => {
+        expect(parseRgbLampColour("#e0a93a")).toBe("#e0a93a");
+        expect(parseRgbLampColour("#E0A93A")).toBe("#e0a93a");
+        expect(parseRgbLampColour("e0a93a")).toBe("#e0a93a");
+        expect(parseRgbLampColour("#abc")).toBe("#aabbcc");
+        expect(parseRgbLampColour("ABC")).toBe("#aabbcc");
+    });
+
+    it("ignores the spaces around a pasted code", () => {
+        expect(parseRgbLampColour("  #e0a93a\n")).toBe("#e0a93a");
+    });
+
+    it("refuses anything else", () => {
+        for (const text of ["", "#", "#12345g", "#abcd", "#1234567", "##abc", "red", "#e0a93a;"]) {
+            expect(parseRgbLampColour(text)).toBeUndefined();
+        }
     });
 });

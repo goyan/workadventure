@@ -51,6 +51,16 @@ export function rgbLampSettingsOf(properties: EntityDataProperties): RgbLampSett
     };
 }
 
+/**
+ * A colour code as typed or pasted (`#rrggbb` or `#rgb`, the `#` optional, any case, spaces around ignored), as the
+ * lowercase `#rrggbb` a lamp keeps; undefined for anything else.
+ */
+export function parseRgbLampColour(text: string): string | undefined {
+    const hex = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(text.trim())?.[1]?.toLowerCase();
+    if (hex === undefined) return undefined;
+    return `#${hex.length === 3 ? [...hex].map((digit) => digit + digit).join("") : hex}`;
+}
+
 /** `#rrggbb` as a number, for a tint; the default colour for anything else. */
 export function rgbLampColour(color: string): number {
     const hex = /^#([0-9a-fA-F]{6})$/.exec(color)?.[1] ?? RGB_LAMP_DEFAULT_COLOR.slice(1);
