@@ -113,6 +113,18 @@
         drawWheel(context, getComputedStyle(wheelElement));
     });
 
+    // While the intensity is being set, the rest of the wheel almost vanishes: the avatar and its light show through.
+    let intensityHovered = $state(false);
+    let intensityFocused = $state(false);
+    const faded = $derived(torchIntensityShown && (intensityHovered || intensityFocused));
+
+    function onIntensityFocusOut(event: FocusEvent): void {
+        const group = event.currentTarget;
+        // From one of its buttons to the other: still focused.
+        intensityFocused =
+            group instanceof HTMLElement && event.relatedTarget instanceof Node && group.contains(event.relatedTarget);
+    }
+
     /** One step dimmer or brighter; the wheel stays open to take several. */
     function stepTorchIntensity(direction: -1 | 1): void {
         torchIntensityStore.update((percent) => percent + direction * TORCH_INTENSITY_STEP);
@@ -154,6 +166,7 @@
 <button class="wheel-dismiss" aria-label={$LL.woka.menu.closeActions()} onclick={close}></button>
 <div
     class="avatar-wheel retro-theme"
+    class:faded
     bind:this={wheelElement}
     style:left="{x}px"
     style:top="{y}px"
@@ -214,6 +227,10 @@
             role="group"
             aria-label={$LL.actionbar.torch.intensity()}
             data-testid="avatar-torch-intensity"
+            onpointerenter={() => (intensityHovered = true)}
+            onpointerleave={() => (intensityHovered = false)}
+            onfocusin={() => (intensityFocused = true)}
+            onfocusout={onIntensityFocusOut}
         >
             <PixelIcon name="torch" size={16} />
             <button
@@ -353,6 +370,27 @@
         display: flex;
         font-size: 25px;
         line-height: 1;
+    }
+    /*
+     * Faded while the intensity is set: only seen, the wheel still takes the clicks (nothing reaches the map) and keeps
+     * its keyboard navigation. The control stays opaque; its own shadow replaces the wheel's.
+     */
+    .avatar-wheel > :not(.wheel-intensity) {
+        transition: opacity 150ms ease-out;
+    }
+    .avatar-wheel.faded {
+        filter: none;
+    }
+    .avatar-wheel.faded > :not(.wheel-intensity) {
+        opacity: 0.12;
+    }
+    .avatar-wheel.faded .wheel-intensity {
+        filter: drop-shadow(0 4px 0 #0007);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .avatar-wheel > :not(.wheel-intensity) {
+            transition: none;
+        }
     }
     /* The intensity of the torch, just under the wheel, in the colors of its sectors. */
     .wheel-intensity {

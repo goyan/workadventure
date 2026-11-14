@@ -130,6 +130,35 @@ describe("own avatar wheel", () => {
             expect(target.querySelector('[data-testid="avatar-radial-menu"]')).not.toBeNull();
         });
 
+        it("fades the rest of the wheel while it is pointed at or focused, to show the avatar and its light", () => {
+            torchEquippedStore.set(true);
+            const target = mountWheel(wheelActions());
+            const wheel = target.querySelector('[data-testid="avatar-radial-menu"]');
+            const group = control(target);
+            const lower = target.querySelector<HTMLButtonElement>('[data-testid="avatar-torch-intensity-lower"]');
+            const raise = target.querySelector<HTMLButtonElement>('[data-testid="avatar-torch-intensity-raise"]');
+            const faded = () => wheel?.classList.contains("faded");
+            expect(faded()).toBe(false);
+
+            flushSync(() => group?.dispatchEvent(new PointerEvent("pointerenter")));
+            expect(faded()).toBe(true);
+            // The control stays usable, the wheel open.
+            flushSync(() => lower?.click());
+            expect(get(torchIntensityStore)).toBe(90);
+            expect(lower?.getAttribute("aria-disabled")).toBe("false");
+            flushSync(() => group?.dispatchEvent(new PointerEvent("pointerleave")));
+            expect(faded()).toBe(false);
+
+            // From the keyboard: focused, from one button to the other, then away.
+            flushSync(() => lower?.focus());
+            expect(faded()).toBe(true);
+            flushSync(() => raise?.focus());
+            expect(faded()).toBe(true);
+            flushSync(() => target.querySelector<HTMLButtonElement>('[data-testid="avatar-torch"]')?.focus());
+            expect(faded()).toBe(false);
+            expect(wheel).not.toBeNull();
+        });
+
         it("is reached with the keys that go around the wheel", () => {
             torchEquippedStore.set(true);
             const target = mountWheel(wheelActions());
