@@ -290,4 +290,53 @@ describe("WanderSchedule", () => {
         expect(satDown).toBeGreaterThan(3);
         expect(satDown).toBeLessThan(30);
     });
+
+    describe("radius", () => {
+        // Everything is free and every path is a straight line: only the radius bounds the destinations.
+        const openMap: WanderMap = {
+            isWalkable: () => true,
+            findPath: (from, to) => Promise.resolve([from, to]),
+        };
+        const farNest = centreOf({ x: 50, y: 50 });
+
+        it("keeps every destination within the given radius", async () => {
+            const schedule = new WanderSchedule("lion", farNest, openMap, 2);
+            let awayFromNest = 0;
+            for (let step = 0; step < 40; step++) {
+                const pose = await poseResolved(schedule, 3 * LEG_MS + step * 3_700);
+                expect(pose).toBeDefined();
+                expect(Math.abs((pose as Point).x - farNest.x)).toBeLessThanOrEqual(2 * TILE_SIZE + TILE_SIZE / 2);
+                expect(Math.abs((pose as Point).y - farNest.y)).toBeLessThanOrEqual(2 * TILE_SIZE + TILE_SIZE / 2);
+                if (pose?.x !== farNest.x || pose?.y !== farNest.y) awayFromNest++;
+            }
+            expect(awayFromNest).toBeGreaterThan(0);
+        });
+
+        it("the default radius is unchanged", async () => {
+            const implicit = new WanderSchedule("duck", farNest, openMap);
+            const explicit = new WanderSchedule("duck", farNest, openMap, RADIUS_TILES);
+            for (let step = 0; step < 40; step++) {
+                const now = 3 * LEG_MS + step * 3_700;
+                expect(await poseResolved(implicit, now)).toEqual(await poseResolved(explicit, now));
+            }
+        });
+
+        it("only sits on the seats within the given radius", async () => {
+            // A seat 4 tiles away: within the default radius, out of a radius of 2.
+            const seat = centreOf({ x: 54, y: 50 });
+            const map: WanderMap = { ...openMap, seats: () => [seat] };
+            const near = new WanderSchedule("cat", farNest, map, 2);
+            const far = new WanderSchedule("cat", farNest, map);
+            let satNear = 0;
+            let satFar = 0;
+            for (let leg = 1; leg <= 40; leg++) {
+                const nearPose = await poseResolved(near, at(leg, LEG_MS - 1, "cat"));
+                const farPose = await poseResolved(far, at(leg, LEG_MS - 1, "cat"));
+                if (nearPose?.x === seat.x && nearPose.y === seat.y) satNear++;
+                if (farPose?.x === seat.x && farPose.y === seat.y) satFar++;
+            }
+            expect(satNear).toBe(0);
+            expect(satFar).toBeGreaterThan(0);
+        });
+    });
 });
