@@ -10,6 +10,7 @@ import {
     parseMapLayerPrefab,
     verticalWallPrefabName,
     windowPrefabName,
+    MAP_LAYER_WALL_LIKE_COLLECTIONS,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { wallBarriers } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerBarriers";
@@ -87,6 +88,10 @@ describe("window catalog", () => {
                 mapLayerPieceSize({ kind: "facade", tint: "gris", ends }),
             );
         }
+    });
+
+    it("counts windows with the walls and doors", () => {
+        expect([...MAP_LAYER_WALL_LIKE_COLLECTIONS].sort()).toEqual(["Carte Fenêtres", "Carte Murs", "Carte Portes"]);
     });
 
     it("names windows", () => {

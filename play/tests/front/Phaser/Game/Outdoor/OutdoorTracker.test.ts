@@ -63,6 +63,20 @@ describe("OutdoorTracker", () => {
         expect(tracker.grid?.isOutdoorAt(30, 10)).toBe(false);
     });
 
+    it("counts a window as a wall: the room behind it stays indoors", () => {
+        const { entities, tracker, at } = setup();
+        // A room from x 64 to 160, y 64 to 160: its north wall is a row of windows.
+        for (const x of [64, 96, 128]) {
+            entities.push({ collectionName: "Carte Fenêtres", x, y: 64, width: 32, height: 6 });
+            entities.push({ collectionName: "Carte Murs", x, y: 160, width: 32, height: 6 });
+        }
+        entities.push({ collectionName: "Carte Murs", x: 58, y: 64, width: 6, height: 102 });
+        entities.push({ collectionName: "Carte Murs", x: 160, y: 64, width: 6, height: 102 });
+        at(0);
+        expect(tracker.grid?.isOutdoorAt(100, 110)).toBe(false);
+        expect(tracker.grid?.isOutdoorAt(10, 10)).toBe(true);
+    });
+
     it("ignores non-wall entities", () => {
         const { entities, tracker, at } = setup();
         at(0);

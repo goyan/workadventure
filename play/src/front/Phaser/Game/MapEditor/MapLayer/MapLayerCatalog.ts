@@ -19,6 +19,12 @@ export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
 /** Windows: a facade whose face has a see-through glass, on one segment of a horizontal wall. */
 export const MAP_LAYER_WINDOW_COLLECTION = "Carte Fenêtres";
+/** Collections whose pieces are walls for the light, the outdoors and the pathfinder: a window is a wall with a glass. */
+export const MAP_LAYER_WALL_LIKE_COLLECTIONS: readonly string[] = [
+    MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_DOOR_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
+];
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
