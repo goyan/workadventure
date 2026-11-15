@@ -138,6 +138,31 @@ describe("cloudinessFromWmoCode", () => {
         expect(realWeatherAt(slots, 2 * SLOT + 1)).toMatchObject({ since: SLOT });
     });
 
+    it("takes where the wind comes from (degrees, 0 north, 90 east) for each quarter hour when Open-Meteo gives it", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    wind_direction_10m: [270, null],
+                },
+            }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 270 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ]);
+    });
+
+    it("gives the wind of the quarter hour under way and of the one before, for turning", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 350 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5, windFrom: 20 },
+        ];
+        expect(realWeatherAt(slots, SLOT + 1)).toMatchObject({ windFrom: 20, windFromBefore: 350 });
+        expect(realWeatherAt(slots, 1)).toMatchObject({ windFrom: 350, windFromBefore: undefined });
+    });
+
     it("lets an older tab read a quarter hour with clouds", () => {
         expect(
             RealWeatherForecast.safeParse({ slots: [{ at: 0, weather: "clear", temperature: 1, cloudiness: 0.5 }] })

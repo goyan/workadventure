@@ -202,3 +202,22 @@ describe("clouds of the real weather", () => {
         expect(withRealWeather({ weather: WeatherType.Real }, raining)).toMatchObject({ cloudCover: 0.95 });
     });
 });
+
+describe("wind of the real weather", () => {
+    it("turns the wind of a quarter hour over ten minutes from the one before, the shorter way round", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 350 },
+            { at: SLOT, weather: WeatherType.Rain, temperature: 5, windFrom: 20 },
+        ];
+        const state = (offset: number) => realWeatherStateAt({ status: "known", slots }, new Date(SLOT + offset));
+        expect(state(0)).toMatchObject({ windFrom: 350 });
+        expect(state(5 * 60_000)).toMatchObject({ windFrom: 5 });
+        expect(state(10 * 60_000)).toMatchObject({ windFrom: 20 });
+        expect(withRealWeather({ weather: WeatherType.Real }, state(10 * 60_000))).toMatchObject({ windFrom: 20 });
+    });
+
+    it("has no wind when Open-Meteo gave none", () => {
+        const slots: RealWeatherSlot[] = [{ at: 0, weather: WeatherType.Clear, temperature: 5 }];
+        expect(realWeatherStateAt({ status: "known", slots }, new Date(1))).not.toHaveProperty("windFrom");
+    });
+});

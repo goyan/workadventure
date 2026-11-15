@@ -4,11 +4,13 @@ import {
     cloudPatches,
     cloudShadowOffset,
     cloudBlockSize,
+    cloudDrift,
     cloudSunlight,
     cloudTint,
     NIGHT_CLOUD_COLOR,
     overcastVeil,
     shadowPatches,
+    SkyDrift,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
 import { FOG_LEVELS, fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightClock";
@@ -195,5 +197,37 @@ describe("sunForClouds", () => {
         expect(sunForClouds({ elevation: -10, azimuth: 270 }, true)).toBeUndefined();
         expect(sunForClouds({ elevation: 1, azimuth: 250 }, true)).toBeUndefined();
         expect(sunForClouds({ elevation: 30, azimuth: 180 }, true)).toEqual({ elevation: 30, azimuth: 180 });
+    });
+});
+
+describe("cloudDrift (north up, y down)", () => {
+    it("pushes the clouds away from where the wind comes from, at the usual speed", () => {
+        const round = (v: { x: number; y: number }) => ({ x: Math.round(v.x) + 0, y: Math.round(v.y) + 0 });
+        // A west wind (270°) blows the clouds east; a north wind (0°) south; an east wind (90°) west.
+        expect(round(cloudDrift(270))).toEqual({ x: CLOUD_DRIFT_PER_SECOND, y: 0 });
+        expect(round(cloudDrift(0))).toEqual({ x: 0, y: CLOUD_DRIFT_PER_SECOND });
+        expect(round(cloudDrift(90))).toEqual({ x: -CLOUD_DRIFT_PER_SECOND, y: 0 });
+    });
+
+    it("keeps the usual direction without a wind (Automatic, or no wind given)", () => {
+        expect(cloudDrift(undefined)).toEqual({ x: 48, y: 36 });
+    });
+});
+
+describe("SkyDrift", () => {
+    it("places the sky by the server time while the wind holds, the same for everyone", () => {
+        const drift = { x: 60, y: 0 };
+        const late = new SkyDrift();
+        const early = new SkyDrift();
+        early.at(1_000, drift);
+        expect(early.at(50_000, drift)).toEqual(late.at(50_000, drift));
+        expect(late.at(50_000, drift)).toEqual({ x: 3_000, y: 0 });
+    });
+
+    it("never jumps when the wind turns: the sky goes on from where it was", () => {
+        const sky = new SkyDrift();
+        const before = sky.at(10_000, { x: 60, y: 0 });
+        expect(sky.at(10_000, { x: 0, y: 60 })).toEqual(before);
+        expect(sky.at(11_000, { x: 0, y: 60 })).toEqual({ x: before.x, y: before.y + 60 });
     });
 });

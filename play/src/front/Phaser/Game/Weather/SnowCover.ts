@@ -50,6 +50,8 @@ export interface MapSnowSettings {
     cloudiness?: number;
     /** Real weather only (never saved): cloud cover of a rain or a storm, 0 to 1. */
     cloudCover?: number;
+    /** Real weather only (never saved): where the wind comes from (degrees, 0 north), which moves the clouds. */
+    windFrom?: number;
 }
 
 /**
