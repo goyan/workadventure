@@ -523,6 +523,9 @@ export class MapLayerEditorTool extends MapEditorTool {
                               height: size - WALL_THICKNESS,
                           };
                 break;
+            case "window":
+                rect = { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size };
+                break;
             case "floor":
                 rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };
                 break;
