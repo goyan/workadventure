@@ -153,7 +153,7 @@ describe("window placing", () => {
         wallRow(model, 0, 4, 1);
         model.setDoor({ orientation: "h", x: 3, y: 1 });
         // Segments 0, 1 free; 2, 3 under the door; 4 has no wall.
-        const edges = windowEdgesBetween(model, { x: 0, y: 1 }, { x: 5, y: 1 });
+        const edges = windowEdgesBetween(model, { x: 4, y: 1 }, { x: 0, y: 1 });
         expect(edges.map((item) => item.edge.x)).toEqual([0, 1, 2, 3, 4]);
         expect(edges.map((item) => item.valid)).toEqual([true, true, false, false, false]);
         expect(applyWindows(model, edges.filter((item) => item.valid).map((item) => item.edge))).toBe(2);
@@ -164,6 +164,17 @@ describe("window placing", () => {
         const model = new MapLayerModel();
         wallRow(model, 0, 2, 1);
         const edges = windowEdgesBetween(model, { x: 0, y: 1 }, { x: 1, y: 6 });
-        expect(edges.map((item) => item.edge)).toEqual([{ orientation: "h", x: 0, y: 1 }]);
+        expect(edges.map((item) => item.edge)).toEqual([
+            { orientation: "h", x: 0, y: 1 },
+            { orientation: "h", x: 1, y: 1 },
+        ]);
+    });
+
+    it("takes the tile under a click as one segment", () => {
+        const model = new MapLayerModel();
+        wallRow(model, 0, 3, 1);
+        expect(windowEdgesBetween(model, { x: 2, y: 1 }, { x: 2, y: 1 })).toEqual([
+            { edge: { orientation: "h", x: 2, y: 1 }, valid: true },
+        ]);
     });
 });

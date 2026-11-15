@@ -430,13 +430,16 @@ export interface WindowEdgeCandidate {
 }
 
 /**
- * The horizontal segments a window drag passes over, between two vertices: windows only go on horizontal walls, so
- * the drag stays on the row of the vertex it started from.
+ * The horizontal segments a window drag passes over, between the tiles under its start and its end. A facade fills
+ * the tile row of its line, so the tile under the cursor is the segment itself: a click sets one window. Windows only
+ * go on horizontal walls, so the drag stays on the row it started from.
  */
-export function windowEdgesBetween(model: MapLayerModel, from: Point, to: Point): WindowEdgeCandidate[] {
-    return lineWallEdges(from, { x: to.x, y: from.y })
-        .filter((edge) => edge.orientation === "h")
-        .map((edge) => ({ edge, valid: model.canSetWindow(edge.x, edge.y) }));
+export function windowEdgesBetween(model: MapLayerModel, fromCell: Point, toCell: Point): WindowEdgeCandidate[] {
+    const candidates: WindowEdgeCandidate[] = [];
+    for (let x = Math.min(fromCell.x, toCell.x); x <= Math.max(fromCell.x, toCell.x); x++) {
+        candidates.push({ edge: { orientation: "h", x, y: fromCell.y }, valid: model.canSetWindow(x, fromCell.y) });
+    }
+    return candidates;
 }
 
 /** Sets a window on each segment that can take one. Returns how many were set. */
