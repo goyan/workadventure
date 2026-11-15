@@ -490,6 +490,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorRectangle: "Rectangle de sol",
             floorFill: "Remplir un sol",
             door: "Porte",
+            window: "Fenêtre",
             erase: "Gomme",
         },
         hints: {
@@ -499,6 +500,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
+            window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers.",
             erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
         },
         floors: "Sol",
@@ -510,6 +512,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             fillTooLarge: "La zone n'est pas fermée ou trop grande pour être remplie. Fermez-la d'abord avec des murs.",
             doorInvalid: "Une porte demande deux segments de mur libres côte à côte. Cliquez sur un mur.",
             doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
+            windowInvalid: "Une fenêtre se pose sur un mur horizontal libre (ni porte ni fenêtre). Cliquez sur un mur.",
+            windowsUnavailable: "Cette salle n’a pas de catalogue de fenêtres : les fenêtres ne sont pas disponibles.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {

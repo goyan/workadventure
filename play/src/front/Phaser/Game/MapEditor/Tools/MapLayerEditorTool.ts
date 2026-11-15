@@ -13,6 +13,7 @@ import {
     mapLayerModeStore,
     mapLayerStatusStore,
     mapLayerWallTintStore,
+    mapLayerWindowsAvailableStore,
 } from "../../../../Stores/MapLayerStore";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
@@ -28,6 +29,7 @@ import {
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
     WALL_HALF,
     WALL_THICKNESS,
     doorPrefabName,
@@ -36,6 +38,7 @@ import {
     mapLayerPieceSize,
     mapLayerPrefabId,
     parseMapLayerPrefab,
+    windowPrefabName,
 } from "../MapLayer/MapLayerCatalog";
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
@@ -46,6 +49,7 @@ import {
     applyDoor,
     applyFloor,
     applyWalls,
+    applyWindows,
     cellAt,
     cellsBetween,
     doorCandidateAt,
@@ -58,6 +62,7 @@ import {
     rectangleCells,
     roomWallEdges,
     vertexAt,
+    windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
 import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
@@ -192,6 +197,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerWindowsAvailableStore.set(false);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -213,6 +219,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerDoorsAvailableStore.set(door !== undefined);
         // The door button is disabled without doors: leave a mode that could not draw anything.
         if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
+        // The windows are optional too.
+        const glazing = await manager.getEntityPrefab(
+            MAP_LAYER_WINDOW_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_WINDOW_COLLECTION, windowPrefabName("blanc", "mid")),
+        );
+        mapLayerWindowsAvailableStore.set(glazing !== undefined);
+        if (glazing === undefined && get(mapLayerModeStore) === "window") mapLayerModeStore.set("wall");
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -277,8 +290,15 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     /** Whether a press can start a gesture now: the capture is only taken for a press that draws. */
     private canStartGesture(): boolean {
+        return this.canDraw() && !this.gesture && !this.placedModeUnavailable();
+    }
+
+    /** The door or window mode in a room whose catalogs do not have them: a click draws nothing. */
+    private placedModeUnavailable(): boolean {
+        const mode = get(mapLayerModeStore);
         return (
-            this.canDraw() && !this.gesture && !(get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore))
+            (mode === "door" && !get(mapLayerDoorsAvailableStore)) ||
+            (mode === "window" && !get(mapLayerWindowsAvailableStore))
         );
     }
 
@@ -293,8 +313,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         ) {
             return;
         }
-        if (get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore)) {
-            mapLayerStatusStore.set("doorsUnavailable");
+        if (this.placedModeUnavailable()) {
+            mapLayerStatusStore.set(get(mapLayerModeStore) === "door" ? "doorsUnavailable" : "windowsUnavailable");
             return;
         }
         mapLayerStatusStore.set(undefined);
@@ -346,6 +366,8 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.commit(operation);
         } else if (mode === "door") {
             mapLayerStatusStore.set("doorInvalid");
+        } else if (mode === "window") {
+            mapLayerStatusStore.set("windowInvalid");
         }
     }
 
@@ -392,6 +414,16 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "door": {
                 const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
                 return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
+            }
+            case "window": {
+                const edges = windowEdgesBetween(gesture.baseModel, startCell, endCell)
+                    .filter((candidate) => candidate.valid)
+                    .map((candidate) => candidate.edge);
+                return edges.length === 0
+                    ? undefined
+                    : (model) => {
+                          applyWindows(model, edges);
+                      };
             }
             case "erase":
                 return (model) => {
@@ -446,6 +478,14 @@ export class MapLayerEditorTool extends MapEditorTool {
                     }
                     this.hoverModel ??= this.readModel();
                     this.drawDoorPreview(graphics, this.hoverModel, this.hover);
+                } else if (mode === "window") {
+                    if (!get(mapLayerWindowsAvailableStore)) {
+                        this.scene.markDirty();
+                        return;
+                    }
+                    this.hoverModel ??= this.readModel();
+                    const cell = cellAt(this.hover.x, this.hover.y);
+                    this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
                 } else if (mode === "erase") {
                     // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
                     this.hoverModel ??= this.readModel();
@@ -464,6 +504,16 @@ export class MapLayerEditorTool extends MapEditorTool {
 
         if (get(mapLayerModeStore) === "door") {
             this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
+            this.scene.markDirty();
+            return;
+        }
+        if (get(mapLayerModeStore) === "window") {
+            this.drawWindowPreview(
+                graphics,
+                gesture.baseModel,
+                cellAt(gesture.startWorld.x, gesture.startWorld.y),
+                cellAt(gesture.currentWorld.x, gesture.currentWorld.y),
+            );
             this.scene.markDirty();
             return;
         }
@@ -496,6 +546,19 @@ export class MapLayerEditorTool extends MapEditorTool {
         const door = doorCandidateAt(model, world.x, world.y);
         const { x, y, width, height } = doorPixelRect(door);
         graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /** The segments a window drag passes over: green where a window can go, red where it cannot. */
+    private drawWindowPreview(
+        graphics: Phaser.GameObjects.Graphics,
+        model: MapLayerModel,
+        fromCell: Point,
+        toCell: Point,
+    ): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        for (const { edge, valid } of windowEdgesBetween(model, fromCell, toCell)) {
+            graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(edge.x * size, edge.y * size, size, size);
+        }
     }
 
     /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */

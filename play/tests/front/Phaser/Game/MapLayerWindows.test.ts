@@ -156,7 +156,12 @@ describe("window placing", () => {
         const edges = windowEdgesBetween(model, { x: 4, y: 1 }, { x: 0, y: 1 });
         expect(edges.map((item) => item.edge.x)).toEqual([0, 1, 2, 3, 4]);
         expect(edges.map((item) => item.valid)).toEqual([true, true, false, false, false]);
-        expect(applyWindows(model, edges.filter((item) => item.valid).map((item) => item.edge))).toBe(2);
+        expect(
+            applyWindows(
+                model,
+                edges.filter((item) => item.valid).map((item) => item.edge),
+            ),
+        ).toBe(2);
         expect(model.hasWindow(1, 1)).toBe(true);
     });
 

@@ -16,12 +16,14 @@ import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
     mapLayerDoorsAvailableStore,
     mapLayerModeStore,
     mapLayerStatusStore,
+    mapLayerWindowsAvailableStore,
 } from "../../../../src/front/Stores/MapLayerStore";
 
 function prefab(collectionName: string, id: string): EntityPrefab {
@@ -34,6 +36,8 @@ describe("MapLayerEditorTool gestures", () => {
     let modeManager: ReturnType<typeof mock<MapEditorModeManager>>;
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
     let doorsInCatalog: boolean;
+    let windowsInCatalog: boolean;
+    let entities: Map<string, Entity>;
     let tool: MapLayerEditorTool;
     let capturedPointers: Set<number>;
 
@@ -115,7 +119,8 @@ describe("MapLayerEditorTool gestures", () => {
         scene.markDirty.mockImplementation(() => undefined);
 
         const entitiesManager = mock<EntitiesManager>();
-        entitiesManager.getEntities.mockReturnValue(new Map<string, Entity>());
+        entities = new Map<string, Entity>();
+        entitiesManager.getEntities.mockReturnValue(entities);
         const gameMapFrontWrapper = mock<GameMapFrontWrapper>();
         gameMapFrontWrapper.getEntitiesManager.mockReturnValue(entitiesManager);
         gameMapFrontWrapper.getMap.mockReturnValue(mock<ITiledMap>({ width: 20, height: 20 }));
@@ -127,13 +132,16 @@ describe("MapLayerEditorTool gestures", () => {
         scene.getGameMap.mockReturnValue(gameMap);
 
         doorsInCatalog = true;
+        windowsInCatalog = true;
         collectionsManager = mock<EntitiesCollectionsManager>();
         collectionsManager.getEntityPrefab.mockImplementation((collectionName, prefabId) => {
             if (collectionName === MAP_LAYER_DOOR_COLLECTION && !doorsInCatalog) return Promise.resolve(undefined);
+            if (collectionName === MAP_LAYER_WINDOW_COLLECTION && !windowsInCatalog) return Promise.resolve(undefined);
             if (
                 collectionName === MAP_LAYER_FLOOR_COLLECTION ||
                 collectionName === MAP_LAYER_WALL_COLLECTION ||
-                collectionName === MAP_LAYER_DOOR_COLLECTION
+                collectionName === MAP_LAYER_DOOR_COLLECTION ||
+                collectionName === MAP_LAYER_WINDOW_COLLECTION
             ) {
                 return Promise.resolve(prefab(collectionName, prefabId));
             }
@@ -156,8 +164,23 @@ describe("MapLayerEditorTool gestures", () => {
         mapLayerModeStore.set("wall");
         mapLayerCatalogAvailableStore.set(undefined);
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerWindowsAvailableStore.set(false);
         mapLayerStatusStore.set(undefined);
     });
+
+    /** A horizontal wall of three segments on the line 2: its facades fill the tile row 2 (y 64 to 96). */
+    function placeWall(): void {
+        const pieces: [string, number][] = [
+            ["facade-blanc-left", -6],
+            ["facade-blanc-mid", 32],
+            ["facade-blanc-right", 64],
+        ];
+        for (const [name, x] of pieces) {
+            const entity = mock<Entity>({ entityId: name, x, y: 64 });
+            entity.getPrefab.mockReturnValue(prefab(MAP_LAYER_WALL_COLLECTION, `Carte Murs:${name}:Default:Down`));
+            entities.set(name, entity);
+        }
+    }
 
     async function activate(): Promise<void> {
         tool.activate();
@@ -231,5 +254,56 @@ describe("MapLayerEditorTool gestures", () => {
         up(40, 40);
         expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
         expect(get(mapLayerStatusStore)).toBe("doorsUnavailable");
+    });
+
+    it("sets windows along a horizontal wall", async () => {
+        placeWall();
+        await activate();
+        expect(get(mapLayerWindowsAvailableStore)).toBe(true);
+        mapLayerModeStore.set("window");
+        down(10, 70);
+        move(60, 90);
+        up(90, 90);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+    });
+
+    it("explains a window drag that finds no free horizontal wall", async () => {
+        await activate();
+        mapLayerModeStore.set("window");
+        down(40, 40);
+        up(80, 40);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBe("windowInvalid");
+    });
+
+    it("explains a click in the window mode when windows are unavailable", async () => {
+        windowsInCatalog = false;
+        placeWall();
+        await activate();
+        mapLayerModeStore.set("window");
+        down(40, 70);
+        up(40, 70);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBe("windowsUnavailable");
+    });
+
+    it("goes back to the wall mode when the room has no window catalog", async () => {
+        windowsInCatalog = false;
+        mapLayerModeStore.set("window");
+        await activate();
+        expect(get(mapLayerWindowsAvailableStore)).toBe(false);
+        expect(get(mapLayerModeStore)).toBe("wall");
+    });
+
+    it("forgets the windows of the previous room as soon as the catalogs are checked again", () => {
+        mapLayerWindowsAvailableStore.set(true);
+        collectionsManager.getEntityPrefab.mockReturnValue(
+            new Promise(() => {
+                // Never answers: the check is still running.
+            }),
+        );
+        tool.activate();
+        expect(get(mapLayerWindowsAvailableStore)).toBe(false);
     });
 });
