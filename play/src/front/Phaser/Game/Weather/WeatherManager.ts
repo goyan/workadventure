@@ -25,12 +25,14 @@ import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
 import {
     cloudBlockSize,
+    cloudDrift,
     cloudPatches,
     cloudShadowOffset,
     cloudSunlight,
     cloudTint,
     overcastVeil,
     shadowPatches,
+    SkyDrift,
 } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { WeatherSounds } from "./WeatherSounds";
@@ -75,6 +77,8 @@ export class WeatherManager {
     private editing = false;
     private weatherShown = true;
     private cloudsShown = true;
+    /** Where the sky has drifted to with the wind of the map (the real one, or the usual drift). */
+    private readonly skyDrift = new SkyDrift();
     private readonly reducedMotion: boolean;
     // What the last fog image looked like: a still fog is not drawn again until one of these changes.
     private lastFogKey: string | undefined;
@@ -189,6 +193,7 @@ export class WeatherManager {
         }
         this.visible = true;
         const epoch = serverDate?.getTime() ?? now;
+        const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom));
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
         if (showWeather && weather === WeatherType.Fog) {
@@ -217,7 +222,7 @@ export class WeatherManager {
                     settings?.cloudCover === undefined
                         ? covering.cloudiness
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
-                const patches = cloudPatches(epoch, view, cover, this.reducedMotion);
+                const patches = cloudPatches(epoch, view, cover, this.reducedMotion, sky);
                 const tint = cloudTint(covering.color, covering.alpha, sunlight.night);
                 this.drawCloudLayer(veil, patches, tint.color, tint.alpha);
             }
@@ -238,7 +243,7 @@ export class WeatherManager {
             if (weather !== WeatherType.Snow) this.graphics.strokePath();
             if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
-        if (showClouds) this.drawClouds(epoch, view, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
+        if (showClouds) this.drawClouds(epoch, sky, view, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
         if (showLeaves) {
             const leaves = leafParticles(epoch, view).map((leaf) => ({
                 ...leaf,
@@ -260,6 +265,7 @@ export class WeatherManager {
      */
     private drawClouds(
         epoch: number,
+        sky: { x: number; y: number },
         view: WeatherView,
         veil: readonly WeatherView[],
         cloudiness: number,
@@ -272,11 +278,12 @@ export class WeatherManager {
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
         }
         if (shadowOffset) {
-            const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset);
+            const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset, sky);
             this.drawCloudLayer(veil, patches, 0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows);
         }
         const tint = cloudTint(0xffffff, CLOUD_ALPHA, sunlight.night);
-        this.drawCloudLayer(veil, cloudPatches(epoch, view, cloudiness, this.reducedMotion), tint.color, tint.alpha);
+        const clouds = cloudPatches(epoch, view, cloudiness, this.reducedMotion, sky);
+        this.drawCloudLayer(veil, clouds, tint.color, tint.alpha);
     }
 
     /** Clouds or their shadows cut into blocks inside the outdoor runs: soft edges, stopped at the walls like the fog. */

@@ -25,8 +25,21 @@ export type RealWeatherState =
           cloudiness?: number;
           /** Cloud cover of a rain or a storm, 0 to 1: how dense its grey or dark clouds are. */
           cloudCover?: number;
+          /** Where the wind comes from (degrees, 0 north), turned from that of the quarter hour before. */
+          windFrom?: number;
       }
     | { status: "unavailable" };
+
+/** How long the wind takes to turn from one quarter hour to the next: the clouds bend their way slowly. */
+const WIND_TURN_MS = 10 * 60 * 1000;
+
+/** The wind direction from `before` to `now`, `elapsed` ms into the quarter hour, the shorter way round (degrees). */
+function turnedWind(before: number | undefined, now: number | undefined, elapsed: number): number | undefined {
+    if (now === undefined || before === undefined) return now;
+    const turn = ((now - before + 540) % 360) - 180;
+    const share = Math.max(0, Math.min(1, elapsed / WIND_TURN_MS));
+    return (before + turn * share + 360) % 360;
+}
 
 /**
  * The real weather at the game date: pending until the first answer and the date are known, unavailable when the
@@ -44,6 +57,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const clearNow = now.weather === WeatherType.Clear ? now.cloudiness : 0;
     const cloudiness = fadedCloudiness(clearBefore, clearNow, date.getTime() - now.slotAt);
     const raining = now.weather === WeatherType.Rain || now.weather === WeatherType.Storm;
+    const windFrom = turnedWind(now.windFromBefore, now.windFrom, date.getTime() - now.slotAt);
     return {
         status: "known",
         weather: now.weather,
@@ -52,6 +66,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
         snowMeltFrom,
         ...(cloudiness > 0 ? { cloudiness } : {}),
         ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
+        ...(windFrom !== undefined ? { windFrom } : {}),
     };
 }
 
@@ -75,6 +90,7 @@ export function withRealWeather(
                 snowMeltFrom: real.snowMeltFrom,
                 cloudiness: real.cloudiness,
                 cloudCover: real.cloudCover,
+                windFrom: real.windFrom,
                 weatherAuto,
                 weatherLocation,
             };

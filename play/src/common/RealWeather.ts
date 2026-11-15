@@ -43,6 +43,8 @@ export const RealWeatherSlot = z.object({
     temperature: z.number().finite().nullable(),
     /** Clouds of the quarter hour, 0 to 1 (absent: none): the cloud cover, over a clear sky or a rain. */
     cloudiness: z.number().min(0).max(1).optional(),
+    /** Where the wind of the quarter hour comes from, in degrees (0 north, 90 east; absent: not given). */
+    windFrom: z.number().min(0).max(360).optional(),
 });
 export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
 
@@ -60,20 +62,23 @@ const OpenMeteoTimeline = z.object({
         temperature_2m: z.array(z.number().finite().nullable()).max(96),
         /** Cloud cover in %, asked since the clouds; absent from older answers. */
         cloud_cover: z.array(z.number().finite().nullable()).max(96).optional(),
+        /** Where the wind comes from (degrees), asked since the wind moves the clouds; absent from older answers. */
+        wind_direction_10m: z.array(z.number().min(0).max(360).nullable()).max(96).optional(),
     }),
 });
 
 /**
- * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover and
+ * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m and
  * timeformat=unixtime.
  * Each value is taken for the quarter hour starting at its time. Undefined when the answer has no such timeline.
  */
 export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
     const parsed = OpenMeteoTimeline.safeParse(answer);
     if (!parsed.success) return undefined;
-    const { time, weather_code, temperature_2m, cloud_cover } = parsed.data.minutely_15;
+    const { time, weather_code, temperature_2m, cloud_cover, wind_direction_10m } = parsed.data.minutely_15;
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
     if (cloud_cover && cloud_cover.length !== time.length) return undefined;
+    if (wind_direction_10m && wind_direction_10m.length !== time.length) return undefined;
     return time.map((seconds, index) => {
         const code = weather_code[index];
         // The cloud cover itself when given (any weather: it sets the clouds over the rain too), else the WMO code.
@@ -89,6 +94,7 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
             weather: (code === null ? undefined : weatherFromWmoCode(code)) ?? null,
             temperature: temperature_2m[index],
             ...(cloudiness ? { cloudiness } : {}),
+            ...(typeof wind_direction_10m?.[index] === "number" ? { windFrom: wind_direction_10m[index] } : {}),
         };
     });
 }
@@ -107,6 +113,9 @@ export interface RealWeatherAt {
     slotAt: number;
     cloudiness: number;
     cloudinessBefore: number;
+    /** Where the wind of the quarter hour under way and of the one before come from (degrees), when given. */
+    windFrom: number | undefined;
+    windFromBefore: number | undefined;
 }
 
 /**
@@ -138,6 +147,8 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
         slotAt: current.at,
         cloudiness: current.cloudiness ?? 0,
         cloudinessBefore: index > 0 && follows(index, index - 1) ? (slots[index - 1].cloudiness ?? 0) : 0,
+        windFrom: current.windFrom,
+        windFromBefore: index > 0 && follows(index, index - 1) ? slots[index - 1].windFrom : undefined,
     };
 }
 

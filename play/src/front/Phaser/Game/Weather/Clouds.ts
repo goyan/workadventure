@@ -4,6 +4,8 @@ import { TILE_SIZE } from "../Wander/WanderSchedule";
 import { repeatedOverView } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
+const DEG = Math.PI / 180;
+
 /** Clouds per square of the sky at most (a cloudiness of 1); they appear one after the other as it grows. */
 const MAX_CLOUDS = 12;
 /**
@@ -29,9 +31,48 @@ const SMALLEST_CLOUD = 0.45;
 const BIGGEST_CLOUD = 1.75;
 /** Farthest a puff reaches from the centre of its cloud, in radii: the main puff and its farthest lobe. */
 const CLOUD_REACH = 1.6;
-/** Drift of the clouds, the same direction for everyone: 60 px a second, a screen crossed in about 30 s. */
+/**
+ * Drift of the clouds without a wind (Automatic, or none given): 60 px a second, a screen crossed in about 30 s, from
+ * the north-west.
+ */
 const CLOUD_DRIFT = { x: 48, y: 36 };
 export const CLOUD_DRIFT_PER_SECOND = Math.hypot(CLOUD_DRIFT.x, CLOUD_DRIFT.y);
+
+type Vector = { x: number; y: number };
+
+/**
+ * The drift of the clouds (map pixels a second, north up, y down) for a wind coming from `windFrom` degrees (0 north,
+ * 90 east): blown away from it, at the usual speed (the true speed would not show at the scale of the map).
+ */
+export function cloudDrift(windFrom: number | undefined): Vector {
+    if (windFrom === undefined) return CLOUD_DRIFT;
+    return {
+        x: -CLOUD_DRIFT_PER_SECOND * Math.sin(windFrom * DEG),
+        y: CLOUD_DRIFT_PER_SECOND * Math.cos(windFrom * DEG),
+    };
+}
+
+/**
+ * Where the sky has drifted to, by the server time. While the wind holds, server time × drift: the same sky for
+ * everyone. When it turns, the sky goes on from where it was (no jump); a page opened after the turn places it by the
+ * new wind alone, so the clouds of two people may then differ.
+ */
+export class SkyDrift {
+    private shift: Vector = { x: 0, y: 0 };
+    private drift: Vector | undefined;
+
+    public at(epoch: number, drift: Vector): Vector {
+        const seconds = epoch / 1000;
+        if (this.drift && (this.drift.x !== drift.x || this.drift.y !== drift.y)) {
+            this.shift = {
+                x: this.shift.x + seconds * (this.drift.x - drift.x),
+                y: this.shift.y + seconds * (this.drift.y - drift.y),
+            };
+        }
+        this.drift = drift;
+        return { x: seconds * drift.x + this.shift.x, y: seconds * drift.y + this.shift.y };
+    }
+}
 /** Each cloud is a main puff and two smaller lobes. */
 const LOBES: readonly { dx: number; dy: number; scale: number }[] = [
     { dx: 0, dy: 0, scale: 1 },
@@ -55,7 +96,6 @@ const OVERCAST_FULL = 0.9;
 const OVERCAST_ALPHA = 0.08;
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
-const DEG = Math.PI / 180;
 
 /**
  * Where the shadow of a cloud falls from the cloud, in map pixels (north up, y down): away from the sun, longer when
@@ -101,10 +141,18 @@ export function overcastVeil(cloudiness: number, daylight = 1): number {
 /**
  * The puffs of the clouds over the view (and a margin around it), drifting with the server time: a square of the sky
  * repeated over the map, so the clouds are the same for any camera, zoom or screen. A cloudier sky has more clouds,
- * the last one fading in (its `weight`).
+ * the last one fading in (its `weight`). `sky` is where the sky has drifted to (SkyDrift); by default, server time ×
+ * the drift without wind.
  */
-export function cloudPatches(epoch: number, view: WeatherView, cloudiness: number, still: boolean): FogPatch[] {
-    const time = still ? 0 : epoch / 1000;
+export function cloudPatches(
+    epoch: number,
+    view: WeatherView,
+    cloudiness: number,
+    still: boolean,
+    sky?: Vector,
+): FogPatch[] {
+    const time = epoch / 1000;
+    const drifted = still ? { x: 0, y: 0 } : (sky ?? { x: time * CLOUD_DRIFT.x, y: time * CLOUD_DRIFT.y });
     const patches: FogPatch[] = [];
     for (let index = 0; index < MAX_CLOUDS; index++) {
         const weight = clamp01(cloudiness * MAX_CLOUDS - index);
@@ -114,16 +162,16 @@ export function cloudPatches(epoch: number, view: WeatherView, cloudiness: numbe
         const radius =
             CLOUD_RADIUS * size * (SMALLEST_CLOUD + (BIGGEST_CLOUD - SMALLEST_CLOUD) * hash01(index, 31) ** 2);
         const square = {
-            x: hash01(index, 37) * SKY_PERIOD + time * CLOUD_DRIFT.x,
-            y: hash01(index, 41) * SKY_PERIOD + time * CLOUD_DRIFT.y,
+            x: hash01(index, 37) * SKY_PERIOD + drifted.x,
+            y: hash01(index, 41) * SKY_PERIOD + drifted.y,
         };
-        // Far enough for a puff whose centre is out of the view to still reach into it.
         // Lobes moved a little for each cloud, so no two clouds have the same shape.
         const lobes = LOBES.map((lobe, lobeIndex) => ({
             dx: lobe.dx + (hash01(index, 43 + lobeIndex) - 0.5) * 0.3,
             dy: lobe.dy + (hash01(index, 47 + lobeIndex) - 0.5) * 0.4,
             scale: lobe.scale,
         }));
+        // Far enough for a puff whose centre is out of the view to still reach into it.
         for (const centre of repeatedOverView(square, SKY_PERIOD, view, CLOUD_REACH * radius)) {
             for (const lobe of lobes) {
                 patches.push({
@@ -148,9 +196,10 @@ export function shadowPatches(
     cloudiness: number,
     still: boolean,
     offset: { x: number; y: number },
+    sky?: Vector,
 ): FogPatch[] {
     const source = { ...view, x: view.x - offset.x, y: view.y - offset.y };
-    return cloudPatches(epoch, source, cloudiness, still).map((patch) => ({
+    return cloudPatches(epoch, source, cloudiness, still, sky).map((patch) => ({
         ...patch,
         x: patch.x + offset.x,
         y: patch.y + offset.y,
