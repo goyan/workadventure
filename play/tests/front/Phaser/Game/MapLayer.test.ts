@@ -5,9 +5,11 @@ import {
     facadePrefabName,
     isMapLayerPrefab,
     floorPrefabName,
+    mapLayerPieceSize,
     mapLayerPrefabId,
     parseMapLayerPrefab,
     verticalWallPrefabName,
+    windowPrefabName,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { wallBarriers } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerBarriers";
@@ -65,6 +67,30 @@ describe("catalog", () => {
                 mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, "facade-rose-none"),
             ),
         ).toBeUndefined();
+    });
+});
+
+describe("window catalog", () => {
+    it("reads a window prefab", () => {
+        expect(parseMapLayerPrefab("Carte Fenêtres", "Carte Fenêtres:fenetre-brique-left:Default:Down")).toEqual({
+            kind: "window",
+            tint: "brique",
+            ends: "left",
+        });
+        expect(parseMapLayerPrefab("Carte Fenêtres", "Carte Fenêtres:fenetre-rose-mid:Default:Down")).toBeUndefined();
+        expect(parseMapLayerPrefab("Carte Murs", "Carte Murs:fenetre-blanc-mid:Default:Down")).toBeUndefined();
+    });
+
+    it("sizes a window like the facade with the same ends", () => {
+        for (const ends of ["mid", "left", "right", "single"] as const) {
+            expect(mapLayerPieceSize({ kind: "window", tint: "gris", ends })).toEqual(
+                mapLayerPieceSize({ kind: "facade", tint: "gris", ends }),
+            );
+        }
+    });
+
+    it("names windows", () => {
+        expect(windowPrefabName("lavande", "single")).toBe("fenetre-lavande-single");
     });
 });
 
