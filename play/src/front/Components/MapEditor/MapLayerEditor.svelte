@@ -13,9 +13,19 @@
         mapLayerStatusStore,
         mapLayerWallSwatchesStore,
         mapLayerWallTintStore,
+        mapLayerWindowsAvailableStore,
     } from "../../Stores/MapLayerStore";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
-    import { IconBrush, IconBucket, IconDoor, IconEraser, IconHome, IconRectangle, IconWall } from "@wa-icons";
+    import {
+        IconBrush,
+        IconBucket,
+        IconDoor,
+        IconEraser,
+        IconHome,
+        IconRectangle,
+        IconWall,
+        IconWindow,
+    } from "@wa-icons";
 
     // "Freehand" modes act while the pointer moves, "area" modes act on the shape dragged between two points.
     const freehandModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
@@ -29,10 +39,16 @@
         { mode: "floorFill", icon: IconBucket },
     ];
 
-    const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [{ mode: "door", icon: IconDoor }];
+    const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
+        { mode: "door", icon: IconDoor },
+        { mode: "window", icon: IconWindow },
+    ];
 
     let usesFloor = $derived(
-        $mapLayerModeStore !== "wall" && $mapLayerModeStore !== "erase" && $mapLayerModeStore !== "door",
+        $mapLayerModeStore !== "wall" &&
+            $mapLayerModeStore !== "erase" &&
+            $mapLayerModeStore !== "door" &&
+            $mapLayerModeStore !== "window",
     );
     let usesWall = $derived($mapLayerModeStore === "wall" || $mapLayerModeStore === "room");
 </script>
@@ -40,7 +56,8 @@
 {#snippet modeButton(mode: MapLayerMode, Icon: typeof IconWall)}
     <button
         type="button"
-        disabled={mode === "door" && !$mapLayerDoorsAvailableStore}
+        disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
+            (mode === "window" && !$mapLayerWindowsAvailableStore)}
         class="flex flex-col items-center gap-1 p-2 rounded text-xs disabled:opacity-40 {$mapLayerModeStore === mode
             ? 'bg-secondary'
             : 'bg-white/10 hover:bg-white/20'}"

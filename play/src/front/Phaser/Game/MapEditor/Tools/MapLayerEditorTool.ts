@@ -13,6 +13,7 @@ import {
     mapLayerModeStore,
     mapLayerStatusStore,
     mapLayerWallTintStore,
+    mapLayerWindowsAvailableStore,
 } from "../../../../Stores/MapLayerStore";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
@@ -28,6 +29,7 @@ import {
     MAP_LAYER_TILE_SIZE,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
     WALL_HALF,
     WALL_THICKNESS,
     doorPrefabName,
@@ -36,6 +38,7 @@ import {
     mapLayerPieceSize,
     mapLayerPrefabId,
     parseMapLayerPrefab,
+    windowPrefabName,
 } from "../MapLayer/MapLayerCatalog";
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
@@ -46,7 +49,9 @@ import {
     applyDoor,
     applyFloor,
     applyWalls,
+    applyWindows,
     cellAt,
+    moveWindow,
     cellsBetween,
     doorCandidateAt,
     doorPixelRect,
@@ -58,6 +63,7 @@ import {
     rectangleCells,
     roomWallEdges,
     vertexAt,
+    windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
 import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
@@ -78,6 +84,8 @@ interface Gesture {
     /** Tiles visited, for continuous gestures (brush, eraser). */
     path: Point[];
     baseModel: MapLayerModel;
+    /** In the window mode, a press on a placed window moves it: the tile of that window. */
+    movedWindow?: Point;
 }
 
 /**
@@ -92,6 +100,8 @@ export class MapLayerEditorTool extends MapEditorTool {
     private gesture: Gesture | undefined;
     private graphics: Phaser.GameObjects.Graphics | undefined;
     private hover: Point | undefined;
+    /** The cursor this tool asked for: a placed window shows a hand that can grab it. */
+    private cursor = "";
     /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
     private hoverModel: MapLayerModel | undefined;
     /**
@@ -167,6 +177,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.pointerCapture = undefined;
         this.graphics?.destroy();
         this.graphics = undefined;
+        this.setCursor("");
         this.scene.input.topOnly = false;
         this.scene.markDirty();
     }
@@ -192,6 +203,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerWindowsAvailableStore.set(false);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -213,6 +225,13 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerDoorsAvailableStore.set(door !== undefined);
         // The door button is disabled without doors: leave a mode that could not draw anything.
         if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
+        // The windows are optional too.
+        const glazing = await manager.getEntityPrefab(
+            MAP_LAYER_WINDOW_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_WINDOW_COLLECTION, windowPrefabName("blanc", "mid")),
+        );
+        mapLayerWindowsAvailableStore.set(glazing !== undefined);
+        if (glazing === undefined && get(mapLayerModeStore) === "window") mapLayerModeStore.set("wall");
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -277,8 +296,15 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     /** Whether a press can start a gesture now: the capture is only taken for a press that draws. */
     private canStartGesture(): boolean {
+        return this.canDraw() && !this.gesture && !this.placedModeUnavailable();
+    }
+
+    /** The door or window mode in a room whose catalogs do not have them: a click draws nothing. */
+    private placedModeUnavailable(): boolean {
+        const mode = get(mapLayerModeStore);
         return (
-            this.canDraw() && !this.gesture && !(get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore))
+            (mode === "door" && !get(mapLayerDoorsAvailableStore)) ||
+            (mode === "window" && !get(mapLayerWindowsAvailableStore))
         );
     }
 
@@ -293,18 +319,24 @@ export class MapLayerEditorTool extends MapEditorTool {
         ) {
             return;
         }
-        if (get(mapLayerModeStore) === "door" && !get(mapLayerDoorsAvailableStore)) {
-            mapLayerStatusStore.set("doorsUnavailable");
+        if (this.placedModeUnavailable()) {
+            mapLayerStatusStore.set(get(mapLayerModeStore) === "door" ? "doorsUnavailable" : "windowsUnavailable");
             return;
         }
         mapLayerStatusStore.set(undefined);
         const world = { x: pointer.worldX, y: pointer.worldY };
+        const baseModel = this.readModel();
+        const startCell = cellAt(world.x, world.y);
         this.gesture = {
             pointerId: pointer.id,
             startWorld: world,
             currentWorld: world,
-            path: [cellAt(world.x, world.y)],
-            baseModel: this.readModel(),
+            path: [startCell],
+            baseModel,
+            movedWindow:
+                get(mapLayerModeStore) === "window" && baseModel.hasWindow(startCell.x, startCell.y)
+                    ? startCell
+                    : undefined,
         };
         // Filling reacts to the click itself.
         this.redraw();
@@ -346,7 +378,15 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.commit(operation);
         } else if (mode === "door") {
             mapLayerStatusStore.set("doorInvalid");
+        } else if (mode === "window" && !this.droppedInPlace(gesture)) {
+            mapLayerStatusStore.set("windowInvalid");
         }
+    }
+
+    /** A moved window released on its own segment: nothing to do, nothing to explain. */
+    private droppedInPlace(gesture: Gesture): boolean {
+        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        return gesture.movedWindow !== undefined && end.x === gesture.movedWindow.x && end.y === gesture.movedWindow.y;
     }
 
     private cancelGesture(): void {
@@ -393,6 +433,25 @@ export class MapLayerEditorTool extends MapEditorTool {
                 const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
                 return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
             }
+            case "window": {
+                const from = gesture.movedWindow;
+                if (from) {
+                    if (this.droppedInPlace(gesture)) return undefined;
+                    return moveWindow(gesture.baseModel.clone(), from, endCell)
+                        ? (model) => {
+                              moveWindow(model, from, endCell);
+                          }
+                        : undefined;
+                }
+                const edges = windowEdgesBetween(gesture.baseModel, startCell, endCell)
+                    .filter((candidate) => candidate.valid)
+                    .map((candidate) => candidate.edge);
+                return edges.length === 0
+                    ? undefined
+                    : (model) => {
+                          applyWindows(model, edges);
+                      };
+            }
             case "erase":
                 return (model) => {
                     const keptEdges = new Set<string>();
@@ -428,9 +487,26 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
     }
 
+    private setCursor(cursor: string): void {
+        if (cursor === this.cursor) return;
+        this.cursor = cursor;
+        this.scene.input.setDefaultCursor(cursor);
+    }
+
+    /** In the window mode, a hand over a placed window (it can be dragged), a closed hand while it is moved. */
+    private wantedCursor(): string {
+        if (get(mapLayerModeStore) !== "window" || !get(mapLayerWindowsAvailableStore)) return "";
+        if (this.gesture) return this.gesture.movedWindow ? "grabbing" : "";
+        if (!this.hover) return "";
+        this.hoverModel ??= this.readModel();
+        const cell = cellAt(this.hover.x, this.hover.y);
+        return this.hoverModel.hasWindow(cell.x, cell.y) ? "grab" : "";
+    }
+
     private redraw(): void {
         const graphics = this.graphics;
         if (!graphics) return;
+        this.setCursor(this.wantedCursor());
         graphics.clear();
         const size = MAP_LAYER_TILE_SIZE;
         const gesture = this.gesture;
@@ -446,6 +522,33 @@ export class MapLayerEditorTool extends MapEditorTool {
                     }
                     this.hoverModel ??= this.readModel();
                     this.drawDoorPreview(graphics, this.hoverModel, this.hover);
+                } else if (mode === "window") {
+                    if (!get(mapLayerWindowsAvailableStore)) {
+                        this.scene.markDirty();
+                        return;
+                    }
+                    this.hoverModel ??= this.readModel();
+                    const cell = cellAt(this.hover.x, this.hover.y);
+                    if (this.hoverModel.hasWindow(cell.x, cell.y)) {
+                        // A placed window: it can be grabbed and moved, not set again.
+                        graphics
+                            .fillStyle(0xffffff, 0.2)
+                            .fillRect(
+                                cell.x * MAP_LAYER_TILE_SIZE,
+                                cell.y * MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                            )
+                            .lineStyle(2, 0xffffff, 0.9)
+                            .strokeRect(
+                                cell.x * MAP_LAYER_TILE_SIZE,
+                                cell.y * MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                            );
+                    } else {
+                        this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
+                    }
                 } else if (mode === "erase") {
                     // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
                     this.hoverModel ??= this.readModel();
@@ -464,6 +567,21 @@ export class MapLayerEditorTool extends MapEditorTool {
 
         if (get(mapLayerModeStore) === "door") {
             this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
+            this.scene.markDirty();
+            return;
+        }
+        if (get(mapLayerModeStore) === "window" && gesture.movedWindow) {
+            this.drawWindowMovePreview(graphics, gesture);
+            this.scene.markDirty();
+            return;
+        }
+        if (get(mapLayerModeStore) === "window") {
+            this.drawWindowPreview(
+                graphics,
+                gesture.baseModel,
+                cellAt(gesture.startWorld.x, gesture.startWorld.y),
+                cellAt(gesture.currentWorld.x, gesture.currentWorld.y),
+            );
             this.scene.markDirty();
             return;
         }
@@ -498,6 +616,31 @@ export class MapLayerEditorTool extends MapEditorTool {
         graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
     }
 
+    /** The segments a window drag passes over: green where a window can go, red where it cannot. */
+    private drawWindowPreview(
+        graphics: Phaser.GameObjects.Graphics,
+        model: MapLayerModel,
+        fromCell: Point,
+        toCell: Point,
+    ): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        for (const { edge, valid } of windowEdgesBetween(model, fromCell, toCell)) {
+            graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(edge.x * size, edge.y * size, size, size);
+        }
+    }
+
+    /** A window being moved: its segment outlined, the target green when it can take the window, red otherwise. */
+    private drawWindowMovePreview(graphics: Phaser.GameObjects.Graphics, gesture: Gesture): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const from = gesture.movedWindow;
+        if (!from) return;
+        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(from.x * size, from.y * size, size, size);
+        if (this.droppedInPlace(gesture)) return;
+        const valid = moveWindow(gesture.baseModel.clone(), from, end);
+        graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(end.x * size, end.y * size, size, size);
+    }
+
     /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */
     private drawEraseHover(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
         const size = MAP_LAYER_TILE_SIZE;
@@ -522,6 +665,9 @@ export class MapLayerEditorTool extends MapEditorTool {
                               width: WALL_THICKNESS,
                               height: size - WALL_THICKNESS,
                           };
+                break;
+            case "window":
+                rect = { x: target.wall.x * size, y: target.wall.y * size, width: size, height: size };
                 break;
             case "floor":
                 rect = { x: target.cell.x * size, y: target.cell.y * size, width: size, height: size };

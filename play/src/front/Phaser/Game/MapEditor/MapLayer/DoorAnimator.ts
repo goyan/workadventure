@@ -470,9 +470,10 @@ export class DoorAnimator {
     private scan(): void {
         const seen = new Set<string>();
         const entities = Array.from(this.getEntities());
-        const facades = entities.filter(
-            (entity) =>
-                parseMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id)?.kind === "facade",
+        const facades = entities.filter((entity) =>
+            ["facade", "window"].includes(
+                parseMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id)?.kind ?? "",
+            ),
         );
         for (const entity of entities) {
             const prefab = entity.getPrefab();

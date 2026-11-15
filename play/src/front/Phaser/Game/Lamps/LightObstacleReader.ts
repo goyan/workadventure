@@ -1,7 +1,7 @@
 import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import type { Entity } from "../../ECS/Entity";
 import type { GameScene } from "../GameScene";
-import { MAP_LAYER_DOOR_COLLECTION, MAP_LAYER_WALL_COLLECTION } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_DOOR_COLLECTION, MAP_LAYER_WALL_LIKE_COLLECTIONS } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { edgeKey } from "../MapEditor/MapLayer/MapLayerModel";
 import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
 import type { Segment } from "./RgbLampGeometry";
@@ -47,7 +47,7 @@ export class LightObstacleReader {
         for (const [entityId, entity] of entities) {
             const prefab = entity.getPrefab();
             const { collectionName } = prefab;
-            if (collectionName === MAP_LAYER_WALL_COLLECTION || collectionName === MAP_LAYER_DOOR_COLLECTION) {
+            if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(collectionName)) {
                 const piece = { x: entity.x, y: entity.y, collectionName, prefabId: prefab.id };
                 const open = collectionName === MAP_LAYER_DOOR_COLLECTION && this.scene.isDoorOpen(entityId);
                 pieces.push(piece);

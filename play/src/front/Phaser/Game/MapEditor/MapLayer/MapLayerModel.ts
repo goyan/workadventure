@@ -68,12 +68,15 @@ export class MapLayerModel {
     private readonly floors = new Map<string, FloorCell>();
     private readonly walls = new Map<string, WallEdge>();
     private readonly doors = new Map<string, DoorRef>();
+    /** Horizontal wall segments drawn as a window. The wall stays in the model under it, like under a door. */
+    private readonly windows = new Map<string, WallEdgeRef>();
 
     public clone(): MapLayerModel {
         const copy = new MapLayerModel();
         for (const door of this.doors.values()) copy.doors.set(edgeKey(door.orientation, door.x, door.y), door);
         for (const floor of this.floors.values()) copy.setFloor(floor.x, floor.y, floor.family);
         for (const wall of this.walls.values()) copy.setWall(wall.orientation, wall.x, wall.y, wall.tint);
+        for (const pane of this.windows.values()) copy.windows.set(edgeKey("h", pane.x, pane.y), pane);
         return copy;
     }
 
@@ -93,19 +96,46 @@ export class MapLayerModel {
         this.walls.set(edgeKey(orientation, x, y), { orientation, x, y, tint });
     }
 
-    /** Removing a wall segment also removes the door that stands on it. */
+    /** Removing a wall segment also removes the door or the window that stands on it. */
     public removeWall(orientation: WallOrientation, x: number, y: number): boolean {
         this.removeDoor(this.getDoorOn(orientation, x, y));
+        if (orientation === "h") this.removeWindow(x, y);
         return this.walls.delete(edgeKey(orientation, x, y));
     }
 
-    /** Whether a door can be set here: walls on both segments and no door already on one of them. */
+    /** Whether a door can be set here: walls on both segments and no door or window already on one of them. */
     public canSetDoor(door: DoorRef): boolean {
         return doorEdges(door).every(
             (edge) =>
                 this.hasWall(edge.orientation, edge.x, edge.y) &&
-                this.getDoorOn(edge.orientation, edge.x, edge.y) === undefined,
+                this.getDoorOn(edge.orientation, edge.x, edge.y) === undefined &&
+                !(edge.orientation === "h" && this.hasWindow(edge.x, edge.y)),
         );
+    }
+
+    /** Whether a window can be set on the horizontal segment (x, y): a wall, and no door nor window on it yet. */
+    public canSetWindow(x: number, y: number): boolean {
+        return this.hasWall("h", x, y) && this.getDoorOn("h", x, y) === undefined && !this.hasWindow(x, y);
+    }
+
+    public setWindow(x: number, y: number): boolean {
+        if (!this.canSetWindow(x, y)) {
+            return false;
+        }
+        this.windows.set(edgeKey("h", x, y), { orientation: "h", x, y });
+        return true;
+    }
+
+    public removeWindow(x: number, y: number): boolean {
+        return this.windows.delete(edgeKey("h", x, y));
+    }
+
+    public hasWindow(x: number, y: number): boolean {
+        return this.windows.has(edgeKey("h", x, y));
+    }
+
+    public getWindows(): IterableIterator<WallEdgeRef> {
+        return this.windows.values();
     }
 
     public setDoor(door: DoorRef): boolean {

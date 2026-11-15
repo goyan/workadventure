@@ -6,7 +6,12 @@ export interface Rect {
 }
 
 /** Walls and doors close a room; everything reachable from the map edge without crossing one is outdoors. */
-export const OUTDOOR_WALL_COLLECTIONS: readonly string[] = ["Carte Murs", "Carte Portes", "Infogène Murs fins"];
+export const OUTDOOR_WALL_COLLECTIONS: readonly string[] = [
+    "Carte Murs",
+    "Carte Portes",
+    "Carte Fenêtres",
+    "Infogène Murs fins",
+];
 
 const WALL = 1;
 const OUTDOOR = 2;

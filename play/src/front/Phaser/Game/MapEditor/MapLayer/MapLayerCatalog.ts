@@ -17,10 +17,19 @@ export const MAP_LAYER_FLOOR_DEPTH = 0.5;
 export const MAP_LAYER_FLOOR_COLLECTION = "Carte Sols";
 export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
+/** Windows: a facade whose face has a see-through glass, on one segment of a horizontal wall. */
+export const MAP_LAYER_WINDOW_COLLECTION = "Carte Fenêtres";
+/** Collections whose pieces are walls for the light, the outdoors and the pathfinder: a window is a wall with a glass. */
+export const MAP_LAYER_WALL_LIKE_COLLECTIONS: readonly string[] = [
+    MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_DOOR_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
+];
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
 ];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
@@ -127,6 +136,11 @@ export function wallEndPrefabName(tint: WallTint): string {
     return `${WALL_END_PREFIX}${tint}`;
 }
 
+/** A window replaces the facade of one segment of a horizontal wall, with the same ends. */
+export function windowPrefabName(tint: WallTint, ends: FacadeEnds): string {
+    return `fenetre-${tint}-${ends}`;
+}
+
 /** Name of a piece of a door; without `frame`, the closed door. */
 export function doorPrefabName(
     orientation: "h" | "v",
@@ -145,6 +159,7 @@ export function doorPrefabName(
 export type MapLayerPiece =
     | { kind: "floor"; family: FloorFamily; variant: FloorVariant }
     | { kind: "facade"; tint: WallTint; ends: FacadeEnds }
+    | { kind: "window"; tint: WallTint; ends: FacadeEnds }
     | { kind: "vertical"; tint: WallTint }
     | { kind: "end"; tint: WallTint }
     | { kind: "joint"; arms: JointArm[] }
@@ -152,6 +167,7 @@ export type MapLayerPiece =
 
 const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni|ombre)$`);
 const FACADE_NAME = new RegExp(`^facade-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
+const WINDOW_NAME = new RegExp(`^fenetre-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
 const END_NAME = new RegExp(`^bout-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
 const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-(b)?(\\d))?$`);
@@ -190,6 +206,10 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
             return { kind: "joint", arms: joint[1].split("") as JointArm[] };
         }
         return undefined;
+    }
+    if (collectionName === MAP_LAYER_WINDOW_COLLECTION) {
+        const match = WINDOW_NAME.exec(name);
+        return match ? { kind: "window", tint: match[1] as WallTint, ends: match[2] as FacadeEnds } : undefined;
     }
     if (collectionName === MAP_LAYER_DOOR_COLLECTION) {
         const door = DOOR_NAME.exec(name);
@@ -231,6 +251,7 @@ export function mapLayerPieceSize(piece: MapLayerPiece): { width: number; height
         case "end":
             return { width: WALL_THICKNESS, height: FACADE_FACE_HEIGHT };
         case "facade":
+        case "window":
             return {
                 width: MAP_LAYER_TILE_SIZE + facadeLeftExtension(piece.ends) + facadeRightExtension(piece.ends),
                 height: FACADE_HEIGHT,

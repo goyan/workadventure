@@ -9,11 +9,13 @@ import {
     MAP_LAYER_TILE_SIZE,
     DOOR_VERTICAL_WIDTH,
     MAP_LAYER_WALL_COLLECTION,
+    MAP_LAYER_WINDOW_COLLECTION,
     doorPrefabName,
     facadeLeftExtension,
     mapLayerPrefabId,
     verticalWallPrefabName,
     wallEndPrefabName,
+    windowPrefabName,
 } from "./MapLayerCatalog";
 import type { FacadeEnds, JointArm } from "./MapLayerCatalog";
 import type { MapLayerModel } from "./MapLayerModel";
@@ -64,7 +66,8 @@ function jointArmsAt(model: MapLayerModel, x: number, y: number): JointArm[] {
  *   right before it (the wall casts its shadow on the top of the tile, fading downwards).
  * - A horizontal wall stands entirely on the tile row of its grid line: cap on the top 12 px, face on the 20 px below.
  *   It is a facade (cap and south face) in one piece per grid column. Its face is seamless with the
- *   next facade and closes with an end when the wall stops on a vertex.
+ *   next facade and closes with an end when the wall stops on a vertex. A segment with a window uses the window of
+ *   the same ends instead of the facade, at the same place.
  * - A vertical wall is a strip, one piece per grid row.
  * - The caps meet on each vertex: a joint piece draws the corner, the T or the cross, or closes the end of a wall.
  */
@@ -134,10 +137,11 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
         }
         if (wall.orientation === "h") {
             const ends = endsOf(model.hasWall("h", wall.x - 1, wall.y), model.hasWall("h", wall.x + 1, wall.y));
+            const glazed = model.hasWindow(wall.x, wall.y);
             placements.push(
                 placement(
-                    MAP_LAYER_WALL_COLLECTION,
-                    facadePrefabName(wall.tint, ends),
+                    glazed ? MAP_LAYER_WINDOW_COLLECTION : MAP_LAYER_WALL_COLLECTION,
+                    glazed ? windowPrefabName(wall.tint, ends) : facadePrefabName(wall.tint, ends),
                     wall.x * size - facadeLeftExtension(ends),
                     wall.y * size,
                 ),

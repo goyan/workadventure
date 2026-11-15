@@ -479,6 +479,7 @@ const mapEditor: BaseTranslation = {
             floorRectangle: "Floor rectangle",
             floorFill: "Floor fill",
             door: "Door",
+            window: "Window",
             erase: "Eraser",
         },
         hints: {
@@ -488,6 +489,7 @@ const mapEditor: BaseTranslation = {
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
+            window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
         },
         floors: "Floor",
@@ -499,6 +501,8 @@ const mapEditor: BaseTranslation = {
             fillTooLarge: "The area is not closed or too large to fill. Close it with walls first.",
             doorInvalid: "A door needs two free wall segments side by side. Click on a wall.",
             doorsUnavailable: "This room has no door catalog: doors are not available.",
+            windowInvalid: "A window goes on a free horizontal wall (no door, no window yet). Click on a wall.",
+            windowsUnavailable: "This room has no window catalog: windows are not available.",
             failed: "The change could not be applied.",
         },
         families: {
