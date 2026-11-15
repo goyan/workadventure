@@ -10,7 +10,7 @@ import {
     overcastVeil,
     shadowPatches,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
-import { fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { FOG_LEVELS, fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const TILE = 32;
@@ -64,13 +64,46 @@ describe("cloudPatches", () => {
     it("shows more clouds for a cloudier sky, one after the other", () => {
         const weight = (cloudiness: number) =>
             // Over a view bigger than the repeated square of the sky, every cloud is there.
-            cloudPatches(0, { x: 0, y: 0, width: 1400, height: 1400 }, cloudiness, false).reduce(
+            cloudPatches(0, { x: 0, y: 0, width: 2100, height: 2100 }, cloudiness, false).reduce(
                 (sum, patch) => sum + (patch.weight ?? 1),
                 0,
             );
         expect(weight(0)).toBe(0);
         expect(weight(0.2)).toBeLessThan(weight(0.5));
         expect(weight(0.5)).toBeLessThan(weight(0.9));
+    });
+
+    it("grows the clouds with the cloudiness, so a cloudy sky is a mass of clouds and not a field of dots", () => {
+        const biggest = (cloudiness: number) =>
+            Math.max(
+                ...cloudPatches(0, { x: 0, y: 0, width: 2100, height: 2100 }, cloudiness, false).map((p) => p.radius),
+            );
+        expect(biggest(0.9)).toBeGreaterThan(1.4 * biggest(0.2));
+    });
+
+    it("mixes small and big clouds", () => {
+        // The main puff of each cloud comes first, before its two lobes.
+        const sky = { x: 0, y: 0, width: 2100, height: 2100 };
+        const mains = cloudPatches(0, sky, 1, true)
+            .filter((_, index) => index % 3 === 0)
+            .map((patch) => patch.radius);
+        expect(Math.max(...mains)).toBeGreaterThan(2.5 * Math.min(...mains));
+    });
+
+    it("puts the share of the map given by the cloud cover under clouds: 90 % of cover, about 90 % of the map", () => {
+        // The square of the sky repeated over the map: what it covers, the whole map does. A block counts as cloud
+        // from a quarter of the thickest, the faint edge left out; averaged over a few moments of the drift.
+        const sky = { x: 0, y: 0, width: 2100, height: 2100 };
+        const covered = (cloudiness: number) =>
+            [0, 7_000, 19_000, 33_000].reduce((sum, epoch) => {
+                const blocks = fogBlocks([sky], cloudPatches(epoch, sky, cloudiness, false), 16);
+                const area = blocks
+                    .filter((block) => block.level >= FOG_LEVELS / 4)
+                    .reduce((total, block) => total + block.width * block.height, 0);
+                return sum + area / (sky.width * sky.height) / 4;
+            }, 0);
+        for (const cloudiness of [0.35, 0.5, 0.7, 0.9]) expect(covered(cloudiness)).toBeCloseTo(cloudiness, 1);
+        expect(covered(1)).toBeGreaterThan(0.97);
     });
 
     it("are fixed to the map: zooming or moving the camera never moves nor resizes them", () => {

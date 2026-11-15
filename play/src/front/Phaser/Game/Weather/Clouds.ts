@@ -5,13 +5,30 @@ import { repeatedOverView } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 /** Clouds per square of the sky at most (a cloudiness of 1); they appear one after the other as it grows. */
-const MAX_CLOUDS = 8;
+const MAX_CLOUDS = 12;
 /**
  * The sky is one square of clouds repeated over the whole map, fixed to the map: the camera, its zoom and the size of
  * the screen never move nor resize them. In map pixels.
  */
-const SKY_PERIOD = 1400;
+const SKY_PERIOD = 2100;
 const CLOUD_RADIUS = 220;
+/**
+ * Size of the clouds for a cloudiness, so that they cover that share of the map (90 % of cloud cover, 90 % of the map
+ * under clouds): clouds overlap more as the sky fills up, so they grow faster and faster, and a very cloudy sky is a
+ * mass of clouds that join, not a field of dots. Overcast (from 97 %) gives the size of 97 %.
+ */
+const COVER_SIZE = 1.9;
+const MIN_COVER = 0.05;
+const MAX_COVER = 0.97;
+function cloudSize(cloudiness: number): number {
+    const cover = Math.max(MIN_COVER, Math.min(MAX_COVER, cloudiness));
+    return COVER_SIZE * Math.sqrt(-Math.log(1 - cover) / cover);
+}
+/** Size of a cloud against the others, drawn for each: from 0.45 to 1.75 times the usual size, mostly small ones. */
+const SMALLEST_CLOUD = 0.45;
+const BIGGEST_CLOUD = 1.75;
+/** Farthest a puff reaches from the centre of its cloud, in radii: the main puff and its farthest lobe. */
+const CLOUD_REACH = 1.6;
 /** Drift of the clouds, the same direction for everyone: 60 px a second, a screen crossed in about 30 s. */
 const CLOUD_DRIFT = { x: 48, y: 36 };
 export const CLOUD_DRIFT_PER_SECOND = Math.hypot(CLOUD_DRIFT.x, CLOUD_DRIFT.y);
@@ -92,14 +109,23 @@ export function cloudPatches(epoch: number, view: WeatherView, cloudiness: numbe
     for (let index = 0; index < MAX_CLOUDS; index++) {
         const weight = clamp01(cloudiness * MAX_CLOUDS - index);
         if (weight === 0) break;
-        const radius = CLOUD_RADIUS * (0.8 + 0.4 * hash01(index, 31));
+        const size = cloudSize(cloudiness);
+        // Sizes spread from small to big, with more small clouds than big ones.
+        const radius =
+            CLOUD_RADIUS * size * (SMALLEST_CLOUD + (BIGGEST_CLOUD - SMALLEST_CLOUD) * hash01(index, 31) ** 2);
         const square = {
             x: hash01(index, 37) * SKY_PERIOD + time * CLOUD_DRIFT.x,
             y: hash01(index, 41) * SKY_PERIOD + time * CLOUD_DRIFT.y,
         };
         // Far enough for a puff whose centre is out of the view to still reach into it.
-        for (const centre of repeatedOverView(square, SKY_PERIOD, view, 2.5 * CLOUD_RADIUS)) {
-            for (const lobe of LOBES) {
+        // Lobes moved a little for each cloud, so no two clouds have the same shape.
+        const lobes = LOBES.map((lobe, lobeIndex) => ({
+            dx: lobe.dx + (hash01(index, 43 + lobeIndex) - 0.5) * 0.3,
+            dy: lobe.dy + (hash01(index, 47 + lobeIndex) - 0.5) * 0.4,
+            scale: lobe.scale,
+        }));
+        for (const centre of repeatedOverView(square, SKY_PERIOD, view, CLOUD_REACH * radius)) {
+            for (const lobe of lobes) {
                 patches.push({
                     x: centre.x + lobe.dx * radius,
                     y: centre.y + lobe.dy * radius,
