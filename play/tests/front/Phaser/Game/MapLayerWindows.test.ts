@@ -6,6 +6,7 @@ import {
     eraseAt,
     eraseTargetAt,
     modelFromPlacedPrefabs,
+    moveWindow,
     windowEdgesBetween,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
 
@@ -181,5 +182,49 @@ describe("window placing", () => {
         expect(windowEdgesBetween(model, { x: 2, y: 1 }, { x: 2, y: 1 })).toEqual([
             { edge: { orientation: "h", x: 2, y: 1 }, valid: true },
         ]);
+    });
+});
+
+describe("window moving", () => {
+    it("moves a window to a free horizontal wall, the walls stay", () => {
+        const model = new MapLayerModel();
+        wallRow(model, 0, 4, 1);
+        model.setWindow(0, 1);
+        expect(moveWindow(model, { x: 0, y: 1 }, { x: 3, y: 1 })).toBe(true);
+        expect(model.hasWindow(0, 1)).toBe(false);
+        expect(model.hasWindow(3, 1)).toBe(true);
+        expect(model.hasWall("h", 0, 1)).toBe(true);
+    });
+
+    it("moves a window to another wall", () => {
+        const model = new MapLayerModel();
+        wallRow(model, 0, 2, 1);
+        wallRow(model, 5, 7, 4);
+        model.setWindow(1, 1);
+        expect(moveWindow(model, { x: 1, y: 1 }, { x: 6, y: 4 })).toBe(true);
+        expect(model.hasWindow(6, 4)).toBe(true);
+    });
+
+    it("leaves the window in place when the target cannot take it", () => {
+        const model = new MapLayerModel();
+        wallRow(model, 0, 4, 1);
+        model.setWindow(0, 1);
+        model.setWindow(1, 1);
+        model.setDoor({ orientation: "h", x: 3, y: 1 });
+        for (const target of [
+            { x: 1, y: 1 },
+            { x: 2, y: 1 },
+            { x: 0, y: 3 },
+        ]) {
+            expect(moveWindow(model, { x: 0, y: 1 }, target)).toBe(false);
+            expect(model.hasWindow(0, 1)).toBe(true);
+        }
+    });
+
+    it("does nothing without a window to move", () => {
+        const model = new MapLayerModel();
+        wallRow(model, 0, 2, 1);
+        expect(moveWindow(model, { x: 0, y: 1 }, { x: 1, y: 1 })).toBe(false);
+        expect(model.hasWindow(1, 1)).toBe(false);
     });
 });

@@ -51,6 +51,7 @@ import {
     applyWalls,
     applyWindows,
     cellAt,
+    moveWindow,
     cellsBetween,
     doorCandidateAt,
     doorPixelRect,
@@ -83,6 +84,8 @@ interface Gesture {
     /** Tiles visited, for continuous gestures (brush, eraser). */
     path: Point[];
     baseModel: MapLayerModel;
+    /** In the window mode, a press on a placed window moves it: the tile of that window. */
+    movedWindow?: Point;
 }
 
 /**
@@ -319,12 +322,18 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
         mapLayerStatusStore.set(undefined);
         const world = { x: pointer.worldX, y: pointer.worldY };
+        const baseModel = this.readModel();
+        const startCell = cellAt(world.x, world.y);
         this.gesture = {
             pointerId: pointer.id,
             startWorld: world,
             currentWorld: world,
-            path: [cellAt(world.x, world.y)],
-            baseModel: this.readModel(),
+            path: [startCell],
+            baseModel,
+            movedWindow:
+                get(mapLayerModeStore) === "window" && baseModel.hasWindow(startCell.x, startCell.y)
+                    ? startCell
+                    : undefined,
         };
         // Filling reacts to the click itself.
         this.redraw();
@@ -366,9 +375,15 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.commit(operation);
         } else if (mode === "door") {
             mapLayerStatusStore.set("doorInvalid");
-        } else if (mode === "window") {
+        } else if (mode === "window" && !this.droppedInPlace(gesture)) {
             mapLayerStatusStore.set("windowInvalid");
         }
+    }
+
+    /** A moved window released on its own segment: nothing to do, nothing to explain. */
+    private droppedInPlace(gesture: Gesture): boolean {
+        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        return gesture.movedWindow !== undefined && end.x === gesture.movedWindow.x && end.y === gesture.movedWindow.y;
     }
 
     private cancelGesture(): void {
@@ -416,6 +431,15 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
             }
             case "window": {
+                const from = gesture.movedWindow;
+                if (from) {
+                    if (this.droppedInPlace(gesture)) return undefined;
+                    return moveWindow(gesture.baseModel.clone(), from, endCell)
+                        ? (model) => {
+                              moveWindow(model, from, endCell);
+                          }
+                        : undefined;
+                }
                 const edges = windowEdgesBetween(gesture.baseModel, startCell, endCell)
                     .filter((candidate) => candidate.valid)
                     .map((candidate) => candidate.edge);
@@ -507,6 +531,11 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.scene.markDirty();
             return;
         }
+        if (get(mapLayerModeStore) === "window" && gesture.movedWindow) {
+            this.drawWindowMovePreview(graphics, gesture);
+            this.scene.markDirty();
+            return;
+        }
         if (get(mapLayerModeStore) === "window") {
             this.drawWindowPreview(
                 graphics,
@@ -559,6 +588,18 @@ export class MapLayerEditorTool extends MapEditorTool {
         for (const { edge, valid } of windowEdgesBetween(model, fromCell, toCell)) {
             graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(edge.x * size, edge.y * size, size, size);
         }
+    }
+
+    /** A window being moved: its segment outlined, the target green when it can take the window, red otherwise. */
+    private drawWindowMovePreview(graphics: Phaser.GameObjects.Graphics, gesture: Gesture): void {
+        const size = MAP_LAYER_TILE_SIZE;
+        const from = gesture.movedWindow;
+        if (!from) return;
+        const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
+        graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(from.x * size, from.y * size, size, size);
+        if (this.droppedInPlace(gesture)) return;
+        const valid = moveWindow(gesture.baseModel.clone(), from, end);
+        graphics.fillStyle(valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(end.x * size, end.y * size, size, size);
     }
 
     /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */

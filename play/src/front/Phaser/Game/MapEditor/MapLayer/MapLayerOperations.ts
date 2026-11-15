@@ -442,6 +442,18 @@ export function windowEdgesBetween(model: MapLayerModel, fromCell: Point, toCell
     return candidates;
 }
 
+/**
+ * Moves the window of the segment under `fromCell` to the segment under `toCell` (any free horizontal wall). The walls
+ * stay where they are. Without a window to move, or with a target that cannot take it, nothing changes.
+ */
+export function moveWindow(model: MapLayerModel, fromCell: Point, toCell: Point): boolean {
+    if (!model.hasWindow(fromCell.x, fromCell.y)) return false;
+    model.removeWindow(fromCell.x, fromCell.y);
+    if (model.setWindow(toCell.x, toCell.y)) return true;
+    model.setWindow(fromCell.x, fromCell.y);
+    return false;
+}
+
 /** Sets a window on each segment that can take one. Returns how many were set. */
 export function applyWindows(model: MapLayerModel, edges: readonly WallEdgeRef[]): number {
     let count = 0;

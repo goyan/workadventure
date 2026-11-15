@@ -1614,6 +1614,9 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
   par case de la rangée de départ ; aperçu vert sur un mur horizontal libre, rouge sur un mur vertical, une porte, une
   fenêtre déjà posée ou sans mur (message « windowInvalid » si rien n'est posable). Côte à côte, elles forment une baie.
   Pas de fenêtre sur un mur vertical : vu de dessus, il n'a pas de face où la voir.
+- Déplacer : en mode « Fenêtre », appuyer sur une fenêtre posée et la glisser ; au relâcher elle passe sur le segment
+  visé s'il peut la recevoir (mur horizontal libre, même sur un autre mur), sinon elle reste (« windowInvalid »). Les
+  murs ne bougent pas ; relâcher sur son propre segment ne fait rien. Un déplacement = une entrée d'annulation.
 - On voit à travers : la vitre de l'image est semi-transparente (alpha 128). Ce que la façade cache (avatar collé au mur
   côté nord, haut d'un meuble, sol de la pièce derrière) apparaît dans la vitre ; aucun code de rendu dédié.
 - Stockage : une entité WAM de la collection `Carte Fenêtres` (`fenetre-<teinte>-<bout>`, mêmes bouts, place, collision et

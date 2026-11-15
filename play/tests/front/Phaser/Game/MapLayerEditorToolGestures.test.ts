@@ -169,15 +169,19 @@ describe("MapLayerEditorTool gestures", () => {
     });
 
     /** A horizontal wall of three segments on the line 2: its facades fill the tile row 2 (y 64 to 96). */
-    function placeWall(): void {
-        const pieces: [string, number][] = [
-            ["facade-blanc-left", -6],
-            ["facade-blanc-mid", 32],
-            ["facade-blanc-right", 64],
+    function placeWall(windowOnFirst = false): void {
+        const pieces: [string, string, number][] = [
+            [
+                windowOnFirst ? MAP_LAYER_WINDOW_COLLECTION : MAP_LAYER_WALL_COLLECTION,
+                windowOnFirst ? "fenetre-blanc-left" : "facade-blanc-left",
+                -6,
+            ],
+            [MAP_LAYER_WALL_COLLECTION, "facade-blanc-mid", 32],
+            [MAP_LAYER_WALL_COLLECTION, "facade-blanc-right", 64],
         ];
-        for (const [name, x] of pieces) {
+        for (const [collection, name, x] of pieces) {
             const entity = mock<Entity>({ entityId: name, x, y: 64 });
-            entity.getPrefab.mockReturnValue(prefab(MAP_LAYER_WALL_COLLECTION, `Carte Murs:${name}:Default:Down`));
+            entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
             entities.set(name, entity);
         }
     }
@@ -305,5 +309,48 @@ describe("MapLayerEditorTool gestures", () => {
         );
         tool.activate();
         expect(get(mapLayerWindowsAvailableStore)).toBe(false);
+    });
+
+    it("moves a placed window along the wall", async () => {
+        placeWall(true);
+        await activate();
+        mapLayerModeStore.set("window");
+        // From the window of the first segment to the second one.
+        down(10, 80);
+        move(30, 80);
+        move(40, 80);
+        up(40, 80);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+        const factory = modeManager.executeCommands.mock.calls[0][0] as () => readonly object[];
+        // The window leaves its segment (its facade comes back) and the facade of the target becomes a window.
+        const deleted = factory()
+            .filter((command) => command.constructor.name === "DeleteEntityFrontCommand")
+            .map((command) => (command as { entityId?: string }).entityId)
+            .filter((id) => id !== undefined)
+            .sort();
+        expect(deleted).toEqual(["facade-blanc-mid", "fenetre-blanc-left"]);
+    });
+
+    it("keeps a window dropped back on its own segment, without a message", async () => {
+        placeWall(true);
+        await activate();
+        mapLayerModeStore.set("window");
+        down(10, 80);
+        move(20, 80);
+        up(20, 80);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+    });
+
+    it("explains a window moved where it cannot go", async () => {
+        placeWall(true);
+        await activate();
+        mapLayerModeStore.set("window");
+        down(10, 80);
+        move(200, 200);
+        up(200, 200);
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBe("windowInvalid");
     });
 });
