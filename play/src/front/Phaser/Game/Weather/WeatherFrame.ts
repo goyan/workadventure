@@ -283,6 +283,24 @@ export interface FogBlock {
     level: number;
 }
 
+interface RowSpan {
+    patch: FogPatch;
+    start: number;
+    end: number;
+}
+
+/** Where each patch covers a horizontal line, sorted by start; the patches missing the line are left out. */
+function rowSpans(patches: readonly FogPatch[], lineY: number): RowSpan[] {
+    const spans: RowSpan[] = [];
+    for (const patch of patches) {
+        const reach = patch.radius ** 2 - (lineY - patch.y) ** 2;
+        if (reach <= 0) continue;
+        const halfWidth = Math.sqrt(reach);
+        spans.push({ patch, start: patch.x - halfWidth, end: patch.x + halfWidth });
+    }
+    return spans.sort((a, b) => a.start - b.start);
+}
+
 /**
  * The fog patches cut into square blocks inside the outdoor runs, so a patch stops at the walls instead of covering
  * a room. Each block takes the thickness at its centre (soft towards the edge of a patch); neighbours of the same
@@ -298,15 +316,27 @@ export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPat
         for (let gridY = Math.floor(run.y / block) * block; gridY < bottom; gridY += block) {
             const y = Math.max(gridY, run.y);
             const height = Math.min(gridY + block, bottom) - y;
+            const centreY = gridY + block / 2;
+            // Only the patches crossing this row, by where they start on it: a block then looks at the few patches
+            // over it instead of all of them (thousands when zoomed out, at every image).
+            const crossing = rowSpans(patches, centreY);
+            const active: RowSpan[] = [];
+            let next = 0;
             let current: FogBlock | undefined;
             for (let gridX = Math.floor(run.x / block) * block; gridX < right; gridX += block) {
                 const x = Math.max(gridX, run.x);
                 const width = Math.min(gridX + block, right) - x;
                 // The thickness of the whole grid block, whatever part of it the run keeps.
                 const centreX = gridX + block / 2;
-                const centreY = gridY + block / 2;
+                while (next < crossing.length && crossing[next].start < centreX) active.push(crossing[next++]);
                 let thickness = 0;
-                for (const patch of patches) {
+                for (let index = active.length - 1; index >= 0; index--) {
+                    const span = active[index];
+                    if (span.end <= centreX) {
+                        active.splice(index, 1);
+                        continue;
+                    }
+                    const patch = span.patch;
                     const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
                     if (share > 0) thickness += (patch.weight ?? 1) * share * share;
                 }
