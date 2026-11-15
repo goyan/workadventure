@@ -1576,7 +1576,7 @@ Les catalogues et leurs images (pack sous licence) sont dans le dépôt privé, 
 de `workadventure-selfhost`. Disponible sur **toutes les salles**, anciennes comprises : la variable `MAP_LAYER_CATALOG_URLS` (URL séparées par des virgules, lue par le pusher et
 transmise au front) ajoute les deux catalogues aux collections de chaque salle ; aucun WAM n'a à être modifié. L'outil ne lit et n'écrit que les entités de ces
 collections : les sols et murs posés comme objets classiques ne sont jamais touchés. Sans la variable (ou si le catalogue est injoignable), l'outil l'indique et ne pose rien.
-Limites connues : plafond de 4000 entités par geste, remplissage limité à 2500 cases, pas de contrôle de présence des joueurs, pas de fenêtres, pas de
+Limites connues : plafond de 4000 entités par geste, remplissage limité à 2500 cases, pas de contrôle de présence des joueurs, pas de
 raccords décoratifs au nord. **Comportement visuel non validé dans le jeu.**
 
 Mises à jour de l'outil Carte :
@@ -1607,6 +1607,22 @@ Portes (mode « Porte » de l'outil Carte) :
 - Ombre et coins : le sol devant une porte horizontale n'est jamais ombré (le passage est ouvert) ; le sol sous les murs voisins l'est toujours. Une porte verticale qui part sous un coin ou un T est dessinée par-dessus la face sud du mur horizontal du dessus (`DoorAnimator`, profondeur juste au-dessus de la façade) : on voit alors son montant de mur continuer le mur jusqu'à la porte, au lieu d'une porte qui flotte sous la face. **Non validé dans le jeu.**
 - Sprites à ajouter au dépôt privé : voir la maquette « Sprites de porte WorkAdventure » (horizontal 32 × 32 par panneau, vertical 64 × 32 par pièce, vertical
   haut qui commence sous le raccord du premier sommet, 8 frames, 4 teintes, depthOffset de `bas` à régler sous le raccord du sommet suivant). **Gomme : au survol, la porte (ou le mur, ou le sol) que la gomme enlèverait est surlignée en rouge ; gommer une porte la retire sans toucher aux sols autour d'elle (murs et sols restent). Les portes déjà posées avec une ancienne version de l'outil (bouts de mur et raccords à côté d'une porte) se redessinent à la prochaine modification de la couche carte.** **Non validé dans le jeu.**
+
+Fenêtres (mode « Fenêtre » de l'outil Carte) :
+
+- Une fenêtre remplace la façade d'**un segment de mur horizontal** (32 px). Clic ou glissé le long du mur : une fenêtre
+  par case de la rangée de départ ; aperçu vert sur un mur horizontal libre, rouge sur un mur vertical, une porte, une
+  fenêtre déjà posée ou sans mur (message « windowInvalid » si rien n'est posable). Côte à côte, elles forment une baie.
+  Pas de fenêtre sur un mur vertical : vu de dessus, il n'a pas de face où la voir.
+- On voit à travers : la vitre de l'image est semi-transparente (alpha 128). Ce que la façade cache (avatar collé au mur
+  côté nord, haut d'un meuble, sol de la pièce derrière) apparaît dans la vitre ; aucun code de rendu dédié.
+- Stockage : une entité WAM de la collection `Carte Fenêtres` (`fenetre-<teinte>-<bout>`, mêmes bouts, place, collision et
+  profondeur que la façade qu'elle remplace). Le mur reste dans le modèle sous la fenêtre (`MapLayerModel.setWindow`) :
+  un passage de gomme retire la fenêtre (la façade revient), le suivant le mur ; retirer le mur retire la fenêtre. Une
+  porte ne se pose pas sur une fenêtre. Catalogue facultatif : sans lui, bouton grisé (« windowsUnavailable »).
+- Ailleurs, une fenêtre est un mur : obstacle, chemin, grille dehors/dedans (`OUTDOOR_WALL_COLLECTIONS`), lumière des
+  lampes (`MAP_LAYER_WALL_LIKE_COLLECTIONS`). Les images (dérivées des façades du pack) sont générées par
+  `tools/build_window_prefabs.mjs` du dépôt infra et restent dans le dépôt privé.
 
 ## Confirmation avant de libérer son bureau
 
