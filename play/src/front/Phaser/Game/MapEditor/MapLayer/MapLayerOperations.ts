@@ -50,6 +50,7 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                     model.setFloor(item.x / size, item.y / size, piece.family);
                 }
                 break;
+            case "window":
             case "facade": {
                 // The sprite fills the tile row of its line and may start left of the column. Walls drawn when the cap
                 // was centered on the line (half a wall higher) are still read, and redrawn in place on the next edit.
@@ -58,6 +59,7 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                 const legacyY = (item.y + WALL_HALF) / size;
                 if (Number.isInteger(x) && Number.isInteger(y)) {
                     model.setWall("h", x, y, piece.tint);
+                    if (piece.kind === "window") model.setWindow(x, y);
                 } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
                     model.setWall("h", x, legacyY, piece.tint);
                 }
@@ -297,9 +299,9 @@ export function applyWalls(
 }
 
 /**
- * Erases what is under a position: a door first (the walls it stands on stay as they were), else a wall, else a
- * floor. `keptEdges` collects the segments of the doors erased, which a drag then leaves alone: one pass of the
- * eraser removes the door, the next one the wall. Returns whether a door was erased: the floor around a door stays.
+ * Erases what is under a position: a door or a window first (the walls it stands on stay as they were), else a wall,
+ * else a floor. `keptEdges` collects the segments of the doors and windows erased, which a drag then leaves alone: one
+ * pass of the eraser removes the door or the window, the next one the wall. Returns whether a door was erased: the floor around a door stays.
  */
 export function eraseAt(
     model: MapLayerModel,
@@ -320,6 +322,10 @@ export function eraseAt(
             }
             return true;
         }
+        if (wall.orientation === "h" && model.removeWindow(wall.x, wall.y)) {
+            keptEdges.add(edgeKey("h", wall.x, wall.y));
+            return false;
+        }
         model.removeWall(wall.orientation, wall.x, wall.y);
         return false;
     }
@@ -331,6 +337,7 @@ export function eraseAt(
 /** What the eraser would remove under a position, for the highlight shown before the click. */
 export type EraseTarget =
     | { kind: "door"; door: DoorRef }
+    | { kind: "window"; wall: WallEdgeRef }
     | { kind: "wall"; wall: WallEdgeRef }
     | { kind: "floor"; cell: Point };
 
@@ -338,7 +345,10 @@ export function eraseTargetAt(model: MapLayerModel, worldX: number, worldY: numb
     const wall = wallAtPoint(model, worldX, worldY);
     if (wall) {
         const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
-        return door ? { kind: "door", door } : { kind: "wall", wall };
+        if (door) return { kind: "door", door };
+        return wall.orientation === "h" && model.hasWindow(wall.x, wall.y)
+            ? { kind: "window", wall }
+            : { kind: "wall", wall };
     }
     const cell = cellAt(worldX, worldY);
     return model.getFloor(cell.x, cell.y) ? { kind: "floor", cell } : undefined;
@@ -411,4 +421,29 @@ export function applyDoor(model: MapLayerModel, door: DoorRef, bounds: MapBounds
             }
         }
     }
+}
+
+/** A segment of a window drag, and whether a window can be set on it. */
+export interface WindowEdgeCandidate {
+    edge: WallEdgeRef;
+    valid: boolean;
+}
+
+/**
+ * The horizontal segments a window drag passes over, between two vertices: windows only go on horizontal walls, so
+ * the drag stays on the row of the vertex it started from.
+ */
+export function windowEdgesBetween(model: MapLayerModel, from: Point, to: Point): WindowEdgeCandidate[] {
+    return lineWallEdges(from, { x: to.x, y: from.y })
+        .filter((edge) => edge.orientation === "h")
+        .map((edge) => ({ edge, valid: model.canSetWindow(edge.x, edge.y) }));
+}
+
+/** Sets a window on each segment that can take one. Returns how many were set. */
+export function applyWindows(model: MapLayerModel, edges: readonly WallEdgeRef[]): number {
+    let count = 0;
+    for (const edge of edges) {
+        if (edge.orientation === "h" && model.setWindow(edge.x, edge.y)) count++;
+    }
+    return count;
 }
