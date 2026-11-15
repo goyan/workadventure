@@ -100,6 +100,8 @@ export class MapLayerEditorTool extends MapEditorTool {
     private gesture: Gesture | undefined;
     private graphics: Phaser.GameObjects.Graphics | undefined;
     private hover: Point | undefined;
+    /** The cursor this tool asked for: a placed window shows a hand that can grab it. */
+    private cursor = "";
     /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
     private hoverModel: MapLayerModel | undefined;
     /**
@@ -175,6 +177,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.pointerCapture = undefined;
         this.graphics?.destroy();
         this.graphics = undefined;
+        this.setCursor("");
         this.scene.input.topOnly = false;
         this.scene.markDirty();
     }
@@ -484,9 +487,26 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
     }
 
+    private setCursor(cursor: string): void {
+        if (cursor === this.cursor) return;
+        this.cursor = cursor;
+        this.scene.input.setDefaultCursor(cursor);
+    }
+
+    /** In the window mode, a hand over a placed window (it can be dragged), a closed hand while it is moved. */
+    private wantedCursor(): string {
+        if (get(mapLayerModeStore) !== "window" || !get(mapLayerWindowsAvailableStore)) return "";
+        if (this.gesture) return this.gesture.movedWindow ? "grabbing" : "";
+        if (!this.hover) return "";
+        this.hoverModel ??= this.readModel();
+        const cell = cellAt(this.hover.x, this.hover.y);
+        return this.hoverModel.hasWindow(cell.x, cell.y) ? "grab" : "";
+    }
+
     private redraw(): void {
         const graphics = this.graphics;
         if (!graphics) return;
+        this.setCursor(this.wantedCursor());
         graphics.clear();
         const size = MAP_LAYER_TILE_SIZE;
         const gesture = this.gesture;
@@ -509,7 +529,26 @@ export class MapLayerEditorTool extends MapEditorTool {
                     }
                     this.hoverModel ??= this.readModel();
                     const cell = cellAt(this.hover.x, this.hover.y);
-                    this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
+                    if (this.hoverModel.hasWindow(cell.x, cell.y)) {
+                        // A placed window: it can be grabbed and moved, not set again.
+                        graphics
+                            .fillStyle(0xffffff, 0.2)
+                            .fillRect(
+                                cell.x * MAP_LAYER_TILE_SIZE,
+                                cell.y * MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                            )
+                            .lineStyle(2, 0xffffff, 0.9)
+                            .strokeRect(
+                                cell.x * MAP_LAYER_TILE_SIZE,
+                                cell.y * MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                                MAP_LAYER_TILE_SIZE,
+                            );
+                    } else {
+                        this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
+                    }
                 } else if (mode === "erase") {
                     // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
                     this.hoverModel ??= this.readModel();

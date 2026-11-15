@@ -489,7 +489,7 @@ const mapEditor: BaseTranslation = {
             floorRectangle: "Drag a rectangle to fill it with the floor.",
             floorFill: "Click inside a closed room to fill it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
-            window: "Click or drag along a horizontal wall to put windows in it. You can see through them.",
+            window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
         },
         floors: "Floor",

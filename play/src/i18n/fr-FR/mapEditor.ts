@@ -500,7 +500,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorRectangle: "Glissez un rectangle pour le remplir de sol.",
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
-            window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers.",
+            window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
         },
         floors: "Sol",

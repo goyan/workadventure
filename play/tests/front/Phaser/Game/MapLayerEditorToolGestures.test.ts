@@ -33,6 +33,7 @@ function prefab(collectionName: string, id: string): EntityPrefab {
 describe("MapLayerEditorTool gestures", () => {
     let canvas: HTMLCanvasElement;
     let inputEvents: Phaser.Events.EventEmitter;
+    let input: ReturnType<typeof mock<Phaser.Input.InputPlugin>>;
     let modeManager: ReturnType<typeof mock<MapEditorModeManager>>;
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
     let doorsInCatalog: boolean;
@@ -93,7 +94,7 @@ describe("MapLayerEditorTool gestures", () => {
         scene.game = mock<Phaser.Game>();
         scene.game.canvas = canvas;
         scene.scale = mock<Phaser.Scale.ScaleManager>({ width: 640, height: 640 });
-        const input = mock<Phaser.Input.InputPlugin>();
+        input = mock<Phaser.Input.InputPlugin>();
         inputEvents = new Phaser.Events.EventEmitter();
         input.on.mockImplementation((event, listener, context) => {
             inputEvents.on(event, listener, context);
@@ -352,5 +353,23 @@ describe("MapLayerEditorTool gestures", () => {
         up(200, 200);
         expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
         expect(get(mapLayerStatusStore)).toBe("windowInvalid");
+    });
+
+    it("shows that a placed window can be grabbed, then dragged", async () => {
+        placeWall(true);
+        await activate();
+        mapLayerModeStore.set("window");
+        const lastCursor = (): unknown => input.setDefaultCursor.mock.calls.at(-1)?.[0];
+        move(10, 80);
+        expect(lastCursor()).toBe("grab");
+        down(10, 80);
+        move(40, 80);
+        expect(lastCursor()).toBe("grabbing");
+        up(40, 80);
+        move(40, 80);
+        expect(lastCursor()).not.toBe("grabbing");
+        // Over a plain wall, nothing to grab.
+        move(80, 80);
+        expect(lastCursor()).toBe("");
     });
 });
