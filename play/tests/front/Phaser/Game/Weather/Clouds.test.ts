@@ -21,7 +21,7 @@ import {
     shadowPatches,
     SkyDrift,
 } from "../../../../../src/front/Phaser/Game/Weather/Clouds";
-import { FOG_LEVELS, fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
+import { FOG_LEVELS, fieldLevels, fogBlocks } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const TILE = 32;
@@ -332,8 +332,34 @@ describe("cumulus clouds", () => {
         expect(cloudAlpha(1, 0.8)).toBeGreaterThan(0);
         expect(cloudAlpha(1, 0.8)).toBeLessThan(cloudAlpha(2, 0.8));
         expect(cloudAlpha(2, 0.8)).toBeLessThan(0.8);
-        expect(cloudAlpha(3, 0.8)).toBe(0.8);
+        expect(cloudAlpha(4, 0.8)).toBe(0.8);
         expect(cloudAlpha(8, 0.8)).toBe(0.8);
+    });
+
+    it("never flickers at the edge: between two images of a drifting sky, no cell jumps by more than a quarter", () => {
+        const size = 16;
+        const area = { x: 0, y: 0, columns: 120, rows: 120 };
+        const view = { x: 0, y: 0, width: 1920, height: 1920 };
+        const sky = (seconds: number) => ({ x: seconds * 48, y: seconds * 36 });
+        let biggest = 0;
+        for (let frame = 0; frame < 6; frame++) {
+            const before = fieldLevels(area, size, cloudPatches(0, view, 0.5, false, sky(frame / 15)));
+            const after = fieldLevels(area, size, cloudPatches(0, view, 0.5, false, sky((frame + 1) / 15)));
+            for (let cell = 0; cell < before.length; cell++) {
+                biggest = Math.max(biggest, Math.abs(cloudAlpha(before[cell], 1) - cloudAlpha(after[cell], 1)));
+            }
+        }
+        expect(biggest).toBeLessThanOrEqual(0.25);
+    });
+
+    it("keeps the middle tone where the neighbour towards the light is thinner by one level only (no checkerboard)", () => {
+        // An edge across the light: thicknesses differ by a rounding, not by the shape of the cloud.
+        // (Both ends lie against the clear sky: real edges, lit and shaded.)
+        const levels = Uint8Array.from([3, 4, 3, 4, 3, 4, 3, 4, 3]);
+        const tones = cloudTones(levels, 9, 1, { columns: -1, rows: 0 });
+        expect(Array.from(tones.mid.slice(1, 8))).toEqual(Array.from(levels.slice(1, 8)));
+        expect(tones.lit.slice(1, 8).some(Boolean)).toBe(false);
+        expect(tones.shade.slice(1, 8).some(Boolean)).toBe(false);
     });
 
     it("lights the side of a cloud facing the light and darkens the other, the middle in between", () => {

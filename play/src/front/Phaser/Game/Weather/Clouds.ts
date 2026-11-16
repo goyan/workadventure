@@ -186,14 +186,14 @@ export function rainPalette(color: number): CloudPalette {
 }
 
 /**
- * Opacity of a cloud cell by its thickness level: a faint rim on the first two levels, then the whole body, so a cloud
- * has an edge instead of fading out like a mist.
+ * Opacity of a cloud cell by its thickness level: a rim rising by quarters on the first three levels, then the whole
+ * body, so a cloud has an edge instead of fading out like a mist. Quarters, not thirds: as the clouds drift, a cell of
+ * the rim changes by one level at a time, and a jump of a third of the opacity flickered.
  */
+const CLOUD_RIM_LEVELS = 4;
 export function cloudAlpha(level: number, body: number): number {
     if (level <= 0) return 0;
-    if (level === 1) return 0.35 * body;
-    if (level === 2) return 0.7 * body;
-    return body;
+    return Math.min(1, level / CLOUD_RIM_LEVELS) * body;
 }
 
 /** How far a cell looks towards the light to tell its tone, in map pixels: the same at any zoom. */
@@ -210,8 +210,11 @@ export function cloudLightStep(size: number): { columns: number; rows: number } 
 
 /**
  * The cells of a field of clouds split by tone, each keeping its level: lit when its neighbour towards the light is
- * thinner (the side facing the light), shaded when the one away from it is, the middle otherwise.
+ * thinner (the side facing the light), shaded when the one away from it is, the middle otherwise. Thinner by two levels
+ * at least: one level is a rounding along an edge across the light, and lit and middle cells alternated there in a
+ * checkerboard.
  */
+const TONE_STEP = 2;
 export function cloudTones(
     levels: Uint8Array,
     columns: number,
@@ -228,9 +231,10 @@ export function cloudTones(
             const cell = line * columns + column;
             const level = levels[cell];
             if (level === 0) continue;
-            if (at(column + towardsLight.columns, line + towardsLight.rows) < level) lit[cell] = level;
-            else if (at(column - towardsLight.columns, line - towardsLight.rows) < level) shade[cell] = level;
-            else mid[cell] = level;
+            if (at(column + towardsLight.columns, line + towardsLight.rows) <= level - TONE_STEP) lit[cell] = level;
+            else if (at(column - towardsLight.columns, line - towardsLight.rows) <= level - TONE_STEP) {
+                shade[cell] = level;
+            } else mid[cell] = level;
         }
     }
     return { lit, mid, shade };
