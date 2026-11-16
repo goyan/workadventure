@@ -1124,6 +1124,44 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
 - **Non vérifié** : rendu en jeu (de jour, de nuit, sous la pluie), présence d'arbres `Nature:tree-*` dehors sur les cartes
   de la beta, qualité et volume réels des cris, coût de 10 calculs de chemin de plus ; deux clients côte à côte.
 
+#### Apprivoiser un lion ou un tigre
+
+- **Geste** : à 1,5 case au plus des pieds d'un animal de la jungle libre, l'invite « [ESPACE] pour apprivoiser cet
+  animal 🐾 » (la même mécanique que l'invite de siège à touche, `InteractionPrompt`) ; ESPACE ou un clic l'apprivoise :
+  il quitte son errance et suit son maître. Près de son compagnon, la même touche le relâche (« pour relâcher votre
+  compagnon ») : il revient tout de suite à son programme de promenade, là où ce programme le place (pas de marche de
+  retour, il peut donc réapparaître d'un coup autour de son nid). Un seul compagnon par joueur.
+- **Suivi** (`JungleCompanionFollow.ts`, pur) : l'animal repasse par les positions de son maître (il contourne donc les
+  murs que le maître a contournés) et s'arrête 2 cases derrière lui, mesurées le long de ce chemin ; il marche plus vite
+  quand il est loin (96 à 640 px/s) ; au-delà de 10 cases (téléportation, véhicule rapide) il saute à côté du maître ;
+  les positions du maître dans l'eau ne sont pas suivies : l'animal attend au bord. Animation de marche des promeneurs,
+  pas de siège. Le suivi à 2 cases est plus long que le rayon de l'invite (1,5) : l'invite « relâcher » n'occupe pas
+  ESPACE à l'arrêt ; il faut revenir vers son compagnon pour la voir.
+- **Partage** : un **événement de salle** `infogene.jungle.companion` (`{ animal, since }`, `since` = heure du serveur,
+  `null` = relâché), et non une variable de joueur : le serveur n'envoie les variables d'un joueur qu'aux joueurs dont
+  le champ de vision le contient (`PositionNotifier` du back, zones), alors qu'un animal apprivoisé quitte son nid, où les
+  autres le cherchent. L'événement atteint toute la salle (`GameRoom.dispatchEvent`, expéditeur fixé par le serveur ;
+  son propre écho est ignoré). Le maître l'annonce toutes les 5 s ; une annonce non renouvelée pendant 15 s expire
+  (départ de la carte, rechargement, coupure) : rien n'est gardé avec le compte. Au démarrage et à la fermeture de la
+  scène, le joueur annonce « aucun compagnon ». Aucun changement de protocole ni du back.
+- **Premier arrivé** (`jungleCompanionOwners`) : un animal revendiqué par quelqu'un n'est pas proposé ; si deux messages
+  se croisent, le plus petit `since` gagne, puis le plus petit id utilisateur ; le perdant relâche sans rien afficher.
+- **Ce que voient les autres** : l'animal suit son maître et n'erre plus ; si le maître est hors de vue, l'animal est
+  masqué (ni ici ni autour de son nid). Les cris continuent pour un compagnon à l'arrêt.
+- **Cas particuliers** : pas de compagnon dans l'éditeur (ouvrir l'éditeur le relâche, rien n'est proposé) ; un animal qui
+  sort du tirage (jungle désactivée dans les réglages, nouveau jour) est relâché ; un autre animal sur le même arbre le
+  lendemain repart du suivi. Véhicule : suivi normal (rattrapage, saut au-delà de 10 cases). Mouvement réduit : rien de
+  changé (le suivi est un déplacement comme celui des avatars, sans flash). Une valeur reçue qui ne désigne pas un
+  animal du tirage local est ignorée. Si un siège à touche ou la nage proposent aussi ESPACE au même endroit, les deux
+  actions partent, comme entre les invites existantes ; Nerf équipé, ESPACE tire et l'invite ne se prend qu'au clic
+  (règle commune des invites, `GameSceneUserInputHandler.addSpaceEventListener`).
+- **Code** : `Jungle/{JungleCompanionProtocol,JungleCompanionFollow,JungleCompanions}.ts` (testés sans Phaser),
+  `GameJungle.ts` (câblage), `WanderingCharactersManager.setFreeCharacterLead` (une pose fournie remplace le programme),
+  i18n `trigger.jungleTame`/`trigger.jungleRelease`.
+- **Non vérifié** : tout le rendu en jeu ; deux joueurs réels (annonce, expiration, course) ; l'heure serveur absente
+  (`since` pris sur l'horloge du poste) ; le suivi derrière un joueur distant (positions interpolées) ; le passage d'une
+  porte ; le coût de l'annonce dans une salle chargée.
+
 ### Gobeur (retiré)
 
 Le Gobeur (mini-jeu de poursuite) a été retiré le 2026-11-06. Le WAM continue de tolérer la propriété
