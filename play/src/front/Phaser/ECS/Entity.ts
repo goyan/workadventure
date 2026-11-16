@@ -97,6 +97,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             name: data.name ?? "",
             properties: data.properties ?? [],
             depthStep: data.depthStep ?? 0,
+            elevation: data.elevation ?? 0,
         };
         this.prefab = prefab;
 

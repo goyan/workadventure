@@ -165,6 +165,7 @@ export class WamManager {
                         properties: message.properties as EntityDataProperties,
                         name: message.name,
                         depthStep: message.depthStep,
+                        elevation: message.elevation,
                     },
                     editMapCommandMessage.id,
                 ).execute();

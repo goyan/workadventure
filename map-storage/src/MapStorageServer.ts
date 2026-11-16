@@ -329,6 +329,7 @@ const mapStorageServer: MapStorageServer = {
                                 properties: message.properties as EntityDataProperties,
                                 name: message.name,
                                 depthStep: message.depthStep,
+                                elevation: message.elevation,
                             },
                             commandId,
                             hookManager,

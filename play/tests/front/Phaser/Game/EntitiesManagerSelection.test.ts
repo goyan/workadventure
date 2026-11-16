@@ -260,6 +260,7 @@ describe("Native entity clicks while selecting a group", () => {
                 properties: [],
                 name: "",
                 depthStep: 0,
+                elevation: 0,
             });
             copies = [];
             updates = [];

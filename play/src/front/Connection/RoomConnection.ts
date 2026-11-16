@@ -1521,6 +1521,7 @@ export class RoomConnection implements RoomConnection {
                                 properties: config.properties ?? [],
                                 name: config.name,
                                 depthStep: config.depthStep,
+                                elevation: config.elevation,
                                 width: entityDimensions.width,
                                 height: entityDimensions.height,
                             },
