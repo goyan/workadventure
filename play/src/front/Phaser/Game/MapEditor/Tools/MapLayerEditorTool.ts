@@ -60,6 +60,7 @@ import {
     DOOR_AUTO_MAX_HEIGHT,
     applyDoorPlan,
     applyFloor,
+    applyRoom,
     applyWalls,
     applyWindows,
     cellAt,
@@ -73,7 +74,6 @@ import {
     modelFromPlacedPrefabs,
     planDoorAt,
     rectangleCells,
-    roomWallEdges,
     vertexAt,
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
@@ -569,10 +569,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                     : (model, bounds) => applyWalls(model, edges, tint, bounds, wallHeight);
             }
             case "room":
-                return (model, bounds) => {
-                    applyWalls(model, roomWallEdges(startCell, endCell), tint, bounds, wallHeight);
-                    applyFloor(model, rectangleCells(startCell, endCell), family, bounds);
-                };
+                return (model, bounds) => applyRoom(model, startCell, endCell, tint, family, bounds, wallHeight);
             case "floorBrush":
                 return (model, bounds) => applyFloor(model, path, family, bounds);
             case "floorRectangle":

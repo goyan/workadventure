@@ -333,6 +333,30 @@ export function applyWalls(
 }
 
 /**
+ * A room on the rectangle of tiles between `a` and `b`: its walls on its border lines and its floor. The south wall
+ * stands on the tile row under the rectangle, where the avatar walks up to its foot: that row gets the floor of the room
+ * too, between the side walls, where it has none yet (a translucent high wall shows it).
+ */
+export function applyRoom(
+    model: MapLayerModel,
+    a: Point,
+    b: Point,
+    tint: WallTint,
+    family: FloorFamily,
+    bounds: MapBounds,
+    height: WallHeight = 1,
+): void {
+    applyWalls(model, roomWallEdges(a, b), tint, bounds, height);
+    applyFloor(model, rectangleCells(a, b), family, bounds);
+    const southRow = Math.max(a.y, b.y) + 1;
+    const underSouthWall = rectangleCells(
+        { x: Math.min(a.x, b.x), y: southRow },
+        { x: Math.max(a.x, b.x), y: southRow },
+    ).filter((cell) => model.getFloor(cell.x, cell.y) === undefined);
+    applyFloor(model, underSouthWall, family, bounds);
+}
+
+/**
  * Erases what is under a position: a door or a window first (the walls it stands on stay as they were), else a wall,
  * else a floor. `keptEdges` collects the segments of the doors and windows erased, which a drag then leaves alone: one
  * pass of the eraser removes the door or the window, the next one the wall. Returns whether a door was erased: the floor around a door stays.

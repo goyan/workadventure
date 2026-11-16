@@ -1650,6 +1650,9 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
   un mur vertical haut : remontée avec son chapeau (`wallRise(N)`), pour rester visible de dessus ; aucune bande sur ses
   deux segments (le passage reste libre), raccords de ses sommets extérieurs au niveau du mur, comme en hauteur 1.
+- Outil « Pièce » : il pose aussi le sol de la pièce sur la rangée où se tient son mur sud (entre ses deux murs de
+  côté, sans écraser un sol déjà là, `applyRoom`) : l'avatar y marche jusqu'au pied du mur, et un mur haut translucide
+  la montre. Les pièces déjà tracées ne sont pas modifiées.
 - Hauteur des portes : le mode Porte propose « Auto 1 2 3 4 », Auto par défaut : la porte prend la hauteur de son mur
   (le plus bas de ses deux segments), 2 cases au plus (`DOOR_AUTO_MAX_HEIGHT`) ; un choix 1 à 4 est ramené à la hauteur
   du mur. Cliquer en mode Porte sur une porte horizontale déjà posée (même sommet) lui donne la hauteur qui serait posée

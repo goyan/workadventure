@@ -20,6 +20,7 @@ import {
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
 import {
     applyFloor,
+    applyRoom,
     applyWalls,
     cellsBetween,
     eraseAt,
@@ -414,5 +415,37 @@ describe("wallBarriers", () => {
         ]);
 
         expect(barriers.touchesTile(3, 3)).toBe(false);
+    });
+});
+
+describe("room tool: the floor under the south wall", () => {
+    it("lays the floor of the room on the row its south wall stands on, between its side walls", () => {
+        const model = new MapLayerModel();
+        applyRoom(model, { x: 2, y: 2 }, { x: 4, y: 3 }, "gris", "parquet-clair", bounds);
+        // The south wall stands on the line 4, on the tile row 4: the avatar walks up to its foot there.
+        for (const x of [2, 3, 4]) expect(model.getFloor(x, 4)?.family).toBe("parquet-clair");
+        expect(model.getFloor(1, 4)).toBeUndefined();
+        expect(model.getFloor(5, 4)).toBeUndefined();
+        expect(model.getFloor(3, 5)).toBeUndefined();
+        expect(model.hasWall("h", 3, 4)).toBe(true);
+        // The shaded floor stays the row under the north wall; the row of the south wall is plain.
+        const floors = names(model).filter((name) => name.startsWith("sol-"));
+        expect(floors.filter((name) => name.includes("ombre"))).toEqual([
+            "sol-parquet-clair-ombre@128,96",
+            "sol-parquet-clair-ombre@64,96",
+            "sol-parquet-clair-ombre@96,96",
+        ]);
+        expect(floors).toContain("sol-parquet-clair-uni@96,128");
+    });
+
+    it("keeps a floor already on the row of the south wall, and still fills the room itself", () => {
+        const model = new MapLayerModel();
+        model.setFloor(3, 4, "pierre-grise");
+        model.setFloor(3, 3, "pierre-grise");
+        applyRoom(model, { x: 2, y: 2 }, { x: 4, y: 3 }, "gris", "parquet-clair", bounds, 2);
+        expect(model.getFloor(3, 4)?.family).toBe("pierre-grise");
+        expect(model.getFloor(2, 4)?.family).toBe("parquet-clair");
+        expect(model.getFloor(3, 3)?.family).toBe("parquet-clair");
+        expect(model.getWall("h", 3, 4)?.height).toBe(2);
     });
 });
