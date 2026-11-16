@@ -1,70 +1,20 @@
 import * as Phaser from "phaser";
 import { JUNGLE_TREE_PREFIX } from "../Jungle/JunglePlan";
+import { POSE_PAD, treePose } from "./TreePoses";
+
+export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
 
 /** Trees of the nature catalogue: the ones that sway in the wind (the same the jungle animals gather around). */
 export function isSwayingTree(prefabId: string): boolean {
     return prefabId.startsWith(JUNGLE_TREE_PREFIX);
 }
 
-/** Wind (km/h) from which the trees sway as much and as fast as they ever do. */
-const STRONGEST_WIND_KMH = 80;
-/** How far a tree leans, in degrees: a little in a calm, four degrees at most in a storm. */
-const CALM_AMPLITUDE = 0.4;
-const STORM_AMPLITUDE = 4;
-/** How often a tree sways, in swings a second. */
-const CALM_FREQUENCY = 0.25;
-const STORM_FREQUENCY = 0.7;
-
-const windShare = (windKmh: number): number =>
-    Math.max(0, Math.min(STRONGEST_WIND_KMH, Number.isFinite(windKmh) ? windKmh : 0)) / STRONGEST_WIND_KMH;
-
-/** How far the trees lean at most (degrees) for a wind of `windKmh` km/h. */
-export function swayAmplitude(windKmh: number): number {
-    return CALM_AMPLITUDE + (STORM_AMPLITUDE - CALM_AMPLITUDE) * windShare(windKmh);
-}
-
-/** How many swings a second for a wind of `windKmh` km/h. */
-export function swayFrequency(windKmh: number): number {
-    return CALM_FREQUENCY + (STORM_FREQUENCY - CALM_FREQUENCY) * windShare(windKmh);
-}
-
-/**
- * How far a tree leans (degrees, positive towards the right) `seconds` into the server time: a main swing and a
- * quicker smaller one, so it does not look like a metronome. `phase` (0 to 1) sets each tree in its own time.
- */
-export function treeSwayAngle(seconds: number, windKmh: number, phase: number): number {
-    const amplitude = swayAmplitude(windKmh);
-    const turn = 2 * Math.PI * swayFrequency(windKmh) * seconds;
-    return amplitude * (0.7 * Math.sin(turn + 2 * Math.PI * phase) + 0.3 * Math.sin(2.3 * turn + 6 * Math.PI * phase));
-}
-
-/**
- * Where the top left corner of a tree image (`x`, `y`, origin at its top left) goes, and its rotation, for the tree
- * to lean by `angle` radians around the middle of its foot, which stays where it is.
- */
-export function swayPose(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    angle: number,
-): { x: number; y: number; rotation: number } {
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    return {
-        x: x + width / 2 - (cos * (width / 2) - sin * height),
-        y: y + height - (sin * (width / 2) + cos * height),
-        rotation: angle,
-    };
-}
-
-/** A placed object as the swaying needs it. */
+/** A placed tree as the swaying needs it (an `Entity` fits). */
 export interface SwayingObject {
     x: number;
-    y: number;
-    rotation: number;
-    displayWidth: number;
-    displayHeight: number;
+    scaleX: number;
+    texture: { key: string };
+    setTexture(key: string): unknown;
 }
 
 export interface TreeSwayOptions {
@@ -72,27 +22,32 @@ export interface TreeSwayOptions {
     trees: () => Iterable<{ id: string; object: SwayingObject }>;
     /** Wind speed (km/h) of the map weather, undefined without one (a light breeze then). */
     windSpeed: () => number | undefined;
+    /** Where the wind comes from (degrees, 0 north), undefined without a real weather. */
+    windFrom: () => number | undefined;
     /** False while the map is edited, or the weather effects are hidden: the trees stand still. */
     enabled: () => boolean;
+    /** Key of the texture showing an image in a pose (TreePoseTextures.key), undefined when there is none. */
+    poseTexture: (textureKey: string, pose: number) => string | undefined;
     reducedMotion?: boolean;
 }
 
 /** Wind of the light breeze the trees sway in without a real weather (Automatic or fixed weathers). */
 const BREEZE_KMH = 10;
-/** The trees move 15 times a second: each move draws the whole map again. */
+/** The pose of the trees is looked at 15 times a second; the map is only drawn again when one changed. */
 const SWAY_FRAME_MS = 1000 / 15;
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /**
- * Trees that sway with the wind. Only their picture leans: just before the scene is drawn their image turns around its
- * foot, and right after it is put back, so collisions, the map editor and anything reading their position never see
- * them move.
+ * Trees that sway with the wind. Their trunk stays where it is and their foliage bends: each tree shows one of a few
+ * bent images of itself (TreePoses), leaning where the wind goes. Only their picture changes: just before the scene is
+ * drawn a bent tree takes its bent image, and right after it gets its own back, so collisions, the map editor and
+ * anything reading the tree never see it move.
  */
 export class TreeSway {
     private readonly reducedMotion: boolean;
     private lastFrameAt = -Infinity;
-    private angles = new Map<SwayingObject, number>();
-    private saved: { object: SwayingObject; x: number; y: number; rotation: number }[] = [];
+    private poses = new Map<string, { object: SwayingObject; pose: number }>();
+    private saved: { object: SwayingObject; x: number; texture: string }[] = [];
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
@@ -103,11 +58,16 @@ export class TreeSway {
         scene.events.on(Phaser.Scenes.Events.RENDER, this.standUp);
     }
 
+    /** The pose the tree `id` is drawn in: pixels its top stands to the right, 0 straight. */
+    public poseOf(id: string): number {
+        return this.poses.get(id)?.pose ?? 0;
+    }
+
     /** `now` in ms, `epoch` the server time in ms (the same swing for everyone). */
     public update(now: number, epoch: number): void {
         if (this.reducedMotion || !this.options.enabled()) {
-            if (this.angles.size > 0) {
-                this.angles.clear();
+            if (this.poses.size > 0) {
+                this.poses.clear();
                 this.scene.markDirty();
             }
             return;
@@ -115,32 +75,35 @@ export class TreeSway {
         if (now - this.lastFrameAt < SWAY_FRAME_MS) return;
         this.lastFrameAt = now;
         const wind = this.options.windSpeed() ?? BREEZE_KMH;
+        const windFrom = this.options.windFrom();
         const seconds = epoch / 1000;
-        const angles = new Map<SwayingObject, number>();
+        const poses = new Map<string, { object: SwayingObject; pose: number }>();
+        let changed = false;
         for (const tree of this.options.trees()) {
-            const degrees = treeSwayAngle(seconds, wind, phaseOf(tree.id));
-            angles.set(tree.object, (degrees * Math.PI) / 180);
+            const pose = treePose(seconds, wind, windFrom, phaseOf(tree.id));
+            if (pose !== this.poseOf(tree.id)) changed = true;
+            if (pose !== 0) poses.set(tree.id, { object: tree.object, pose });
         }
-        this.angles = angles;
-        if (angles.size > 0) this.scene.markDirty();
+        this.poses = poses;
+        if (changed) this.scene.markDirty();
     }
 
     private readonly lean = (): void => {
         this.saved = [];
-        for (const [object, angle] of this.angles) {
-            this.saved.push({ object, x: object.x, y: object.y, rotation: object.rotation });
-            const pose = swayPose(object.x, object.y, object.displayWidth, object.displayHeight, angle);
-            object.x = pose.x;
-            object.y = pose.y;
-            object.rotation = pose.rotation;
+        for (const { object, pose } of this.poses.values()) {
+            const texture = this.options.poseTexture(object.texture.key, pose);
+            if (!texture) continue;
+            this.saved.push({ object, x: object.x, texture: object.texture.key });
+            object.setTexture(texture);
+            // The bent image is wider than the tree's own: its trunk stays where the tree stands.
+            object.x -= POSE_PAD * object.scaleX;
         }
     };
 
     private readonly standUp = (): void => {
-        for (const { object, x, y, rotation } of this.saved) {
+        for (const { object, x, texture } of this.saved) {
+            object.setTexture(texture);
             object.x = x;
-            object.y = y;
-            object.rotation = rotation;
         }
         this.saved = [];
     };

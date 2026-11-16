@@ -270,7 +270,8 @@ import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
-import { isSwayingTree, TreeSway, type SwayingObject } from "./Nature/TreeSway";
+import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
+import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { treeSeasonAt } from "./Nature/SeasonClock";
@@ -493,6 +494,8 @@ export class GameScene extends DirtyScene {
     private weatherManager: WeatherManager | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
+    /** The bent images the swaying trees are drawn with. */
+    private treePoses: TreePoseTextures | undefined;
     /** Leaves falling from the autumn trees, snow building up on the snowy ones and falling off them. */
     private treeSeasonEffects: TreeSeasonEffects | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
@@ -1525,6 +1528,8 @@ export class GameScene extends DirtyScene {
         this.lampManager = undefined;
         this.weatherManager?.destroy();
         this.treeSway?.destroy();
+        this.treePoses?.destroy();
+        this.treePoses = undefined;
         this.treeSeasonEffects?.destroy();
         this.treeSeasonEffects = undefined;
         this.seasonalThemeManager?.destroy();
@@ -1614,12 +1619,6 @@ export class GameScene extends DirtyScene {
         for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
             if (isSwayingTree(entity.getPrefab().id)) yield { id, object: entity };
         }
-    }
-
-    /** The swaying trees with the bare image drawn over each snowy one, which leans as its tree does. */
-    private *swayingTreeImages(): Generator<{ id: string; object: SwayingObject }> {
-        yield* this.swayingTrees();
-        if (this.treeSeasonEffects) yield* this.treeSeasonEffects.overlays();
     }
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
@@ -1834,9 +1833,9 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
-            // Before the swaying: the bare image over a snowy tree leans with its tree.
-            this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
             this.treeSway?.update(time, serverDate?.getTime() ?? time);
+            // After the swaying: the bare image over a snowy tree bends as its tree does.
+            this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -3050,13 +3049,14 @@ export class GameScene extends DirtyScene {
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
                 this.treeSway?.destroy();
+                this.treePoses?.destroy();
+                const treePoses = new TreePoseTextures(this);
+                this.treePoses = treePoses;
                 this.treeSway = new TreeSway(this, {
-                    trees: () => this.swayingTreeImages(),
-                    windSpeed: () =>
-                        shownWeatherSettings(
-                            this.getGameMap().getWamFile()?.getWam().settings,
-                            this.nightManager?.serverDate(),
-                        )?.windSpeed,
+                    trees: () => this.swayingTrees(),
+                    windSpeed: () => this.shownWeather()?.windSpeed,
+                    windFrom: () => this.shownWeather()?.windFrom,
+                    poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                 });
                 this.treeSeasonEffects?.destroy();
@@ -3076,6 +3076,8 @@ export class GameScene extends DirtyScene {
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     view: () => this.cameras.main.worldView,
+                    pose: (id) => this.treeSway?.poseOf(id) ?? 0,
+                    poseTexture: (key, pose) => treePoses.key(key, pose),
                 });
                 this.seasonalThemeManager?.destroy();
                 this.seasonalThemeManager = new SeasonalThemeManager(this, {
