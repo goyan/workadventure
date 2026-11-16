@@ -20,7 +20,9 @@ import {
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorGlazedStore,
     mapLayerDoorsAvailableStore,
+    mapLayerGlazedDoorsAvailableStore,
     mapLayerModeStore,
     mapLayerStatusStore,
     mapLayerWindowsAvailableStore,
@@ -37,6 +39,7 @@ describe("MapLayerEditorTool gestures", () => {
     let modeManager: ReturnType<typeof mock<MapEditorModeManager>>;
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
     let doorsInCatalog: boolean;
+    let glazedDoorsInCatalog: boolean;
     let windowsInCatalog: boolean;
     let entities: Map<string, Entity>;
     let tool: MapLayerEditorTool;
@@ -133,10 +136,12 @@ describe("MapLayerEditorTool gestures", () => {
         scene.getGameMap.mockReturnValue(gameMap);
 
         doorsInCatalog = true;
+        glazedDoorsInCatalog = true;
         windowsInCatalog = true;
         collectionsManager = mock<EntitiesCollectionsManager>();
         collectionsManager.getEntityPrefab.mockImplementation((collectionName, prefabId) => {
             if (collectionName === MAP_LAYER_DOOR_COLLECTION && !doorsInCatalog) return Promise.resolve(undefined);
+            if (prefabId.includes("-vitree") && !glazedDoorsInCatalog) return Promise.resolve(undefined);
             if (collectionName === MAP_LAYER_WINDOW_COLLECTION && !windowsInCatalog) return Promise.resolve(undefined);
             if (
                 collectionName === MAP_LAYER_FLOOR_COLLECTION ||
@@ -166,6 +171,8 @@ describe("MapLayerEditorTool gestures", () => {
         mapLayerCatalogAvailableStore.set(undefined);
         mapLayerDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
+        mapLayerGlazedDoorsAvailableStore.set(false);
+        mapLayerDoorGlazedStore.set(false);
         mapLayerStatusStore.set(undefined);
     });
 
@@ -371,5 +378,100 @@ describe("MapLayerEditorTool gestures", () => {
         // Over a plain wall, nothing to grab.
         move(80, 80);
         expect(lastCursor()).toBe("");
+    });
+
+    /** A plain or glazed horizontal door on the segments 0 and 1 of the wall of the line 2, the facade of 2 beside. */
+    function placeDoor(glazed: boolean): void {
+        const suffix = glazed ? "-vitree" : "";
+        const pieces: [string, string, number][] = [
+            [MAP_LAYER_DOOR_COLLECTION, `porte-h-blanc-g${suffix}`, 0],
+            [MAP_LAYER_DOOR_COLLECTION, `porte-h-blanc-d${suffix}`, 32],
+            [MAP_LAYER_WALL_COLLECTION, "facade-blanc-right", 64],
+        ];
+        for (const [collection, name, x] of pieces) {
+            const entity = mock<Entity>({ entityId: name, x, y: 64 });
+            entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
+            entities.set(name, entity);
+        }
+    }
+
+    /** Names of the pieces created and deleted by the only committed operation. */
+    function committedPieces(): { created: string[]; deleted: string[] } {
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+        const factory = modeManager.executeCommands.mock.calls[0][0] as () => readonly object[];
+        const commands = factory();
+        return {
+            created: commands
+                .filter((command) => command.constructor.name === "CreateEntityFrontCommand")
+                .map(
+                    (command) =>
+                        (command as { entityData?: { prefabRef?: { id?: string } } }).entityData?.prefabRef?.id,
+                )
+                .filter((id): id is string => id !== undefined)
+                .map((id) => id.split(":")[1])
+                .sort(),
+            deleted: commands
+                .filter((command) => command.constructor.name === "DeleteEntityFrontCommand")
+                .map((command) => (command as { entityId?: string }).entityId)
+                .filter((id): id is string => id !== undefined)
+                .sort(),
+        };
+    }
+
+    function clickDoor(): void {
+        down(32, 80);
+        move(32, 80);
+        up(32, 80);
+    }
+
+    it("places a glazed door with the switch on", async () => {
+        placeWall();
+        await activate();
+        expect(get(mapLayerGlazedDoorsAvailableStore)).toBe(true);
+        mapLayerModeStore.set("door");
+        mapLayerDoorGlazedStore.set(true);
+        clickDoor();
+        expect(committedPieces().created).toEqual(
+            expect.arrayContaining(["porte-h-blanc-d-vitree", "porte-h-blanc-g-vitree"]),
+        );
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+    });
+
+    it("switches a placed door to the chosen variant in one operation", async () => {
+        placeDoor(false);
+        await activate();
+        mapLayerModeStore.set("door");
+        mapLayerDoorGlazedStore.set(true);
+        clickDoor();
+        const { created, deleted } = committedPieces();
+        // The fixture has no joint at the end of the wall: the tool adds it on the way, it is not part of the switch.
+        expect(created.filter((name) => !name.startsWith("raccord-"))).toEqual([
+            "porte-h-blanc-d-vitree",
+            "porte-h-blanc-g-vitree",
+        ]);
+        expect(deleted).toEqual(["porte-h-blanc-d", "porte-h-blanc-g"]);
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+    });
+
+    it("does nothing, without a message, on a door already of the chosen variant", async () => {
+        placeDoor(true);
+        await activate();
+        mapLayerModeStore.set("door");
+        mapLayerDoorGlazedStore.set(true);
+        clickDoor();
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        expect(get(mapLayerStatusStore)).toBeUndefined();
+    });
+
+    it("places plain doors when the room's catalog has no glazed pieces", async () => {
+        glazedDoorsInCatalog = false;
+        placeWall();
+        await activate();
+        expect(get(mapLayerGlazedDoorsAvailableStore)).toBe(false);
+        mapLayerModeStore.set("door");
+        mapLayerDoorGlazedStore.set(true);
+        clickDoor();
+        expect(committedPieces().created).toEqual(expect.arrayContaining(["porte-h-blanc-d", "porte-h-blanc-g"]));
+        expect(committedPieces().created.filter((name) => name.includes("vitree"))).toEqual([]);
     });
 });

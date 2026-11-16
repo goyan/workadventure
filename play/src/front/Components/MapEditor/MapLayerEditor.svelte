@@ -1,12 +1,15 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
+    import InputSwitch from "../Input/InputSwitch.svelte";
     import {
         MAP_LAYER_FLOOR_FAMILIES,
         MAP_LAYER_WALL_TINTS,
     } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import {
         mapLayerCatalogAvailableStore,
+        mapLayerDoorGlazedStore,
         mapLayerDoorsAvailableStore,
+        mapLayerGlazedDoorsAvailableStore,
         mapLayerFloorFamilyStore,
         mapLayerFloorSwatchesStore,
         mapLayerModeStore,
@@ -122,6 +125,19 @@
             </div>
         </section>
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
+
+        {#if $mapLayerModeStore === "door"}
+            <section class="flex flex-col gap-1">
+                <InputSwitch
+                    id="map-layer-glazed-door"
+                    label={$LL.mapEditor.mapLayer.glazedDoor()}
+                    bind:value={$mapLayerDoorGlazedStore}
+                    disabled={!$mapLayerGlazedDoorsAvailableStore}
+                    margin="mt-0"
+                />
+                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.glazedDoorHint()}</p>
+            </section>
+        {/if}
 
         {#if usesWall}
             <section class="flex flex-col gap-2">
