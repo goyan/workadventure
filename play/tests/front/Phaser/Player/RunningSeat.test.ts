@@ -65,7 +65,7 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-describe("automatic seating while running", () => {
+describe("automatic seating only when stopping on a seat", () => {
     it.each([UserInputEvent.MoveUp, UserInputEvent.MoveDown, UserInputEvent.MoveLeft, UserInputEvent.MoveRight])(
         "keeps running over a seat in direction %s, including the first running frame",
         (direction) => {
@@ -77,15 +77,22 @@ describe("automatic seating while running", () => {
         },
     );
 
-    it.each([input(UserInputEvent.MoveRight), input(), input(UserInputEvent.SpeedUp)])(
-        "still sits when walking or stopped, even after running",
-        (events) => {
-            const { player, slide } = fixture();
-            Object.assign(player, { lastRunning: true });
-            player.moveUser(16, events);
-            expect(slide).toHaveBeenCalledWith(seat);
+    it.each([UserInputEvent.MoveUp, UserInputEvent.MoveDown, UserInputEvent.MoveLeft, UserInputEvent.MoveRight])(
+        "keeps walking over a seat in direction %s: only stopping on it sits down",
+        (direction) => {
+            const { player, slide, emit } = fixture();
+            player.moveUser(16, input(direction));
+            expect(slide).not.toHaveBeenCalled();
+            expect(emit).toHaveBeenCalledWith("hasMoved", expect.objectContaining({ moving: true, running: false }));
         },
     );
+
+    it.each([input(), input(UserInputEvent.SpeedUp)])("sits once stopped on a seat, even after running", (events) => {
+        const { player, slide } = fixture();
+        Object.assign(player, { lastRunning: true });
+        player.moveUser(16, events);
+        expect(slide).toHaveBeenCalledWith(seat);
+    });
 
     it("keeps interaction-key seats available without sitting automatically", () => {
         const { player, slide, show } = fixture();

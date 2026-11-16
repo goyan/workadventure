@@ -193,9 +193,8 @@ export class Player extends Character {
             }
             this.standUp();
         } else if (!this.pathToFollow && state === "off" && this.vehicleMode === VehicleMode.Off) {
-            this.trySitDown(
-                !activeUserInputEvents.get(UserInputEvent.SpeedUp) || !this.hasMovementInput(activeUserInputEvents),
-            );
+            // Sit automatically only once stopped on a seat: walking or running past one keeps the move going.
+            this.trySitDown(!this.hasMovementInput(activeUserInputEvents));
             if (this.isSlidingToSeat) {
                 return;
             }
@@ -420,7 +419,7 @@ export class Player extends Character {
 
     /**
      * After a double-click run that did not aim at a seat: the player stays standing where it ended, even against a
-     * seat, until it walks away from it (running does not pull the player onto seats).
+     * seat, until it walks away from it (walking or running past a seat never pulls the player onto it).
      */
     public stayStandingHere(): void {
         const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
