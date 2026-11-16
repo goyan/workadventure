@@ -14,26 +14,56 @@ const surface = vi.hoisted(() => ({
               fillRect: (x: number, y: number, width: number, height: number) => unknown;
           },
 }));
-vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => ({
-    createBlockSurface: () => ({
-        begin(): void {},
-        paint(
-            blocks: readonly { x: number; y: number; width: number; height: number; level: number }[],
-            color: number,
-            alphaOf: (level: number) => number,
-        ): void {
-            for (let level = 1; level <= 8; level++) {
-                const ofLevel = blocks.filter((block) => block.level === level);
-                if (ofLevel.length === 0) continue;
-                surface.graphics?.fillStyle(color, alphaOf(level));
-                for (const block of ofLevel) surface.graphics?.fillRect(block.x, block.y, block.width, block.height);
-            }
-        },
-        end(): void {},
-        hide(): void {},
-        destroy(): void {},
-    }),
-}));
+vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => {
+    type Cells = { x: number; y: number; columns: number; rows: number };
+    let canvas: Cells = { x: 0, y: 0, columns: 0, rows: 0 };
+    let size = 1;
+    return {
+        createBlockSurface: () => ({
+            begin(view: { x: number; y: number; width: number; height: number }, resolution: number): Cells {
+                size = resolution;
+                canvas = {
+                    x: Math.floor(view.x / resolution) * resolution,
+                    y: Math.floor(view.y / resolution) * resolution,
+                    columns: Math.ceil(view.width / resolution) + 1,
+                    rows: Math.ceil(view.height / resolution) + 1,
+                };
+                return canvas;
+            },
+            // Each painted cell as a rectangle of the map, by level, like the blocks drawn before the canvas.
+            paintField(
+                field: Cells,
+                levels: Uint8Array,
+                outdoor: Uint8Array,
+                shift: { columns: number; rows: number },
+                color: number,
+                alphaOf: (level: number) => number,
+            ): void {
+                const columnOffset = Math.round((canvas.x - field.x) / size) - shift.columns;
+                const lineOffset = Math.round((canvas.y - field.y) / size) - shift.rows;
+                for (let level = 1; level <= 8; level++) {
+                    let styled = false;
+                    for (let line = 0; line < canvas.rows; line++) {
+                        for (let column = 0; column < canvas.columns; column++) {
+                            if (!outdoor[line * canvas.columns + column]) continue;
+                            const fieldLine = line + lineOffset;
+                            const fieldColumn = column + columnOffset;
+                            if (fieldLine < 0 || fieldLine >= field.rows || fieldColumn < 0) continue;
+                            if (fieldColumn >= field.columns) continue;
+                            if (levels[fieldLine * field.columns + fieldColumn] !== level) continue;
+                            if (!styled) surface.graphics?.fillStyle(color, alphaOf(level));
+                            styled = true;
+                            surface.graphics?.fillRect(canvas.x + column * size, canvas.y + line * size, size, size);
+                        }
+                    }
+                }
+            },
+            end(): void {},
+            hide(): void {},
+            destroy(): void {},
+        }),
+    };
+});
 const ground = vi.hoisted(() => ({ update: vi.fn(), destroy: vi.fn() }));
 vi.mock("../../../../../src/front/Phaser/Game/Weather/SnowGround", () => ({
     SnowGround: class {
@@ -363,8 +393,8 @@ describe("weather rendering lifecycle", () => {
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
             expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.6]);
-            // A quarter of the screen beyond each edge: a scroll uncovers fog already drawn.
-            expect(graphics.fillRect.mock.calls[0]).toEqual([-200, -150, 1200, 900]);
+            // A tenth of the screen beyond each edge: a scroll uncovers fog already drawn.
+            expect(graphics.fillRect.mock.calls[0]).toEqual([-80, -60, 960, 720]);
             // The patches are drawn as blocks on top of the veil, at most 0.3 thicker.
             const patchAlphas = fogFill(graphics)
                 .slice(1)
@@ -417,15 +447,15 @@ describe("weather rendering lifecycle", () => {
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
             // A short move stays well inside the drawn margin: no drawing before the next fifth of a second.
-            scene.cameras.main.worldView.x = 50;
+            scene.cameras.main.worldView.x = 20;
             manager.update(30, new Date(30));
             expect(graphics.clear.mock.calls).toHaveLength(1);
             // A fast scroll comes past half the margin: drawn again right away, around the new view.
-            scene.cameras.main.worldView.x = 150;
+            scene.cameras.main.worldView.x = 60;
             manager.update(60, new Date(60));
             expect(graphics.clear.mock.calls).toHaveLength(2);
             expect(graphics.fillRect.mock.lastCall).toBeDefined();
-            const veil = graphics.fillRect.mock.calls.find(([x, , width]) => x === -50 && width === 1200);
+            const veil = graphics.fillRect.mock.calls.find(([x, , width]) => x === -20 && width === 960);
             expect(veil).toBeDefined();
         });
 

@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import type { FogBlock, WeatherView } from "./WeatherFrame";
+import type { WeatherView } from "./WeatherFrame";
 
 /** Where a block canvas lies on the map: its top left corner (map pixels) and its size, one pixel a block. */
 export interface BlockCanvasArea {
@@ -23,47 +23,73 @@ export function blockCanvasArea(view: WeatherView, resolution: number): BlockCan
 }
 
 /**
- * Paints blocks (fog, clouds, their shadows) into the RGBA pixels of a block canvas, over what is already there as the
- * screen would lay them. A block cut by a wall is rounded to the nearest pixel.
+ * Paints a field of thickness levels (fieldLevels) into the RGBA pixels of a block canvas, on its outdoor cells only
+ * (outdoorCells over the canvas), moved by `shift` whole cells (the shadows of the clouds), over what is already there.
  */
-export function paintBlocks(
+export function paintField(
     pixels: Uint8ClampedArray,
     area: BlockCanvasArea,
     resolution: number,
-    blocks: readonly FogBlock[],
+    field: BlockCanvasArea,
+    levels: Uint8Array,
+    outdoor: Uint8Array,
+    shift: { columns: number; rows: number },
     color: number,
     alphaOf: (level: number) => number,
 ): void {
     const red = (color >> 16) & 0xff;
     const green = (color >> 8) & 0xff;
     const blue = color & 0xff;
-    const column = (x: number) => Math.max(0, Math.min(area.columns, Math.round((x - area.x) / resolution)));
-    const row = (y: number) => Math.max(0, Math.min(area.rows, Math.round((y - area.y) / resolution)));
-    for (const block of blocks) {
-        const alpha = alphaOf(block.level);
-        if (alpha <= 0) continue;
-        const left = column(block.x);
-        const right = column(block.x + block.width);
-        const bottom = row(block.y + block.height);
-        for (let line = row(block.y); line < bottom; line++) {
-            for (let index = (line * area.columns + left) * 4; index < (line * area.columns + right) * 4; index += 4) {
-                const under = pixels[index + 3] / 255;
-                const over = under * (1 - alpha);
-                const total = alpha + over;
-                pixels[index] = (red * alpha + pixels[index] * over) / total;
-                pixels[index + 1] = (green * alpha + pixels[index + 1] * over) / total;
-                pixels[index + 2] = (blue * alpha + pixels[index + 2] * over) / total;
-                pixels[index + 3] = total * 255;
-            }
+    const alphas = Array.from({ length: 256 }, (_, level) => (level === 0 ? 0 : alphaOf(level)));
+    // Field cell under the canvas cell (column, line), the field moved by the shift.
+    const columnOffset = Math.round((area.x - field.x) / resolution) - shift.columns;
+    const lineOffset = Math.round((area.y - field.y) / resolution) - shift.rows;
+    for (let line = 0; line < area.rows; line++) {
+        const fieldLine = line + lineOffset;
+        if (fieldLine < 0 || fieldLine >= field.rows) continue;
+        for (let column = 0; column < area.columns; column++) {
+            const cell = line * area.columns + column;
+            if (!outdoor[cell]) continue;
+            const fieldColumn = column + columnOffset;
+            if (fieldColumn < 0 || fieldColumn >= field.columns) continue;
+            const alpha = alphas[levels[fieldLine * field.columns + fieldColumn]];
+            if (alpha <= 0) continue;
+            blend(pixels, cell * 4, red, green, blue, alpha);
         }
     }
 }
 
+/** Lays a colour of opacity `alpha` over the pixel at `index`, as the screen would. */
+function blend(
+    pixels: Uint8ClampedArray,
+    index: number,
+    red: number,
+    green: number,
+    blue: number,
+    alpha: number,
+): void {
+    const under = pixels[index + 3] / 255;
+    const over = under * (1 - alpha);
+    const total = alpha + over;
+    pixels[index] = (red * alpha + pixels[index] * over) / total;
+    pixels[index + 1] = (green * alpha + pixels[index + 1] * over) / total;
+    pixels[index + 2] = (blue * alpha + pixels[index + 2] * over) / total;
+    pixels[index + 3] = total * 255;
+}
+
 /** Blocks of the weather drawn on the map (fog, clouds, their shadows), each layer over the one before. */
 export interface BlockSurface {
-    /** Starts a new image over `view`, with blocks of `resolution` map pixels at the finest. */
-    begin(view: WeatherView, resolution: number): void;
-    paint(blocks: readonly FogBlock[], color: number, alphaOf: (level: number) => number): void;
+    /** Starts a new image over `view`, one pixel a cell of `resolution` map pixels: the cells of the canvas. */
+    begin(view: WeatherView, resolution: number): BlockCanvasArea;
+    /** Paints a field of levels (paintField) on the outdoor cells of the canvas, over the layers painted before. */
+    paintField(
+        field: BlockCanvasArea,
+        levels: Uint8Array,
+        outdoor: Uint8Array,
+        shift: { columns: number; rows: number },
+        color: number,
+        alphaOf: (level: number) => number,
+    ): void;
     /** Shows what was painted since `begin` (nothing painted: hidden). */
     end(): void;
     hide(): void;
@@ -94,7 +120,7 @@ export class CanvasBlockSurface implements BlockSurface {
         this.image = scene.add.image(0, 0, "__DEFAULT").setOrigin(0, 0).setDepth(depth).setVisible(false);
     }
 
-    public begin(view: WeatherView, resolution: number): void {
+    public begin(view: WeatherView, resolution: number): BlockCanvasArea {
         this.resolution = resolution;
         this.area = blockCanvasArea(view, resolution);
         this.painted = false;
@@ -116,11 +142,19 @@ export class CanvasBlockSurface implements BlockSurface {
         } else {
             this.pixels?.data.fill(0);
         }
+        return this.area;
     }
 
-    public paint(blocks: readonly FogBlock[], color: number, alphaOf: (level: number) => number): void {
-        if (!this.pixels || blocks.length === 0) return;
-        paintBlocks(this.pixels.data, this.area, this.resolution, blocks, color, alphaOf);
+    public paintField(
+        field: BlockCanvasArea,
+        levels: Uint8Array,
+        outdoor: Uint8Array,
+        shift: { columns: number; rows: number },
+        color: number,
+        alphaOf: (level: number) => number,
+    ): void {
+        if (!this.pixels) return;
+        paintField(this.pixels.data, this.area, this.resolution, field, levels, outdoor, shift, color, alphaOf);
         this.painted = true;
     }
 
