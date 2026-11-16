@@ -470,6 +470,7 @@ const mapEditor: BaseTranslation = {
             freehand: "Draw freehand",
             area: "Draw an area",
             placed: "Place an item",
+            floors: "Raised floors",
         },
         title: "Map",
         modes: {
@@ -482,6 +483,9 @@ const mapEditor: BaseTranslation = {
             window: "Window",
             height: "Height",
             erase: "Eraser",
+            slab: "Floor slabs",
+            slabErase: "Floor eraser",
+            stair: "Stair",
         },
         hints: {
             wall: "Drag to draw a straight wall.",
@@ -493,8 +497,28 @@ const mapEditor: BaseTranslation = {
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
+            slab: "Choose a level, then drag a rectangle to lay the slabs of a raised floor.",
+            slabErase: "Drag a rectangle to remove slabs of the level, or click a stair that starts from it.",
+            stair: "Click the tile of the first step. The stair goes up from the level to the floor of the chosen height, and cuts its well in it.",
         },
         floors: "Floor",
+        floorLevel: {
+            title: "Level",
+            ground: "Ground",
+            onWall: "Wall of {height}",
+            other: "+{pixels} px",
+            pick: "Pick the level under the pointer",
+            pickArmed: "Click on the map…",
+            pickHint: "Or Alt + click (Cmd + click on a Mac) on the map.",
+            unavailable: "This room has no catalog of raised floors.",
+        },
+        stair: {
+            direction: "Goes up towards",
+            directions: { n: "North", e: "East", s: "South", o: "West" },
+            width: "Width",
+            height: "Height of the walls",
+            openSide: "Open side",
+        },
         walls: "Wall style",
         glazedDoor: "Glazed",
         glazedDoorHint:
@@ -523,6 +547,9 @@ const mapEditor: BaseTranslation = {
             doorsUnavailable: "This room has no door catalog: doors are not available.",
             windowInvalid: "A window goes on a free horizontal wall (no door, no window yet). Click on a wall.",
             windowsUnavailable: "This room has no window catalog: windows are not available.",
+            slabOnGround:
+                "Choose a level above the ground first: the floors of the ground are drawn with the floor modes.",
+            stairInvalid: "The stair does not fit here: it leaves the map or crosses another stair.",
             failed: "The change could not be applied.",
         },
         families: {

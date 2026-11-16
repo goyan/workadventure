@@ -40,6 +40,7 @@ import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -689,7 +690,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.depthCache = {
                 x: this.x,
                 y: this.y,
-                depth: this.floorZ > 0 ? 300_000 + this.floorZ * 1000 + groundDepth / 16 : groundDepth,
+                depth: floorDepth(this.floorZ, groundDepth),
             };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(

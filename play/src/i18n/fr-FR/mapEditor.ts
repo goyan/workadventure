@@ -481,6 +481,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             freehand: "Tracer à la volée",
             area: "Tracer une zone",
             placed: "Poser un élément",
+            floors: "Paliers",
         },
         title: "Carte",
         modes: {
@@ -493,6 +494,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             window: "Fenêtre",
             height: "Hauteur",
             erase: "Gomme",
+            slab: "Dalles de palier",
+            slabErase: "Gomme de palier",
+            stair: "Escalier",
         },
         hints: {
             wall: "Glissez pour tracer un mur droit.",
@@ -504,8 +508,29 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
             erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
+            slab: "Choisissez un niveau, puis glissez un rectangle pour poser les dalles d’un palier.",
+            slabErase:
+                "Glissez un rectangle pour retirer des dalles du niveau, ou cliquez sur un escalier qui en part.",
+            stair: "Cliquez sur la case de la première marche. L’escalier monte du niveau au palier de la hauteur choisie, et y découpe sa trémie.",
         },
         floors: "Sol",
+        floorLevel: {
+            title: "Niveau",
+            ground: "Sol",
+            onWall: "Mur de {height}",
+            other: "+{pixels} px",
+            pick: "Prendre le niveau sous le pointeur",
+            pickArmed: "Cliquez sur la carte…",
+            pickHint: "Ou Alt + clic (Cmd + clic sur Mac) sur la carte.",
+            unavailable: "Cette salle n’a pas de catalogue de paliers.",
+        },
+        stair: {
+            direction: "Monte vers",
+            directions: { n: "Nord", e: "Est", s: "Sud", o: "Ouest" },
+            width: "Largeur",
+            height: "Hauteur des murs",
+            openSide: "Flanc vide",
+        },
         walls: "Style de mur",
         glazedDoor: "Vitrée",
         glazedDoorHint:
@@ -534,6 +559,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             doorsUnavailable: "Cette salle n’a pas de catalogue de portes : les portes ne sont pas disponibles.",
             windowInvalid: "Une fenêtre se pose sur un mur horizontal libre (ni porte ni fenêtre). Cliquez sur un mur.",
             windowsUnavailable: "Cette salle n’a pas de catalogue de fenêtres : les fenêtres ne sont pas disponibles.",
+            slabOnGround: "Choisissez d’abord un niveau au-dessus du sol : le sol se dessine avec les modes de sol.",
+            stairInvalid: "L’escalier ne tient pas ici : il sort de la carte ou croise un autre escalier.",
             failed: "La modification n'a pas pu être appliquée.",
         },
         families: {

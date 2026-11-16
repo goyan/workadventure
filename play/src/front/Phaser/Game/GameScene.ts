@@ -267,6 +267,7 @@ import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
@@ -3077,13 +3078,16 @@ export class GameScene extends DirtyScene {
                     poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                 });
-                const palier = new URLSearchParams(window.location.search).get("palier");
-                if (palier !== null && !this.floorSpike) {
+                // The raised floors: the ones placed on the map, or a trial layout asked by `?palier=`.
+                if (!this.floorSpike) {
+                    const entitiesManager = this.gameMapFrontWrapper.getEntitiesManager();
                     this.floorSpike = new FloorSpike(
                         this,
                         () => this.CurrentPlayer,
-                        palier,
-                        () => wallBarriers(readMapLayerEntityStates(this.gameMapFrontWrapper.getEntitiesManager())),
+                        new URLSearchParams(window.location.search).get("palier") ?? undefined,
+                        () => wallBarriers(readMapLayerEntityStates(entitiesManager)),
+                        () => entitiesManager.getEntities().values(),
+                        () => ({ open: get(mapEditorModeStore), level: get(mapLayerLevelStore) }),
                     );
                 }
                 this.treeSeasonEffects?.destroy();

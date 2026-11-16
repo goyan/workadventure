@@ -142,3 +142,11 @@ export function stairElevationAt(stair: StairShape, foot: TilePoint, ground: { x
     }
     return Math.min(1, Math.max(0, progress)) * floorElevation(stair.height);
 }
+
+/** Size of the image of a piece: a slab is a tile with its thickness under it, a stair what it shows on the screen. */
+export const SLAB_THICKNESS = 8;
+export function floorPieceSize(piece: FloorPiece): { width: number; height: number } {
+    if (piece.kind === "slab") return { width: MAP_LAYER_TILE_SIZE, height: MAP_LAYER_TILE_SIZE + SLAB_THICKNESS };
+    const box = stairScreenBox(piece, { x: 0, y: 0 });
+    return { width: box.width, height: box.height };
+}

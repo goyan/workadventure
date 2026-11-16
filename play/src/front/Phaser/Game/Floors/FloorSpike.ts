@@ -3,9 +3,11 @@ import type { TileBarriers } from "../../../Utils/TileBarriers";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
 import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
+import { FLOOR_LEVEL_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { floorStep } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
-import type { StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
+import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
 
 /**
  * TRIAL of the raised floors, enabled by `?palier=piece`, `?palier=1` or `?palier=<cellX>,<cellY>`: the floors are
@@ -16,13 +18,6 @@ export interface FloorAvatar {
     y: number;
     setPosition(x: number, y: number): unknown;
     setFloorZ(z: number): void;
-}
-
-/** Everything standing on a raised floor is drawn over everything standing lower. */
-export const FLOOR_LEVEL_DEPTH = 300_000;
-/** Depth of what stands at an altitude, sorted by its foot like on the ground. */
-export function floorDepth(elevation: number, footY: number): number {
-    return elevation > 0 ? FLOOR_LEVEL_DEPTH + elevation * 1000 + footY / 16 : footY;
 }
 
 /** The point read for the avatar, under its centre: between its feet. */
@@ -36,11 +31,24 @@ const TILE = MAP_LAYER_TILE_SIZE;
 
 interface LevelDrawing {
     elevation: number;
-    /** The slabs, and apart the ones drawn over a stair. */
-    slabs: Phaser.GameObjects.Graphics;
-    overStairs: Phaser.GameObjects.Graphics;
     alpha: number;
+    /** Shows the slabs of the level at this opacity; the ones drawn over a stair let it show through. */
+    show(alpha: number): void;
 }
+
+/** A slab or a stair placed on the map (an `Entity` fits). */
+export interface FloorEntity {
+    x: number;
+    y: number;
+    setAlpha(alpha: number): unknown;
+    getPrefab(): { collectionName: string; id: string };
+    getEntityData(): { elevation?: number };
+}
+
+/** Opacity of the floors above the one being edited, in the map editor. */
+const EDITOR_ABOVE_ALPHA = 0.3;
+/** The floors of the map are read again this often: the map editor changes them. */
+const MAP_REFRESH_MS = 400;
 
 const stair = (direction: StairShape["direction"], width: 1 | 2 = 1): StairShape => ({
     direction,
@@ -125,13 +133,19 @@ export class FloorSpike {
     private readonly label: Phaser.GameObjects.Text;
     private barriers: TileBarriers | undefined;
     private barriersAge = 0;
+    private mapAge = 0;
+    private mapSignature = "";
 
     constructor(
         private readonly scene: Phaser.Scene & { markDirty(): void },
         private readonly avatar: () => FloorAvatar | undefined,
-        private readonly origin: string,
+        /** A trial layout built in memory (`piece`, `1`, `<x>,<y>`); undefined: the floors placed on the map. */
+        private readonly origin: string | undefined,
         /** The walls of the ground, as barriers between tiles. */
         private readonly readBarriers: () => TileBarriers,
+        private readonly readEntities: () => Iterable<FloorEntity>,
+        /** The map editor: whether it is open, and the floor being edited. */
+        private readonly editor: () => { open: boolean; level: number },
     ) {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_LEVEL_DEPTH * 2.5);
@@ -158,11 +172,19 @@ export class FloorSpike {
         const avatar = this.avatar();
         if (!avatar) return;
         const p = { x: avatar.x, y: avatar.y + FEET_OFFSET_Y };
+        if (this.origin === undefined) {
+            this.mapAge -= delta;
+            if (!this.model || this.mapAge <= 0) {
+                this.mapAge = MAP_REFRESH_MS;
+                this.readMap();
+            }
+        }
         if (!this.model) {
-            const cells = this.origin.split(",").map((value) => Number.parseInt(value, 10));
+            const origin = this.origin ?? "";
+            const cells = origin.split(",").map((value) => Number.parseInt(value, 10));
             const given = cells.length === 2 && cells.every((value) => Number.isFinite(value));
             this.model =
-                this.origin === "piece"
+                origin === "piece"
                     ? roomModel()
                     : given
                       ? openModel(cells[0], cells[1])
@@ -184,6 +206,7 @@ export class FloorSpike {
         avatar.setFloorZ(result.state.elevation);
         this.fade(this.model, result.p, delta);
 
+        this.label.setVisible(this.origin !== undefined);
         this.label.setPosition(result.p.x + 14, result.p.y - 44);
         this.label.setText(`z=${Math.round(this.state.elevation)}${this.state.stair === undefined ? "" : " escalier"}`);
     };
@@ -191,9 +214,13 @@ export class FloorSpike {
     /** A floor over the avatar, or the one it climbs to, lets it show through. */
     private fade(model: FloorModel, p: { x: number; y: number }, delta: number): void {
         const climbingTo = this.state.stair === undefined ? undefined : model.getStairs()[this.state.stair]?.top;
+        const editor = this.editor();
         for (const level of this.levels) {
             let target = 1;
-            if (level.elevation > this.state.elevation + 1) {
+            if (editor.open) {
+                // In the editor, the floors above the one being edited let it show through.
+                if (level.elevation > editor.level) target = EDITOR_ABOVE_ALPHA;
+            } else if (level.elevation > this.state.elevation + 1) {
                 const hides = model.getSlabs().some((slab) => {
                     if (slab.elevation !== level.elevation) return false;
                     const top = slab.y * TILE - slab.elevation;
@@ -208,10 +235,79 @@ export class FloorSpike {
             const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
             level.alpha =
                 target > level.alpha ? Math.min(target, level.alpha + change) : Math.max(target, level.alpha - change);
-            level.slabs.setAlpha(level.alpha);
-            level.overStairs.setAlpha(level.alpha * OVER_STAIR_ALPHA);
+            level.show(level.alpha);
             this.scene.markDirty();
         }
+    }
+
+    /**
+     * Reads the slabs and the stairs placed on the map; rebuilds the floors when they changed. The opacity of a level
+     * is then set on its entities.
+     */
+    private readMap(): void {
+        const pieces: { entity: FloorEntity; piece: FloorPiece; elevation: number }[] = [];
+        let signature = "";
+        for (const entity of this.readEntities()) {
+            const prefab = entity.getPrefab();
+            const piece = parseFloorPiece(prefab.collectionName, prefab.id);
+            if (!piece) continue;
+            const elevation = entity.getEntityData().elevation ?? 0;
+            pieces.push({ entity, piece, elevation });
+            signature += `${prefab.id}@${entity.x},${entity.y},${elevation};`;
+        }
+        if (this.model && signature === this.mapSignature) return;
+        this.mapSignature = signature;
+        const model = FloorModel.fromPlaced(
+            pieces.map(({ entity, elevation }) => {
+                const prefab = entity.getPrefab();
+                return {
+                    x: entity.x,
+                    y: entity.y,
+                    collectionName: prefab.collectionName,
+                    prefabId: prefab.id,
+                    elevation,
+                };
+            }),
+        );
+        this.model = model;
+        const stairBoxes = model.getStairs().map((placed) => this.stairScreenBox(placed));
+        const alphas = new Map(this.levels.map((level) => [level.elevation, level.alpha]));
+        this.levels.length = 0;
+        for (const elevation of model.getLevels()) {
+            const normal: FloorEntity[] = [];
+            const overStairs: FloorEntity[] = [];
+            for (const { entity, piece, elevation: at } of pieces) {
+                if (piece.kind !== "slab" || at !== elevation) continue;
+                const covers = stairBoxes.some(
+                    (box) =>
+                        entity.x < box.x + box.width &&
+                        box.x < entity.x + TILE &&
+                        entity.y < box.y + box.height &&
+                        box.y < entity.y + TILE,
+                );
+                (covers ? overStairs : normal).push(entity);
+            }
+            const level = {
+                elevation,
+                alpha: alphas.get(elevation) ?? 1,
+                show: (alpha: number) => {
+                    for (const entity of normal) entity.setAlpha(alpha);
+                    for (const entity of overStairs) entity.setAlpha(alpha * OVER_STAIR_ALPHA);
+                },
+            };
+            level.show(level.alpha);
+            this.levels.push(level);
+        }
+        this.scene.markDirty();
+    }
+
+    /** What a stair shows on the screen. */
+    private stairScreenBox(placed: PlacedStair): { x: number; y: number; width: number; height: number } {
+        const g = placed.ground;
+        const rise = placed.top - placed.base;
+        return placed.shape.direction === "s"
+            ? { x: g.x, y: g.y - placed.base, width: g.width, height: g.height - rise }
+            : { x: g.x, y: g.y - rise - placed.base, width: g.width, height: g.height + rise };
     }
 
     private graphics(depth: number): Phaser.GameObjects.Graphics {
@@ -235,11 +331,17 @@ export class FloorSpike {
         });
 
         for (const elevation of model.getLevels()) {
-            const level: LevelDrawing = {
+            const normal = this.graphics(floorDepth(elevation, 0) - 1);
+            const overStairs = this.graphics(floorDepth(elevation, 0) - 1).setAlpha(OVER_STAIR_ALPHA);
+            const level = {
                 elevation,
-                slabs: this.graphics(floorDepth(elevation, 0) - 1),
-                overStairs: this.graphics(floorDepth(elevation, 0) - 1).setAlpha(OVER_STAIR_ALPHA),
                 alpha: 1,
+                slabs: normal,
+                overStairs,
+                show: (alpha: number) => {
+                    normal.setAlpha(alpha);
+                    overStairs.setAlpha(alpha * OVER_STAIR_ALPHA);
+                },
             };
             this.levels.push(level);
             for (const slab of model.getSlabs()) {

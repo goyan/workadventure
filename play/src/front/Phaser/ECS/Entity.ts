@@ -12,6 +12,8 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
+import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
+import { floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
 import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
@@ -383,6 +385,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
      * level above the ground tiles: nothing, neither a character nor a companion walking over a tile row, may go under.
      */
     public updateDepth(depthOffset: number = this.prefab.depthOffset ?? 0): void {
+        const floorPiece = parseFloorPiece(this.prefab.collectionName, this.prefab.id);
+        if (floorPiece) {
+            // A slab or a stair of the raised floors: in the band of depths of its altitude.
+            this.setDepth(floorPieceDepth(floorPiece, this.x, this.y, this.entityData.elevation));
+            return;
+        }
         if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
             return;
