@@ -47,6 +47,11 @@ const menu: BaseTranslation = {
         weatherEffects: "Show weather effects (rain, snow and storm light)",
         lampEffects: "Light effects of lamps and dance floors",
         clouds: "Show clouds and their shadows",
+        cloudsHeight: {
+            label: "Cloud height (zooming in passes under them)",
+            low: "Low",
+            always: "Always visible",
+        },
         lampDemo: "Show the demo lamps next to my avatar",
         jungle: "Show the jungle animals",
         ambiance: {

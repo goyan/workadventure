@@ -48,6 +48,11 @@ const menu: DeepPartial<Translation["menu"]> = {
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
         lampEffects: "Effets lumineux des lampes et des pistes de danse",
         clouds: "Afficher les nuages et leurs ombres",
+        cloudsHeight: {
+            label: "Hauteur des nuages (en zoomant, on passe dessous)",
+            low: "Basse",
+            always: "Toujours visibles",
+        },
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
         jungle: "Afficher les animaux de la jungle",
         ambiance: {

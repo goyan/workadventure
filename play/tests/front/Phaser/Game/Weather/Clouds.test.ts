@@ -27,6 +27,17 @@ import { sunForClouds } from "../../../../../src/front/Phaser/Game/Night/NightCl
 const TILE = 32;
 const view = { x: 0, y: 0, width: 800, height: 600 };
 
+describe("cloudZoomFade and the height of the clouds", () => {
+    it("passes under low clouds from 1.4 screen pixels a map pixel, under higher ones only closer, never at the top", () => {
+        expect(cloudZoomFade(0.8)).toBe(1);
+        expect(cloudZoomFade(1.4)).toBe(0);
+        // Twice as high: whole up to 1.6, gone from 2.8.
+        expect(cloudZoomFade(1.4, 0.5)).toBe(1);
+        expect(cloudZoomFade(2.8, 0.5)).toBe(0);
+        expect(cloudZoomFade(10, 1)).toBe(1);
+    });
+});
+
 describe("cloudShadowOffset (north up, y down)", () => {
     it("casts the shadow away from the sun, three tiles of height, six tiles at most", () => {
         // Paris, 2026-11-14 at solar noon: the sun is south, 22.9° high; 3 / tan(22.9°) = 7.1 tiles, kept to 6.
