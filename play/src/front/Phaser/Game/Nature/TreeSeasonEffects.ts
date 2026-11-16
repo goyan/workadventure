@@ -3,7 +3,8 @@ import type * as Phaser from "phaser";
 import { FLOOR_OBJECT_DEPTH, OVERHEAD_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import { groundLeaves, treeLeaves, type TreeBox } from "./TreeLeafFall";
 import { snowClumps, SNOW_DUMP_SECONDS, treeSnowCycle, treeSnowLoad } from "./TreeSnowLoad";
-import { phaseOf, type SwayingObject } from "./TreeSway";
+import { POSE_PAD } from "./TreePoses";
+import { phaseOf } from "./TreeSway";
 
 /** A tree placed on the map, as its leaves and its snow need it (an `Entity` fits). */
 export interface SeasonTreeObject {
@@ -37,6 +38,10 @@ export interface TreeSeasonEffectsOptions {
     isOutdoor: (x: number, y: number) => boolean;
     /** What the camera shows, in map pixels. */
     view: () => TreeBox;
+    /** The pose a tree sways in (TreeSway.poseOf), 0 straight: the bare image over a snowy tree bends with it. */
+    pose?: (id: string) => number;
+    /** Key of the texture showing an image in a pose (TreePoseTextures.key), undefined when there is none. */
+    poseTexture?: (textureKey: string, pose: number) => string | undefined;
     reducedMotion?: boolean;
 }
 
@@ -81,11 +86,6 @@ export class TreeSeasonEffects {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.graphics = scene.add.graphics().setDepth(EFFECTS_DEPTH);
         this.ground = scene.add.graphics().setDepth(GROUND_DEPTH);
-    }
-
-    /** The bare images over the snowy trees, for them to sway with their tree. */
-    public *overlays(): Generator<{ id: string; object: SwayingObject }> {
-        for (const [id, object] of this.bareImages) yield { id, object };
     }
 
     /** `now` in ms, `epoch` the server time in ms. */
@@ -142,12 +142,17 @@ export class TreeSeasonEffects {
             const bare = this.bareTexture(object);
             if (!bare) continue;
             const cycle = treeSnowCycle(seconds, phaseOf(id));
-            const image = this.bareImage(id, bare)
-                .setPosition(object.x, object.y)
-                .setDisplaySize(object.displayWidth, object.displayHeight)
+            // The bare image bends as its tree does: a bent image has room for its top on each side.
+            const pose = this.options.pose?.(id) ?? 0;
+            const bent = pose === 0 ? undefined : this.options.poseTexture?.(bare, pose);
+            const image = this.bareImage(id, bent ?? bare);
+            const { width, height } = image.frame;
+            const scale = object.displayWidth / (bent ? width - 2 * POSE_PAD : width);
+            image
+                .setPosition(object.x - (bent ? POSE_PAD * scale : 0), object.y)
+                .setDisplaySize(width * scale, object.displayHeight)
                 .setDepth(object.depth + 0.01);
             // The snowy tree shows above the cut: the snow line comes down as the tree loads.
-            const { width, height } = image.frame;
             const snowLine = Math.round(height * FOLIAGE_SHARE * treeSnowLoad(coverage, cycle.load));
             image.setCrop(0, snowLine, width, height - snowLine);
             snowy.add(id);

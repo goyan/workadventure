@@ -7,13 +7,16 @@ interface FakeImage {
     x: number;
     y: number;
     alpha: number;
+    displayWidth: number;
     depth: number;
     destroyed: boolean;
     /** Share of the image hidden from its top (0 to 1): the snowy tree shows there. */
     snow: number;
 }
 
-function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?: boolean; coverage?: number } = {}) {
+function fixture(
+    overrides: { season?: Season; enabled?: boolean; reducedMotion?: boolean; coverage?: number; pose?: number } = {},
+) {
     const state = {
         season: overrides.season ?? Season.Autumn,
         enabled: overrides.enabled ?? true,
@@ -51,9 +54,12 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
                     displayHeight: 0,
                     destroyed: false,
                     snow: 0,
-                    frame: { width: 32, height: 48 },
+                    // A bent image is 4 px wider on each side than the tree's own.
+                    get frame() {
+                        return { width: image.key.includes("@") ? 40 : 32, height: 48 };
+                    },
                     setCrop: (x: number, y: number, width: number, height: number) => {
-                        expect([x, width, y + height]).toEqual([0, 32, 48]);
+                        expect([x, width, y + height]).toEqual([0, image.frame.width, 48]);
                         image.snow = y / 48;
                         return image;
                     },
@@ -114,6 +120,8 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
         enabled: () => state.enabled,
         isOutdoor: () => state.outdoor,
         view: () => state.view,
+        pose: () => overrides.pose ?? 0,
+        poseTexture: (key, pose) => `${key}@${pose}`,
         reducedMotion: overrides.reducedMotion ?? false,
     });
     return { effects, graphics, ground, images, markDirty, state, trees };
@@ -199,7 +207,17 @@ describe("TreeSeasonEffects", () => {
         expect(Math.max(...alphas)).toBeGreaterThan(0.8);
         const drops = alphas.filter((alpha, index) => index > 0 && alpha > alphas[index - 1] + 0.5).length;
         expect(drops).toBeGreaterThanOrEqual(2);
-        expect([...effects.overlays()].map((overlay) => overlay.id)).toEqual(["oak"]);
+        // The tree is 64 px wide, its image 32: drawn twice as big, as the tree.
+        expect(images[0].displayWidth).toBe(64);
+    });
+
+    it("bends the bare image as its tree sways, the trunk where the tree stands", () => {
+        const { effects, images, trees } = fixture({ season: Season.Winter, pose: 3 });
+        effects.update(0, at(0));
+        expect(images[0].key).toBe("autumn.png@3");
+        // Twice as big as its image, as the tree: the 4 px of room on each side take 8 on the map.
+        expect(images[0].x).toBe(trees[0].object.x - 8);
+        expect(images[0].displayWidth).toBe(80);
     });
 
     it("drops snow on each side of the tree when it reaches its threshold", () => {
@@ -235,7 +253,6 @@ describe("TreeSeasonEffects", () => {
         state.season = Season.Summer;
         effects.update(1000, at(1));
         expect(images[0].destroyed).toBe(true);
-        expect([...effects.overlays()]).toEqual([]);
         effects.destroy();
         expect(graphics.destroy).toHaveBeenCalled();
     });
