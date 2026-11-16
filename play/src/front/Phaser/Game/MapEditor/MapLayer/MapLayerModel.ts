@@ -30,6 +30,14 @@ export interface DoorRef {
     orientation: WallOrientation;
     x: number;
     y: number;
+    /** A glazed door (horizontal only); absent for a plain one. */
+    glazed?: boolean;
+}
+
+/** A door without the glazed flag unless it is a glazed horizontal door. */
+function doorOf(door: DoorRef, glazed: boolean): DoorRef {
+    const plain: DoorRef = { orientation: door.orientation, x: door.x, y: door.y };
+    return glazed && door.orientation === "h" ? { ...plain, glazed: true } : plain;
 }
 
 /** The two wall segments a door stands on, first one first. */
@@ -142,7 +150,21 @@ export class MapLayerModel {
         if (!this.canSetDoor(door)) {
             return false;
         }
-        this.doors.set(edgeKey(door.orientation, door.x, door.y), { ...door });
+        this.doors.set(edgeKey(door.orientation, door.x, door.y), doorOf(door, door.glazed === true));
+        return true;
+    }
+
+    /**
+     * Makes the horizontal door centered on (door.x, door.y) glazed or plain. False without such a door, or for a
+     * vertical one (never glazed). The entry is replaced, not changed: copies of the model share the door objects.
+     */
+    public setDoorGlazed(door: DoorRef, glazed: boolean): boolean {
+        const key = edgeKey(door.orientation, door.x, door.y);
+        const placed = this.doors.get(key);
+        if (!placed || placed.orientation !== "h") {
+            return false;
+        }
+        this.doors.set(key, doorOf(placed, glazed));
         return true;
     }
 
