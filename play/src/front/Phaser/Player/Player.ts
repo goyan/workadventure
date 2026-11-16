@@ -304,7 +304,11 @@ export class Player extends Character {
 
     private updateObjectAction(): void {
         const body = this.getBody();
-        const object = findActionableObject(this.scene, { x: this.x, y: this.y + body.offset.y + body.height / 2 });
+        // SPIKE (floors study): the objects of the ground are out of reach from a raised floor.
+        const object =
+            this.getFloorZ() > 0
+                ? undefined
+                : findActionableObject(this.scene, { x: this.x, y: this.y + body.offset.y + body.height / 2 });
         if (object?.entityId !== this.ignoredActionObjectId) this.ignoredActionObjectId = undefined;
         if (object?.entityId !== this.actionObject?.entityId || object?.action !== this.actionObject?.action)
             this.actionPrompt.hide();
@@ -355,7 +359,8 @@ export class Player extends Character {
      */
     private trySitDown(allowAutomaticSitting: boolean): void {
         this.releaseSeatObjectWhenOut();
-        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
+        const seat =
+            this.getFloorZ() > 0 ? undefined : findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
         // The seat just left, and the other places of its couch, stay ignored until the player is off it.
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
@@ -561,7 +566,7 @@ export class Player extends Character {
      * walking onto the edge: it stops swimming once no part of its body touches the water any more.
      */
     private updateSwimming(): void {
-        const water = getWaterRectangles(this.scene);
+        const water = this.getFloorZ() > 0 ? [] : getWaterRectangles(this.scene);
         const body = this.getBody();
         const inWater = intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height });
         if (this.swimming) {

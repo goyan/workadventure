@@ -273,6 +273,7 @@ import { shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
+import { FloorSpike } from "./Floors/FloorSpike";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
@@ -498,6 +499,8 @@ export class GameScene extends DirtyScene {
     private treePoses: TreePoseTextures | undefined;
     /** Leaves falling from the autumn trees, snow building up on the snowy ones and falling off them. */
     private treeSeasonEffects: TreeSeasonEffects | undefined;
+    /** SPIKE (floors study), `?palier=1`. */
+    public floorSpike: FloorSpike | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
     /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
     private wallFade: WallFade | undefined;
@@ -1532,6 +1535,8 @@ export class GameScene extends DirtyScene {
         this.treePoses = undefined;
         this.treeSeasonEffects?.destroy();
         this.treeSeasonEffects = undefined;
+        this.floorSpike?.destroy();
+        this.floorSpike = undefined;
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
@@ -3069,6 +3074,10 @@ export class GameScene extends DirtyScene {
                     poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                 });
+                const palier = new URLSearchParams(window.location.search).get("palier");
+                if (palier !== null && !this.floorSpike) {
+                    this.floorSpike = new FloorSpike(this, () => this.CurrentPlayer, palier);
+                }
                 this.treeSeasonEffects?.destroy();
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
                     trees: () => this.swayingTrees(),
@@ -5191,6 +5200,8 @@ ${escapedMessage}
                     object1: Body | StaticBody | Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody,
                     object2: Body | StaticBody | Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody,
                 ) => {},
+                // SPIKE (floors study): the ground does not block an avatar on a raised floor.
+                () => this.CurrentPlayer.isNearGround(),
             );
             this.gameMapFrontWrapper.configureTileCollisions(phaserLayer);
             if (DEBUG_MODE) {

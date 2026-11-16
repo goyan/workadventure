@@ -152,6 +152,8 @@ export class ActivatablesManager {
     }
 
     private findNearestActivatableObject(): ActivatableInterface | undefined {
+        // SPIKE (floors study): the objects of the ground are out of reach from a raised floor.
+        if (this.currentPlayer.getFloorZ() > 0) return undefined;
         const playerCenter = this.currentPlayer.getDirectionalActivationPosition(
             this.directionalActivationPositionShift,
         );

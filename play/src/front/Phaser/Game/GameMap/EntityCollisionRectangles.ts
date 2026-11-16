@@ -91,7 +91,12 @@ export class EntityCollisionRectangles {
 
     private createCollider(player: Player, state: EntityCollisionState): Phaser.Physics.Arcade.Collider {
         if (this.kind === "water") {
-            return this.scene.physics.add.collider(player, state.group, undefined, () => !player.isSwimming());
+            return this.scene.physics.add.collider(
+                player,
+                state.group,
+                undefined,
+                () => !player.isSwimming() && player.isNearGround(),
+            );
         }
         const prefab = state.entity.getPrefab();
         // The walls of the map layer are barriers for the pathfinder: a path never goes through them. While the avatar
@@ -101,7 +106,10 @@ export class EntityCollisionRectangles {
             player,
             state.group,
             undefined,
-            () => !(isWall && player.isWalkingPath()) && !player.isSittingOn(state.entity.entityId),
+            () =>
+                !(isWall && player.isWalkingPath()) &&
+                !player.isSittingOn(state.entity.entityId) &&
+                player.isNearGround(),
         );
     }
 

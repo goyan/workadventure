@@ -448,6 +448,30 @@ export abstract class Character extends Container implements OutlineableInterfac
         this.scene.markDirty();
     }
 
+    /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
+    private floorZ = 0;
+    public getFloorZ(): number {
+        return this.floorZ;
+    }
+
+    /**
+     * Whether the things of the ground still stop the character: on the ground, and on the first steps of a stair (so
+     * that a wall at the foot of a stair is not walked through).
+     */
+    public isNearGround(): boolean {
+        return this.floorZ < 16;
+    }
+
+    public setFloorZ(z: number): void {
+        if (this.floorZ > 0 === z > 0) {
+            this.floorZ = z;
+            return;
+        }
+        this.floorZ = z;
+        this.depthCache = undefined;
+        this.setDepthIfNeeded(this.computeDepth());
+    }
+
     private setDepthIfNeeded(depth: number): void {
         if (this.depth !== depth) {
             this.setDepth(depth);
@@ -663,7 +687,13 @@ export abstract class Character extends Container implements OutlineableInterfac
             const actionObject = takesObjectPlace(this.avatarAction)
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;
-            this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
+            // SPIKE (floors study): everything standing on a raised floor is drawn over everything standing lower.
+            const floorBand = this.floorZ > 0 ? 300_000 : 0;
+            this.depthCache = {
+                x: this.x,
+                y: this.y,
+                depth: (actionObject?.depth ?? seat?.depth ?? this.y + 16) + floorBand,
+            };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(
                 this,
