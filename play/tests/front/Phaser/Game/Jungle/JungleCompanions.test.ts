@@ -79,6 +79,28 @@ describe("JungleCompanions", () => {
         expect(prompt.kind).toBeUndefined();
     });
 
+    it("a stale tame action does nothing once the animal is out of reach or taken", () => {
+        const { world, feet, sent, leads, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        const stale = prompt.action;
+        // The player walked away from the lion: the action of the prompt shown next to it is called anyway.
+        feet.set(ME, { x: 320, y: 600 });
+        companions.update(16);
+        const count = sent.length;
+        stale?.();
+        companions.update(32);
+        expect(sent).toHaveLength(count);
+        expect(leads.size).toBe(0);
+        // Back next to it, but player 9 tamed it meanwhile.
+        feet.set(ME, { x: 320, y: 352 });
+        companions.update(48);
+        const next = prompt.action;
+        companions.receive(9, JUNGLE_COMPANION_EVENT, claim([LION.id, 1]), 50);
+        next?.();
+        expect(sent).toHaveLength(count);
+    });
+
     it("taming tells the room and makes the animal follow its master", () => {
         const { world, sent, leads, prompt } = makeWorld();
         const companions = new JungleCompanions(world);

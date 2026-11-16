@@ -121,9 +121,20 @@ export class JungleCompanions {
 
     private tame(animal: string): void {
         if (this.local.has(animal) || this.local.size >= JUNGLE_MAX_COMPANIONS || this.world.editorOpen()) return;
+        // The action may be called late (a prompt of a former frame): the animal must still be within reach and free.
+        if (!this.withinReach(animal) || this.others.claims(this.nowMs).some((claim) => claim.animal === animal))
+            return;
         this.local.set(animal, this.world.serverNow());
         this.lastAnnounce = this.nowMs;
         this.sendLocal();
+    }
+
+    private withinReach(animal: string): boolean {
+        const localId = this.world.localUserId();
+        const feet = localId === undefined ? undefined : this.world.playerFeet(localId);
+        const pose = this.world.animalPose(animal);
+        if (!feet || !pose || !this.world.animals().some((candidate) => candidate.id === animal)) return false;
+        return Math.hypot(pose.x - feet.x, pose.y - feet.y) <= COMPANION_PROMPT_PX;
     }
 
     private release(animal: string): void {
