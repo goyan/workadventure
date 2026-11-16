@@ -37,6 +37,17 @@ import {
     mapLayerWindowsAvailableStore,
 } from "../../../../src/front/Stores/MapLayerStore";
 
+/** The data of a placed entity, for the readers of its altitude: on the ground. */
+const ENTITY_DATA = {
+    x: 0,
+    y: 0,
+    name: "",
+    properties: [],
+    depthStep: 0,
+    elevation: 0,
+    prefabRef: { collectionName: "", id: "" },
+};
+
 function prefab(collectionName: string, id: string): EntityPrefab {
     return mock<EntityPrefab>({ collectionName, id, imagePath: `${id}.png` });
 }
@@ -208,6 +219,7 @@ describe("MapLayerEditorTool gestures", () => {
         ];
         for (const [collection, name, x] of pieces) {
             const entity = mock<Entity>({ entityId: name, x, y: 64 - 32 * (height - 1) });
+            entity.getEntityData.mockReturnValue(ENTITY_DATA);
             entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
             entities.set(name, entity);
         }
@@ -492,6 +504,7 @@ describe("MapLayerEditorTool gestures", () => {
             ] as const) {
                 const name = `porte-h-blanc-${side}${suffix}`;
                 const entity = mock<Entity>({ entityId: name, x, y: 64 - 32 * (door - 1) });
+                entity.getEntityData.mockReturnValue(ENTITY_DATA);
                 entity.getPrefab.mockReturnValue(
                     prefab(MAP_LAYER_DOOR_COLLECTION, `${MAP_LAYER_DOOR_COLLECTION}:${name}:Default:Down`),
                 );
@@ -501,6 +514,7 @@ describe("MapLayerEditorTool gestures", () => {
                 for (const x of [32, 64]) {
                     const name = `linteau-blanc-${x === 64 ? "right" : "mid"}-h${wall}-o${door}`;
                     const entity = mock<Entity>({ entityId: `${name}@${x}`, x, y: 64 - 32 * (wall - 1) });
+                    entity.getEntityData.mockReturnValue(ENTITY_DATA);
                     entity.getPrefab.mockReturnValue(
                         prefab(MAP_LAYER_WALL_COLLECTION, `${MAP_LAYER_WALL_COLLECTION}:${name}:Default:Down`),
                     );
@@ -657,6 +671,7 @@ describe("MapLayerEditorTool gestures", () => {
         ];
         for (const [collection, name, x] of pieces) {
             const entity = mock<Entity>({ entityId: name, x, y: 64 });
+            entity.getEntityData.mockReturnValue(ENTITY_DATA);
             entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
             entities.set(name, entity);
         }
