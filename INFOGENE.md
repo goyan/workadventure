@@ -1898,6 +1898,21 @@ marcher et zoomer ; désactiver les effets dans une seule session et recharger p
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
 l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
 
+### Arbres au vent
+
+Les arbres `Nature:tree-*` se balancent avec le vent de la météo de la carte (`Nature/TreeSway.ts`, `TreePoses.ts`) :
+
+- Le tronc reste fixe (30 % du bas de l'image) et le feuillage se plie, de plus en plus vers la cime : chaque ligne de
+  pixels est décalée d'un nombre entier de pixels, sans rotation, donc sans flou. La cime bouge de 4 px au plus.
+- L'arbre penche du côté où va le vent (2,5 px par vent de 80 km/h ou plus) et oscille autour (0,8 px par calme,
+  2,5 px en tempête). Sans météo réelle : brise de 10 km/h du nord-ouest, comme les nuages.
+- Les images pliées sont fabriquées par le navigateur à la première utilisation (`TreePoseTextures`, une par image et
+  par pose) : aucun fichier de catalogue. Une image illisible laisse l'arbre immobile.
+- L'image pliée n'est posée sur l'arbre que le temps du dessin (`PRE_RENDER` / `RENDER`) : collisions, éditeur et
+  lectures de l'objet ne voient rien. La carte n'est redessinée que quand un arbre change de pose.
+- Même pose pour tous (heure du serveur, identifiant de l'arbre). Rien en mode édition, ni avec la météo masquée ou le
+  mouvement réduit.
+
 ### Arbres : feuilles d'automne et neige
 
 Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent
