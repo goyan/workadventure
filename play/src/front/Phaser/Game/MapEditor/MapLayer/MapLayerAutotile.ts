@@ -259,12 +259,13 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                 ),
             );
         } else {
-            // A vertical door is drawn on the ground between its joints; the strip of a high wall passes over it.
+            // A vertical door is drawn on the ground between its joints; the strip of a high wall passes over it,
+            // without the collision of the wall, which would close the doorway.
             if (door && !isStripOverDoor(wall)) continue;
             placements.push(
                 placement(
                     MAP_LAYER_WALL_COLLECTION,
-                    verticalWallPrefabName(wall.tint, wall.height),
+                    verticalWallPrefabName(wall.tint, wall.height, door !== undefined),
                     wall.x * size - WALL_HALF,
                     wall.y * size + WALL_THICKNESS - wallRise(wall.height),
                 ),

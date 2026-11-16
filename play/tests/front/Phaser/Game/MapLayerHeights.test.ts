@@ -519,17 +519,44 @@ describe("wall heights: placements", () => {
         expect(items.filter((name) => name.startsWith("facade"))).toEqual([]);
     });
 
-    it("keeps the strips of a high vertical wall over its door, joints included", () => {
-        const model = new MapLayerModel();
-        for (let y = 2; y < 6; y++) model.setWall("v", 4, y, "blanc", 2);
-        expect(model.setDoor({ orientation: "v", x: 4, y: 4 })).toBe(true);
-        const items = names(model);
-        expect(items).toContain("porte-v-blanc-haut@96,108");
-        expect(items).toContain("porte-v-blanc-bas@96,140");
-        for (const y of [3, 4]) expect(items).toContain(`mur-vertical-blanc-h2@122,${y * 32 + 12 - 32}`);
-        expect(items).toContain("raccord-NS-h2@122,96");
-        expect(items).toContain("raccord-NS-h2@122,64");
-        expect(items).toContain("raccord-NS-h2@122,128");
+    for (const height of [2, 4] as const) {
+        it(`passes the strips of a vertical wall of ${height} over its door without their collision, joints included`, () => {
+            const model = new MapLayerModel();
+            for (let y = 2; y < 6; y++) model.setWall("v", 4, y, "blanc", height);
+            expect(model.setDoor({ orientation: "v", x: 4, y: 4 })).toBe(true);
+            const items = names(model);
+            const rise = 32 * (height - 1);
+            expect(items).toContain("porte-v-blanc-haut@96,108");
+            expect(items).toContain("porte-v-blanc-bas@96,140");
+            // Over the two segments of the door, the strips are the pieces without collision: the doorway stays open.
+            for (const y of [3, 4]) {
+                expect(items).toContain(`mur-vertical-blanc-h${height}-porte@122,${y * 32 + 12 - rise}`);
+                expect(items).not.toContain(`mur-vertical-blanc-h${height}@122,${y * 32 + 12 - rise}`);
+            }
+            // The other segments keep their strips.
+            for (const y of [2, 5]) expect(items).toContain(`mur-vertical-blanc-h${height}@122,${y * 32 + 12 - rise}`);
+            expect(items).toContain(`raccord-NS-h${height}@122,${128 - rise}`);
+            expect(items).toContain(`raccord-NS-h${height}@122,${96 - rise}`);
+            expect(items).toContain(`raccord-NS-h${height}@122,${160 - rise}`);
+            const placements = computePlacements(model);
+            for (const order of [placements, [...placements].reverse()]) {
+                const rebuilt = modelFromPlacedPrefabs(order);
+                expect(state(rebuilt)).toEqual(state(model));
+                expect(names(rebuilt)).toEqual(items);
+            }
+        });
+    }
+
+    it("reads the strip over a door, of height 2 to 4 only", () => {
+        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h3-porte")).toEqual({
+            kind: "vertical",
+            tint: "gris",
+            height: 3,
+            overDoor: true,
+        });
+        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-porte")).toBeUndefined();
+        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h1-porte")).toBeUndefined();
+        expect(verticalWallPrefabName("gris", 3, true)).toBe("mur-vertical-gris-h3-porte");
     });
 
     it("reads its own placements back to the same model and the same placements", () => {

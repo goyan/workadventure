@@ -187,6 +187,11 @@ describe("entityOutdoorRect of high walls", () => {
         expect(entityOutdoorRect(lintel, imageSize(lintel))).toMatchObject({ width: 0, height: 0 });
     });
 
+    it("gives the strip over a vertical door no rectangle of its own: the door under it has one", () => {
+        const strip = piece("Carte Murs", "mur-vertical-gris-h2-porte", 58, 44);
+        expect(entityOutdoorRect(strip, imageSize(strip))).toMatchObject({ width: 0, height: 0 });
+    });
+
     it("keeps a room closed in high walls exactly as in walls of height 1", () => {
         const outdoorOf = (wall: WallHeight, door: WallHeight): boolean[] => {
             const model = new MapLayerModel();

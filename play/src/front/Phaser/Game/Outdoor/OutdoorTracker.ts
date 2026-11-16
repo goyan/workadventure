@@ -104,6 +104,8 @@ function groundPiece(
 ): { rise: number; ground: MapLayerPiece | undefined } | undefined {
     if (piece === undefined || piece.kind === "floor") return undefined;
     if (piece.kind === "lintel") return { rise: 0, ground: undefined };
+    // The strip over a vertical door: the door under it stands on the ground, the doorway stays open.
+    if (piece.kind === "vertical" && piece.overDoor) return { rise: 0, ground: undefined };
     // A vertical door has no height; the pieces of height 1 keep their own image.
     if (piece.height === 1) return undefined;
     return { rise: wallRise(piece.height), ground: groundPieceOf(piece) };
