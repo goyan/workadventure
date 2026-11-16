@@ -194,37 +194,6 @@ export function findSeatUnderFeet(
 }
 
 /**
- * The seats on the eight tiles around the feet (not the tile of the feet itself: see findSeatUnderFeet), nearest
- * first. Cheap: walls are left to seatBehindWall.
- */
-export function seatsNextToFeet(scene: GameScene, feet: { x: number; y: number }): Seat[] {
-    const { width, height } = scene.getGameMapFrontWrapper().getTileDimensions();
-    const column = Math.floor(feet.x / width);
-    const row = Math.floor(feet.y / height);
-    return getSeats(scene)
-        .filter((seat) => {
-            const dx = Math.floor(seat.feet.x / width) - column;
-            const dy = Math.floor(seat.feet.y / height) - row;
-            return Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && (dx !== 0 || dy !== 0);
-        })
-        .sort(
-            (a, b) =>
-                Math.hypot(a.feet.x - feet.x, a.feet.y - feet.y) - Math.hypot(b.feet.x - feet.x, b.feet.y - feet.y),
-        );
-}
-
-/** Whether a wall of the map tool stands between the tile of the feet and the (neighbouring) tile of the seat. */
-export function seatBehindWall(scene: GameScene, feet: { x: number; y: number }, seat: Seat): boolean {
-    const wrapper = scene.getGameMapFrontWrapper();
-    const { width, height } = wrapper.getTileDimensions();
-    const tile = (point: { x: number; y: number }) => ({
-        x: Math.floor(point.x / width),
-        y: Math.floor(point.y / height),
-    });
-    return wrapper.getWallBarriers().blocksMove(tile(feet), tile(seat.feet));
-}
-
-/**
  * The seat a click at `point` aims at: among the seats whose object image contains the point and that `accept`
  * takes, the one nearest to the point (a couch has several places, a chair is clicked on its backrest as well as on
  * its seat); else the seat under the point as if feet stood there.
