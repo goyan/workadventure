@@ -10,18 +10,21 @@ import type { SunPosition } from "../Night/NightClock";
 import {
     effectiveWeather,
     FOG_LEVELS,
-    fogBlocks,
+    fieldLevels,
     fogPatches,
     fogStrength,
     keepOutdoorParticles,
     leafParticles,
     lastStrike,
     lightningBolt,
+    outdoorCells,
+    paddedView,
     stormFlash,
     weatherParticles,
     weatherAtTime,
+    wellInside,
 } from "./WeatherFrame";
-import type { FogPatch, WeatherView } from "./WeatherFrame";
+import type { WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
 import {
     cloudBlockSize,
@@ -31,10 +34,11 @@ import {
     cloudSunlight,
     cloudTint,
     overcastVeil,
-    shadowPatches,
     SkyDrift,
 } from "./Clouds";
 import { SnowGround } from "./SnowGround";
+import { createBlockSurface } from "./BlockSurface";
+import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
 
 /** The system asks for less motion: the fog patches stand still. */
@@ -48,6 +52,10 @@ const FOG_PATCH_ALPHA = 0.3;
 const FOG_NIGHT_FACTOR = 0.6;
 /** Size of a fog block, in pixels of the map: small enough to look soft, big enough to stay cheap. */
 const FOG_BLOCK = 16;
+/** A layer painted where it is computed (the shadows are moved by the sun). */
+const NO_SHIFT = { columns: 0, rows: 0 };
+/** Weather drawn beyond each edge of the screen, in a share of its size: a quick scroll never shows a bare band. */
+const DRAW_MARGIN = 0.1;
 /** White clouds at their thickest, and their shadows: shadows first, the clouds over them. */
 const CLOUD_ALPHA = 0.45;
 const CLOUD_SHADOW_ALPHA = 0.3;
@@ -68,6 +76,8 @@ export interface WeatherManagerOptions {
 
 export class WeatherManager {
     private readonly graphics: Phaser.GameObjects.Graphics;
+    /** Fog, clouds and their shadows: one image over the veils and the falling weather. */
+    private readonly blocks: BlockSurface;
     private lastFrameAt = -Infinity;
     private visible = false;
     private readonly sounds: WeatherSounds;
@@ -82,6 +92,8 @@ export class WeatherManager {
     private readonly reducedMotion: boolean;
     // What the last fog image looked like: a still fog is not drawn again until one of these changes.
     private lastFogKey: string | undefined;
+    /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
+    private drawn: WeatherView | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -99,6 +111,8 @@ export class WeatherManager {
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
             .setVisible(false);
+        // Added after the graphics, at the same depth: above them.
+        this.blocks = createBlockSurface(scene, DEPTH_NIGHT_INDEX + 1);
     }
 
     /** `sun`: where the sun of the map is (NightManager), for the shadows of the clouds and their fading at dusk. */
@@ -135,11 +149,13 @@ export class WeatherManager {
         if (!showWeather && !showLeaves && !showClouds) {
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
+                this.blocks.hide();
                 this.visible = false;
                 this.scene.markDirty();
             }
             this.lastFrameAt = -Infinity;
             this.lastFogKey = undefined;
+            this.drawn = undefined;
             return;
         }
         // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
@@ -148,9 +164,14 @@ export class WeatherManager {
         const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
         // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
         const cloudsOnly = showClouds && !showLeaves;
-        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
+        const camera = this.scene.cameras.main.worldView;
+        const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
+        // A scroll that has used half of the drawn margin draws again at once, whatever the pace.
+        const nearEdge = this.drawn !== undefined && !wellInside(this.drawn, screen, DRAW_MARGIN / 2);
+        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
-        const view = this.scene.cameras.main.worldView;
+        const view = paddedView(screen, DRAW_MARGIN);
+        this.drawn = view;
         const fogStrengthNow =
             showWeather && weather === WeatherType.Fog
                 ? serverDate
@@ -186,6 +207,7 @@ export class WeatherManager {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
                 this.graphics.clear().setVisible(false);
+                this.blocks.hide();
                 this.visible = false;
                 this.scene.markDirty();
             }
@@ -196,18 +218,22 @@ export class WeatherManager {
         const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom));
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
+        // Cells of the clouds at this zoom, never finer than the fog's 16 px when there is fog (powers of two).
+        const cloudBlock = cloudBlockSize(this.scene.cameras.main.zoom);
+        const foggy = showWeather && weather === WeatherType.Fog;
+        const size = foggy ? Math.max(FOG_BLOCK, cloudBlock) : cloudBlock;
+        const canvas = this.blocks.begin(view, size);
+        // The walls once for all the layers: a cell is painted when its centre is outdoors.
+        const outdoor = grid ? outdoorCells(canvas, size, veil) : new Uint8Array(canvas.columns * canvas.rows).fill(1);
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
             this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
-            // The patches are cut into blocks inside the outdoor runs, so they stop at the walls.
-            const blocks = fogBlocks(veil, fogPatches(epoch, view, this.reducedMotion), FOG_BLOCK);
-            for (let level = 1; level <= FOG_LEVELS; level++) {
-                const ofLevel = blocks.filter((block) => block.level === level);
-                if (ofLevel.length === 0) continue;
-                this.graphics.fillStyle(FOG_COLOR, ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density);
-                for (const block of ofLevel) this.graphics.fillRect(block.x, block.y, block.width, block.height);
-            }
+            // The patches stop at the walls: only outdoor cells are painted.
+            const levels = fieldLevels(canvas, size, fogPatches(epoch, view, this.reducedMotion));
+            this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, FOG_COLOR, (level) => {
+                return ((FOG_PATCH_ALPHA * level) / FOG_LEVELS) * density;
+            });
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
                 this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.2 : 0.05);
@@ -222,9 +248,11 @@ export class WeatherManager {
                     settings?.cloudCover === undefined
                         ? covering.cloudiness
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
-                const patches = cloudPatches(epoch, view, cover, this.reducedMotion, sky);
+                const levels = fieldLevels(canvas, size, cloudPatches(epoch, view, cover, this.reducedMotion, sky));
                 const tint = cloudTint(covering.color, covering.alpha, sunlight.night);
-                this.drawCloudLayer(veil, patches, tint.color, tint.alpha);
+                this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, tint.color, (level) => {
+                    return (tint.alpha * level) / FOG_LEVELS;
+                });
             }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
@@ -243,7 +271,9 @@ export class WeatherManager {
             if (weather !== WeatherType.Snow) this.graphics.strokePath();
             if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
-        if (showClouds) this.drawClouds(epoch, sky, view, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
+        if (showClouds) {
+            this.drawClouds(epoch, sky, canvas, size, outdoor, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
+        }
         if (showLeaves) {
             const leaves = leafParticles(epoch, view).map((leaf) => ({
                 ...leaf,
@@ -255,6 +285,7 @@ export class WeatherManager {
                 this.graphics.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
             }
         }
+        this.blocks.end();
         this.scene.markDirty();
     }
 
@@ -266,7 +297,9 @@ export class WeatherManager {
     private drawClouds(
         epoch: number,
         sky: { x: number; y: number },
-        view: WeatherView,
+        canvas: BlockCanvasArea,
+        size: number,
+        outdoor: Uint8Array,
         veil: readonly WeatherView[],
         cloudiness: number,
         sunlight: { night: number; shadows: number },
@@ -277,30 +310,32 @@ export class WeatherManager {
             this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
             for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
         }
+        // One field of clouds for the clouds and their shadows (the same clouds, moved by whole cells), wide enough for
+        // the shadows of clouds just out of the canvas.
+        const shift = shadowOffset
+            ? { columns: Math.round(shadowOffset.x / size), rows: Math.round(shadowOffset.y / size) }
+            : NO_SHIFT;
+        const field = {
+            x: canvas.x - Math.abs(shift.columns) * size,
+            y: canvas.y - Math.abs(shift.rows) * size,
+            columns: canvas.columns + 2 * Math.abs(shift.columns),
+            rows: canvas.rows + 2 * Math.abs(shift.rows),
+        };
+        const fieldView = { x: field.x, y: field.y, width: field.columns * size, height: field.rows * size };
+        const levels = fieldLevels(field, size, cloudPatches(epoch, fieldView, cloudiness, this.reducedMotion, sky));
         if (shadowOffset) {
-            const patches = shadowPatches(epoch, view, cloudiness, this.reducedMotion, shadowOffset, sky);
-            this.drawCloudLayer(veil, patches, 0x000000, CLOUD_SHADOW_ALPHA * sunlight.shadows);
+            const alpha = CLOUD_SHADOW_ALPHA * sunlight.shadows;
+            this.blocks.paintField(field, levels, outdoor, shift, 0x000000, (level) => (alpha * level) / FOG_LEVELS);
         }
         const tint = cloudTint(0xffffff, CLOUD_ALPHA, sunlight.night);
-        const clouds = cloudPatches(epoch, view, cloudiness, this.reducedMotion, sky);
-        this.drawCloudLayer(veil, clouds, tint.color, tint.alpha);
-    }
-
-    /** Clouds or their shadows cut into blocks inside the outdoor runs: soft edges, stopped at the walls like the fog. */
-    private drawCloudLayer(
-        veil: readonly WeatherView[],
-        patches: readonly FogPatch[],
-        color: number,
-        alpha: number,
-    ): void {
-        const block = cloudBlockSize(this.scene.cameras.main.zoom);
-        const blocks = fogBlocks(veil, patches, block);
-        for (let level = 1; level <= FOG_LEVELS; level++) {
-            const ofLevel = blocks.filter((cloud) => cloud.level === level);
-            if (ofLevel.length === 0) continue;
-            this.graphics.fillStyle(color, (alpha * level) / FOG_LEVELS);
-            for (const cloud of ofLevel) this.graphics.fillRect(cloud.x, cloud.y, cloud.width, cloud.height);
-        }
+        this.blocks.paintField(
+            field,
+            levels,
+            outdoor,
+            NO_SHIFT,
+            tint.color,
+            (level) => (tint.alpha * level) / FOG_LEVELS,
+        );
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */
@@ -338,5 +373,6 @@ export class WeatherManager {
         this.sounds.destroy();
         this.snowGround.destroy();
         this.graphics.destroy();
+        this.blocks.destroy();
     }
 }

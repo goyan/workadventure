@@ -12,6 +12,31 @@ export interface WeatherView {
     height: number;
 }
 
+/**
+ * The view grown by `share` of its size on each side: the weather is drawn beyond the screen, so a scroll between two
+ * drawings uncovers weather already there instead of a bare band.
+ */
+export function paddedView(view: WeatherView, share: number): WeatherView {
+    return {
+        x: view.x - view.width * share,
+        y: view.y - view.height * share,
+        width: view.width * (1 + 2 * share),
+        height: view.height * (1 + 2 * share),
+    };
+}
+
+/** Whether `view` keeps at least `slack` of its size inside `drawn` on every side. */
+export function wellInside(drawn: WeatherView, view: WeatherView, slack: number): boolean {
+    const x = view.width * slack;
+    const y = view.height * slack;
+    return (
+        view.x - drawn.x >= x &&
+        view.y - drawn.y >= y &&
+        drawn.x + drawn.width - (view.x + view.width) >= x &&
+        drawn.y + drawn.height - (view.y + view.height) >= y
+    );
+}
+
 export interface WeatherParticle {
     x: number;
     y: number;
@@ -289,16 +314,97 @@ interface RowSpan {
     end: number;
 }
 
+/** The patches crossing a horizontal line, and the width of the widest crossing. */
+interface Row {
+    spans: RowSpan[];
+    widest: number;
+}
+
 /** Where each patch covers a horizontal line, sorted by start; the patches missing the line are left out. */
-function rowSpans(patches: readonly FogPatch[], lineY: number): RowSpan[] {
+function rowSpans(patches: readonly FogPatch[], lineY: number): Row {
     const spans: RowSpan[] = [];
+    let widest = 0;
     for (const patch of patches) {
         const reach = patch.radius ** 2 - (lineY - patch.y) ** 2;
         if (reach <= 0) continue;
         const halfWidth = Math.sqrt(reach);
         spans.push({ patch, start: patch.x - halfWidth, end: patch.x + halfWidth });
+        widest = Math.max(widest, 2 * halfWidth);
     }
-    return spans.sort((a, b) => a.start - b.start);
+    return { spans: spans.sort((a, b) => a.start - b.start), widest };
+}
+
+/** Cells over the map: the top left corner of the first (map pixels), how many across and down. */
+export interface CellArea {
+    x: number;
+    y: number;
+    columns: number;
+    rows: number;
+}
+
+/**
+ * The thickness of the patches (0 to FOG_LEVELS) at the centre of each cell of `area`, `size` map pixels wide, row by
+ * row: one pass over the patches for the whole area, the walls applied when painting (outdoorCells).
+ */
+export function fieldLevels(area: CellArea, size: number, patches: readonly FogPatch[]): Uint8Array {
+    const levels = new Uint8Array(area.columns * area.rows);
+    if (patches.length === 0) return levels;
+    for (let line = 0; line < area.rows; line++) {
+        const centreY = area.y + (line + 0.5) * size;
+        const spans = rowSpans(patches, centreY).spans;
+        const active: RowSpan[] = [];
+        let next = 0;
+        for (let column = 0; column < area.columns; column++) {
+            const centreX = area.x + (column + 0.5) * size;
+            while (next < spans.length && spans[next].start < centreX) active.push(spans[next++]);
+            let thickness = 0;
+            for (let index = active.length - 1; index >= 0; index--) {
+                const span = active[index];
+                if (span.end <= centreX) {
+                    active[index] = active[active.length - 1];
+                    active.pop();
+                    continue;
+                }
+                const patch = span.patch;
+                const share = 1 - ((centreX - patch.x) ** 2 + (centreY - patch.y) ** 2) / patch.radius ** 2;
+                if (share > 0) thickness += (patch.weight ?? 1) * share * share;
+            }
+            levels[line * area.columns + column] = Math.round(Math.min(1, thickness) * FOG_LEVELS);
+        }
+    }
+    return levels;
+}
+
+/** 1 for each cell of `area` whose centre is in one of the outdoor runs, 0 for the others. */
+export function outdoorCells(area: CellArea, size: number, runs: readonly WeatherView[]): Uint8Array {
+    const outdoor = new Uint8Array(area.columns * area.rows);
+    // The first cell whose centre is at or after `value`, and the first one after `end` (excluded), in cells.
+    const from = (value: number, origin: number) => Math.max(0, Math.ceil((value - origin) / size - 0.5));
+    for (const run of runs) {
+        const top = from(run.y, area.y);
+        const bottom = Math.min(area.rows, from(run.y + run.height, area.y));
+        const left = from(run.x, area.x);
+        const right = Math.min(area.columns, from(run.x + run.width, area.x));
+        for (let line = top; line < bottom; line++)
+            outdoor.fill(1, line * area.columns + left, line * area.columns + right);
+    }
+    return outdoor;
+}
+
+/**
+ * Index of a span of the row (sorted by start) from which on any span may reach `x`: every span before it starts more
+ * than the widest span away on the left, so it ends before `x`.
+ */
+function firstReaching(row: Row, x: number): number {
+    const { spans, widest } = row;
+    let low = 0;
+    let high = spans.length;
+    while (low < high) {
+        const middle = (low + high) >> 1;
+        if (spans[middle].start < x - widest) low = middle + 1;
+        else high = middle;
+    }
+    return low;
 }
 
 /**
@@ -309,6 +415,8 @@ function rowSpans(patches: readonly FogPatch[], lineY: number): RowSpan[] {
 export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPatch[], block: number): FogBlock[] {
     const blocks: FogBlock[] = [];
     if (patches.length === 0) return blocks;
+    // The patches crossing each row, found once for all the runs of that row (hundreds when walls cut the outside).
+    const rows = new Map<number, Row>();
     for (const run of runs) {
         const right = run.x + run.width;
         const bottom = run.y + run.height;
@@ -319,9 +427,15 @@ export function fogBlocks(runs: readonly WeatherView[], patches: readonly FogPat
             const centreY = gridY + block / 2;
             // Only the patches crossing this row, by where they start on it: a block then looks at the few patches
             // over it instead of all of them (thousands when zoomed out, at every image).
-            const crossing = rowSpans(patches, centreY);
+            let row = rows.get(centreY);
+            if (!row) {
+                row = rowSpans(patches, centreY);
+                rows.set(centreY, row);
+            }
+            const crossing = row.spans;
+            // The first patch that may reach this run, found by halving: the ones before end on its left.
+            let next = firstReaching(row, run.x);
             const active: RowSpan[] = [];
-            let next = 0;
             let current: FogBlock | undefined;
             for (let gridX = Math.floor(run.x / block) * block; gridX < right; gridX += block) {
                 const x = Math.max(gridX, run.x);
