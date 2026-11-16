@@ -350,8 +350,21 @@ export function groundPieceOf(piece: MapLayerPiece): MapLayerPiece {
  * vertical strips, lintels) have theirs lower than their sprite.
  */
 export function mapLayerGroundBottom(piece: MapLayerPiece, y: number): number {
+    const ground = mapLayerGroundRect(piece, 0, y);
+    return ground.y + ground.height;
+}
+
+/**
+ * Rectangle on the ground of a piece whose sprite has its top-left corner at (x, y): the one of the piece of height 1
+ * it stands in for (`groundPieceOf`), `wallRise(height)` lower than the sprite.
+ */
+export function mapLayerGroundRect(
+    piece: MapLayerPiece,
+    x: number,
+    y: number,
+): { x: number; y: number; width: number; height: number } {
     const rise = piece.kind === "floor" ? 0 : wallRise(piece.height);
-    return y + rise + mapLayerPieceSize(groundPieceOf(piece)).height;
+    return { x, y: y + rise, ...mapLayerPieceSize(groundPieceOf(piece)) };
 }
 
 /** Size in pixels of the sprite of each piece, used to create entities without loading their image first. */

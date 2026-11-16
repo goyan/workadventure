@@ -1,10 +1,4 @@
-import {
-    groundPieceOf,
-    mapLayerPieceSize,
-    parseMapLayerPrefab,
-    wallRise,
-    type MapLayerPiece,
-} from "../MapEditor/MapLayer/MapLayerCatalog";
+import { mapLayerGroundRect, parseMapLayerPrefab, type MapLayerPiece } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, OutdoorGrid, type Rect } from "./OutdoorGrid";
 
 /** Cell size of the team maps. */
@@ -96,19 +90,22 @@ export interface OutdoorSourceEntity {
 }
 
 /**
- * A piece of the map layer of height 2 or more, as the piece of height 1 it stands in for (`groundPieceOf`). A lintel
- * counts for nothing: the door or the window under it stands on the ground, and a wall there would close the doorway.
+ * Where a piece of the map layer stands for the outdoors, when it is not its own image: a piece of height 2 or more
+ * stands where its piece of height 1 would (`mapLayerGroundRect`). A lintel, and the strip over a vertical door, count
+ * for nothing: the door or the window under them stands on the ground, and a wall there would close the doorway.
+ * Undefined: the image of the prefab (the pieces of height 1, and a vertical door, which has no height).
  */
-function groundPiece(
+function groundRectFor(
     piece: MapLayerPiece | undefined,
-): { rise: number; ground: MapLayerPiece | undefined } | undefined {
+    x: number,
+    y: number,
+): { x: number; y: number; width: number; height: number } | undefined {
     if (piece === undefined || piece.kind === "floor") return undefined;
-    if (piece.kind === "lintel") return { rise: 0, ground: undefined };
-    // The strip over a vertical door: the door under it stands on the ground, the doorway stays open.
-    if (piece.kind === "vertical" && piece.overDoor) return { rise: 0, ground: undefined };
-    // A vertical door has no height; the pieces of height 1 keep their own image.
+    if (piece.kind === "lintel" || (piece.kind === "vertical" && piece.overDoor)) {
+        return { x, y, width: 0, height: 0 };
+    }
     if (piece.height === 1) return undefined;
-    return { rise: wallRise(piece.height), ground: groundPieceOf(piece) };
+    return mapLayerGroundRect(piece, x, y);
 }
 
 /**
@@ -121,17 +118,9 @@ export function entityOutdoorRect(
     prefabFrameSize: (imagePath: string) => { width: number; height: number } | undefined,
 ): OutdoorEntity {
     const prefab = entity.getPrefab();
-    const high = groundPiece(parseMapLayerPrefab(prefab.collectionName, prefab.id));
-    if (high) {
-        const size = high.ground ? mapLayerPieceSize(high.ground) : { width: 0, height: 0 };
-        return {
-            collectionName: prefab.collectionName,
-            x: entity.x,
-            y: entity.y + high.rise * entity.scaleY,
-            width: size.width * entity.scaleX,
-            height: size.height * entity.scaleY,
-        };
-    }
+    // The pieces of the map layer are never scaled: they are placed at the size of their catalog image.
+    const ground = groundRectFor(parseMapLayerPrefab(prefab.collectionName, prefab.id), entity.x, entity.y);
+    if (ground) return { collectionName: prefab.collectionName, ...ground };
     const frame = prefabFrameSize(prefab.imagePath);
     return {
         collectionName: prefab.collectionName,

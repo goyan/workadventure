@@ -4,8 +4,8 @@ import {
     WALL_THICKNESS,
     facadeLeftExtension,
     WALL_FOOTPRINT,
-    groundPieceOf,
     mapLayerGroundBottom,
+    mapLayerGroundRect,
     mapLayerPieceSize,
     parseMapLayerPrefab,
     wallRise,
@@ -72,15 +72,6 @@ export function wallTargetAlpha(
 export function roomsBehind(piece: MapLayerPiece, rect: Rect, grid: WallFadeGrid): ReadonlySet<number> {
     if (piece.kind === "floor" || piece.kind === "vertical" || piece.kind === "end") return EMPTY;
     return grid.roomsTouching({ x: rect.x, y: rect.y - 1, width: rect.width, height: 1 });
-}
-
-/**
- * Where a piece stands on the ground, in the same way as the outdoor grid reads it: the piece of height 1 it stands in
- * for; a lintel stands where the facade of height 1 under it would.
- */
-function groundRect(piece: MapLayerPiece, x: number, y: number): Rect {
-    const rise = piece.kind === "floor" ? 0 : wallRise(piece.height);
-    return { x, y: y + rise, ...mapLayerPieceSize(groundPieceOf(piece)) };
 }
 
 /** Height of the wall that carries a door or a window, read in the model; for the other pieces, their own height. */
@@ -307,7 +298,7 @@ export class WallFade {
                 piece,
                 x: wall.x,
                 y: wall.y,
-                rect: groundRect(piece, wall.x, wall.y),
+                rect: mapLayerGroundRect(piece, wall.x, wall.y),
                 rooms: undefined,
                 carrierHeight: pieceHeight(piece),
                 target: Number.NaN,
