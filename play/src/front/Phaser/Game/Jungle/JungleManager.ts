@@ -36,6 +36,8 @@ export interface JungleHearing {
     pose(animalId: string): { x: number; y: number; moving: boolean } | undefined;
     /** The tab is hidden: nothing is heard. */
     hidden(): boolean;
+    /** The animal was tamed and follows its master: it does not call (it would call next to them, even indoors). */
+    led(animalId: string): boolean;
     /** The personal volume of the jungle calls, from 0 to 1. */
     volume(): number;
     play(key: JungleSoundKey, volume: number): void;
@@ -99,7 +101,7 @@ export class JungleManager {
         if (!listener) return;
         for (const animal of this.applied) {
             const leg = jungleCryLeg(animal.id, nowMs);
-            if (leg === undefined) continue;
+            if (leg === undefined || hearing.led(animal.id)) continue;
             const key = jungleSoundKey(animal.sheetPath);
             if (!key) continue;
             const pose = hearing.pose(animal.id);

@@ -85,6 +85,7 @@ export class GameJungle {
                     scene.CurrentPlayer ? { x: scene.CurrentPlayer.x, y: scene.CurrentPlayer.y } : undefined,
                 pose: (animalId) => wanderers.freeCharacterPose(animalId),
                 hidden: () => document.hidden,
+                led: (animalId) => wanderers.isLed(animalId),
                 volume: () => get(jungleVolumeStore),
                 play: (key, volume) => {
                     // The same guards as the other sound effects (see NerfManager.playPop).
@@ -104,8 +105,9 @@ export class GameJungle {
                 return player ? feetOf(player) : undefined;
             },
             playerInWater: (userId) => playerOf(userId)?.isInWater() ?? false,
-            animals: () => this.manager.animals,
-            animalPose: (id) => wanderers.freeCharacterPose(id),
+            // Every wandering animal: the jungle ones and the ones placed on the map.
+            animals: () => wanderers.tameableCharacters(),
+            animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),
             send: (message) => {
@@ -114,7 +116,7 @@ export class GameJungle {
                     console.warn("Could not send a jungle companion event", error);
                 });
             },
-            setLead: (id, lead) => wanderers.setFreeCharacterLead(id, lead),
+            setLead: (id, lead) => wanderers.setCharacterLead(id, lead),
             showPrompt: (kind, action) => (kind === "tame" ? this.tamePrompt : this.releasePrompt).show(action),
             hidePrompt: () => {
                 this.tamePrompt.hide();
@@ -135,6 +137,14 @@ export class GameJungle {
             loop: true,
             callback: () => this.manager.refresh(),
         });
+    }
+
+    public tamedAnimalCount(): number {
+        return this.companions.tamedCount;
+    }
+
+    public releaseTamedAnimals(): void {
+        this.companions.releaseAll();
     }
 
     public destroy(): void {

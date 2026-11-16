@@ -14,6 +14,13 @@ import type { JungleAnimal } from "./JunglePlan";
 
 /** The interaction key tames an animal whose feet are this close to the player's: a tile and a half. */
 export const COMPANION_PROMPT_PX = 48;
+/**
+ * An animal seen with the same master for that long stays with them (see jungleCompanionOwners): longer than a crossed
+ * message takes, shorter than anyone would notice.
+ */
+export const COMPANION_HOLD_MS = 3_000;
+/** The companions are announced again at once to a player who arrives, at most that often. */
+const ARRIVAL_ANNOUNCE_MS = 1_000;
 
 /** Everything the companions read from and do in the game: injected, so that they are tested without Phaser. */
 export interface JungleCompanionWorld {
@@ -50,15 +57,20 @@ export class JungleCompanions {
     private readonly local = new Map<string, number>();
     private lastAnnounce = 0;
     /** The master each led animal follows, and its place in their group. */
-    private readonly led = new Map<string, { owner: number; sheetPath: string | undefined; slot: number }>();
+    private readonly led = new Map<
+        string,
+        { owner: number; sheetPath: string | undefined; slot: number; lead: WanderLead | undefined }
+    >();
     private prompt: { kind: "tame" | "release"; animal: string } | undefined;
     /** The clock of the last update. */
     private nowMs = 0;
+    /** The master each animal has had on this screen, and since when (the page's clock). */
+    private readonly holders = new Map<string, { owner: number; from: number }>();
+    /** Whether this player told the room anything: on a map without an animal to tame, it never does. */
+    private greeted = false;
+    private lastArrivalAnnounce = Number.NEGATIVE_INFINITY;
 
-    constructor(private readonly world: JungleCompanionWorld) {
-        // A claim of a former connection of this player (a reconnection without reloading) is over.
-        this.sendLocal();
-    }
+    constructor(private readonly world: JungleCompanionWorld) {}
 
     /** A room event: claims of the other players. */
     public receive(senderId: number | undefined, name: string, data: unknown, nowMs: number): void {
@@ -66,12 +78,29 @@ export class JungleCompanions {
         // The server sends the room events back to their sender too.
         if (!message || senderId === undefined || senderId === this.world.localUserId()) return;
         this.others.receive(senderId, message, nowMs);
+        // An empty list is a player arriving (or releasing everything): they learn about the companions now, not at
+        // the next announce, which would leave them seeing these animals wander for a few seconds.
+        if (
+            message.companions.length === 0 &&
+            this.local.size > 0 &&
+            nowMs - this.lastArrivalAnnounce >= ARRIVAL_ANNOUNCE_MS
+        ) {
+            this.lastArrivalAnnounce = nowMs;
+            this.lastAnnounce = nowMs;
+            this.sendLocal();
+        }
     }
 
     /** Called every frame (the page's clock, for the expiry of the claims). */
     public update(nowMs: number): void {
         this.nowMs = nowMs;
         const animals = new Map(this.world.animals().map((animal) => [animal.id, animal]));
+        if (!this.greeted && animals.size > 0) {
+            // A claim of a former connection of this player (a reconnection without reloading) is over; and the
+            // masters in the room announce their companions to this new player.
+            this.greeted = true;
+            this.sendLocal();
+        }
         const localId = this.world.localUserId();
         if (this.local.size > 0 && this.world.editorOpen()) {
             // No companion in the map editor.
@@ -83,7 +112,15 @@ export class JungleCompanions {
         if (localId !== undefined) {
             for (const [animal, since] of this.local) claims.push({ owner: localId, animal, since });
         }
-        const owners = jungleCompanionOwners(claims);
+        const held = new Map<string, number>();
+        for (const [animal, holder] of this.holders) {
+            if (nowMs - holder.from >= COMPANION_HOLD_MS) held.set(animal, holder.owner);
+        }
+        const owners = jungleCompanionOwners(claims, held);
+        for (const animal of this.holders.keys()) if (!owners.has(animal)) this.holders.delete(animal);
+        for (const [animal, { owner }] of owners) {
+            if (this.holders.get(animal)?.owner !== owner) this.holders.set(animal, { owner, from: nowMs });
+        }
         // Someone tamed it first: their message crossed ours. Given up without a word.
         this.dropLocal([...this.local.keys()].filter((animal) => owners.get(animal)?.owner !== localId));
         this.announce(nowMs);
@@ -106,6 +143,17 @@ export class JungleCompanions {
         this.sendLocal();
     }
 
+    public get tamedCount(): number {
+        return this.local.size;
+    }
+
+    /** Lets every companion of the local player go (from the wheel of their avatar). */
+    public releaseAll(): void {
+        if (this.local.size === 0) return;
+        this.local.clear();
+        this.sendLocal();
+    }
+
     /** The page goes away (reload, tab closed): the companions are released at once rather than when they expire. */
     public releaseNow(): void {
         if (this.local.size > 0) this.releaseAll();
@@ -113,7 +161,7 @@ export class JungleCompanions {
 
     public destroy(): void {
         this.local.clear();
-        this.sendLocal();
+        if (this.greeted) this.sendLocal();
         for (const animal of this.led.keys()) this.world.setLead(animal, undefined);
         this.led.clear();
         this.hidePrompt();
@@ -139,11 +187,6 @@ export class JungleCompanions {
 
     private release(animal: string): void {
         this.dropLocal([animal]);
-    }
-
-    private releaseAll(): void {
-        this.local.clear();
-        this.sendLocal();
     }
 
     /** Lets these companions go, and tells the room about the ones left (once, only if one was dropped). */
@@ -173,6 +216,9 @@ export class JungleCompanions {
             // Another species on the same tree (a new day) is a new character of the wandering ones: led again.
             if (owners.get(animal)?.owner === entry.owner && animals.get(animal)?.sheetPath === entry.sheetPath) {
                 entry.slot = slots.get(animal) ?? 0;
+                // Given again every frame (nothing happens when it has it): a character made anew (a placed object
+                // edited, the map reloaded) is led again at once.
+                if (entry.lead) this.world.setLead(animal, entry.lead);
                 continue;
             }
             this.led.delete(animal);
@@ -182,9 +228,10 @@ export class JungleCompanions {
             if (this.led.has(animal)) continue;
             const start = this.world.animalPose(animal) ?? animals.get(animal)?.nest ?? { x: 0, y: 0 };
             let follower: JungleCompanionFollower | undefined = new JungleCompanionFollower(start, this.nowMs);
-            const entry = { owner, sheetPath: animals.get(animal)?.sheetPath, slot: slots.get(animal) ?? 0 };
+            const entry: { owner: number; sheetPath: string | undefined; slot: number; lead: WanderLead | undefined } =
+                { owner, sheetPath: animals.get(animal)?.sheetPath, slot: slots.get(animal) ?? 0, lead: undefined };
             this.led.set(animal, entry);
-            this.world.setLead(animal, {
+            entry.lead = {
                 poseAt: (nowMs) => {
                     const feet = this.world.playerFeet(owner);
                     if (!feet) {
@@ -196,7 +243,8 @@ export class JungleCompanions {
                     follower ??= new JungleCompanionFollower(feet, nowMs);
                     return follower.poseAt(nowMs, feet, !this.world.playerInWater(owner), entry.slot);
                 },
-            });
+            };
+            this.world.setLead(animal, entry.lead);
         }
     }
 

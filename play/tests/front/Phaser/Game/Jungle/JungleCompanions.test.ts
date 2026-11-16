@@ -63,10 +63,76 @@ function tameNow(companions: JungleCompanions, prompt: { action: (() => void) | 
 }
 
 describe("JungleCompanions", () => {
-    it("tells the room it has no companion when it starts", () => {
+    it("tells the room it has no companion once there is an animal to tame, once", () => {
         const { world, sent } = makeWorld();
-        new JungleCompanions(world);
+        const companions = new JungleCompanions(world);
+        expect(sent).toEqual([]);
+        companions.update(0);
+        companions.update(16);
         expect(sent).toEqual([NONE]);
+    });
+
+    it("says nothing on a map without an animal to tame, not even when it goes", () => {
+        const { world, sent } = makeWorld({ animals: [] });
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        companions.receive(9, JUNGLE_COMPANION_EVENT, NONE, 0);
+        companions.destroy();
+        expect(sent).toEqual([]);
+    });
+
+    it("announces its companions at once to a player who just arrived (their empty list), once a second at most", () => {
+        const { world, sent, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        tameNow(companions, prompt, 0);
+        const count = sent.length;
+        companions.receive(9, JUNGLE_COMPANION_EVENT, NONE, 100);
+        expect(sent).toHaveLength(count + 1);
+        expect(sent.at(-1)).toEqual(claim([LION.id, 1_000_000]));
+        companions.receive(8, JUNGLE_COMPANION_EVENT, NONE, 600);
+        expect(sent).toHaveLength(count + 1);
+        companions.receive(8, JUNGLE_COMPANION_EVENT, NONE, 1100);
+        expect(sent).toHaveLength(count + 2);
+    });
+
+    it("keeps an animal with the master seen holding it: an older claim arriving later does not take it", () => {
+        const { world, feet, leads } = makeWorld();
+        feet.set(7, { x: 360, y: 352 });
+        const companions = new JungleCompanions(world);
+        companions.receive(7, JUNGLE_COMPANION_EVENT, claim([LION.id, 900_000]), 0);
+        companions.update(0);
+        companions.update(4000);
+        // Player 9 says they tamed it long before: too late, player 7 has it.
+        companions.receive(9, JUNGLE_COMPANION_EVENT, claim([LION.id, 1]), 4000);
+        companions.update(4016);
+        expect(leads.get(LION.id)?.poseAt(4016)).toBeDefined();
+        companions.update(10_000);
+        expect(leads.get(LION.id)?.poseAt(10_000)).toBeDefined();
+        // In view, player 9 would be followed if they were its master: it follows player 7, out of view now.
+        feet.set(9, { x: 360, y: 352 });
+        feet.delete(7);
+        expect(leads.get(LION.id)?.poseAt(10_016)).toBeUndefined();
+    });
+
+    it("gives the lead again to an animal the wandering characters made anew (a placed object edited)", () => {
+        const { world, leads, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        tameNow(companions, prompt, 0);
+        companions.update(16);
+        const lead = leads.get(LION.id);
+        leads.delete(LION.id);
+        companions.update(32);
+        expect(leads.get(LION.id)).toBe(lead);
+    });
+
+    it("tames a placed animal like a jungle one", () => {
+        const DUCK: JungleAnimal = { id: "entity:duck-1", sheetPath: "duck.png", nest: { x: 320, y: 330 } };
+        const { world, sent, leads, prompt } = makeWorld({ animals: [DUCK] });
+        const companions = new JungleCompanions(world);
+        tameNow(companions, prompt, 0);
+        expect(sent.at(-1)).toEqual(claim([DUCK.id, 1_000_000]));
+        companions.update(16);
+        expect(leads.has(DUCK.id)).toBe(true);
     });
 
     it("offers to tame a free animal within a tile and a half, and nothing further", () => {
