@@ -541,6 +541,30 @@ describe("weather rendering lifecycle", () => {
             expect(scene.markDirty.mock.calls).toHaveLength(1);
         });
 
+        it("paints cumulus with a lit side, a middle and a shaded side, gone zoomed in under them, their shadows kept", () => {
+            const painted = (zoom: number) => {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Cloudy };
+                scene.cameras.main.zoom = zoom;
+                // A view as big as the repeated square of the sky: every cloud is in it.
+                scene.cameras.main.worldView.width = 2100;
+                scene.cameras.main.worldView.height = 2100;
+                manager = new WeatherManager(scene);
+                manager.update(0, at, false, sun);
+                const calls = graphics.fillStyle.mock.calls.filter(([color]) => color !== 0x000000);
+                const shadowCalls = graphics.fillStyle.mock.calls.length - calls.length;
+                manager.destroy();
+                manager = undefined;
+                return { colors: new Set(calls.map(([color]) => color)), shadowCalls };
+            };
+            const far = painted(0.4);
+            expect(far.colors.size).toBeGreaterThanOrEqual(3);
+            expect(far.colors.has(0xffffff)).toBe(true);
+            const near = painted(2);
+            expect(near.colors.size).toBe(0);
+            expect(near.shadowCalls).toBeGreaterThan(0);
+        });
+
         it("moves 15 times a second, so they glide", () => {
             const { scene, graphics, wam } = fixture();
             wam.settings = { weather: WeatherType.Cloudy };
@@ -593,6 +617,56 @@ describe("weather rendering lifecycle", () => {
             manager.update(1000, new Date(at.getTime() + 1000), false, sun);
             expect(of(0x2b3240)).toBeGreaterThan(0);
             expect(shadows(graphics)).toBe(0);
+        });
+
+        it("fades the clouds by their scale on the screen, the canvas stretched or not (Retina screens)", () => {
+            const shown = (cameraZoom: number, displayScale: number) => {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Cloudy };
+                scene.cameras.main.zoom = cameraZoom;
+                // Phaser's display scale: game pixels per screen pixel of the canvas.
+                scene.scale.displayScale.x = displayScale;
+                scene.cameras.main.worldView.width = 2100;
+                scene.cameras.main.worldView.height = 2100;
+                manager = new WeatherManager(scene);
+                manager.update(0, at, false, sun);
+                const count = whites(graphics);
+                manager.destroy();
+                manager = undefined;
+                return count;
+            };
+            // The camera at 1 over a canvas stretched 1.5 times (a map just opened): under the clouds.
+            expect(shown(1, 1 / 1.5)).toBe(0);
+            // The camera at 1 over a canvas shrunk to 0.75: the clouds show.
+            expect(shown(1, 1 / 0.75)).toBeGreaterThan(0);
+        });
+
+        it("paints rain and storm clouds as cumulus too, in three tones, gone zoomed in under them", () => {
+            for (const [weather, mid] of [
+                [WeatherType.Rain, 0x7d8794],
+                [WeatherType.Storm, 0x2b3240],
+            ] as const) {
+                const painted = (zoom: number) => {
+                    const { scene, graphics, wam } = fixture();
+                    wam.settings = { weather };
+                    scene.cameras.main.zoom = zoom;
+                    scene.cameras.main.worldView.width = 2100;
+                    scene.cameras.main.worldView.height = 2100;
+                    manager = new WeatherManager(scene);
+                    manager.update(0, at, false, sun);
+                    // The cloud tones only: neither the veil of the sky nor the flash of a strike.
+                    const calls = graphics.fillStyle.mock.calls.filter(
+                        ([color]) => color !== 0x27344b && color !== 0xe3eaff,
+                    );
+                    manager.destroy();
+                    manager = undefined;
+                    return new Set(calls.map(([color]) => color));
+                };
+                const far = painted(0.4);
+                expect(far.size).toBeGreaterThanOrEqual(3);
+                expect(far.has(mid)).toBe(true);
+                expect(painted(2).size).toBe(0);
+            }
         });
 
         it("has no shadow with a low sun, and dark clouds without shadows at night", () => {

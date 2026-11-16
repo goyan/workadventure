@@ -5,6 +5,7 @@ import { repeatedOverView } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 
 const DEG = Math.PI / 180;
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
 /** Clouds per square of the sky at most (a cloudiness of 1); they appear one after the other as it grows. */
 const MAX_CLOUDS = 12;
@@ -19,7 +20,7 @@ const CLOUD_RADIUS = 220;
  * under clouds): clouds overlap more as the sky fills up, so they grow faster and faster, and a very cloudy sky is a
  * mass of clouds that join, not a field of dots. Overcast (from 97 %) gives the size of 97 %.
  */
-const COVER_SIZE = 1.9;
+const COVER_SIZE = 1.75;
 const MIN_COVER = 0.05;
 const MAX_COVER = 0.97;
 function cloudSize(cloudiness: number): number {
@@ -82,12 +83,153 @@ export class SkyDrift {
         return { x: seconds * drift.x + this.shift.x, y: seconds * drift.y + this.shift.y };
     }
 }
-/** Each cloud is a main puff and two smaller lobes. */
-const LOBES: readonly { dx: number; dy: number; scale: number }[] = [
-    { dx: 0, dy: 0, scale: 1 },
-    { dx: -0.6, dy: 0.2, scale: 0.7 },
-    { dx: 0.65, dy: 0.15, scale: 0.65 },
-];
+/**
+ * Each cloud is a cumulus: a main puff and smaller ones around it, spread wider than tall, placed and sized its own way
+ * for each cloud so that no two clouds have the same outline.
+ */
+export const CLOUD_PUFFS = 7;
+const PUFF_SPREAD_ACROSS = 0.72;
+const PUFF_SPREAD_DOWN = 0.35;
+const PUFF_SMALLEST = 0.5;
+const PUFF_BIGGEST = 0.75;
+
+function cloudPuffs(index: number): { dx: number; dy: number; scale: number }[] {
+    const puffs = [{ dx: 0, dy: 0, scale: 1 }];
+    for (let puff = 1; puff < CLOUD_PUFFS; puff++) {
+        const angle = ((puff - 1) / (CLOUD_PUFFS - 1) + (hash01(index, 43 + puff) - 0.5) * 0.1) * 2 * Math.PI;
+        puffs.push({
+            dx: Math.cos(angle) * PUFF_SPREAD_ACROSS,
+            dy: Math.sin(angle) * PUFF_SPREAD_DOWN,
+            scale: PUFF_SMALLEST + (PUFF_BIGGEST - PUFF_SMALLEST) * hash01(index, 53 + puff),
+        });
+    }
+    return puffs;
+}
+
+/**
+ * The share of the map the clouds of a clear sky cover for a cloud cover: the cover itself up to 35 %, then growing
+ * slowly to 55 % for an overcast sky, so the ground stays in sight between cumulus instead of under a sheet. A very
+ * cloudy sky shows in the colour of the clouds (cloudPalette) and the grey veil.
+ */
+const SHOWN_COVER_FULL = 0.35;
+const SHOWN_COVER_SLOPE = 0.3;
+export function shownCloudiness(cloudiness: number): number {
+    if (cloudiness <= SHOWN_COVER_FULL) return cloudiness;
+    return SHOWN_COVER_FULL + (cloudiness - SHOWN_COVER_FULL) * SHOWN_COVER_SLOPE;
+}
+
+/** The three tones of a cloud: the side facing the light, the middle, the side away from it. */
+export interface CloudPalette {
+    lit: number;
+    mid: number;
+    shade: number;
+}
+const CLEAR_PALETTE: CloudPalette = { lit: 0xffffff, mid: 0xe3e8ef, shade: 0xb4becb };
+/** A very cloudy sky greys its clouds, up to this share of this grey for an overcast one, from 50 % of cover. */
+const GREY_CLOUD = 0x8e97a3;
+const GREY_FROM = 0.5;
+const GREY_SHARE = 0.45;
+
+function mixColor(from: number, to: number, share: number): number {
+    const channel = (shift: number): number => {
+        const a = (from >> shift) & 0xff;
+        const b = (to >> shift) & 0xff;
+        return Math.round(a + (b - a) * share) << shift;
+    };
+    return channel(16) | channel(8) | channel(0);
+}
+
+/** The tones of the clouds for a cloud cover: white by fine weather, greyer as the sky gets covered. */
+export function cloudPalette(cloudiness: number): CloudPalette {
+    const share = GREY_SHARE * clamp01((cloudiness - GREY_FROM) / (1 - GREY_FROM));
+    if (share <= 0) return CLEAR_PALETTE;
+    return {
+        lit: mixColor(CLEAR_PALETTE.lit, GREY_CLOUD, share),
+        mid: mixColor(CLEAR_PALETTE.mid, GREY_CLOUD, share),
+        shade: mixColor(CLEAR_PALETTE.shade, GREY_CLOUD, share),
+    };
+}
+
+/**
+ * The share of the map the clouds of a rain or a storm cover for their cloud cover (60 % at least): from 45 % to 65 %,
+ * more than fine weather clouds but never a sheet, the ground showing between them. The dark veil of the weather
+ * tells the sky is covered.
+ */
+const RAIN_COVER_FROM = 0.6;
+const RAIN_SHOWN_FROM = 0.45;
+const RAIN_SHOWN_TO = 0.65;
+export function shownRainCover(cover: number): number {
+    const share = clamp01((cover - RAIN_COVER_FROM) / (1 - RAIN_COVER_FROM));
+    return RAIN_SHOWN_FROM + (RAIN_SHOWN_TO - RAIN_SHOWN_FROM) * share;
+}
+
+/** The tones of rain or storm clouds of a colour: that colour in the middle, lighter towards the light, darker away. */
+export function rainPalette(color: number): CloudPalette {
+    return { lit: mixColor(color, 0xffffff, 0.2), mid: color, shade: mixColor(color, 0x000000, 0.25) };
+}
+
+/**
+ * Opacity of a cloud cell by its thickness level: a faint rim on the first two levels, then the whole body, so a cloud
+ * has an edge instead of fading out like a mist.
+ */
+export function cloudAlpha(level: number, body: number): number {
+    if (level <= 0) return 0;
+    if (level === 1) return 0.35 * body;
+    if (level === 2) return 0.7 * body;
+    return body;
+}
+
+/** How far a cell looks towards the light to tell its tone, in map pixels: the same at any zoom. */
+const SHADE_REACH = 48;
+
+/**
+ * Where the clouds are lit from, in cells of `size` map pixels: always the north-west, as the map is drawn, whatever the
+ * sun (which only moves their shadows). Lit from the south, as the sun of our latitudes would, they read as dents.
+ */
+export function cloudLightStep(size: number): { columns: number; rows: number } {
+    const reach = Math.max(1, Math.round((SHADE_REACH * Math.SQRT1_2) / size));
+    return { columns: -reach, rows: -reach };
+}
+
+/**
+ * The cells of a field of clouds split by tone, each keeping its level: lit when its neighbour towards the light is
+ * thinner (the side facing the light), shaded when the one away from it is, the middle otherwise.
+ */
+export function cloudTones(
+    levels: Uint8Array,
+    columns: number,
+    rows: number,
+    towardsLight: { columns: number; rows: number },
+): { lit: Uint8Array; mid: Uint8Array; shade: Uint8Array } {
+    const lit = new Uint8Array(levels.length);
+    const mid = new Uint8Array(levels.length);
+    const shade = new Uint8Array(levels.length);
+    const at = (column: number, line: number): number =>
+        column < 0 || column >= columns || line < 0 || line >= rows ? 0 : levels[line * columns + column];
+    for (let line = 0; line < rows; line++) {
+        for (let column = 0; column < columns; column++) {
+            const cell = line * columns + column;
+            const level = levels[cell];
+            if (level === 0) continue;
+            if (at(column + towardsLight.columns, line + towardsLight.rows) < level) lit[cell] = level;
+            else if (at(column - towardsLight.columns, line - towardsLight.rows) < level) shade[cell] = level;
+            else mid[cell] = level;
+        }
+    }
+    return { lit, mid, shade };
+}
+
+/**
+ * Clouds whole while a map pixel takes 0.8 screen pixel or less, gone from 1.4 (a map opens at 1.5): zoomed in, the
+ * camera is under them, and only their shadows on the ground remain. One notch of the wheel out shows them. Measured
+ * on the screen, not by the camera zoom, which stays at 1 while Phaser stretches the canvas (Retina screens).
+ */
+const ZOOM_WHOLE = 0.8;
+const ZOOM_GONE = 1.4;
+export function cloudZoomFade(screenScale: number): number {
+    if (!Number.isFinite(screenScale)) return 1;
+    return 1 - clamp01((screenScale - ZOOM_WHOLE) / (ZOOM_GONE - ZOOM_WHOLE));
+}
 
 /** Height of the clouds and longest shadow, in tiles. */
 const CLOUD_HEIGHT_TILES = 3;
@@ -103,8 +245,6 @@ const NIGHT_CLOUD_ALPHA_FACTOR = 0.7;
 const OVERCAST_FROM = 0.6;
 const OVERCAST_FULL = 0.9;
 const OVERCAST_ALPHA = 0.08;
-
-const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
 /**
  * Where the shadow of a cloud falls from the cloud, in map pixels (north up, y down): away from the sun, longer when
@@ -179,12 +319,7 @@ export function cloudPatches(
             x: hash01(index, 37) * SKY_PERIOD + drifted.x,
             y: hash01(index, 41) * SKY_PERIOD + drifted.y,
         };
-        // Lobes moved a little for each cloud, so no two clouds have the same shape.
-        const lobes = LOBES.map((lobe, lobeIndex) => ({
-            dx: lobe.dx + (hash01(index, 43 + lobeIndex) - 0.5) * 0.3,
-            dy: lobe.dy + (hash01(index, 47 + lobeIndex) - 0.5) * 0.4,
-            scale: lobe.scale,
-        }));
+        const lobes = cloudPuffs(index);
         // Far enough for a puff whose centre is out of the view, or moved off it, to still reach into it.
         const reach = CLOUD_REACH * radius * COPY_BIGGEST + COPY_SHIFT * SKY_PERIOD;
         for (const copy of repeatedOverView(square, SKY_PERIOD, view, reach)) {

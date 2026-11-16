@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
     CLOUD_DRIFT_PER_SECOND,
+    CLOUD_PUFFS,
+    cloudAlpha,
+    cloudLightStep,
+    cloudPalette,
     cloudPatches,
+    cloudTones,
+    cloudZoomFade,
+    rainPalette,
+    shownCloudiness,
+    shownRainCover,
     cloudShadowOffset,
     cloudBlockSize,
     cloudDrift,
@@ -84,10 +93,10 @@ describe("cloudPatches", () => {
     });
 
     it("mixes small and big clouds", () => {
-        // The main puff of each cloud comes first, before its two lobes.
+        // The main puff of each cloud comes first, before the puffs around it.
         const sky = { x: 0, y: 0, width: 2100, height: 2100 };
         const mains = cloudPatches(0, sky, 1, true)
-            .filter((_, index) => index % 3 === 0)
+            .filter((_, index) => index % CLOUD_PUFFS === 0)
             .map((patch) => patch.radius);
         expect(Math.max(...mains)).toBeGreaterThan(2.5 * Math.min(...mains));
     });
@@ -257,5 +266,96 @@ describe("SkyDrift", () => {
         const before = sky.at(10_000, { x: 60, y: 0 });
         expect(sky.at(10_000, { x: 0, y: 60 })).toEqual(before);
         expect(sky.at(11_000, { x: 0, y: 60 })).toEqual({ x: before.x, y: before.y + 60 });
+    });
+});
+
+describe("cumulus clouds", () => {
+    const sky = { x: 0, y: 0, width: 2100, height: 2100 };
+    const brightness = (color: number) => ((color >> 16) & 0xff) + ((color >> 8) & 0xff) + (color & 0xff);
+
+    it("makes each cloud of a main puff and puffs around it, wider than tall", () => {
+        // One cloud only, standing still.
+        const puffs = cloudPatches(0, sky, 1 / 12, true);
+        expect(CLOUD_PUFFS).toBeGreaterThanOrEqual(6);
+        expect(puffs.length % CLOUD_PUFFS).toBe(0);
+        const cloud = puffs.slice(0, CLOUD_PUFFS);
+        const main = cloud[0];
+        const across = Math.max(...cloud.map((puff) => Math.abs(puff.x - main.x)));
+        const down = Math.max(...cloud.map((puff) => Math.abs(puff.y - main.y)));
+        expect(across).toBeGreaterThan(1.4 * down);
+        expect(Math.max(...cloud.slice(1).map((puff) => puff.radius))).toBeLessThan(main.radius);
+    });
+
+    it("keeps the ground in sight: the clouds of a very cloudy sky cover a little over half the map", () => {
+        expect(shownCloudiness(0)).toBe(0);
+        expect(shownCloudiness(0.2)).toBe(0.2);
+        expect(shownCloudiness(0.35)).toBeCloseTo(0.35);
+        expect(shownCloudiness(0.9)).toBeGreaterThan(shownCloudiness(0.6));
+        expect(shownCloudiness(1)).toBeLessThanOrEqual(0.55);
+    });
+
+    it("greys the clouds of a very cloudy sky, lit side light, far side dark", () => {
+        const clear = cloudPalette(0.3);
+        expect(clear.lit).toBe(0xffffff);
+        expect(brightness(clear.lit)).toBeGreaterThan(brightness(clear.mid));
+        expect(brightness(clear.mid)).toBeGreaterThan(brightness(clear.shade));
+        const grey = cloudPalette(1);
+        expect(brightness(grey.lit)).toBeLessThan(brightness(clear.lit));
+        expect(brightness(grey.shade)).toBeLessThan(brightness(clear.shade));
+    });
+
+    it("gives a cloud a sharp edge: a faint rim, then the body", () => {
+        expect(cloudAlpha(0, 0.8)).toBe(0);
+        expect(cloudAlpha(1, 0.8)).toBeGreaterThan(0);
+        expect(cloudAlpha(1, 0.8)).toBeLessThan(cloudAlpha(2, 0.8));
+        expect(cloudAlpha(2, 0.8)).toBeLessThan(0.8);
+        expect(cloudAlpha(3, 0.8)).toBe(0.8);
+        expect(cloudAlpha(8, 0.8)).toBe(0.8);
+    });
+
+    it("lights the side of a cloud facing the light and darkens the other, the middle in between", () => {
+        // A cloud across one row, the light from the west (one cell to the left).
+        const levels = Uint8Array.from([0, 2, 5, 8, 8, 8, 5, 2, 0]);
+        const tones = cloudTones(levels, 9, 1, { columns: -1, rows: 0 });
+        // A cell is lit when its neighbour towards the light is thinner, shaded when the one away from it is.
+        expect(Array.from(tones.lit)).toEqual([0, 2, 5, 8, 0, 0, 0, 0, 0]);
+        expect(Array.from(tones.mid)).toEqual([0, 0, 0, 0, 8, 0, 0, 0, 0]);
+        expect(Array.from(tones.shade)).toEqual([0, 0, 0, 0, 0, 8, 5, 2, 0]);
+    });
+
+    it("lights the clouds from the north-west, a few map pixels away whatever the zoom: they read as puffs, not dents", () => {
+        expect(cloudLightStep(48)).toEqual({ columns: -1, rows: -1 });
+        expect(cloudLightStep(16)).toEqual({ columns: -2, rows: -2 });
+        expect(cloudLightStep(64)).toEqual({ columns: -1, rows: -1 });
+    });
+
+    it("fades the clouds out as the camera comes down under them, by the scale on the screen", () => {
+        // A map pixel over 0.8 screen pixel or less: whole; over 1.4 or more (the zoom a map opens with is 1.5): gone.
+        expect(cloudZoomFade(0.17)).toBe(1);
+        expect(cloudZoomFade(0.8)).toBe(1);
+        expect(cloudZoomFade(1.1)).toBeGreaterThan(0);
+        expect(cloudZoomFade(1.1)).toBeLessThan(1);
+        expect(cloudZoomFade(1.4)).toBe(0);
+        expect(cloudZoomFade(1.5)).toBe(0);
+    });
+});
+
+describe("rain and storm clouds", () => {
+    const brightness = (color: number) => ((color >> 16) & 0xff) + ((color >> 8) & 0xff) + (color & 0xff);
+
+    it("cover more of the map than fine weather clouds, never a sheet: the ground shows between them", () => {
+        expect(shownRainCover(0.6)).toBeCloseTo(0.45);
+        expect(shownRainCover(0.3)).toBeCloseTo(0.45);
+        expect(shownRainCover(0.9)).toBeGreaterThan(shownRainCover(0.6));
+        expect(shownRainCover(1)).toBeCloseTo(0.65);
+        expect(shownRainCover(0.9)).toBeGreaterThan(shownCloudiness(0.9));
+    });
+
+    it("keep their colour in the middle, lighter on the lit side and darker on the other", () => {
+        const rain = rainPalette(0x7d8794);
+        expect(rain.mid).toBe(0x7d8794);
+        expect(brightness(rain.lit)).toBeGreaterThan(brightness(rain.mid));
+        expect(brightness(rain.mid)).toBeGreaterThan(brightness(rain.shade));
+        expect(rainPalette(0x2b3240).mid).toBe(0x2b3240);
     });
 });
