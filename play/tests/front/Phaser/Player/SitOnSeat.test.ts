@@ -13,6 +13,8 @@ vi.mock("@wa/front/Phaser/Player/Seat", () => ({
     findSeatOfCharacter: vi.fn(),
     getSeats: vi.fn(),
     isSeatTaken: vi.fn(),
+    seatsNextToFeet: vi.fn(() => []),
+    seatBehindWall: vi.fn(() => false),
 }));
 vi.mock("@wa/front/Rules/StatusRules/statusChangerFunctions", () => ({ passStatusToOnline: vi.fn() }));
 
