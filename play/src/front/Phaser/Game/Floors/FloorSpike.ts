@@ -54,16 +54,20 @@ function slabs(model: FloorModel, elevation: number, x0: number, y0: number, x1:
 }
 
 /**
- * The guinea-pig room of the local team map (walls of height 2, tiles 126..131 x 70..75): a mezzanine over its north
- * half, a stair 2 tiles wide going north along the west wall, and a stair going west that arrives in a 2 x 1 well.
+ * The guinea-pig room of the local team map (walls of height 2, tiles 126..131 x 70..75): a mezzanine over its four
+ * north rows, with two wells cut in it. A stair going north along the west wall arrives in a well 1 x 2 at the south
+ * edge of the mezzanine, which goes on beside it; a stair going west arrives in a well 2 x 1 in its middle.
  */
 function roomModel(): FloorModel {
     const model = new FloorModel();
-    slabs(model, 52, 126, 70, 131, 72);
-    model.removeSlab(52, 129, 71);
-    model.removeSlab(52, 130, 71);
-    model.addStair(stair("o"), { x: 130, y: 71 }, 0);
-    model.addStair(stair("n", 2), { x: 126, y: 74 }, 0);
+    slabs(model, 52, 126, 70, 131, 73);
+    for (const placed of [
+        model.addStair(stair("n"), { x: 126, y: 73 }, 0),
+        model.addStair(stair("o"), { x: 130, y: 71 }, 0),
+    ]) {
+        // The well: no slab over the stair.
+        for (const cell of stairCells(placed)) model.removeSlab(52, cell.x, cell.y);
+    }
     return model;
 }
 
