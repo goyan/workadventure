@@ -194,7 +194,7 @@
     </button>
 {/snippet}
 
-<div class="flex flex-col gap-4 text-white" data-testid="mapLayerEditor">
+<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pe-1 text-white" data-testid="mapLayerEditor">
     <h2 class="text-lg font-bold m-0">{$LL.mapEditor.mapLayer.title()}</h2>
 
     {#if $mapLayerCatalogAvailableStore === undefined}
