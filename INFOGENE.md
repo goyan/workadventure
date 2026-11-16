@@ -1634,7 +1634,7 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   sinon bouton grisé avec une explication, et la pose se fait en hauteur 1. Tracer sur un mur existant le remplace.
 - Géométrie : un mur de hauteur N est le mur de hauteur 1 remonté de `32 × (N − 1)` px (`wallRise`), face de
   `20 + 32 × (N − 1)` px. Le pied, les collisions, le « dehors », la lumière (torche, lampes), le chemin et la zone de
-  clic de l'outil (rangée du pied) ne changent pas. Une carte sans pièce `-h` se lit et se dessine comme avant
+  clic des modes de tracé (rangée du pied) ne changent pas. Une carte sans pièce `-h` se lit et se dessine comme avant
   (placements figés dans `MapLayerHeights.test.ts`).
 - Noms (contrat avec le catalogue privé ; hauteur 1 = nom sans suffixe, `-h1` refusé) : `facade-<t>-<bouts>-hN`,
   `mur-vertical-<t>-hN`, `bout-<t>-hN`, `raccord-<bras>-hN`, `fenetre-<t>-<bouts>-hM`, `porte-h-<t>-<g|d>-hM` (images
@@ -1648,6 +1648,16 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   horizontal plus haut qu'un niveau cache ce niveau, sauf le bras sud. Un mur vertical seul à un niveau reçoit son
   `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
   un mur vertical haut : les bandes et le raccord du milieu restent au-dessus d'elle (choix à confirmer à l'écran).
+- Mode « Hauteur » (`MapLayerHeightEdit`, logique pure testée ; l'outil ne fait que dessiner et valider) : un clic sur un
+  mur, une porte ou une fenêtre déjà posés le sélectionne (surligné en bleu, contour blanc au survol), sur **toute son
+  image**, dessus remonté compris ; quand plusieurs images sont sous le pointeur, celle dont le pied est le plus au sud
+  (dessinée devant), et le linteau devant la porte ou la fenêtre dont il couvre le chapeau. Glisser depuis un élément
+  sélectionne les segments de sa ligne jusqu'à celui sous le pointeur, avec la porte ou la fenêtre qu'ils portent ; un
+  clic dans le vide (ou Échap, ou un autre mode) vide la sélection. La rangée 1 à 4 montre la hauteur commune (aucune
+  si elle est mixte) et applique celle cliquée en une commande (un Ctrl+Z), la sélection restant : les murs d'abord,
+  teinte conservée (baisser un mur baisse sa porte ou sa fenêtre), puis portes et fenêtres, ramenées à leur mur
+  (`setDoorHeight`, `setWindowHeight`). Une porte verticale se sélectionne comme ses deux segments de mur. Les
+  hauteurs que le catalogue n'a pas pour tout ce qui est sélectionné sont grisées.
 - Transparence (`WallFade`, pour soi seulement, rien n'est envoyé) : éditeur ouvert, murs, portes et fenêtres à 45 % ;
   en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
   pièces de hauteur ≥ 2 **devant** elle (les murs horizontaux dont le pied est juste au sud de la pièce, `roomsBehind`),
@@ -1659,7 +1669,7 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
   l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
-  (gomme, porte, fenêtre : rangée du pied) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
 
 ## Confirmation avant de libérer son bureau
