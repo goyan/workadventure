@@ -180,7 +180,7 @@ describe("MapLayerEditorTool gestures", () => {
         mapLayerWindowsAvailableStore.set(false);
         mapLayerStatusStore.set(undefined);
         mapLayerWallHeightStore.set(1);
-        mapLayerDoorHeightStore.set(1);
+        mapLayerDoorHeightStore.set("auto");
         mapLayerWindowHeightStore.set(1);
     });
 
@@ -465,6 +465,79 @@ describe("MapLayerEditorTool gestures", () => {
                 "porte-h-blanc-d-h2",
                 "porte-h-blanc-g-h2",
             ]);
+        });
+    });
+
+    describe("door heights", () => {
+        /** The two pieces of a door of height `door` on the vertex (2, 2) of the wall of `placeWall(false, wall)`. */
+        function placeDoor(wall: number, door: number): void {
+            // The door replaces the facades of its two segments.
+            for (const name of ["facade-blanc-mid", "facade-blanc-right"]) {
+                entities.delete(wall === 1 ? name : `${name}-h${wall}`);
+            }
+            const suffix = door === 1 ? "" : `-h${door}`;
+            for (const [side, x] of [
+                ["g", 32],
+                ["d", 64],
+            ] as const) {
+                const name = `porte-h-blanc-${side}${suffix}`;
+                const entity = mock<Entity>({ entityId: name, x, y: 64 - 32 * (door - 1) });
+                entity.getPrefab.mockReturnValue(
+                    prefab(MAP_LAYER_DOOR_COLLECTION, `${MAP_LAYER_DOOR_COLLECTION}:${name}:Default:Down`),
+                );
+                entities.set(name, entity);
+            }
+            if (wall > door) {
+                for (const x of [32, 64]) {
+                    const name = `linteau-blanc-${x === 64 ? "right" : "mid"}-h${wall}-o${door}`;
+                    const entity = mock<Entity>({ entityId: `${name}@${x}`, x, y: 64 - 32 * (wall - 1) });
+                    entity.getPrefab.mockReturnValue(
+                        prefab(MAP_LAYER_WALL_COLLECTION, `${MAP_LAYER_WALL_COLLECTION}:${name}:Default:Down`),
+                    );
+                    entities.set(`${name}@${x}`, entity);
+                }
+            }
+        }
+
+        it("gives a door of a wall of 4 the height 2 in Auto, the default", async () => {
+            placeWall(false, 4);
+            await activate();
+            expect(get(mapLayerDoorHeightStore)).toBe("auto");
+            mapLayerModeStore.set("door");
+            down(64, 80);
+            up(64, 80);
+            expect(createdNames().filter((name) => name.startsWith("porte"))).toEqual([
+                "porte-h-blanc-d-h2",
+                "porte-h-blanc-g-h2",
+            ]);
+        });
+
+        it("gives a placed door another height in one command", async () => {
+            placeWall(false, 4);
+            placeDoor(4, 1);
+            await activate();
+            mapLayerModeStore.set("door");
+            mapLayerDoorHeightStore.set(3);
+            down(64, 80);
+            up(64, 80);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+            expect(get(mapLayerStatusStore)).toBeUndefined();
+            expect(createdNames().filter((name) => name.startsWith("porte") || name.startsWith("linteau"))).toEqual([
+                "linteau-blanc-mid-h4-o3",
+                "linteau-blanc-right-h4-o3",
+                "porte-h-blanc-d-h3",
+                "porte-h-blanc-g-h3",
+            ]);
+        });
+
+        it("changes nothing on a placed door that already has the height", async () => {
+            placeWall(false, 4);
+            placeDoor(4, 2);
+            await activate();
+            mapLayerModeStore.set("door");
+            down(64, 80);
+            up(64, 80);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
         });
     });
 

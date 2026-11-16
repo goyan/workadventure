@@ -214,7 +214,7 @@ export class MapLayerModel {
     }
 
     /** Height of the lower of the two walls a door stands on. */
-    private lowerWallOf(door: DoorRef): WallHeight {
+    public lowerWallOf(door: DoorRef): WallHeight {
         let lowest: WallHeight = 4;
         for (const edge of doorEdges(door)) {
             const wallHeight = this.getWall(edge.orientation, edge.x, edge.y)?.height ?? 1;

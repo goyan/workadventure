@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import type { FloorFamily, WallHeight, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import type { DoorHeightSetting } from "../Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
 
 export type MapLayerMode =
     | "wall"
@@ -18,7 +19,8 @@ export const mapLayerWallTintStore = writable<WallTint>("blanc");
 
 /** Height of what is drawn, one setting per mode: the walls (and the walls of a room), the doors, the windows. */
 export const mapLayerWallHeightStore = writable<WallHeight>(1);
-export const mapLayerDoorHeightStore = writable<WallHeight>(1);
+/** The doors: "auto" (the default) gives a door the height of its wall, two tiles at most. */
+export const mapLayerDoorHeightStore = writable<DoorHeightSetting>("auto");
 export const mapLayerWindowHeightStore = writable<WallHeight>(1);
 
 /**

@@ -10,7 +10,7 @@ import {
     wallRise,
 } from "./MapLayerCatalog";
 import type { DoorRef, WallEdgeRef, WallOrientation } from "./MapLayerModel";
-import { MapLayerModel, cellKey, doorEdges, edgeKey } from "./MapLayerModel";
+import { MapLayerModel, cellKey, doorEdges, doorHeight, edgeKey } from "./MapLayerModel";
 
 export interface Point {
     x: number;
@@ -436,6 +436,48 @@ function defaultDoorFloor(model: MapLayerModel, cell: Point): FloorFamily | unde
         }
     }
     return undefined;
+}
+
+/** The height chosen for the doors: one of the heights, or "auto", the height of the wall up to `DOOR_AUTO_MAX_HEIGHT`. */
+export type DoorHeightSetting = WallHeight | "auto";
+export const DOOR_AUTO_MAX_HEIGHT: WallHeight = 2;
+
+/**
+ * Height a door gets from the setting: in "auto", the one of its wall (the lower of its two walls), two tiles at most;
+ * otherwise the chosen height, brought down to the one of its wall. A vertical door has no height: 1.
+ */
+export function doorHeightFor(model: MapLayerModel, door: DoorRef, setting: DoorHeightSetting): WallHeight {
+    if (door.orientation === "v") return 1;
+    const wall = model.lowerWallOf(door);
+    const wanted = setting === "auto" ? DOOR_AUTO_MAX_HEIGHT : setting;
+    return wanted > wall ? wall : wanted;
+}
+
+/**
+ * What a click of the door mode does: place a door, give a placed horizontal door (same vertex) another height, or
+ * nothing (no wall to take a door, or a placed door that already has that height).
+ */
+export interface DoorPlan {
+    door: DoorRef;
+    height: WallHeight;
+    action: "place" | "update" | "invalid";
+}
+
+export function planDoorAt(model: MapLayerModel, worldX: number, worldY: number, setting: DoorHeightSetting): DoorPlan {
+    const candidate = doorCandidateAt(model, worldX, worldY);
+    const door: DoorRef = { orientation: candidate.orientation, x: candidate.x, y: candidate.y };
+    const height = doorHeightFor(model, door, setting);
+    if (candidate.valid) return { door, height, action: "place" };
+    const placed = model.hasDoorAt(door.orientation, door.x, door.y)
+        ? model.getDoorOn(door.orientation, door.x, door.y)
+        : undefined;
+    const update = placed !== undefined && placed.orientation === "h" && doorHeight(placed) !== height;
+    return { door, height, action: update ? "update" : "invalid" };
+}
+
+export function applyDoorPlan(model: MapLayerModel, plan: DoorPlan, bounds: MapBounds): void {
+    if (plan.action === "place") applyDoor(model, { ...plan.door, height: plan.height }, bounds);
+    if (plan.action === "update") model.setDoorHeight(plan.door, plan.height);
 }
 
 /** Sets a door and gives its horizontal segments the floor of the room, unless they already have one. */

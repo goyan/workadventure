@@ -57,26 +57,27 @@ import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLay
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import { cellKey } from "../MapLayer/MapLayerModel";
 import {
-    applyDoor,
+    DOOR_AUTO_MAX_HEIGHT,
+    applyDoorPlan,
     applyFloor,
     applyWalls,
     applyWindows,
     cellAt,
     moveWindow,
     cellsBetween,
-    doorCandidateAt,
     doorPixelRect,
     eraseAt,
     eraseTargetAt,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
+    planDoorAt,
     rectangleCells,
     roomWallEdges,
     vertexAt,
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
-import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
+import type { DoorHeightSetting, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
 
 /** The chosen height, or 1 when the catalogs of the room do not have its pieces. */
@@ -321,7 +322,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerWindowHeightsAvailableStore.set(windowHeights);
         // A height the catalogs do not have goes back to 1.
         mapLayerWallHeightStore.update((height) => availableHeight(height, wallHeights));
-        mapLayerDoorHeightStore.update((height) => availableHeight(height, doorHeights));
+        mapLayerDoorHeightStore.update((height) => (height === "auto" ? height : availableHeight(height, doorHeights)));
         mapLayerWindowHeightStore.update((height) => availableHeight(height, windowHeights));
 
         const floorSamples = await Promise.all(
@@ -550,7 +551,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         const family = get(mapLayerFloorFamilyStore);
         const tint = get(mapLayerWallTintStore);
         const wallHeight = availableHeight(get(mapLayerWallHeightStore), get(mapLayerWallHeightsAvailableStore));
-        const doorHeight = availableHeight(get(mapLayerDoorHeightStore), get(mapLayerDoorHeightsAvailableStore));
+        const doorSetting = this.doorHeightSetting();
         const windowHeight = availableHeight(get(mapLayerWindowHeightStore), get(mapLayerWindowHeightsAvailableStore));
         const startCell = cellAt(gesture.startWorld.x, gesture.startWorld.y);
         const endCell = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
@@ -584,11 +585,16 @@ export class MapLayerEditorTool extends MapEditorTool {
                     return;
                 };
             case "door": {
-                const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
-                // The model brings a door higher than its walls down to their height.
-                return door.valid
-                    ? (model, bounds) => applyDoor(model, { ...door, height: doorHeight }, bounds)
-                    : undefined;
+                // A new door, or another height for the door already placed there; the model of the commit is read again.
+                const plan = planDoorAt(gesture.baseModel, worldPath.end.x, worldPath.end.y, doorSetting);
+                return plan.action === "invalid"
+                    ? undefined
+                    : (model, bounds) =>
+                          applyDoorPlan(
+                              model,
+                              planDoorAt(model, worldPath.end.x, worldPath.end.y, doorSetting),
+                              bounds,
+                          );
             }
             case "window": {
                 const from = gesture.movedWindow;
@@ -802,10 +808,19 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
+    /** The two segments the door would replace (or the door whose height would change): green, or red when it cannot. */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
-        const door = doorCandidateAt(model, world.x, world.y);
-        const { x, y, width, height } = doorPixelRect(door);
-        graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+        const plan = planDoorAt(model, world.x, world.y, this.doorHeightSetting());
+        const { x, y, width, height } = doorPixelRect(plan.door);
+        graphics.fillStyle(plan.action !== "invalid" ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /** The height setting of the doors, an explicit height the catalogs do not have going back to 1. */
+    private doorHeightSetting(): DoorHeightSetting {
+        const available = get(mapLayerDoorHeightsAvailableStore);
+        const setting = get(mapLayerDoorHeightStore);
+        if (setting === "auto") return available.includes(DOOR_AUTO_MAX_HEIGHT) ? "auto" : 1;
+        return availableHeight(setting, available);
     }
 
     /** The segments a window drag passes over: green where a window can go, red where it cannot. */

@@ -17,14 +17,18 @@ import {
     wallRise,
     windowPrefabName,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import type { WallHeight } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { computePlacements } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
 import {
     applyDoor,
     applyFloor,
     applyWalls,
+    applyDoorPlan,
     applyWindows,
+    doorHeightFor,
     lineWallEdges,
+    planDoorAt,
     modelFromPlacedPrefabs,
     moveWindow,
     rectangleCells,
@@ -600,5 +604,75 @@ describe("mapLayerGroundBottom", () => {
         expect(mapLayerGroundBottom({ kind: "vertical", tint: "gris", height: 3 }, 44)).toBe(128);
         // A lintel stands where the facade of height 1 of its wall would: the wall of the grid line at y = 96.
         expect(mapLayerGroundBottom({ kind: "lintel", tint: "gris", ends: "mid", height: 4, opening: 2 }, 0)).toBe(128);
+    });
+});
+
+describe("door heights: Auto, and a door set again on a placed door", () => {
+    /** A wall of the given height on the line 3, columns 1 to 4. */
+    const wallOf = (height: WallHeight): MapLayerModel => {
+        const model = new MapLayerModel();
+        for (let x = 1; x < 5; x++) model.setWall("h", x, 3, "gris", height);
+        return model;
+    };
+    /** The cursor on the vertex (3, 3), on the row of the foot of the wall. */
+    const AT_VERTEX = { x: 3 * 32, y: 3 * 32 + 20 };
+
+    it("gives a door the height of its wall, two tiles at most, in Auto", () => {
+        for (const [wall, door] of [
+            [1, 1],
+            [2, 2],
+            [3, 2],
+            [4, 2],
+        ] as const) {
+            const model = wallOf(wall);
+            const plan = planDoorAt(model, AT_VERTEX.x, AT_VERTEX.y, "auto");
+            expect(plan).toMatchObject({ action: "place", height: door });
+            applyDoorPlan(model, plan, bounds);
+            expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: door }]);
+        }
+    });
+
+    it("takes the lower of the two walls of the door as its wall", () => {
+        const model = wallOf(4);
+        model.setWall("h", 2, 3, "gris", 1);
+        expect(doorHeightFor(model, { orientation: "h", x: 3, y: 3 }, "auto")).toBe(1);
+    });
+
+    it("keeps an explicit height, brought down to the height of the wall", () => {
+        expect(planDoorAt(wallOf(4), AT_VERTEX.x, AT_VERTEX.y, 3)).toMatchObject({ action: "place", height: 3 });
+        expect(planDoorAt(wallOf(2), AT_VERTEX.x, AT_VERTEX.y, 3)).toMatchObject({ action: "place", height: 2 });
+    });
+
+    it("gives a placed door the new height, its lintels following", () => {
+        const model = wallOf(4);
+        expect(model.setDoor({ orientation: "h", x: 3, y: 3, height: 1 })).toBe(true);
+        const plan = planDoorAt(model, AT_VERTEX.x, AT_VERTEX.y, 3);
+        expect(plan).toMatchObject({ action: "update", height: 3 });
+        applyDoorPlan(model, plan, bounds);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: 3 }]);
+        const items = names(model);
+        expect(items.filter((name) => name.startsWith("linteau"))).toEqual([
+            "linteau-gris-mid-h4-o3@64,0",
+            "linteau-gris-mid-h4-o3@96,0",
+        ]);
+        expect(items).toContain("porte-h-gris-g-h3@64,32");
+    });
+
+    it("changes nothing on a placed door that already has the height", () => {
+        const high = wallOf(4);
+        high.setDoor({ orientation: "h", x: 3, y: 3, height: 2 });
+        expect(planDoorAt(high, AT_VERTEX.x, AT_VERTEX.y, "auto").action).toBe("invalid");
+        const low = wallOf(2);
+        low.setDoor({ orientation: "h", x: 3, y: 3, height: 2 });
+        expect(planDoorAt(low, AT_VERTEX.x, AT_VERTEX.y, 4).action).toBe("invalid");
+    });
+
+    it("gives a vertical door no height, and never updates it", () => {
+        const model = new MapLayerModel();
+        for (let y = 1; y < 5; y++) model.setWall("v", 6, y, "gris", 4);
+        const plan = planDoorAt(model, 6 * 32, 3 * 32 + 12, 3);
+        expect(plan).toMatchObject({ action: "place", height: 1, door: { orientation: "v", x: 6, y: 3 } });
+        applyDoorPlan(model, plan, bounds);
+        expect(planDoorAt(model, 6 * 32, 3 * 32 + 12, 3).action).toBe("invalid");
     });
 });

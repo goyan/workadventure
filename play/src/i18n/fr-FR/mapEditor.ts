@@ -519,6 +519,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             window: "Catalogue de fenêtres hautes absent de cette carte",
             selection: "Pièces de cette hauteur absentes du catalogue de cette carte",
         },
+        doorHeightAuto: "Auto",
+        doorHeightAutoHint: "Hauteur selon le mur : 2 cases au plus",
         heightNoSelection: "Sélectionnez d’abord un mur, une porte ou une fenêtre",
         catalogLoading: "Vérification des catalogues de sols et de murs...",
         catalogMissing: "Les catalogues de sols et de murs ne sont pas disponibles dans cette salle.",

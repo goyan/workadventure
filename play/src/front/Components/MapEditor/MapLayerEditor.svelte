@@ -195,7 +195,22 @@
         {#if heightKind}
             <section class="flex flex-col gap-2" data-testid="mapLayerHeight">
                 <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.heights[heightKind]()}</h3>
-                <div class="grid grid-cols-4 gap-2">
+                <div class="grid {heightKind === 'door' ? 'grid-cols-5' : 'grid-cols-4'} gap-2">
+                    {#if heightKind === "door"}
+                        <!-- The default of the doors: the height of the wall, two tiles at most. -->
+                        <button
+                            type="button"
+                            class="p-2 rounded text-sm {$mapLayerDoorHeightStore === 'auto'
+                                ? 'bg-secondary'
+                                : 'bg-white/10 hover:bg-white/20'}"
+                            aria-pressed={$mapLayerDoorHeightStore === "auto"}
+                            title={$LL.mapEditor.mapLayer.doorHeightAutoHint()}
+                            data-testid="mapLayerHeight-auto"
+                            onclick={() => mapLayerDoorHeightStore.set("auto")}
+                        >
+                            {$LL.mapEditor.mapLayer.doorHeightAuto()}
+                        </button>
+                    {/if}
                     {#each MAP_LAYER_WALL_HEIGHTS as height (height)}
                         {@const available = heightsAvailable.includes(height)}
                         <button

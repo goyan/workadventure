@@ -508,6 +508,8 @@ const mapEditor: BaseTranslation = {
             window: "High window catalog missing on this map",
             selection: "Pieces of this height missing from the catalog of this map",
         },
+        doorHeightAuto: "Auto",
+        doorHeightAutoHint: "Height from the wall: 2 tiles at most",
         heightNoSelection: "Select a wall, a door or a window first",
         catalogLoading: "Checking the floor and wall catalogs...",
         catalogMissing: "The floor and wall catalogs are not available in this room.",

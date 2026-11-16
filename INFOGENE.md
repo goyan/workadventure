@@ -1648,6 +1648,11 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   horizontal plus haut qu'un niveau cache ce niveau, sauf le bras sud. Un mur vertical seul à un niveau reçoit son
   `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
   un mur vertical haut : les bandes et le raccord du milieu restent au-dessus d'elle (choix à confirmer à l'écran).
+- Hauteur des portes : le mode Porte propose « Auto 1 2 3 4 », Auto par défaut : la porte prend la hauteur de son mur
+  (le plus bas de ses deux segments), 2 cases au plus (`DOOR_AUTO_MAX_HEIGHT`) ; un choix 1 à 4 est ramené à la hauteur
+  du mur. Cliquer en mode Porte sur une porte horizontale déjà posée (même sommet) lui donne la hauteur qui serait posée
+  si elle diffère, en une commande ; sinon rien (aperçu vert seulement dans le premier cas, `planDoorAt`). Les fenêtres
+  n'ont pas d'Auto, et poser une fenêtre sur une fenêtre ne change pas sa hauteur (code séparé : mode Hauteur).
 - Mode « Hauteur » (`MapLayerHeightEdit`, logique pure testée ; l'outil ne fait que dessiner et valider) : un clic sur un
   mur, une porte ou une fenêtre déjà posés le sélectionne (surligné en bleu, contour blanc au survol), sur **toute son
   image**, dessus remonté compris ; quand plusieurs images sont sous le pointeur, celle dont le pied est le plus au sud
