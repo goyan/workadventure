@@ -72,6 +72,13 @@ describe("floorStep", () => {
         expect(down.p).toEqual({ x: 176, y: 236 });
     });
 
+    it("lets it step down from the very edge of the width of the stair", () => {
+        const model = northModel();
+        // The stair spans x 160..192: an avatar walking along x = 160 is still over it.
+        const down = walk(model, { x: 160, y: 90 }, [{ y: 236 }], { elevation: 52 });
+        expect(down.state).toEqual({ elevation: 0 });
+    });
+
     it("keeps an avatar on a floor over its slabs: the edge is a railing", () => {
         const model = northModel();
         // On the screen the floor spans x 128..256 and y 12..108.

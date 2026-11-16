@@ -274,6 +274,8 @@ import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { FloorSpike } from "./Floors/FloorSpike";
+import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
+import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
@@ -3077,7 +3079,12 @@ export class GameScene extends DirtyScene {
                 });
                 const palier = new URLSearchParams(window.location.search).get("palier");
                 if (palier !== null && !this.floorSpike) {
-                    this.floorSpike = new FloorSpike(this, () => this.CurrentPlayer, palier);
+                    this.floorSpike = new FloorSpike(
+                        this,
+                        () => this.CurrentPlayer,
+                        palier,
+                        () => wallBarriers(readMapLayerEntityStates(this.gameMapFrontWrapper.getEntitiesManager())),
+                    );
                 }
                 this.treeSeasonEffects?.destroy();
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {

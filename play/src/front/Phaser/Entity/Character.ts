@@ -463,10 +463,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     public setFloorZ(z: number): void {
-        if (this.floorZ > 0 === z > 0) {
-            this.floorZ = z;
-            return;
-        }
+        if (this.floorZ === z) return;
         this.floorZ = z;
         this.depthCache = undefined;
         this.setDepthIfNeeded(this.computeDepth());
@@ -687,12 +684,12 @@ export abstract class Character extends Container implements OutlineableInterfac
             const actionObject = takesObjectPlace(this.avatarAction)
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;
-            // SPIKE (floors study): everything standing on a raised floor is drawn over everything standing lower.
-            const floorBand = this.floorZ > 0 ? 300_000 : 0;
+            // Floors: everything standing on a raised floor is drawn over everything standing lower.
+            const groundDepth = actionObject?.depth ?? seat?.depth ?? this.y + 16;
             this.depthCache = {
                 x: this.x,
                 y: this.y,
-                depth: (actionObject?.depth ?? seat?.depth ?? this.y + 16) + floorBand,
+                depth: this.floorZ > 0 ? 300_000 + this.floorZ * 1000 + groundDepth / 16 : groundDepth,
             };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(

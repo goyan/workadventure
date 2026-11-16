@@ -51,6 +51,16 @@ function isHorizontal(stair: PlacedStair): boolean {
     return stair.shape.direction === "e" || stair.shape.direction === "o";
 }
 
+/** Whether a point of the ground is over the stair, below its top edge; the edges of its width count. */
+function overStair(stair: PlacedStair, ground: Pt): boolean {
+    const g = stair.ground;
+    const progress = progressOnGround(stair, ground);
+    const within = isHorizontal(stair)
+        ? ground.y >= g.y && ground.y <= g.y + g.height
+        : ground.x >= g.x && ground.x <= g.x + g.width;
+    return within && progress > 0 && progress < 1;
+}
+
 /** How far up the stair a point of the ground is: 0 at its foot, 1 at its top (not bounded). */
 function progressOnGround(stair: PlacedStair, ground: Pt): number {
     const g = stair.ground;
@@ -149,7 +159,7 @@ export function floorStep(
                 point = { x: kept.x, y: kept.y - level };
             } else if (stair.top === level) {
                 // The stair arrives on this floor: one steps on it over its top edge.
-                if (inside(ground, stair.ground) && progressOnGround(stair, prevGround) >= 1) {
+                if (overStair(stair, ground) && progressOnGround(stair, prevGround) >= 1) {
                     next = { elevation: level, stair: index, lane: isHorizontal(stair) ? ground.y : undefined };
                     break;
                 }
