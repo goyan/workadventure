@@ -332,6 +332,16 @@ export function groundPieceOf(piece: MapLayerPiece): MapLayerPiece {
     return { ...piece, height: 1 };
 }
 
+/**
+ * Bottom, on the ground, of a piece whose sprite has its top at `y`: the bottom of the piece of height 1 it stands in for
+ * (`groundPieceOf`). For a piece of height 1 it is the bottom of its sprite; the raised pieces of a high wall (joints,
+ * vertical strips, lintels) have theirs lower than their sprite.
+ */
+export function mapLayerGroundBottom(piece: MapLayerPiece, y: number): number {
+    const rise = piece.kind === "floor" ? 0 : wallRise(piece.height);
+    return y + rise + mapLayerPieceSize(groundPieceOf(piece)).height;
+}
+
 /** Size in pixels of the sprite of each piece, used to create entities without loading their image first. */
 export function mapLayerPieceSize(piece: MapLayerPiece): { width: number; height: number } {
     switch (piece.kind) {

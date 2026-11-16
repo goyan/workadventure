@@ -8,6 +8,7 @@ import {
     facadePrefabName,
     jointPrefabName,
     lintelPrefabName,
+    mapLayerGroundBottom,
     mapLayerPieceSize,
     mapLayerPrefabId,
     parseMapLayerPrefab,
@@ -556,5 +557,21 @@ describe("wall heights: placements", () => {
                 .sort(),
         ).toEqual(placements.map((item) => item.key).sort());
         expect(state(modelFromPlacedPrefabs([...placements].reverse()))).toEqual(state(model));
+    });
+});
+
+describe("mapLayerGroundBottom", () => {
+    it("is the bottom of the sprite for a piece of height 1 and for a facade, whose foot does not move", () => {
+        expect(mapLayerGroundBottom({ kind: "facade", tint: "gris", ends: "mid", height: 1 }, 96)).toBe(128);
+        expect(mapLayerGroundBottom({ kind: "facade", tint: "gris", ends: "mid", height: 3 }, 32)).toBe(128);
+        expect(mapLayerGroundBottom({ kind: "joint", arms: ["E"], height: 1 }, 96)).toBe(108);
+    });
+
+    it("is under the sprite of the raised pieces of a high wall", () => {
+        // The pieces of a wall 3 tiles high are drawn 64 px above where the ones of height 1 would be.
+        expect(mapLayerGroundBottom({ kind: "joint", arms: ["E"], height: 3 }, 32)).toBe(108);
+        expect(mapLayerGroundBottom({ kind: "vertical", tint: "gris", height: 3 }, 44)).toBe(128);
+        // A lintel stands where the facade of height 1 of its wall would: the wall of the grid line at y = 96.
+        expect(mapLayerGroundBottom({ kind: "lintel", tint: "gris", ends: "mid", height: 4, opening: 2 }, 0)).toBe(128);
     });
 });
