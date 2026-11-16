@@ -338,6 +338,17 @@ describe("WallFade: vertical walls and their joints", () => {
         expect(roomsBehind(door, rect, grid)).toEqual(new Set([2]));
     });
 
+    it("fades the joints of the south wall of a high room with its facades", () => {
+        const { fade, walls } = setup(2);
+        fade.update(WALL_FADE_MS);
+        // The south wall stands on the line 9, raised by 32: its joints are drawn from y = 9 * 32 - 32.
+        const southJoints = walls.filter(
+            (wall) => wall.name.startsWith("raccord-") && wall.y === 9 * 32 - 32 && !isJointWithoutEastWest(wall),
+        );
+        expect(southJoints.length).toBeGreaterThan(0);
+        for (const joint of southJoints) expect(joint.alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+
     it("leaves the joints of the side walls of a high room opaque, like their strips", () => {
         const { fade, walls } = setup(3);
         fade.update(WALL_FADE_MS);
