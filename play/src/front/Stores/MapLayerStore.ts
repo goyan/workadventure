@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import type { FloorFamily, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
+import type { FloorFamily, WallHeight, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 
 export type MapLayerMode =
     | "wall"
@@ -14,6 +14,16 @@ export type MapLayerMode =
 export const mapLayerModeStore = writable<MapLayerMode>("wall");
 export const mapLayerFloorFamilyStore = writable<FloorFamily>("carrelage-gris");
 export const mapLayerWallTintStore = writable<WallTint>("blanc");
+
+/** Height of what is drawn, one setting per mode: the walls (and the walls of a room), the doors, the windows. */
+export const mapLayerWallHeightStore = writable<WallHeight>(1);
+export const mapLayerDoorHeightStore = writable<WallHeight>(1);
+export const mapLayerWindowHeightStore = writable<WallHeight>(1);
+
+/** Heights whose pieces the loaded catalogs have (1 is always there). */
+export const mapLayerWallHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
+export const mapLayerDoorHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
+export const mapLayerWindowHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
 
 /** Image URL of a sample of each floor family and wall tint, shown in the panel. Filled once the catalogs are loaded. */
 export const mapLayerFloorSwatchesStore = writable<Partial<Record<FloorFamily, string>>>({});

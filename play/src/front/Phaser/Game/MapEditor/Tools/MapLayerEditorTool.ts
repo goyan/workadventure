@@ -3,16 +3,22 @@ import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Sentry from "@sentry/svelte";
 import { asError } from "catch-unknown";
 import { get } from "svelte/store";
-import type { FloorFamily, WallTint } from "../MapLayer/MapLayerCatalog";
+import type { FloorFamily, WallHeight, WallTint } from "../MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorHeightStore,
+    mapLayerDoorHeightsAvailableStore,
     mapLayerDoorsAvailableStore,
     mapLayerFloorFamilyStore,
     mapLayerFloorSwatchesStore,
     mapLayerWallSwatchesStore,
     mapLayerModeStore,
     mapLayerStatusStore,
+    mapLayerWallHeightStore,
+    mapLayerWallHeightsAvailableStore,
     mapLayerWallTintStore,
+    mapLayerWindowHeightStore,
+    mapLayerWindowHeightsAvailableStore,
     mapLayerWindowsAvailableStore,
 } from "../../../../Stores/MapLayerStore";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
@@ -27,6 +33,7 @@ import {
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_FLOOR_FAMILIES,
     MAP_LAYER_TILE_SIZE,
+    MAP_LAYER_WALL_HEIGHTS,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
@@ -67,6 +74,11 @@ import {
 } from "../MapLayer/MapLayerOperations";
 import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
+
+/** The chosen height, or 1 when the catalogs of the room do not have its pieces. */
+function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): WallHeight {
+    return available.includes(chosen) ? chosen : 1;
+}
 
 /** Above every entity, below nothing: the preview must stay readable over furniture. */
 const PREVIEW_DEPTH = 100_000;
@@ -204,6 +216,9 @@ export class MapLayerEditorTool extends MapEditorTool {
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
+        mapLayerWallHeightsAvailableStore.set([1]);
+        mapLayerDoorHeightsAvailableStore.set([1]);
+        mapLayerWindowHeightsAvailableStore.set([1]);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -232,6 +247,45 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapLayerWindowsAvailableStore.set(glazing !== undefined);
         if (glazing === undefined && get(mapLayerModeStore) === "window") mapLayerModeStore.set("wall");
+
+        // The high walls, doors and windows are optional: a height is offered when the catalog has a sample of it.
+        const tint = MAP_LAYER_WALL_TINTS[0];
+        const heightsWith = async (sample: (height: WallHeight) => [string, string]): Promise<WallHeight[]> => {
+            const found = await Promise.all(
+                MAP_LAYER_WALL_HEIGHTS.map((height) =>
+                    height === 1 ? Promise.resolve(true) : manager.getEntityPrefab(...sample(height)).then(Boolean),
+                ),
+            );
+            return MAP_LAYER_WALL_HEIGHTS.filter((_, index) => found[index]);
+        };
+        const [wallHeights, doorHeights, windowHeights] = await Promise.all([
+            heightsWith((height) => [
+                MAP_LAYER_WALL_COLLECTION,
+                mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, facadePrefabName(tint, "mid", height)),
+            ]),
+            door === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_DOOR_COLLECTION,
+                      mapLayerPrefabId(
+                          MAP_LAYER_DOOR_COLLECTION,
+                          doorPrefabName("h", tint, "g", undefined, false, height),
+                      ),
+                  ]),
+            glazing === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_WINDOW_COLLECTION,
+                      mapLayerPrefabId(MAP_LAYER_WINDOW_COLLECTION, windowPrefabName(tint, "mid", height)),
+                  ]),
+        ]);
+        mapLayerWallHeightsAvailableStore.set(wallHeights);
+        mapLayerDoorHeightsAvailableStore.set(doorHeights);
+        mapLayerWindowHeightsAvailableStore.set(windowHeights);
+        // A height the catalogs do not have goes back to 1.
+        mapLayerWallHeightStore.update((height) => availableHeight(height, wallHeights));
+        mapLayerDoorHeightStore.update((height) => availableHeight(height, doorHeights));
+        mapLayerWindowHeightStore.update((height) => availableHeight(height, windowHeights));
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -400,6 +454,9 @@ export class MapLayerEditorTool extends MapEditorTool {
         const mode = get(mapLayerModeStore);
         const family = get(mapLayerFloorFamilyStore);
         const tint = get(mapLayerWallTintStore);
+        const wallHeight = availableHeight(get(mapLayerWallHeightStore), get(mapLayerWallHeightsAvailableStore));
+        const doorHeight = availableHeight(get(mapLayerDoorHeightStore), get(mapLayerDoorHeightsAvailableStore));
+        const windowHeight = availableHeight(get(mapLayerWindowHeightStore), get(mapLayerWindowHeightsAvailableStore));
         const startCell = cellAt(gesture.startWorld.x, gesture.startWorld.y);
         const endCell = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
         const path = [...gesture.path];
@@ -411,11 +468,13 @@ export class MapLayerEditorTool extends MapEditorTool {
                     vertexAt(worldPath.start.x, worldPath.start.y),
                     vertexAt(worldPath.end.x, worldPath.end.y),
                 );
-                return edges.length === 0 ? undefined : (model, bounds) => applyWalls(model, edges, tint, bounds);
+                return edges.length === 0
+                    ? undefined
+                    : (model, bounds) => applyWalls(model, edges, tint, bounds, wallHeight);
             }
             case "room":
                 return (model, bounds) => {
-                    applyWalls(model, roomWallEdges(startCell, endCell), tint, bounds);
+                    applyWalls(model, roomWallEdges(startCell, endCell), tint, bounds, wallHeight);
                     applyFloor(model, rectangleCells(startCell, endCell), family, bounds);
                 };
             case "floorBrush":
@@ -431,7 +490,10 @@ export class MapLayerEditorTool extends MapEditorTool {
                 };
             case "door": {
                 const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
-                return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
+                // The model brings a door higher than its walls down to their height.
+                return door.valid
+                    ? (model, bounds) => applyDoor(model, { ...door, height: doorHeight }, bounds)
+                    : undefined;
             }
             case "window": {
                 const from = gesture.movedWindow;
@@ -449,7 +511,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return edges.length === 0
                     ? undefined
                     : (model) => {
-                          applyWindows(model, edges);
+                          applyWindows(model, edges, windowHeight);
                       };
             }
             case "erase":

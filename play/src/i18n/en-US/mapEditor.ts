@@ -494,6 +494,16 @@ const mapEditor: BaseTranslation = {
         },
         floors: "Floor",
         walls: "Wall style",
+        heights: {
+            wall: "Wall height",
+            door: "Door height",
+            window: "Window height",
+        },
+        heightUnavailable: {
+            wall: "High wall catalog missing on this map",
+            door: "High door catalog missing on this map",
+            window: "High window catalog missing on this map",
+        },
         catalogLoading: "Checking the floor and wall catalogs...",
         catalogMissing: "The floor and wall catalogs are not available in this room.",
         status: {

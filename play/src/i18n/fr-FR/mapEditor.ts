@@ -505,6 +505,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         floors: "Sol",
         walls: "Style de mur",
+        heights: {
+            wall: "Hauteur du mur",
+            door: "Hauteur de la porte",
+            window: "Hauteur de la fenêtre",
+        },
+        heightUnavailable: {
+            wall: "Catalogue de murs hauts absent de cette carte",
+            door: "Catalogue de portes hautes absent de cette carte",
+            window: "Catalogue de fenêtres hautes absent de cette carte",
+        },
         catalogLoading: "Vérification des catalogues de sols et de murs...",
         catalogMissing: "Les catalogues de sols et de murs ne sont pas disponibles dans cette salle.",
         status: {

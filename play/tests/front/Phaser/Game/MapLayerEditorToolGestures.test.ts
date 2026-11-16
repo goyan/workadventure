@@ -1,6 +1,6 @@
 import * as Phaser from "phaser";
 import { WamFile } from "@workadventure/map-editor";
-import type { EntityPrefab, GameMap } from "@workadventure/map-editor";
+import type { EntityPrefab, GameMap, WAMEntityData } from "@workadventure/map-editor";
 import { mock } from "vitest-mock-extended";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { get } from "svelte/store";
@@ -20,9 +20,15 @@ import {
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorHeightStore,
+    mapLayerDoorHeightsAvailableStore,
     mapLayerDoorsAvailableStore,
     mapLayerModeStore,
     mapLayerStatusStore,
+    mapLayerWallHeightStore,
+    mapLayerWallHeightsAvailableStore,
+    mapLayerWindowHeightStore,
+    mapLayerWindowHeightsAvailableStore,
     mapLayerWindowsAvailableStore,
 } from "../../../../src/front/Stores/MapLayerStore";
 
@@ -38,6 +44,8 @@ describe("MapLayerEditorTool gestures", () => {
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
     let doorsInCatalog: boolean;
     let windowsInCatalog: boolean;
+    /** Whether the catalogs have the pieces of the walls, doors and windows higher than 1. */
+    let highPiecesInCatalog: boolean;
     let entities: Map<string, Entity>;
     let tool: MapLayerEditorTool;
     let capturedPointers: Set<number>;
@@ -134,8 +142,10 @@ describe("MapLayerEditorTool gestures", () => {
 
         doorsInCatalog = true;
         windowsInCatalog = true;
+        highPiecesInCatalog = true;
         collectionsManager = mock<EntitiesCollectionsManager>();
         collectionsManager.getEntityPrefab.mockImplementation((collectionName, prefabId) => {
+            if (!highPiecesInCatalog && /-h[2-4](?::|-)/.test(prefabId)) return Promise.resolve(undefined);
             if (collectionName === MAP_LAYER_DOOR_COLLECTION && !doorsInCatalog) return Promise.resolve(undefined);
             if (collectionName === MAP_LAYER_WINDOW_COLLECTION && !windowsInCatalog) return Promise.resolve(undefined);
             if (
@@ -167,21 +177,25 @@ describe("MapLayerEditorTool gestures", () => {
         mapLayerDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
         mapLayerStatusStore.set(undefined);
+        mapLayerWallHeightStore.set(1);
+        mapLayerDoorHeightStore.set(1);
+        mapLayerWindowHeightStore.set(1);
     });
 
     /** A horizontal wall of three segments on the line 2: its facades fill the tile row 2 (y 64 to 96). */
-    function placeWall(windowOnFirst = false): void {
+    function placeWall(windowOnFirst = false, height = 1): void {
+        const suffix = height === 1 ? "" : `-h${height}`;
         const pieces: [string, string, number][] = [
             [
                 windowOnFirst ? MAP_LAYER_WINDOW_COLLECTION : MAP_LAYER_WALL_COLLECTION,
-                windowOnFirst ? "fenetre-blanc-left" : "facade-blanc-left",
+                windowOnFirst ? `fenetre-blanc-left${suffix}` : `facade-blanc-left${suffix}`,
                 -6,
             ],
-            [MAP_LAYER_WALL_COLLECTION, "facade-blanc-mid", 32],
-            [MAP_LAYER_WALL_COLLECTION, "facade-blanc-right", 64],
+            [MAP_LAYER_WALL_COLLECTION, `facade-blanc-mid${suffix}`, 32],
+            [MAP_LAYER_WALL_COLLECTION, `facade-blanc-right${suffix}`, 64],
         ];
         for (const [collection, name, x] of pieces) {
-            const entity = mock<Entity>({ entityId: name, x, y: 64 });
+            const entity = mock<Entity>({ entityId: name, x, y: 64 - 32 * (height - 1) });
             entity.getPrefab.mockReturnValue(prefab(collection, `${collection}:${name}:Default:Down`));
             entities.set(name, entity);
         }
@@ -371,5 +385,84 @@ describe("MapLayerEditorTool gestures", () => {
         // Over a plain wall, nothing to grab.
         move(80, 80);
         expect(lastCursor()).toBe("");
+    });
+
+    /** Prefab names of the entities created by the first commit. */
+    function createdNames(): string[] {
+        const factory = modeManager.executeCommands.mock.calls[0][0] as () => readonly object[];
+        return factory()
+            .filter((command) => command.constructor.name === "CreateEntityFrontCommand")
+            .map((command) => (command as { entityData?: WAMEntityData }).entityData?.prefabRef?.id.split(":")[1] ?? "")
+            .sort();
+    }
+
+    describe("heights", () => {
+        it("draws walls of the chosen height", async () => {
+            await activate();
+            expect(get(mapLayerWallHeightsAvailableStore)).toEqual([1, 2, 3, 4]);
+            mapLayerModeStore.set("wall");
+            mapLayerWallHeightStore.set(3);
+            // From the vertex (1, 2) to the vertex (3, 2): two segments of the line 2.
+            down(32, 96);
+            move(96, 96);
+            up(96, 96);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+            const walls = createdNames().filter((name) => name.startsWith("facade"));
+            expect(walls).toEqual(["facade-blanc-left-h3", "facade-blanc-right-h3"]);
+        });
+
+        it("draws walls of height 1 by default", async () => {
+            await activate();
+            mapLayerModeStore.set("wall");
+            down(32, 96);
+            move(96, 96);
+            up(96, 96);
+            expect(createdNames().filter((name) => name.startsWith("facade"))).toEqual([
+                "facade-blanc-left",
+                "facade-blanc-right",
+            ]);
+        });
+
+        it("draws walls of height 1 when the catalog has no high wall", async () => {
+            highPiecesInCatalog = false;
+            mapLayerWallHeightStore.set(3);
+            await activate();
+            expect(get(mapLayerWallHeightsAvailableStore)).toEqual([1]);
+            expect(get(mapLayerDoorHeightsAvailableStore)).toEqual([1]);
+            expect(get(mapLayerWindowHeightsAvailableStore)).toEqual([1]);
+            mapLayerModeStore.set("wall");
+            mapLayerWallHeightStore.set(3);
+            down(32, 96);
+            move(96, 96);
+            up(96, 96);
+            expect(createdNames().filter((name) => name.startsWith("facade"))).toEqual([
+                "facade-blanc-left",
+                "facade-blanc-right",
+            ]);
+        });
+
+        it("sets a window of the chosen height, brought down to the height of its wall", async () => {
+            placeWall();
+            await activate();
+            mapLayerModeStore.set("window");
+            mapLayerWindowHeightStore.set(2);
+            down(40, 80);
+            up(40, 80);
+            expect(createdNames().filter((name) => name.startsWith("fenetre"))).toEqual(["fenetre-blanc-mid"]);
+        });
+
+        it("sets a door of the chosen height in a wall as high", async () => {
+            placeWall(false, 2);
+            await activate();
+            mapLayerModeStore.set("door");
+            mapLayerDoorHeightStore.set(2);
+            // The vertex (2, 2), in the middle of the wall, on the row of its foot (its facades are drawn from y = 32).
+            down(64, 80);
+            up(64, 80);
+            expect(createdNames().filter((name) => name.startsWith("porte"))).toEqual([
+                "porte-h-blanc-d-h2",
+                "porte-h-blanc-g-h2",
+            ]);
+        });
     });
 });
