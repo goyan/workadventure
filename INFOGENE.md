@@ -1124,11 +1124,16 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
 - **Non vérifié** : rendu en jeu (de jour, de nuit, sous la pluie), présence d'arbres `Nature:tree-*` dehors sur les cartes
   de la beta, qualité et volume réels des cris, coût de 10 calculs de chemin de plus ; deux clients côte à côte.
 
-#### Apprivoiser des lions et des tigres
+#### Apprivoiser les animaux promeneurs (lions, tigres, canards…)
+
+Tous les animaux promeneurs s'apprivoisent : ceux de la jungle (`jungle:<arbre>`) et ceux posés sur la carte avec une
+feuille `wander` (`entity:<id de l'entité>`, `WanderingCharactersManager.tameableCharacters`). Le code est resté dans
+`Jungle/` et l'événement garde son nom `infogene.jungle.companion` (compatibilité) : « jungle » y est historique.
 
 - **Geste** : à 1,5 case au plus des pieds d'un animal de la jungle libre, l'invite « [ESPACE] pour apprivoiser cet
   animal 🐾 » (la même mécanique que l'invite de siège à touche, `InteractionPrompt`) ; ESPACE ou un clic l'apprivoise :
-  il quitte son errance et suit son maître. **Jusqu'à 5 compagnons par joueur** : l'invite « apprivoiser » reste proposée
+  il quitte son errance et suit son maître (un animal posé : son objet reste masqué tant qu'il est mené, même quand son
+  maître est hors de vue). **Jusqu'à 5 compagnons par joueur** : l'invite « apprivoiser » reste proposée
   tant qu'on en a moins de 5. Près d'un de ses compagnons, la même touche le relâche (« pour relâcher votre
   compagnon ») : il revient tout de suite à son programme de promenade, là où ce programme le place (pas de marche de
   retour, il peut donc réapparaître d'un coup autour de son nid). La touche agit sur l'animal **le plus proche** à portée :
@@ -1139,7 +1144,12 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
   les positions du maître dans l'eau ne sont pas suivies : l'animal attend au bord. Animation de marche des promeneurs,
   pas de siège. Le suivi à 2 cases est plus long que le rayon de l'invite (1,5) : l'invite « relâcher » n'occupe pas
   ESPACE à l'arrêt ; il faut revenir vers son compagnon pour la voir (testé : un maître qui rebrousse chemin passe à
-  moins de 1,5 case de la place de tête comme d'une place arrière).
+  moins de 1,5 case de la place de tête comme d'une place arrière). **Relâcher sans rebrousser chemin** : la roue de son
+  propre avatar (clic sur soi) montre « Relâcher mes animaux (n) » dès qu'on en a un (icône patte) ; elle les relâche
+  tous. Choisi plutôt qu'une invite plus large : une invite qui couvrirait le groupe à l'arrêt prendrait ESPACE en
+  permanence (siège à touche, objets) ; la roue est déjà là pour la torche et le Nerf.
+- **Garde-fou** : même appelée par une invite périmée, l'action « apprivoiser » ne prend que l'animal encore à portée
+  (1,5 case), présent et revendiqué par personne.
 - **Groupe** (`COMPANION_SLOTS`) : les compagnons ne vont pas en file indienne mais forment une petite grappe autour du
   point situé 2 cases derrière le maître sur sa piste ; chacun a sa place, dans l'ordre où ils ont été apprivoisés : le
   premier sur la piste, les deux suivants de part et d'autre (une case à gauche et à droite, 12 px plus en arrière),
@@ -1154,20 +1164,30 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
   autres le cherchent. L'événement atteint toute la salle (`GameRoom.dispatchEvent`, expéditeur fixé par le serveur ;
   son propre écho est ignoré). Le maître l'annonce toutes les 5 s, par un minuteur de la page (la boucle Phaser dort
   onglet caché) ; quitter la carte (fermeture de la scène) ou la page (`pagehide` : rechargement, onglet fermé) envoie
-  « relâché », et au démarrage le joueur annonce « aucun compagnon » : rien n'est gardé avec le compte. Une annonce non
+  « relâché », et à la première vue d'un animal apprivoisable le joueur annonce « aucun compagnon » : rien n'est gardé
+  avec le compte. Sur une carte sans animal apprivoisable, rien n'est diffusé (ni à l'arrivée ni au départ). À la
+  réception d'une liste vide (un joueur qui arrive, ou qui relâche tout), chaque maître réannonce aussitôt ses
+  compagnons (au plus une fois par seconde) : le nouveau venu ne les voit pas errer pendant 5 s. Une annonce non
   renouvelée pendant 75 s expire (plantage, réseau perdu) ; plus d'une minute parce que les minuteurs d'un onglet caché
   longtemps ne tournent plus qu'une fois par minute. Le maître dont les annonces se sont interrompues plus longtemps
   que cela relâche ses compagnons de lui-même (les autres l'ont déjà fait). Aucun changement de protocole ni du back.
   **Compatibilité** : le format de la première version (`{ animal, since }`, un compagnon) est encore lu ; un client de
   la première version ignore le nouveau format (champ `companions` inconnu, sans erreur) et voit donc les compagnons
   d'un nouveau client errer autour de leur nid.
-- **Premier arrivé** (`jungleCompanionOwners`) : par animal ; un animal revendiqué par quelqu'un n'est pas proposé ; si
+- **Premier arrivé** (`jungleCompanionOwners`) : par animal ; **le tenant reste** : un animal vu avec le même maître
+  depuis 3 s (`COMPANION_HOLD_MS`) lui reste tant qu'il le revendique, même si une revendication au `since` plus ancien
+  arrive ensuite (`since` vient du client : un client modifié pourrait sinon voler un animal déjà apprivoisé). Seuls les
+  messages croisés de moins de 3 s se départagent par `since`. Limite : un joueur qui arrive voit les deux
+  revendications à la fois et applique `since` ; il se range à l'avis des autres seulement au changement suivant. un animal revendiqué par quelqu'un n'est pas proposé ; si
   deux messages se croisent, le plus petit `since` de cet animal gagne, puis le plus petit id utilisateur ; le perdant
   relâche cet animal seul, sans rien afficher, et garde ses autres compagnons. Au-delà de 5 par joueur (jamais envoyé
   par un client), seuls ses 5 premiers comptent.
 - **Ce que voient les autres** : l'animal suit son maître et n'erre plus ; si le maître est hors de vue, l'animal est
-  masqué (ni ici ni autour de son nid) et réapparaît à ses pieds quand il revient en vue. Les cris continuent pour un
-  compagnon à l'arrêt.
+  masqué (ni ici ni autour de son nid) et réapparaît à ses pieds quand il revient en vue. **Un animal mené ne crie
+  plus** (dedans comme dehors : le plus simple, `JungleHearing.led`). **Portes** : un animal mené ouvre les portes sur
+  son chemin, comme son maître (`forEachDoorOpener`), donc il ne passe pas à travers une porte fermée ; exception non
+  traitée : la porte d'une zone verrouillée reste fermée aux animaux, et un compagnon qui suit un maître admis par un
+  « toc toc » est dessiné à travers.
 - **Cas particuliers** : pas de compagnon dans l'éditeur (ouvrir l'éditeur les relâche tous, rien n'est proposé) ; un
   animal qui sort du tirage (jungle désactivée dans les réglages, nouveau jour) est relâché, les autres restent ; un autre animal sur le même arbre le
   lendemain repart du suivi. Véhicule : suivi normal (rattrapage, saut au-delà de 10 cases). Mouvement réduit : rien de
@@ -1180,11 +1200,13 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
   l'ancienne action (on relâchait le lion, on apprivoisait le tigre… et le lion suivait) et l'écouteur n'était pas retiré
   à la fermeture. L'écouteur appelle désormais l'action courante et c'est lui qui est retiré.
 - **Code** : `Jungle/{JungleCompanionProtocol,JungleCompanionFollow,JungleCompanions}.ts` (testés sans Phaser),
-  `GameJungle.ts` (câblage), `WanderingCharactersManager.setFreeCharacterLead` (une pose fournie remplace le programme),
-  i18n `trigger.jungleTame`/`trigger.jungleRelease`.
+  `GameJungle.ts` (câblage), `WanderingCharactersManager.{tameableCharacters,characterPose,setCharacterLead,isLed}`
+  (une pose fournie remplace le programme, animaux de la jungle comme animaux posés), entrée de roue dans
+  `GameSceneUserInputHandler`, i18n `trigger.jungleTame`/`trigger.jungleRelease`/`woka.menu.releaseAnimals`.
 - **Non vérifié** : tout le rendu en jeu ; deux joueurs réels (annonce, expiration, course) ; l'heure serveur absente
   (`since` pris sur l'horloge du poste) ; le suivi derrière un joueur distant (positions interpolées) ; le passage d'une
-  porte ; le groupe dans un couloir étroit et dans les virages ; le coût de l'annonce dans une salle chargée ; le bridage réel des minuteurs d'un onglet caché longtemps ;
+  porte (ouverte par l'animal) ; un animal posé apprivoisé (canard) ; l'entrée de roue ; le groupe dans un couloir
+  étroit et dans les virages ; le coût de l'annonce dans une salle chargée ; le bridage réel des minuteurs d'un onglet caché longtemps ;
   l'envoi effectif de « relâché » au `pagehide` (la connexion peut se fermer avant).
 
 ### Gobeur (retiré)
