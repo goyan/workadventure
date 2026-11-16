@@ -182,20 +182,33 @@ export function spikeStep(layout: SpikeLayout, state: SpikeState, prev: Pt, p: P
         const stair = layout.stairs[next.on];
         const g = stair.ground;
         let progress: number;
+        // On its first steps, one can step off a stair by its sides.
+        let steppedOff = false;
         if (stair.dir === "e") {
             const moved = state.on === next.on ? point.y - prev.y : 0;
-            const lane = clamp((next.lane ?? point.y) + moved, g.y + SIDE, g.y + g.height - 2);
+            const across = (next.lane ?? point.y) + moved;
             progress = (point.x - g.x) / g.width;
-            const altitude = clamp(progress, 0, 1) * z;
-            point = { x: point.x, y: lane - altitude };
-            next = { on: next.on, z: altitude, lane };
+            if (progress < LOW_END && (across < g.y || across > g.y + g.height)) {
+                steppedOff = true;
+                point = { x: point.x, y: across };
+            } else {
+                const lane = progress < LOW_END ? across : clamp(across, g.y + SIDE, g.y + g.height - 2);
+                const altitude = clamp(progress, 0, 1) * z;
+                point = { x: point.x, y: lane - altitude };
+                next = { on: next.on, z: altitude, lane };
+            }
         } else {
             const box = stairScreenBox(stair, z);
             progress = stair.dir === "n" ? (g.y + g.height - point.y) / box.height : (point.y - g.y) / box.height;
-            point = { x: clamp(point.x, g.x + SIDE, g.x + g.width - SIDE), y: point.y };
+            if (progress < LOW_END) {
+                steppedOff = point.x < g.x || point.x > g.x + g.width;
+            } else {
+                point = { x: clamp(point.x, g.x + SIDE, g.x + g.width - SIDE), y: point.y };
+            }
             next = { on: next.on, z: clamp(progress, 0, 1) * z };
         }
-        if (progress <= 0) next = { on: "ground", z: 0 };
+        if (steppedOff) next = { on: "ground", z: 0 };
+        else if (progress <= 0) next = { on: "ground", z: 0 };
         else if (progress >= 1) next = { on: "platform", z };
     }
     return { state: next, p: point };
