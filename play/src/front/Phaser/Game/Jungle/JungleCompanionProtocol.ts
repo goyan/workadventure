@@ -16,10 +16,17 @@ export const JUNGLE_COMPANION_EXPIRY_MS = 75_000;
 /** How many companions a player may have. */
 export const JUNGLE_MAX_COMPANIONS = 5;
 
-const AnimalIdSchema = z.string().startsWith("jungle:").max(256);
+/**
+ * A tamable animal: a jungle animal (`jungle:<tree id>`) or a wandering animal placed on the map
+ * (`entity:<entity id>`). The event keeps its first name, from when only the jungle animals could be tamed.
+ */
+const AnimalIdSchema = z
+    .string()
+    .max(256)
+    .regex(/^(jungle|entity):.+$/);
 
 const JungleCompanionSchema = z.object({
-    /** The id of the animal: `jungle:<tree id>`. */
+    /** The id of the animal: `jungle:<tree id>` or `entity:<entity id>`. */
     animal: AnimalIdSchema,
     /** When the animal was tamed, on the server clock: the first claim of an animal wins. */
     since: z.number().finite(),
@@ -68,14 +75,21 @@ export function decodeJungleCompanion(name: string, data: unknown): JungleCompan
  * Who each animal follows: the first claim of that animal (smallest `since`), the smaller user id on the same
  * instant; and the first JUNGLE_MAX_COMPANIONS animals of a player at most. The same on every client that got the
  * same claims.
+ * `held`: the animals this client has seen with the same master for a while. They stay with that master as long as
+ * they claim them: `since` is said by the clients, and an older one arriving later (a crossed message is a matter of
+ * a moment; an altered client could say anything) does not take an animal from its master.
  */
-export function jungleCompanionOwners(claims: Iterable<JungleCompanionClaim>): Map<string, JungleCompanionClaim> {
+export function jungleCompanionOwners(
+    claims: Iterable<JungleCompanionClaim>,
+    held: ReadonlyMap<string, number> = new Map(),
+): Map<string, JungleCompanionClaim> {
     const sorted = [...claims].sort(
         (a, b) => a.since - b.since || a.owner - b.owner || (a.animal < b.animal ? -1 : a.animal > b.animal ? 1 : 0),
     );
     const owners = new Map<string, JungleCompanionClaim>();
     const counts = new Map<number, number>();
-    for (const claim of sorted) {
+    const holding = sorted.filter((claim) => held.get(claim.animal) === claim.owner);
+    for (const claim of [...holding, ...sorted]) {
         const count = counts.get(claim.owner) ?? 0;
         if (owners.has(claim.animal) || count >= JUNGLE_MAX_COMPANIONS) continue;
         owners.set(claim.animal, claim);

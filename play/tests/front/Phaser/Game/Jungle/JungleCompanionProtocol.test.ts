@@ -25,6 +25,19 @@ describe("JungleCompanionProtocol", () => {
         expect(decodeJungleCompanion(release.name, release.data)).toEqual({ companions: [] });
     });
 
+    it("names an animal placed on the map by its entity, and nothing else", () => {
+        const placed = encodeJungleCompanion({ companions: [companion("entity:3f2a-duck", 7)] });
+        expect(decodeJungleCompanion(placed.name, placed.data)).toEqual({
+            companions: [companion("entity:3f2a-duck", 7)],
+        });
+        expect(
+            decodeJungleCompanion(JUNGLE_COMPANION_EVENT, { companions: [companion("entity:", 7)] }),
+        ).toBeUndefined();
+        expect(
+            decodeJungleCompanion(JUNGLE_COMPANION_EVENT, { companions: [companion("wander:a", 7)] }),
+        ).toBeUndefined();
+    });
+
     it("reads the format of a client with one companion", () => {
         expect(decodeJungleCompanion(JUNGLE_COMPANION_EVENT, { animal: "jungle:a", since: 3 })).toEqual({
             companions: [companion("jungle:a", 3)],
@@ -60,6 +73,18 @@ describe("JungleCompanionProtocol", () => {
                 ["jungle:b", { owner: 2, animal: "jungle:b", since: 50 }],
             ]),
         );
+    });
+
+    it("an animal held for a while stays with its master: an older claim arriving later does not take it", () => {
+        // Player 7 has been seen holding it; player 9 says (rightly or not) they tamed it earlier.
+        const claims = [
+            { owner: 7, animal: "jungle:a", since: 200 },
+            { owner: 9, animal: "jungle:a", since: 1 },
+        ];
+        expect(jungleCompanionOwners(claims, new Map([["jungle:a", 7]])).get("jungle:a")?.owner).toBe(7);
+        expect(jungleCompanionOwners(claims).get("jungle:a")?.owner).toBe(9);
+        // A holder that does not claim it any more holds nothing.
+        expect(jungleCompanionOwners(claims.slice(1), new Map([["jungle:a", 7]])).get("jungle:a")?.owner).toBe(9);
     });
 
     it("five companions per player at most: their first five", () => {
