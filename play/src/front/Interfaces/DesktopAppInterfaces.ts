@@ -1,5 +1,6 @@
-import type { WeatherType } from "@workadventure/map-editor";
+import type { AutoWeatherSettings, WeatherType } from "@workadventure/map-editor";
 import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
+import type { LampMusicSource } from "../Stores/LampMusicSourceStore";
 import type { NightMode } from "../Stores/NightStore";
 import type { SeasonalThemeMode } from "../Phaser/Game/Seasonal/SeasonalTheme";
 
@@ -8,15 +9,62 @@ export type LegacyChristmasMode = "auto" | "always" | "never";
 /** Former ground setting: accepted and ignored, reported as "seasonal" while the autumn theme is chosen. */
 export type LegacyGroundMode = "green" | "seasonal";
 
+export enum DesktopLightSetting {
+    Effects = "lampEffects",
+    Demo = "lampDemo",
+    Source = "lampMusicSource",
+}
+
+export enum DesktopSoundSetting {
+    Footsteps = "footstepVolume",
+    Skateboard = "skateboardVolume",
+    Weather = "weatherVolume",
+    Doors = "doorVolume",
+    Nerf = "nerfVolume",
+    Jungle = "jungleVolume",
+    Map = "mapSoundsVolume",
+    Notifications = "notificationSoundVolume",
+}
+
+export enum DesktopWeatherSetting {
+    Clouds = "clouds",
+    CloudsHeight = "cloudsHeight",
+    Auto = "weatherAuto",
+}
+
+export enum DesktopVisualSetting {
+    Jungle = "jungle",
+}
+
+export enum DesktopSoundsSetting {
+    Preview = "soundPreview",
+    Sounds = "sounds",
+}
+
+export enum DesktopAppearanceSetting {
+    Appearance = "appearance",
+}
+
 export type DesktopEnvironmentRequest =
+    | { setting: DesktopVisualSetting.Jungle; value: boolean }
+    | { setting: DesktopSoundsSetting.Preview; value: DesktopSoundSetting }
+    | { setting: DesktopAppearanceSetting.Appearance; value: DesktopAppearance }
     | { setting: "weather"; value: WeatherType }
     | { setting: "night"; value: NightMode }
     | { setting: "ground"; value: LegacyGroundMode }
     | { setting: "seasonal"; value: SeasonalThemeMode }
     | { setting: "christmas"; value: LegacyChristmasMode }
-    | { setting: "effects"; value: boolean };
+    | {
+          setting: "effects" | DesktopLightSetting.Effects | DesktopLightSetting.Demo | DesktopWeatherSetting.Clouds;
+          value: boolean;
+      }
+    | { setting: DesktopLightSetting.Source; value: LampMusicSource }
+    | { setting: DesktopWeatherSetting.CloudsHeight; value: number }
+    | { setting: DesktopWeatherSetting.Auto; value: AutoWeatherSettings }
+    | { setting: DesktopSoundsSetting.Sounds; value: { sound: DesktopSoundSetting; volume: number } };
 
 export interface DesktopEnvironmentState {
+    appearance: DesktopAppearance;
     weather: WeatherType;
     displayWeather: WeatherType;
     night: NightMode;
@@ -25,6 +73,16 @@ export interface DesktopEnvironmentState {
     seasonal: SeasonalThemeMode;
     christmas: LegacyChristmasMode;
     effects: boolean;
+    lampEffects: boolean;
+    lampDemo: boolean;
+    lampMusicSource: LampMusicSource;
+    mapWeather: WeatherType;
+    mapDisplayWeather: WeatherType;
+    weatherAuto: AutoWeatherSettings;
+    clouds: boolean;
+    cloudsHeight: number;
+    jungle: boolean;
+    sounds: Record<DesktopSoundSetting, number>;
     canEditWeather: boolean;
     busy: boolean;
     error: string;

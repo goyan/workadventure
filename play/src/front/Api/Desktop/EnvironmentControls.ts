@@ -1,19 +1,73 @@
 import { get } from "svelte/store";
 import { z } from "zod";
-import { Weather, WeatherType } from "@workadventure/map-editor";
+import { AutoWeather, DEFAULT_AUTO_WEATHER, Weather, WeatherType } from "@workadventure/map-editor";
 import type {
     DesktopEnvironmentRequest,
     DesktopEnvironmentState,
     LegacyChristmasMode,
 } from "../../Interfaces/DesktopAppInterfaces";
 import { NightMode, nightModeStore } from "../../Stores/NightStore";
-import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { migrateChristmasMode, SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
 import { mapEditorActivated } from "../../Stores/MenuStore";
+import {
+    DesktopAppearanceSetting,
+    DesktopLightSetting,
+    DesktopSoundSetting,
+    DesktopSoundsSetting,
+    DesktopWeatherSetting,
+    DesktopVisualSetting,
+} from "../../Interfaces/DesktopAppInterfaces";
+import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
+import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
+import { LampMusicSource, lampMusicSourceStore } from "../../Stores/LampMusicSourceStore";
+import {
+    footstepVolumeStore,
+    skateboardVolumeStore,
+    weatherVolumeStore,
+    doorVolumeStore,
+    nerfVolumeStore,
+    jungleVolumeStore,
+    mapSoundsVolumeStore,
+    notificationSoundVolumeStore,
+} from "../../Stores/SoundEffectsStore";
+
+import { RETRO_PALETTES, UI_FONTS, retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
+
+import { jungleEnabledStore } from "../../Stores/JungleStore";
+import { createSoundPreview, type PreviewedSoundFamily } from "../../Components/Menu/SoundPreview";
+
+const soundPreview = createSoundPreview();
+const previewFamilies: Partial<Record<DesktopSoundSetting, PreviewedSoundFamily>> = {
+    [DesktopSoundSetting.Footsteps]: "footsteps",
+    [DesktopSoundSetting.Skateboard]: "skateboard",
+    [DesktopSoundSetting.Weather]: "weather",
+    [DesktopSoundSetting.Doors]: "doors",
+    [DesktopSoundSetting.Nerf]: "nerf",
+    [DesktopSoundSetting.Jungle]: "jungle",
+    [DesktopSoundSetting.Notifications]: "notifications",
+};
+
+const soundStores = {
+    [DesktopSoundSetting.Footsteps]: footstepVolumeStore,
+    [DesktopSoundSetting.Skateboard]: skateboardVolumeStore,
+    [DesktopSoundSetting.Weather]: weatherVolumeStore,
+    [DesktopSoundSetting.Doors]: doorVolumeStore,
+    [DesktopSoundSetting.Nerf]: nerfVolumeStore,
+    [DesktopSoundSetting.Jungle]: jungleVolumeStore,
+    [DesktopSoundSetting.Map]: mapSoundsVolumeStore,
+    [DesktopSoundSetting.Notifications]: notificationSoundVolumeStore,
+};
 
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
+    z.object({ setting: z.literal(DesktopVisualSetting.Jungle), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopSoundsSetting.Preview), value: z.nativeEnum(DesktopSoundSetting) }),
+    z.object({
+        setting: z.literal(DesktopAppearanceSetting.Appearance),
+        value: z.object({ palette: z.enum(RETRO_PALETTES), font: z.enum(UI_FONTS) }),
+    }),
     z.object({ setting: z.literal("weather"), value: Weather }),
     z.object({ setting: z.literal("night"), value: z.nativeEnum(NightMode) }),
     // Former ground setting, replaced by the seasonal theme: accepted from older desktop apps and ignored.
@@ -22,6 +76,15 @@ export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
     // Former Christmas control, kept for desktop apps that predate the seasonal theme.
     z.object({ setting: z.literal("christmas"), value: z.enum(["auto", "always", "never"]) }),
     z.object({ setting: z.literal("effects"), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopWeatherSetting.Clouds), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopWeatherSetting.CloudsHeight), value: z.number().min(0).max(1) }),
+    z.object({ setting: z.literal(DesktopWeatherSetting.Auto), value: AutoWeather }),
+    z.object({ setting: z.enum([DesktopLightSetting.Effects, DesktopLightSetting.Demo]), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopLightSetting.Source), value: z.nativeEnum(LampMusicSource) }),
+    z.object({
+        setting: z.literal(DesktopSoundsSetting.Sounds),
+        value: z.object({ sound: z.nativeEnum(DesktopSoundSetting), volume: z.number().min(0).max(1) }),
+    }),
 ]);
 
 /** What an older desktop app shows in its three-choice Christmas control. */
@@ -34,7 +97,7 @@ function legacyChristmasMode(mode: SeasonalThemeMode): LegacyChristmasMode {
 /** The weather mode shown by the desktop app, which knows no "real" mode (and is not changed): the closest one. */
 export function desktopWeatherMode(weather: WeatherType | undefined): WeatherType {
     if (weather === WeatherType.Real) return WeatherType.Automatic;
-    if (weather === WeatherType.Cloudy) return WeatherType.Clear;
+    if (weather === WeatherType.Cloudy || weather === WeatherType.Fog) return WeatherType.Clear;
     return weather ?? WeatherType.Clear;
 }
 
@@ -43,15 +106,35 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
     const scene = get(gameSceneStore);
     if (!scene) return null;
     return {
-        // The desktop app knows no "real" mode (and is not changed): it sees the closest one, the automatic weather.
+        appearance: { palette: get(retroPaletteStore), font: get(uiFontStore) },
+        // Keep the legacy values for older desktop clients; modern clients use the raw map fields below.
         weather: desktopWeatherMode(scene.getGameMap().getWamFile()?.getWam().settings?.weather),
-        displayWeather: scene.getDesktopWeather(),
+        displayWeather: desktopWeatherMode(scene.getDesktopWeather()),
+        mapWeather: scene.getGameMap().getWamFile()?.getWam().settings?.weather ?? WeatherType.Clear,
+        mapDisplayWeather: scene.getDesktopWeather(),
+        weatherAuto: scene.getGameMap().getWamFile()?.getWam().settings?.weatherAuto ?? DEFAULT_AUTO_WEATHER,
+        clouds: get(cloudsShownStore),
+        cloudsHeight: get(cloudsHeightStore),
         night: get(nightModeStore),
         isNight: scene.getNightActive(),
         ground: get(seasonalThemeModeStore) === SeasonalThemeMode.Autumn ? "seasonal" : "green",
         seasonal: get(seasonalThemeModeStore),
         christmas: legacyChristmasMode(get(seasonalThemeModeStore)),
         effects: get(weatherEffectsEnabledStore),
+        lampEffects: get(lampEffectsEnabledStore),
+        lampDemo: get(lampDemoEnabledStore),
+        lampMusicSource: get(lampMusicSourceStore),
+        jungle: get(jungleEnabledStore),
+        sounds: {
+            footstepVolume: get(footstepVolumeStore),
+            skateboardVolume: get(skateboardVolumeStore),
+            weatherVolume: get(weatherVolumeStore),
+            doorVolume: get(doorVolumeStore),
+            nerfVolume: get(nerfVolumeStore),
+            jungleVolume: get(jungleVolumeStore),
+            mapSoundsVolume: get(mapSoundsVolumeStore),
+            notificationSoundVolume: get(notificationSoundVolumeStore),
+        },
         canEditWeather: Boolean(
             get(mapEditorActivated) &&
             scene.connection &&
@@ -69,17 +152,54 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
     const state = readDesktopEnvironment();
     if (!state) throw new Error("No room is loaded");
     switch (request.setting) {
+        case DesktopVisualSetting.Jungle:
+            jungleEnabledStore.set(request.value);
+            return;
+        case DesktopSoundsSetting.Preview: {
+            const family = previewFamilies[request.value];
+            if (family) soundPreview.play(family, get(soundStores[request.value]));
+            return;
+        }
+        case DesktopAppearanceSetting.Appearance:
+            retroPaletteStore.set(request.value.palette);
+            uiFontStore.set(request.value.font);
+            return;
         case "weather": {
             if (!state.canEditWeather) throw new Error("Map editing is unavailable");
-            if (state.weather === request.value) return;
+            if (state.mapWeather === request.value) return;
             // Loading the editor only on a map edit avoids an eager cycle through GameScene and DesktopApi.
             const { executeUpdateWAMSettings } = await import("../../Phaser/Game/MapEditor/Commands/Facades");
             await executeUpdateWAMSettings({
                 $case: "updateWeatherSettingMessage",
-                updateWeatherSettingMessage: { weather: request.value, autoInclude: [] },
+                updateWeatherSettingMessage: {
+                    weather: request.value,
+                    autoFrequency: state.weatherAuto.frequency,
+                    autoInclude: state.weatherAuto.include,
+                    autoClouds: state.weatherAuto.clouds !== false,
+                },
             });
             break;
         }
+        case DesktopWeatherSetting.Auto: {
+            if (!state.canEditWeather) throw new Error("Map editing is unavailable");
+            const { executeUpdateWAMSettings } = await import("../../Phaser/Game/MapEditor/Commands/Facades");
+            await executeUpdateWAMSettings({
+                $case: "updateWeatherSettingMessage",
+                updateWeatherSettingMessage: {
+                    weather: state.mapWeather,
+                    autoFrequency: request.value.frequency,
+                    autoInclude: request.value.include,
+                    autoClouds: request.value.clouds !== false,
+                },
+            });
+            break;
+        }
+        case DesktopWeatherSetting.Clouds:
+            cloudsShownStore.set(request.value);
+            break;
+        case DesktopWeatherSetting.CloudsHeight:
+            cloudsHeightStore.set(request.value);
+            break;
         case "night":
             nightModeStore.set(request.value);
             break;
@@ -93,6 +213,21 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             break;
         case "effects":
             weatherEffectsEnabledStore.set(request.value);
+            break;
+        case DesktopLightSetting.Effects:
+            lampEffectsEnabledStore.set(request.value);
+            break;
+        case DesktopLightSetting.Demo:
+            lampDemoEnabledStore.set(request.value);
+            break;
+        case DesktopLightSetting.Source:
+            if (request.value === LampMusicSource.Personal && !window.WAD?.watchSpotifyMusic) {
+                throw new Error("Personal music analysis is unavailable");
+            }
+            lampMusicSourceStore.set(request.value);
+            break;
+        case DesktopSoundsSetting.Sounds:
+            soundStores[request.value.sound].set(request.value.volume);
             break;
     }
 }

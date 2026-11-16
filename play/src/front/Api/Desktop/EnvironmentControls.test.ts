@@ -1,15 +1,30 @@
 import { get } from "svelte/store";
-import { WeatherType } from "@workadventure/map-editor";
+import { DEFAULT_AUTO_WEATHER, WeatherType } from "@workadventure/map-editor";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GameScene } from "../../Phaser/Game/GameScene";
 import type { DesktopEnvironmentRequest } from "../../Interfaces/DesktopAppInterfaces";
 import { gameSceneStore } from "../../Stores/GameSceneStore";
 import { mapEditorActivated } from "../../Stores/MenuStore";
 import { NightMode, nightModeStore } from "../../Stores/NightStore";
-import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { seasonalThemeModeStore } from "../../Stores/SeasonalThemeStore";
 import { SeasonalThemeMode } from "../../Phaser/Game/Seasonal/SeasonalTheme";
+import {
+    DesktopAppearanceSetting,
+    DesktopVisualSetting,
+    DesktopLightSetting,
+    DesktopSoundSetting,
+    DesktopSoundsSetting,
+    DesktopWeatherSetting,
+} from "../../Interfaces/DesktopAppInterfaces";
+import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
+import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
+import { LampMusicSource, lampMusicSourceStore } from "../../Stores/LampMusicSourceStore";
+import { retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
+import { weatherVolumeStore } from "../../Stores/SoundEffectsStore";
 
+const preview = vi.hoisted(() => vi.fn());
+vi.mock("../../Components/Menu/SoundPreview", () => ({ createSoundPreview: () => ({ play: preview }) }));
 const save = vi.hoisted(() => vi.fn());
 vi.mock("../../Stores/GameSceneStore", async () => {
     const { writable } = await import("svelte/store");
@@ -26,6 +41,7 @@ let isNight = false;
 
 beforeEach(() => {
     save.mockReset();
+    preview.mockReset();
     settings.weather = WeatherType.Rain;
     isNight = false;
     gameSceneStore.set({
@@ -39,6 +55,119 @@ beforeEach(() => {
 });
 
 describe("desktop environment settings", () => {
+    it("previews the selected family at its current volume and keeps animals personal", async () => {
+        weatherVolumeStore.set(0.35);
+        await applyDesktopEnvironment({ setting: DesktopSoundsSetting.Preview, value: DesktopSoundSetting.Weather });
+        expect(preview).toHaveBeenCalledExactlyOnceWith("weather", 0.35);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Jungle, value: false });
+        expect(readDesktopEnvironment()?.jungle).toBe(false);
+        expect(save).not.toHaveBeenCalled();
+    });
+    it("applies and reports the same appearance as the web preferences without editor rights", async () => {
+        await applyDesktopEnvironment({
+            setting: DesktopAppearanceSetting.Appearance,
+            value: { palette: "forest", font: "system" },
+        });
+        expect(get(retroPaletteStore)).toBe("forest");
+        expect(get(uiFontStore)).toBe("system");
+        expect(readDesktopEnvironment()?.appearance).toEqual({ palette: "forest", font: "system" });
+        expect(save).not.toHaveBeenCalled();
+        await expect(
+            applyDesktopEnvironment({
+                setting: DesktopAppearanceSetting.Appearance,
+                value: { palette: "invalid", font: "system" },
+            } as unknown as DesktopEnvironmentRequest),
+        ).rejects.toThrow();
+        expect(get(retroPaletteStore)).toBe("forest");
+    });
+    it("selects and reports personal music, requires desktop analysis, and persists the choice", async () => {
+        lampMusicSourceStore.set(LampMusicSource.Rooms);
+        await expect(
+            applyDesktopEnvironment({ setting: DesktopLightSetting.Source, value: LampMusicSource.Personal }),
+        ).rejects.toThrow("Personal music analysis");
+        expect(get(lampMusicSourceStore)).toBe(LampMusicSource.Rooms);
+        vi.stubGlobal("WAD", { watchSpotifyMusic: vi.fn() });
+        try {
+            await applyDesktopEnvironment({ setting: DesktopLightSetting.Source, value: LampMusicSource.Personal });
+            expect(readDesktopEnvironment()?.lampMusicSource).toBe(LampMusicSource.Personal);
+            expect(localStorage.getItem("lampMusicSource")).toBe(LampMusicSource.Personal);
+            await applyDesktopEnvironment({ setting: DesktopLightSetting.Source, value: LampMusicSource.Rooms });
+            expect(save).not.toHaveBeenCalled();
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it("keeps cloud visibility and height personal while protecting shared automatic settings", async () => {
+        await applyDesktopEnvironment({ setting: DesktopWeatherSetting.Clouds, value: false });
+        await applyDesktopEnvironment({ setting: DesktopWeatherSetting.CloudsHeight, value: 0.75 });
+        expect(get(cloudsShownStore)).toBe(false);
+        expect(get(cloudsHeightStore)).toBe(0.75);
+        expect(save).not.toHaveBeenCalled();
+        await expect(
+            applyDesktopEnvironment({ setting: DesktopWeatherSetting.CloudsHeight, value: 2 }),
+        ).rejects.toThrow();
+        await expect(
+            applyDesktopEnvironment({ setting: DesktopWeatherSetting.Auto, value: DEFAULT_AUTO_WEATHER }),
+        ).rejects.toThrow("Map editing");
+        mapEditorActivated.set(true);
+        await applyDesktopEnvironment({
+            setting: DesktopWeatherSetting.Auto,
+            value: { frequency: "calm", include: [WeatherType.Fog], clouds: false },
+        });
+        expect(save).toHaveBeenCalledExactlyOnceWith({
+            $case: "updateWeatherSettingMessage",
+            updateWeatherSettingMessage: {
+                weather: WeatherType.Rain,
+                autoFrequency: "calm",
+                autoInclude: [WeatherType.Fog],
+                autoClouds: false,
+            },
+        });
+    });
+
+    it.each([WeatherType.Cloudy, WeatherType.Real, WeatherType.Fog])(
+        "reports %s to modern desktop apps and keeps legacy weather compatible",
+        (weather) => {
+            settings.weather = weather;
+            expect(readDesktopEnvironment()).toMatchObject({
+                mapWeather: weather,
+                weather: weather === WeatherType.Real ? WeatherType.Automatic : WeatherType.Clear,
+            });
+        },
+    );
+    it("changes music lights and demo without changing music or the shared map", async () => {
+        await applyDesktopEnvironment({ setting: DesktopLightSetting.Effects, value: false });
+        await applyDesktopEnvironment({ setting: DesktopLightSetting.Demo, value: true });
+        expect(get(lampEffectsEnabledStore)).toBe(false);
+        expect(get(lampDemoEnabledStore)).toBe(true);
+        expect(readDesktopEnvironment()).toMatchObject({ lampEffects: false, lampDemo: true });
+        expect(localStorage.getItem("lampEffectsEnabled")).toBe("false");
+        expect(save).not.toHaveBeenCalled();
+    });
+
+    it.each(Object.values(DesktopSoundSetting))(
+        "adjusts %s separately, preserves the others and saves the preference",
+        async (sound) => {
+            const before = readDesktopEnvironment()?.sounds;
+            await applyDesktopEnvironment({ setting: DesktopSoundsSetting.Sounds, value: { sound, volume: 0.37 } });
+            expect(readDesktopEnvironment()?.sounds).toEqual({ ...before, [sound]: 0.37 });
+            expect(localStorage.getItem(sound)).toBe("0.37");
+            expect(save).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each([-1, 1.01, NaN])("rejects invalid volume %s without changing the saved sound", async (volume) => {
+        weatherVolumeStore.set(0.15);
+        await expect(
+            applyDesktopEnvironment({
+                setting: DesktopSoundsSetting.Sounds,
+                value: { sound: DesktopSoundSetting.Weather, volume },
+            }),
+        ).rejects.toThrow();
+        expect(get(weatherVolumeStore)).toBe(0.15);
+    });
+
     it("reads actual map values, remote changes, editing rights, and room departure", () => {
         expect(readDesktopEnvironment()).toMatchObject({ weather: WeatherType.Rain, canEditWeather: false });
         mapEditorActivated.set(true);
@@ -65,7 +194,12 @@ describe("desktop environment settings", () => {
         await applyDesktopEnvironment({ setting: "weather", value: WeatherType.Snow });
         expect(save).toHaveBeenCalledExactlyOnceWith({
             $case: "updateWeatherSettingMessage",
-            updateWeatherSettingMessage: { weather: WeatherType.Snow, autoInclude: [] },
+            updateWeatherSettingMessage: {
+                weather: WeatherType.Snow,
+                autoFrequency: DEFAULT_AUTO_WEATHER.frequency,
+                autoInclude: DEFAULT_AUTO_WEATHER.include,
+                autoClouds: true,
+            },
         });
     });
 
