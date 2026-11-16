@@ -52,13 +52,13 @@ describe("catalog", () => {
                 MAP_LAYER_WALL_COLLECTION,
                 mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, facadePrefabName("brique", "single")),
             ),
-        ).toEqual({ kind: "facade", tint: "brique", ends: "single" });
+        ).toEqual({ kind: "facade", tint: "brique", ends: "single", height: 1 });
         expect(
             parseMapLayerPrefab(
                 MAP_LAYER_WALL_COLLECTION,
                 mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, verticalWallPrefabName("brique")),
             ),
-        ).toEqual({ kind: "vertical", tint: "brique" });
+        ).toEqual({ kind: "vertical", tint: "brique", height: 1 });
         expect(
             parseMapLayerPrefab("Infogène Sols", "Infogène Sols:sol-carrelage-gris-0-0:Default:Down"),
         ).toBeUndefined();
@@ -77,6 +77,7 @@ describe("window catalog", () => {
             kind: "window",
             tint: "brique",
             ends: "left",
+            height: 1,
         });
         expect(parseMapLayerPrefab("Carte Fenêtres", "Carte Fenêtres:fenetre-rose-mid:Default:Down")).toBeUndefined();
         expect(parseMapLayerPrefab("Carte Murs", "Carte Murs:fenetre-blanc-mid:Default:Down")).toBeUndefined();
@@ -84,8 +85,8 @@ describe("window catalog", () => {
 
     it("sizes a window like the facade with the same ends", () => {
         for (const ends of ["mid", "left", "right", "single"] as const) {
-            expect(mapLayerPieceSize({ kind: "window", tint: "gris", ends })).toEqual(
-                mapLayerPieceSize({ kind: "facade", tint: "gris", ends }),
+            expect(mapLayerPieceSize({ kind: "window", tint: "gris", ends, height: 1 })).toEqual(
+                mapLayerPieceSize({ kind: "facade", tint: "gris", ends, height: 1 }),
             );
         }
     });

@@ -77,6 +77,28 @@ export const VERTICAL_WALL_HEIGHT = MAP_LAYER_TILE_SIZE - WALL_THICKNESS;
 /** A horizontal wall that stops on a vertex extends its face by this much to close the corner. */
 export const FACADE_END_EXTENSION = WALL_HALF;
 
+/**
+ * Height of a wall, in tiles. A wall of height N is the wall of height 1 raised by `wallRise(N)`: its cap is drawn that
+ * much higher and its face is that much longer, its foot (and so its collision) stays where it is. The height is told by
+ * the name of the pieces (`-h2`, `-h3`, `-h4`); the pieces of height 1 keep their names without a suffix.
+ */
+export const MAP_LAYER_WALL_HEIGHTS = [1, 2, 3, 4] as const;
+export type WallHeight = (typeof MAP_LAYER_WALL_HEIGHTS)[number];
+
+/** How much higher the cap of a wall of this height is drawn than the cap of a wall of height 1. */
+export function wallRise(height: WallHeight): number {
+    return MAP_LAYER_TILE_SIZE * (height - 1);
+}
+
+/** Height of the south face of a horizontal wall of this height. */
+export function facadeFaceHeight(height: WallHeight): number {
+    return FACADE_FACE_HEIGHT + wallRise(height);
+}
+
+function heightSuffix(height: WallHeight): string {
+    return height === 1 ? "" : `-h${height}`;
+}
+
 /** Which sides of a horizontal wall stop on a vertex ("mid" continues on both sides, "single" stops on both). */
 export type FacadeEnds = "mid" | "left" | "right" | "single";
 
@@ -109,6 +131,7 @@ export type DoorSide = "g" | "d" | "haut" | "bas";
 const VERTICAL_WALL_PREFIX = "mur-vertical-";
 const WALL_END_PREFIX = "bout-";
 const JOINT_PREFIX = "raccord-";
+const LINTEL_PREFIX = "linteau-";
 
 export function mapLayerPrefabId(collectionName: string, name: string): string {
     return `${collectionName}:${name}:Default:Down`;
@@ -118,60 +141,102 @@ export function floorPrefabName(family: FloorFamily, variant: FloorVariant): str
     return `sol-${family}-${variant}`;
 }
 
-export function facadePrefabName(tint: WallTint, ends: FacadeEnds): string {
-    return `facade-${tint}-${ends}`;
+export function facadePrefabName(tint: WallTint, ends: FacadeEnds, height: WallHeight = 1): string {
+    return `facade-${tint}-${ends}${heightSuffix(height)}`;
 }
 
 /** Arms are given in N, E, S, W order, for example "NE" for a corner or "NESW" for a cross. */
-export function jointPrefabName(arms: readonly JointArm[]): string {
-    return `${JOINT_PREFIX}${JOINT_ARMS.filter((arm) => arms.includes(arm)).join("")}`;
+export function jointPrefabName(arms: readonly JointArm[], height: WallHeight = 1): string {
+    return `${JOINT_PREFIX}${JOINT_ARMS.filter((arm) => arms.includes(arm)).join("")}${heightSuffix(height)}`;
 }
 
-export function verticalWallPrefabName(tint: WallTint): string {
-    return `${VERTICAL_WALL_PREFIX}${tint}`;
+export function verticalWallPrefabName(tint: WallTint, height: WallHeight = 1): string {
+    return `${VERTICAL_WALL_PREFIX}${tint}${heightSuffix(height)}`;
 }
 
 /** The south face at the free bottom end of a vertical wall, like the face of a horizontal wall. */
-export function wallEndPrefabName(tint: WallTint): string {
-    return `${WALL_END_PREFIX}${tint}`;
+export function wallEndPrefabName(tint: WallTint, height: WallHeight = 1): string {
+    return `${WALL_END_PREFIX}${tint}${heightSuffix(height)}`;
 }
 
 /** A window replaces the facade of one segment of a horizontal wall, with the same ends. */
-export function windowPrefabName(tint: WallTint, ends: FacadeEnds): string {
-    return `fenetre-${tint}-${ends}`;
+export function windowPrefabName(tint: WallTint, ends: FacadeEnds, height: WallHeight = 1): string {
+    return `fenetre-${tint}-${ends}${heightSuffix(height)}`;
 }
 
-/** Name of a piece of a door; without `frame`, the closed door. */
+/**
+ * The full wall above a door or a window lower than its wall: the cap of the wall of height `wall` and the part of its
+ * face above the opening of height `opening`. It covers the cap of the door or the window under it.
+ */
+export function lintelPrefabName(tint: WallTint, ends: FacadeEnds, wall: WallHeight, opening: WallHeight): string {
+    if (wall <= opening) {
+        throw new Error(`A lintel needs a wall higher than its opening (wall ${wall}, opening ${opening})`);
+    }
+    return `${LINTEL_PREFIX}${tint}-${ends}-h${wall}-o${opening}`;
+}
+
+/**
+ * Name of a piece of a door; without `frame`, the closed door. Only a horizontal door has a height (a vertical door is
+ * seen from above); its suffix comes before the one of the frame.
+ */
 export function doorPrefabName(
     orientation: "h" | "v",
     tint: WallTint,
     side: DoorSide,
     frame?: number,
     pushedTowardsViewer = false,
+    height: WallHeight = 1,
 ): string {
-    const base = `porte-${orientation}-${tint}-${side}`;
+    const base = `porte-${orientation}-${tint}-${side}${orientation === "h" ? heightSuffix(height) : ""}`;
     if (frame === undefined || frame === DOOR_CLOSED_FRAME) {
         return base;
     }
     return `${base}-${pushedTowardsViewer ? "b" : ""}${frame}`;
 }
 
+/**
+ * What a placed prefab means. `height` is the height of the wall the piece belongs to (a door or a window: its own
+ * height, at most the one of its wall); a lintel also tells the height of the opening under it.
+ */
 export type MapLayerPiece =
     | { kind: "floor"; family: FloorFamily; variant: FloorVariant }
-    | { kind: "facade"; tint: WallTint; ends: FacadeEnds }
-    | { kind: "window"; tint: WallTint; ends: FacadeEnds }
-    | { kind: "vertical"; tint: WallTint }
-    | { kind: "end"; tint: WallTint }
-    | { kind: "joint"; arms: JointArm[] }
-    | { kind: "door"; orientation: "h" | "v"; tint: WallTint; side: DoorSide; frame: number; reverse: boolean };
+    | { kind: "facade"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
+    | { kind: "window"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
+    | { kind: "vertical"; tint: WallTint; height: WallHeight }
+    | { kind: "end"; tint: WallTint; height: WallHeight }
+    | { kind: "joint"; arms: JointArm[]; height: WallHeight }
+    | { kind: "lintel"; tint: WallTint; ends: FacadeEnds; height: WallHeight; opening: WallHeight }
+    | {
+          kind: "door";
+          orientation: "h" | "v";
+          tint: WallTint;
+          side: DoorSide;
+          frame: number;
+          reverse: boolean;
+          height: WallHeight;
+      };
 
+const TINTS = MAP_LAYER_WALL_TINTS.join("|");
+/** The optional height suffix: `-h1` is not a name, a wall of height 1 has no suffix. */
+const HEIGHT = "(?:-h([2-4]))?";
 const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni|ombre)$`);
-const FACADE_NAME = new RegExp(`^facade-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
-const WINDOW_NAME = new RegExp(`^fenetre-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
-const VERTICAL_NAME = new RegExp(`^mur-vertical-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
-const END_NAME = new RegExp(`^bout-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
-const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-(b)?(\\d))?$`);
-const JOINT_NAME = /^raccord-(N?E?S?W?)$/;
+const FACADE_NAME = new RegExp(`^facade-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
+const WINDOW_NAME = new RegExp(`^fenetre-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
+const VERTICAL_NAME = new RegExp(`^mur-vertical-(${TINTS})${HEIGHT}$`);
+const END_NAME = new RegExp(`^bout-(${TINTS})${HEIGHT}$`);
+const LINTEL_NAME = new RegExp(`^linteau-(${TINTS})-(mid|left|right|single)-h([2-4])-o([1-3])$`);
+const DOOR_NAME = new RegExp(`^porte-(h|v)-(${TINTS})-(g|d|haut|bas)${HEIGHT}(?:-(b)?(\\d))?$`);
+const JOINT_NAME = new RegExp(`^raccord-(N?E?S?W?)${HEIGHT}$`);
+
+function readHeight(suffix: string | undefined): WallHeight {
+    return suffix === undefined ? 1 : toWallHeight(Number(suffix));
+}
+
+/** The known wall height nearest to `value`. */
+export function toWallHeight(value: number): WallHeight {
+    const rounded = Math.round(value);
+    return MAP_LAYER_WALL_HEIGHTS.find((height) => height === rounded) ?? (rounded > 4 ? 4 : 1);
+}
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not part of the map layer. */
 export function parseMapLayerPrefab(collectionName: string, prefabId: string): MapLayerPiece | undefined {
@@ -191,38 +256,57 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
     if (collectionName === MAP_LAYER_WALL_COLLECTION) {
         const vertical = VERTICAL_NAME.exec(name);
         if (vertical) {
-            return { kind: "vertical", tint: vertical[1] as WallTint };
+            return { kind: "vertical", tint: vertical[1] as WallTint, height: readHeight(vertical[2]) };
         }
         const end = END_NAME.exec(name);
         if (end) {
-            return { kind: "end", tint: end[1] as WallTint };
+            return { kind: "end", tint: end[1] as WallTint, height: readHeight(end[2]) };
         }
         const match = FACADE_NAME.exec(name);
         if (match) {
-            return { kind: "facade", tint: match[1] as WallTint, ends: match[2] as FacadeEnds };
+            return {
+                kind: "facade",
+                tint: match[1] as WallTint,
+                ends: match[2] as FacadeEnds,
+                height: readHeight(match[3]),
+            };
         }
         const joint = JOINT_NAME.exec(name);
         if (joint && joint[1].length > 0) {
-            return { kind: "joint", arms: joint[1].split("") as JointArm[] };
+            return { kind: "joint", arms: joint[1].split("") as JointArm[], height: readHeight(joint[2]) };
+        }
+        const lintel = LINTEL_NAME.exec(name);
+        if (lintel) {
+            const height = readHeight(lintel[3]);
+            const opening = readHeight(lintel[4]);
+            return opening < height
+                ? { kind: "lintel", tint: lintel[1] as WallTint, ends: lintel[2] as FacadeEnds, height, opening }
+                : undefined;
         }
         return undefined;
     }
     if (collectionName === MAP_LAYER_WINDOW_COLLECTION) {
         const match = WINDOW_NAME.exec(name);
-        return match ? { kind: "window", tint: match[1] as WallTint, ends: match[2] as FacadeEnds } : undefined;
+        return match
+            ? { kind: "window", tint: match[1] as WallTint, ends: match[2] as FacadeEnds, height: readHeight(match[3]) }
+            : undefined;
     }
     if (collectionName === MAP_LAYER_DOOR_COLLECTION) {
         const door = DOOR_NAME.exec(name);
         if (!door) {
             return undefined;
         }
-        const frame = door[5] === undefined ? DOOR_CLOSED_FRAME : Number(door[5]);
-        if (door[5] !== undefined && frame >= DOOR_CLOSED_FRAME) {
+        const frame = door[6] === undefined ? DOOR_CLOSED_FRAME : Number(door[6]);
+        if (door[6] !== undefined && frame >= DOOR_CLOSED_FRAME) {
             return undefined;
         }
         const orientation = door[1] as "h" | "v";
         const side = door[3] as DoorSide;
         if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
+            return undefined;
+        }
+        // A vertical door is seen from above: it has no height.
+        if (orientation === "v" && door[4] !== undefined) {
             return undefined;
         }
         return {
@@ -231,7 +315,8 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
             tint: door[2] as WallTint,
             side,
             frame,
-            reverse: door[4] === "b",
+            reverse: door[5] === "b",
+            height: readHeight(door[4]),
         };
     }
     return undefined;
@@ -249,21 +334,31 @@ export function mapLayerPieceSize(piece: MapLayerPiece): { width: number; height
         case "joint":
             return { width: WALL_THICKNESS, height: WALL_THICKNESS };
         case "end":
-            return { width: WALL_THICKNESS, height: FACADE_FACE_HEIGHT };
+            return { width: WALL_THICKNESS, height: facadeFaceHeight(piece.height) };
         case "facade":
         case "window":
             return {
                 width: MAP_LAYER_TILE_SIZE + facadeLeftExtension(piece.ends) + facadeRightExtension(piece.ends),
-                height: FACADE_HEIGHT,
+                height: FACADE_HEIGHT + wallRise(piece.height),
+            };
+        case "lintel":
+            return {
+                width: MAP_LAYER_TILE_SIZE + facadeLeftExtension(piece.ends) + facadeRightExtension(piece.ends),
+                height: lintelHeight(piece.height, piece.opening),
             };
         case "floor":
             return { width: MAP_LAYER_TILE_SIZE, height: MAP_LAYER_TILE_SIZE };
         case "door":
             return {
                 width: piece.orientation === "h" ? MAP_LAYER_TILE_SIZE : DOOR_VERTICAL_WIDTH,
-                height: MAP_LAYER_TILE_SIZE,
+                height: MAP_LAYER_TILE_SIZE + (piece.orientation === "h" ? wallRise(piece.height) : 0),
             };
     }
+}
+
+/** Height of a lintel: the cap and the part of the face of the wall that is above the opening. */
+export function lintelHeight(wall: WallHeight, opening: WallHeight): number {
+    return WALL_THICKNESS + MAP_LAYER_TILE_SIZE * (wall - opening);
 }
 
 export function facadeLeftExtension(ends: FacadeEnds): number {
