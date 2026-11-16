@@ -391,3 +391,170 @@ describe("wall heights: reading the map", () => {
         ).toEqual(["door h:3,3 h2", "wall h:2,3 gris h4", "wall h:3,3 gris h4", "wall h:8,3 gris h2", "window 8,3 h2"]);
     });
 });
+
+describe("wall heights: placements", () => {
+    const highRow = (model: MapLayerModel, from: number, to: number, y: number, height: 1 | 2 | 3 | 4): void => {
+        for (let x = from; x < to; x++) model.setWall("h", x, y, "gris", height);
+    };
+
+    it("raises a high horizontal wall and gives its joints the same level", () => {
+        const model = new MapLayerModel();
+        highRow(model, 2, 4, 3, 2);
+        expect(names(model)).toEqual([
+            "facade-gris-left-h2@58,64",
+            "facade-gris-right-h2@96,64",
+            "raccord-E-h2@58,64",
+            "raccord-EW-h2@90,64",
+            "raccord-W-h2@122,64",
+        ]);
+    });
+
+    it("closes the higher of two aligned walls, the lower one continuing under it", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 2, 3, "gris", 2);
+        model.setWall("h", 3, 3, "gris", 1);
+        expect(names(model)).toEqual([
+            "facade-gris-right@96,96",
+            "facade-gris-single-h2@58,64",
+            "raccord-E-h2@58,64",
+            "raccord-W-h2@90,64",
+            "raccord-W@122,96",
+        ]);
+    });
+
+    it("shows the south face of a high vertical wall arriving on a lower horizontal wall", () => {
+        const model = new MapLayerModel();
+        model.setWall("v", 2, 1, "gris", 2);
+        model.setWall("v", 2, 2, "gris", 2);
+        highRow(model, 1, 3, 3, 1);
+        const items = names(model);
+        expect(items).toContain("bout-gris-h2@58,76");
+        expect(items).toContain("raccord-N-h2@58,64");
+        expect(items).toContain("raccord-EW@58,96");
+        expect(items).toContain("mur-vertical-gris-h2@58,12");
+        expect(items).toContain("mur-vertical-gris-h2@58,44");
+        expect(items.filter((name) => name.startsWith("raccord-NEW"))).toEqual([]);
+    });
+
+    it("keeps only the south arm of a lower joint that a higher horizontal wall covers", () => {
+        const model = new MapLayerModel();
+        highRow(model, 1, 3, 3, 3);
+        model.setWall("v", 2, 2, "gris", 1);
+        model.setWall("v", 2, 3, "gris", 1);
+        const items = names(model).filter((name) => name.includes("@58,"));
+        expect(items).toEqual([
+            "bout-gris@58,140",
+            "mur-vertical-gris@58,108",
+            "mur-vertical-gris@58,76",
+            "raccord-EW-h3@58,32",
+            "raccord-N@58,128",
+            "raccord-S@58,64",
+            "raccord-S@58,96",
+        ]);
+    });
+
+    it("puts lintels over a door lower than its wall, and its joints at the level of the wall", () => {
+        const model = new MapLayerModel();
+        highRow(model, 2, 4, 3, 3);
+        expect(model.setDoor({ orientation: "h", x: 3, y: 3 })).toBe(true);
+        expect(names(model)).toEqual([
+            "linteau-gris-left-h3-o1@58,32",
+            "linteau-gris-right-h3-o1@96,32",
+            "porte-h-gris-d@96,96",
+            "porte-h-gris-g@64,96",
+            "raccord-E-h3@58,32",
+            "raccord-EW-h3@90,32",
+            "raccord-W-h3@122,32",
+        ]);
+    });
+
+    it("draws a door of 2 in a wall of 4 under two lintels", () => {
+        const model = new MapLayerModel();
+        highRow(model, 1, 5, 3, 4);
+        expect(model.setDoor({ orientation: "h", x: 3, y: 3, height: 2 })).toBe(true);
+        const items = names(model);
+        expect(items).toContain("porte-h-gris-g-h2@64,64");
+        expect(items).toContain("porte-h-gris-d-h2@96,64");
+        expect(items).toContain("linteau-gris-mid-h4-o2@64,0");
+        expect(items).toContain("linteau-gris-mid-h4-o2@96,0");
+        expect(items.filter((name) => name.startsWith("facade"))).toEqual([
+            "facade-gris-left-h4@26,0",
+            "facade-gris-right-h4@128,0",
+        ]);
+        expect(items.filter((name) => name.startsWith("raccord"))).toEqual([
+            "raccord-E-h4@26,0",
+            "raccord-EW-h4@122,0",
+            "raccord-EW-h4@58,0",
+            "raccord-EW-h4@90,0",
+            "raccord-W-h4@154,0",
+        ]);
+    });
+
+    it("draws a door as high as its wall as before, its jambs closing the walls next to it", () => {
+        const model = new MapLayerModel();
+        highRow(model, 1, 5, 3, 2);
+        expect(model.setDoor({ orientation: "h", x: 3, y: 3, height: 2 })).toBe(true);
+        expect(names(model)).toEqual([
+            "facade-gris-left-h2@26,64",
+            "facade-gris-right-h2@128,64",
+            "porte-h-gris-d-h2@96,64",
+            "porte-h-gris-g-h2@64,64",
+            "raccord-E-h2@26,64",
+            "raccord-W-h2@154,64",
+        ]);
+    });
+
+    it("draws a window as high as its wall without a lintel, and a lower one under a lintel", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 2, 3, "gris", 2);
+        expect(model.setWindow(2, 3, 2)).toBe(true);
+        model.setWall("h", 8, 3, "gris", 3);
+        expect(model.setWindow(8, 3)).toBe(true);
+        const items = names(model);
+        expect(items).toContain("fenetre-gris-single-h2@58,64");
+        expect(items).toContain("fenetre-gris-single@250,96");
+        expect(items).toContain("linteau-gris-single-h3-o1@250,32");
+        expect(items.filter((name) => name.startsWith("linteau")).length).toBe(1);
+        expect(items.filter((name) => name.startsWith("facade"))).toEqual([]);
+    });
+
+    it("keeps the strips of a high vertical wall over its door, joints included", () => {
+        const model = new MapLayerModel();
+        for (let y = 2; y < 6; y++) model.setWall("v", 4, y, "blanc", 2);
+        expect(model.setDoor({ orientation: "v", x: 4, y: 4 })).toBe(true);
+        const items = names(model);
+        expect(items).toContain("porte-v-blanc-haut@96,108");
+        expect(items).toContain("porte-v-blanc-bas@96,140");
+        for (const y of [3, 4]) expect(items).toContain(`mur-vertical-blanc-h2@122,${y * 32 + 12 - 32}`);
+        expect(items).toContain("raccord-NS-h2@122,96");
+        expect(items).toContain("raccord-NS-h2@122,64");
+        expect(items).toContain("raccord-NS-h2@122,128");
+    });
+
+    it("reads its own placements back to the same model and the same placements", () => {
+        const model = new MapLayerModel();
+        applyFloor(model, rectangleCells({ x: 1, y: 1 }, { x: 10, y: 8 }), "parquet-clair", bounds);
+        applyWalls(model, roomWallEdges({ x: 1, y: 1 }, { x: 4, y: 3 }), "gris", bounds, 2);
+        applyWalls(model, roomWallEdges({ x: 5, y: 1 }, { x: 10, y: 3 }), "brique", bounds, 4);
+        applyWalls(model, lineWallEdges({ x: 1, y: 6 }, { x: 11, y: 6 }), "blanc", bounds, 3);
+        applyWalls(model, lineWallEdges({ x: 1, y: 8 }, { x: 6, y: 8 }), "lavande", bounds, 1);
+        applyWalls(model, lineWallEdges({ x: 6, y: 4 }, { x: 6, y: 8 }), "lavande", bounds, 3);
+        applyDoor(model, { orientation: "h", x: 3, y: 4, height: 2 }, bounds);
+        applyDoor(model, { orientation: "h", x: 8, y: 4 }, bounds);
+        applyDoor(model, { orientation: "h", x: 3, y: 6, height: 3 }, bounds);
+        applyDoor(model, { orientation: "v", x: 11, y: 3 }, bounds);
+        applyDoor(model, { orientation: "v", x: 6, y: 7 }, bounds);
+        applyWindows(model, [{ orientation: "h", x: 7, y: 1 }], 2);
+        applyWindows(model, [{ orientation: "h", x: 2, y: 1 }], 2);
+        applyWindows(model, [{ orientation: "h", x: 8, y: 6 }], 1);
+        const placements = computePlacements(model);
+        const rebuilt = modelFromPlacedPrefabs(placements);
+        expect(state(rebuilt)).toEqual(state(model));
+        expect(
+            computePlacements(rebuilt)
+                .map((item) => item.key)
+                .sort(),
+        ).toEqual(placements.map((item) => item.key).sort());
+        expect(state(modelFromPlacedPrefabs([...placements].reverse()))).toEqual(state(model));
+    });
+});
