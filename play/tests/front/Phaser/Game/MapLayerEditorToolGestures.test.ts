@@ -23,6 +23,8 @@ import {
     mapLayerDoorHeightStore,
     mapLayerDoorHeightsAvailableStore,
     mapLayerDoorsAvailableStore,
+    mapLayerHeightRequestStore,
+    mapLayerHeightSelectionStore,
     mapLayerModeStore,
     mapLayerStatusStore,
     mapLayerWallHeightStore,
@@ -463,6 +465,71 @@ describe("MapLayerEditorTool gestures", () => {
                 "porte-h-blanc-d-h2",
                 "porte-h-blanc-g-h2",
             ]);
+        });
+    });
+
+    describe("height mode", () => {
+        it("selects a high wall by its raised top and shows its height", async () => {
+            placeWall(false, 2);
+            await activate();
+            mapLayerModeStore.set("height");
+            // The facades of height 2 of the line 2 are drawn from y = 32: (40, 40) is on the raised top of the second one.
+            down(40, 40);
+            up(40, 40);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+            expect(get(mapLayerHeightSelectionStore)).toEqual({ count: 1, height: 2, available: [1, 2, 3, 4] });
+        });
+
+        it("selects the segments of a drag along the wall, and empties the selection on a click in the void", async () => {
+            placeWall(false, 2);
+            await activate();
+            mapLayerModeStore.set("height");
+            down(10, 40);
+            move(50, 40);
+            move(90, 40);
+            up(90, 40);
+            expect(get(mapLayerHeightSelectionStore)).toMatchObject({ count: 3, height: 2 });
+            down(300, 300);
+            up(300, 300);
+            expect(get(mapLayerHeightSelectionStore)).toMatchObject({ count: 0, height: undefined });
+        });
+
+        it("applies a height to the selection in one command, keeping the selection", async () => {
+            placeWall(false, 2);
+            await activate();
+            mapLayerModeStore.set("height");
+            down(40, 40);
+            up(40, 40);
+            mapLayerHeightRequestStore.set(3);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+            // Higher than its neighbours, the raised segment closes on both sides; they continue under it.
+            expect(createdNames().filter((name) => name.startsWith("facade"))).toEqual(["facade-blanc-single-h3"]);
+            expect(get(mapLayerHeightRequestStore)).toBeUndefined();
+            expect(get(mapLayerHeightSelectionStore).count).toBe(1);
+        });
+
+        it("applies no height the catalogs do not have, and none without a selection", async () => {
+            highPiecesInCatalog = false;
+            placeWall();
+            await activate();
+            mapLayerModeStore.set("height");
+            mapLayerHeightRequestStore.set(1);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+            down(40, 80);
+            up(40, 80);
+            expect(get(mapLayerHeightSelectionStore)).toEqual({ count: 1, height: 1, available: [1] });
+            mapLayerHeightRequestStore.set(3);
+            expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
+        });
+
+        it("forgets the selection when another mode is chosen", async () => {
+            placeWall(false, 2);
+            await activate();
+            mapLayerModeStore.set("height");
+            down(40, 40);
+            up(40, 40);
+            mapLayerModeStore.set("wall");
+            expect(get(mapLayerHeightSelectionStore).count).toBe(0);
         });
     });
 });

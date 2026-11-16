@@ -9,6 +9,8 @@ import {
     mapLayerDoorHeightStore,
     mapLayerDoorHeightsAvailableStore,
     mapLayerDoorsAvailableStore,
+    mapLayerHeightRequestStore,
+    mapLayerHeightSelectionStore,
     mapLayerFloorFamilyStore,
     mapLayerFloorSwatchesStore,
     mapLayerWallSwatchesStore,
@@ -49,6 +51,8 @@ import {
 } from "../MapLayer/MapLayerCatalog";
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
+import { applyHeight, buildHeightPicker, selectionHeight } from "../MapLayer/MapLayerHeightEdit";
+import type { HeightPicker, HeightTarget } from "../MapLayer/MapLayerHeightEdit";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import { cellKey } from "../MapLayer/MapLayerModel";
@@ -80,6 +84,9 @@ function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): 
     return available.includes(chosen) ? chosen : 1;
 }
 
+/** The walls, doors and windows selected in the height mode. */
+const HEIGHT_SELECTION_COLOR = 0x3b82f6;
+
 /** Above every entity, below nothing: the preview must stay readable over furniture. */
 const PREVIEW_DEPTH = 100_000;
 
@@ -98,6 +105,8 @@ interface Gesture {
     baseModel: MapLayerModel;
     /** In the window mode, a press on a placed window moves it: the tile of that window. */
     movedWindow?: Point;
+    /** In the height mode, what the drag picks, read from the model of the start of the gesture. */
+    picker?: HeightPicker;
 }
 
 /**
@@ -116,6 +125,12 @@ export class MapLayerEditorTool extends MapEditorTool {
     private cursor = "";
     /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
     private hoverModel: MapLayerModel | undefined;
+    /** What the pointer picks in the height mode, built from `hoverModel`. */
+    private hoverPicker: HeightPicker | undefined;
+    /** The walls, doors and windows selected in the height mode. */
+    private heightSelection: HeightTarget[] = [];
+    private unsubscribeHeightRequest: (() => void) | undefined;
+    private unsubscribeMode: (() => void) | undefined;
     /**
      * Keeps a mouse gesture on the canvas while it crosses HTML overlays (the editor panel, the action bar, video
      * bubbles): without it the browser sends the moves to the overlay and Phaser reports that the pointer left the game.
@@ -168,7 +183,20 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapEditorVisibilityStore.set(true);
         mapLayerStatusStore.set(undefined);
-        this.hoverModel = undefined;
+        this.forgetHoverModel();
+        this.setHeightSelection([], undefined);
+        this.unsubscribeHeightRequest = mapLayerHeightRequestStore.subscribe((height) => {
+            if (height === undefined) return;
+            mapLayerHeightRequestStore.set(undefined);
+            this.applySelectionHeight(height);
+        });
+        // The selection belongs to the height mode: choosing another mode lets it go.
+        this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            if (mode !== "height" && this.heightSelection.length > 0) {
+                this.setHeightSelection([], undefined);
+                this.redraw();
+            }
+        });
         this.checkCatalogs().catch((error: unknown) => {
             console.error("Map layer catalog check failed", error);
             mapLayerCatalogAvailableStore.set(false);
@@ -179,6 +207,11 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.active = false;
         this.gesture = undefined;
         this.hover = undefined;
+        this.unsubscribeHeightRequest?.();
+        this.unsubscribeHeightRequest = undefined;
+        this.unsubscribeMode?.();
+        this.unsubscribeMode = undefined;
+        this.setHeightSelection([], undefined);
         this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
@@ -202,6 +235,10 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     public handleKeyDownEvent(event: KeyboardEvent): void {
         if (event.key.toLowerCase() === "escape") {
+            if (!this.gesture && this.heightSelection.length > 0) {
+                this.setHeightSelection([], undefined);
+                this.redraw();
+            }
             this.cancelGesture();
         }
     }
@@ -391,6 +428,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 get(mapLayerModeStore) === "window" && baseModel.hasWindow(startCell.x, startCell.y)
                     ? startCell
                     : undefined,
+            picker: get(mapLayerModeStore) === "height" ? buildHeightPicker(baseModel) : undefined,
         };
         // Filling reacts to the click itself.
         this.redraw();
@@ -423,8 +461,19 @@ export class MapLayerEditorTool extends MapEditorTool {
     private handlePointerUp(pointer: Phaser.Input.Pointer): void {
         const gesture = this.gesture;
         if (!gesture || gesture.pointerId !== pointer.id || pointer.button !== 0) return;
-        const operation = this.buildOperation(gesture);
         const mode = get(mapLayerModeStore);
+        if (mode === "height") {
+            // A click or a drag selects, it changes nothing on the map.
+            this.gesture = undefined;
+            this.pointerCapture?.release();
+            this.setHeightSelection(
+                gesture.picker?.along(gesture.startWorld, gesture.currentWorld) ?? [],
+                gesture.baseModel,
+            );
+            this.redraw();
+            return;
+        }
+        const operation = this.buildOperation(gesture);
         this.gesture = undefined;
         this.pointerCapture?.release();
         this.clearPreview();
@@ -435,6 +484,52 @@ export class MapLayerEditorTool extends MapEditorTool {
         } else if (mode === "window" && !this.droppedInPlace(gesture)) {
             mapLayerStatusStore.set("windowInvalid");
         }
+    }
+
+    /** The model of the map for the hover previews, and what it picks in the height mode: read again after an edit. */
+    private forgetHoverModel(): void {
+        this.hoverModel = undefined;
+        this.hoverPicker = undefined;
+    }
+
+    private getHoverPicker(): HeightPicker {
+        this.hoverModel ??= this.readModel();
+        this.hoverPicker ??= buildHeightPicker(this.hoverModel);
+        return this.hoverPicker;
+    }
+
+    /** Selects the walls, doors and windows of the height mode, and tells the panel their height. */
+    private setHeightSelection(targets: HeightTarget[], model: MapLayerModel | undefined): void {
+        this.heightSelection = targets;
+        const kinds = new Set(targets.map((target) => target.kind));
+        let available: readonly WallHeight[] = MAP_LAYER_WALL_HEIGHTS;
+        const keep = (heights: readonly WallHeight[]): void => {
+            available = available.filter((height) => heights.includes(height));
+        };
+        if (kinds.has("wall")) keep(get(mapLayerWallHeightsAvailableStore));
+        if (kinds.has("door")) keep(get(mapLayerDoorHeightsAvailableStore));
+        if (kinds.has("window")) keep(get(mapLayerWindowHeightsAvailableStore));
+        mapLayerHeightSelectionStore.set({
+            count: targets.length,
+            height: model && targets.length > 0 ? selectionHeight(model, targets) : undefined,
+            available: targets.length > 0 ? available : [1],
+        });
+    }
+
+    /** Gives the selection a height, in one command (one undo step); the selection stays. */
+    private applySelectionHeight(height: WallHeight): void {
+        const targets = this.heightSelection;
+        if (!this.canDraw() || targets.length === 0) return;
+        if (!get(mapLayerHeightSelectionStore).available.includes(height)) return;
+        this.commit(
+            (model) => applyHeight(model, targets, height),
+            () => {
+                const model = this.readModel();
+                this.hoverModel = model;
+                if (this.heightSelection === targets) this.setHeightSelection(targets, model);
+                this.redraw();
+            },
+        );
     }
 
     /** A moved window released on its own segment: nothing to do, nothing to explain. */
@@ -514,6 +609,9 @@ export class MapLayerEditorTool extends MapEditorTool {
                           applyWindows(model, edges, windowHeight);
                       };
             }
+            case "height":
+                // The height mode selects on pointer up; a height is applied from the panel.
+                return undefined;
             case "erase":
                 return (model) => {
                     const keptEdges = new Set<string>();
@@ -611,6 +709,12 @@ export class MapLayerEditorTool extends MapEditorTool {
                     } else {
                         this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
                     }
+                } else if (mode === "height") {
+                    const picker = this.getHoverPicker();
+                    this.drawHeightSelection(graphics, picker, this.heightSelection);
+                    for (const rect of picker.rects(picker.select(picker.at(this.hover.x, this.hover.y)))) {
+                        graphics.lineStyle(2, 0xffffff, 0.9).strokeRect(rect.x, rect.y, rect.width, rect.height);
+                    }
                 } else if (mode === "erase") {
                     // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
                     this.hoverModel ??= this.readModel();
@@ -627,6 +731,17 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
 
+        if (get(mapLayerModeStore) === "height") {
+            if (gesture.picker) {
+                this.drawHeightSelection(
+                    graphics,
+                    gesture.picker,
+                    gesture.picker.along(gesture.startWorld, gesture.currentWorld),
+                );
+            }
+            this.scene.markDirty();
+            return;
+        }
         if (get(mapLayerModeStore) === "door") {
             this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
             this.scene.markDirty();
@@ -669,6 +784,21 @@ export class MapLayerEditorTool extends MapEditorTool {
             }
         }
         this.scene.markDirty();
+    }
+
+    /** The selection of the height mode, over the sprites of its walls, doors and windows. */
+    private drawHeightSelection(
+        graphics: Phaser.GameObjects.Graphics,
+        picker: HeightPicker,
+        targets: readonly HeightTarget[],
+    ): void {
+        for (const rect of picker.rects(targets)) {
+            graphics
+                .fillStyle(HEIGHT_SELECTION_COLOR, 0.3)
+                .fillRect(rect.x, rect.y, rect.width, rect.height)
+                .lineStyle(2, HEIGHT_SELECTION_COLOR, 0.9)
+                .strokeRect(rect.x, rect.y, rect.width, rect.height);
+        }
     }
 
     /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
@@ -754,7 +884,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.markDirty();
     }
 
-    private commit(operation: MapLayerOperation): void {
+    /** Commits an edit as one undo step. `done` runs once the map has been changed. */
+    private commit(operation: MapLayerOperation, done?: () => void): void {
         const wamFile = this.scene.getGameMap().getWamFile();
         if (!wamFile) return;
         const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
@@ -775,11 +906,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             return buildMapLayerCommands(wamFile, entitiesManager, diff);
         };
 
-        this.hoverModel = undefined;
+        this.forgetHoverModel();
         this.mapEditorModeManager
             .executeCommands(factory)
             .then(() => {
-                this.hoverModel = undefined;
+                this.forgetHoverModel();
+                done?.();
             })
             .catch((error: unknown) => {
                 const cause = asError(error);

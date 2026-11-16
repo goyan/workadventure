@@ -480,6 +480,7 @@ const mapEditor: BaseTranslation = {
             floorFill: "Floor fill",
             door: "Door",
             window: "Window",
+            height: "Height",
             erase: "Eraser",
         },
         hints: {
@@ -490,6 +491,7 @@ const mapEditor: BaseTranslation = {
             floorFill: "Click inside a closed room to fill it.",
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
+            height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
             erase: "Hold the button to erase walls and floors. Objects are kept.",
         },
         floors: "Floor",
@@ -498,12 +500,15 @@ const mapEditor: BaseTranslation = {
             wall: "Wall height",
             door: "Door height",
             window: "Window height",
+            selection: "Selection height",
         },
         heightUnavailable: {
             wall: "High wall catalog missing on this map",
             door: "High door catalog missing on this map",
             window: "High window catalog missing on this map",
+            selection: "Pieces of this height missing from the catalog of this map",
         },
+        heightNoSelection: "Select a wall, a door or a window first",
         catalogLoading: "Checking the floor and wall catalogs...",
         catalogMissing: "The floor and wall catalogs are not available in this room.",
         status: {

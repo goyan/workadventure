@@ -10,6 +10,8 @@
         mapLayerDoorHeightStore,
         mapLayerDoorHeightsAvailableStore,
         mapLayerDoorsAvailableStore,
+        mapLayerHeightRequestStore,
+        mapLayerHeightSelectionStore,
         mapLayerFloorFamilyStore,
         mapLayerFloorSwatchesStore,
         mapLayerModeStore,
@@ -24,6 +26,7 @@
     } from "../../Stores/MapLayerStore";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import {
+        IconArrowAutofitHeight,
         IconBrush,
         IconBucket,
         IconDoor,
@@ -49,25 +52,30 @@
     const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
         { mode: "door", icon: IconDoor },
         { mode: "window", icon: IconWindow },
+        { mode: "height", icon: IconArrowAutofitHeight },
     ];
 
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
             $mapLayerModeStore !== "erase" &&
             $mapLayerModeStore !== "door" &&
-            $mapLayerModeStore !== "window",
+            $mapLayerModeStore !== "window" &&
+            $mapLayerModeStore !== "height",
     );
     let usesWall = $derived($mapLayerModeStore === "wall" || $mapLayerModeStore === "room");
 
     // The height setting of the current mode: the walls (and the walls of a room), the doors or the windows.
-    let heightKind = $derived<"wall" | "door" | "window" | undefined>(
+    // The height mode shows the height of what is selected, and applies the one clicked to it.
+    let heightKind = $derived<"wall" | "door" | "window" | "selection" | undefined>(
         usesWall
             ? "wall"
             : $mapLayerModeStore === "door"
               ? "door"
               : $mapLayerModeStore === "window"
                 ? "window"
-                : undefined,
+                : $mapLayerModeStore === "height"
+                  ? "selection"
+                  : undefined,
     );
     let heightStore = $derived(
         heightKind === "door"
@@ -77,18 +85,24 @@
               : mapLayerWallHeightStore,
     );
     let heightsAvailable = $derived(
-        heightKind === "door"
-            ? $mapLayerDoorHeightsAvailableStore
-            : heightKind === "window"
-              ? $mapLayerWindowHeightsAvailableStore
-              : $mapLayerWallHeightsAvailableStore,
+        heightKind === "selection"
+            ? $mapLayerHeightSelectionStore.count > 0
+                ? $mapLayerHeightSelectionStore.available
+                : []
+            : heightKind === "door"
+              ? $mapLayerDoorHeightsAvailableStore
+              : heightKind === "window"
+                ? $mapLayerWindowHeightsAvailableStore
+                : $mapLayerWallHeightsAvailableStore,
     );
     let chosenHeight = $derived(
-        heightKind === "door"
-            ? $mapLayerDoorHeightStore
-            : heightKind === "window"
-              ? $mapLayerWindowHeightStore
-              : $mapLayerWallHeightStore,
+        heightKind === "selection"
+            ? $mapLayerHeightSelectionStore.height
+            : heightKind === "door"
+              ? $mapLayerDoorHeightStore
+              : heightKind === "window"
+                ? $mapLayerWindowHeightStore
+                : $mapLayerWallHeightStore,
     );
 </script>
 
@@ -191,9 +205,16 @@
                                 ? 'bg-secondary'
                                 : 'bg-white/10 hover:bg-white/20'}"
                             aria-pressed={chosenHeight === height}
-                            title={available ? undefined : $LL.mapEditor.mapLayer.heightUnavailable[heightKind]()}
+                            title={available
+                                ? undefined
+                                : heightKind === "selection" && $mapLayerHeightSelectionStore.count === 0
+                                  ? $LL.mapEditor.mapLayer.heightNoSelection()
+                                  : $LL.mapEditor.mapLayer.heightUnavailable[heightKind]()}
                             data-testid="mapLayerHeight-{height}"
-                            onclick={() => heightStore.set(height)}
+                            onclick={() =>
+                                heightKind === "selection"
+                                    ? mapLayerHeightRequestStore.set(height)
+                                    : heightStore.set(height)}
                         >
                             {height}
                         </button>

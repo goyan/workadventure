@@ -156,6 +156,14 @@ export class MapLayerModel {
         return true;
     }
 
+    /** Changes the height of the window of the segment (x, y), brought down to the height of its wall. */
+    public setWindowHeight(x: number, y: number, height: WallHeight): boolean {
+        const wall = this.getWall("h", x, y);
+        if (!wall || !this.hasWindow(x, y)) return false;
+        this.windowHeights.set(edgeKey("h", x, y), height > wall.height ? wall.height : height);
+        return true;
+    }
+
     public removeWindow(x: number, y: number): boolean {
         this.windowHeights.delete(edgeKey("h", x, y));
         return this.windows.delete(edgeKey("h", x, y));
@@ -181,11 +189,8 @@ export class MapLayerModel {
         }
         let height: WallHeight = 1;
         if (door.orientation === "h") {
-            height = doorHeight(door);
-            for (const edge of doorEdges(door)) {
-                const wallHeight = this.getWall(edge.orientation, edge.x, edge.y)?.height ?? 1;
-                if (wallHeight < height) height = wallHeight;
-            }
+            const wallHeight = this.lowerWallOf(door);
+            height = doorHeight(door) > wallHeight ? wallHeight : doorHeight(door);
         }
         this.doors.set(edgeKey(door.orientation, door.x, door.y), {
             orientation: door.orientation,
@@ -194,6 +199,28 @@ export class MapLayerModel {
             height,
         });
         return true;
+    }
+
+    /**
+     * Changes the height of the horizontal door centered on the vertex of `door`, brought down to the height of the lower
+     * of its walls. A vertical door has no height.
+     */
+    public setDoorHeight(door: DoorRef, height: WallHeight): boolean {
+        const placed = this.doors.get(edgeKey(door.orientation, door.x, door.y));
+        if (!placed || placed.orientation !== "h") return false;
+        const wallHeight = this.lowerWallOf(placed);
+        placed.height = height > wallHeight ? wallHeight : height;
+        return true;
+    }
+
+    /** Height of the lower of the two walls a door stands on. */
+    private lowerWallOf(door: DoorRef): WallHeight {
+        let lowest: WallHeight = 4;
+        for (const edge of doorEdges(door)) {
+            const wallHeight = this.getWall(edge.orientation, edge.x, edge.y)?.height ?? 1;
+            if (wallHeight < lowest) lowest = wallHeight;
+        }
+        return lowest;
     }
 
     public removeDoor(door: DoorRef | undefined): void {

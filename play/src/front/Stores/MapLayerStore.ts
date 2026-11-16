@@ -9,6 +9,7 @@ export type MapLayerMode =
     | "floorFill"
     | "door"
     | "window"
+    | "height"
     | "erase";
 
 export const mapLayerModeStore = writable<MapLayerMode>("wall");
@@ -19,6 +20,23 @@ export const mapLayerWallTintStore = writable<WallTint>("blanc");
 export const mapLayerWallHeightStore = writable<WallHeight>(1);
 export const mapLayerDoorHeightStore = writable<WallHeight>(1);
 export const mapLayerWindowHeightStore = writable<WallHeight>(1);
+
+/**
+ * In the height mode, what is selected: how many walls, doors and windows, their common height (undefined when they
+ * differ or nothing is selected), and the heights the catalogs have for all of them.
+ */
+export interface MapLayerHeightSelection {
+    count: number;
+    height: WallHeight | undefined;
+    available: readonly WallHeight[];
+}
+export const mapLayerHeightSelectionStore = writable<MapLayerHeightSelection>({
+    count: 0,
+    height: undefined,
+    available: [1],
+});
+/** A height asked for the selection by the panel; the tool applies it, then sets the store back to undefined. */
+export const mapLayerHeightRequestStore = writable<WallHeight | undefined>(undefined);
 
 /** Heights whose pieces the loaded catalogs have (1 is always there). */
 export const mapLayerWallHeightsAvailableStore = writable<readonly WallHeight[]>([1]);

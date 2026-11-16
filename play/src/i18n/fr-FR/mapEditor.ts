@@ -491,6 +491,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorFill: "Remplir un sol",
             door: "Porte",
             window: "Fenêtre",
+            height: "Hauteur",
             erase: "Gomme",
         },
         hints: {
@@ -501,6 +502,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             floorFill: "Cliquez dans une pièce fermée pour la remplir.",
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
+            height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
             erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
         },
         floors: "Sol",
@@ -509,12 +511,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             wall: "Hauteur du mur",
             door: "Hauteur de la porte",
             window: "Hauteur de la fenêtre",
+            selection: "Hauteur de la sélection",
         },
         heightUnavailable: {
             wall: "Catalogue de murs hauts absent de cette carte",
             door: "Catalogue de portes hautes absent de cette carte",
             window: "Catalogue de fenêtres hautes absent de cette carte",
+            selection: "Pièces de cette hauteur absentes du catalogue de cette carte",
         },
+        heightNoSelection: "Sélectionnez d’abord un mur, une porte ou une fenêtre",
         catalogLoading: "Vérification des catalogues de sols et de murs...",
         catalogMissing: "Les catalogues de sols et de murs ne sont pas disponibles dans cette salle.",
         status: {
