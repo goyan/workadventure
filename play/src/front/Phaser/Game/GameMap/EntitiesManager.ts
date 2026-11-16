@@ -242,6 +242,11 @@ export class EntitiesManager extends EventEmitter {
      * colours nature for this person only; shared snow cover takes priority over it, unless `mapSnow` is false
      * (weather hidden, or a theme chosen rather than auto: see mapSnowShown).
      */
+    /** The season the seasonal trees show: the calendar, the snow of the map or the personal theme. */
+    public getSeason(): Season {
+        return this.season;
+    }
+
     public updateSeason(time: number, serverDate: Date | undefined, forcedSeason?: Season, mapSnow = true): void {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
         const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);

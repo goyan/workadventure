@@ -30,6 +30,7 @@ import {
     listeningZoneJamKey,
     type WAMFileFormat,
     WAMSettingsUtils,
+    Season,
     WeatherType,
 } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
@@ -269,7 +270,9 @@ import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
-import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
+import { isSwayingTree, TreeSway, type SwayingObject } from "./Nature/TreeSway";
+import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
+import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -320,7 +323,7 @@ import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import { GameJungle } from "./Jungle/GameJungle";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
 import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
-import { forcedTreeSeason, type SeasonalTheme } from "./Seasonal/SeasonalTheme";
+import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { LampManager } from "./Lamps/LampManager";
@@ -489,6 +492,8 @@ export class GameScene extends DirtyScene {
     private weatherManager: WeatherManager | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
+    /** Leaves falling from the autumn trees, snow building up on the snowy ones and falling off them. */
+    private treeSeasonEffects: TreeSeasonEffects | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
     /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
     private wallFade: WallFade | undefined;
@@ -1519,6 +1524,8 @@ export class GameScene extends DirtyScene {
         this.lampManager = undefined;
         this.weatherManager?.destroy();
         this.treeSway?.destroy();
+        this.treeSeasonEffects?.destroy();
+        this.treeSeasonEffects = undefined;
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
@@ -1606,6 +1613,12 @@ export class GameScene extends DirtyScene {
         for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
             if (isSwayingTree(entity.getPrefab().id)) yield { id, object: entity };
         }
+    }
+
+    /** The swaying trees with the bare image drawn over each snowy one, which leans as its tree does. */
+    private *swayingTreeImages(): Generator<{ id: string; object: SwayingObject }> {
+        yield* this.swayingTrees();
+        if (this.treeSeasonEffects) yield* this.treeSeasonEffects.overlays();
     }
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
@@ -1820,6 +1833,8 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // Before the swaying: the bare image over a snowy tree leans with its tree.
+            this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
             this.treeSway?.update(time, serverDate?.getTime() ?? time);
             this.updateFootsteps();
             this.updateOverheardLoudness();
@@ -2396,6 +2411,11 @@ export class GameScene extends DirtyScene {
 
     public getDesktopWeather(): WeatherType {
         return effectiveWeather(this.getMapWeather(), this.getSeasonalTheme());
+    }
+
+    /** The map weather as it is shown now, with its wind. */
+    private shownWeather(): ReturnType<typeof shownWeatherSettings> {
+        return shownWeatherSettings(this.getGameMap().getWamFile()?.getWam().settings, this.nightManager?.serverDate());
     }
 
     /** How much the map snow covers the ground for this person, 0 to 1: drawn as the Christmas decor fading in. */
@@ -3030,13 +3050,30 @@ export class GameScene extends DirtyScene {
                 });
                 this.treeSway?.destroy();
                 this.treeSway = new TreeSway(this, {
-                    trees: () => this.swayingTrees(),
+                    trees: () => this.swayingTreeImages(),
                     windSpeed: () =>
                         shownWeatherSettings(
                             this.getGameMap().getWamFile()?.getWam().settings,
                             this.nightManager?.serverDate(),
                         )?.windSpeed,
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
+                });
+                this.treeSeasonEffects?.destroy();
+                this.treeSeasonEffects = new TreeSeasonEffects(this, {
+                    trees: () => this.swayingTrees(),
+                    season: () => this.gameMapFrontWrapper.getEntitiesManager().getSeason(),
+                    bareSeason: () => {
+                        const serverDate = this.nightManager?.serverDate();
+                        return serverDate ? treeSeasonAt(serverDate, WeatherType.Clear, 0) : Season.Summer;
+                    },
+                    windSpeed: () => this.shownWeather()?.windSpeed,
+                    windFrom: () => this.shownWeather()?.windFrom,
+                    // The Christmas theme shows its snow whatever the map weather.
+                    snowCoverage: () =>
+                        this.getSeasonalTheme() === SeasonalTheme.Christmas ? 1 : this.getMapSnowCoverage(),
+                    enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
+                    isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+                    view: () => this.cameras.main.worldView,
                 });
                 this.seasonalThemeManager?.destroy();
                 this.seasonalThemeManager = new SeasonalThemeManager(this, {
