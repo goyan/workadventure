@@ -1685,7 +1685,9 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   s'estompe : la suite continue de segments horizontaux de la même ligne, du côté de cet espace seulement (une partie
   du mur qui borde une autre pièce au nord reste opaque ; une portion de hauteur 1 ne s'estompe pas mais ne coupe pas
   la suite). Un mur vertical haut ne s'estompe que si son chapeau passe sur le corps de l'avatar, à 16 px de sa ligne.
-  Sans grille du dehors, seule la géométrie compte. Un raccord droit (`raccord-EW`, toute hauteur) est posé sur les
+  Sur la rangée d'un mur horizontal haut, en venant du dehors (case « mur » de la grille, sans pièce gardée), l'espace
+  de l'avatar est celui du sol juste au nord de la pièce de mur derrière laquelle il se tient : le mur reste estompé
+  jusqu'à son pied. Sans grille du dehors, seule la géométrie compte. Un raccord droit (`raccord-EW`, toute hauteur) est posé sur les
   chapeaux de ses deux façades, dessinés à l'identique : translucide par-dessus, il ferait un carré plus clair (deux
   images à 45 ou 55 % superposées) ; il est donc invisible tant que son mur est estompé et revient à 1 au moment où les
   façades y reviennent. Même règle pour le raccord de bout (bras E ou W seul) d'un mur de hauteur ≥ 2 : ses façades,

@@ -198,6 +198,11 @@ export function isDrawnByCapsUnder(piece: MapLayerPiece): boolean {
     return (arms === "E" || arms === "W") && piece.height >= 2;
 }
 
+/** The floor just north of the foot of a piece: in the middle of its rectangle on the ground, a little above it. */
+function northFloorOf(entry: { rect: Rect }): { x: number; y: number } {
+    return { x: entry.rect.x + entry.rect.width / 2, y: entry.rect.y - NORTH_FLOOR_OFFSET_PX };
+}
+
 /** Numbers the straight horizontal walls of a model: the runs of consecutive segments on one grid line. */
 function straightWalls(model: MapLayerModel): Map<string, number> {
     const byLine = new Map<number, number[]>();
@@ -299,15 +304,15 @@ export class WallFade {
         let redraw = false;
         if (changed) {
             // The player is outdoors when they stand in no room and the grid says so; on the row of a wall, neither.
-            const outdoors = grid !== undefined && playerRoom === undefined && grid.isOutdoorAt(player.x, player.y);
+            const space = grid ? this.playerSpace(grid, player, playerRoom) : undefined;
             const sameSpace = (entry: FadeEntry): boolean => {
-                if (!grid) return true;
-                if (playerRoom !== undefined) {
+                if (!grid || !space) return grid === undefined;
+                if (space.room !== undefined) {
                     entry.rooms ??= roomsBehind(entry.piece, entry.rect, grid);
-                    return entry.rooms.has(playerRoom);
+                    return entry.rooms.has(space.room);
                 }
-                const northX = entry.rect.x + entry.rect.width / 2;
-                return outdoors && grid.isOutdoorAt(northX, entry.rect.y - NORTH_FLOOR_OFFSET_PX);
+                const north = northFloorOf(entry);
+                return space.outdoors && grid.isOutdoorAt(north.x, north.y);
             };
             // The straight walls the player walks behind, from the space they stand in.
             const hidingWalls = new Set<number>();
@@ -399,6 +404,35 @@ export class WallFade {
         if (entry.wall.alpha === drawn) return false;
         entry.wall.setAlpha(drawn);
         return true;
+    }
+
+    /**
+     * The space the player stands in, for the walls they walk behind: their room (kept on the row of a wall when they
+     * come from inside), or outdoors. On the row of a horizontal wall, coming from outdoors (a wall cell of the grid),
+     * it is the space of the floor just north of the high wall piece they stand behind. Undefined: none of these.
+     */
+    private playerSpace(
+        grid: WallFadeGrid,
+        player: { x: number; y: number },
+        playerRoom: number | undefined,
+    ): { room: number | undefined; outdoors: boolean } | undefined {
+        if (playerRoom !== undefined) return { room: playerRoom, outdoors: false };
+        if (grid.isOutdoorAt(player.x, player.y)) return { room: undefined, outdoors: true };
+        for (const entry of this.entries.values()) {
+            if (entry.straightWalls.length === 0 || entry.carrierHeight < 2) continue;
+            const { rect } = entry;
+            const onItsRow =
+                player.x >= rect.x &&
+                player.x < rect.x + rect.width &&
+                player.y >= rect.y &&
+                player.y < rect.y + rect.height - WALL_FOOTPRINT;
+            if (!onItsRow) continue;
+            const north = northFloorOf(entry);
+            if (grid.isOutdoorAt(north.x, north.y)) return { room: undefined, outdoors: true };
+            const room = grid.roomAt(north.x, north.y);
+            if (room !== undefined) return { room, outdoors: false };
+        }
+        return undefined;
     }
 
     private readPlayerRoom(grid: WallFadeGrid | undefined): number | undefined {

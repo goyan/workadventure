@@ -12,6 +12,7 @@ import { MapLayerModel } from "../../../../../../src/front/Phaser/Game/MapEditor
 import { computePlacements } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
 import {
     applyDoor,
+    applyRoom,
     applyWalls,
     roomWallEdges,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
@@ -480,5 +481,40 @@ describe("WallFade: pieces drawn over the same cap", () => {
         const corners = walls.filter((wall) => /^raccord-N[EW]-h2$/.test(wall.name) && wall.y === 9 * 32 - 32);
         expect(corners.length).toBe(2);
         for (const corner of corners) expect(corner.alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+});
+
+describe("WallFade: the player on the row of a wall, coming from outdoors", () => {
+    /** A room of height 3 traced with the room tool on the cells 5 to 8 by 6 to 8: its back wall stands on the row 5. */
+    function backWallScene(player: { x: number; y: number }) {
+        const model = new MapLayerModel();
+        applyRoom(model, { x: 5, y: 6 }, { x: 8, y: 8 }, "gris", "parquet-clair", { columns: 20, rows: 20 }, 3);
+        const scene = settle(model, player);
+        // The back wall: the facades of the line 5, raised by 64 (their foot at y = 192).
+        const back = (wall: FakeWall): boolean => wall.name.startsWith("facade") && wall.y === 5 * 32 - 64;
+        return { ...scene, back };
+    }
+    const X = 6 * 32 + 16;
+    const FOOT = 6 * 32;
+
+    it("fades the back wall with the player behind it, two rows north of its foot and on its own row", () => {
+        const scene = backWallScene({ x: X, y: FOOT - 64 });
+        expect(scene.alphaOf(scene.back)).toEqual(Array(4).fill(WALL_ROOM_ALPHA));
+        // On the row of the wall, 10 px north of its foot: a wall cell of the grid, neither outdoors nor in a room.
+        scene.moveTo({ x: X, y: FOOT - 10 });
+        expect(scene.alphaOf(scene.back)).toEqual(Array(4).fill(WALL_ROOM_ALPHA));
+    });
+
+    it("never brings the back wall back to 1 while the player walks from the north to its foot", () => {
+        const scene = backWallScene({ x: X, y: FOOT - 90 });
+        for (let y = FOOT - 90; y <= FOOT - 8; y += 4) {
+            scene.moveTo({ x: X, y });
+            expect(scene.alphaOf(scene.back).every((alpha) => alpha < 1)).toBe(true);
+        }
+    });
+
+    it("leaves the back wall opaque with the player inside the room", () => {
+        const scene = backWallScene({ x: X, y: 7 * 32 + 16 });
+        expect(scene.alphaOf(scene.back)).toEqual(Array(4).fill(1));
     });
 });
