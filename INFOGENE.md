@@ -1688,14 +1688,16 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   Sans grille du dehors, seule la géométrie compte. Un raccord droit (`raccord-EW`, toute hauteur) est posé sur les
   chapeaux de ses deux façades, dessinés à l'identique : translucide par-dessus, il ferait un carré plus clair (deux
   images à 45 ou 55 % superposées) ; il est donc invisible tant que son mur est estompé et revient à 1 au moment où les
-  façades y reviennent.
+  façades y reviennent. Même règle pour le raccord de bout (bras E ou W seul) d'un mur de hauteur ≥ 2 : ses façades,
+  fenêtres et linteaux à bout ferment eux-mêmes leur chapeau avec les pixels de ce raccord (catalogue, infra 4a8fa35) ;
+  en hauteur 1 le raccord de bout reste dessiné (`isDrawnByCapsUnder`).
   Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
   l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
   dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; superpositions
-  translucides restantes (dessins différents, non corrigées) : raccords d'angle, de T, de croix et de bout sur le chapeau
-  et le débord de 6 px des façades, linteau sur le chapeau de sa porte ou de sa fenêtre (12 px), bout d'un mur vertical
+  translucides restantes (dessins différents, non corrigées) : raccords d'angle, de T et de croix sur le chapeau des
+  façades, raccords de bout d'un mur de hauteur 1 sur le débord de 6 px de sa façade, linteau sur le chapeau de sa porte ou de sa fenêtre (12 px), bout d'un mur vertical
   haut sur la façade d'un mur plus bas, porte verticale sous un T sur la face du mur du dessus ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
 

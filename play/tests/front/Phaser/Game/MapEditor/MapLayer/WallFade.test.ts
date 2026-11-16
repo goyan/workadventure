@@ -385,10 +385,8 @@ describe("WallFade: the high wall the player walks behind", () => {
         // Behind its second segment: north of its foot (y = 352), under the top of its image (y = 256).
         const scene = settle(model, { x: 3 * 32 + 16, y: 300 });
         expect(scene.alphaOf((wall) => wall.name.startsWith("facade"))).toEqual(Array(8).fill(WALL_ROOM_ALPHA));
-        expect(scene.alphaOf((wall) => wall.name.startsWith("raccord") && !isStraight(wall))).toEqual(
-            Array(2).fill(WALL_ROOM_ALPHA),
-        );
-        expect(scene.alphaOf(isStraight)).toEqual(Array(7).fill(0));
+        // Every joint of a straight high wall is drawn by the caps under it: the straight ones and the two ends.
+        expect(scene.alphaOf((wall) => wall.name.startsWith("raccord"))).toEqual(Array(9).fill(0));
         scene.moveTo({ x: 3 * 32 + 16, y: 200 });
         expect(scene.walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
     });
@@ -427,11 +425,8 @@ describe("WallFade: pieces drawn over the same cap", () => {
         const scene = settle(straightWall(), { x: 3 * 32 + 16, y: 300 });
         expect(scene.alphaOf(isStraight)).toEqual(Array(7).fill(0));
         expect(scene.alphaOf((wall) => wall.name.startsWith("facade"))).toEqual(Array(8).fill(WALL_ROOM_ALPHA));
-        // The joints at the ends of the wall draw its closing outline: they keep the opacity of the wall.
-        expect(scene.alphaOf((wall) => /^raccord-[EW]-h3$/.test(wall.name))).toEqual([
-            WALL_ROOM_ALPHA,
-            WALL_ROOM_ALPHA,
-        ]);
+        // The facades at the ends of a high wall close their cap with the pixels of the end joint: hidden too.
+        expect(scene.alphaOf((wall) => /^raccord-[EW]-h3$/.test(wall.name))).toEqual([0, 0]);
         // North of the top of the wall: opaque again, every piece at 1.
         scene.moveTo({ x: 3 * 32 + 16, y: 200 });
         expect(scene.walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
@@ -457,5 +452,33 @@ describe("WallFade: pieces drawn over the same cap", () => {
         expect(walls.filter(isStraight).every((wall) => wall.alpha === 0)).toBe(true);
         fade.update(WALL_FADE_MS / 2);
         expect(walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
+    });
+
+    it("keeps the end joints of a wall of height 1 drawn: its facades do not close their cap", () => {
+        const model = new MapLayerModel();
+        for (let x = 2; x < 6; x++) model.setWall("h", x, 10, "gris", 1);
+        const { walls, grid } = sceneOf(model);
+        const fade = new WallFade(
+            () => walls,
+            () => grid,
+            () => ({ x: 400, y: 600 }),
+            () => true,
+            () => undefined,
+        );
+        fade.update(WALL_FADE_MS);
+        expect(walls.filter((wall) => /^raccord-[EW]$/.test(wall.name)).map((wall) => wall.alpha)).toEqual([
+            WALL_EDIT_ALPHA,
+            WALL_EDIT_ALPHA,
+        ]);
+        expect(walls.filter(isStraight).every((wall) => wall.alpha === 0)).toBe(true);
+    });
+
+    it("keeps the corners, T and crosses of a high wall drawn at the opacity of the wall", () => {
+        const { fade, walls } = setup(2);
+        fade.update(WALL_FADE_MS);
+        // The corners of the south wall of the room (line 9, raised by 32): NE and NW.
+        const corners = walls.filter((wall) => /^raccord-N[EW]-h2$/.test(wall.name) && wall.y === 9 * 32 - 32);
+        expect(corners.length).toBe(2);
+        for (const corner of corners) expect(corner.alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
     });
 });

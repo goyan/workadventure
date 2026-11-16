@@ -184,6 +184,20 @@ function horizontalSegmentsOf(
     }
 }
 
+/**
+ * Whether a joint draws nothing that the caps under it do not already draw the same, so that it can be hidden while its
+ * wall is see-through: a straight joint (arms E and W) lies over the caps of its two facades; the end joint of a wall
+ * of height 2 or more (arm E or W alone) lies over the end of its facade, which closes its cap with the pixels of that
+ * joint (catalog, infrastructure 4a8fa35). The facades of height 1 do not close their cap; corners, T and crosses have
+ * openings the caps do not have.
+ */
+export function isDrawnByCapsUnder(piece: MapLayerPiece): boolean {
+    if (piece.kind !== "joint") return false;
+    const arms = [...piece.arms].sort().join("");
+    if (arms === "EW") return true;
+    return (arms === "E" || arms === "W") && piece.height >= 2;
+}
+
 /** Numbers the straight horizontal walls of a model: the runs of consecutive segments on one grid line. */
 function straightWalls(model: MapLayerModel): Map<string, number> {
     const byLine = new Map<number, number[]>();
@@ -223,9 +237,9 @@ interface FadeEntry {
     elapsed: number;
     /** A piece that appeared on the map takes its opacity at once, with no fade. */
     snap: boolean;
-    /** A straight joint (arms E and W only): drawn over the caps of its two facades, the same as them. */
+    /** A joint drawn the same by the caps under it (`isDrawnByCapsUnder`): hidden while its wall is see-through. */
     overCap: boolean;
-    /** Opacity of the piece in the fade; the one drawn differs for a hidden straight joint (`overCap`). */
+    /** Opacity of the piece in the fade; the one drawn differs for a hidden joint (`overCap`). */
     opacity: number;
 }
 
@@ -375,9 +389,9 @@ export class WallFade {
     }
 
     /**
-     * Gives a piece its opacity in the fade. A straight joint lies over the caps of its two facades, drawn the same:
-     * see-through over them, it would make a brighter square (two translucent images one over the other), so it is
-     * hidden until its wall is opaque again, and shows again at the same time as the facades reach 1.
+     * Gives a piece its opacity in the fade. A joint drawn the same by the caps under it (`isDrawnByCapsUnder`) would,
+     * see-through over them, make a brighter square (two translucent images one over the other): it is hidden until its
+     * wall is opaque again, and shows again at the same time as the facades reach 1.
      */
     private show(entry: FadeEntry, opacity: number): boolean {
         entry.opacity = opacity;
@@ -450,11 +464,7 @@ export class WallFade {
                 elapsed: 0,
                 // The pieces of the first reading fade in; the ones that appear later take their opacity at once.
                 snap: this.started,
-                overCap:
-                    piece.kind === "joint" &&
-                    piece.arms.length === 2 &&
-                    piece.arms.includes("E") &&
-                    piece.arms.includes("W"),
+                overCap: isDrawnByCapsUnder(piece),
                 opacity: wall.alpha,
             };
             next.set(wall, entry);
