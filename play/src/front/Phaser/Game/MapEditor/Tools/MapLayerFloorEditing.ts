@@ -49,6 +49,9 @@ const FLOOR_PREVIEW_DEPTH = 890_000;
 const OK_COLOR = 0x22c55e;
 const REFUSED_COLOR = 0xef4444;
 const ERASE_COLOR = 0xf97316;
+/** The tiles one steps onto at the top of a stair: with a slab, and without one. */
+const ARRIVAL_COLOR = 0x3b82f6;
+const MISSING_COLOR = 0xf97316;
 
 /** An edit of the floors, applied to their model; false when it changes nothing or is refused. */
 type FloorOperation = (model: FloorModel, bounds: MapBounds) => boolean;
@@ -175,19 +178,83 @@ export class MapLayerFloorEditing {
         if (mode === "stair") {
             const shape = this.stairShape();
             if (!shape) return;
-            const fits = canPlaceStair(this.readModel(), shape, to, level, this.getBounds());
+            const model = this.readModel();
+            const fits = canPlaceStair(model, shape, to, level, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
+            const top = level + shape.rise;
+            const ground = stairGroundBox(shape, to);
+            // Where the stair will show.
             const image = stairImagePosition(shape, to, level);
             const box = stairScreenBox(shape, to);
             graphics.fillStyle(color, 0.3);
             graphics.fillRect(image.x, image.y, box.width, box.height);
-            // Its footprint on the floor it starts from, and its well in the floor it reaches.
-            const ground = stairGroundBox(shape, to);
             graphics.lineStyle(2, color, 1);
-            graphics.strokeRect(ground.x, ground.y - level, ground.width, ground.height);
-            graphics.lineStyle(1, 0xffffff, 0.9);
-            const rise = box.height - ground.height;
-            graphics.strokeRect(ground.x, ground.y - level - Math.abs(rise), ground.width, ground.height);
+            graphics.strokeRect(image.x, image.y, box.width, box.height);
+
+            const cells: { x: number; y: number }[] = [];
+            for (let x = ground.x / size; x < (ground.x + ground.width) / size; x++) {
+                for (let y = ground.y / size; y < (ground.y + ground.height) / size; y++) cells.push({ x, y });
+            }
+            // The slabs of the floor it reaches that its well removes.
+            graphics.fillStyle(REFUSED_COLOR, 0.45);
+            for (const cell of cells) {
+                if (model.hasSlab(top, cell.x, cell.y))
+                    graphics.fillRect(cell.x * size, cell.y * size - top, size, size);
+            }
+            // The tiles of that floor one steps onto at the top: blue with a slab, orange without (the stair would
+            // lead nowhere).
+            const horizontal = shape.direction === "e" || shape.direction === "o";
+            const beyond =
+                shape.direction === "n"
+                    ? ground.y / size - 1
+                    : shape.direction === "s"
+                      ? (ground.y + ground.height) / size
+                      : shape.direction === "e"
+                        ? (ground.x + ground.width) / size
+                        : ground.x / size - 1;
+            for (let i = 0; i < shape.width; i++) {
+                const cell = horizontal ? { x: beyond, y: ground.y / size + i } : { x: ground.x / size + i, y: beyond };
+                const arrival = model.hasSlab(top, cell.x, cell.y) ? ARRIVAL_COLOR : MISSING_COLOR;
+                graphics.fillStyle(arrival, 0.35);
+                graphics.fillRect(cell.x * size, cell.y * size - top, size, size);
+                graphics.lineStyle(2, arrival, 1);
+                graphics.strokeRect(cell.x * size, cell.y * size - top, size, size);
+            }
+            // From the first step (the dot, on the floor it starts from) to the top (the arrow head, on the floor it
+            // reaches).
+            const centreX = ground.x + ground.width / 2;
+            const centreY = ground.y + ground.height / 2;
+            const foot =
+                shape.direction === "n"
+                    ? { x: centreX, y: ground.y + ground.height - size / 2 }
+                    : shape.direction === "s"
+                      ? { x: centreX, y: ground.y + size / 2 }
+                      : shape.direction === "e"
+                        ? { x: ground.x + size / 2, y: centreY }
+                        : { x: ground.x + ground.width - size / 2, y: centreY };
+            const head =
+                shape.direction === "n"
+                    ? { x: centreX, y: ground.y }
+                    : shape.direction === "s"
+                      ? { x: centreX, y: ground.y + ground.height }
+                      : shape.direction === "e"
+                        ? { x: ground.x + ground.width, y: centreY }
+                        : { x: ground.x, y: centreY };
+            const from = { x: foot.x, y: foot.y - level };
+            const tip = { x: head.x, y: head.y - top };
+            graphics.lineStyle(3, 0xffffff, 1);
+            graphics.lineBetween(from.x, from.y, tip.x, tip.y);
+            graphics.fillStyle(0xffffff, 1);
+            graphics.fillCircle(from.x, from.y, 4);
+            const angle = Math.atan2(tip.y - from.y, tip.x - from.x);
+            graphics.fillTriangle(
+                tip.x,
+                tip.y,
+                tip.x - 9 * Math.cos(angle - 0.5),
+                tip.y - 9 * Math.sin(angle - 0.5),
+                tip.x - 9 * Math.cos(angle + 0.5),
+                tip.y - 9 * Math.sin(angle + 0.5),
+            );
             return;
         }
         if (mode === "slab" && level === 0) return;

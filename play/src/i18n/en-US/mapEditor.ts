@@ -499,7 +499,7 @@ const mapEditor: BaseTranslation = {
             erase: "Hold the button to erase walls and floors. Objects are kept.",
             slab: "Choose a level, then drag a rectangle to lay the slabs of a raised floor.",
             slabErase: "Drag a rectangle to remove slabs of the level, or click a stair that starts from it.",
-            stair: "Click the tile of the first step. The stair goes up from the level to the floor of the chosen height, and cuts its well in it.",
+            stair: "Click the tile of the first step, on the level being edited. The dot is the first step, the arrow shows where the stair arrives, one level up. Blue tiles: the slabs you step onto at the top (orange: no slab there yet, the stair would lead nowhere). Red tiles: the slabs removed for its well.",
         },
         floors: "Floor",
         floorLevel: {
