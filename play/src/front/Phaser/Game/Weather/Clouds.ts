@@ -29,6 +29,15 @@ function cloudSize(cloudiness: number): number {
 /** Size of a cloud against the others, drawn for each: from 0.45 to 1.75 times the usual size, mostly small ones. */
 const SMALLEST_CLOUD = 0.45;
 const BIGGEST_CLOUD = 1.75;
+/**
+ * Each copy of a cloud over the map is moved (up to 0.3 of the square of the sky) and sized (0.75 to 1.3 times) its own
+ * way, the same for everyone: zoomed out, the sky shows no repeated pattern.
+ */
+const COPY_SHIFT = 0.3;
+const COPY_SMALLEST = 0.75;
+const COPY_BIGGEST = 1.3;
+/** Copies are told apart over this many squares of the sky: far beyond any screen, and small numbers for the hash. */
+const COPY_CYCLE = 997;
 /** Farthest a puff reaches from the centre of its cloud, in radii: the main puff and its farthest lobe. */
 const CLOUD_REACH = 1.6;
 /**
@@ -138,6 +147,11 @@ export function overcastVeil(cloudiness: number, daylight = 1): number {
     return OVERCAST_ALPHA * daylight * clamp01((cloudiness - OVERCAST_FROM) / (OVERCAST_FULL - OVERCAST_FROM));
 }
 
+/** A copy number brought into 0..COPY_CYCLE - 1. */
+function cycled(value: number): number {
+    return ((value % COPY_CYCLE) + COPY_CYCLE) % COPY_CYCLE;
+}
+
 /**
  * The puffs of the clouds over the view (and a margin around it), drifting with the server time: a square of the sky
  * repeated over the map, so the clouds are the same for any camera, zoom or screen. A cloudier sky has more clouds,
@@ -171,13 +185,23 @@ export function cloudPatches(
             dy: lobe.dy + (hash01(index, 47 + lobeIndex) - 0.5) * 0.4,
             scale: lobe.scale,
         }));
-        // Far enough for a puff whose centre is out of the view to still reach into it.
-        for (const centre of repeatedOverView(square, SKY_PERIOD, view, CLOUD_REACH * radius)) {
+        // Far enough for a puff whose centre is out of the view, or moved off it, to still reach into it.
+        const reach = CLOUD_REACH * radius * COPY_BIGGEST + COPY_SHIFT * SKY_PERIOD;
+        for (const copy of repeatedOverView(square, SKY_PERIOD, view, reach)) {
+            // Which copy it is, counted from the drifting square: it keeps its shift and size as the sky drifts.
+            const column = cycled(Math.round((copy.x - square.x) / SKY_PERIOD));
+            const row = cycled(Math.round((copy.y - square.y) / SKY_PERIOD));
+            const seed = index * COPY_CYCLE + column;
+            const centre = {
+                x: copy.x + (hash01(seed, row, 1) - 0.5) * 2 * COPY_SHIFT * SKY_PERIOD,
+                y: copy.y + (hash01(seed, row, 2) - 0.5) * 2 * COPY_SHIFT * SKY_PERIOD,
+            };
+            const copyRadius = radius * (COPY_SMALLEST + (COPY_BIGGEST - COPY_SMALLEST) * hash01(seed, row, 3));
             for (const lobe of lobes) {
                 patches.push({
-                    x: centre.x + lobe.dx * radius,
-                    y: centre.y + lobe.dy * radius,
-                    radius: Math.round(radius * lobe.scale),
+                    x: centre.x + lobe.dx * copyRadius,
+                    y: centre.y + lobe.dy * copyRadius,
+                    radius: Math.round(copyRadius * lobe.scale),
                     weight,
                 });
             }
