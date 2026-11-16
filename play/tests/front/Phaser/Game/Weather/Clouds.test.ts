@@ -257,6 +257,18 @@ describe("cloudDrift (north up, y down)", () => {
         expect(round(cloudDrift(90))).toEqual({ x: -CLOUD_DRIFT_PER_SECOND, y: 0 });
     });
 
+    it("goes as fast as the wind: 60 px a second at 20 km/h, in proportion, from 15 to 180 px a second", () => {
+        const speed = (windSpeed: number | undefined) =>
+            Math.round(Math.hypot(...Object.values(cloudDrift(270, windSpeed))));
+        expect(speed(20)).toBe(60);
+        expect(speed(40)).toBe(120);
+        expect(speed(10)).toBe(30);
+        expect(speed(0)).toBe(15);
+        expect(speed(150)).toBe(180);
+        // Speed unknown: the usual one.
+        expect(speed(undefined)).toBe(60);
+    });
+
     it("keeps the usual direction without a wind (Automatic, or no wind given)", () => {
         expect(cloudDrift(undefined)).toEqual({ x: 48, y: 36 });
     });
