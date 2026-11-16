@@ -169,14 +169,14 @@ export function rainPalette(color: number): CloudPalette {
 }
 
 /**
- * Opacity of a cloud cell by its thickness level: a faint rim on the first two levels, then the whole body, so a cloud
- * has an edge instead of fading out like a mist.
+ * Opacity of a cloud cell by its thickness level: a rim rising by quarters on the first three levels, then the whole
+ * body, so a cloud has an edge instead of fading out like a mist. Quarters, not thirds: as the clouds drift, a cell of
+ * the rim changes by one level at a time, and a jump of a third of the opacity flickered.
  */
+const CLOUD_RIM_LEVELS = 4;
 export function cloudAlpha(level: number, body: number): number {
     if (level <= 0) return 0;
-    if (level === 1) return 0.35 * body;
-    if (level === 2) return 0.7 * body;
-    return body;
+    return Math.min(1, level / CLOUD_RIM_LEVELS) * body;
 }
 
 /** How far a cell looks towards the light to tell its tone, in map pixels: the same at any zoom. */
