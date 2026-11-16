@@ -30,7 +30,6 @@ import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
-import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
 import { MapDragPointerCapture } from "./MapDragPointerCapture";
@@ -478,8 +477,9 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         if (!this.gameScene.userInputManager.isControlsEnabled || this.gameScene.getCameraManager().isZoomLocked()) {
             return false;
         }
-        // The explorer list sets a focus target on hover, which must not hold the editor's view like a focus zone.
-        return get(mapEditorModeStore) || !waScaleManager.getFocusTarget();
+        // A focus zone (a personal desk, a meeting room) frames the view on entering it, but never holds it: a drag
+        // or a two-finger scroll frees the view as anywhere else, and it comes back on the zone when the avatar moves.
+        return true;
     }
 
     private canDragMap(): boolean {
