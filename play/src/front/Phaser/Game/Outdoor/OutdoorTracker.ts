@@ -1,4 +1,5 @@
 import {
+    groundPieceOf,
     mapLayerPieceSize,
     parseMapLayerPrefab,
     wallRise,
@@ -95,8 +96,8 @@ export interface OutdoorSourceEntity {
 }
 
 /**
- * A piece of the map layer of height 2 or more, as the piece of height 1 it stands in for. A lintel has no piece of
- * height 1: the door or the window under it stands on the ground.
+ * A piece of the map layer of height 2 or more, as the piece of height 1 it stands in for (`groundPieceOf`). A lintel
+ * counts for nothing: the door or the window under it stands on the ground, and a wall there would close the doorway.
  */
 function groundPiece(
     piece: MapLayerPiece | undefined,
@@ -105,7 +106,7 @@ function groundPiece(
     if (piece.kind === "lintel") return { rise: 0, ground: undefined };
     // A vertical door has no height; the pieces of height 1 keep their own image.
     if (piece.height === 1) return undefined;
-    return { rise: wallRise(piece.height), ground: { ...piece, height: 1 } };
+    return { rise: wallRise(piece.height), ground: groundPieceOf(piece) };
 }
 
 /**

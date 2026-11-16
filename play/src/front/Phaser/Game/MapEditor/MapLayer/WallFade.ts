@@ -3,6 +3,7 @@ import {
     MAP_LAYER_TILE_SIZE,
     WALL_THICKNESS,
     facadeLeftExtension,
+    groundPieceOf,
     mapLayerPieceSize,
     parseMapLayerPrefab,
     wallRise,
@@ -60,14 +61,8 @@ export function wallTargetAlpha(
  * for; a lintel stands where the facade of height 1 under it would.
  */
 function groundRect(piece: MapLayerPiece, x: number, y: number): Rect {
-    if (piece.kind === "floor") {
-        return { x, y, ...mapLayerPieceSize(piece) };
-    }
-    const ground: MapLayerPiece =
-        piece.kind === "lintel"
-            ? { kind: "facade", tint: piece.tint, ends: piece.ends, height: 1 }
-            : { ...piece, height: 1 };
-    return { x, y: y + wallRise(piece.height), ...mapLayerPieceSize(ground) };
+    const rise = piece.kind === "floor" ? 0 : wallRise(piece.height);
+    return { x, y: y + rise, ...mapLayerPieceSize(groundPieceOf(piece)) };
 }
 
 /** Height of the wall that carries a door or a window, read in the model; for the other pieces, their own height. */
@@ -131,12 +126,16 @@ export class WallFade {
         private readonly grid: () => WallFadeGrid | undefined,
         private readonly player: () => { x: number; y: number },
         private readonly editorOpen: () => boolean,
+        /** Called after a change of opacity: the scene only draws itself again when told (`DirtyScene`). */
+        private readonly markDirty: () => void,
     ) {}
 
     /** Moves each wall's alpha towards its target, WALL_FADE_MS for a full swing. */
     update(deltaMs: number): void {
         const grid = this.grid();
         const editorOpen = this.editorOpen();
+        // The rooms are numbered again with each new grid: the room kept from the previous one means nothing.
+        if (grid !== this.lastGrid) this.playerRoom = undefined;
         const playerRoom = this.readPlayerRoom(grid);
         const added = this.readEntries();
         const changed =
@@ -147,6 +146,7 @@ export class WallFade {
         this.lastGrid = grid;
         this.lastEditorOpen = editorOpen;
         this.lastPlayerRoom = playerRoom;
+        let redraw = false;
         if (changed) {
             for (const entry of this.entries.values()) {
                 if (entry.piece.kind !== "floor" && !editorOpen && playerRoom !== undefined && grid) {
@@ -162,7 +162,10 @@ export class WallFade {
                     entry.snap = false;
                     entry.target = target;
                     entry.elapsed = WALL_FADE_MS;
-                    entry.wall.setAlpha(target);
+                    if (Math.abs(entry.wall.alpha - target) >= 1e-6) {
+                        entry.wall.setAlpha(target);
+                        redraw = true;
+                    }
                 } else if (target !== entry.target) {
                     entry.target = target;
                     entry.from = entry.wall.alpha;
@@ -170,18 +173,29 @@ export class WallFade {
                 }
             }
         }
-        for (const entry of this.entries.values()) this.step(entry, deltaMs);
+        for (const entry of this.entries.values()) {
+            if (this.step(entry, deltaMs)) redraw = true;
+        }
+        if (redraw) this.markDirty();
     }
 
     /** Every wall back to 1. */
     destroy(): void {
-        for (const entry of this.entries.values()) entry.wall.setAlpha(1);
+        let redraw = false;
+        for (const entry of this.entries.values()) {
+            if (entry.wall.alpha !== 1) {
+                entry.wall.setAlpha(1);
+                redraw = true;
+            }
+        }
         this.entries.clear();
+        if (redraw) this.markDirty();
     }
 
-    private step(entry: FadeEntry, deltaMs: number): void {
+    /** Moves the opacity of a piece one step towards its target. Returns whether it changed. */
+    private step(entry: FadeEntry, deltaMs: number): boolean {
         const alpha = entry.wall.alpha;
-        if (Math.abs(alpha - entry.target) < 1e-6) return;
+        if (Math.abs(alpha - entry.target) < 1e-6) return false;
         if (entry.elapsed >= WALL_FADE_MS) {
             // Someone else changed the opacity (the editor resets it when it dims the other entities): fade back.
             entry.from = alpha;
@@ -190,6 +204,7 @@ export class WallFade {
         entry.elapsed = Math.min(WALL_FADE_MS, entry.elapsed + deltaMs);
         const progress = entry.elapsed / WALL_FADE_MS;
         entry.wall.setAlpha(progress >= 1 ? entry.target : entry.from + (entry.target - entry.from) * progress);
+        return true;
     }
 
     private readPlayerRoom(grid: WallFadeGrid | undefined): number | undefined {

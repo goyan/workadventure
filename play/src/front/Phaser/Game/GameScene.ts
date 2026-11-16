@@ -3009,6 +3009,7 @@ export class GameScene extends DirtyScene {
                     // The feet, as the torch reads the outdoors.
                     () => ({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y }),
                     () => this.mapEditorModeManager?.isActive() ?? false,
+                    () => this.markDirty(),
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),

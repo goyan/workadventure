@@ -114,20 +114,26 @@ const ON_NORTH_WALL_ROW = { x: 6 * 32 + 16, y: 6 * 32 + 8 };
 const OUTSIDE = { x: 32, y: 32 };
 
 function setup(height: WallHeight) {
-    const { walls, grid } = room(height);
+    const { walls, grid: firstGrid } = room(height);
+    let grid = firstGrid;
     const listed: FakeWall[] = [...walls];
     let player = { ...INSIDE };
     let editorOpen = false;
+    const redraws = { count: 0 };
     const fade = new WallFade(
         () => listed,
         () => grid,
         () => player,
         () => editorOpen,
+        () => redraws.count++,
     );
     return {
         walls,
         listed,
         fade,
+        redraws,
+        /** The outdoor tracker computed the grid again, with the same walls. */
+        recomputeGrid: () => (grid = room(height).grid),
         setPlayer: (point: { x: number; y: number }) => (player = { ...point }),
         setEditor: (open: boolean) => (editorOpen = open),
         facade: () => {
@@ -211,5 +217,30 @@ describe("WallFade", () => {
         facade().setAlpha(1);
         fade.update(WALL_FADE_MS / 2);
         expect(facade().alpha).toBeCloseTo(0.775, 3);
+    });
+
+    it("asks for a redraw while an opacity changes, and not once the walls are still", () => {
+        const { fade, redraws } = setup(2);
+        fade.update(WALL_FADE_MS / 2);
+        expect(redraws.count).toBe(1);
+        fade.update(WALL_FADE_MS / 2);
+        expect(redraws.count).toBe(2);
+        fade.update(WALL_FADE_MS);
+        expect(redraws.count).toBe(2);
+        fade.destroy();
+        expect(redraws.count).toBe(3);
+    });
+
+    it("forgets the room kept on the row of a wall when the grid is computed again, its rooms being numbered anew", () => {
+        const { fade, facade, setPlayer, recomputeGrid } = setup(2);
+        fade.update(WALL_FADE_MS);
+        setPlayer(ON_NORTH_WALL_ROW);
+        recomputeGrid();
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBeCloseTo(1, 6);
+        setPlayer(INSIDE);
+        recomputeGrid();
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
     });
 });

@@ -228,14 +228,9 @@ const LINTEL_NAME = new RegExp(`^linteau-(${TINTS})-(mid|left|right|single)-h([2
 const DOOR_NAME = new RegExp(`^porte-(h|v)-(${TINTS})-(g|d|haut|bas)${HEIGHT}(?:-(b)?(\\d))?$`);
 const JOINT_NAME = new RegExp(`^raccord-(N?E?S?W?)${HEIGHT}$`);
 
+/** The height told by the suffix of a name (the regular expressions only let 2 to 4 through). */
 function readHeight(suffix: string | undefined): WallHeight {
-    return suffix === undefined ? 1 : toWallHeight(Number(suffix));
-}
-
-/** The known wall height nearest to `value`. */
-export function toWallHeight(value: number): WallHeight {
-    const rounded = Math.round(value);
-    return MAP_LAYER_WALL_HEIGHTS.find((height) => height === rounded) ?? (rounded > 4 ? 4 : 1);
+    return MAP_LAYER_WALL_HEIGHTS.find((height) => String(height) === suffix) ?? 1;
 }
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not part of the map layer. */
@@ -324,6 +319,17 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
 
 export function isMapLayerPrefab(collectionName: string, prefabId: string): boolean {
     return parseMapLayerPrefab(collectionName, prefabId) !== undefined;
+}
+
+/**
+ * The piece of height 1 a piece stands in for on the ground (its foot does not move with the height): a high wall,
+ * door or window is its piece of height 1, `wallRise(height)` lower; a lintel stands where the facade of height 1
+ * under its wall would. The other pieces are their own.
+ */
+export function groundPieceOf(piece: MapLayerPiece): MapLayerPiece {
+    if (piece.kind === "floor") return piece;
+    if (piece.kind === "lintel") return { kind: "facade", tint: piece.tint, ends: piece.ends, height: 1 };
+    return { ...piece, height: 1 };
 }
 
 /** Size in pixels of the sprite of each piece, used to create entities without loading their image first. */
