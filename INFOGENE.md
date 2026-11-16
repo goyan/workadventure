@@ -1617,7 +1617,7 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
 - Déplacer : en mode « Fenêtre », appuyer sur une fenêtre posée et la glisser ; au relâcher elle passe sur le segment
   visé s'il peut la recevoir (mur horizontal libre, même sur un autre mur), sinon elle reste (« windowInvalid »). Les
   murs ne bougent pas ; relâcher sur son propre segment ne fait rien. Un déplacement = une entrée d'annulation.
-- On voit à travers : la vitre de l'image est semi-transparente (alpha 128). Ce que la façade cache (avatar collé au mur
+- On voit à travers : la vitre de l'image est semi-transparente (bleu ciel `#90d6f1`, bande `#579be1` en haut, alpha 180). Ce que la façade cache (avatar collé au mur
   côté nord, haut d'un meuble, sol de la pièce derrière) apparaît dans la vitre ; aucun code de rendu dédié.
 - Stockage : une entité WAM de la collection `Carte Fenêtres` (`fenetre-<teinte>-<bout>`, mêmes bouts, place, collision et
   profondeur que la façade qu'elle remplace). Le mur reste dans le modèle sous la fenêtre (`MapLayerModel.setWindow`) :
@@ -1626,6 +1626,20 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
 - Ailleurs, une fenêtre est un mur : obstacle, chemin, grille dehors/dedans (`OUTDOOR_WALL_COLLECTIONS`), lumière des
   lampes (`MAP_LAYER_WALL_LIKE_COLLECTIONS`). Les images (dérivées des façades du pack) sont générées par
   `tools/build_window_prefabs.mjs` du dépôt infra et restent dans le dépôt privé.
+
+Portes vitrées (interrupteur « Vitrée » du mode Porte) :
+
+- Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre (même bleu,
+  bande et alpha que les fenêtres), poignée et cadre gardés ; on voit à travers, même porte entrouverte. Une porte
+  verticale reste pleine (vue de dessus, c'est un trait).
+- Interrupteur éteint par défaut, gardé le temps de la page. Allumé, le mode Porte pose des portes horizontales
+  vitrées ; un clic sur une porte horizontale déjà posée la bascule dans la variante choisie (une entrée d'annulation),
+  sans message si elle l'est déjà. Grisé quand le catalogue de la salle n'a pas les portes vitrées : les portes posées
+  sont alors pleines.
+- Stockage : `DoorRef.glazed` (absent pour une porte pleine), porté par le nom des pièces
+  `porte-h-<teinte>-<g|d>-vitree` puis le suffixe d'image (`-3`, `-b3`) ; une porte verticale vitrée n'existe pas.
+  Ouverture, collision, verrou et toc toc identiques à une porte pleine. Images générées par
+  `tools/build_door_prefabs.mjs` du dépôt infra.
 
 ## Confirmation avant de libérer son bureau
 
