@@ -1767,7 +1767,8 @@ export class GameScene extends DirtyScene {
         });
         const localUuid = this._knockManager?.localUuid;
         const listener = asDoorCharacter(this.CurrentPlayer, localUuid === "" ? undefined : localUuid);
-        const characters: DoorCharacter[] = [listener];
+        // SPIKE (floors study): an avatar on a raised floor does not open the doors of the ground.
+        const characters: DoorCharacter[] = this.CurrentPlayer.getFloorZ() > 0 ? [] : [listener];
         if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
         for (const player of this.MapPlayersByKey.values()) {
             characters.push(asDoorCharacter(player, player.userUuid));
