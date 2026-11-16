@@ -53,8 +53,8 @@ describe("door prefabs", () => {
 
     it("names and reads glazed horizontal doors, never glazed vertical ones", () => {
         const read = (name: string) => parseMapLayerPrefab("Carte Portes", mapLayerPrefabId("Carte Portes", name));
-        expect(doorPrefabName("h", "gris", "g", undefined, false, true)).toBe("porte-h-gris-g-vitree");
-        expect(doorPrefabName("h", "gris", "d", 3, true, true)).toBe("porte-h-gris-d-vitree-b3");
+        expect(doorPrefabName("h", "gris", "g", undefined, false, 1, true)).toBe("porte-h-gris-g-vitree");
+        expect(doorPrefabName("h", "gris", "d", 3, true, 1, true)).toBe("porte-h-gris-d-vitree-b3");
         expect(doorPrefabName("h", "gris", "g", 3)).toBe("porte-h-gris-g-3");
         expect(read("porte-h-gris-d-vitree-b3")).toEqual({
             kind: "door",
@@ -63,6 +63,7 @@ describe("door prefabs", () => {
             side: "d",
             frame: 3,
             reverse: true,
+            height: 1,
             glazed: true,
         });
         expect(read("porte-h-gris-g-vitree")).toMatchObject({ frame: 7, glazed: true });
@@ -116,7 +117,7 @@ describe("doors", () => {
         const model = roomWithWall();
         model.setDoor({ orientation: "h", x: 5, y: 5 });
         const rebuilt = modelFromPlacedPrefabs(placed(model));
-        expect([...rebuilt.getDoors()]).toEqual([{ orientation: "h", x: 5, y: 5 }]);
+        expect([...rebuilt.getDoors()]).toEqual([{ orientation: "h", x: 5, y: 5, height: 1 }]);
         expect(rebuilt.hasWall("h", 4, 5)).toBe(true);
         expect(
             placed(rebuilt)
@@ -137,7 +138,7 @@ describe("doors", () => {
         expect(items).toContain("porte-v-blanc-haut@96,140");
         expect(items).toContain("porte-v-blanc-bas@96,172");
         const rebuilt = modelFromPlacedPrefabs(placed(model));
-        expect([...rebuilt.getDoors()]).toEqual([{ orientation: "v", x: 4, y: 5 }]);
+        expect([...rebuilt.getDoors()]).toEqual([{ orientation: "v", x: 4, y: 5, height: 1 }]);
     });
 
     it("lets everyone through the door for the pathfinder, but not through the wall next to it", () => {
@@ -202,7 +203,7 @@ describe("doors", () => {
         model.setDoor({ orientation: "h", x: 5, y: 5 });
         expect(eraseTargetAt(model, 5 * 32 + 3, 5 * 32 + 20)).toEqual({
             kind: "door",
-            door: { orientation: "h", x: 5, y: 5 },
+            door: { orientation: "h", x: 5, y: 5, height: 1 },
         });
         expect(eraseTargetAt(model, 2 * 32 + 3, 5 * 32 + 20)).toMatchObject({ kind: "wall" });
         expect(eraseTargetAt(model, 2 * 32 + 3, 8 * 32)).toBeUndefined();

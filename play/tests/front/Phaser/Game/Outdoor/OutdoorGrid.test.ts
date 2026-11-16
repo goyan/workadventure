@@ -75,3 +75,39 @@ describe("OutdoorGrid", () => {
         ]);
     });
 });
+
+describe("OutdoorGrid rooms", () => {
+    // Two rooms side by side: an outline from the cells 2 to 8 (columns) and 2 to 6 (rows), split by the column 5.
+    const walls: Rect[] = [
+        { x: 64, y: 64, width: 224, height: 32 },
+        { x: 64, y: 192, width: 224, height: 32 },
+        { x: 64, y: 96, width: 32, height: 96 },
+        { x: 256, y: 96, width: 32, height: 96 },
+        { x: 160, y: 96, width: 32, height: 96 },
+    ];
+    const grid = OutdoorGrid.fromWalls(SIZE, SIZE, CELL, walls);
+
+    it("numbers each closed set of indoor cells", () => {
+        const left = grid.roomAt(3 * CELL + 16, 4 * CELL + 16);
+        const right = grid.roomAt(6 * CELL + 16, 4 * CELL + 16);
+        expect(left).toBeDefined();
+        expect(right).toBeDefined();
+        expect(left).not.toBe(right);
+        expect(grid.roomAt(4 * CELL + 16, 3 * CELL + 16)).toBe(left);
+    });
+
+    it("has no room outdoors, in a wall or off the map", () => {
+        expect(grid.roomAt(16, 16)).toBeUndefined();
+        expect(grid.roomAt(5 * CELL + 16, 4 * CELL + 16)).toBeUndefined();
+        expect(grid.roomAt(-10, 4 * CELL)).toBeUndefined();
+        expect(grid.roomAt(SIZE + 10, 4 * CELL)).toBeUndefined();
+    });
+
+    it("tells the rooms a wall borders", () => {
+        const left = grid.roomAt(3 * CELL + 16, 4 * CELL + 16);
+        const right = grid.roomAt(6 * CELL + 16, 4 * CELL + 16);
+        expect([...grid.roomsTouching(walls[4])].sort()).toEqual([left, right].sort());
+        expect([...grid.roomsTouching(walls[2])]).toEqual([left]);
+        expect(grid.roomsTouching({ x: 0, y: 0, width: 32, height: 32 }).size).toBe(0);
+    });
+});

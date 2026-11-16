@@ -5,6 +5,7 @@ import {
     facadePrefabName,
     floorPrefabName,
     jointPrefabName,
+    lintelPrefabName,
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_TILE_SIZE,
     DOOR_VERTICAL_WIDTH,
@@ -15,10 +16,12 @@ import {
     mapLayerPrefabId,
     verticalWallPrefabName,
     wallEndPrefabName,
+    wallRise,
     windowPrefabName,
 } from "./MapLayerCatalog";
-import type { FacadeEnds, JointArm } from "./MapLayerCatalog";
-import type { MapLayerModel } from "./MapLayerModel";
+import type { FacadeEnds, JointArm, WallHeight } from "./MapLayerCatalog";
+import { doorEdges, doorHeight } from "./MapLayerModel";
+import type { MapLayerModel, WallEdge } from "./MapLayerModel";
 
 /** One entity the model needs, at a pixel position (top-left corner of its sprite). */
 export interface MapLayerPlacement {
@@ -46,18 +49,98 @@ function endsOf(continuesLeft: boolean, continuesRight: boolean): FacadeEnds {
 }
 
 /**
- * A horizontal door replaces the whole wall on its two segments, cap included, and draws the ends of the wall itself
- * (its jambs): the walls next to it continue up to it, with no end of their own, and the vertices it touches get no
- * horizontal arm. A vertical door is drawn between its joints, which stay.
+ * Ends of the face of height `height` drawn on the horizontal segment (x, y): it continues on a side when the wall next
+ * to it is at least as high. A lower wall next to it continues under it, and this face closes with its end.
  */
-function jointArmsAt(model: MapLayerModel, x: number, y: number): JointArm[] {
-    const arms: JointArm[] = [];
-    const touchesDoor = model.getDoorOn("h", x, y) !== undefined || model.getDoorOn("h", x - 1, y) !== undefined;
-    if (model.hasWall("v", x, y - 1)) arms.push("N");
-    if (!touchesDoor && model.hasWall("h", x, y)) arms.push("E");
-    if (model.hasWall("v", x, y)) arms.push("S");
-    if (!touchesDoor && model.hasWall("h", x - 1, y)) arms.push("W");
-    return arms;
+function facadeEndsAt(model: MapLayerModel, x: number, y: number, height: WallHeight): FacadeEnds {
+    const continues = (next: number): boolean => (model.getWall("h", next, y)?.height ?? 0) >= height;
+    return endsOf(continues(x - 1), continues(x + 1));
+}
+
+/**
+ * Whether a horizontal door draws the whole wall of this segment, cap included: it does when it is as high as its
+ * wall. Under a lower door, the lintel above it draws the cap at the level of the wall.
+ */
+function isDrawnByDoor(model: MapLayerModel, wall: WallEdge): boolean {
+    if (wall.orientation !== "h") return false;
+    const door = model.getDoorOn("h", wall.x, wall.y);
+    return door !== undefined && doorHeight(door) >= wall.height;
+}
+
+interface ArmWall {
+    arm: JointArm;
+    wall: WallEdge;
+}
+
+/**
+ * The joints of a vertex, one per level of the walls that meet there, each one joining the walls of its level.
+ * - A horizontal door as high as its wall draws the ends of the wall itself (its jambs): the walls of its level next to
+ *   it continue up to it, with no end of their own, and the vertices it touches get no horizontal arm at that level.
+ * - A horizontal wall higher than a level hides the joint of that level behind its face, but for the south arm, the
+ *   wall that comes out under it.
+ * - The middle vertex of a door is drawn by the door, but for the lintels that pass over a lower horizontal door. A
+ *   vertical door is raised to the level of its wall and draws its middle vertex itself.
+ * - A vertical wall that ends alone at a level shows its south face under its cap, like a horizontal wall.
+ */
+function jointsAt(model: MapLayerModel, x: number, y: number): MapLayerPlacement[] {
+    const size = MAP_LAYER_TILE_SIZE;
+    const middleOfDoor = model.hasDoorAt("h", x, y) || model.hasDoorAt("v", x, y);
+    const candidates: ArmWall[] = [];
+    const add = (arm: JointArm, wall: WallEdge | undefined): void => {
+        if (wall) candidates.push({ arm, wall });
+    };
+    add("N", model.getWall("v", x, y - 1));
+    add("E", model.getWall("h", x, y));
+    add("S", model.getWall("v", x, y));
+    add("W", model.getWall("h", x - 1, y));
+
+    const horizontals = candidates.filter(({ arm }) => arm === "E" || arm === "W");
+    const arms = middleOfDoor
+        ? candidates.filter(
+              ({ wall }) =>
+                  wall.orientation === "h" &&
+                  model.getDoorOn("h", wall.x, wall.y) !== undefined &&
+                  !isDrawnByDoor(model, wall),
+          )
+        : candidates.filter(({ wall }) => !isDrawnByDoor(model, wall));
+
+    const placements: MapLayerPlacement[] = [];
+    const levels = new Set(arms.map(({ wall }) => wall.height));
+    for (const level of [...levels].sort((a, b) => a - b)) {
+        const jambAtLevel =
+            !middleOfDoor && horizontals.some(({ wall }) => wall.height === level && isDrawnByDoor(model, wall));
+        const coveredByHigherWall = horizontals.some(({ wall }) => wall.height > level);
+        const atLevel = arms.filter(({ arm, wall }) => {
+            if (wall.height !== level) return false;
+            if (coveredByHigherWall) return arm === "S";
+            return !(jambAtLevel && (arm === "E" || arm === "W"));
+        });
+        if (atLevel.length === 0) continue;
+        const rise = wallRise(level);
+        const north = atLevel.find(({ arm }) => arm === "N");
+        if (atLevel.length === 1 && north) {
+            placements.push(
+                placement(
+                    MAP_LAYER_WALL_COLLECTION,
+                    wallEndPrefabName(north.wall.tint, level),
+                    x * size - WALL_HALF,
+                    y * size + WALL_THICKNESS - rise,
+                ),
+            );
+        }
+        placements.push(
+            placement(
+                MAP_LAYER_WALL_COLLECTION,
+                jointPrefabName(
+                    atLevel.map(({ arm }) => arm),
+                    level,
+                ),
+                x * size - WALL_HALF,
+                y * size - rise,
+            ),
+        );
+    }
+    return placements;
 }
 
 /**
@@ -70,6 +153,8 @@ function jointArmsAt(model: MapLayerModel, x: number, y: number): JointArm[] {
  *   the same ends instead of the facade, at the same place.
  * - A vertical wall is a strip, one piece per grid row.
  * - The caps meet on each vertex: a joint piece draws the corner, the T or the cross, or closes the end of a wall.
+ * - A wall of height N is the same wall raised by `wallRise(N)`, its face longer by as much: its foot stays on the
+ *   same row. A door or a window lower than its wall gets a lintel above it, at the height of the wall.
  */
 export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
     const placements: MapLayerPlacement[] = [];
@@ -84,109 +169,110 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
     }
 
     for (const door of model.getDoors()) {
-        const tint = model.getWall(
-            door.orientation,
-            door.x - (door.orientation === "h" ? 1 : 0),
-            door.y - (door.orientation === "v" ? 1 : 0),
-        )?.tint;
+        const [first] = doorEdges(door);
+        const tint = model.getWall(first.orientation, first.x, first.y)?.tint;
         if (tint === undefined) continue;
         if (door.orientation === "h") {
+            const height = doorHeight(door);
+            const y = door.y * size - wallRise(height);
             placements.push(
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("h", tint, "g", undefined, false, door.glazed === true),
+                    doorPrefabName("h", tint, "g", undefined, false, height, door.glazed === true),
                     (door.x - 1) * size,
-                    door.y * size,
+                    y,
                 ),
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("h", tint, "d", undefined, false, door.glazed === true),
+                    doorPrefabName("h", tint, "d", undefined, false, height, door.glazed === true),
                     door.x * size,
-                    door.y * size,
+                    y,
                 ),
             );
         } else {
+            // Raised with the cap of its wall (the lower of its two segments), to stay seen from above.
+            const height = model.lowerWallOf(door);
             const x = door.x * size - DOOR_VERTICAL_WIDTH / 2;
+            const rise = wallRise(height);
             placements.push(
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("v", tint, "haut"),
+                    doorPrefabName("v", tint, "haut", undefined, false, height),
                     x,
-                    (door.y - 1) * size + WALL_THICKNESS,
+                    (door.y - 1) * size + WALL_THICKNESS - rise,
                 ),
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("v", tint, "bas"),
+                    doorPrefabName("v", tint, "bas", undefined, false, height),
                     x,
-                    door.y * size + WALL_THICKNESS,
+                    door.y * size + WALL_THICKNESS - rise,
                 ),
             );
         }
     }
 
     for (const wall of model.getWalls()) {
-        // The walls under a door are drawn by the door itself; their vertices still get their joints.
-        if (model.getDoorOn(wall.orientation, wall.x, wall.y)) {
-            const ends =
-                wall.orientation === "h"
-                    ? [
-                          [wall.x, wall.y],
-                          [wall.x + 1, wall.y],
-                      ]
-                    : [
-                          [wall.x, wall.y],
-                          [wall.x, wall.y + 1],
-                      ];
-            for (const [vx, vy] of ends) vertices.set(`${vx},${vy}`, { x: vx, y: vy });
-            continue;
-        }
         if (wall.orientation === "h") {
-            const ends = endsOf(model.hasWall("h", wall.x - 1, wall.y), model.hasWall("h", wall.x + 1, wall.y));
-            const glazed = model.hasWindow(wall.x, wall.y);
-            placements.push(
-                placement(
-                    glazed ? MAP_LAYER_WINDOW_COLLECTION : MAP_LAYER_WALL_COLLECTION,
-                    glazed ? windowPrefabName(wall.tint, ends) : facadePrefabName(wall.tint, ends),
-                    wall.x * size - facadeLeftExtension(ends),
-                    wall.y * size,
-                ),
-            );
             vertices.set(`${wall.x},${wall.y}`, { x: wall.x, y: wall.y });
             vertices.set(`${wall.x + 1},${wall.y}`, { x: wall.x + 1, y: wall.y });
         } else {
+            vertices.set(`${wall.x},${wall.y}`, { x: wall.x, y: wall.y });
+            vertices.set(`${wall.x},${wall.y + 1}`, { x: wall.x, y: wall.y + 1 });
+        }
+        const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
+        if (wall.orientation === "h") {
+            const wallEnds = facadeEndsAt(model, wall.x, wall.y, wall.height);
+            const lintel = (opening: WallHeight): MapLayerPlacement =>
+                placement(
+                    MAP_LAYER_WALL_COLLECTION,
+                    lintelPrefabName(wall.tint, wallEnds, wall.height, opening),
+                    wall.x * size - facadeLeftExtension(wallEnds),
+                    wall.y * size - wallRise(wall.height),
+                );
+            if (door) {
+                // The door itself is drawn with the doors; a lower door gets the rest of the wall above it.
+                const opening = doorHeight(door);
+                if (opening < wall.height) placements.push(lintel(opening));
+                continue;
+            }
+            const paneHeight = model.getWindowHeight(wall.x, wall.y);
+            if (paneHeight !== undefined) {
+                const paneEnds = facadeEndsAt(model, wall.x, wall.y, paneHeight);
+                placements.push(
+                    placement(
+                        MAP_LAYER_WINDOW_COLLECTION,
+                        windowPrefabName(wall.tint, paneEnds, paneHeight),
+                        wall.x * size - facadeLeftExtension(paneEnds),
+                        wall.y * size - wallRise(paneHeight),
+                    ),
+                );
+                if (paneHeight < wall.height) placements.push(lintel(paneHeight));
+                continue;
+            }
             placements.push(
                 placement(
                     MAP_LAYER_WALL_COLLECTION,
-                    verticalWallPrefabName(wall.tint),
-                    wall.x * size - WALL_HALF,
-                    wall.y * size + WALL_THICKNESS,
+                    facadePrefabName(wall.tint, wallEnds, wall.height),
+                    wall.x * size - facadeLeftExtension(wallEnds),
+                    wall.y * size - wallRise(wall.height),
                 ),
             );
-            vertices.set(`${wall.x},${wall.y}`, { x: wall.x, y: wall.y });
-            vertices.set(`${wall.x},${wall.y + 1}`, { x: wall.x, y: wall.y + 1 });
+        } else {
+            // A vertical door is drawn between its joints, in place of the strips of its two segments.
+            if (door) continue;
+            placements.push(
+                placement(
+                    MAP_LAYER_WALL_COLLECTION,
+                    verticalWallPrefabName(wall.tint, wall.height),
+                    wall.x * size - WALL_HALF,
+                    wall.y * size + WALL_THICKNESS - wallRise(wall.height),
+                ),
+            );
         }
     }
 
     for (const vertex of vertices.values()) {
-        // The door draws its own cap on its middle vertex.
-        if (model.hasDoorAt("h", vertex.x, vertex.y) || model.hasDoorAt("v", vertex.x, vertex.y)) continue;
-        const arms = jointArmsAt(model, vertex.x, vertex.y);
-        const lastWall = model.getWall("v", vertex.x, vertex.y - 1);
-        if (arms.length === 1 && arms[0] === "N" && lastWall) {
-            // A vertical wall that ends alone shows its south face under its cap, like a horizontal wall.
-            placements.push(
-                placement(
-                    MAP_LAYER_WALL_COLLECTION,
-                    wallEndPrefabName(lastWall.tint),
-                    vertex.x * size - WALL_HALF,
-                    vertex.y * size + WALL_THICKNESS,
-                ),
-            );
-        }
-        if (arms.length === 0) continue;
-        placements.push(
-            placement(MAP_LAYER_WALL_COLLECTION, jointPrefabName(arms), vertex.x * size - WALL_HALF, vertex.y * size),
-        );
+        placements.push(...jointsAt(model, vertex.x, vertex.y));
     }
 
     return placements;

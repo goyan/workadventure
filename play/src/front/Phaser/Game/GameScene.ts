@@ -68,6 +68,7 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { HtmlUtils } from "@wa/front/WebRtc/HtmlUtils";
 import { Loader } from "@wa/front/Phaser/Components/Loader";
 import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
+import type { Entity } from "@wa/front/Phaser/ECS/Entity";
 import { AVATAR_ACTION_VARIABLE } from "@wa/front/Phaser/Entity/AvatarAction";
 import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "@wa/front/Phaser/Entity/Swimwear";
 import { SelectCharacterScene, SelectCharacterSceneName } from "@wa/front/Phaser/Login/SelectCharacterScene";
@@ -277,6 +278,8 @@ import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
+import { MAP_LAYER_WALL_LIKE_COLLECTIONS } from "./MapEditor/MapLayer/MapLayerCatalog";
+import { WallFade } from "./MapEditor/MapLayer/WallFade";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { takesSteps } from "./Ice/Steps";
 import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
@@ -483,6 +486,8 @@ export class GameScene extends DirtyScene {
     private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
+    /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
+    private wallFade: WallFade | undefined;
     private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
@@ -1504,6 +1509,8 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.wallFade?.destroy();
+        this.wallFade = undefined;
         this.lampManager?.destroy();
         this.lampManager = undefined;
         this.weatherManager?.destroy();
@@ -1579,6 +1586,13 @@ export class GameScene extends DirtyScene {
     /** The personal seasonal theme shown right now, if any. */
     public getSeasonalTheme(): SeasonalTheme | undefined {
         return this.seasonalThemeManager?.activeTheme();
+    }
+
+    /** The walls, doors and windows of the map layer, among the entities of the map. */
+    private *mapLayerWallEntities(): Generator<Entity> {
+        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(entity.getPrefab().collectionName)) yield entity;
+        }
     }
 
     /** Outdoor cells of the map, shared by the weather and the seasonal theme. */
@@ -1783,6 +1797,7 @@ export class GameScene extends DirtyScene {
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
+            this.wallFade?.update(delta);
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
@@ -2986,6 +3001,15 @@ export class GameScene extends DirtyScene {
                             height: (map.height ?? 0) * (map.tileheight ?? 0),
                         };
                     },
+                );
+                this.wallFade?.destroy();
+                this.wallFade = new WallFade(
+                    () => this.mapLayerWallEntities(),
+                    () => this.getOutdoorGrid(),
+                    // The feet, as the torch reads the outdoors.
+                    () => ({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y }),
+                    () => this.mapEditorModeManager?.isActive() ?? false,
+                    () => this.markDirty(),
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),

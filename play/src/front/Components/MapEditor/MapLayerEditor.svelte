@@ -3,23 +3,34 @@
     import InputSwitch from "../Input/InputSwitch.svelte";
     import {
         MAP_LAYER_FLOOR_FAMILIES,
+        MAP_LAYER_WALL_HEIGHTS,
         MAP_LAYER_WALL_TINTS,
     } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import {
         mapLayerCatalogAvailableStore,
+        mapLayerDoorHeightStore,
+        mapLayerDoorHeightsAvailableStore,
         mapLayerDoorGlazedStore,
         mapLayerDoorsAvailableStore,
+        mapLayerGlazedDoorHeightsAvailableStore,
         mapLayerGlazedDoorsAvailableStore,
+        mapLayerHeightRequestStore,
+        mapLayerHeightSelectionStore,
         mapLayerFloorFamilyStore,
         mapLayerFloorSwatchesStore,
         mapLayerModeStore,
         mapLayerStatusStore,
         mapLayerWallSwatchesStore,
+        mapLayerWallHeightStore,
+        mapLayerWallHeightsAvailableStore,
         mapLayerWallTintStore,
+        mapLayerWindowHeightStore,
+        mapLayerWindowHeightsAvailableStore,
         mapLayerWindowsAvailableStore,
     } from "../../Stores/MapLayerStore";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import {
+        IconArrowAutofitHeight,
         IconBrush,
         IconBucket,
         IconDoor,
@@ -45,15 +56,61 @@
     const placedModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
         { mode: "door", icon: IconDoor },
         { mode: "window", icon: IconWindow },
+        { mode: "height", icon: IconArrowAutofitHeight },
     ];
 
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
             $mapLayerModeStore !== "erase" &&
             $mapLayerModeStore !== "door" &&
-            $mapLayerModeStore !== "window",
+            $mapLayerModeStore !== "window" &&
+            $mapLayerModeStore !== "height",
     );
     let usesWall = $derived($mapLayerModeStore === "wall" || $mapLayerModeStore === "room");
+
+    // The height setting of the current mode: the walls (and the walls of a room), the doors or the windows.
+    // The height mode shows the height of what is selected, and applies the one clicked to it.
+    let heightKind = $derived<"wall" | "door" | "window" | "selection" | undefined>(
+        usesWall
+            ? "wall"
+            : $mapLayerModeStore === "door"
+              ? "door"
+              : $mapLayerModeStore === "window"
+                ? "window"
+                : $mapLayerModeStore === "height"
+                  ? "selection"
+                  : undefined,
+    );
+    let heightStore = $derived(
+        heightKind === "door"
+            ? mapLayerDoorHeightStore
+            : heightKind === "window"
+              ? mapLayerWindowHeightStore
+              : mapLayerWallHeightStore,
+    );
+    let heightsAvailable = $derived(
+        heightKind === "selection"
+            ? $mapLayerHeightSelectionStore.count > 0
+                ? $mapLayerHeightSelectionStore.available
+                : []
+            : heightKind === "door"
+              ? // A glazed door of a height needs its own pieces in the catalog.
+                $mapLayerDoorGlazedStore && $mapLayerGlazedDoorsAvailableStore
+                  ? $mapLayerGlazedDoorHeightsAvailableStore
+                  : $mapLayerDoorHeightsAvailableStore
+              : heightKind === "window"
+                ? $mapLayerWindowHeightsAvailableStore
+                : $mapLayerWallHeightsAvailableStore,
+    );
+    let chosenHeight = $derived(
+        heightKind === "selection"
+            ? $mapLayerHeightSelectionStore.height
+            : heightKind === "door"
+              ? $mapLayerDoorHeightStore
+              : heightKind === "window"
+                ? $mapLayerWindowHeightStore
+                : $mapLayerWallHeightStore,
+    );
 </script>
 
 {#snippet modeButton(mode: MapLayerMode, Icon: typeof IconWall)}
@@ -150,6 +207,52 @@
                             $mapLayerWallSwatchesStore[tint],
                             () => mapLayerWallTintStore.set(tint),
                         )}
+                    {/each}
+                </div>
+            </section>
+        {/if}
+
+        {#if heightKind}
+            <section class="flex flex-col gap-2" data-testid="mapLayerHeight">
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.heights[heightKind]()}</h3>
+                <div class="grid {heightKind === 'door' ? 'grid-cols-5' : 'grid-cols-4'} gap-2">
+                    {#if heightKind === "door"}
+                        <!-- The default of the doors: the height of the wall, two tiles at most. -->
+                        <button
+                            type="button"
+                            class="p-2 rounded text-sm {$mapLayerDoorHeightStore === 'auto'
+                                ? 'bg-secondary'
+                                : 'bg-white/10 hover:bg-white/20'}"
+                            aria-pressed={$mapLayerDoorHeightStore === "auto"}
+                            title={$LL.mapEditor.mapLayer.doorHeightAutoHint()}
+                            data-testid="mapLayerHeight-auto"
+                            onclick={() => mapLayerDoorHeightStore.set("auto")}
+                        >
+                            {$LL.mapEditor.mapLayer.doorHeightAuto()}
+                        </button>
+                    {/if}
+                    {#each MAP_LAYER_WALL_HEIGHTS as height (height)}
+                        {@const available = heightsAvailable.includes(height)}
+                        <button
+                            type="button"
+                            disabled={!available}
+                            class="p-2 rounded text-sm disabled:opacity-40 {chosenHeight === height
+                                ? 'bg-secondary'
+                                : 'bg-white/10 hover:bg-white/20'}"
+                            aria-pressed={chosenHeight === height}
+                            title={available
+                                ? undefined
+                                : heightKind === "selection" && $mapLayerHeightSelectionStore.count === 0
+                                  ? $LL.mapEditor.mapLayer.heightNoSelection()
+                                  : $LL.mapEditor.mapLayer.heightUnavailable[heightKind]()}
+                            data-testid="mapLayerHeight-{height}"
+                            onclick={() =>
+                                heightKind === "selection"
+                                    ? mapLayerHeightRequestStore.set(height)
+                                    : heightStore.set(height)}
+                        >
+                            {height}
+                        </button>
                     {/each}
                 </div>
             </section>
