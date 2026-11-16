@@ -11,8 +11,9 @@ import {
     doorPrefabName,
     mapLayerPrefabId,
     parseMapLayerPrefab,
+    wallRise,
 } from "./MapLayerCatalog";
-import type { MapLayerPiece } from "./MapLayerCatalog";
+import type { MapLayerPiece, WallHeight } from "./MapLayerCatalog";
 
 type DoorPiece = Extract<MapLayerPiece, { kind: "door" }>;
 
@@ -110,6 +111,7 @@ export interface DoorLocks {
 interface DoorPieceState {
     entity: Entity;
     piece: DoorPiece;
+    /** The opening of the door, on the ground: a high door is drawn higher, its opening stays on the row of its wall. */
     rect: DoorRect;
     /**
      * Textures of the frames of both sets (swinging towards the north / west, then towards the south / east), by frame
@@ -222,9 +224,11 @@ export class DoorAnimator {
             if (markers.has(key)) continue;
             const { rect, piece } = state;
             if (zones.some((zone) => isDoorInZone(rect, piece.orientation, zone))) {
-                // The bottom of a vertical door passes under the joint of the vertex below it: it is not seen.
+                // The bottom of a vertical door passes under the joint of the vertex below it: it is not seen. A high
+                // horizontal door is seen above its opening, up to its raised top.
                 const bottom = piece.orientation === "v" ? rect.bottom - WALL_THICKNESS : rect.bottom;
-                markers.set(key, { x: (rect.left + rect.right) / 2, y: (rect.top + bottom) / 2 });
+                const top = piece.orientation === "h" ? rect.top - wallRise(piece.height) : rect.top;
+                markers.set(key, { x: (rect.left + rect.right) / 2, y: (top + bottom) / 2 });
             }
         }
         return markers;
@@ -435,7 +439,8 @@ export class DoorAnimator {
         const size = MAP_LAYER_TILE_SIZE;
         if (piece.orientation === "h") {
             const left = piece.side === "g" ? entity.x : entity.x - size;
-            return { left, top: entity.y, right: left + 2 * size, bottom: entity.y + size };
+            const top = entity.y + wallRise(piece.height);
+            return { left, top, right: left + 2 * size, bottom: top + size };
         }
         const top = piece.side === "haut" ? entity.y : entity.y - size;
         const center = entity.x + DOOR_VERTICAL_WIDTH / 2;
@@ -447,16 +452,21 @@ export class DoorAnimator {
      * which reaches 20 px under the cap: the door would hang in the void under the wall. It is drawn right over that
      * face instead, so that it keeps looking attached to the wall.
      */
-    private depthOverFacadeAbove(entity: Entity, piece: DoorPiece, facades: readonly Entity[]): number | undefined {
+    private depthOverFacadeAbove(
+        entity: Entity,
+        piece: DoorPiece,
+        facades: readonly { entity: Entity; height: WallHeight }[],
+    ): number | undefined {
         if (piece.orientation !== "v" || piece.side !== "haut") {
             return undefined;
         }
         const center = entity.x + DOOR_VERTICAL_WIDTH / 2;
         let depth: number | undefined;
-        for (const facade of facades) {
-            // The door starts one cap (WALL_THICKNESS) under the line of the wall it hangs from.
+        for (const { entity: facade, height } of facades) {
+            // The door starts one cap (WALL_THICKNESS) under the line of the wall it hangs from, a high wall being
+            // drawn higher.
             const above =
-                facade.y === entity.y - WALL_THICKNESS &&
+                facade.y + wallRise(height) === entity.y - WALL_THICKNESS &&
                 facade.x <= center &&
                 center <= facade.x + facade.displayWidth;
             if (above) {
@@ -470,11 +480,11 @@ export class DoorAnimator {
     private scan(): void {
         const seen = new Set<string>();
         const entities = Array.from(this.getEntities());
-        const facades = entities.filter((entity) =>
-            ["facade", "window"].includes(
-                parseMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id)?.kind ?? "",
-            ),
-        );
+        const facades: { entity: Entity; height: WallHeight }[] = [];
+        for (const entity of entities) {
+            const wall = parseMapLayerPrefab(entity.getPrefab().collectionName, entity.getPrefab().id);
+            if (wall?.kind === "facade" || wall?.kind === "window") facades.push({ entity, height: wall.height });
+        }
         for (const entity of entities) {
             const prefab = entity.getPrefab();
             const piece = this.parse(prefab.collectionName, prefab.id);
@@ -532,7 +542,14 @@ export class DoorAnimator {
                               closed.collectionName,
                               mapLayerPrefabId(
                                   closed.collectionName,
-                                  doorPrefabName(piece.orientation, piece.tint, piece.side, frame, reverse),
+                                  doorPrefabName(
+                                      piece.orientation,
+                                      piece.tint,
+                                      piece.side,
+                                      frame,
+                                      reverse,
+                                      piece.height,
+                                  ),
                               ),
                           ),
                 ),

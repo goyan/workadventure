@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as Phaser from "phaser";
+import type { EntityPrefab } from "@workadventure/map-editor";
 import type { Entity } from "../../../../../../src/front/Phaser/ECS/Entity";
 import { mapLayerPrefabId } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { DOOR_SOUND_KEYS, DoorAnimator } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/DoorAnimator";
@@ -292,5 +293,87 @@ describe("DoorAnimator locked door markers", () => {
         const { animator } = makeAnimator();
         const north = { x: 96, y: 32, width: 128, height: 128 };
         expect(scanned(animator).getLockedDoorMarkers([ZONE, north]).size).toBe(1);
+    });
+});
+
+// A horizontal door of height M is drawn wallRise(M) higher, its opening still on the row of its wall: frames of its own
+// height, with the same margin above, aligned the same way on the top of the door.
+describe("DoorAnimator high doors", () => {
+    function makeFramedDoor(name: string, x: number, y: number, frameHeight: number) {
+        const prefabId = mapLayerPrefabId("Carte Portes", name);
+        const requested: string[] = [];
+        const entity = {
+            entityId: "door",
+            x,
+            y,
+            depth: 0,
+            height: frameHeight,
+            originY: 0,
+            texture: { key: `${name}.png` },
+            getPrefab: () => ({ collectionName: "Carte Portes", id: prefabId, imagePath: `${name}.png` }),
+            setDepth: () => entity,
+            setTexture(key: string) {
+                entity.texture = { key };
+                return entity;
+            },
+            setOrigin(_x: number, originY: number) {
+                entity.originY = originY;
+                return entity;
+            },
+        };
+        const animator = new DoorAnimator(
+            {} as Phaser.Scene,
+            () => [entity as unknown as Entity],
+            (collectionName, id) => {
+                requested.push(id.split(":")[1]);
+                return Promise.resolve({
+                    collectionName,
+                    id,
+                    imagePath: `${id.split(":")[1]}.png`,
+                } as unknown as EntityPrefab);
+            },
+            () => {},
+            () => {},
+            () => [],
+        );
+        /** Top of what is drawn: the origin moves the image up by its margin. */
+        const drawnTop = () => entity.y - entity.originY * entity.height;
+        return { animator, entity, requested, drawnTop };
+    }
+
+    async function openWithPlayerIn(animator: DoorAnimator, player: DoorCharacter): Promise<void> {
+        animator.update(0, [player], player);
+        // Let the frames load.
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+        run(animator, 600, 900, () => [], player);
+    }
+
+    it("opens a door of height 2 from its opening and plays the frames of its height, 14 px above the door", async () => {
+        // Door of height 2 on the segments (4, 5) and (5, 5): drawn from y = 160 - 32, opening 128..192 x 160..192.
+        const { animator, entity, requested, drawnTop } = makeFramedDoor("porte-h-gris-g-h2", 128, 128, 32 + 32 + 28);
+        await openWithPlayerIn(animator, { ...IN_DOOR });
+        expect(requested).toContain("porte-h-gris-g-h2-0");
+        expect(requested).toContain("porte-h-gris-g-h2-b3");
+        expect(requested.filter((name) => !name.startsWith("porte-h-gris-g-h2-"))).toEqual([]);
+        expect(entity.texture.key).not.toBe("porte-h-gris-g-h2.png");
+        expect(drawnTop()).toBe(128 - 14);
+    });
+
+    it("keeps a door of height 1 as before", async () => {
+        const { animator, entity, requested, drawnTop } = makeFramedDoor("porte-h-gris-g", 128, 160, 32 + 28);
+        await openWithPlayerIn(animator, { ...IN_DOOR });
+        expect(requested).toContain("porte-h-gris-g-0");
+        expect(requested.filter((name) => name.includes("-h2"))).toEqual([]);
+        expect(entity.texture.key).not.toBe("porte-h-gris-g.png");
+        expect(drawnTop()).toBe(160 - 14);
+    });
+
+    it("marks a high door in the middle of what is seen of it", () => {
+        const { animator } = makeFramedDoor("porte-h-gris-g-h2", 128, 128, 64);
+        animator.update(0, [], { x: 0, y: 0 });
+        const zone = { x: 96, y: 192, width: 128, height: 128 };
+        expect(Array.from(animator.getLockedDoorMarkers([zone]).values())).toEqual([{ x: 160, y: 160 }]);
     });
 });
