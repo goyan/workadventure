@@ -26,6 +26,7 @@ import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import {
     MAP_LAYER_FLOOR_DEPTH,
     isMapLayerPrefab,
+    mapLayerGroundBottom,
     parseMapLayerPrefab,
 } from "../Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
@@ -410,9 +411,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 depth: neighbour.depth,
                 naturalDepth: neighbour.y + neighbour.displayHeight + (prefab.depthOffset ?? 0),
             };
-            if (isMapLayerPrefab(prefab.collectionName, prefab.id)) {
-                if (depthOffset < 0 && parseMapLayerPrefab(prefab.collectionName, prefab.id)?.kind !== "floor") {
-                    walls.push(neighbourBox);
+            const piece = parseMapLayerPrefab(prefab.collectionName, prefab.id);
+            if (piece) {
+                if (depthOffset < 0 && piece.kind !== "floor") {
+                    // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
+                    walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
                 }
             } else if (this.prefab.seat === undefined) {
                 supports.push({ ...neighbourBox, collisionGrid: prefab.collisionGrid });

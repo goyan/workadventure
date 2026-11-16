@@ -3,18 +3,27 @@ import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Sentry from "@sentry/svelte";
 import { asError } from "catch-unknown";
 import { get } from "svelte/store";
-import type { FloorFamily, WallTint } from "../MapLayer/MapLayerCatalog";
+import type { FloorFamily, WallHeight, WallTint } from "../MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorHeightStore,
+    mapLayerDoorHeightsAvailableStore,
     mapLayerDoorGlazedStore,
-    mapLayerDoorsAvailableStore,
+    mapLayerGlazedDoorHeightsAvailableStore,
     mapLayerGlazedDoorsAvailableStore,
+    mapLayerDoorsAvailableStore,
+    mapLayerHeightRequestStore,
+    mapLayerHeightSelectionStore,
     mapLayerFloorFamilyStore,
     mapLayerFloorSwatchesStore,
     mapLayerWallSwatchesStore,
     mapLayerModeStore,
     mapLayerStatusStore,
+    mapLayerWallHeightStore,
+    mapLayerWallHeightsAvailableStore,
     mapLayerWallTintStore,
+    mapLayerWindowHeightStore,
+    mapLayerWindowHeightsAvailableStore,
     mapLayerWindowsAvailableStore,
 } from "../../../../Stores/MapLayerStore";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
@@ -29,6 +38,7 @@ import {
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_FLOOR_FAMILIES,
     MAP_LAYER_TILE_SIZE,
+    MAP_LAYER_WALL_HEIGHTS,
     MAP_LAYER_WALL_TINTS,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
@@ -44,18 +54,20 @@ import {
 } from "../MapLayer/MapLayerCatalog";
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
+import { applyHeight, buildHeightPicker, selectionHeight } from "../MapLayer/MapLayerHeightEdit";
+import type { HeightPicker, HeightTarget } from "../MapLayer/MapLayerHeightEdit";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
-import type { DoorRef, MapLayerModel } from "../MapLayer/MapLayerModel";
+import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import { cellKey } from "../MapLayer/MapLayerModel";
 import {
-    applyDoor,
+    applyDoorPlan,
     applyFloor,
+    applyRoom,
     applyWalls,
     applyWindows,
     cellAt,
     moveWindow,
     cellsBetween,
-    doorCandidateAt,
     doorPixelRect,
     doorUnderPoint,
     eraseAt,
@@ -63,13 +75,21 @@ import {
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
+    planDoorAt,
     rectangleCells,
-    roomWallEdges,
     vertexAt,
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
-import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
+import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
+
+/** The chosen height, or 1 when the catalogs of the room do not have its pieces. */
+function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): WallHeight {
+    return available.includes(chosen) ? chosen : 1;
+}
+
+/** The walls, doors and windows selected in the height mode. */
+const HEIGHT_SELECTION_COLOR = 0x3b82f6;
 
 /** Above every entity, below nothing: the preview must stay readable over furniture. */
 const PREVIEW_DEPTH = 100_000;
@@ -89,6 +109,8 @@ interface Gesture {
     baseModel: MapLayerModel;
     /** In the window mode, a press on a placed window moves it: the tile of that window. */
     movedWindow?: Point;
+    /** In the height mode, what the drag picks, read from the model of the start of the gesture. */
+    picker?: HeightPicker;
 }
 
 /**
@@ -107,6 +129,12 @@ export class MapLayerEditorTool extends MapEditorTool {
     private cursor = "";
     /** The model read for the door preview, which follows the cursor: read again when the map has been edited. */
     private hoverModel: MapLayerModel | undefined;
+    /** What the pointer picks in the height mode, built from `hoverModel`. */
+    private hoverPicker: HeightPicker | undefined;
+    /** The walls, doors and windows selected in the height mode. */
+    private heightSelection: HeightTarget[] = [];
+    private unsubscribeHeightRequest: (() => void) | undefined;
+    private unsubscribeMode: (() => void) | undefined;
     /**
      * Keeps a mouse gesture on the canvas while it crosses HTML overlays (the editor panel, the action bar, video
      * bubbles): without it the browser sends the moves to the overlay and Phaser reports that the pointer left the game.
@@ -159,7 +187,20 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapEditorVisibilityStore.set(true);
         mapLayerStatusStore.set(undefined);
-        this.hoverModel = undefined;
+        this.forgetHoverModel();
+        this.setHeightSelection([], undefined);
+        this.unsubscribeHeightRequest = mapLayerHeightRequestStore.subscribe((height) => {
+            if (height === undefined) return;
+            mapLayerHeightRequestStore.set(undefined);
+            this.applySelectionHeight(height);
+        });
+        // The selection belongs to the height mode: choosing another mode lets it go.
+        this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            if (mode !== "height" && this.heightSelection.length > 0) {
+                this.setHeightSelection([], undefined);
+                this.redraw();
+            }
+        });
         this.checkCatalogs().catch((error: unknown) => {
             console.error("Map layer catalog check failed", error);
             mapLayerCatalogAvailableStore.set(false);
@@ -170,6 +211,11 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.active = false;
         this.gesture = undefined;
         this.hover = undefined;
+        this.unsubscribeHeightRequest?.();
+        this.unsubscribeHeightRequest = undefined;
+        this.unsubscribeMode?.();
+        this.unsubscribeMode = undefined;
+        this.setHeightSelection([], undefined);
         this.scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDownEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.pointerMoveEventHandler);
         this.scene.input.off(Phaser.Input.Events.POINTER_UP, this.pointerUpEventHandler);
@@ -193,6 +239,10 @@ export class MapLayerEditorTool extends MapEditorTool {
 
     public handleKeyDownEvent(event: KeyboardEvent): void {
         if (event.key.toLowerCase() === "escape") {
+            if (!this.gesture && this.heightSelection.length > 0) {
+                this.setHeightSelection([], undefined);
+                this.redraw();
+            }
             this.cancelGesture();
         }
     }
@@ -208,6 +258,10 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerDoorsAvailableStore.set(false);
         mapLayerGlazedDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
+        mapLayerWallHeightsAvailableStore.set([1]);
+        mapLayerGlazedDoorHeightsAvailableStore.set([1]);
+        mapLayerDoorHeightsAvailableStore.set([1]);
+        mapLayerWindowHeightsAvailableStore.set([1]);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
             manager.getEntityPrefab(
@@ -234,7 +288,10 @@ export class MapLayerEditorTool extends MapEditorTool {
             door &&
             (await manager.getEntityPrefab(
                 MAP_LAYER_DOOR_COLLECTION,
-                mapLayerPrefabId(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", "blanc", "g", undefined, false, true)),
+                mapLayerPrefabId(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("h", "blanc", "g", undefined, false, 1, true),
+                ),
             ));
         mapLayerGlazedDoorsAvailableStore.set(glazedDoor !== undefined);
         // The windows are optional too.
@@ -244,6 +301,56 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapLayerWindowsAvailableStore.set(glazing !== undefined);
         if (glazing === undefined && get(mapLayerModeStore) === "window") mapLayerModeStore.set("wall");
+
+        // The high walls, doors and windows are optional: a height is offered when the catalog has a sample of it.
+        const tint = MAP_LAYER_WALL_TINTS[0];
+        const heightsWith = async (sample: (height: WallHeight) => [string, string]): Promise<WallHeight[]> => {
+            const found = await Promise.all(
+                MAP_LAYER_WALL_HEIGHTS.map((height) =>
+                    height === 1 ? Promise.resolve(true) : manager.getEntityPrefab(...sample(height)).then(Boolean),
+                ),
+            );
+            return MAP_LAYER_WALL_HEIGHTS.filter((_, index) => found[index]);
+        };
+        const [wallHeights, doorHeights, windowHeights, glazedDoorHeights] = await Promise.all([
+            heightsWith((height) => [
+                MAP_LAYER_WALL_COLLECTION,
+                mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, facadePrefabName(tint, "mid", height)),
+            ]),
+            door === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_DOOR_COLLECTION,
+                      mapLayerPrefabId(
+                          MAP_LAYER_DOOR_COLLECTION,
+                          doorPrefabName("h", tint, "g", undefined, false, height),
+                      ),
+                  ]),
+            glazing === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_WINDOW_COLLECTION,
+                      mapLayerPrefabId(MAP_LAYER_WINDOW_COLLECTION, windowPrefabName(tint, "mid", height)),
+                  ]),
+            // A glazed door of a height is offered when the catalog has it (`porte-h-<teinte>-g-vitree-hN`).
+            glazedDoor === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_DOOR_COLLECTION,
+                      mapLayerPrefabId(
+                          MAP_LAYER_DOOR_COLLECTION,
+                          doorPrefabName("h", tint, "g", undefined, false, height, true),
+                      ),
+                  ]),
+        ]);
+        mapLayerWallHeightsAvailableStore.set(wallHeights);
+        mapLayerDoorHeightsAvailableStore.set(doorHeights);
+        mapLayerGlazedDoorHeightsAvailableStore.set(glazedDoorHeights);
+        mapLayerWindowHeightsAvailableStore.set(windowHeights);
+        // A height the catalogs do not have goes back to 1.
+        mapLayerWallHeightStore.update((height) => availableHeight(height, wallHeights));
+        mapLayerDoorHeightStore.update((height) => (height === "auto" ? height : availableHeight(height, doorHeights)));
+        mapLayerWindowHeightStore.update((height) => availableHeight(height, windowHeights));
 
         const floorSamples = await Promise.all(
             MAP_LAYER_FLOOR_FAMILIES.map((family) =>
@@ -349,6 +456,7 @@ export class MapLayerEditorTool extends MapEditorTool {
                 get(mapLayerModeStore) === "window" && baseModel.hasWindow(startCell.x, startCell.y)
                     ? startCell
                     : undefined,
+            picker: get(mapLayerModeStore) === "height" ? buildHeightPicker(baseModel) : undefined,
         };
         // Filling reacts to the click itself.
         this.redraw();
@@ -381,8 +489,19 @@ export class MapLayerEditorTool extends MapEditorTool {
     private handlePointerUp(pointer: Phaser.Input.Pointer): void {
         const gesture = this.gesture;
         if (!gesture || gesture.pointerId !== pointer.id || pointer.button !== 0) return;
-        const operation = this.buildOperation(gesture);
         const mode = get(mapLayerModeStore);
+        if (mode === "height") {
+            // A click or a drag selects, it changes nothing on the map.
+            this.gesture = undefined;
+            this.pointerCapture?.release();
+            this.setHeightSelection(
+                gesture.picker?.along(gesture.startWorld, gesture.currentWorld) ?? [],
+                gesture.baseModel,
+            );
+            this.redraw();
+            return;
+        }
+        const operation = this.buildOperation(gesture);
         this.gesture = undefined;
         this.pointerCapture?.release();
         this.clearPreview();
@@ -395,28 +514,53 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
     }
 
+    /** The model of the map for the hover previews, and what it picks in the height mode: read again after an edit. */
+    private forgetHoverModel(): void {
+        this.hoverModel = undefined;
+        this.hoverPicker = undefined;
+    }
+
+    private getHoverPicker(): HeightPicker {
+        this.hoverModel ??= this.readModel();
+        this.hoverPicker ??= buildHeightPicker(this.hoverModel);
+        return this.hoverPicker;
+    }
+
+    /** Selects the walls, doors and windows of the height mode, and tells the panel their height. */
+    private setHeightSelection(targets: HeightTarget[], model: MapLayerModel | undefined): void {
+        this.heightSelection = targets;
+        const kinds = new Set(targets.map((target) => target.kind));
+        let available: readonly WallHeight[] = MAP_LAYER_WALL_HEIGHTS;
+        const keep = (heights: readonly WallHeight[]): void => {
+            available = available.filter((height) => heights.includes(height));
+        };
+        if (kinds.has("wall")) keep(get(mapLayerWallHeightsAvailableStore));
+        if (kinds.has("door")) keep(get(mapLayerDoorHeightsAvailableStore));
+        if (kinds.has("window")) keep(get(mapLayerWindowHeightsAvailableStore));
+        mapLayerHeightSelectionStore.set({
+            count: targets.length,
+            height: model && targets.length > 0 ? selectionHeight(model, targets) : undefined,
+            available: targets.length > 0 ? available : [1],
+        });
+    }
+
+    /** Gives the selection a height, in one command (one undo step); the selection stays. */
+    private applySelectionHeight(height: WallHeight): void {
+        const targets = this.heightSelection;
+        if (!this.canDraw() || targets.length === 0) return;
+        if (!get(mapLayerHeightSelectionStore).available.includes(height)) return;
+        this.commit(
+            (model) => applyHeight(model, targets, height),
+            () => {
+                const model = this.readModel();
+                this.hoverModel = model;
+                if (this.heightSelection === targets) this.setHeightSelection(targets, model);
+                this.redraw();
+            },
+        );
+    }
+
     /** A moved window released on its own segment: nothing to do, nothing to explain. */
-    /** Whether a door-mode click hit a placed horizontal door: it flips it, or explains nothing when it cannot. */
-    private onPlacedDoor(gesture: Gesture): boolean {
-        const door = doorUnderPoint(gesture.baseModel, gesture.currentWorld.x, gesture.currentWorld.y);
-        return door?.orientation === "h";
-    }
-
-    /**
-     * The placed horizontal door under a point that a click flips (plain to glazed, glazed to plain), whatever the
-     * switch; a plain one only when the catalog has the glazed doors.
-     */
-    private doorToFlip(model: MapLayerModel, world: Point): DoorRef | undefined {
-        const door = doorUnderPoint(model, world.x, world.y);
-        if (door?.orientation !== "h") return undefined;
-        return door.glazed === true || get(mapLayerGlazedDoorsAvailableStore) ? door : undefined;
-    }
-
-    /** The variant the door mode places: glazed only with the switch on and the glazed doors in the catalog. */
-    private doorGlazed(): boolean {
-        return get(mapLayerDoorGlazedStore) && get(mapLayerGlazedDoorsAvailableStore);
-    }
-
     private droppedInPlace(gesture: Gesture): boolean {
         const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
         return gesture.movedWindow !== undefined && end.x === gesture.movedWindow.x && end.y === gesture.movedWindow.y;
@@ -433,6 +577,9 @@ export class MapLayerEditorTool extends MapEditorTool {
         const mode = get(mapLayerModeStore);
         const family = get(mapLayerFloorFamilyStore);
         const tint = get(mapLayerWallTintStore);
+        const wallHeight = availableHeight(get(mapLayerWallHeightStore), get(mapLayerWallHeightsAvailableStore));
+        const doorSetting = this.doorHeightSetting();
+        const windowHeight = availableHeight(get(mapLayerWindowHeightStore), get(mapLayerWindowHeightsAvailableStore));
         const startCell = cellAt(gesture.startWorld.x, gesture.startWorld.y);
         const endCell = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
         const path = [...gesture.path];
@@ -444,13 +591,12 @@ export class MapLayerEditorTool extends MapEditorTool {
                     vertexAt(worldPath.start.x, worldPath.start.y),
                     vertexAt(worldPath.end.x, worldPath.end.y),
                 );
-                return edges.length === 0 ? undefined : (model, bounds) => applyWalls(model, edges, tint, bounds);
+                return edges.length === 0
+                    ? undefined
+                    : (model, bounds) => applyWalls(model, edges, tint, bounds, wallHeight);
             }
             case "room":
-                return (model, bounds) => {
-                    applyWalls(model, roomWallEdges(startCell, endCell), tint, bounds);
-                    applyFloor(model, rectangleCells(startCell, endCell), family, bounds);
-                };
+                return (model, bounds) => applyRoom(model, startCell, endCell, tint, family, bounds, wallHeight);
             case "floorBrush":
                 return (model, bounds) => applyFloor(model, path, family, bounds);
             case "floorRectangle":
@@ -463,20 +609,18 @@ export class MapLayerEditorTool extends MapEditorTool {
                     return;
                 };
             case "door": {
-                const glazed = this.doorGlazed();
-                const candidate = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
-                if (candidate.valid) {
-                    const door = { orientation: candidate.orientation, x: candidate.x, y: candidate.y, glazed };
-                    return (model, bounds) => applyDoor(model, door, bounds);
-                }
-                // A click on a placed horizontal door flips it, whatever the switch.
-                const placed = this.doorToFlip(gesture.baseModel, worldPath.end);
-                if (placed) {
-                    return (model) => {
-                        model.setDoorGlazed(placed, placed.glazed !== true);
-                    };
-                }
-                return undefined;
+                // A new door, or the settings of the panel (height, glazed) for the door placed there, or a flip of a
+                // door that has them already; the model of the commit is read again.
+                const options = this.doorPlanOptions();
+                const plan = planDoorAt(gesture.baseModel, worldPath.end.x, worldPath.end.y, doorSetting, options);
+                return plan.action === "invalid"
+                    ? undefined
+                    : (model, bounds) =>
+                          applyDoorPlan(
+                              model,
+                              planDoorAt(model, worldPath.end.x, worldPath.end.y, doorSetting, options),
+                              bounds,
+                          );
             }
             case "window": {
                 const from = gesture.movedWindow;
@@ -494,9 +638,12 @@ export class MapLayerEditorTool extends MapEditorTool {
                 return edges.length === 0
                     ? undefined
                     : (model) => {
-                          applyWindows(model, edges);
+                          applyWindows(model, edges, windowHeight);
                       };
             }
+            case "height":
+                // The height mode selects on pointer up; a height is applied from the panel.
+                return undefined;
             case "erase":
                 return (model) => {
                     const keptEdges = new Set<string>();
@@ -594,6 +741,12 @@ export class MapLayerEditorTool extends MapEditorTool {
                     } else {
                         this.drawWindowPreview(graphics, this.hoverModel, cell, cell);
                     }
+                } else if (mode === "height") {
+                    const picker = this.getHoverPicker();
+                    this.drawHeightSelection(graphics, picker, this.heightSelection);
+                    for (const rect of picker.rects(picker.select(picker.at(this.hover.x, this.hover.y)))) {
+                        graphics.lineStyle(2, 0xffffff, 0.9).strokeRect(rect.x, rect.y, rect.width, rect.height);
+                    }
                 } else if (mode === "erase") {
                     // What the eraser would remove under the cursor is highlighted in red: a door, a wall or a floor.
                     this.hoverModel ??= this.readModel();
@@ -610,6 +763,17 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
 
+        if (get(mapLayerModeStore) === "height") {
+            if (gesture.picker) {
+                this.drawHeightSelection(
+                    graphics,
+                    gesture.picker,
+                    gesture.picker.along(gesture.startWorld, gesture.currentWorld),
+                );
+            }
+            this.scene.markDirty();
+            return;
+        }
         if (get(mapLayerModeStore) === "door") {
             this.drawDoorPreview(graphics, gesture.baseModel, gesture.currentWorld);
             this.scene.markDirty();
@@ -654,18 +818,52 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.markDirty();
     }
 
-    /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
-    /** The door a click would place, green where it can go, red where it cannot; a door a click would flip, green. */
-    private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
-        const door = doorCandidateAt(model, world.x, world.y);
-        const placed = door.valid ? undefined : this.doorToFlip(model, world);
-        if (placed) {
-            const { x, y, width, height } = doorPixelRect(placed);
-            graphics.fillStyle(0x2ecc71, 0.45).fillRect(x, y, width, height);
-            return;
+    /** The selection of the height mode, over the sprites of its walls, doors and windows. */
+    private drawHeightSelection(
+        graphics: Phaser.GameObjects.Graphics,
+        picker: HeightPicker,
+        targets: readonly HeightTarget[],
+    ): void {
+        for (const rect of picker.rects(targets)) {
+            graphics
+                .fillStyle(HEIGHT_SELECTION_COLOR, 0.3)
+                .fillRect(rect.x, rect.y, rect.width, rect.height)
+                .lineStyle(2, HEIGHT_SELECTION_COLOR, 0.9)
+                .strokeRect(rect.x, rect.y, rect.width, rect.height);
         }
-        const { x, y, width, height } = doorPixelRect(door);
-        graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /**
+     * The door a click would place (or the placed door it would change): green when the click does something, red when
+     * it does not.
+     */
+    private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
+        const plan = planDoorAt(model, world.x, world.y, this.doorHeightSetting(), this.doorPlanOptions());
+        const { x, y, width, height } = doorPixelRect(plan.door);
+        graphics.fillStyle(plan.action !== "invalid" ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
+    }
+
+    /** The height setting of the doors: Auto, or the chosen height (one the catalogs lack goes back to 1 in the plan). */
+    private doorHeightSetting(): DoorHeightSetting {
+        return get(mapLayerDoorHeightStore);
+    }
+
+    /** The glazed switch and what the catalogs have, for the plan of a door-mode click. */
+    private doorPlanOptions(): DoorPlanOptions {
+        const glazedAvailable = get(mapLayerGlazedDoorsAvailableStore);
+        const plain = get(mapLayerDoorHeightsAvailableStore);
+        const glazedHeights = get(mapLayerGlazedDoorHeightsAvailableStore);
+        return {
+            glazed: get(mapLayerDoorGlazedStore) && glazedAvailable,
+            glazedAvailable,
+            heightsAvailable: (glazed) => (glazed ? glazedHeights : plain),
+        };
+    }
+
+    /** Whether a door-mode click hit a placed horizontal door: it changes or flips it, or explains nothing when it cannot. */
+    private onPlacedDoor(gesture: Gesture): boolean {
+        const door = doorUnderPoint(gesture.baseModel, gesture.currentWorld.x, gesture.currentWorld.y);
+        return door?.orientation === "h";
     }
 
     /** The segments a window drag passes over: green where a window can go, red where it cannot. */
@@ -744,7 +942,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.scene.markDirty();
     }
 
-    private commit(operation: MapLayerOperation): void {
+    /** Commits an edit as one undo step. `done` runs once the map has been changed. */
+    private commit(operation: MapLayerOperation, done?: () => void): void {
         const wamFile = this.scene.getGameMap().getWamFile();
         if (!wamFile) return;
         const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
@@ -765,11 +964,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             return buildMapLayerCommands(wamFile, entitiesManager, diff);
         };
 
-        this.hoverModel = undefined;
+        this.forgetHoverModel();
         this.mapEditorModeManager
             .executeCommands(factory)
             .then(() => {
-                this.hoverModel = undefined;
+                this.forgetHoverModel();
+                done?.();
             })
             .catch((error: unknown) => {
                 const cause = asError(error);
