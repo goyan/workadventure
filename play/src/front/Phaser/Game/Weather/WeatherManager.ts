@@ -216,8 +216,10 @@ export class WeatherManager {
         const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom));
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
-        // As fine as the finest blocks drawn: the fog's, or the clouds' at this zoom (both powers of two).
-        this.blocks.begin(view, Math.min(FOG_BLOCK, cloudBlockSize(this.scene.cameras.main.zoom)));
+        // As fine as the finest blocks drawn: the clouds' at this zoom, and the fog's when there is fog (powers of two).
+        const cloudBlock = cloudBlockSize(this.scene.cameras.main.zoom);
+        const foggy = showWeather && weather === WeatherType.Fog;
+        this.blocks.begin(view, foggy ? Math.min(FOG_BLOCK, cloudBlock) : cloudBlock);
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
             this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);

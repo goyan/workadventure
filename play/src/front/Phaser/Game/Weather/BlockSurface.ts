@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import type { FogBlock, WeatherView } from "./WeatherFrame";
 
 /** Where a block canvas lies on the map: its top left corner (map pixels) and its size, one pixel a block. */
@@ -8,15 +9,16 @@ export interface BlockCanvasArea {
     rows: number;
 }
 
-/** The canvas covering `view` with one pixel a block of `resolution` map pixels, on a grid fixed to the map. */
+/**
+ * The canvas covering `view` with one pixel a block of `resolution` map pixels, on a grid fixed to the map. Its size
+ * depends on the size of the view only, one block wider and higher than it: a scroll never makes the canvas again.
+ */
 export function blockCanvasArea(view: WeatherView, resolution: number): BlockCanvasArea {
-    const x = Math.floor(view.x / resolution) * resolution;
-    const y = Math.floor(view.y / resolution) * resolution;
     return {
-        x,
-        y,
-        columns: Math.ceil((view.x + view.width - x) / resolution),
-        rows: Math.ceil((view.y + view.height - y) / resolution),
+        x: Math.floor(view.x / resolution) * resolution,
+        y: Math.floor(view.y / resolution) * resolution,
+        columns: Math.ceil(view.width / resolution) + 1,
+        rows: Math.ceil(view.height / resolution) + 1,
     };
 }
 
@@ -82,6 +84,8 @@ export class CanvasBlockSurface implements BlockSurface {
     private area: BlockCanvasArea = { x: 0, y: 0, columns: 0, rows: 0 };
     private resolution = 1;
     private painted = false;
+    /** Canvases made so far (a new size of view), for a key of its own each. */
+    private sizes = 0;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -97,8 +101,13 @@ export class CanvasBlockSurface implements BlockSurface {
         const { columns, rows } = this.area;
         if (!this.texture || this.texture.width !== columns || this.texture.height !== rows) {
             const previous = this.texture;
+            // A canvas kept in memory (not on the GPU): sending its pixels to the texture at every drawing stays cheap.
+            const canvas = document.createElement("canvas");
+            canvas.width = columns;
+            canvas.height = rows;
+            canvas.getContext("2d", { willReadFrequently: true });
             this.texture =
-                this.scene.textures.createCanvas(`weather-blocks:${this.id}:${columns}x${rows}`, columns, rows) ??
+                this.scene.textures.addCanvas(`weather-blocks:${this.id}:${this.sizes++}:${columns}x${rows}`, canvas) ??
                 undefined;
             this.texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
             this.pixels = this.texture?.getContext().createImageData(columns, rows);
