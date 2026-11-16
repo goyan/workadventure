@@ -220,14 +220,15 @@ export function cloudTones(
 }
 
 /**
- * Clouds whole up to a zoom of 0.5, gone at a zoom of 1 and closer: zoomed in, the camera is under them, and only their
- * shadows on the ground remain.
+ * Clouds whole while a map pixel takes 0.8 screen pixel or less, gone from 1.4 (a map opens at 1.5): zoomed in, the
+ * camera is under them, and only their shadows on the ground remain. One notch of the wheel out shows them. Measured
+ * on the screen, not by the camera zoom, which stays at 1 while Phaser stretches the canvas (Retina screens).
  */
-const ZOOM_WHOLE = 0.5;
-const ZOOM_GONE = 1;
-export function cloudZoomFade(zoom: number): number {
-    if (!Number.isFinite(zoom)) return 1;
-    return 1 - clamp01((zoom - ZOOM_WHOLE) / (ZOOM_GONE - ZOOM_WHOLE));
+const ZOOM_WHOLE = 0.8;
+const ZOOM_GONE = 1.4;
+export function cloudZoomFade(screenScale: number): number {
+    if (!Number.isFinite(screenScale)) return 1;
+    return 1 - clamp01((screenScale - ZOOM_WHOLE) / (ZOOM_GONE - ZOOM_WHOLE));
 }
 
 /** Height of the clouds and longest shadow, in tiles. */

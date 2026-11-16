@@ -619,6 +619,28 @@ describe("weather rendering lifecycle", () => {
             expect(shadows(graphics)).toBe(0);
         });
 
+        it("fades the clouds by their scale on the screen, the canvas stretched or not (Retina screens)", () => {
+            const shown = (cameraZoom: number, displayScale: number) => {
+                const { scene, graphics, wam } = fixture();
+                wam.settings = { weather: WeatherType.Cloudy };
+                scene.cameras.main.zoom = cameraZoom;
+                // Phaser's display scale: game pixels per screen pixel of the canvas.
+                scene.scale.displayScale.x = displayScale;
+                scene.cameras.main.worldView.width = 2100;
+                scene.cameras.main.worldView.height = 2100;
+                manager = new WeatherManager(scene);
+                manager.update(0, at, false, sun);
+                const count = whites(graphics);
+                manager.destroy();
+                manager = undefined;
+                return count;
+            };
+            // The camera at 1 over a canvas stretched 1.5 times (a map just opened): under the clouds.
+            expect(shown(1, 1 / 1.5)).toBe(0);
+            // The camera at 1 over a canvas shrunk to 0.75: the clouds show.
+            expect(shown(1, 1 / 0.75)).toBeGreaterThan(0);
+        });
+
         it("paints rain and storm clouds as cumulus too, in three tones, gone zoomed in under them", () => {
             for (const [weather, mid] of [
                 [WeatherType.Rain, 0x7d8794],

@@ -265,7 +265,7 @@ export class WeatherManager {
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
                 const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
                 const levels = fieldLevels(canvas, size, patches);
-                const body = covering.alpha * cloudZoomFade(this.scene.cameras.main.zoom);
+                const body = covering.alpha * cloudZoomFade(this.screenScale());
                 this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
             }
             if (weather === WeatherType.Snow) {
@@ -286,7 +286,7 @@ export class WeatherManager {
             if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
         if (showClouds) {
-            const zoom = this.scene.cameras.main.zoom;
+            const zoom = this.screenScale();
             this.drawClouds(
                 epoch,
                 sky,
@@ -389,6 +389,16 @@ export class WeatherManager {
                 cloudAlpha(level, tint.alpha),
             );
         }
+    }
+
+    /**
+     * Screen pixels a map pixel takes: the camera zoom over Phaser's display scale, which stretches the canvas while the
+     * camera stays at 1 (Retina screens). The camera zoom alone when the display scale is unknown.
+     */
+    private screenScale(): number {
+        const zoom = this.scene.cameras.main.zoom;
+        const scale = zoom / this.scene.scale.displayScale.x;
+        return Number.isFinite(scale) && scale > 0 ? scale : zoom;
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */

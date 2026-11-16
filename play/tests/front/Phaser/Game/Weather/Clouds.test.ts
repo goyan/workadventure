@@ -329,13 +329,14 @@ describe("cumulus clouds", () => {
         expect(cloudLightStep(64)).toEqual({ columns: -1, rows: -1 });
     });
 
-    it("fades the clouds out as the camera comes down under them, whole zoomed out", () => {
-        expect(cloudZoomFade(0.25)).toBe(1);
-        expect(cloudZoomFade(0.5)).toBe(1);
-        expect(cloudZoomFade(0.75)).toBeGreaterThan(0);
-        expect(cloudZoomFade(0.75)).toBeLessThan(1);
-        expect(cloudZoomFade(1)).toBe(0);
-        expect(cloudZoomFade(3)).toBe(0);
+    it("fades the clouds out as the camera comes down under them, by the scale on the screen", () => {
+        // A map pixel over 0.8 screen pixel or less: whole; over 1.4 or more (the zoom a map opens with is 1.5): gone.
+        expect(cloudZoomFade(0.17)).toBe(1);
+        expect(cloudZoomFade(0.8)).toBe(1);
+        expect(cloudZoomFade(1.1)).toBeGreaterThan(0);
+        expect(cloudZoomFade(1.1)).toBeLessThan(1);
+        expect(cloudZoomFade(1.4)).toBe(0);
+        expect(cloudZoomFade(1.5)).toBe(0);
     });
 });
 
