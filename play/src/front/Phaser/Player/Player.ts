@@ -49,7 +49,7 @@ import { NERF_KNOCKBACK_MS, NERF_KNOCKBACK_PX } from "../Game/Nerf/NerfBlink";
 import { RUN_ANIMATION_SPEED } from "./Animation";
 import { computeTileSnapTarget, getFeetTile } from "./TileSnap";
 import type { Seat } from "./Seat";
-import { findSeatOfCharacter, findSeatUnderFeet, getSeats, isSeatTaken, seatBehindWall, seatsNextToFeet } from "./Seat";
+import { findSeatOfCharacter, findSeatUnderFeet, getSeats, isSeatTaken } from "./Seat";
 import { findActionableObject } from "./ActionableObjects";
 
 /** Water set to dive on contact: the body center this close to it makes the player dive. */
@@ -78,8 +78,6 @@ export class Player extends Character {
     private ignoredSeatId: string | undefined;
     private seatEntityId: string | undefined;
     private ignoredSeatEntityId: string | undefined;
-    /** Whether the seats next to the feet were looked at since the player stopped (trySitDown). */
-    private lookedBesideSince = false;
     private swimming = false;
     private diveTarget: ReturnType<typeof findDiveTarget>;
     private readonly divePrompt: InteractionPrompt;
@@ -352,47 +350,37 @@ export class Player extends Character {
     }
 
     /**
-     * Sits on the free seat under the feet of the player: slides to its center, then faces the way of the seat. Once
-     * stopped, a free seat on a tile next to the feet does too (not through a wall of the map tool).
+     * Sits on the free seat under the feet of the player (within half a tile of it, or against its object): slides to
+     * its center, then faces the way of the seat. Automatically only once stopped (`allowAutomaticSitting`).
      */
     private trySitDown(allowAutomaticSitting: boolean): void {
         this.releaseSeatObjectWhenOut();
-        const feet = this.getFeet();
-        const seat = findSeatUnderFeet(this.scene, feet, this.getBodyBox());
-        const around = seatsNextToFeet(this.scene, feet);
-        // The seat just left, and the other places of its couch, stay ignored until the player is off it and its
-        // neighbouring tiles: stepping off a seat and stopping next to it does not sit back on it.
-        const close = seat ? [seat, ...around] : around;
-        if (!close.some((near) => near.id === this.ignoredSeatId)) this.ignoredSeatId = undefined;
-        if (!close.some((near) => near.entityId === this.ignoredSeatEntityId)) this.ignoredSeatEntityId = undefined;
-        const free = (near: Seat) =>
-            near.id !== this.ignoredSeatId &&
-            near.entityId !== this.ignoredSeatEntityId &&
-            !isSeatTaken(this.scene, near);
-        if (seat && free(seat)) {
-            if (seat.trigger === "key") {
-                // A seat set to the interaction key: offer it, sit only when asked.
-                this.sitPrompt.show(() => {
-                    this.sitPrompt.hide();
-                    this.slideToSeat(seat);
-                });
-                return;
-            }
-            if (allowAutomaticSitting) this.slideToSeat(seat);
+        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
+        // The seat just left, and the other places of its couch, stay ignored until the player is off it.
+        if (seat?.id !== this.ignoredSeatId) {
+            this.ignoredSeatId = undefined;
+        }
+        if (seat?.entityId !== this.ignoredSeatEntityId) {
+            this.ignoredSeatEntityId = undefined;
+        }
+        if (
+            !seat ||
+            seat.id === this.ignoredSeatId ||
+            seat.entityId === this.ignoredSeatEntityId ||
+            isSeatTaken(this.scene, seat)
+        ) {
+            this.sitPrompt.hide();
             return;
         }
-        this.sitPrompt.hide();
-        if (!allowAutomaticSitting) {
-            this.lookedBesideSince = false;
+        if (seat.trigger === "key") {
+            // A seat set to the interaction key: offer it, sit only when asked.
+            this.sitPrompt.show(() => {
+                this.sitPrompt.hide();
+                this.slideToSeat(seat);
+            });
             return;
         }
-        // Once a stop: looking for walls on every image of a player standing still would cost for nothing.
-        if (this.lookedBesideSince) return;
-        this.lookedBesideSince = true;
-        const beside = around.find(
-            (near) => near.trigger === "auto" && free(near) && !seatBehindWall(this.scene, feet, near),
-        );
-        if (beside) this.slideToSeat(beside);
+        if (allowAutomaticSitting) this.slideToSeat(seat);
     }
 
     private getFeet(): { x: number; y: number } {
@@ -877,9 +865,6 @@ export class Player extends Character {
     }
 
     public finishFollowingPath(cancelled = false, blocked = false): void {
-        // A walk along a path (a double-click run, a walk to a meeting) ends standing even next to a seat: only a stop
-        // after moving by hand sits on the seat beside (trySitDown).
-        this.lookedBesideSince = true;
         const wasFollowing = this.isFollowingPath();
         super.finishFollowingPath(cancelled, blocked);
         this.onPathFinished(wasFollowing);

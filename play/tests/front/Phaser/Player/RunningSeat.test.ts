@@ -5,14 +5,12 @@ import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
 import { ActiveEventList, UserInputEvent } from "@wa/front/Phaser/UserInput/UserInputManager";
 import { followStateStore } from "@wa/front/Stores/FollowStore";
 import { userMovingStore } from "@wa/front/Stores/GameStore";
-import { findSeatOfCharacter, findSeatUnderFeet, seatBehindWall, seatsNextToFeet } from "@wa/front/Phaser/Player/Seat";
+import { findSeatOfCharacter, findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import type { Seat } from "@wa/front/Phaser/Player/Seat";
 
 vi.mock("@wa/front/Phaser/Player/Seat", () => ({
     findSeatUnderFeet: vi.fn(),
     findSeatOfCharacter: vi.fn(),
-    seatsNextToFeet: vi.fn(() => []),
-    seatBehindWall: vi.fn(() => false),
     isSeatTaken: () => false,
 }));
 vi.mock("@wa/front/Rules/StatusRules/statusChangerFunctions", () => ({ passStatusToOnline: vi.fn() }));
@@ -61,8 +59,6 @@ beforeEach(() => {
     followStateStore.set("off");
     userMovingStore.set(false);
     vi.mocked(findSeatUnderFeet).mockReturnValue(seat);
-    vi.mocked(seatsNextToFeet).mockReturnValue([]);
-    vi.mocked(seatBehindWall).mockReturnValue(false);
 });
 afterEach(() => {
     userMovingStore.set(false);
@@ -141,58 +137,25 @@ describe("automatic seating only when stopping on a seat", () => {
     });
 });
 
-describe("sitting on a seat of the next tile when stopping", () => {
+describe("sitting only within half a tile of a seat", () => {
     const beside: Seat = { ...seat, id: "beside", entityId: "beside", feet: { x: 48, y: 16 } };
 
     beforeEach(() => {
+        // The feet are more than half a tile from any seat: none under them.
         vi.mocked(findSeatUnderFeet).mockReturnValue(undefined);
-        vi.mocked(seatsNextToFeet).mockReturnValue([beside]);
     });
 
-    it("sits on the free seat of a tile next to the feet once stopped", () => {
+    it("stays standing when stopping on the tile next to a seat", () => {
         const { player, slide } = fixture();
-        player.moveUser(16, input());
-        expect(slide).toHaveBeenCalledWith(beside);
-    });
-
-    it("keeps walking past it", () => {
-        const { player, slide } = fixture();
-        player.moveUser(16, input(UserInputEvent.MoveRight));
-        expect(slide).not.toHaveBeenCalled();
-    });
-
-    it("never through a wall of the map tool", () => {
-        const { player, slide } = fixture();
-        vi.mocked(seatBehindWall).mockReturnValue(true);
         player.moveUser(16, input());
         expect(slide).not.toHaveBeenCalled();
     });
 
-    it("never sits back on the seat just left by stepping off it and stopping next to it", () => {
+    it("never goes back on the seat just left by stepping off it and stopping next to it", () => {
         const { player, slide } = fixture();
         Object.assign(player, { ignoredSeatId: beside.id, ignoredSeatEntityId: beside.entityId });
         player.moveUser(16, input(UserInputEvent.MoveRight));
         player.moveUser(16, input());
         expect(slide).not.toHaveBeenCalled();
-    });
-
-    it("ends a walk along a path (a double-click run, a walk to a meeting) standing, even next to a seat", () => {
-        const { player, slide } = fixture();
-        Object.assign(player, { onPathFinished: vi.fn() });
-        player.finishFollowingPath();
-        player.moveUser(16, input());
-        expect(slide).not.toHaveBeenCalled();
-        // Walking again then stopping next to it does sit.
-        player.moveUser(16, input(UserInputEvent.MoveRight));
-        player.moveUser(16, input());
-        expect(slide).toHaveBeenCalledWith(beside);
-    });
-
-    it("offers no interaction-key seat of a tile next to the feet: only the one under them", () => {
-        const { player, slide, show } = fixture();
-        vi.mocked(seatsNextToFeet).mockReturnValue([{ ...beside, trigger: "key" }]);
-        player.moveUser(16, input());
-        expect(slide).not.toHaveBeenCalled();
-        expect(show).not.toHaveBeenCalled();
     });
 });
