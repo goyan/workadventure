@@ -370,6 +370,17 @@ describe("DoorAnimator high doors", () => {
         expect(drawnTop()).toBe(160 - 14);
     });
 
+    it("opens a vertical door of a wall of 2 from the ground, plays the frames of its height and marks what is seen", async () => {
+        // Raised by 32 px: drawn from y = 128, its opening on the ground 112..144 x 160..224.
+        const { animator, requested } = makeFramedDoor("porte-v-gris-haut-h2", 96, 128, 32);
+        await openWithPlayerIn(animator, { x: 128, y: 176 });
+        expect(requested).toContain("porte-v-gris-haut-h2-0");
+        expect(requested.filter((name) => !name.startsWith("porte-v-gris-haut-h2-"))).toEqual([]);
+        const zone = { x: 128, y: 160, width: 128, height: 64 };
+        // Seen from 128 to 180: the door raised by 32, its last 12 px under the joint of the vertex below.
+        expect(Array.from(animator.getLockedDoorMarkers([zone]).values())).toEqual([{ x: 128, y: 154 }]);
+    });
+
     it("marks a high door in the middle of what is seen of it", () => {
         const { animator } = makeFramedDoor("porte-h-gris-g-h2", 128, 128, 64);
         animator.update(0, [], { x: 0, y: 0 });

@@ -120,7 +120,7 @@ function carrierHeightOf(piece: MapLayerPiece, wall: FadableWall, model: MapLaye
         const segment =
             piece.orientation === "h"
                 ? model.getWall("h", wall.x / size, (wall.y + wallRise(piece.height)) / size)
-                : model.getWall("v", (wall.x + size) / size, (wall.y - WALL_THICKNESS) / size);
+                : model.getWall("v", (wall.x + size) / size, (wall.y + wallRise(piece.height) - WALL_THICKNESS) / size);
         return segment?.height ?? piece.height;
     }
     if (piece.kind === "window") {

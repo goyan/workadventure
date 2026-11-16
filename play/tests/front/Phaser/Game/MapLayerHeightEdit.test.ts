@@ -63,8 +63,8 @@ describe("height mode: what is under the pointer", () => {
         const picker = buildHeightPicker(model);
         // The door of height 2 is drawn from y = 96 - 32 = 64, under its lintel down to y = 76.
         expect(picker.at(3 * 32 + 10, 90)).toEqual({ kind: "door", door: { orientation: "h", x: 4, y: 3 } });
-        // The pieces of a vertical door are 64 px wide around their line, on the ground.
-        expect(picker.select(picker.at(256 - 20, 3 * 32 + 20))).toEqual([wall(8, 2, "v"), wall(8, 3, "v")]);
+        // The pieces of a vertical door are 64 px wide around their line, raised with their wall of 2 (bas: y 76 to 108).
+        expect(picker.select(picker.at(256 - 20, 3 * 32 - 12))).toEqual([wall(8, 2, "v"), wall(8, 3, "v")]);
     });
 
     it("finds nothing in the void", () => {

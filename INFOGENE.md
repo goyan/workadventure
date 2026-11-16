@@ -1639,7 +1639,8 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
 - Noms (contrat avec le catalogue privé ; hauteur 1 = nom sans suffixe, `-h1` refusé) : `facade-<t>-<bouts>-hN`,
   `mur-vertical-<t>-hN`, `bout-<t>-hN`, `raccord-<bras>-hN`, `fenetre-<t>-<bouts>-hM`, `porte-h-<t>-<g|d>-hM` (images
   d'animation `-hM-<n>` / `-hM-b<n>`), `linteau-<t>-<bouts>-hN-oM` (mur plein au-dessus d'une porte ou d'une fenêtre de
-  hauteur M < N). La porte verticale n'a pas de hauteur (vue de dessus).
+  hauteur M < N), `porte-v-<t>-<haut|bas>-hN` (porte verticale : toujours la hauteur de son mur, le plus bas de ses deux
+  segments, sans réglage propre).
 - Modèle : `WallEdge.height`, hauteur propre des portes horizontales (`DoorRef.height`) et des fenêtres
   (`getWindowHeight`), ramenée à celle du mur (pose, ou mur abaissé). Relecture : chaque pièce haute à sa place
   remontée ; la hauteur du mur au-dessus d'une ouverture vient du linteau ; résultat indépendant de l'ordre des objets.
@@ -1647,7 +1648,8 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   continue que vers un voisin au moins aussi haut, sinon elle se ferme (le plus bas continue sous elle). Un mur
   horizontal plus haut qu'un niveau cache ce niveau, sauf le bras sud. Un mur vertical seul à un niveau reçoit son
   `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
-  un mur vertical haut : les bandes et le raccord du milieu restent au-dessus d'elle (choix à confirmer à l'écran).
+  un mur vertical haut : remontée avec son chapeau (`wallRise(N)`), pour rester visible de dessus ; aucune bande sur ses
+  deux segments (le passage reste libre), raccords de ses sommets extérieurs au niveau du mur, comme en hauteur 1.
 - Hauteur des portes : le mode Porte propose « Auto 1 2 3 4 », Auto par défaut : la porte prend la hauteur de son mur
   (le plus bas de ses deux segments), 2 cases au plus (`DOOR_AUTO_MAX_HEIGHT`) ; un choix 1 à 4 est ramené à la hauteur
   du mur. Cliquer en mode Porte sur une porte horizontale déjà posée (même sommet) lui donne la hauteur qui serait posée
@@ -1680,9 +1682,7 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
   l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
-  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; au-dessus d'une
-  porte verticale, un mur vertical haut pose `mur-vertical-<teinte>-hN-porte` (même image, sans collision : le passage
-  reste ouvert, et la pièce ne compte pas pour le dehors) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
 
 ## Confirmation avant de libérer son bureau

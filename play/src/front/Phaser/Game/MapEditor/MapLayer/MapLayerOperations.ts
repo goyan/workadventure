@@ -116,7 +116,7 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                         : {
                               orientation: "v",
                               x: (item.x + DOOR_VERTICAL_WIDTH / 2) / size,
-                              y: (item.y - WALL_THICKNESS) / size + 1,
+                              y: (item.y + wallRise(piece.height) - WALL_THICKNESS) / size + 1,
                           };
                 if (Number.isInteger(door.x) && Number.isInteger(door.y)) {
                     for (const edge of doorEdges(door)) {

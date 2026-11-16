@@ -67,11 +67,6 @@ function isDrawnByDoor(model: MapLayerModel, wall: WallEdge): boolean {
     return door !== undefined && doorHeight(door) >= wall.height;
 }
 
-/** Whether the strip of a vertical wall under a vertical door is drawn: only a high wall passes over its door. */
-function isStripOverDoor(wall: WallEdge): boolean {
-    return wall.orientation === "v" && wall.height >= 2;
-}
-
 interface ArmWall {
     arm: JointArm;
     wall: WallEdge;
@@ -83,8 +78,8 @@ interface ArmWall {
  *   it continue up to it, with no end of their own, and the vertices it touches get no horizontal arm at that level.
  * - A horizontal wall higher than a level hides the joint of that level behind its face, but for the south arm, the
  *   wall that comes out under it.
- * - The middle vertex of a door is drawn by the door, but for the walls that pass over it (the lintels over a lower
- *   horizontal door, the strips of a high vertical wall over its door).
+ * - The middle vertex of a door is drawn by the door, but for the lintels that pass over a lower horizontal door. A
+ *   vertical door is raised to the level of its wall and draws its middle vertex itself.
  * - A vertical wall that ends alone at a level shows its south face under its cap, like a horizontal wall.
  */
 function jointsAt(model: MapLayerModel, x: number, y: number): MapLayerPlacement[] {
@@ -101,10 +96,11 @@ function jointsAt(model: MapLayerModel, x: number, y: number): MapLayerPlacement
 
     const horizontals = candidates.filter(({ arm }) => arm === "E" || arm === "W");
     const arms = middleOfDoor
-        ? candidates.filter(({ wall }) =>
-              wall.orientation === "h"
-                  ? model.getDoorOn("h", wall.x, wall.y) !== undefined && !isDrawnByDoor(model, wall)
-                  : model.getDoorOn("v", wall.x, wall.y) !== undefined && isStripOverDoor(wall),
+        ? candidates.filter(
+              ({ wall }) =>
+                  wall.orientation === "h" &&
+                  model.getDoorOn("h", wall.x, wall.y) !== undefined &&
+                  !isDrawnByDoor(model, wall),
           )
         : candidates.filter(({ wall }) => !isDrawnByDoor(model, wall));
 
@@ -194,19 +190,22 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                 ),
             );
         } else {
+            // Raised with the cap of its wall (the lower of its two segments), to stay seen from above.
+            const height = model.lowerWallOf(door);
             const x = door.x * size - DOOR_VERTICAL_WIDTH / 2;
+            const rise = wallRise(height);
             placements.push(
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("v", tint, "haut"),
+                    doorPrefabName("v", tint, "haut", undefined, false, height),
                     x,
-                    (door.y - 1) * size + WALL_THICKNESS,
+                    (door.y - 1) * size + WALL_THICKNESS - rise,
                 ),
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("v", tint, "bas"),
+                    doorPrefabName("v", tint, "bas", undefined, false, height),
                     x,
-                    door.y * size + WALL_THICKNESS,
+                    door.y * size + WALL_THICKNESS - rise,
                 ),
             );
         }
@@ -259,13 +258,12 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
                 ),
             );
         } else {
-            // A vertical door is drawn on the ground between its joints; the strip of a high wall passes over it,
-            // without the collision of the wall, which would close the doorway.
-            if (door && !isStripOverDoor(wall)) continue;
+            // A vertical door is drawn between its joints, in place of the strips of its two segments.
+            if (door) continue;
             placements.push(
                 placement(
                     MAP_LAYER_WALL_COLLECTION,
-                    verticalWallPrefabName(wall.tint, wall.height, door !== undefined),
+                    verticalWallPrefabName(wall.tint, wall.height),
                     wall.x * size - WALL_HALF,
                     wall.y * size + WALL_THICKNESS - wallRise(wall.height),
                 ),

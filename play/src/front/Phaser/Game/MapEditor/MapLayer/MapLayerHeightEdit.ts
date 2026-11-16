@@ -104,7 +104,7 @@ function pickableSprites(model: MapLayerModel): PickableSprite[] {
                         : {
                               orientation: "v",
                               x: (placement.x + DOOR_VERTICAL_WIDTH / 2) / size,
-                              y: (placement.y - WALL_THICKNESS) / size,
+                              y: (placement.y + rise - WALL_THICKNESS) / size,
                           };
                 const door = model.getDoorOn(edge.orientation, edge.x, edge.y);
                 if (door) target = { kind: "door", door: doorRefOf(door) };

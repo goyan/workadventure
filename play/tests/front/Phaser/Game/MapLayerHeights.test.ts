@@ -71,7 +71,7 @@ describe("wall heights: names", () => {
         expect(doorPrefabName("h", "gris", "g", 3, false, 2)).toBe("porte-h-gris-g-h2-3");
         expect(doorPrefabName("h", "gris", "g", 3, true, 2)).toBe("porte-h-gris-g-h2-b3");
         expect(doorPrefabName("h", "gris", "g", 3, true)).toBe("porte-h-gris-g-b3");
-        expect(doorPrefabName("v", "gris", "haut", undefined, false, 2)).toBe("porte-v-gris-haut");
+        expect(doorPrefabName("v", "gris", "haut", undefined, false, 2)).toBe("porte-v-gris-haut-h2");
         expect(windowPrefabName("gris", "mid", 2)).toBe("fenetre-gris-mid-h2");
         expect(windowPrefabName("gris", "mid")).toBe("fenetre-gris-mid");
     });
@@ -141,7 +141,6 @@ describe("wall heights: parsing", () => {
         expect(read(MAP_LAYER_WALL_COLLECTION, "linteau-gris-mid-h2-o2")).toBeUndefined();
         expect(read(MAP_LAYER_WALL_COLLECTION, "linteau-gris-mid-h2-o3")).toBeUndefined();
         expect(read(MAP_LAYER_WALL_COLLECTION, "linteau-gris-mid-h2")).toBeUndefined();
-        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-v-gris-haut-h2")).toBeUndefined();
         expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-g-h2-7")).toBeUndefined();
         expect(read(MAP_LAYER_WINDOW_COLLECTION, "fenetre-gris-mid-h5")).toBeUndefined();
     });
@@ -524,24 +523,23 @@ describe("wall heights: placements", () => {
     });
 
     for (const height of [2, 4] as const) {
-        it(`passes the strips of a vertical wall of ${height} over its door without their collision, joints included`, () => {
+        it(`raises a vertical door to the level of its wall of ${height}, with no strip over it`, () => {
             const model = new MapLayerModel();
             for (let y = 2; y < 6; y++) model.setWall("v", 4, y, "blanc", height);
             expect(model.setDoor({ orientation: "v", x: 4, y: 4 })).toBe(true);
             const items = names(model);
             const rise = 32 * (height - 1);
-            expect(items).toContain("porte-v-blanc-haut@96,108");
-            expect(items).toContain("porte-v-blanc-bas@96,140");
-            // Over the two segments of the door, the strips are the pieces without collision: the doorway stays open.
+            expect(items).toContain(`porte-v-blanc-haut-h${height}@96,${108 - rise}`);
+            expect(items).toContain(`porte-v-blanc-bas-h${height}@96,${140 - rise}`);
+            // The doorway is open: no piece of the wall (and its collision) on the two segments of the door.
             for (const y of [3, 4]) {
-                expect(items).toContain(`mur-vertical-blanc-h${height}-porte@122,${y * 32 + 12 - rise}`);
-                expect(items).not.toContain(`mur-vertical-blanc-h${height}@122,${y * 32 + 12 - rise}`);
+                expect(items.filter((name) => name.endsWith(`@122,${y * 32 + 12 - rise}`))).toEqual([]);
             }
-            // The other segments keep their strips.
+            // The other segments keep their strips; the outer vertices their joints, the door draws its middle one.
             for (const y of [2, 5]) expect(items).toContain(`mur-vertical-blanc-h${height}@122,${y * 32 + 12 - rise}`);
-            expect(items).toContain(`raccord-NS-h${height}@122,${128 - rise}`);
             expect(items).toContain(`raccord-NS-h${height}@122,${96 - rise}`);
             expect(items).toContain(`raccord-NS-h${height}@122,${160 - rise}`);
+            expect(items.filter((name) => name.endsWith(`@122,${128 - rise}`))).toEqual([]);
             const placements = computePlacements(model);
             for (const order of [placements, [...placements].reverse()]) {
                 const rebuilt = modelFromPlacedPrefabs(order);
@@ -551,16 +549,28 @@ describe("wall heights: placements", () => {
         });
     }
 
-    it("reads the strip over a door, of height 2 to 4 only", () => {
-        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h3-porte")).toEqual({
-            kind: "vertical",
-            tint: "gris",
+    it("reads a vertical door of a high wall, the height before the frame", () => {
+        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-v-gris-bas-h3")).toMatchObject({
+            orientation: "v",
+            side: "bas",
+            frame: 7,
             height: 3,
-            overDoor: true,
         });
-        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-porte")).toBeUndefined();
-        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h1-porte")).toBeUndefined();
-        expect(verticalWallPrefabName("gris", 3, true)).toBe("mur-vertical-gris-h3-porte");
+        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-v-gris-haut-h2-b4")).toMatchObject({
+            frame: 4,
+            reverse: true,
+            height: 2,
+        });
+        expect(doorPrefabName("v", "gris", "haut", 4, true, 2)).toBe("porte-v-gris-haut-h2-b4");
+        expect(read(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h3-porte")).toBeUndefined();
+    });
+
+    it("takes the height of a vertical door from the lower of its walls", () => {
+        const model = new MapLayerModel();
+        model.setWall("v", 4, 3, "blanc", 4);
+        model.setWall("v", 4, 4, "blanc", 2);
+        model.setDoor({ orientation: "v", x: 4, y: 4 });
+        expect(names(model)).toContain("porte-v-blanc-haut-h2@96,76");
     });
 
     it("reads its own placements back to the same model and the same placements", () => {

@@ -170,6 +170,7 @@ describe("entityOutdoorRect of high walls", () => {
     it("stands a high door, a high window and a high vertical wall like their pieces of height 1", () => {
         const pairs: [string, string, string, number, number][] = [
             ["Carte Portes", "porte-h-gris-g-h2", "porte-h-gris-g", 64, 32],
+            ["Carte Portes", "porte-v-gris-bas-h3", "porte-v-gris-bas", 96, 64],
             ["Carte Fenêtres", "fenetre-gris-left-h4", "fenetre-gris-left", 58, 96],
             ["Carte Murs", "mur-vertical-gris-h2", "mur-vertical-gris", 58, 32],
             ["Carte Murs", "bout-gris-h3", "bout-gris", 58, 64],
@@ -185,11 +186,6 @@ describe("entityOutdoorRect of high walls", () => {
     it("gives a lintel no rectangle of its own", () => {
         const lintel = piece("Carte Murs", "linteau-gris-mid-h4-o2", 64, 0);
         expect(entityOutdoorRect(lintel, imageSize(lintel))).toMatchObject({ width: 0, height: 0 });
-    });
-
-    it("gives the strip over a vertical door no rectangle of its own: the door under it has one", () => {
-        const strip = piece("Carte Murs", "mur-vertical-gris-h2-porte", 58, 44);
-        expect(entityOutdoorRect(strip, imageSize(strip))).toMatchObject({ width: 0, height: 0 });
     });
 
     it("keeps a room closed in high walls exactly as in walls of height 1", () => {

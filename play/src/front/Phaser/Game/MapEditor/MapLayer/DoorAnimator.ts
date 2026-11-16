@@ -225,9 +225,10 @@ export class DoorAnimator {
             const { rect, piece } = state;
             if (zones.some((zone) => isDoorInZone(rect, piece.orientation, zone))) {
                 // The bottom of a vertical door passes under the joint of the vertex below it: it is not seen. A high
-                // horizontal door is seen above its opening, up to its raised top.
-                const bottom = piece.orientation === "v" ? rect.bottom - WALL_THICKNESS : rect.bottom;
-                const top = piece.orientation === "h" ? rect.top - wallRise(piece.height) : rect.top;
+                // door is drawn raised: a horizontal one up from its opening, a vertical one shifted whole.
+                const rise = wallRise(piece.height);
+                const bottom = piece.orientation === "v" ? rect.bottom - WALL_THICKNESS - rise : rect.bottom;
+                const top = rect.top - rise;
                 markers.set(key, { x: (rect.left + rect.right) / 2, y: (top + bottom) / 2 });
             }
         }
@@ -442,7 +443,9 @@ export class DoorAnimator {
             const top = entity.y + wallRise(piece.height);
             return { left, top, right: left + 2 * size, bottom: top + size };
         }
-        const top = piece.side === "haut" ? entity.y : entity.y - size;
+        // A vertical door of a high wall is raised with its cap; its opening stays on the ground.
+        const ground = entity.y + wallRise(piece.height);
+        const top = piece.side === "haut" ? ground : ground - size;
         const center = entity.x + DOOR_VERTICAL_WIDTH / 2;
         return { left: center - size / 2, top, right: center + size / 2, bottom: top + 2 * size };
     }
@@ -466,7 +469,7 @@ export class DoorAnimator {
             // The door starts one cap (WALL_THICKNESS) under the line of the wall it hangs from, a high wall being
             // drawn higher.
             const above =
-                facade.y + wallRise(height) === entity.y - WALL_THICKNESS &&
+                facade.y + wallRise(height) === entity.y + wallRise(piece.height) - WALL_THICKNESS &&
                 facade.x <= center &&
                 center <= facade.x + facade.displayWidth;
             if (above) {

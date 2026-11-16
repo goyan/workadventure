@@ -132,7 +132,6 @@ const VERTICAL_WALL_PREFIX = "mur-vertical-";
 const WALL_END_PREFIX = "bout-";
 const JOINT_PREFIX = "raccord-";
 const LINTEL_PREFIX = "linteau-";
-const OVER_DOOR_SUFFIX = "-porte";
 
 export function mapLayerPrefabId(collectionName: string, name: string): string {
     return `${collectionName}:${name}:Default:Down`;
@@ -151,12 +150,8 @@ export function jointPrefabName(arms: readonly JointArm[], height: WallHeight = 
     return `${JOINT_PREFIX}${JOINT_ARMS.filter((arm) => arms.includes(arm)).join("")}${heightSuffix(height)}`;
 }
 
-/**
- * The strip of a vertical wall; `overDoor`: the same strip over a vertical door, without the collision of the wall (only
- * a high wall passes over its door, so it exists for the heights 2 to 4).
- */
-export function verticalWallPrefabName(tint: WallTint, height: WallHeight = 1, overDoor = false): string {
-    return `${VERTICAL_WALL_PREFIX}${tint}${heightSuffix(height)}${overDoor ? OVER_DOOR_SUFFIX : ""}`;
+export function verticalWallPrefabName(tint: WallTint, height: WallHeight = 1): string {
+    return `${VERTICAL_WALL_PREFIX}${tint}${heightSuffix(height)}`;
 }
 
 /** The south face at the free bottom end of a vertical wall, like the face of a horizontal wall. */
@@ -181,8 +176,9 @@ export function lintelPrefabName(tint: WallTint, ends: FacadeEnds, wall: WallHei
 }
 
 /**
- * Name of a piece of a door; without `frame`, the closed door. Only a horizontal door has a height (a vertical door is
- * seen from above); its suffix comes before the one of the frame.
+ * Name of a piece of a door; without `frame`, the closed door. The suffix of the height comes before the one of the frame.
+ * A horizontal door has its own height; a vertical door has the height of its wall (it is raised with its cap, to stay
+ * seen from above).
  */
 export function doorPrefabName(
     orientation: "h" | "v",
@@ -192,7 +188,7 @@ export function doorPrefabName(
     pushedTowardsViewer = false,
     height: WallHeight = 1,
 ): string {
-    const base = `porte-${orientation}-${tint}-${side}${orientation === "h" ? heightSuffix(height) : ""}`;
+    const base = `porte-${orientation}-${tint}-${side}${heightSuffix(height)}`;
     if (frame === undefined || frame === DOOR_CLOSED_FRAME) {
         return base;
     }
@@ -207,7 +203,7 @@ export type MapLayerPiece =
     | { kind: "floor"; family: FloorFamily; variant: FloorVariant }
     | { kind: "facade"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
     | { kind: "window"; tint: WallTint; ends: FacadeEnds; height: WallHeight }
-    | { kind: "vertical"; tint: WallTint; height: WallHeight; overDoor?: true }
+    | { kind: "vertical"; tint: WallTint; height: WallHeight }
     | { kind: "end"; tint: WallTint; height: WallHeight }
     | { kind: "joint"; arms: JointArm[]; height: WallHeight }
     | { kind: "lintel"; tint: WallTint; ends: FacadeEnds; height: WallHeight; opening: WallHeight }
@@ -228,7 +224,6 @@ const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni
 const FACADE_NAME = new RegExp(`^facade-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
 const WINDOW_NAME = new RegExp(`^fenetre-(${TINTS})-(mid|left|right|single)${HEIGHT}$`);
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${TINTS})${HEIGHT}$`);
-const VERTICAL_OVER_DOOR_NAME = new RegExp(`^mur-vertical-(${TINTS})-h([2-4])-porte$`);
 const END_NAME = new RegExp(`^bout-(${TINTS})${HEIGHT}$`);
 const LINTEL_NAME = new RegExp(`^linteau-(${TINTS})-(mid|left|right|single)-h([2-4])-o([1-3])$`);
 const DOOR_NAME = new RegExp(`^porte-(h|v)-(${TINTS})-(g|d|haut|bas)${HEIGHT}(?:-(b)?(\\d))?$`);
@@ -258,10 +253,6 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         const vertical = VERTICAL_NAME.exec(name);
         if (vertical) {
             return { kind: "vertical", tint: vertical[1] as WallTint, height: readHeight(vertical[2]) };
-        }
-        const overDoor = VERTICAL_OVER_DOOR_NAME.exec(name);
-        if (overDoor) {
-            return { kind: "vertical", tint: overDoor[1] as WallTint, height: readHeight(overDoor[2]), overDoor: true };
         }
         const end = END_NAME.exec(name);
         if (end) {
@@ -310,10 +301,6 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
             return undefined;
         }
-        // A vertical door is seen from above: it has no height.
-        if (orientation === "v" && door[4] !== undefined) {
-            return undefined;
-        }
         return {
             kind: "door",
             orientation,
@@ -339,8 +326,6 @@ export function isMapLayerPrefab(collectionName: string, prefabId: string): bool
 export function groundPieceOf(piece: MapLayerPiece): MapLayerPiece {
     if (piece.kind === "floor") return piece;
     if (piece.kind === "lintel") return { kind: "facade", tint: piece.tint, ends: piece.ends, height: 1 };
-    // The strip over a door has no piece of height 1: it stands for the strip of the wall.
-    if (piece.kind === "vertical") return { kind: "vertical", tint: piece.tint, height: 1 };
     return { ...piece, height: 1 };
 }
 
