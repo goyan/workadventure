@@ -111,6 +111,13 @@ export class FloorModel {
         return stair;
     }
 
+    public removeStair(stair: PlacedStair): boolean {
+        const index = this.stairs.indexOf(stair);
+        if (index < 0) return false;
+        this.stairs.splice(index, 1);
+        return true;
+    }
+
     public hasSlab(elevation: number, x: number, y: number): boolean {
         return this.slabs.has(key(elevation, x, y));
     }
