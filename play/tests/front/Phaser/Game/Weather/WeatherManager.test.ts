@@ -333,7 +333,8 @@ describe("weather rendering lifecycle", () => {
             manager = new WeatherManager(scene);
             manager.update(0, new Date(0));
             expect(fogFill(graphics)[0]).toEqual([0xdfe6ee, 0.6]);
-            expect(graphics.fillRect.mock.calls[0]).toEqual([0, 0, 800, 600]);
+            // A quarter of the screen beyond each edge: a scroll uncovers fog already drawn.
+            expect(graphics.fillRect.mock.calls[0]).toEqual([-200, -150, 1200, 900]);
             // The patches are drawn as blocks on top of the veil, at most 0.3 thicker.
             const patchAlphas = fogFill(graphics)
                 .slice(1)
@@ -378,6 +379,24 @@ describe("weather rendering lifecycle", () => {
             manager.update(200, new Date(200));
             expect(graphics.clear.mock.calls).toHaveLength(2);
             expect(scene.markDirty.mock.calls).toHaveLength(2);
+        });
+
+        it("draws again at once when a scroll nears the edge of what is drawn, not waiting for its 5 times a second", () => {
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Fog };
+            manager = new WeatherManager(scene);
+            manager.update(0, new Date(0));
+            // A short move stays well inside the drawn margin: no drawing before the next fifth of a second.
+            scene.cameras.main.worldView.x = 50;
+            manager.update(30, new Date(30));
+            expect(graphics.clear.mock.calls).toHaveLength(1);
+            // A fast scroll comes past half the margin: drawn again right away, around the new view.
+            scene.cameras.main.worldView.x = 150;
+            manager.update(60, new Date(60));
+            expect(graphics.clear.mock.calls).toHaveLength(2);
+            expect(graphics.fillRect.mock.lastCall).toBeDefined();
+            const veil = graphics.fillRect.mock.calls.find(([x, , width]) => x === -50 && width === 1200);
+            expect(veil).toBeDefined();
         });
 
         it("a still fog draws the map again only when something visible changes", () => {

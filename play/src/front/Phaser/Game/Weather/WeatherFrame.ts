@@ -12,6 +12,31 @@ export interface WeatherView {
     height: number;
 }
 
+/**
+ * The view grown by `share` of its size on each side: the weather is drawn beyond the screen, so a scroll between two
+ * drawings uncovers weather already there instead of a bare band.
+ */
+export function paddedView(view: WeatherView, share: number): WeatherView {
+    return {
+        x: view.x - view.width * share,
+        y: view.y - view.height * share,
+        width: view.width * (1 + 2 * share),
+        height: view.height * (1 + 2 * share),
+    };
+}
+
+/** Whether `view` keeps at least `slack` of its size inside `drawn` on every side. */
+export function wellInside(drawn: WeatherView, view: WeatherView, slack: number): boolean {
+    const x = view.width * slack;
+    const y = view.height * slack;
+    return (
+        view.x - drawn.x >= x &&
+        view.y - drawn.y >= y &&
+        drawn.x + drawn.width - (view.x + view.width) >= x &&
+        drawn.y + drawn.height - (view.y + view.height) >= y
+    );
+}
+
 export interface WeatherParticle {
     x: number;
     y: number;

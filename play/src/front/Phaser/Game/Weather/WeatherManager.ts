@@ -17,9 +17,11 @@ import {
     leafParticles,
     lastStrike,
     lightningBolt,
+    paddedView,
     stormFlash,
     weatherParticles,
     weatherAtTime,
+    wellInside,
 } from "./WeatherFrame";
 import type { FogPatch, WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
@@ -48,6 +50,8 @@ const FOG_PATCH_ALPHA = 0.3;
 const FOG_NIGHT_FACTOR = 0.6;
 /** Size of a fog block, in pixels of the map: small enough to look soft, big enough to stay cheap. */
 const FOG_BLOCK = 16;
+/** Weather drawn beyond each edge of the screen, in a share of its size: a quick scroll never shows a bare band. */
+const DRAW_MARGIN = 0.25;
 /** White clouds at their thickest, and their shadows: shadows first, the clouds over them. */
 const CLOUD_ALPHA = 0.45;
 const CLOUD_SHADOW_ALPHA = 0.3;
@@ -82,6 +86,8 @@ export class WeatherManager {
     private readonly reducedMotion: boolean;
     // What the last fog image looked like: a still fog is not drawn again until one of these changes.
     private lastFogKey: string | undefined;
+    /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
+    private drawn: WeatherView | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -140,6 +146,7 @@ export class WeatherManager {
             }
             this.lastFrameAt = -Infinity;
             this.lastFogKey = undefined;
+            this.drawn = undefined;
             return;
         }
         // Keep weather light on the CPU, including when the avatar is idle: rain and snow 30 times a second, the slow
@@ -148,9 +155,14 @@ export class WeatherManager {
         const fogOnly = showWeather && weather === WeatherType.Fog && !showLeaves;
         // Clouds cross a screen in about 30 s: 15 images a second for them to glide (rain and storm already draw 30).
         const cloudsOnly = showClouds && !showLeaves;
-        if (now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
+        const camera = this.scene.cameras.main.worldView;
+        const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
+        // A scroll that has used half of the drawn margin draws again at once, whatever the pace.
+        const nearEdge = this.drawn !== undefined && !wellInside(this.drawn, screen, DRAW_MARGIN / 2);
+        if (!nearEdge && now - this.lastFrameAt < 1000 / (falling ? 30 : fogOnly ? 5 : 15)) return;
         this.lastFrameAt = now;
-        const view = this.scene.cameras.main.worldView;
+        const view = paddedView(screen, DRAW_MARGIN);
+        this.drawn = view;
         const fogStrengthNow =
             showWeather && weather === WeatherType.Fog
                 ? serverDate
