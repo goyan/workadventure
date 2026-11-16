@@ -14,7 +14,7 @@ import type { MapLayerModel } from "./MapLayerModel";
 
 /** Opacity of every wall, door and window while the map editor is open: the objects behind them can be seen. */
 export const WALL_EDIT_ALPHA = 0.45;
-/** Opacity of the high walls (2 tiles or more) of the room the player stands in. */
+/** Opacity of the high walls (2 tiles or more) in front of the room the player stands in: the ones that hide it. */
 export const WALL_ROOM_ALPHA = 0.55;
 /** Duration of a full change of opacity. */
 export const WALL_FADE_MS = 200;
@@ -35,6 +35,8 @@ export interface WallFadeGrid {
     isOutdoorAt(x: number, y: number): boolean;
 }
 
+const EMPTY: ReadonlySet<number> = new Set();
+
 /** Height of the wall a piece belongs to, as told by its own name. */
 function pieceHeight(piece: MapLayerPiece): WallHeight {
     return piece.kind === "floor" ? 1 : piece.height;
@@ -54,6 +56,16 @@ export function wallTargetAlpha(
     if (state.editorOpen) return WALL_EDIT_ALPHA;
     if (state.playerRoom === undefined || carrierHeight < 2) return 1;
     return rooms.has(state.playerRoom) ? WALL_ROOM_ALPHA : 1;
+}
+
+/**
+ * Rooms a piece stands in front of, hiding their last rows: the ones just north of its foot. The wall at the back of a
+ * room and its side walls (the vertical walls and their ends) hide nothing of it: they stay opaque, so that what stands
+ * behind them does not show through.
+ */
+export function roomsBehind(piece: MapLayerPiece, rect: Rect, grid: WallFadeGrid): ReadonlySet<number> {
+    if (piece.kind === "floor" || piece.kind === "vertical" || piece.kind === "end") return EMPTY;
+    return grid.roomsTouching({ x: rect.x, y: rect.y - 1, width: rect.width, height: 1 });
 }
 
 /**
@@ -94,7 +106,7 @@ interface FadeEntry {
     y: number;
     piece: MapLayerPiece;
     rect: Rect;
-    /** Rooms the piece borders, read from the current grid; undefined until needed. */
+    /** Rooms the piece stands in front of (`roomsBehind`), read from the current grid; undefined until needed. */
     rooms: ReadonlySet<number> | undefined;
     carrierHeight: WallHeight;
     target: number;
@@ -105,11 +117,9 @@ interface FadeEntry {
     snap: boolean;
 }
 
-const EMPTY: ReadonlySet<number> = new Set();
-
 /**
  * Makes the walls see-through for the local player only: all of them while the map editor is open, the high ones
- * that border the room of their avatar otherwise. Nothing is stored nor sent: only the opacity of the sprites changes.
+ * in front of the room of their avatar otherwise. Nothing is stored nor sent: only the opacity of the sprites changes.
  */
 export class WallFade {
     private entries = new Map<FadableWall, FadeEntry>();
@@ -150,7 +160,7 @@ export class WallFade {
         if (changed) {
             for (const entry of this.entries.values()) {
                 if (entry.piece.kind !== "floor" && !editorOpen && playerRoom !== undefined && grid) {
-                    entry.rooms ??= grid.roomsTouching(entry.rect);
+                    entry.rooms ??= roomsBehind(entry.piece, entry.rect, grid);
                 }
                 const target = wallTargetAlpha(
                     entry.piece,

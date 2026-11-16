@@ -136,9 +136,16 @@ function setup(height: WallHeight) {
         recomputeGrid: () => (grid = room(height).grid),
         setPlayer: (point: { x: number; y: number }) => (player = { ...point }),
         setEditor: (open: boolean) => (editorOpen = open),
+        /** A facade of the south wall of the room: the wall in front of the player, which hides the room. */
         facade: () => {
-            const found = walls.find((wall) => wall.name.startsWith("facade"));
+            const found = walls.find((wall) => wall.name.startsWith("facade") && wall.y > INSIDE.y - 64);
             if (!found) throw new Error("no facade");
+            return found;
+        },
+        /** A facade of the north wall of the room: the wall at the back, which hides nothing of the room. */
+        backFacade: () => {
+            const found = walls.find((wall) => wall.name.startsWith("facade") && wall.y < INSIDE.y - 64);
+            if (!found) throw new Error("no back facade");
             return found;
         },
     };
@@ -151,6 +158,16 @@ describe("WallFade", () => {
         expect(facade().alpha).toBeCloseTo(0.775, 3);
         fade.update(WALL_FADE_MS / 2);
         expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+
+    it("leaves the back wall and the side walls of the room opaque: they hide nothing of it", () => {
+        const { fade, walls, facade, backFacade } = setup(3);
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+        expect(backFacade().alpha).toBe(1);
+        const sides = walls.filter((wall) => wall.name.startsWith("mur-vertical"));
+        expect(sides.length).toBeGreaterThan(0);
+        expect(sides.every((wall) => wall.alpha === 1)).toBe(true);
     });
 
     it("leaves the walls of height 1 opaque in their room", () => {

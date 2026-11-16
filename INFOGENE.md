@@ -1650,7 +1650,9 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   un mur vertical haut : les bandes et le raccord du milieu restent au-dessus d'elle (choix à confirmer à l'écran).
 - Transparence (`WallFade`, pour soi seulement, rien n'est envoyé) : éditeur ouvert, murs, portes et fenêtres à 45 % ;
   en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
-  pièces de hauteur ≥ 2 qui la bordent (`roomsTouching`), et les portes, fenêtres et linteaux d'un mur haut, à 55 %.
+  pièces de hauteur ≥ 2 **devant** elle (les murs horizontaux dont le pied est juste au sud de la pièce, `roomsBehind`),
+  avec leurs portes, fenêtres et linteaux, à 55 %. Le mur du fond et les murs de côté restent opaques : ils ne
+  cachent rien de la pièce, et ce qui est derrière eux ne doit pas se voir à travers.
   Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
