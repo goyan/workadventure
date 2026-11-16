@@ -232,7 +232,7 @@ export class WeatherManager {
         }
         this.visible = true;
         const epoch = serverDate?.getTime() ?? now;
-        const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom));
+        const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom, settings?.windSpeed));
         const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
         this.graphics.clear().setVisible(true);
         // Cells of the clouds at this zoom, never finer than the fog's 16 px when there is fog (powers of two).

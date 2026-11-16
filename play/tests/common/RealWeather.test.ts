@@ -154,12 +154,37 @@ describe("cloudinessFromWmoCode", () => {
         ]);
     });
 
+    it("takes the wind speed (km/h at 10 m) of each quarter hour when Open-Meteo gives it", () => {
+        expect(
+            slotsFromOpenMeteo({
+                minutely_15: {
+                    time: [0, 900],
+                    weather_code: [0, 0],
+                    temperature_2m: [5, 5],
+                    wind_speed_10m: [32.4, null],
+                },
+            }),
+        ).toEqual([
+            { at: 0, weather: WeatherType.Clear, temperature: 5, windSpeed: 32.4 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ]);
+    });
+
     it("gives the wind of the quarter hour under way and of the one before, for turning", () => {
         const slots: RealWeatherSlot[] = [
             { at: 0, weather: WeatherType.Clear, temperature: 5, windFrom: 350 },
             { at: SLOT, weather: WeatherType.Clear, temperature: 5, windFrom: 20 },
         ];
         expect(realWeatherAt(slots, SLOT + 1)).toMatchObject({ windFrom: 20, windFromBefore: 350 });
+        expect(
+            realWeatherAt(
+                [
+                    { at: 0, weather: WeatherType.Clear, temperature: 5, windSpeed: 10 },
+                    { at: SLOT, weather: WeatherType.Clear, temperature: 5, windSpeed: 30 },
+                ],
+                SLOT + 1,
+            ),
+        ).toMatchObject({ windSpeed: 30, windSpeedBefore: 10 });
         expect(realWeatherAt(slots, 1)).toMatchObject({ windFrom: 350, windFromBefore: undefined });
     });
 

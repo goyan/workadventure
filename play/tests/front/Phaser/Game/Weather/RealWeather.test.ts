@@ -220,4 +220,16 @@ describe("wind of the real weather", () => {
         const slots: RealWeatherSlot[] = [{ at: 0, weather: WeatherType.Clear, temperature: 5 }];
         expect(realWeatherStateAt({ status: "known", slots }, new Date(1))).not.toHaveProperty("windFrom");
     });
+
+    it("changes the wind speed over ten minutes from that of the quarter hour before", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5, windSpeed: 10 },
+            { at: SLOT, weather: WeatherType.Clear, temperature: 5, windSpeed: 30 },
+        ];
+        const state = (offset: number) => realWeatherStateAt({ status: "known", slots }, new Date(SLOT + offset));
+        expect(state(0)).toMatchObject({ windSpeed: 10 });
+        expect(state(5 * 60_000)).toMatchObject({ windSpeed: 20 });
+        expect(state(10 * 60_000)).toMatchObject({ windSpeed: 30 });
+        expect(withRealWeather({ weather: WeatherType.Real }, state(10 * 60_000))).toMatchObject({ windSpeed: 30 });
+    });
 });

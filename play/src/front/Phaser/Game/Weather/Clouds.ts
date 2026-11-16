@@ -52,14 +52,31 @@ type Vector = { x: number; y: number };
 
 /**
  * The drift of the clouds (map pixels a second, north up, y down) for a wind coming from `windFrom` degrees (0 north,
- * 90 east): blown away from it, at the usual speed (the true speed would not show at the scale of the map).
+ * 90 east) at `windSpeed` km/h: blown away from it, as fast as the wind in proportion (cloudSpeed: the true speed would
+ * not show at the scale of the map). Without a direction, from the north-west.
  */
-export function cloudDrift(windFrom: number | undefined): Vector {
-    if (windFrom === undefined) return CLOUD_DRIFT;
-    return {
-        x: -CLOUD_DRIFT_PER_SECOND * Math.sin(windFrom * DEG),
-        y: CLOUD_DRIFT_PER_SECOND * Math.cos(windFrom * DEG),
-    };
+export function cloudDrift(windFrom: number | undefined, windSpeed?: number): Vector {
+    const speed = cloudSpeed(windSpeed);
+    if (windFrom === undefined) {
+        return {
+            x: (CLOUD_DRIFT.x * speed) / CLOUD_DRIFT_PER_SECOND,
+            y: (CLOUD_DRIFT.y * speed) / CLOUD_DRIFT_PER_SECOND,
+        };
+    }
+    return { x: -speed * Math.sin(windFrom * DEG), y: speed * Math.cos(windFrom * DEG) };
+}
+
+/** Wind (km/h) giving the usual speed of the clouds (CLOUD_DRIFT_PER_SECOND, a screen in about 30 s). */
+const USUAL_WIND_KMH = 20;
+/** Slowest and fastest clouds (map pixels a second): never still in a calm, still readable in a storm. */
+const SLOWEST_CLOUDS = 15;
+const FASTEST_CLOUDS = 180;
+
+/** How fast the clouds go (map pixels a second) for a wind of `windSpeed` km/h: in proportion, the usual speed unknown. */
+function cloudSpeed(windSpeed: number | undefined): number {
+    if (windSpeed === undefined || !Number.isFinite(windSpeed)) return CLOUD_DRIFT_PER_SECOND;
+    const speed = (CLOUD_DRIFT_PER_SECOND * windSpeed) / USUAL_WIND_KMH;
+    return Math.min(FASTEST_CLOUDS, Math.max(SLOWEST_CLOUDS, speed));
 }
 
 /**
