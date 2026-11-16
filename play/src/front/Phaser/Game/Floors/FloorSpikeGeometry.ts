@@ -24,6 +24,8 @@ export interface Box {
 export interface SpikeStair {
     dir: "n" | "s" | "e";
     ground: Box;
+    /** A wall stands at the foot of the stair: one steps on and off it by its sides only. */
+    closedFoot?: boolean;
 }
 export interface SpikeLayout {
     /** Footprint of the platform on the ground; it is drawn `z` higher. */
@@ -71,7 +73,7 @@ export function spikeRoomLayout(): SpikeLayout {
         z: SPIKE_Z,
         stairs: [
             { dir: "n", ground: { x: 131 * t, y: 73 * t, width: t, height: 3 * t } },
-            { dir: "e", ground: { x: 126 * t, y: 71 * t, width: 2 * t, height: t } },
+            { dir: "e", ground: { x: 126 * t, y: 71 * t, width: 2 * t, height: t }, closedFoot: true },
         ],
     };
 }
@@ -108,6 +110,8 @@ function keepOut(prev: Pt, p: Pt, box: Box): Pt {
 const SIDE = 6;
 /** Part of a stair, from its foot, where one can step on it from the ground. */
 const LOW_END = 0.3;
+/** How far from a wall at the foot of a stair the avatar stays: the reach of the wall and half its body. */
+const FOOT_WALL = 18;
 /** A move longer than this in one frame is a teleport: the avatar is read again as standing on the ground. */
 const TELEPORT_PX = 48;
 
@@ -187,6 +191,7 @@ export function spikeStep(layout: SpikeLayout, state: SpikeState, prev: Pt, p: P
         if (stair.dir === "e") {
             const moved = state.on === next.on ? point.y - prev.y : 0;
             const across = (next.lane ?? point.y) + moved;
+            if (stair.closedFoot) point = { x: Math.max(point.x, g.x + FOOT_WALL), y: point.y };
             progress = (point.x - g.x) / g.width;
             if (progress < LOW_END && (across < g.y || across > g.y + g.height)) {
                 steppedOff = true;

@@ -455,11 +455,11 @@ export abstract class Character extends Container implements OutlineableInterfac
     }
 
     /**
-     * Whether the things of the ground still stop the character: on the ground, and on the first steps of a stair (so
-     * that a wall at the foot of a stair is not walked through).
+     * Whether the things of the ground stop the character: not once it is on a stair or a raised floor, where they are
+     * under it (the stair itself keeps it between its sides).
      */
     public isNearGround(): boolean {
-        return this.floorZ < 16;
+        return this.floorZ < 2;
     }
 
     public setFloorZ(z: number): void {
