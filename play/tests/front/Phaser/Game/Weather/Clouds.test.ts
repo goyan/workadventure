@@ -340,6 +340,16 @@ describe("cumulus clouds", () => {
         expect(biggest).toBeLessThanOrEqual(0.25);
     });
 
+    it("keeps the middle tone where the neighbour towards the light is thinner by one level only (no checkerboard)", () => {
+        // An edge across the light: thicknesses differ by a rounding, not by the shape of the cloud.
+        // (Both ends lie against the clear sky: real edges, lit and shaded.)
+        const levels = Uint8Array.from([3, 4, 3, 4, 3, 4, 3, 4, 3]);
+        const tones = cloudTones(levels, 9, 1, { columns: -1, rows: 0 });
+        expect(Array.from(tones.mid.slice(1, 8))).toEqual(Array.from(levels.slice(1, 8)));
+        expect(tones.lit.slice(1, 8).some(Boolean)).toBe(false);
+        expect(tones.shade.slice(1, 8).some(Boolean)).toBe(false);
+    });
+
     it("lights the side of a cloud facing the light and darkens the other, the middle in between", () => {
         // A cloud across one row, the light from the west (one cell to the left).
         const levels = Uint8Array.from([0, 2, 5, 8, 8, 8, 5, 2, 0]);

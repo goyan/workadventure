@@ -193,8 +193,11 @@ export function cloudLightStep(size: number): { columns: number; rows: number } 
 
 /**
  * The cells of a field of clouds split by tone, each keeping its level: lit when its neighbour towards the light is
- * thinner (the side facing the light), shaded when the one away from it is, the middle otherwise.
+ * thinner (the side facing the light), shaded when the one away from it is, the middle otherwise. Thinner by two levels
+ * at least: one level is a rounding along an edge across the light, and lit and middle cells alternated there in a
+ * checkerboard.
  */
+const TONE_STEP = 2;
 export function cloudTones(
     levels: Uint8Array,
     columns: number,
@@ -211,9 +214,10 @@ export function cloudTones(
             const cell = line * columns + column;
             const level = levels[cell];
             if (level === 0) continue;
-            if (at(column + towardsLight.columns, line + towardsLight.rows) < level) lit[cell] = level;
-            else if (at(column - towardsLight.columns, line - towardsLight.rows) < level) shade[cell] = level;
-            else mid[cell] = level;
+            if (at(column + towardsLight.columns, line + towardsLight.rows) <= level - TONE_STEP) lit[cell] = level;
+            else if (at(column - towardsLight.columns, line - towardsLight.rows) <= level - TONE_STEP) {
+                shade[cell] = level;
+            } else mid[cell] = level;
         }
     }
     return { lit, mid, shade };
