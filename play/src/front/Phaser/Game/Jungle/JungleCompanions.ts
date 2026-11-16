@@ -86,6 +86,11 @@ export class JungleCompanions {
             nowMs - this.lastArrivalAnnounce >= ARRIVAL_ANNOUNCE_MS
         ) {
             this.lastArrivalAnnounce = nowMs;
+            if (nowMs - this.lastAnnounce > JUNGLE_COMPANION_EXPIRY_MS) {
+                // Not announced for too long (see announce): the others let them go, so does this player.
+                this.releaseAll();
+                return;
+            }
             this.lastAnnounce = nowMs;
             this.sendLocal();
         }

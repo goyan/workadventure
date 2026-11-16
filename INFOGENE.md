@@ -1133,7 +1133,8 @@ feuille `wander` (`entity:<id de l'entité>`, `WanderingCharactersManager.tameab
 - **Geste** : à 1,5 case au plus des pieds d'un animal de la jungle libre, l'invite « [ESPACE] pour apprivoiser cet
   animal 🐾 » (la même mécanique que l'invite de siège à touche, `InteractionPrompt`) ; ESPACE ou un clic l'apprivoise :
   il quitte son errance et suit son maître (un animal posé : son objet reste masqué tant qu'il est mené, même quand son
-  maître est hors de vue). **Jusqu'à 5 compagnons par joueur** : l'invite « apprivoiser » reste proposée
+  maître est hors de vue ; dans l'éditeur, l'objet d'un animal posé reste visible et modifiable même mené par un autre
+  joueur, et il reste affiché tant que la feuille n'est pas chargée). **Jusqu'à 5 compagnons par joueur** : l'invite « apprivoiser » reste proposée
   tant qu'on en a moins de 5. Près d'un de ses compagnons, la même touche le relâche (« pour relâcher votre
   compagnon ») : il revient tout de suite à son programme de promenade, là où ce programme le place (pas de marche de
   retour, il peut donc réapparaître d'un coup autour de son nid). La touche agit sur l'animal **le plus proche** à portée :
@@ -1167,7 +1168,8 @@ feuille `wander` (`entity:<id de l'entité>`, `WanderingCharactersManager.tameab
   « relâché », et à la première vue d'un animal apprivoisable le joueur annonce « aucun compagnon » : rien n'est gardé
   avec le compte. Sur une carte sans animal apprivoisable, rien n'est diffusé (ni à l'arrivée ni au départ). À la
   réception d'une liste vide (un joueur qui arrive, ou qui relâche tout), chaque maître réannonce aussitôt ses
-  compagnons (au plus une fois par seconde) : le nouveau venu ne les voit pas errer pendant 5 s. Une annonce non
+  compagnons (au plus une fois par seconde) : le nouveau venu ne les voit pas errer pendant 5 s ; sauf si ses
+  annonces se sont interrompues plus de 75 s (veille du poste) : il relâche alors tout, comme les autres l'ont fait. Une annonce non
   renouvelée pendant 75 s expire (plantage, réseau perdu) ; plus d'une minute parce que les minuteurs d'un onglet caché
   longtemps ne tournent plus qu'une fois par minute. Le maître dont les annonces se sont interrompues plus longtemps
   que cela relâche ses compagnons de lui-même (les autres l'ont déjà fait). Aucun changement de protocole ni du back.

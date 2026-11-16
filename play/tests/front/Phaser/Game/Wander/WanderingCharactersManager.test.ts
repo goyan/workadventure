@@ -385,6 +385,28 @@ describe("WanderingCharactersManager", () => {
             expect(manager.characterPose("entity:duck")).toEqual({ x: 80, y: 80, moving: false });
         });
 
+        it("in the map editor, a placed animal someone leads shows its object, to be edited", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            manager.setCharacterLead("entity:duck", { poseAt: () => undefined });
+            scene.update();
+            expect(scene.entity.visible).toBe(false);
+            mapEditorModeStore.set(true);
+            scene.update();
+            expect(scene.entity.visible).toBe(true);
+        });
+
+        it("a placed animal led before its sheet is loaded keeps its object shown", () => {
+            const scene = makeScene([], undefined, { sheetLoaded: false });
+            manager = scene.manager;
+            scene.reconcile();
+            manager.setCharacterLead("entity:duck", { poseAt: () => undefined });
+            scene.update();
+            expect(scene.entity.visible).toBe(true);
+        });
+
         it("a led free character opens the doors on its way, like its master", () => {
             const scene = makeScene([], undefined, { withDuck: false });
             manager = scene.manager;

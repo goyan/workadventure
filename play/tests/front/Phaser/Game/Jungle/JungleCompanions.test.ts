@@ -95,6 +95,17 @@ describe("JungleCompanions", () => {
         expect(sent).toHaveLength(count + 2);
     });
 
+    it("after a gap in its announces longer than their expiry, an arrival releases the companions instead", () => {
+        const { world, sent, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        tameNow(companions, prompt, 0);
+        // The computer slept: nothing announced for longer than the expiry, the others let the lion go.
+        companions.receive(9, JUNGLE_COMPANION_EVENT, NONE, JUNGLE_COMPANION_EXPIRY_MS + 1);
+        expect(sent.at(-1)).toEqual(NONE);
+        companions.update(JUNGLE_COMPANION_EXPIRY_MS + 2);
+        expect(prompt.kind).toBe("tame");
+    });
+
     it("keeps an animal with the master seen holding it: an older claim arriving later does not take it", () => {
         const { world, feet, leads } = makeWorld();
         feet.set(7, { x: 360, y: 352 });

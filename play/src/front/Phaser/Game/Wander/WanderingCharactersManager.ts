@@ -540,8 +540,10 @@ export class WanderingCharactersManager {
                 sprite.setVisible(showSprite);
                 changed = true;
             }
-            // A led character out of view is nowhere: its object is not shown at its nest either.
-            if (character.entity && this.showEntity(character.entity, !showSprite && !character.lead)) {
+            // A led character out of view is nowhere: its object is not shown at its nest either. But in the map editor
+            // the object is shown, to be edited; and without a sprite (sheet loading or failed), it stays as it is.
+            const hiddenByLead = character.lead !== undefined && sprite !== undefined && !this.isEditorMode;
+            if (character.entity && this.showEntity(character.entity, !showSprite && !hiddenByLead)) {
                 changed = true;
             }
         }
