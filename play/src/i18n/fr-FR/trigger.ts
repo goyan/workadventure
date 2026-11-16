@@ -11,6 +11,8 @@ const trigger: DeepPartial<Translation["trigger"]> = {
     sit: "[ESPACE] pour s’asseoir 🪑",
     avatarAction: "[ESPACE] pour {action}",
     swim: "[ESPACE] pour nager 🏊",
+    jungleTame: "[ESPACE] pour apprivoiser cet animal 🐾",
+    jungleRelease: "[ESPACE] pour relâcher votre compagnon 🐾",
     mobile: {
         cowebsite: "👆 pour ouvrir le site Web 👀",
         jitsiRoom: "👆 pour entrer dans Jitsi 👀",

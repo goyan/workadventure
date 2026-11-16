@@ -301,6 +301,125 @@ describe("WanderingCharactersManager", () => {
             expect(scene.sprite.visible).toBe(true);
         });
 
+        it("a lead moves a free character instead of its schedule, and hides it while it gives no pose", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            let pose: WanderScheduleModule.WanderPose | undefined = {
+                x: 100,
+                y: 120,
+                direction: "right",
+                moving: true,
+                pausedMs: 0,
+            };
+            manager.setCharacterLead(LION.id, { poseAt: () => pose });
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 100, y: 120, moving: true });
+            expect(scene.sprite.visible).toBe(true);
+            pose = undefined;
+            scene.update();
+            expect(scene.sprite.visible).toBe(false);
+            expect(manager.freeCharacterPose(LION.id)).toBeUndefined();
+            // Without its lead, it is back to its schedule, around its nest.
+            manager.setCharacterLead(LION.id, undefined);
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 48, y: 48, moving: false });
+        });
+
+        it("a led character keeps its lead across a new map, and is hidden in the map editor", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            manager.setFreeCharacters([LION], map);
+            manager.setCharacterLead(LION.id, {
+                poseAt: () => ({ x: 100, y: 120, direction: "down", moving: false, pausedMs: 0 }),
+            });
+            manager.setFreeCharacters([LION], { ...map });
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 100, y: 120, moving: false });
+            mapEditorModeStore.set(true);
+            scene.update();
+            expect(scene.sprite.visible).toBe(false);
+        });
+
+        it("lists every tamable character: the free ones and the placed ones (entity:<id>)", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            expect(manager.characterPose("entity:duck")).toEqual({ x: 80, y: 80, moving: false });
+            // The entity id alone names no tamable character: the free ones and the placed ones never mix.
+            expect(manager.characterPose("duck")).toBeUndefined();
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            expect(manager.tameableCharacters()).toEqual([
+                { id: "entity:duck", sheetPath: SHEET, nest: { x: 80, y: 80 } },
+                LION,
+            ]);
+        });
+
+        it("a placed animal can be led: its object stays hidden, even while its master is out of view", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            let pose: WanderScheduleModule.WanderPose | undefined = {
+                x: 200,
+                y: 120,
+                direction: "left",
+                moving: true,
+                pausedMs: 0,
+            };
+            manager.setCharacterLead("entity:duck", { poseAt: () => pose });
+            expect(manager.isLed("entity:duck")).toBe(true);
+            scene.update();
+            expect(manager.characterPose("entity:duck")).toEqual({ x: 200, y: 120, moving: true });
+            expect(scene.entity.visible).toBe(false);
+            pose = undefined;
+            scene.update();
+            expect(scene.sprite.visible).toBe(false);
+            expect(scene.entity.visible).toBe(false);
+            manager.setCharacterLead("entity:duck", undefined);
+            expect(manager.isLed("entity:duck")).toBe(false);
+            scene.update();
+            expect(manager.characterPose("entity:duck")).toEqual({ x: 80, y: 80, moving: false });
+        });
+
+        it("in the map editor, a placed animal someone leads shows its object, to be edited", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            manager.setCharacterLead("entity:duck", { poseAt: () => undefined });
+            scene.update();
+            expect(scene.entity.visible).toBe(false);
+            mapEditorModeStore.set(true);
+            scene.update();
+            expect(scene.entity.visible).toBe(true);
+        });
+
+        it("a placed animal led before its sheet is loaded keeps its object shown", () => {
+            const scene = makeScene([], undefined, { sheetLoaded: false });
+            manager = scene.manager;
+            scene.reconcile();
+            manager.setCharacterLead("entity:duck", { poseAt: () => undefined });
+            scene.update();
+            expect(scene.entity.visible).toBe(true);
+        });
+
+        it("a led free character opens the doors on its way, like its master", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            expect(openers(manager)).toEqual([]);
+            manager.setCharacterLead(LION.id, {
+                poseAt: () => ({ x: 100, y: 120, direction: "down", moving: true, pausedMs: 0 }),
+            });
+            scene.update();
+            expect(openers(manager)).toEqual([{ x: 100, y: 104 }]);
+        });
+
         it("a sheet that fails to load leaves no sprite", () => {
             const scene = makeScene([], undefined, { withDuck: false, sheetLoaded: false });
             manager = scene.manager;

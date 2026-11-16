@@ -15,7 +15,7 @@ import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { WanderSchedule } from "./WanderSchedule";
-import type { Point, WanderDirection, WanderMap } from "./WanderSchedule";
+import type { Point, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
 import {
     WANDER_FRAME_SIZE,
     WANDER_WALK_COLUMNS,
@@ -25,6 +25,8 @@ import {
 } from "./WanderSheet";
 
 const RECONCILE_INTERVAL_MS = 500;
+/** How a placed character is named among the tamable ones: by the id of its entity. */
+export const ENTITY_ID_PREFIX = "entity:";
 const WALK_FRAME_RATE = 8;
 const DIRECTIONS: WanderDirection[] = ["down", "left", "right", "up"];
 
@@ -37,6 +39,14 @@ const DESTINATION_TILE_TYPES: ReadonlySet<number> = new Set([
     PathTileType.MeetingRoom,
     PathTileType.PersonalDesk,
 ]);
+
+/**
+ * What moves a free character instead of its schedule (a tamed jungle animal following its master). No pose: the
+ * character is not shown (its master is out of view).
+ */
+export interface WanderLead {
+    poseAt(nowMs: number): WanderPose | undefined;
+}
 
 interface WanderingCharacter {
     /** Undefined for a free character (a jungle animal): no object of the map stands for it. */
@@ -54,6 +64,8 @@ interface WanderingCharacter {
     opener: Point;
     // Whether the last pose applied to the sprite was a walk.
     moving: boolean;
+    /** Set for a free character only: it is led instead of following its schedule. */
+    lead?: WanderLead;
 }
 
 /**
@@ -114,8 +126,8 @@ export class WanderingCharactersManager {
      */
     public forEachDoorOpener(callback: (position: Point) => void): void {
         for (const character of this.characters.values()) {
-            // Free characters stay outdoors: they open no door.
-            if (character.entity && character.sprite?.visible) {
+            // Free characters stay outdoors: they open no door, unless they follow a master (who went through it).
+            if ((character.entity || character.lead) && character.sprite?.visible) {
                 callback(character.opener);
             }
         }
@@ -180,6 +192,63 @@ export class WanderingCharactersManager {
         if (removed) {
             this.scene.markDirty();
         }
+    }
+
+    /**
+     * The characters a player may tame: the free ones (by their id) and the placed ones (`entity:<entity id>`), with
+     * their sheet and nest. Placed first, by entity id; then the free ones in the order they were given.
+     */
+    public tameableCharacters(): JungleAnimal[] {
+        const placed: JungleAnimal[] = [];
+        const free: JungleAnimal[] = [];
+        for (const [key, character] of this.characters) {
+            const animal = {
+                id: character.entity ? `${ENTITY_ID_PREFIX}${key}` : key,
+                sheetPath: character.sheetPath,
+                nest: character.nest,
+            };
+            (character.entity ? placed : free).push(animal);
+        }
+        placed.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        return [...placed, ...free];
+    }
+
+    /** Where a tamable character (see tameableCharacters) is shown, undefined while it is not. */
+    public characterPose(id: string): { x: number; y: number; moving: boolean } | undefined {
+        const character = this.tameable(id);
+        if (!character?.sprite?.visible) {
+            return undefined;
+        }
+        return { x: character.sprite.x, y: character.sprite.y, moving: character.moving };
+    }
+
+    /**
+     * Gives a tamable character (see tameableCharacters) a lead: it follows that instead of its schedule; or takes it
+     * away: the character is then back to its schedule at once, where the schedule has it now. A placed one keeps its
+     * object hidden while it is led.
+     */
+    public setCharacterLead(id: string, lead: WanderLead | undefined): void {
+        const character = this.tameable(id);
+        if (!character || character.lead === lead) {
+            return;
+        }
+        character.lead = lead;
+        // Hidden until its first pose from the new source, instead of showing it at its old place for a frame.
+        character.hasPose = false;
+        this.scene.markDirty();
+    }
+
+    public isLed(id: string): boolean {
+        return this.tameable(id)?.lead !== undefined;
+    }
+
+    private tameable(id: string): WanderingCharacter | undefined {
+        if (id.startsWith(ENTITY_ID_PREFIX)) {
+            const character = this.characters.get(id.slice(ENTITY_ID_PREFIX.length));
+            return character?.entity ? character : undefined;
+        }
+        const character = this.characters.get(id);
+        return character && !character.entity ? character : undefined;
     }
 
     /** Where a free character is shown, undefined while it is not (sheet loading or failed, map editor). */
@@ -419,7 +488,12 @@ export class WanderingCharactersManager {
             }
             const sprite = character.sprite;
             if (sprite && !this.isEditorMode) {
-                const pose = character.schedule.poseAt(now);
+                const lead = character.lead;
+                const pose = lead ? lead.poseAt(now) : character.schedule.poseAt(now);
+                if (lead && !pose) {
+                    // Led out of view: not shown, rather than left where it was last seen.
+                    character.hasPose = false;
+                }
                 if (pose) {
                     character.hasPose = true;
                     character.moving = pose.moving;
@@ -432,12 +506,15 @@ export class WanderingCharactersManager {
                     // Out of the position check: a character standing still where it was created needs it too. Only on
                     // change, as setting the depth sorts the display list again.
                     // On a seat, drawn like a seated player: over the chair (behind it when it shows its back).
-                    const seat = pose.moving
-                        ? undefined
-                        : getSeats(this.scene).find(
-                              (candidate) =>
-                                  Math.abs(candidate.feet.x - pose.x) < 1 && Math.abs(candidate.feet.y - pose.y) < 1,
-                          );
+                    // A led character goes where it is led, never onto a seat.
+                    const seat =
+                        pose.moving || lead
+                            ? undefined
+                            : getSeats(this.scene).find(
+                                  (candidate) =>
+                                      Math.abs(candidate.feet.x - pose.x) < 1 &&
+                                      Math.abs(candidate.feet.y - pose.y) < 1,
+                              );
                     const depth = seat?.depth ?? pose.y;
                     if (sprite.depth !== depth) {
                         sprite.setDepth(depth);
@@ -463,7 +540,10 @@ export class WanderingCharactersManager {
                 sprite.setVisible(showSprite);
                 changed = true;
             }
-            if (character.entity && this.showEntity(character.entity, !showSprite)) {
+            // A led character out of view is nowhere: its object is not shown at its nest either. But in the map editor
+            // the object is shown, to be edited; and without a sprite (sheet loading or failed), it stays as it is.
+            const hiddenByLead = character.lead !== undefined && sprite !== undefined && !this.isEditorMode;
+            if (character.entity && this.showEntity(character.entity, !showSprite && !hiddenByLead)) {
                 changed = true;
             }
         }
