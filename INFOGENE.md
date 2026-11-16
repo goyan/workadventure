@@ -1627,6 +1627,37 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
   lampes (`MAP_LAYER_WALL_LIKE_COLLECTIONS`). Les images (dérivées des façades du pack) sont générées par
   `tools/build_window_prefabs.mjs` du dépôt infra et restent dans le dépôt privé.
 
+Murs hauts (réglage « Hauteur » de l'outil Carte) :
+
+- Hauteur choisie de 1 à 4 cases, une par mode : murs (et murs d'une pièce), portes, fenêtres. Une hauteur n'est proposée
+  que si le catalogue chargé en a les pièces (`facade-blanc-mid-hN`, `porte-h-blanc-g-hM`, `fenetre-blanc-mid-hM`) ;
+  sinon bouton grisé avec une explication, et la pose se fait en hauteur 1. Tracer sur un mur existant le remplace.
+- Géométrie : un mur de hauteur N est le mur de hauteur 1 remonté de `32 × (N − 1)` px (`wallRise`), face de
+  `20 + 32 × (N − 1)` px. Le pied, les collisions, le « dehors », la lumière (torche, lampes), le chemin et la zone de
+  clic de l'outil (rangée du pied) ne changent pas. Une carte sans pièce `-h` se lit et se dessine comme avant
+  (placements figés dans `MapLayerHeights.test.ts`).
+- Noms (contrat avec le catalogue privé ; hauteur 1 = nom sans suffixe, `-h1` refusé) : `facade-<t>-<bouts>-hN`,
+  `mur-vertical-<t>-hN`, `bout-<t>-hN`, `raccord-<bras>-hN`, `fenetre-<t>-<bouts>-hM`, `porte-h-<t>-<g|d>-hM` (images
+  d'animation `-hM-<n>` / `-hM-b<n>`), `linteau-<t>-<bouts>-hN-oM` (mur plein au-dessus d'une porte ou d'une fenêtre de
+  hauteur M < N). La porte verticale n'a pas de hauteur (vue de dessus).
+- Modèle : `WallEdge.height`, hauteur propre des portes horizontales (`DoorRef.height`) et des fenêtres
+  (`getWindowHeight`), ramenée à celle du mur (pose, ou mur abaissé). Relecture : chaque pièce haute à sa place
+  remontée ; la hauteur du mur au-dessus d'une ouverture vient du linteau ; résultat indépendant de l'ordre des objets.
+- Raccords par niveau : sur un sommet, un raccord par hauteur présente, reliant les murs de cette hauteur. Une façade ne
+  continue que vers un voisin au moins aussi haut, sinon elle se ferme (le plus bas continue sous elle). Un mur
+  horizontal plus haut qu'un niveau cache ce niveau, sauf le bras sud. Un mur vertical seul à un niveau reçoit son
+  `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
+  un mur vertical haut : les bandes et le raccord du milieu restent au-dessus d'elle (choix à confirmer à l'écran).
+- Transparence (`WallFade`, pour soi seulement, rien n'est envoyé) : éditeur ouvert, murs, portes et fenêtres à 45 % ;
+  en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
+  pièces de hauteur ≥ 2 qui la bordent (`roomsTouching`), et les portes, fenêtres et linteaux d'un mur haut, à 55 %.
+  Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
+  s'oublie dehors.
+- Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
+  l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
+  (gomme, porte, fenêtre : rangée du pied) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
+
 ## Confirmation avant de libérer son bureau
 
 L’action « Libérer mon bureau » ouvre un dialogue avec le nom du bureau. Annuler, fermer ou appuyer sur Échap conserve le bureau. La confirmation revérifie le compte, la salle et la propriété actuelle ; une confirmation devenue obsolète ne libère aucun bureau. Les doubles clics ne déclenchent pas deux libérations. Texte français et anglais, repli anglais explicite pour les autres langues. Recette interactive à confirmer en beta après fusion.
