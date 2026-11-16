@@ -1630,7 +1630,7 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
 Portes vitrées (interrupteur « Vitrée » du mode Porte) :
 
 - Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre claire (bleu et
-  bande des fenêtres, mais 30 % d'opacité, avec un reflet en diagonale), poignée et cadre gardés ; on voit nettement à
+  bande des fenêtres, mais 45 % d'opacité, avec un reflet en diagonale), poignée et cadre gardés ; on voit nettement à
   travers, même porte entrouverte. Une porte
   verticale reste pleine (vue de dessus, c'est un trait).
 - Interrupteur éteint par défaut, gardé le temps de la page : il choisit la variante des **nouvelles** portes
