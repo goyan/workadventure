@@ -13,7 +13,7 @@ import { InteractionPrompt } from "../Water/InteractionPrompt";
 import type { WanderingCharactersManager } from "../Wander/WanderingCharactersManager";
 import type { Point } from "../Wander/WanderSchedule";
 import { JUNGLE_COMPANION_ANNOUNCE_MS, encodeJungleCompanion } from "./JungleCompanionProtocol";
-import { JungleCompanions } from "./JungleCompanions";
+import { joinedUserId, JungleCompanions } from "./JungleCompanions";
 import { loadJungleSounds, playJungleSound } from "./JungleCries";
 import { JungleManager } from "./JungleManager";
 import type { JunglePrefab } from "./JunglePlan";
@@ -97,9 +97,9 @@ export class GameJungle {
         this.tamePrompt = new InteractionPrompt(scene, "jungle-tame", () => get(LL).trigger.jungleTame());
         this.releasePrompt = new InteractionPrompt(scene, "jungle-release", () => get(LL).trigger.jungleRelease());
         const playerOf = (userId: number): Character | undefined =>
-            userId === scene.connection?.getUserId() ? scene.CurrentPlayer : scene.MapPlayersByKey.get(userId);
+            userId === joinedUserId(scene.connection) ? scene.CurrentPlayer : scene.MapPlayersByKey.get(userId);
         this.companions = new JungleCompanions({
-            localUserId: () => scene.connection?.getUserId(),
+            localUserId: () => joinedUserId(scene.connection),
             playerFeet: (userId) => {
                 const player = playerOf(userId);
                 return player ? feetOf(player) : undefined;

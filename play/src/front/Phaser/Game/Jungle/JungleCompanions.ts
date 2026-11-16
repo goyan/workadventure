@@ -23,6 +23,18 @@ export const COMPANION_HOLD_MS = 3_000;
 const ARRIVAL_ANNOUNCE_MS = 1_000;
 
 /** Everything the companions read from and do in the game: injected, so that they are tested without Phaser. */
+/**
+ * The user id of the local player, undefined until the room is joined. `RoomConnection.getUserId` throws before that,
+ * and an exception in the update of the scene stops the game loop for good (a blank page).
+ */
+export function joinedUserId(connection: { getUserId(): number } | undefined): number | undefined {
+    try {
+        return connection?.getUserId();
+    } catch {
+        return undefined;
+    }
+}
+
 export interface JungleCompanionWorld {
     /** The user id of the local player, set by the server; undefined before the connection. */
     localUserId(): number | undefined;
