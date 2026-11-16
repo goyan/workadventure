@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     COMPANION_FOLLOW_PX,
+    COMPANION_SLOTS,
     COMPANION_TELEPORT_PX,
     JungleCompanionFollower,
 } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanionFollow";
@@ -42,6 +43,61 @@ function wait(follower: JungleCompanionFollower, master: Point, nowMs: number, m
 }
 
 describe("JungleCompanionFollower", () => {
+    it("five companions make a small group two tiles behind their master, side by side, without overlapping", () => {
+        expect(COMPANION_SLOTS).toHaveLength(5);
+        const followers = COMPANION_SLOTS.map(() => new JungleCompanionFollower({ x: 0, y: 0 }, 0));
+        const master = { x: 0, y: 0 };
+        let nowMs = 0;
+        const poses = followers.map((follower, slot) => follower.poseAt(nowMs, master, true, slot));
+        // The master walks right, along a wide street, then stops.
+        for (let x = 4; x <= 400; x += 4) {
+            nowMs += FRAME_MS;
+            master.x = x;
+            followers.forEach((follower, slot) => (poses[slot] = follower.poseAt(nowMs, master, true, slot)));
+        }
+        for (let t = 0; t < 4000; t += FRAME_MS) {
+            nowMs += FRAME_MS;
+            followers.forEach((follower, slot) => (poses[slot] = follower.poseAt(nowMs, master, true, slot)));
+        }
+        for (const pose of poses) {
+            expect(pose.moving).toBe(false);
+            // Behind the master, about two tiles away: between 1.5 and 4 tiles.
+            expect(pose.x).toBeLessThan(400);
+            const distance = Math.hypot(pose.x - 400, pose.y);
+            expect(distance).toBeGreaterThanOrEqual(48);
+            expect(distance).toBeLessThanOrEqual(128);
+        }
+        for (let a = 0; a < poses.length; a++) {
+            for (let b = a + 1; b < poses.length; b++) {
+                expect(Math.hypot(poses[a].x - poses[b].x, poses[a].y - poses[b].y)).toBeGreaterThanOrEqual(31.5);
+            }
+        }
+        // The first one right behind, the next two on either side.
+        expect(poses[0].x).toBeCloseTo(400 - COMPANION_FOLLOW_PX, 0);
+        expect(poses[0].y).toBeCloseTo(0, 0);
+        expect(Math.sign(poses[1].y)).toBe(-Math.sign(poses[2].y));
+    });
+
+    it("a master walking back to a companion of the group comes within a tile and a half of it", () => {
+        for (const slot of [0, 3]) {
+            const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
+            const master = { x: 0, y: 0 };
+            let nowMs = 0;
+            let closest = Number.POSITIVE_INFINITY;
+            const step = () => {
+                nowMs += FRAME_MS;
+                const pose = follower.poseAt(nowMs, master, true, slot);
+                closest = Math.min(closest, Math.hypot(pose.x - master.x, pose.y - master.y));
+            };
+            for (; master.x < 300; master.x += 4) step();
+            for (let t = 0; t < 3000; t += FRAME_MS) step();
+            closest = Number.POSITIVE_INFINITY;
+            // Back the way it came, at a walk.
+            for (; master.x > 0; master.x -= 2) step();
+            expect(closest).toBeLessThanOrEqual(48);
+        }
+    });
+
     it("stays where it is while its master is within two tiles", () => {
         const follower = new JungleCompanionFollower({ x: 0, y: 0 }, 0);
         const pose = wait(follower, { x: 40, y: 0 }, 0, 1000);

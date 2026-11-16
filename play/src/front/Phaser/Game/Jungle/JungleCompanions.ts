@@ -4,6 +4,7 @@ import { JungleCompanionFollower } from "./JungleCompanionFollow";
 import {
     JUNGLE_COMPANION_ANNOUNCE_MS,
     JUNGLE_COMPANION_EXPIRY_MS,
+    JUNGLE_MAX_COMPANIONS,
     JungleCompanionClaims,
     decodeJungleCompanion,
     jungleCompanionOwners,
@@ -13,8 +14,6 @@ import type { JungleAnimal } from "./JunglePlan";
 
 /** The interaction key tames an animal whose feet are this close to the player's: a tile and a half. */
 export const COMPANION_PROMPT_PX = 48;
-
-const RELEASED: JungleCompanionMessage = { animal: null, since: 0 };
 
 /** Everything the companions read from and do in the game: injected, so that they are tested without Phaser. */
 export interface JungleCompanionWorld {
@@ -38,24 +37,27 @@ export interface JungleCompanionWorld {
 }
 
 /**
- * Tamed jungle animals: the interaction key next to a free animal tames it, next to one's companion releases it.
- * A companion follows its master on every client (see JungleCompanionFollower) and wanders no more; one companion per
- * player, and an animal tamed by someone cannot be tamed by another. Nothing is saved: a companion is released when its
- * master leaves the map or reloads the page (their claim is not announced any more and expires).
+ * Tamed jungle animals: the interaction key next to a free animal tames it, next to one of one's companions releases
+ * it (the nearest animal within reach is the one the key acts on). A companion follows its master on every client, at
+ * its place in the small group behind them (see JungleCompanionFollower), and wanders no more; up to
+ * JUNGLE_MAX_COMPANIONS per player, and an animal tamed by someone cannot be tamed by another. Nothing is saved: the
+ * companions are released when their master leaves the map or reloads the page (their claims are not announced any more
+ * and expire).
  */
 export class JungleCompanions {
     private readonly others = new JungleCompanionClaims();
-    private local: { animal: string; since: number } | undefined;
+    /** The companions of the local player, in the order they were tamed: when each one was. */
+    private readonly local = new Map<string, number>();
     private lastAnnounce = 0;
-    /** The master each led animal follows, with its follower. */
-    private readonly led = new Map<string, { owner: number; sheetPath: string | undefined }>();
+    /** The master each led animal follows, and its place in their group. */
+    private readonly led = new Map<string, { owner: number; sheetPath: string | undefined; slot: number }>();
     private prompt: { kind: "tame" | "release"; animal: string } | undefined;
     /** The clock of the last update. */
     private nowMs = 0;
 
     constructor(private readonly world: JungleCompanionWorld) {
         // A claim of a former connection of this player (a reconnection without reloading) is over.
-        world.send(RELEASED);
+        this.sendLocal();
     }
 
     /** A room event: claims of the other players. */
@@ -71,74 +73,106 @@ export class JungleCompanions {
         this.nowMs = nowMs;
         const animals = new Map(this.world.animals().map((animal) => [animal.id, animal]));
         const localId = this.world.localUserId();
-        if (this.local && (this.world.editorOpen() || !animals.has(this.local.animal))) {
-            // No companion in the map editor; and an animal gone from the jungle (switched off, a new day) is free.
-            this.release();
+        if (this.local.size > 0 && this.world.editorOpen()) {
+            // No companion in the map editor.
+            this.releaseAll();
         }
+        // An animal gone from the jungle (switched off, a new day) is free.
+        this.dropLocal([...this.local.keys()].filter((animal) => !animals.has(animal)));
         const claims: JungleCompanionClaim[] = this.others.claims(nowMs).filter((claim) => animals.has(claim.animal));
-        if (this.local && localId !== undefined) claims.push({ owner: localId, ...this.local });
-        const owners = jungleCompanionOwners(claims);
-        if (this.local && owners.get(this.local.animal) !== localId) {
-            // Someone tamed it first: their message crossed ours. Given up without a word.
-            this.release();
+        if (localId !== undefined) {
+            for (const [animal, since] of this.local) claims.push({ owner: localId, animal, since });
         }
+        const owners = jungleCompanionOwners(claims);
+        // Someone tamed it first: their message crossed ours. Given up without a word.
+        this.dropLocal([...this.local.keys()].filter((animal) => owners.get(animal)?.owner !== localId));
         this.announce(nowMs);
         this.updateLeads(owners, animals);
         this.updatePrompt(owners, animals);
     }
 
     /**
-     * Tells the room about the companion when it is time: called every frame and by a timer of its own, as the frames
+     * Tells the room about the companions when it is time: called every frame and by a timer of its own, as the frames
      * stop in a hidden tab. After a gap longer than the expiry (a tab hidden long, its timers slowed down), the others
-     * have let the companion go: so does this player.
+     * have let the companions go: so does this player.
      */
     public announce(nowMs: number): void {
-        if (!this.local || nowMs - this.lastAnnounce < JUNGLE_COMPANION_ANNOUNCE_MS) return;
+        if (this.local.size === 0 || nowMs - this.lastAnnounce < JUNGLE_COMPANION_ANNOUNCE_MS) return;
         if (nowMs - this.lastAnnounce > JUNGLE_COMPANION_EXPIRY_MS) {
-            this.release();
+            this.releaseAll();
             return;
         }
         this.lastAnnounce = nowMs;
-        this.world.send({ animal: this.local.animal, since: this.local.since });
+        this.sendLocal();
     }
 
-    /** The page goes away (reload, tab closed): the companion is released at once rather than when its claim expires. */
+    /** The page goes away (reload, tab closed): the companions are released at once rather than when they expire. */
     public releaseNow(): void {
-        if (this.local) this.release();
+        if (this.local.size > 0) this.releaseAll();
     }
 
     public destroy(): void {
-        if (this.local) this.release();
-        else this.world.send(RELEASED);
+        this.local.clear();
+        this.sendLocal();
         for (const animal of this.led.keys()) this.world.setLead(animal, undefined);
         this.led.clear();
         this.hidePrompt();
     }
 
     private tame(animal: string): void {
-        if (this.local || this.world.editorOpen()) return;
-        this.local = { animal, since: this.world.serverNow() };
+        if (this.local.has(animal) || this.local.size >= JUNGLE_MAX_COMPANIONS || this.world.editorOpen()) return;
+        this.local.set(animal, this.world.serverNow());
         this.lastAnnounce = this.nowMs;
-        this.world.send({ animal, since: this.local.since });
+        this.sendLocal();
     }
 
-    private release(): void {
-        this.local = undefined;
-        this.world.send(RELEASED);
+    private release(animal: string): void {
+        this.dropLocal([animal]);
     }
 
-    private updateLeads(owners: Map<string, number>, animals: Map<string, JungleAnimal>): void {
+    private releaseAll(): void {
+        this.local.clear();
+        this.sendLocal();
+    }
+
+    /** Lets these companions go, and tells the room about the ones left (once, only if one was dropped). */
+    private dropLocal(animals: string[]): void {
+        let dropped = false;
+        for (const animal of animals) dropped = this.local.delete(animal) || dropped;
+        if (dropped) this.sendLocal();
+    }
+
+    private sendLocal(): void {
+        this.world.send({ companions: [...this.local].map(([animal, since]) => ({ animal, since })) });
+    }
+
+    private updateLeads(owners: Map<string, JungleCompanionClaim>, animals: Map<string, JungleAnimal>): void {
+        // The place of each companion in the group of its master: in the order they were tamed.
+        const slots = new Map<string, number>();
+        const counts = new Map<number, number>();
+        const ordered = [...owners.values()].sort(
+            (a, b) => a.since - b.since || (a.animal < b.animal ? -1 : a.animal > b.animal ? 1 : 0),
+        );
+        for (const claim of ordered) {
+            const slot = counts.get(claim.owner) ?? 0;
+            slots.set(claim.animal, slot);
+            counts.set(claim.owner, slot + 1);
+        }
         for (const [animal, entry] of this.led) {
             // Another species on the same tree (a new day) is a new character of the wandering ones: led again.
-            if (owners.get(animal) === entry.owner && animals.get(animal)?.sheetPath === entry.sheetPath) continue;
+            if (owners.get(animal)?.owner === entry.owner && animals.get(animal)?.sheetPath === entry.sheetPath) {
+                entry.slot = slots.get(animal) ?? 0;
+                continue;
+            }
             this.led.delete(animal);
             this.world.setLead(animal, undefined);
         }
-        for (const [animal, owner] of owners) {
+        for (const [animal, { owner }] of owners) {
             if (this.led.has(animal)) continue;
             const start = this.world.animalPose(animal) ?? animals.get(animal)?.nest ?? { x: 0, y: 0 };
             let follower: JungleCompanionFollower | undefined = new JungleCompanionFollower(start, this.nowMs);
-            this.led.set(animal, { owner, sheetPath: animals.get(animal)?.sheetPath });
+            const entry = { owner, sheetPath: animals.get(animal)?.sheetPath, slot: slots.get(animal) ?? 0 };
+            this.led.set(animal, entry);
             this.world.setLead(animal, {
                 poseAt: (nowMs) => {
                     const feet = this.world.playerFeet(owner);
@@ -149,37 +183,33 @@ export class JungleCompanions {
                         return undefined;
                     }
                     follower ??= new JungleCompanionFollower(feet, nowMs);
-                    return follower.poseAt(nowMs, feet, !this.world.playerInWater(owner));
+                    return follower.poseAt(nowMs, feet, !this.world.playerInWater(owner), entry.slot);
                 },
             });
         }
     }
 
-    private updatePrompt(owners: Map<string, number>, animals: Map<string, JungleAnimal>): void {
+    private updatePrompt(owners: Map<string, JungleCompanionClaim>, animals: Map<string, JungleAnimal>): void {
         const localId = this.world.localUserId();
         const feet = localId === undefined ? undefined : this.world.playerFeet(localId);
         if (!feet || this.world.editorOpen()) {
             this.hidePrompt();
             return;
         }
-        const near = (animal: string): boolean => {
-            const pose = this.world.animalPose(animal);
-            return pose !== undefined && Math.hypot(pose.x - feet.x, pose.y - feet.y) <= COMPANION_PROMPT_PX;
-        };
+        // The nearest animal within reach the key can act on: one of the companions (released), or a free animal
+        // (tamed) while there is room for one more.
+        const canTame = this.local.size < JUNGLE_MAX_COMPANIONS;
         let wanted: { kind: "tame" | "release"; animal: string } | undefined;
-        if (this.local) {
-            if (near(this.local.animal)) wanted = { kind: "release", animal: this.local.animal };
-        } else {
-            let best = Number.POSITIVE_INFINITY;
-            for (const animal of animals.keys()) {
-                if (owners.has(animal)) continue;
-                const pose = this.world.animalPose(animal);
-                if (!pose) continue;
-                const distance = Math.hypot(pose.x - feet.x, pose.y - feet.y);
-                if (distance <= COMPANION_PROMPT_PX && distance < best) {
-                    best = distance;
-                    wanted = { kind: "tame", animal };
-                }
+        let best = Number.POSITIVE_INFINITY;
+        for (const animal of animals.keys()) {
+            const kind = this.local.has(animal) ? "release" : !owners.has(animal) && canTame ? "tame" : undefined;
+            if (!kind) continue;
+            const pose = this.world.animalPose(animal);
+            if (!pose) continue;
+            const distance = Math.hypot(pose.x - feet.x, pose.y - feet.y);
+            if (distance <= COMPANION_PROMPT_PX && distance < best) {
+                best = distance;
+                wanted = { kind, animal };
             }
         }
         if (!wanted) {
@@ -193,7 +223,7 @@ export class JungleCompanions {
         this.world.showPrompt(target.kind, () => {
             this.hidePrompt();
             if (target.kind === "tame") this.tame(target.animal);
-            else if (this.local?.animal === target.animal) this.release();
+            else this.release(target.animal);
         });
     }
 
