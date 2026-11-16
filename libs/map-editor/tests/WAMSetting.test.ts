@@ -148,7 +148,7 @@ describe("WAM Setting", () => {
     it("keeps the auto settings when an older client sends only the weather", async () => {
         const wam: WAMFileFormat = {
             ...defaultWamFile,
-            settings: { weather: WeatherType.Automatic, weatherAuto: { frequency: "calm", include: ["snow"] } },
+            settings: { weather: WeatherType.Automatic, weatherAuto: { frequency: "calm", include: [WeatherType.Snow] } },
         };
         await new UpdateWAMSettingCommand(wam, {
             message: {

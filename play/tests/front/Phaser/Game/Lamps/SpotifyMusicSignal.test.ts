@@ -5,6 +5,15 @@ const uri = "spotify:track:abc";
 const idle = { bass: 0, mid: 0, treble: 0, beat: false };
 
 describe("SpotifyMusicSignal", () => {
+    it("reads personal music without a salon track and silences stale or stopped playback", () => {
+        const signal = new SpotifyMusicSignal();
+        expect(signal.readCurrent(0)).toEqual(idle);
+        signal.set({ uri, beatStartMs: 0, intensity: 0.8 }, 0);
+        expect(signal.readCurrent(0)).toMatchObject({ beat: true, mid: 0.8 });
+        expect(signal.readCurrent(1001)).toEqual(idle);
+        signal.set(null, 1002);
+        expect(signal.readCurrent(1002)).toEqual(idle);
+    });
     it("punches the bass on each real beat, as hard as the attack under it, then lets it die away", () => {
         const signal = new SpotifyMusicSignal();
         signal.set({ uri, beatStartMs: 500, intensity: 0.5, attack: 0.9, brightness: 0.2 }, 0);

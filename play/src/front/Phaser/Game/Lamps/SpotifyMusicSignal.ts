@@ -64,4 +64,9 @@ export class SpotifyMusicSignal {
             ...(bar && { bar }),
         };
     }
+
+    /** The desktop reports only the local player's current track, including when no Jam is joined. */
+    public readCurrent(now: number): LampFrame {
+        return this.read(this.frame?.uri, now);
+    }
 }

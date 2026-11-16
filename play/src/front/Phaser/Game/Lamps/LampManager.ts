@@ -15,6 +15,7 @@ import {
 import { listeningByUserUuidStore } from "../../../Spotify/SpotifyListeningDirectory";
 import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
+import { LampMusicSource, lampMusicSourceStore } from "../../../Stores/LampMusicSourceStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { lightableAreas } from "../Night/NightLights";
 import type { Entity } from "../../ECS/Entity";
@@ -155,6 +156,7 @@ export class LampManager {
     private readonly unsubscribers: Unsubscriber[] = [];
     private editorOpen = false;
     private effectsEnabled = true;
+    private musicSource = LampMusicSource.Rooms;
     private lastReconcileAt: number | undefined;
     /** The colour washing over each room on the beat, by area. */
     private readonly roomWash = new Map<string, { colourIndex: number; pulse: number; lastAt: number }>();
@@ -180,11 +182,12 @@ export class LampManager {
                 (room) =>
                     isHomeJam(room.jam) && room.zone.areaId === joined.areaId && room.jam.hostUuid === joined.hostUuid,
             );
-        if (home && !this.stopSpotifyMusic) {
+        const needed = this.effectsEnabled && (home || this.musicSource === LampMusicSource.Personal);
+        if (needed && !this.stopSpotifyMusic) {
             this.stopSpotifyMusic = window.WAD?.watchSpotifyMusic?.((frame) =>
                 this.spotifyMusic.set(frame, performance.now()),
             );
-        } else if (!home && this.stopSpotifyMusic) {
+        } else if (!needed && this.stopSpotifyMusic) {
             this.stopSpotifyMusic();
             this.stopSpotifyMusic = undefined;
             this.spotifyMusic.set(null, performance.now());
@@ -202,6 +205,12 @@ export class LampManager {
         this.unsubscribers = [
             lampEffectsEnabledStore.subscribe((enabled) => {
                 this.effectsEnabled = enabled;
+                this.watchJukeboxMusic();
+                this.scene.markDirty();
+            }),
+            lampMusicSourceStore.subscribe((source) => {
+                this.musicSource = window.WAD?.watchSpotifyMusic ? source : LampMusicSource.Rooms;
+                this.watchJukeboxMusic();
                 this.scene.markDirty();
             }),
             mapEditorModeStore.subscribe((open) => {
@@ -466,7 +475,7 @@ export class LampManager {
      * Draws the dance floors. A floor never stops: without music (no Jam, effects turned off, a Jam this user does not
      * hear) it goes through its patterns along the clock, the same for everyone. Returns whether one was drawn.
      */
-    private updateFloors(now: number, demoFrame: LampFrame | undefined): boolean {
+    private updateFloors(now: number, demoFrame: LampFrame | undefined, personalFrame: LampFrame | undefined): boolean {
         if (this.floors.size === 0) {
             return false;
         }
@@ -501,7 +510,7 @@ export class LampManager {
             const frame =
                 !this.effectsEnabled || this.editorOpen
                     ? undefined
-                    : (demoFrame ?? (space ? this.frameOfJam(space, now) : undefined));
+                    : (demoFrame ?? personalFrame ?? (space ? this.frameOfJam(space, now) : undefined));
             // A Jam this user does not hear, or a source without data, gives silence: the floor keeps its own patterns.
             if (frame && !isSilentFrame(frame)) {
                 floor.heardAt = now;
@@ -588,7 +597,10 @@ export class LampManager {
         // (it is a steady light, not an effect); a turning one then stands still at its direction.
         this.rgbLamps.update(this.editorOpen, this.effectsEnabled);
         const demoFrame = this.demoSignal?.read(now);
-        if (this.updateFloors(now, demoFrame)) {
+        // Read once per image so every lamp sees the same beat.
+        const personalFrame =
+            this.musicSource === LampMusicSource.Personal ? this.spotifyMusic.readCurrent(now) : undefined;
+        if (this.updateFloors(now, demoFrame, personalFrame)) {
             // The scene is only drawn when something changed: a floor on the screen changes at every image.
             this.scene.markDirty();
         }
@@ -627,7 +639,10 @@ export class LampManager {
             }
             const space = placed.jam && this.spaceNameOf(placed.jam);
             // In the editor a lamp is always lit, steady, so that it can be placed; with a demo, lit by the demo.
-            const lit = this.editorOpen || demoFrame !== undefined || space !== undefined;
+            const lit =
+                this.editorOpen ||
+                demoFrame !== undefined ||
+                (personalFrame !== undefined ? !isSilentFrame(personalFrame) : space !== undefined);
             const elapsed = placed.lastUpdateAt === undefined ? 0 : now - placed.lastUpdateAt;
             placed.lastUpdateAt = now;
             placed.brightness = nextBrightness(placed.brightness, lit, elapsed);
@@ -642,7 +657,7 @@ export class LampManager {
                 ? IDLE_FRAME
                 : this.editorOpen
                   ? EDITOR_FRAME
-                  : (demoFrame ?? (space ? this.frameOfJam(space, now) : IDLE_FRAME));
+                  : (demoFrame ?? personalFrame ?? (space ? this.frameOfJam(space, now) : IDLE_FRAME));
             // At every image: the object may be dragged in the editor, and the light goes with it.
             const source = lampSource(placed.entity, placed.entity.getPrefab().lamp?.anchor);
             placed.visual.moveTo(source.x, source.y);
