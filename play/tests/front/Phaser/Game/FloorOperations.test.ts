@@ -10,12 +10,13 @@ import {
     floorCellAt,
     levelUnderPoint,
     placeStair,
+    reachableLevels,
     removeStairAt,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
 const BOUNDS = { columns: 40, rows: 40 };
-const north: StairShape = { direction: "n", width: 1, height: 2, open: false };
+const north: StairShape = { direction: "n", width: 1, rise: 52, open: false };
 
 describe("floor operations", () => {
     it("places one entity per slab and per stair, at the altitude it stands on", () => {
@@ -43,7 +44,7 @@ describe("floor operations", () => {
     it("reads its own placements back", () => {
         const model = new FloorModel();
         applySlabs(model, 84, { x: 2, y: 2 }, { x: 4, y: 3 }, "moquette-grise", BOUNDS);
-        placeStair(model, { direction: "o", width: 2, height: 3, open: true }, { x: 9, y: 2 }, 0, BOUNDS);
+        placeStair(model, { direction: "o", width: 2, rise: 84, open: true }, { x: 9, y: 2 }, 0, BOUNDS);
         const read = FloorModel.fromPlaced(computeFloorPlacements(model));
         expect(read.getSlabs()).toEqual(model.getSlabs());
         expect(read.getStairs()).toEqual(model.getStairs());
@@ -131,10 +132,21 @@ describe("floor operations", () => {
         expect(removeStairAt(model, 0, { x: 5, y: 5 })).toBe(false);
     });
 
-    it("offers the floors of the walls of 2, 3 and 4, and the ones over the floors already there", () => {
+    it("offers the floors of the walls of 2, 3 and 4, and the ones already on the map", () => {
         const model = new FloorModel();
         expect(availableLevels(model)).toEqual([52, 84, 116]);
-        model.setSlab(52, 1, 1, "parquet-clair");
-        expect(availableLevels(model)).toEqual([52, 84, 104, 116, 136, 168]);
+        model.setSlab(104, 1, 1, "parquet-clair");
+        expect(availableLevels(model)).toEqual([52, 84, 104, 116]);
+    });
+
+    it("tells the floors a stair can reach from a floor", () => {
+        const levels = [52, 84, 116];
+        expect(reachableLevels(0, levels)).toEqual([52, 84, 116]);
+        // From the top of walls of 2 tiles: 32 px up to the walls of 3, 64 px up to the walls of 4.
+        expect(reachableLevels(52, levels)).toEqual([84, 116]);
+        expect(reachableLevels(84, levels)).toEqual([116]);
+        expect(reachableLevels(116, levels)).toEqual([]);
+        // No stair goes up 20 px.
+        expect(reachableLevels(84, [104, 116])).toEqual([116]);
     });
 });

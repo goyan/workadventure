@@ -1,6 +1,6 @@
 import { MAP_LAYER_TILE_SIZE } from "./MapLayerCatalog";
 import type { FloorFamily } from "./MapLayerCatalog";
-import { floorElevation, parseFloorPiece, stairGroundBox, stairRun, stairScreenBox } from "./MapLayerFloors";
+import { parseFloorPiece, stairGroundBox, stairRun, stairScreenBox } from "./MapLayerFloors";
 import type { PixelBox, StairShape, TilePoint } from "./MapLayerFloors";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
 
@@ -42,8 +42,8 @@ export function stairImagePosition(shape: StairShape, foot: TilePoint, base: num
 /** The tile of the foot of a stair whose image is at (x, y); undefined when it is not on the grid. */
 export function stairFootFromImage(shape: StairShape, x: number, y: number, base: number): TilePoint | undefined {
     const size = MAP_LAYER_TILE_SIZE;
-    const run = stairRun(shape.direction, shape.height) * size;
-    const rise = floorElevation(shape.height);
+    const run = stairRun(shape.direction, shape.rise) * size;
+    const rise = shape.rise;
     // Top-left corner of what the stair covers on the ground.
     const groundX = x;
     const groundY = shape.direction === "s" ? y + base : y + base + rise;
@@ -84,7 +84,7 @@ export class FloorModel {
                 if (Number.isInteger(x) && Number.isInteger(y)) model.setSlab(elevation, x, y, piece.family);
                 continue;
             }
-            const shape = { direction: piece.direction, width: piece.width, height: piece.height, open: piece.open };
+            const shape = { direction: piece.direction, width: piece.width, rise: piece.rise, open: piece.open };
             const foot = stairFootFromImage(shape, item.x, item.y, elevation);
             if (foot) model.addStair(shape, foot, elevation);
         }
@@ -104,7 +104,7 @@ export class FloorModel {
             shape,
             foot,
             base,
-            top: base + floorElevation(shape.height),
+            top: base + shape.rise,
             ground: stairGroundBox(shape, foot),
         };
         this.stairs.push(stair);

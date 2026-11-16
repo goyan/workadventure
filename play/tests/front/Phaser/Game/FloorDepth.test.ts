@@ -20,7 +20,7 @@ describe("depth of the floors", () => {
     });
 
     it("sorts a stair by its foot on the floor it starts from", () => {
-        const stair = { kind: "stair", direction: "n", width: 1, height: 2, open: false } as const;
+        const stair = { kind: "stair", direction: "n", width: 1, rise: 52, open: false } as const;
         // Foot tile (10, 20): on the ground down to y = 672; its image starts at y = 608 - 52.
         expect(floorPieceDepth(stair, 320, 608 - 52, 0)).toBe(672);
         expect(floorPieceDepth(stair, 320, 608 - 52 - 52, 52)).toBe(floorDepth(52, 672));

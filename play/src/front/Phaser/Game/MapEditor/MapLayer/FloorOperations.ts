@@ -5,12 +5,13 @@ import type { FloorModel, PlacedStair } from "./FloorModel";
 import {
     FLOOR_WALL_HEIGHTS,
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
+    STAIR_RISES,
     floorElevation,
     slabPrefabName,
     stairGroundBox,
     stairPrefabName,
 } from "./MapLayerFloors";
-import type { StairShape, TilePoint } from "./MapLayerFloors";
+import type { StairRise, StairShape, TilePoint } from "./MapLayerFloors";
 import type { MapBounds } from "./MapLayerOperations";
 
 /** One entity the floors need: a slab or a stair, at the position of its image, with the altitude it stands at. */
@@ -199,15 +200,21 @@ export function removeStairAt(model: FloorModel, level: number, cell: TilePoint)
 }
 
 /**
- * The floors the editor offers: the ones on the walls of 2, 3 and 4 tiles standing on the ground, the ones already on
- * the map, and the ones on walls standing on those.
+ * The floors the editor offers above the ground: the ones on the walls of 2, 3 and 4 tiles, and the ones already on
+ * the map.
  */
 export function availableLevels(model: FloorModel): number[] {
-    const rises = FLOOR_WALL_HEIGHTS.map((height) => floorElevation(height));
-    const levels = new Set<number>(rises);
-    for (const level of model.getLevels()) {
-        levels.add(level);
-        for (const rise of rises) levels.add(level + rise);
-    }
+    const levels = new Set<number>(FLOOR_WALL_HEIGHTS.map((height) => floorElevation(height)));
+    for (const level of model.getLevels()) levels.add(level);
     return [...levels].sort((a, b) => a - b);
+}
+
+/** Among floors, the ones a stair can reach from a floor: the ones as much higher as a stair goes up. */
+export function reachableLevels(from: number, levels: readonly number[]): number[] {
+    return levels.filter((level) => STAIR_RISES.some((rise) => from + rise === level));
+}
+
+/** How much a stair goes up from a floor to another; undefined when no stair does. */
+export function stairRiseBetween(from: number, to: number): StairRise | undefined {
+    return STAIR_RISES.find((rise) => from + rise === to);
 }

@@ -22,6 +22,14 @@ export function floorElevation(height: FloorWallHeight): number {
     return FACADE_FACE_HEIGHT + wallRise(height satisfies WallHeight);
 }
 
+/**
+ * How much a stair goes up, in pixels: from the ground to the top of walls of 2, 3 or 4 tiles (52, 84, 116), or
+ * between two such tops, 1 or 2 tiles apart (32, 64). The names of the catalogs tell it `h2`..`h4` and `m1`, `m2`.
+ */
+export const STAIR_RISES = [32, 52, 64, 84, 116] as const;
+export type StairRise = (typeof STAIR_RISES)[number];
+const STAIR_RISE_NAMES: Record<StairRise, string> = { 32: "m1", 52: "h2", 64: "m2", 84: "h3", 116: "h4" };
+
 /** Direction a stair goes up towards ("o" is the west, as in the names of the catalogs). */
 export const STAIR_DIRECTIONS = ["n", "e", "s", "o"] as const;
 export type StairDirection = (typeof STAIR_DIRECTIONS)[number];
@@ -31,8 +39,8 @@ export interface StairShape {
     direction: StairDirection;
     /** In tiles, across the stair. */
     width: StairWidth;
-    /** Height of the walls of the floor it goes up to. */
-    height: FloorWallHeight;
+    /** How much it goes up, in pixels. */
+    rise: StairRise;
     /** Whether its side is open (only its stringer is drawn, the ground shows under it) instead of full. */
     open: boolean;
 }
@@ -55,11 +63,11 @@ export function slabPrefabName(family: FloorFamily): string {
 }
 
 export function stairPrefabName(stair: StairShape): string {
-    return `escalier-${stair.direction}-l${stair.width}-h${stair.height}${stair.open ? "-vide" : ""}`;
+    return `escalier-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}${stair.open ? "-vide" : ""}`;
 }
 
 const SLAB_NAME = new RegExp(`^dalle-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})$`);
-const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-h([2-4])(-vide)?$/;
+const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[2-4]|m[12])(-vide)?$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not a slab or a stair. */
 export function parseFloorPiece(collectionName: string, prefabId: string): FloorPiece | undefined {
@@ -77,17 +85,18 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
     if (family) return { kind: "slab", family };
     const stair = STAIR_NAME.exec(name);
     const direction = STAIR_DIRECTIONS.find((candidate) => candidate === stair?.[1]);
-    const height = FLOOR_WALL_HEIGHTS.find((candidate) => String(candidate) === stair?.[3]);
-    if (!stair || !direction || !height) return undefined;
-    return { kind: "stair", direction, width: stair[2] === "2" ? 2 : 1, height, open: stair[4] !== undefined };
+    const rise = STAIR_RISES.find((candidate) => STAIR_RISE_NAMES[candidate] === stair?.[3]);
+    if (!stair || !direction || !rise) return undefined;
+    return { kind: "stair", direction, width: stair[2] === "2" ? 2 : 1, rise, open: stair[4] !== undefined };
 }
 
 /**
- * Length of a stair on the ground, in tiles: one per tile of height. Going south, the avatar goes down the screen by
+ * Length of a stair on the ground, in tiles: one per tile it goes up (rounded up). Going south, the avatar goes down the screen by
  * its run and up by its rise: one more tile keeps it going down.
  */
-export function stairRun(direction: StairDirection, height: FloorWallHeight): number {
-    return direction === "s" ? height + 1 : height;
+export function stairRun(direction: StairDirection, rise: StairRise): number {
+    const tiles = Math.ceil(rise / MAP_LAYER_TILE_SIZE);
+    return direction === "s" ? tiles + 1 : tiles;
 }
 
 /**
@@ -97,7 +106,7 @@ export function stairRun(direction: StairDirection, height: FloorWallHeight): nu
  */
 export function stairGroundBox(stair: StairShape, foot: TilePoint): PixelBox {
     const size = MAP_LAYER_TILE_SIZE;
-    const run = stairRun(stair.direction, stair.height) * size;
+    const run = stairRun(stair.direction, stair.rise) * size;
     const across = stair.width * size;
     switch (stair.direction) {
         case "n":
@@ -117,7 +126,7 @@ export function stairGroundBox(stair: StairShape, foot: TilePoint): PixelBox {
  */
 export function stairScreenBox(stair: StairShape, foot: TilePoint): PixelBox {
     const ground = stairGroundBox(stair, foot);
-    const rise = floorElevation(stair.height);
+    const rise = stair.rise;
     if (stair.direction === "s") return { ...ground, height: ground.height - rise };
     return { ...ground, y: ground.y - rise, height: ground.height + rise };
 }
@@ -140,7 +149,7 @@ export function stairElevationAt(stair: StairShape, foot: TilePoint, ground: { x
             progress = (box.x + box.width - ground.x) / box.width;
             break;
     }
-    return Math.min(1, Math.max(0, progress)) * floorElevation(stair.height);
+    return Math.min(1, Math.max(0, progress)) * stair.rise;
 }
 
 /** Size of the image of a piece: a slab is a tile with its thickness under it, a stair what it shows on the screen. */

@@ -7,7 +7,7 @@ import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/Map
 const stair = (direction: StairShape["direction"], width: 1 | 2 = 1): StairShape => ({
     direction,
     width,
-    height: 2,
+    rise: 52,
     open: false,
 });
 

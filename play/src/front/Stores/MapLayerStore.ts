@@ -1,7 +1,7 @@
 import { writable } from "svelte/store";
 import type { FloorFamily, WallHeight, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import type { DoorHeightSetting } from "../Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
-import type { FloorWallHeight, StairDirection, StairWidth } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+import type { StairDirection, StairWidth } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
 export type MapLayerMode =
     | "wall"
@@ -93,12 +93,15 @@ export const mapLayerFloorsAvailableStore = writable<boolean>(false);
 export const mapLayerLevelStore = writable<number>(0);
 /** The floors the panel offers above the ground, lowest first. */
 export const mapLayerLevelsStore = writable<readonly number[]>([]);
+/** Among them, the floors that have slabs on the map, lowest first: the first one is the floor 1, and so on. */
+export const mapLayerBuiltLevelsStore = writable<readonly number[]>([]);
 /** Armed by the panel: the next click on the map picks the floor under the pointer instead of drawing. */
 export const mapLayerPickLevelStore = writable<boolean>(false);
 
 /** The stair the stair mode places. */
 export const mapLayerStairDirectionStore = writable<StairDirection>("n");
 export const mapLayerStairWidthStore = writable<StairWidth>(1);
-export const mapLayerStairHeightStore = writable<FloorWallHeight>(2);
+/** The floor the stair goes up to; undefined (or a floor out of reach): the first one a stair can reach. */
+export const mapLayerStairTargetStore = writable<number | undefined>(undefined);
 /** Whether its side is open (its stringer only) instead of full. */
 export const mapLayerStairOpenStore = writable<boolean>(false);

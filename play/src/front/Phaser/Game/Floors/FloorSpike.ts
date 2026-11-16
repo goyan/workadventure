@@ -53,7 +53,7 @@ const MAP_REFRESH_MS = 400;
 const stair = (direction: StairShape["direction"], width: 1 | 2 = 1): StairShape => ({
     direction,
     width,
-    height: 2,
+    rise: 52,
     open: false,
 });
 

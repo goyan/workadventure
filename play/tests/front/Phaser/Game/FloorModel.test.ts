@@ -50,7 +50,7 @@ describe("FloorModel", () => {
     });
 
     it.each<StairShape["direction"]>(["n", "e", "s", "o"])("finds the foot of a stair going %s back", (direction) => {
-        const shape: StairShape = { direction, width: 2, height: 3, open: false };
+        const shape: StairShape = { direction, width: 2, rise: 84, open: false };
         for (const base of [0, 52]) {
             const image = stairImagePosition(shape, { x: 10, y: 20 }, base);
             expect(stairFootFromImage(shape, image.x, image.y, base)).toEqual({ x: 10, y: 20 });
@@ -59,23 +59,23 @@ describe("FloorModel", () => {
 
     it("places the image of a stair where it shows on the screen", () => {
         // Going north from the ground, 2 tiles of run: the image starts its rise above the top of its run.
-        expect(stairImagePosition({ direction: "n", width: 1, height: 2, open: false }, { x: 10, y: 20 }, 0)).toEqual({
+        expect(stairImagePosition({ direction: "n", width: 1, rise: 52, open: false }, { x: 10, y: 20 }, 0)).toEqual({
             x: 320,
             y: 608 - 52,
         });
         // The same stair standing on a floor at 52 px is drawn 52 px higher.
-        expect(stairImagePosition({ direction: "n", width: 1, height: 2, open: false }, { x: 10, y: 20 }, 52)).toEqual({
+        expect(stairImagePosition({ direction: "n", width: 1, rise: 52, open: false }, { x: 10, y: 20 }, 52)).toEqual({
             x: 320,
             y: 608 - 52 - 52,
         });
-        expect(stairImagePosition({ direction: "s", width: 1, height: 2, open: false }, { x: 10, y: 20 }, 0)).toEqual({
+        expect(stairImagePosition({ direction: "s", width: 1, rise: 52, open: false }, { x: 10, y: 20 }, 0)).toEqual({
             x: 320,
             y: 640,
         });
     });
 
     it("reads the stairs back with the floors they join", () => {
-        const shape: StairShape = { direction: "e", width: 1, height: 2, open: true };
+        const shape: StairShape = { direction: "e", width: 1, rise: 52, open: true };
         const image = stairImagePosition(shape, { x: 3, y: 4 }, 52);
         const model = FloorModel.fromPlaced([placed(stairPrefabName(shape), image.x, image.y, 52)]);
         expect(model.getStairs()).toEqual([
@@ -90,7 +90,7 @@ describe("FloorModel", () => {
     });
 
     it("ignores a stair off the grid", () => {
-        const shape: StairShape = { direction: "n", width: 1, height: 2, open: false };
+        const shape: StairShape = { direction: "n", width: 1, rise: 52, open: false };
         expect(FloorModel.fromPlaced([placed(stairPrefabName(shape), 320, 600, 0)]).getStairs()).toEqual([]);
     });
 });

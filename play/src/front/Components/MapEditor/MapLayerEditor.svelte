@@ -33,15 +33,13 @@
         mapLayerLevelsStore,
         mapLayerPickLevelStore,
         mapLayerStairDirectionStore,
-        mapLayerStairHeightStore,
+        mapLayerStairTargetStore,
+        mapLayerBuiltLevelsStore,
         mapLayerStairOpenStore,
         mapLayerStairWidthStore,
     } from "../../Stores/MapLayerStore";
-    import {
-        FLOOR_WALL_HEIGHTS,
-        STAIR_DIRECTIONS,
-        floorElevation,
-    } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+    import { STAIR_DIRECTIONS, floorElevation } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+    import { reachableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import {
         IconArrowAutofitHeight,
@@ -83,13 +81,25 @@
         { mode: "slabErase", icon: IconEraser },
     ];
 
-    /** The name of a level: the height of the walls it stands on when it is one of the ground, its altitude otherwise. */
-    function levelLabel(level: number): string {
-        const height = FLOOR_WALL_HEIGHTS.find((candidate) => floorElevation(candidate) === level);
-        return height
-            ? $LL.mapEditor.mapLayer.floorLevel.onWall({ height })
-            : $LL.mapEditor.mapLayer.floorLevel.other({ pixels: level });
+    /**
+     * The name of a level: the height in tiles of the walls it stands on, and, once it has slabs on the map, its rank
+     * among the floors (the lowest one is the floor 1).
+     */
+    function levelLabel(level: number, built: readonly number[]): string {
+        const tiles = (level - floorElevation(2)) / 32 + 2;
+        const height = Number.isInteger(tiles) ? String(tiles) : tiles.toFixed(1);
+        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height });
+        const rank = built.indexOf(level) + 1;
+        return rank > 0 ? `${name} · ${$LL.mapEditor.mapLayer.floorLevel.built({ rank })}` : name;
     }
+
+    // The floors a stair can reach from the level being edited, and the one it goes up to.
+    let stairTargets = $derived(reachableLevels($mapLayerLevelStore, $mapLayerLevelsStore));
+    let stairTarget = $derived(
+        $mapLayerStairTargetStore !== undefined && stairTargets.includes($mapLayerStairTargetStore)
+            ? $mapLayerStairTargetStore
+            : stairTargets[0],
+    );
 
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
@@ -243,7 +253,9 @@
                             data-testid="mapLayerLevel-{level}"
                             onclick={() => mapLayerLevelStore.set(level)}
                         >
-                            {level === 0 ? $LL.mapEditor.mapLayer.floorLevel.ground() : levelLabel(level)}
+                            {level === 0
+                                ? $LL.mapEditor.mapLayer.floorLevel.ground()
+                                : levelLabel(level, $mapLayerBuiltLevelsStore)}
                         </button>
                     {/each}
                 </div>
@@ -298,21 +310,26 @@
                         </button>
                     {/each}
                 </div>
-                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.height()}</h3>
-                <div class="flex gap-2">
-                    {#each FLOOR_WALL_HEIGHTS as height (height)}
-                        <button
-                            type="button"
-                            class="px-3 py-1 rounded text-xs {$mapLayerStairHeightStore === height
-                                ? 'bg-secondary'
-                                : 'bg-white/10 hover:bg-white/20'}"
-                            aria-pressed={$mapLayerStairHeightStore === height}
-                            onclick={() => mapLayerStairHeightStore.set(height)}
-                        >
-                            {height}
-                        </button>
-                    {/each}
-                </div>
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.target()}</h3>
+                {#if stairTargets.length === 0}
+                    <p class="m-0 text-xs text-warning">{$LL.mapEditor.mapLayer.stair.noTarget()}</p>
+                {:else}
+                    <div class="flex flex-wrap gap-2">
+                        {#each stairTargets as level (level)}
+                            <button
+                                type="button"
+                                class="px-3 py-1 rounded text-xs {stairTarget === level
+                                    ? 'bg-secondary'
+                                    : 'bg-white/10 hover:bg-white/20'}"
+                                aria-pressed={stairTarget === level}
+                                data-testid="mapLayerStairTarget-{level}"
+                                onclick={() => mapLayerStairTargetStore.set(level)}
+                            >
+                                {levelLabel(level, $mapLayerBuiltLevelsStore)}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
                 <InputSwitch
                     id="map-layer-stair-open"
                     label={$LL.mapEditor.mapLayer.stair.openSide()}

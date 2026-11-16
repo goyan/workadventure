@@ -7,10 +7,11 @@ import type { WAMEntityData } from "@workadventure/map-editor";
 import {
     mapLayerFloorFamilyStore,
     mapLayerLevelStore,
+    mapLayerBuiltLevelsStore,
     mapLayerLevelsStore,
     mapLayerModeStore,
     mapLayerStairDirectionStore,
-    mapLayerStairHeightStore,
+    mapLayerStairTargetStore,
     mapLayerStairOpenStore,
     mapLayerStairWidthStore,
     mapLayerStatusStore,
@@ -33,7 +34,9 @@ import {
     floorPlacementKey,
     levelUnderPoint,
     placeStair,
+    reachableLevels,
     removeStairAt,
+    stairRiseBetween,
 } from "../MapLayer/FloorOperations";
 import type { PlacedFloorEntity } from "../MapLayer/FloorOperations";
 import { floorPieceSize, parseFloorPiece, stairGroundBox, stairScreenBox } from "../MapLayer/MapLayerFloors";
@@ -103,8 +106,10 @@ export class MapLayerFloorEditing {
 
     /** The floors the panel offers; the one being edited goes back to the ground when it is no longer offered. */
     public refreshLevels(): void {
-        const levels = availableLevels(this.readModel());
+        const model = this.readModel();
+        const levels = availableLevels(model);
         mapLayerLevelsStore.set(levels);
+        mapLayerBuiltLevelsStore.set(model.getLevels());
         if (get(mapLayerLevelStore) !== 0 && !levels.includes(get(mapLayerLevelStore))) mapLayerLevelStore.set(0);
     }
 
@@ -113,11 +118,18 @@ export class MapLayerFloorEditing {
         mapLayerLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
     }
 
-    private stairShape(): StairShape {
+    /** The stair the mode would place from the level being edited; undefined when no floor is in reach of a stair. */
+    private stairShape(): StairShape | undefined {
+        const level = get(mapLayerLevelStore);
+        const reachable = reachableLevels(level, get(mapLayerLevelsStore));
+        const wanted = get(mapLayerStairTargetStore);
+        const target = wanted !== undefined && reachable.includes(wanted) ? wanted : reachable[0];
+        const rise = target === undefined ? undefined : stairRiseBetween(level, target);
+        if (rise === undefined) return undefined;
         return {
             direction: get(mapLayerStairDirectionStore),
             width: get(mapLayerStairWidthStore),
-            height: get(mapLayerStairHeightStore),
+            rise,
             open: get(mapLayerStairOpenStore),
         };
     }
@@ -144,7 +156,7 @@ export class MapLayerFloorEditing {
         }
         if (mode === "stair") {
             const shape = this.stairShape();
-            return (model, bounds) => placeStair(model, shape, to, level, bounds);
+            return (model, bounds) => shape !== undefined && placeStair(model, shape, to, level, bounds);
         }
         return undefined;
     }
@@ -162,6 +174,7 @@ export class MapLayerFloorEditing {
         const to = floorCellAt(current.x, current.y, level);
         if (mode === "stair") {
             const shape = this.stairShape();
+            if (!shape) return;
             const fits = canPlaceStair(this.readModel(), shape, to, level, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
             const image = stairImagePosition(shape, to, level);
