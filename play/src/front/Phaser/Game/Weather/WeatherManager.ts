@@ -27,15 +27,24 @@ import {
 import type { WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
 import {
+    cloudAlpha,
     cloudBlockSize,
     cloudDrift,
+    cloudLightStep,
+    cloudPalette,
     cloudPatches,
     cloudShadowOffset,
     cloudSunlight,
     cloudTint,
+    cloudTones,
+    cloudZoomFade,
     overcastVeil,
+    rainPalette,
+    shownCloudiness,
+    shownRainCover,
     SkyDrift,
 } from "./Clouds";
+import type { CloudPalette } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
@@ -56,12 +65,18 @@ const FOG_BLOCK = 16;
 const NO_SHIFT = { columns: 0, rows: 0 };
 /** Weather drawn beyond each edge of the screen, in a share of its size: a quick scroll never shows a bare band. */
 const DRAW_MARGIN = 0.1;
-/** White clouds at their thickest, and their shadows: shadows first, the clouds over them. */
-const CLOUD_ALPHA = 0.45;
-const CLOUD_SHADOW_ALPHA = 0.3;
-/** Clouds over the rain (grey) and the storm (dark): a covered sky, no sun, so no shadows. */
-const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.4, cloudiness: 0.9 };
-const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.45, cloudiness: 1 };
+/**
+ * The body of the clouds (their rim is fainter, cloudAlpha) and their shadows: shadows first, the clouds over them,
+ * opaque enough to hide their own shadow and read as clouds, not mist.
+ */
+const CLOUD_ALPHA = 0.78;
+const CLOUD_SHADOW_ALPHA = 0.2;
+/**
+ * Clouds over the rain (grey) and the storm (dark), as cumulus thicker than fine weather ones: a covered sky, no sun,
+ * so no shadows.
+ */
+const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.65, cloudiness: 0.9 };
+const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.75, cloudiness: 1 };
 const MIN_RAIN_COVER = 0.6;
 const OVERCAST_COLOR = 0x8a94a3;
 
@@ -248,11 +263,10 @@ export class WeatherManager {
                     settings?.cloudCover === undefined
                         ? covering.cloudiness
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
-                const levels = fieldLevels(canvas, size, cloudPatches(epoch, view, cover, this.reducedMotion, sky));
-                const tint = cloudTint(covering.color, covering.alpha, sunlight.night);
-                this.blocks.paintField(canvas, levels, outdoor, NO_SHIFT, tint.color, (level) => {
-                    return (tint.alpha * level) / FOG_LEVELS;
-                });
+                const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
+                const levels = fieldLevels(canvas, size, patches);
+                const body = covering.alpha * cloudZoomFade(this.scene.cameras.main.zoom);
+                this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
             }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
@@ -272,7 +286,20 @@ export class WeatherManager {
             if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
         if (showClouds) {
-            this.drawClouds(epoch, sky, canvas, size, outdoor, veil, cloudiness, sunlight, shadowOffset, veilAlpha);
+            const zoom = this.scene.cameras.main.zoom;
+            this.drawClouds(
+                epoch,
+                sky,
+                canvas,
+                size,
+                outdoor,
+                veil,
+                cloudiness,
+                sunlight,
+                shadowOffset,
+                veilAlpha,
+                zoom,
+            );
         }
         if (showLeaves) {
             const leaves = leafParticles(epoch, view).map((leaf) => ({
@@ -291,8 +318,10 @@ export class WeatherManager {
 
     /**
      * Clouds of a clear sky, outdoors only and over everything (avatars and objects too): the grey veil of an overcast
-     * sky, the shadows cast away from the sun, then the clouds over them, white by day and dark at night. Fixed to the map, they glide with the
-     * wind whatever the camera or its zoom.
+     * sky, the shadows cast away from the sun, then the clouds over them. Each cloud is a cumulus with a sharp edge, lit
+     * from the north-west and grey on the other side, white by fine weather, greyer as the
+     * sky gets covered and dark at night. A very cloudy sky shows more and greyer clouds, never a sheet over the map.
+     * Gone zoomed in (the camera is under them), their shadows kept. Fixed to the map, they glide with the wind whatever the camera.
      */
     private drawClouds(
         epoch: number,
@@ -305,6 +334,7 @@ export class WeatherManager {
         sunlight: { night: number; shadows: number },
         shadowOffset: { x: number; y: number } | undefined,
         veilAlpha: number,
+        zoom: number,
     ): void {
         if (veilAlpha > 0) {
             this.graphics.fillStyle(OVERCAST_COLOR, veilAlpha);
@@ -322,20 +352,43 @@ export class WeatherManager {
             rows: canvas.rows + 2 * Math.abs(shift.rows),
         };
         const fieldView = { x: field.x, y: field.y, width: field.columns * size, height: field.rows * size };
-        const levels = fieldLevels(field, size, cloudPatches(epoch, fieldView, cloudiness, this.reducedMotion, sky));
+        const patches = cloudPatches(epoch, fieldView, shownCloudiness(cloudiness), this.reducedMotion, sky);
+        const levels = fieldLevels(field, size, patches);
+        const fade = cloudZoomFade(zoom);
         if (shadowOffset) {
+            // The shadows stay on the ground, also zoomed in under the clouds.
             const alpha = CLOUD_SHADOW_ALPHA * sunlight.shadows;
             this.blocks.paintField(field, levels, outdoor, shift, 0x000000, (level) => (alpha * level) / FOG_LEVELS);
         }
-        const tint = cloudTint(0xffffff, CLOUD_ALPHA, sunlight.night);
-        this.blocks.paintField(
-            field,
-            levels,
-            outdoor,
-            NO_SHIFT,
-            tint.color,
-            (level) => (tint.alpha * level) / FOG_LEVELS,
-        );
+        this.paintCumulus(field, levels, outdoor, size, cloudPalette(cloudiness), CLOUD_ALPHA * fade, sunlight.night);
+    }
+
+    /**
+     * A field of clouds painted as cumulus: lit from the north-west, in the three tones of the palette, `body` the
+     * opacity of their body (their rim fainter), darkened as the night comes.
+     */
+    private paintCumulus(
+        field: BlockCanvasArea,
+        levels: Uint8Array,
+        outdoor: Uint8Array,
+        size: number,
+        palette: CloudPalette,
+        body: number,
+        night: number,
+    ): void {
+        // Zoomed in under the clouds: nothing to paint.
+        if (body <= 0) return;
+        const tones = cloudTones(levels, field.columns, field.rows, cloudLightStep(size));
+        for (const [tone, color] of [
+            [tones.lit, palette.lit],
+            [tones.mid, palette.mid],
+            [tones.shade, palette.shade],
+        ] as const) {
+            const tint = cloudTint(color, body, night);
+            this.blocks.paintField(field, tone, outdoor, NO_SHIFT, tint.color, (level) =>
+                cloudAlpha(level, tint.alpha),
+            );
+        }
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */
