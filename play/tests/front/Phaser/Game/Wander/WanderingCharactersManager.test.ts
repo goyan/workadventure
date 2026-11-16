@@ -301,6 +301,48 @@ describe("WanderingCharactersManager", () => {
             expect(scene.sprite.visible).toBe(true);
         });
 
+        it("a lead moves a free character instead of its schedule, and hides it while it gives no pose", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            manager.setFreeCharacters([LION], manager.getWanderMap());
+            scene.update();
+            let pose: WanderScheduleModule.WanderPose | undefined = {
+                x: 100,
+                y: 120,
+                direction: "right",
+                moving: true,
+                pausedMs: 0,
+            };
+            manager.setFreeCharacterLead(LION.id, { poseAt: () => pose });
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 100, y: 120, moving: true });
+            expect(scene.sprite.visible).toBe(true);
+            pose = undefined;
+            scene.update();
+            expect(scene.sprite.visible).toBe(false);
+            expect(manager.freeCharacterPose(LION.id)).toBeUndefined();
+            // Without its lead, it is back to its schedule, around its nest.
+            manager.setFreeCharacterLead(LION.id, undefined);
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 48, y: 48, moving: false });
+        });
+
+        it("a led character keeps its lead across a new map, and is hidden in the map editor", () => {
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            manager.setFreeCharacters([LION], map);
+            manager.setFreeCharacterLead(LION.id, {
+                poseAt: () => ({ x: 100, y: 120, direction: "down", moving: false, pausedMs: 0 }),
+            });
+            manager.setFreeCharacters([LION], { ...map });
+            scene.update();
+            expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 100, y: 120, moving: false });
+            mapEditorModeStore.set(true);
+            scene.update();
+            expect(scene.sprite.visible).toBe(false);
+        });
+
         it("a sheet that fails to load leaves no sprite", () => {
             const scene = makeScene([], undefined, { withDuck: false, sheetLoaded: false });
             manager = scene.manager;

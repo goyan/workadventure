@@ -15,7 +15,7 @@ import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
 import { WanderSchedule } from "./WanderSchedule";
-import type { Point, WanderDirection, WanderMap } from "./WanderSchedule";
+import type { Point, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
 import {
     WANDER_FRAME_SIZE,
     WANDER_WALK_COLUMNS,
@@ -38,6 +38,14 @@ const DESTINATION_TILE_TYPES: ReadonlySet<number> = new Set([
     PathTileType.PersonalDesk,
 ]);
 
+/**
+ * What moves a free character instead of its schedule (a tamed jungle animal following its master). No pose: the
+ * character is not shown (its master is out of view).
+ */
+export interface WanderLead {
+    poseAt(nowMs: number): WanderPose | undefined;
+}
+
 interface WanderingCharacter {
     /** Undefined for a free character (a jungle animal): no object of the map stands for it. */
     entity: Entity | undefined;
@@ -54,6 +62,8 @@ interface WanderingCharacter {
     opener: Point;
     // Whether the last pose applied to the sprite was a walk.
     moving: boolean;
+    /** Set for a free character only: it is led instead of following its schedule. */
+    lead?: WanderLead;
 }
 
 /**
@@ -180,6 +190,21 @@ export class WanderingCharactersManager {
         if (removed) {
             this.scene.markDirty();
         }
+    }
+
+    /**
+     * Gives a free character a lead (it follows that instead of its schedule), or takes it away: the character is
+     * then back to its schedule at once, where the schedule has it now.
+     */
+    public setFreeCharacterLead(id: string, lead: WanderLead | undefined): void {
+        const character = this.characters.get(id);
+        if (!character || character.entity || character.lead === lead) {
+            return;
+        }
+        character.lead = lead;
+        // Hidden until its first pose from the new source, instead of showing it at its old place for a frame.
+        character.hasPose = false;
+        this.scene.markDirty();
     }
 
     /** Where a free character is shown, undefined while it is not (sheet loading or failed, map editor). */
@@ -419,7 +444,12 @@ export class WanderingCharactersManager {
             }
             const sprite = character.sprite;
             if (sprite && !this.isEditorMode) {
-                const pose = character.schedule.poseAt(now);
+                const lead = character.lead;
+                const pose = lead ? lead.poseAt(now) : character.schedule.poseAt(now);
+                if (lead && !pose) {
+                    // Led out of view: not shown, rather than left where it was last seen.
+                    character.hasPose = false;
+                }
                 if (pose) {
                     character.hasPose = true;
                     character.moving = pose.moving;
@@ -432,12 +462,15 @@ export class WanderingCharactersManager {
                     // Out of the position check: a character standing still where it was created needs it too. Only on
                     // change, as setting the depth sorts the display list again.
                     // On a seat, drawn like a seated player: over the chair (behind it when it shows its back).
-                    const seat = pose.moving
-                        ? undefined
-                        : getSeats(this.scene).find(
-                              (candidate) =>
-                                  Math.abs(candidate.feet.x - pose.x) < 1 && Math.abs(candidate.feet.y - pose.y) < 1,
-                          );
+                    // A led character goes where it is led, never onto a seat.
+                    const seat =
+                        pose.moving || lead
+                            ? undefined
+                            : getSeats(this.scene).find(
+                                  (candidate) =>
+                                      Math.abs(candidate.feet.x - pose.x) < 1 &&
+                                      Math.abs(candidate.feet.y - pose.y) < 1,
+                              );
                     const depth = seat?.depth ?? pose.y;
                     if (sprite.depth !== depth) {
                         sprite.setDepth(depth);
