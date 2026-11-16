@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { leafActivity, LEAVES_PER_TREE, treeLeaves } from "../../../../../src/front/Phaser/Game/Nature/TreeLeafFall";
+import {
+    autumnProgress,
+    GROUND_LEAVES_PER_TREE,
+    groundLeaves,
+    leafActivity,
+    LEAVES_PER_TREE,
+    treeLeaves,
+} from "../../../../../src/front/Phaser/Game/Nature/TreeLeafFall";
 
 const box = { x: 100, y: 200, width: 64, height: 96 };
 
@@ -66,5 +73,44 @@ describe("treeLeaves", () => {
 
     it("gives no leaf for a time that is not one", () => {
         expect(treeLeaves(Number.NaN, 30, 200, 0.3, box)).toEqual([]);
+    });
+});
+
+describe("groundLeaves", () => {
+    it("lays more and more leaves on the ground under the tree, without moving the ones already there", () => {
+        const few = groundLeaves(0.3, 0.25, box);
+        const half = groundLeaves(0.3, 0.5, box);
+        const all = groundLeaves(0.3, 1, box);
+        expect(groundLeaves(0.3, 0, box)).toEqual([]);
+        expect(few.length).toBeGreaterThan(0);
+        expect(few.length).toBeLessThan(half.length);
+        expect(half.length).toBeLessThan(all.length);
+        expect(all.length).toBe(GROUND_LEAVES_PER_TREE);
+        expect(groundLeaves(0.3, 7, box).length).toBe(GROUND_LEAVES_PER_TREE);
+        expect(all.slice(0, half.length)).toEqual(half);
+        expect(half.slice(0, few.length)).toEqual(few);
+    });
+
+    it("keeps them under the foliage, around the foot of the tree", () => {
+        const foot = box.y + box.height;
+        for (const leaf of groundLeaves(0.3, 1, box)) {
+            expect(leaf.x).toBeGreaterThanOrEqual(box.x - 2);
+            expect(leaf.x).toBeLessThanOrEqual(box.x + box.width + 2);
+            expect(leaf.y).toBeGreaterThan(foot - 32);
+            expect(leaf.y).toBeLessThan(foot + 14);
+        }
+        expect(groundLeaves(0.3, 1, box)).toEqual(groundLeaves(0.3, 1, box));
+        expect(groundLeaves(0.3, 1, box)).not.toEqual(groundLeaves(0.7, 1, box));
+    });
+});
+
+describe("autumnProgress", () => {
+    it("goes from the first day of autumn to its last, in Paris", () => {
+        expect(autumnProgress(new Date("2026-09-01T10:00:00+02:00"))).toBeLessThan(0.05);
+        expect(autumnProgress(new Date("2026-10-16T10:00:00+02:00"))).toBeCloseTo(0.5, 1);
+        expect(autumnProgress(new Date("2026-11-30T10:00:00+01:00"))).toBeGreaterThan(0.95);
+        // Out of autumn (a personal autumn theme): a carpet half way.
+        expect(autumnProgress(new Date("2026-07-14T10:00:00+02:00"))).toBe(0.5);
+        expect(autumnProgress(new Date(Number.NaN))).toBe(0.5);
     });
 });

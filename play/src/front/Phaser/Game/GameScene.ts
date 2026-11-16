@@ -272,6 +272,7 @@ import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway, type SwayingObject } from "./Nature/TreeSway";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
+import { autumnProgress } from "./Nature/TreeLeafFall";
 import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
@@ -3066,6 +3067,7 @@ export class GameScene extends DirtyScene {
                         const serverDate = this.nightManager?.serverDate();
                         return serverDate ? treeSeasonAt(serverDate, WeatherType.Clear, 0) : Season.Summer;
                     },
+                    autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
                     // The Christmas theme shows its snow whatever the map weather.

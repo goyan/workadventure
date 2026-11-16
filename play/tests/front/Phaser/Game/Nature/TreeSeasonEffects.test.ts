@@ -9,6 +9,8 @@ interface FakeImage {
     alpha: number;
     depth: number;
     destroyed: boolean;
+    /** Share of the image hidden from its top (0 to 1): the snowy tree shows there. */
+    snow: number;
 }
 
 function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?: boolean; coverage?: number } = {}) {
@@ -19,20 +21,24 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
         outdoor: true,
         view: { x: 0, y: 0, width: 800, height: 600 },
     };
-    const graphics = {
+    const newGraphics = () => ({
         clear: vi.fn(),
         fillStyle: vi.fn(),
         fillRect: vi.fn(),
         setDepth: vi.fn().mockReturnThis(),
         destroy: vi.fn(),
-    };
+    });
+    /** What falls, over the trees; and the leaves lying on the ground, under everyone. */
+    const graphics = newGraphics();
+    const ground = newGraphics();
+    const made = [graphics, ground];
     const images: FakeImage[] = [];
     const markDirty = vi.fn();
     const scene = {
         markDirty,
         textures: { exists: () => true },
         add: {
-            graphics: () => graphics,
+            graphics: () => made.shift() ?? newGraphics(),
             image: (x: number, y: number, key: string) => {
                 const image = {
                     key,
@@ -44,6 +50,13 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
                     displayWidth: 0,
                     displayHeight: 0,
                     destroyed: false,
+                    snow: 0,
+                    frame: { width: 32, height: 48 },
+                    setCrop: (x: number, y: number, width: number, height: number) => {
+                        expect([x, width, y + height]).toEqual([0, 32, 48]);
+                        image.snow = y / 48;
+                        return image;
+                    },
                     setOrigin: () => image,
                     setPosition: (px: number, py: number) => {
                         image.x = px;
@@ -94,6 +107,7 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
         trees: () => trees,
         season: () => state.season,
         bareSeason: () => Season.Autumn,
+        autumnProgress: () => 0.5,
         windSpeed: () => 80,
         windFrom: () => 270,
         snowCoverage: () => state.coverage,
@@ -102,7 +116,7 @@ function fixture(overrides: { season?: Season; enabled?: boolean; reducedMotion?
         view: () => state.view,
         reducedMotion: overrides.reducedMotion ?? false,
     });
-    return { effects, graphics, images, markDirty, state, trees };
+    return { effects, graphics, ground, images, markDirty, state, trees };
 }
 
 /** Server time of a drawing: `second` seconds into a fixed day. */
@@ -123,6 +137,20 @@ describe("TreeSeasonEffects", () => {
         effects.update(1000, at(1));
         expect(graphics.fillRect).not.toHaveBeenCalled();
         expect(graphics.clear).toHaveBeenCalled();
+    });
+
+    it("lays the fallen leaves on the ground under the autumn trees, below the characters", () => {
+        const { effects, ground, graphics, state } = fixture();
+        effects.update(0, at(0));
+        // Half way into autumn: half of the forty leaves of each of the two trees in view.
+        expect(ground.fillRect).toHaveBeenCalledTimes(40);
+        const groundDepth = ground.setDepth.mock.calls[0][0] as number;
+        expect(groundDepth).toBeLessThan(2);
+        expect(graphics.setDepth.mock.calls[0][0]).toBeGreaterThan(900_000);
+        state.season = Season.Winter;
+        ground.fillRect.mockClear();
+        effects.update(1000, at(1));
+        expect(ground.fillRect).not.toHaveBeenCalled();
     });
 
     it("draws 15 times a second at most", () => {
@@ -151,12 +179,14 @@ describe("TreeSeasonEffects", () => {
         expect(images).toEqual([]);
     });
 
-    it("shows the bare tree through the snowy one, less and less as the snow builds up", () => {
+    it("lets the snow settle on the top of the tree, lower and lower as it builds up", () => {
         const { effects, images, trees } = fixture({ season: Season.Winter });
         const alphas: number[] = [];
         for (let second = 0; second < 600; second += 2) {
             effects.update(second * 1000, at(second));
-            alphas.push(images[0].alpha);
+            // The bare image hides its top, where the snowy tree shows; what is left of it is plain.
+            expect(images[0].alpha).toBe(1);
+            alphas.push(1 - images[0].snow / 0.75);
         }
         // Only the seasonal tree in view gets its bare image, right over it.
         expect(images.length).toBe(1);
@@ -164,7 +194,7 @@ describe("TreeSeasonEffects", () => {
         expect(images[0].x).toBe(trees[0].object.x);
         expect(images[0].depth).toBeGreaterThan(trees[0].object.depth);
         expect(images[0].depth).toBeLessThan(trees[0].object.depth + 1);
-        // The tree whitens (the bare image fades), then its snow falls off (the bare image comes back).
+        // The snow comes down from the top to the bottom of the foliage (three quarters of the image), then falls off.
         expect(Math.min(...alphas)).toBeLessThan(0.05);
         expect(Math.max(...alphas)).toBeGreaterThan(0.8);
         const drops = alphas.filter((alpha, index) => index > 0 && alpha > alphas[index - 1] + 0.5).length;
@@ -179,7 +209,7 @@ describe("TreeSeasonEffects", () => {
         for (let tenth = 0; tenth < 3000 && !fell; tenth++) {
             graphics.fillRect.mockClear();
             effects.update(tenth * 100, at(tenth / 10));
-            const alpha = images[0].alpha;
+            const alpha = 1 - images[0].snow / 0.75;
             if (tenth > 0 && alpha > previous + 0.5) {
                 fell = true;
                 const xs = graphics.fillRect.mock.calls.map(([x]) => x as number);
@@ -194,7 +224,7 @@ describe("TreeSeasonEffects", () => {
     it("carries no more snow than the map has, and drops none while there is little", () => {
         const { effects, graphics, images } = fixture({ season: Season.Winter, coverage: 0.1 });
         for (let tenth = 0; tenth < 3000; tenth++) effects.update(tenth * 100, at(tenth / 10));
-        expect(images[0].alpha).toBeGreaterThanOrEqual(0.9);
+        expect(images[0].snow).toBeLessThanOrEqual(0.1);
         expect(graphics.fillRect).not.toHaveBeenCalled();
     });
 

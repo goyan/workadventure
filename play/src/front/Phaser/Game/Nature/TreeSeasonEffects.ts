@@ -1,7 +1,7 @@
 import { Season } from "@workadventure/map-editor";
 import type * as Phaser from "phaser";
-import { OVERHEAD_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
-import { treeLeaves, type TreeBox } from "./TreeLeafFall";
+import { FLOOR_OBJECT_DEPTH, OVERHEAD_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
+import { groundLeaves, treeLeaves, type TreeBox } from "./TreeLeafFall";
 import { snowClumps, SNOW_DUMP_SECONDS, treeSnowCycle, treeSnowLoad } from "./TreeSnowLoad";
 import { phaseOf, type SwayingObject } from "./TreeSway";
 
@@ -24,6 +24,8 @@ export interface TreeSeasonEffectsOptions {
     season: () => Season;
     /** The season the trees would show without snow: what is under the snow. */
     bareSeason: () => Season;
+    /** How far into autumn it is, 0 to 1: how many leaves lie under the trees. */
+    autumnProgress: () => number;
     /** Wind speed (km/h) of the map weather, undefined without one (a light breeze then). */
     windSpeed: () => number | undefined;
     /** Where the wind comes from (degrees, 0 north), undefined without a real weather. */
@@ -46,6 +48,10 @@ const FRAME_MS = 1000 / 15;
 const VIEW_MARGIN = 48;
 /** Over every overhead object (the trees), under the overlay layers and the night veil. */
 const EFFECTS_DEPTH = OVERHEAD_OBJECT_DEPTH + 60_000;
+/** The leaves on the ground: over the floors and the floor objects, under every character. */
+const GROUND_DEPTH = FLOOR_OBJECT_DEPTH + 0.45;
+/** The snow settles on the top of the tree and comes down to the bottom of its foliage: this share of its image. */
+const FOLIAGE_SHARE = 0.75;
 const SNOW_COLOR = 0xf4f7ff;
 /** A tree with less snow than this drops none: there is nothing to fall yet. */
 const LIGHTEST_DUMP = 0.3;
@@ -55,13 +61,15 @@ type BareImage = Phaser.GameObjects.Image;
 
 /**
  * What the season does to the trees that sway. In autumn the wind takes their leaves, which fall under the foliage.
- * While the map is snowy the snow builds up on each tree, then falls off on each side once it is too heavy: the tree's
- * own snowy image shows more and more through its bare image drawn over it, which comes back when the snow falls.
+ * and stay on the ground around its foot, more of them as autumn goes. While the map is snowy the snow settles on the
+ * top of each tree and comes down its foliage, then falls off on each side once it is too heavy: the bare image of the
+ * tree is drawn over its snowy one with its top cut off, lower and lower, and comes back whole when the snow falls.
  * Everything comes from the server time and the id of the tree: the same for everyone.
  */
 export class TreeSeasonEffects {
     private readonly reducedMotion: boolean;
     private readonly graphics: Phaser.GameObjects.Graphics;
+    private readonly ground: Phaser.GameObjects.Graphics;
     private readonly bareImages = new Map<string, BareImage>();
     private lastFrameAt = -Infinity;
     private drawn = false;
@@ -72,6 +80,7 @@ export class TreeSeasonEffects {
     ) {
         this.reducedMotion = options.reducedMotion ?? REDUCED_MOTION;
         this.graphics = scene.add.graphics().setDepth(EFFECTS_DEPTH);
+        this.ground = scene.add.graphics().setDepth(GROUND_DEPTH);
     }
 
     /** The bare images over the snowy trees, for them to sway with their tree. */
@@ -91,7 +100,9 @@ export class TreeSeasonEffects {
         if (now - this.lastFrameAt < FRAME_MS) return;
         this.lastFrameAt = now;
         this.graphics.clear();
+        this.ground.clear();
         const seconds = epoch / 1000;
+        const fallen = autumn ? this.options.autumnProgress() : 0;
         const view = this.options.view();
         const wind = this.options.windSpeed() ?? BREEZE_KMH;
         const windFrom = this.options.windFrom();
@@ -111,6 +122,11 @@ export class TreeSeasonEffects {
             // A tree stands where its foot is: the middle of its bottom edge.
             if (!this.options.isOutdoor(box.x + box.width / 2, box.y + box.height - 1)) continue;
             if (autumn) {
+                for (const leaf of groundLeaves(phaseOf(id), fallen, box)) {
+                    this.ground.fillStyle(leaf.color, 0.9);
+                    this.ground.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
+                    drawn = true;
+                }
                 for (const leaf of treeLeaves(seconds, wind, windFrom, phaseOf(id), box)) {
                     this.graphics.fillStyle(leaf.color, 0.95 * leaf.alpha);
                     this.graphics.fillRect(
@@ -126,11 +142,14 @@ export class TreeSeasonEffects {
             const bare = this.bareTexture(object);
             if (!bare) continue;
             const cycle = treeSnowCycle(seconds, phaseOf(id));
-            this.bareImage(id, bare)
+            const image = this.bareImage(id, bare)
                 .setPosition(object.x, object.y)
                 .setDisplaySize(object.displayWidth, object.displayHeight)
-                .setDepth(object.depth + 0.01)
-                .setAlpha(1 - treeSnowLoad(coverage, cycle.load));
+                .setDepth(object.depth + 0.01);
+            // The snowy tree shows above the cut: the snow line comes down as the tree loads.
+            const { width, height } = image.frame;
+            const snowLine = Math.round(height * FOLIAGE_SHARE * treeSnowLoad(coverage, cycle.load));
+            image.setCrop(0, snowLine, width, height - snowLine);
             snowy.add(id);
             drawn = true;
             if (coverage < LIGHTEST_DUMP || cycle.sinceDump > SNOW_DUMP_SECONDS + 1) continue;
@@ -172,6 +191,7 @@ export class TreeSeasonEffects {
     private clear(): void {
         if (!this.drawn && this.bareImages.size === 0) return;
         this.graphics.clear();
+        this.ground.clear();
         for (const image of this.bareImages.values()) image.destroy();
         this.bareImages.clear();
         this.drawn = false;
@@ -183,5 +203,6 @@ export class TreeSeasonEffects {
         for (const image of this.bareImages.values()) image.destroy();
         this.bareImages.clear();
         this.graphics.destroy();
+        this.ground.destroy();
     }
 }
