@@ -1,3 +1,9 @@
+import {
+    mapLayerPieceSize,
+    parseMapLayerPrefab,
+    wallRise,
+    type MapLayerPiece,
+} from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, OutdoorGrid, type Rect } from "./OutdoorGrid";
 
 /** Cell size of the team maps. */
@@ -85,18 +91,44 @@ export interface OutdoorSourceEntity {
     displayHeight: number;
     scaleX: number;
     scaleY: number;
-    getPrefab(): { collectionName: string; imagePath: string };
+    getPrefab(): { collectionName: string; id: string; imagePath: string };
+}
+
+/**
+ * A piece of the map layer of height 2 or more, as the piece of height 1 it stands in for. A lintel has no piece of
+ * height 1: the door or the window under it stands on the ground.
+ */
+function groundPiece(
+    piece: MapLayerPiece | undefined,
+): { rise: number; ground: MapLayerPiece | undefined } | undefined {
+    if (piece === undefined || piece.kind === "floor") return undefined;
+    if (piece.kind === "lintel") return { rise: 0, ground: undefined };
+    // A vertical door has no height; the pieces of height 1 keep their own image.
+    if (piece.height === 1) return undefined;
+    return { rise: wallRise(piece.height), ground: { ...piece, height: 1 } };
 }
 
 /**
  * Where an entity stands, sized by its prefab image: an opening door swaps to a taller frame, which must neither
- * reopen the room nor trigger a recomputation at every passage.
+ * reopen the room nor trigger a recomputation at every passage. A high wall, door or window stands where its piece of
+ * height 1 would: the outdoors are read on the ground, whatever the height of the walls.
  */
 export function entityOutdoorRect(
     entity: OutdoorSourceEntity,
     prefabFrameSize: (imagePath: string) => { width: number; height: number } | undefined,
 ): OutdoorEntity {
     const prefab = entity.getPrefab();
+    const high = groundPiece(parseMapLayerPrefab(prefab.collectionName, prefab.id));
+    if (high) {
+        const size = high.ground ? mapLayerPieceSize(high.ground) : { width: 0, height: 0 };
+        return {
+            collectionName: prefab.collectionName,
+            x: entity.x,
+            y: entity.y + high.rise * entity.scaleY,
+            width: size.width * entity.scaleX,
+            height: size.height * entity.scaleY,
+        };
+    }
     const frame = prefabFrameSize(prefab.imagePath);
     return {
         collectionName: prefab.collectionName,
