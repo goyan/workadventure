@@ -85,7 +85,12 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                 }
                 const door: DoorRef =
                     piece.orientation === "h"
-                        ? { orientation: "h", x: item.x / size + 1, y: item.y / size }
+                        ? {
+                              orientation: "h",
+                              x: item.x / size + 1,
+                              y: item.y / size,
+                              ...(piece.glazed ? { glazed: true } : {}),
+                          }
                         : {
                               orientation: "v",
                               x: (item.x + DOOR_VERTICAL_WIDTH / 2) / size,
@@ -365,6 +370,12 @@ export function doorPixelRect(door: DoorRef): { x: number; y: number; width: num
               width: WALL_THICKNESS,
               height: 2 * size - WALL_THICKNESS,
           };
+}
+
+/** The door placed on the wall segment under a world position, if any. */
+export function doorUnderPoint(model: MapLayerModel, worldX: number, worldY: number): DoorRef | undefined {
+    const wall = wallAtPoint(model, worldX, worldY);
+    return wall ? model.getDoorOn(wall.orientation, wall.x, wall.y) : undefined;
 }
 
 /** A door the cursor would place, and whether the walls under it allow it. */

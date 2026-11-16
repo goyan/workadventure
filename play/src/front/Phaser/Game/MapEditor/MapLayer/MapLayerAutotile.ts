@@ -94,11 +94,16 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
             placements.push(
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("h", tint, "g"),
+                    doorPrefabName("h", tint, "g", undefined, false, door.glazed === true),
                     (door.x - 1) * size,
                     door.y * size,
                 ),
-                placement(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", tint, "d"), door.x * size, door.y * size),
+                placement(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("h", tint, "d", undefined, false, door.glazed === true),
+                    door.x * size,
+                    door.y * size,
+                ),
             );
         } else {
             const x = door.x * size - DOOR_VERTICAL_WIDTH / 2;

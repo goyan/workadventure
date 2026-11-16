@@ -505,6 +505,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         floors: "Sol",
         walls: "Style de mur",
+        glazedDoor: "Vitrée",
+        glazedDoorHint:
+            "Pour les nouvelles portes horizontales. Cliquez sur une porte horizontale posée pour la rendre vitrée ou pleine.",
         catalogLoading: "Vérification des catalogues de sols et de murs...",
         catalogMissing: "Les catalogues de sols et de murs ne sont pas disponibles dans cette salle.",
         status: {

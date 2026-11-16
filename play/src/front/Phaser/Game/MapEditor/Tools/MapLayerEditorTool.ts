@@ -6,7 +6,9 @@ import { get } from "svelte/store";
 import type { FloorFamily, WallTint } from "../MapLayer/MapLayerCatalog";
 import {
     mapLayerCatalogAvailableStore,
+    mapLayerDoorGlazedStore,
     mapLayerDoorsAvailableStore,
+    mapLayerGlazedDoorsAvailableStore,
     mapLayerFloorFamilyStore,
     mapLayerFloorSwatchesStore,
     mapLayerWallSwatchesStore,
@@ -43,7 +45,7 @@ import {
 import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
-import type { MapLayerModel } from "../MapLayer/MapLayerModel";
+import type { DoorRef, MapLayerModel } from "../MapLayer/MapLayerModel";
 import { cellKey } from "../MapLayer/MapLayerModel";
 import {
     applyDoor,
@@ -55,6 +57,7 @@ import {
     cellsBetween,
     doorCandidateAt,
     doorPixelRect,
+    doorUnderPoint,
     eraseAt,
     eraseTargetAt,
     floodFillCells,
@@ -203,6 +206,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerGlazedDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
         const manager = this.scene.getEntitiesCollectionsManager();
         const [floor, wall] = await Promise.all([
@@ -225,6 +229,14 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerDoorsAvailableStore.set(door !== undefined);
         // The door button is disabled without doors: leave a mode that could not draw anything.
         if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
+        // The glazed doors are optional within the doors: without them the switch is off and doors are plain.
+        const glazedDoor =
+            door &&
+            (await manager.getEntityPrefab(
+                MAP_LAYER_DOOR_COLLECTION,
+                mapLayerPrefabId(MAP_LAYER_DOOR_COLLECTION, doorPrefabName("h", "blanc", "g", undefined, false, true)),
+            ));
+        mapLayerGlazedDoorsAvailableStore.set(glazedDoor !== undefined);
         // The windows are optional too.
         const glazing = await manager.getEntityPrefab(
             MAP_LAYER_WINDOW_COLLECTION,
@@ -376,7 +388,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.clearPreview();
         if (operation) {
             this.commit(operation);
-        } else if (mode === "door") {
+        } else if (mode === "door" && !this.onPlacedDoor(gesture)) {
             mapLayerStatusStore.set("doorInvalid");
         } else if (mode === "window" && !this.droppedInPlace(gesture)) {
             mapLayerStatusStore.set("windowInvalid");
@@ -384,6 +396,27 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     /** A moved window released on its own segment: nothing to do, nothing to explain. */
+    /** Whether a door-mode click hit a placed horizontal door: it flips it, or explains nothing when it cannot. */
+    private onPlacedDoor(gesture: Gesture): boolean {
+        const door = doorUnderPoint(gesture.baseModel, gesture.currentWorld.x, gesture.currentWorld.y);
+        return door?.orientation === "h";
+    }
+
+    /**
+     * The placed horizontal door under a point that a click flips (plain to glazed, glazed to plain), whatever the
+     * switch; a plain one only when the catalog has the glazed doors.
+     */
+    private doorToFlip(model: MapLayerModel, world: Point): DoorRef | undefined {
+        const door = doorUnderPoint(model, world.x, world.y);
+        if (door?.orientation !== "h") return undefined;
+        return door.glazed === true || get(mapLayerGlazedDoorsAvailableStore) ? door : undefined;
+    }
+
+    /** The variant the door mode places: glazed only with the switch on and the glazed doors in the catalog. */
+    private doorGlazed(): boolean {
+        return get(mapLayerDoorGlazedStore) && get(mapLayerGlazedDoorsAvailableStore);
+    }
+
     private droppedInPlace(gesture: Gesture): boolean {
         const end = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
         return gesture.movedWindow !== undefined && end.x === gesture.movedWindow.x && end.y === gesture.movedWindow.y;
@@ -430,8 +463,20 @@ export class MapLayerEditorTool extends MapEditorTool {
                     return;
                 };
             case "door": {
-                const door = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
-                return door.valid ? (model, bounds) => applyDoor(model, door, bounds) : undefined;
+                const glazed = this.doorGlazed();
+                const candidate = doorCandidateAt(gesture.baseModel, worldPath.end.x, worldPath.end.y);
+                if (candidate.valid) {
+                    const door = { orientation: candidate.orientation, x: candidate.x, y: candidate.y, glazed };
+                    return (model, bounds) => applyDoor(model, door, bounds);
+                }
+                // A click on a placed horizontal door flips it, whatever the switch.
+                const placed = this.doorToFlip(gesture.baseModel, worldPath.end);
+                if (placed) {
+                    return (model) => {
+                        model.setDoorGlazed(placed, placed.glazed !== true);
+                    };
+                }
+                return undefined;
             }
             case "window": {
                 const from = gesture.movedWindow;
@@ -610,8 +655,15 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
+    /** The door a click would place, green where it can go, red where it cannot; a door a click would flip, green. */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
         const door = doorCandidateAt(model, world.x, world.y);
+        const placed = door.valid ? undefined : this.doorToFlip(model, world);
+        if (placed) {
+            const { x, y, width, height } = doorPixelRect(placed);
+            graphics.fillStyle(0x2ecc71, 0.45).fillRect(x, y, width, height);
+            return;
+        }
         const { x, y, width, height } = doorPixelRect(door);
         graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
     }

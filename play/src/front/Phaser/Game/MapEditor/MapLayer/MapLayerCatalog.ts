@@ -141,15 +141,19 @@ export function windowPrefabName(tint: WallTint, ends: FacadeEnds): string {
     return `fenetre-${tint}-${ends}`;
 }
 
-/** Name of a piece of a door; without `frame`, the closed door. */
+/**
+ * Name of a piece of a door; without `frame`, the closed door. A glazed door (horizontal only) has `-vitree` after
+ * its side, before the frame.
+ */
 export function doorPrefabName(
     orientation: "h" | "v",
     tint: WallTint,
     side: DoorSide,
     frame?: number,
     pushedTowardsViewer = false,
+    glazed = false,
 ): string {
-    const base = `porte-${orientation}-${tint}-${side}`;
+    const base = `porte-${orientation}-${tint}-${side}${glazed && orientation === "h" ? "-vitree" : ""}`;
     if (frame === undefined || frame === DOOR_CLOSED_FRAME) {
         return base;
     }
@@ -163,14 +167,24 @@ export type MapLayerPiece =
     | { kind: "vertical"; tint: WallTint }
     | { kind: "end"; tint: WallTint }
     | { kind: "joint"; arms: JointArm[] }
-    | { kind: "door"; orientation: "h" | "v"; tint: WallTint; side: DoorSide; frame: number; reverse: boolean };
+    | {
+          kind: "door";
+          orientation: "h" | "v";
+          tint: WallTint;
+          side: DoorSide;
+          frame: number;
+          reverse: boolean;
+          glazed: boolean;
+      };
 
 const FLOOR_NAME = new RegExp(`^sol-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})-(uni|ombre)$`);
 const FACADE_NAME = new RegExp(`^facade-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
 const WINDOW_NAME = new RegExp(`^fenetre-(${MAP_LAYER_WALL_TINTS.join("|")})-(mid|left|right|single)$`);
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
 const END_NAME = new RegExp(`^bout-(${MAP_LAYER_WALL_TINTS.join("|")})$`);
-const DOOR_NAME = new RegExp(`^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(?:-(b)?(\\d))?$`);
+const DOOR_NAME = new RegExp(
+    `^porte-(h|v)-(${MAP_LAYER_WALL_TINTS.join("|")})-(g|d|haut|bas)(-vitree)?(?:-(b)?(\\d))?$`,
+);
 const JOINT_NAME = /^raccord-(N?E?S?W?)$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not part of the map layer. */
@@ -216,11 +230,16 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         if (!door) {
             return undefined;
         }
-        const frame = door[5] === undefined ? DOOR_CLOSED_FRAME : Number(door[5]);
-        if (door[5] !== undefined && frame >= DOOR_CLOSED_FRAME) {
+        const frame = door[6] === undefined ? DOOR_CLOSED_FRAME : Number(door[6]);
+        if (door[6] !== undefined && frame >= DOOR_CLOSED_FRAME) {
             return undefined;
         }
         const orientation = door[1] as "h" | "v";
+        const glazed = door[4] !== undefined;
+        // Seen from above, a vertical door is a line: it has no glazed variant.
+        if (glazed && orientation === "v") {
+            return undefined;
+        }
         const side = door[3] as DoorSide;
         if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
             return undefined;
@@ -231,7 +250,8 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
             tint: door[2] as WallTint,
             side,
             frame,
-            reverse: door[4] === "b",
+            reverse: door[5] === "b",
+            glazed,
         };
     }
     return undefined;
