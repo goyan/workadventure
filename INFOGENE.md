@@ -1141,13 +1141,17 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
   `null` = relâché), et non une variable de joueur : le serveur n'envoie les variables d'un joueur qu'aux joueurs dont
   le champ de vision le contient (`PositionNotifier` du back, zones), alors qu'un animal apprivoisé quitte son nid, où les
   autres le cherchent. L'événement atteint toute la salle (`GameRoom.dispatchEvent`, expéditeur fixé par le serveur ;
-  son propre écho est ignoré). Le maître l'annonce toutes les 5 s ; une annonce non renouvelée pendant 15 s expire
-  (départ de la carte, rechargement, coupure) : rien n'est gardé avec le compte. Au démarrage et à la fermeture de la
-  scène, le joueur annonce « aucun compagnon ». Aucun changement de protocole ni du back.
+  son propre écho est ignoré). Le maître l'annonce toutes les 5 s, par un minuteur de la page (la boucle Phaser dort
+  onglet caché) ; quitter la carte (fermeture de la scène) ou la page (`pagehide` : rechargement, onglet fermé) envoie
+  « relâché », et au démarrage le joueur annonce « aucun compagnon » : rien n'est gardé avec le compte. Une annonce non
+  renouvelée pendant 75 s expire (plantage, réseau perdu) ; plus d'une minute parce que les minuteurs d'un onglet caché
+  longtemps ne tournent plus qu'une fois par minute. Le maître dont les annonces se sont interrompues plus longtemps
+  que cela relâche son compagnon de lui-même (les autres l'ont déjà fait). Aucun changement de protocole ni du back.
 - **Premier arrivé** (`jungleCompanionOwners`) : un animal revendiqué par quelqu'un n'est pas proposé ; si deux messages
   se croisent, le plus petit `since` gagne, puis le plus petit id utilisateur ; le perdant relâche sans rien afficher.
 - **Ce que voient les autres** : l'animal suit son maître et n'erre plus ; si le maître est hors de vue, l'animal est
-  masqué (ni ici ni autour de son nid). Les cris continuent pour un compagnon à l'arrêt.
+  masqué (ni ici ni autour de son nid) et réapparaît à ses pieds quand il revient en vue. Les cris continuent pour un
+  compagnon à l'arrêt.
 - **Cas particuliers** : pas de compagnon dans l'éditeur (ouvrir l'éditeur le relâche, rien n'est proposé) ; un animal qui
   sort du tirage (jungle désactivée dans les réglages, nouveau jour) est relâché ; un autre animal sur le même arbre le
   lendemain repart du suivi. Véhicule : suivi normal (rattrapage, saut au-delà de 10 cases). Mouvement réduit : rien de
@@ -1160,7 +1164,8 @@ Module du front seul (`Phaser/Game/Jungle/`) : aucun changement de WAM, de proto
   i18n `trigger.jungleTame`/`trigger.jungleRelease`.
 - **Non vérifié** : tout le rendu en jeu ; deux joueurs réels (annonce, expiration, course) ; l'heure serveur absente
   (`since` pris sur l'horloge du poste) ; le suivi derrière un joueur distant (positions interpolées) ; le passage d'une
-  porte ; le coût de l'annonce dans une salle chargée.
+  porte ; le coût de l'annonce dans une salle chargée ; le bridage réel des minuteurs d'un onglet caché longtemps ;
+  l'envoi effectif de « relâché » au `pagehide` (la connexion peut se fermer avant).
 
 ### Gobeur (retiré)
 
