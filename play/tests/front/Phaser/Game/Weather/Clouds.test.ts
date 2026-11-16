@@ -93,12 +93,12 @@ describe("cloudPatches", () => {
     });
 
     it("puts the share of the map given by the cloud cover under clouds: 90 % of cover, about 90 % of the map", () => {
-        // The square of the sky repeated over the map: what it covers, the whole map does. A block counts as cloud
-        // from a quarter of the thickest, the faint edge left out; averaged over a few moments of the drift.
-        const sky = { x: 0, y: 0, width: 2100, height: 2100 };
+        // Nine squares of the sky, wide enough for the average of the map. A block counts as cloud from a quarter of
+        // the thickest, the faint edge left out; averaged over a few moments of the drift.
+        const sky = { x: 0, y: 0, width: 6300, height: 6300 };
         const covered = (cloudiness: number) =>
             [0, 7_000, 19_000, 33_000].reduce((sum, epoch) => {
-                const blocks = fogBlocks([sky], cloudPatches(epoch, sky, cloudiness, false), 16);
+                const blocks = fogBlocks([sky], cloudPatches(epoch, sky, cloudiness, false), 32);
                 const area = blocks
                     .filter((block) => block.level >= FOG_LEVELS / 4)
                     .reduce((total, block) => total + block.width * block.height, 0);
@@ -106,6 +106,30 @@ describe("cloudPatches", () => {
             }, 0);
         for (const cloudiness of [0.35, 0.5, 0.7, 0.9]) expect(covered(cloudiness)).toBeCloseTo(cloudiness, 1);
         expect(covered(1)).toBeGreaterThan(0.97);
+    });
+
+    it("never repeats the same sky side by side: each copy of a cloud is moved and sized its own way", () => {
+        // The same view 32 periods of the sky further (on the same grid of blocks): most of its clouds must not be those
+        // here moved over.
+        const levels = (x: number) => {
+            const view = { x, y: 0, width: 2100, height: 2100 };
+            const grid = new Map<string, number>();
+            for (const block of fogBlocks([view], cloudPatches(0, view, 0.6, true), 64)) {
+                for (let left = block.x; left < block.x + block.width; left += 64) {
+                    grid.set(`${Math.round(left - x)},${Math.round(block.y)}`, block.level);
+                }
+            }
+            return grid;
+        };
+        const here = levels(0);
+        const there = levels(32 * 2100);
+        let differing = 0;
+        for (let x = 0; x < 2100; x += 64) {
+            for (let y = 0; y < 2100; y += 64) {
+                if ((here.get(`${x},${y}`) ?? 0) !== (there.get(`${x},${y}`) ?? 0)) differing++;
+            }
+        }
+        expect(differing / (33 * 33)).toBeGreaterThan(0.3);
     });
 
     it("are fixed to the map: zooming or moving the camera never moves nor resizes them", () => {
@@ -130,11 +154,15 @@ describe("cloudPatches", () => {
     it("drift with the wind, and stand still when motion is reduced", () => {
         const before = cloudPatches(10_000, view, 0.5, false);
         const after = cloudPatches(11_000, view, 0.5, false);
-        const moved = before.map((patch, index) => Math.hypot(after[index].x - patch.x, after[index].y - patch.y));
-        // Most patches move by the drift; one that wraps around the window jumps.
-        expect(moved.filter((distance) => Math.abs(distance - CLOUD_DRIFT_PER_SECOND) < 0.01).length).toBeGreaterThan(
-            moved.length / 2,
+        // Most patches are found again moved by the drift, the same size; a few left or entered the margin.
+        const drifted = before.filter((patch) =>
+            after.some(
+                (later) =>
+                    later.radius === patch.radius &&
+                    Math.abs(Math.hypot(later.x - patch.x, later.y - patch.y) - CLOUD_DRIFT_PER_SECOND) < 0.01,
+            ),
         );
+        expect(drifted.length).toBeGreaterThan(before.length / 2);
         expect(cloudPatches(10_000, view, 0.5, true)).toEqual(cloudPatches(99_000, view, 0.5, true));
     });
 
