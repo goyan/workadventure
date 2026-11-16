@@ -20,6 +20,7 @@ import {
     WALL_FADE_MS,
     WALL_ROOM_ALPHA,
     WallFade,
+    roomsBehind,
     wallTargetAlpha,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/WallFade";
 import type { FadableWall } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/WallFade";
@@ -70,6 +71,11 @@ function room(height: WallHeight) {
     const bounds = { columns: 20, rows: 20 };
     applyWalls(model, roomWallEdges({ x: 5, y: 6 }, { x: 8, y: 8 }), "gris", bounds, height);
     applyDoor(model, { orientation: "h", x: 7, y: 9 }, bounds);
+    return sceneOf(model);
+}
+
+/** The pieces of the walls of a model, as fake entities, and the outdoor grid they make. */
+function sceneOf(model: MapLayerModel) {
     const walls: FakeWall[] = computePlacements(model)
         .filter((placement) => MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(placement.collectionName))
         .map((placement) => {
@@ -290,5 +296,99 @@ describe("WallFade", () => {
         recomputeGrid();
         fade.update(WALL_FADE_MS);
         expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+});
+
+/** Runs the fade on the walls of `model` with the player at `player`, long enough for every fade to end. */
+function settle(model: MapLayerModel, player: { x: number; y: number }) {
+    const { walls, grid } = sceneOf(model);
+    let at = { ...player };
+    const fade = new WallFade(
+        () => walls,
+        () => grid,
+        () => at,
+        () => false,
+        () => undefined,
+    );
+    fade.update(WALL_FADE_MS);
+    const alphaOf = (predicate: (wall: FakeWall) => boolean): number[] =>
+        walls.filter(predicate).map((wall) => wall.alpha);
+    return {
+        walls,
+        alphaOf,
+        moveTo: (next: { x: number; y: number }) => {
+            at = { ...next };
+            fade.update(WALL_FADE_MS);
+        },
+    };
+}
+
+/** A joint of the cap of a vertical wall only: no arm towards the east nor the west (`raccord-NS-h3`). */
+const isJointWithoutEastWest = (wall: FakeWall): boolean =>
+    wall.name.startsWith("raccord-") && !/[EW]/.test(wall.name.split("-")[1]);
+
+describe("WallFade: vertical walls and their joints", () => {
+    it("never counts a piece of a vertical wall in front of a room, a vertical door included", () => {
+        const grid = { roomAt: () => 2, roomsTouching: () => new Set([2]), isOutdoorAt: () => false };
+        const rect = { x: 0, y: 0, width: 12, height: 12 };
+        const verticalDoor: MapLayerPiece = { ...door, orientation: "v", side: "haut" };
+        expect(roomsBehind(verticalDoor, rect, grid).size).toBe(0);
+        expect(roomsBehind({ kind: "joint", arms: ["N", "S"], height: 3 }, rect, grid).size).toBe(0);
+        expect(roomsBehind({ kind: "joint", arms: ["N", "E"], height: 3 }, rect, grid)).toEqual(new Set([2]));
+        expect(roomsBehind(door, rect, grid)).toEqual(new Set([2]));
+    });
+
+    it("leaves the joints of the side walls of a high room opaque, like their strips", () => {
+        const { fade, walls } = setup(3);
+        fade.update(WALL_FADE_MS);
+        const sideJoints = walls.filter(isJointWithoutEastWest);
+        expect(sideJoints.length).toBeGreaterThan(0);
+        expect(sideJoints.every((wall) => wall.alpha === 1)).toBe(true);
+    });
+
+    it("fades a high vertical wall only right behind its cap, its joints like its strips", () => {
+        const model = new MapLayerModel();
+        for (let y = 3; y < 9; y++) model.setWall("v", 12, y, "gris", 3);
+        // 40 px east of the line of the wall: beside it, not behind its cap.
+        const scene = settle(model, { x: 12 * 32 + 40, y: 150 });
+        expect(scene.walls.every((wall) => wall.alpha === 1)).toBe(true);
+        // Right behind its cap: the strip of the row 4, drawn from y = 76 to 96, over the body of the avatar.
+        scene.moveTo({ x: 12 * 32 + 8, y: 110 });
+        expect(scene.alphaOf((wall) => wall.name === "mur-vertical-gris-h3" && wall.y === 4 * 32 + 12 - 64)).toEqual([
+            WALL_ROOM_ALPHA,
+        ]);
+    });
+});
+
+describe("WallFade: the high wall the player walks behind", () => {
+    it("fades the whole straight wall, joints included, and nothing once the player is north of its top", () => {
+        const model = new MapLayerModel();
+        for (let x = 2; x < 10; x++) model.setWall("h", x, 10, "gris", 3);
+        // Behind its second segment: north of its foot (y = 352), under the top of its image (y = 256).
+        const scene = settle(model, { x: 3 * 32 + 16, y: 300 });
+        expect(scene.alphaOf((wall) => wall.name.startsWith("facade"))).toEqual(Array(8).fill(WALL_ROOM_ALPHA));
+        expect(scene.alphaOf((wall) => wall.name.startsWith("raccord"))).toEqual(Array(9).fill(WALL_ROOM_ALPHA));
+        scene.moveTo({ x: 3 * 32 + 16, y: 200 });
+        expect(scene.walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
+    });
+
+    it("never fades through a side wall: only the part of the wall that borders the room of the player", () => {
+        // Two high rooms side by side (cells 2 to 4 and 5 to 8, rows 6 to 8), the vertical wall x = 5 between them;
+        // their south walls make one straight wall on the line 9.
+        const model = new MapLayerModel();
+        const bounds = { columns: 20, rows: 20 };
+        applyWalls(model, roomWallEdges({ x: 2, y: 6 }, { x: 4, y: 8 }), "gris", bounds, 3);
+        applyWalls(model, roomWallEdges({ x: 5, y: 6 }, { x: 8, y: 8 }), "gris", bounds, 3);
+        // In the left room, on its last row, less than a tile from the south facade of the right room.
+        const scene = settle(model, { x: 4 * 32 + 20, y: 8 * 32 + 16 });
+        const southFacade = (column: number) => (wall: FakeWall) =>
+            wall.name.startsWith("facade") && wall.y === 9 * 32 - 64 && Math.floor((wall.x + 6) / 32) === column;
+        for (const column of [2, 3, 4]) expect(scene.alphaOf(southFacade(column))).toEqual([WALL_ROOM_ALPHA]);
+        for (const column of [5, 6, 7, 8]) expect(scene.alphaOf(southFacade(column))).toEqual([1]);
+        // The wall between the rooms keeps its opacity: its strips and the joints of its cap.
+        const shared = (wall: FakeWall): boolean =>
+            wall.x === 5 * 32 - 6 && (wall.name.startsWith("mur-vertical") || isJointWithoutEastWest(wall));
+        expect(scene.walls.filter(shared).length).toBeGreaterThan(0);
+        expect(scene.alphaOf(shared).every((alpha) => alpha === 1)).toBe(true);
     });
 });

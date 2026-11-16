@@ -1661,15 +1661,23 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
 - Transparence (`WallFade`, pour soi seulement, rien n'est envoyé) : éditeur ouvert, murs, portes et fenêtres à 45 % ;
   en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
   pièces de hauteur ≥ 2 **devant** elle (les murs horizontaux dont le pied est juste au sud de la pièce, `roomsBehind`),
-  avec leurs portes, fenêtres et linteaux, à 55 %. Le mur du fond et les murs de côté restent opaques : ils ne
+  avec leurs portes, fenêtres et linteaux et les raccords à bras est ou ouest de leur chapeau, à 55 %. Le mur du fond
+  et les murs de côté (bandes, bouts, raccords sans bras est ni ouest, portes verticales) restent opaques : ils ne
   cachent rien de la pièce, et ce qui est derrière eux ne doit pas se voir à travers. En plus, dedans comme dehors,
-  un mur de hauteur ≥ 2 derrière lequel passe son avatar s'estompe sur deux cases et demie de chaque côté de lui
-  (`wallHidesPlayer` : au nord du pied du mur, sous le haut de son image).
+  quand son avatar passe derrière une pièce d'un mur horizontal de hauteur ≥ 2 (`wallHidesPlayer` : au nord de son
+  pied, sous le haut de son image, dans sa largeur à une demi-largeur d'avatar près) **et** se trouve dans le même
+  espace que le sol juste au nord de ce pied (même pièce, ou dehors tous les deux), c'est **tout le mur droit** qui
+  s'estompe : la suite continue de segments horizontaux de la même ligne, du côté de cet espace seulement (une partie
+  du mur qui borde une autre pièce au nord reste opaque ; une portion de hauteur 1 ne s'estompe pas mais ne coupe pas
+  la suite). Un mur vertical haut ne s'estompe que si son chapeau passe sur le corps de l'avatar, à 16 px de sa ligne.
+  Sans grille du dehors, seule la géométrie compte.
   Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
   l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
-  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; au-dessus d'une
+  porte verticale, un mur vertical haut pose `mur-vertical-<teinte>-hN-porte` (même image, sans collision : le passage
+  reste ouvert, et la pièce ne compte pas pour le dehors) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
 
 ## Confirmation avant de libérer son bureau
