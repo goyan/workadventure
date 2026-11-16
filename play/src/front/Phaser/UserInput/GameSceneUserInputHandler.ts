@@ -327,6 +327,19 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
                 wokaMenuStore.clear();
             },
         });
+        // The interaction key lets a companion go only next to it: here, all of them, from anywhere.
+        const tamed = this.gameScene.tamedAnimalCount() ?? 0;
+        if (tamed > 0) {
+            wokaMenuStore.addAction({
+                actionName: get(LL).woka.menu.releaseAnimals({ count: tamed }),
+                icon: "paw",
+                testId: "avatar-release-animals",
+                callback: () => {
+                    this.gameScene.releaseTamedAnimals();
+                    wokaMenuStore.clear();
+                },
+            });
+        }
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());
         const vehicle = localUserStore.getVehicle();

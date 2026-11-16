@@ -52,6 +52,7 @@ const woka: BaseTranslation = {
         closeActions: "Close actions",
         profile: "Show profile",
         businessCard: "Business Card",
+        releaseAnimals: "Let my animals go ({count:number})",
     },
     swimwear: {
         auto: "Based on avatar",
