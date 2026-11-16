@@ -3,7 +3,9 @@ import {
     MAP_LAYER_TILE_SIZE,
     WALL_THICKNESS,
     facadeLeftExtension,
+    WALL_FOOTPRINT,
     groundPieceOf,
+    mapLayerGroundBottom,
     mapLayerPieceSize,
     parseMapLayerPrefab,
     wallRise,
@@ -16,6 +18,10 @@ import type { MapLayerModel } from "./MapLayerModel";
 export const WALL_EDIT_ALPHA = 0.45;
 /** Opacity of the high walls (2 tiles or more) in front of the room the player stands in: the ones that hide it. */
 export const WALL_ROOM_ALPHA = 0.55;
+/** How far along a wall, on each side of the player, its pieces fade when the player walks behind it. */
+export const WALL_HIDING_REACH_PX = 2.5 * MAP_LAYER_TILE_SIZE;
+/** The player is read again for the walls they walk behind once they moved this far. */
+const PLAYER_STEP_PX = 4;
 /** Duration of a full change of opacity. */
 export const WALL_FADE_MS = 200;
 
@@ -99,6 +105,19 @@ function carrierHeightOf(piece: MapLayerPiece, wall: FadableWall, model: MapLaye
     return pieceHeight(piece);
 }
 
+/**
+ * Whether the piece of a wall, its sprite at (x, y), hides the player standing behind it: north of its foot, under the
+ * top of its sprite, and near enough along the wall (a vertical wall only hides what is right behind its cap). It holds
+ * outdoors as well as in a room.
+ */
+export function wallHidesPlayer(piece: MapLayerPiece, x: number, y: number, player: { x: number; y: number }): boolean {
+    if (piece.kind === "floor") return false;
+    if (player.y <= y || player.y >= mapLayerGroundBottom(piece, y) - WALL_FOOTPRINT) return false;
+    const { width } = mapLayerPieceSize(piece);
+    const reach = piece.kind === "vertical" || piece.kind === "end" ? MAP_LAYER_TILE_SIZE / 2 : WALL_HIDING_REACH_PX;
+    return Math.abs(player.x - (x + width / 2)) <= reach;
+}
+
 interface FadeEntry {
     wall: FadableWall;
     /** Where the piece was read: a piece moved by the editor is read again. */
@@ -118,8 +137,8 @@ interface FadeEntry {
 }
 
 /**
- * Makes the walls see-through for the local player only: all of them while the map editor is open, the high ones
- * in front of the room of their avatar otherwise. Nothing is stored nor sent: only the opacity of the sprites changes.
+ * Makes the walls see-through for the local player only: all of them while the map editor is open; otherwise the
+ * high ones in front of the room of their avatar, and the high ones their avatar walks behind. Nothing is stored nor sent: only the opacity of the sprites changes.
  */
 export class WallFade {
     private entries = new Map<FadableWall, FadeEntry>();
@@ -128,6 +147,8 @@ export class WallFade {
     private lastGrid: WallFadeGrid | undefined;
     private lastEditorOpen: boolean | undefined;
     private lastPlayerRoom: number | undefined;
+    /** Where the player was when the walls they walk behind were last read. */
+    private lastPlayer: { x: number; y: number } | undefined;
     /** The room of the player, kept while they stand on the row of a wall (a wall cell of the grid, not outdoors). */
     private playerRoom: number | undefined;
 
@@ -148,8 +169,18 @@ export class WallFade {
         if (grid !== this.lastGrid) this.playerRoom = undefined;
         const playerRoom = this.readPlayerRoom(grid);
         const added = this.readEntries();
+        const player = this.player();
+        const moved =
+            !this.lastPlayer ||
+            Math.abs(player.x - this.lastPlayer.x) >= PLAYER_STEP_PX ||
+            Math.abs(player.y - this.lastPlayer.y) >= PLAYER_STEP_PX;
+        if (moved) this.lastPlayer = { x: player.x, y: player.y };
         const changed =
-            added || grid !== this.lastGrid || editorOpen !== this.lastEditorOpen || playerRoom !== this.lastPlayerRoom;
+            added ||
+            moved ||
+            grid !== this.lastGrid ||
+            editorOpen !== this.lastEditorOpen ||
+            playerRoom !== this.lastPlayerRoom;
         if (grid !== this.lastGrid) {
             for (const entry of this.entries.values()) entry.rooms = undefined;
         }
@@ -162,12 +193,17 @@ export class WallFade {
                 if (entry.piece.kind !== "floor" && !editorOpen && playerRoom !== undefined && grid) {
                     entry.rooms ??= roomsBehind(entry.piece, entry.rect, grid);
                 }
-                const target = wallTargetAlpha(
-                    entry.piece,
-                    entry.rooms ?? EMPTY,
-                    { editorOpen, playerRoom },
-                    entry.carrierHeight,
-                );
+                // A high wall the player walks behind fades wherever they are; otherwise the rule of the room applies.
+                const hiding =
+                    !editorOpen && entry.carrierHeight >= 2 && wallHidesPlayer(entry.piece, entry.x, entry.y, player);
+                const target = hiding
+                    ? WALL_ROOM_ALPHA
+                    : wallTargetAlpha(
+                          entry.piece,
+                          entry.rooms ?? EMPTY,
+                          { editorOpen, playerRoom },
+                          entry.carrierHeight,
+                      );
                 if (entry.snap) {
                     entry.snap = false;
                     entry.target = target;

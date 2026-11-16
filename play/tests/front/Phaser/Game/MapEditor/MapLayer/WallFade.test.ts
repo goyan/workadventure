@@ -170,6 +170,37 @@ describe("WallFade", () => {
         expect(sides.every((wall) => wall.alpha === 1)).toBe(true);
     });
 
+    it("fades the high wall the player walks behind, outdoors too, and only near them", () => {
+        // The north wall of the room, 3 tiles high: its foot ends at y = 224 and its image starts at y = 128.
+        const { fade, walls, backFacade, setPlayer } = setup(3);
+        const near = backFacade();
+        const far = walls.filter((wall) => wall.name.startsWith("facade") && wall.y === near.y).at(-1);
+        if (!far || far === near) throw new Error("the north wall needs two facades");
+        // Outdoors, north of the wall, hidden by its face.
+        setPlayer({ x: near.x + 16, y: 180 });
+        fade.update(WALL_FADE_MS);
+        expect(near.alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+        // Further along the same wall, more than two tiles and a half away: that part hides nothing of the player.
+        setPlayer({ x: near.x + 16 - 200, y: 180 });
+        fade.update(WALL_FADE_MS);
+        expect(near.alpha).toBe(1);
+        // North of the top of the wall: nothing is hidden.
+        setPlayer({ x: near.x + 16, y: 100 });
+        fade.update(WALL_FADE_MS);
+        expect(near.alpha).toBe(1);
+        // South of the wall, inside the room: in front of it.
+        setPlayer(INSIDE);
+        fade.update(WALL_FADE_MS);
+        expect(near.alpha).toBe(1);
+    });
+
+    it("never fades a wall of height 1 the player walks behind", () => {
+        const { fade, walls, setPlayer } = setup(1);
+        setPlayer({ x: 6 * 32 + 16, y: 200 });
+        fade.update(WALL_FADE_MS);
+        expect(walls.every((wall) => wall.alpha === 1)).toBe(true);
+    });
+
     it("leaves the walls of height 1 opaque in their room", () => {
         const { fade, walls } = setup(1);
         fade.update(WALL_FADE_MS);

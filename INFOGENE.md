@@ -1652,7 +1652,9 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
   pièces de hauteur ≥ 2 **devant** elle (les murs horizontaux dont le pied est juste au sud de la pièce, `roomsBehind`),
   avec leurs portes, fenêtres et linteaux, à 55 %. Le mur du fond et les murs de côté restent opaques : ils ne
-  cachent rien de la pièce, et ce qui est derrière eux ne doit pas se voir à travers.
+  cachent rien de la pièce, et ce qui est derrière eux ne doit pas se voir à travers. En plus, dedans comme dehors,
+  un mur de hauteur ≥ 2 derrière lequel passe son avatar s'estompe sur deux cases et demie de chaque côté de lui
+  (`wallHidesPlayer` : au nord du pied du mur, sous le haut de son image).
   Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
