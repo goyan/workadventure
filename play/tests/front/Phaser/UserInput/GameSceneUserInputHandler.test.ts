@@ -4,6 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { mock } from "vitest-mock-extended";
 import { Vehicle, VehicleMode } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { localUserStore } from "@wa/front/Connection/LocalUserStore";
+import { waScaleManager } from "@wa/front/Phaser/Services/WaScaleManager";
 import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import type { GameMapFrontWrapper } from "../../../../src/front/Phaser/Game/GameMap/GameMapFrontWrapper";
 import type { CameraManager } from "../../../../src/front/Phaser/Game/CameraManager";
@@ -534,6 +535,18 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
 
         it("pans with a two-finger trackpad scroll outside the map editor", () => {
             handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
+
+            expect(cameraManager.startManualPan.mock.calls).toHaveLength(1);
+            expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
+        });
+
+        it("pans inside a focus zone too (a personal desk, a meeting room): the zone frames the view, it does not hold it", () => {
+            waScaleManager.setFocusTarget({ x: 100, y: 100, width: 192, height: 224 });
+            try {
+                handler.handleMouseWheelEvent(trackpadScroll(), [], 4, 6, 0);
+            } finally {
+                waScaleManager.setFocusTarget();
+            }
 
             expect(cameraManager.startManualPan.mock.calls).toHaveLength(1);
             expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
