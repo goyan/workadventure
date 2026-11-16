@@ -645,8 +645,15 @@ export class MapLayerEditorTool extends MapEditorTool {
     }
 
     /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
+    /** The door a click would place, green where it can go, red where it cannot; a door a click would switch, green. */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
         const door = doorCandidateAt(model, world.x, world.y);
+        const placed = door.valid ? undefined : doorUnderPoint(model, world.x, world.y);
+        if (placed?.orientation === "h" && (placed.glazed === true) !== this.doorGlazed()) {
+            const { x, y, width, height } = doorPixelRect(placed);
+            graphics.fillStyle(0x2ecc71, 0.45).fillRect(x, y, width, height);
+            return;
+        }
         const { x, y, width, height } = doorPixelRect(door);
         graphics.fillStyle(door.valid ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
     }

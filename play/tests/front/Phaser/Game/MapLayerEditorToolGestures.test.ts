@@ -44,6 +44,7 @@ describe("MapLayerEditorTool gestures", () => {
     let entities: Map<string, Entity>;
     let tool: MapLayerEditorTool;
     let capturedPointers: Set<number>;
+    let previewGraphics: ReturnType<typeof mock<Phaser.GameObjects.Graphics>>;
 
     function pointer(worldX: number, worldY: number, pressed = true): Phaser.Input.Pointer {
         const result = mock<Phaser.Input.Pointer>({ id: 1, x: worldX, y: worldY, worldX, worldY, button: 0 });
@@ -117,6 +118,7 @@ describe("MapLayerEditorTool gestures", () => {
         graphics.fillRect.mockReturnValue(graphics);
         graphics.strokeRect.mockReturnValue(graphics);
         graphics.fillCircle.mockReturnValue(graphics);
+        previewGraphics = graphics;
         const factory = mock<Phaser.GameObjects.GameObjectFactory>();
         factory.graphics.mockReturnValue(graphics);
         scene.add = factory;
@@ -473,5 +475,18 @@ describe("MapLayerEditorTool gestures", () => {
         clickDoor();
         expect(committedPieces().created).toEqual(expect.arrayContaining(["porte-h-blanc-d", "porte-h-blanc-g"]));
         expect(committedPieces().created.filter((name) => name.includes("vitree"))).toEqual([]);
+    });
+
+    it("shows a door that a click would switch in green, on the door itself", async () => {
+        placeDoor(false);
+        await activate();
+        mapLayerModeStore.set("door");
+        mapLayerDoorGlazedStore.set(true);
+        previewGraphics.fillStyle.mockClear();
+        previewGraphics.fillRect.mockClear();
+        move(40, 80);
+        expect(previewGraphics.fillStyle.mock.calls.map(([color]) => color)).toEqual([0x2ecc71]);
+        // The door on the segments 0 and 1 of the line 2, not a door centered on the cursor.
+        expect(previewGraphics.fillRect.mock.lastCall?.slice(0, 2)).toEqual([0, 64]);
     });
 });
