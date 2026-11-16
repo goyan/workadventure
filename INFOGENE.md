@@ -1629,13 +1629,14 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
 
 Portes vitrées (interrupteur « Vitrée » du mode Porte) :
 
-- Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre (même bleu,
-  bande et alpha que les fenêtres), poignée et cadre gardés ; on voit à travers, même porte entrouverte. Une porte
+- Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre claire (bleu et
+  bande des fenêtres, mais 30 % d'opacité, avec un reflet en diagonale), poignée et cadre gardés ; on voit nettement à
+  travers, même porte entrouverte. Une porte
   verticale reste pleine (vue de dessus, c'est un trait).
-- Interrupteur éteint par défaut, gardé le temps de la page. Allumé, le mode Porte pose des portes horizontales
-  vitrées ; un clic sur une porte horizontale déjà posée la bascule dans la variante choisie (une entrée d'annulation),
-  sans message si elle l'est déjà. Grisé quand le catalogue de la salle n'a pas les portes vitrées : les portes posées
-  sont alors pleines.
+- Interrupteur éteint par défaut, gardé le temps de la page : il choisit la variante des **nouvelles** portes
+  horizontales. Un clic sur une porte horizontale déjà posée l'inverse (pleine ↔ vitrée), quel que soit l'interrupteur
+  (aperçu vert sur la porte, une entrée d'annulation). Grisé quand le catalogue de la salle n'a pas les portes vitrées :
+  les nouvelles portes sont alors pleines et un clic ne rend pas vitrée une porte pleine.
 - Stockage : `DoorRef.glazed` (absent pour une porte pleine), porté par le nom des pièces
   `porte-h-<teinte>-<g|d>-vitree` puis le suffixe d'image (`-3`, `-b3`) ; une porte verticale vitrée n'existe pas.
   Ouverture, collision, verrou et toc toc identiques à une porte pleine. Images générées par

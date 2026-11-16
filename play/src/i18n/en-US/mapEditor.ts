@@ -495,7 +495,7 @@ const mapEditor: BaseTranslation = {
         floors: "Floor",
         walls: "Wall style",
         glazedDoor: "Glazed",
-        glazedDoorHint: "Horizontal doors only. Click a placed door to switch it.",
+        glazedDoorHint: "For new horizontal doors. Click a placed horizontal door to make it glazed or plain.",
         catalogLoading: "Checking the floor and wall catalogs...",
         catalogMissing: "The floor and wall catalogs are not available in this room.",
         status: {

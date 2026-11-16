@@ -439,11 +439,11 @@ describe("MapLayerEditorTool gestures", () => {
         expect(get(mapLayerStatusStore)).toBeUndefined();
     });
 
-    it("switches a placed door to the chosen variant in one operation", async () => {
+    it("flips a placed plain door to glazed in one operation, whatever the switch", async () => {
         placeDoor(false);
         await activate();
         mapLayerModeStore.set("door");
-        mapLayerDoorGlazedStore.set(true);
+        mapLayerDoorGlazedStore.set(false);
         clickDoor();
         const { created, deleted } = committedPieces();
         // The fixture has no joint at the end of the wall: the tool adds it on the way, it is not part of the switch.
@@ -455,11 +455,22 @@ describe("MapLayerEditorTool gestures", () => {
         expect(get(mapLayerStatusStore)).toBeUndefined();
     });
 
-    it("does nothing, without a message, on a door already of the chosen variant", async () => {
+    it("flips a placed glazed door back to plain, whatever the switch", async () => {
         placeDoor(true);
         await activate();
         mapLayerModeStore.set("door");
         mapLayerDoorGlazedStore.set(true);
+        clickDoor();
+        const { created, deleted } = committedPieces();
+        expect(created.filter((name) => !name.startsWith("raccord-"))).toEqual(["porte-h-blanc-d", "porte-h-blanc-g"]);
+        expect(deleted).toEqual(["porte-h-blanc-d-vitree", "porte-h-blanc-g-vitree"]);
+    });
+
+    it("leaves a placed plain door alone, without a message, when the catalog has no glazed pieces", async () => {
+        glazedDoorsInCatalog = false;
+        placeDoor(false);
+        await activate();
+        mapLayerModeStore.set("door");
         clickDoor();
         expect(modeManager.executeCommands.mock.calls).toHaveLength(0);
         expect(get(mapLayerStatusStore)).toBeUndefined();
@@ -477,11 +488,11 @@ describe("MapLayerEditorTool gestures", () => {
         expect(committedPieces().created.filter((name) => name.includes("vitree"))).toEqual([]);
     });
 
-    it("shows a door that a click would switch in green, on the door itself", async () => {
+    it("shows a door that a click would flip in green, on the door itself", async () => {
         placeDoor(false);
         await activate();
         mapLayerModeStore.set("door");
-        mapLayerDoorGlazedStore.set(true);
+        mapLayerDoorGlazedStore.set(false);
         previewGraphics.fillStyle.mockClear();
         previewGraphics.fillRect.mockClear();
         move(40, 80);
