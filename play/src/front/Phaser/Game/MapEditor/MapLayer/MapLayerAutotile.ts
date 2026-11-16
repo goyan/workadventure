@@ -178,13 +178,13 @@ export function computePlacements(model: MapLayerModel): MapLayerPlacement[] {
             placements.push(
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("h", tint, "g", undefined, false, height),
+                    doorPrefabName("h", tint, "g", undefined, false, height, door.glazed === true),
                     (door.x - 1) * size,
                     y,
                 ),
                 placement(
                     MAP_LAYER_DOOR_COLLECTION,
-                    doorPrefabName("h", tint, "d", undefined, false, height),
+                    doorPrefabName("h", tint, "d", undefined, false, height, door.glazed === true),
                     door.x * size,
                     y,
                 ),

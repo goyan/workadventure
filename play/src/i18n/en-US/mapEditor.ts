@@ -496,6 +496,9 @@ const mapEditor: BaseTranslation = {
         },
         floors: "Floor",
         walls: "Wall style",
+        glazedDoor: "Glazed",
+        glazedDoorHint:
+            "For new horizontal doors. Click a placed horizontal door to give it the settings above, or to make it glazed or plain when it has them.",
         heights: {
             wall: "Wall height",
             door: "Door height",

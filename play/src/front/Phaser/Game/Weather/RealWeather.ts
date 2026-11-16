@@ -27,6 +27,8 @@ export type RealWeatherState =
           cloudCover?: number;
           /** Where the wind comes from (degrees, 0 north), turned from that of the quarter hour before. */
           windFrom?: number;
+          /** Wind speed (km/h), changed from that of the quarter hour before. */
+          windSpeed?: number;
       }
     | { status: "unavailable" };
 
@@ -39,6 +41,12 @@ function turnedWind(before: number | undefined, now: number | undefined, elapsed
     const turn = ((now - before + 540) % 360) - 180;
     const share = Math.max(0, Math.min(1, elapsed / WIND_TURN_MS));
     return (before + turn * share + 360) % 360;
+}
+
+/** The wind speed from `before` to `now`, `elapsed` ms into the quarter hour, over the same ten minutes as its turn. */
+function changedWindSpeed(before: number | undefined, now: number | undefined, elapsed: number): number | undefined {
+    if (now === undefined || before === undefined) return now;
+    return before + (now - before) * Math.max(0, Math.min(1, elapsed / WIND_TURN_MS));
 }
 
 /**
@@ -58,6 +66,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const cloudiness = fadedCloudiness(clearBefore, clearNow, date.getTime() - now.slotAt);
     const raining = now.weather === WeatherType.Rain || now.weather === WeatherType.Storm;
     const windFrom = turnedWind(now.windFromBefore, now.windFrom, date.getTime() - now.slotAt);
+    const windSpeed = changedWindSpeed(now.windSpeedBefore, now.windSpeed, date.getTime() - now.slotAt);
     return {
         status: "known",
         weather: now.weather,
@@ -67,6 +76,7 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
         ...(cloudiness > 0 ? { cloudiness } : {}),
         ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
         ...(windFrom !== undefined ? { windFrom } : {}),
+        ...(windSpeed !== undefined ? { windSpeed } : {}),
     };
 }
 
@@ -91,6 +101,7 @@ export function withRealWeather(
                 cloudiness: real.cloudiness,
                 cloudCover: real.cloudCover,
                 windFrom: real.windFrom,
+                windSpeed: real.windSpeed,
                 weatherAuto,
                 weatherLocation,
             };

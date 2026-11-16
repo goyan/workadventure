@@ -552,6 +552,7 @@ export class DoorAnimator {
                                       frame,
                                       reverse,
                                       piece.height,
+                                      piece.glazed,
                                   ),
                               ),
                           ),

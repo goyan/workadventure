@@ -388,3 +388,71 @@ describe("DoorAnimator high doors", () => {
         expect(Array.from(animator.getLockedDoorMarkers([zone]).values())).toEqual([{ x: 160, y: 160 }]);
     });
 });
+
+describe("glazed doors", () => {
+    it("animates a glazed door with its glazed frames, both ways", async () => {
+        const name = "porte-h-gris-g-vitree";
+        const prefabId = mapLayerPrefabId("Carte Portes", name);
+        const entity = {
+            entityId: "glazed",
+            x: 128,
+            y: 160,
+            depth: 0,
+            texture: { key: `${name}.png` },
+            getPrefab: () => ({ collectionName: "Carte Portes", id: prefabId, imagePath: `${name}.png` }),
+            setDepth: () => entity,
+        } as unknown as Entity;
+        const asked: string[] = [];
+        const animator = new DoorAnimator(
+            {} as Phaser.Scene,
+            () => [entity],
+            (collectionName: string, id: string) => {
+                asked.push(id.split(":")[1]);
+                return Promise.resolve({ collectionName, id, imagePath: `${id}.png` } as never);
+            },
+            () => {},
+            () => {},
+            () => [],
+        );
+        animator.update(0, [], { x: 0, y: 0 });
+        await vi.waitFor(() => expect(asked).toHaveLength(14));
+        const frames = [0, 1, 2, 3, 4, 5, 6];
+        expect(asked.sort()).toEqual(
+            [...frames.map((frame) => `${name}-${frame}`), ...frames.map((frame) => `${name}-b${frame}`)].sort(),
+        );
+    });
+});
+
+describe("glazed high doors", () => {
+    it("animates a glazed door of height 2 with its glazed frames of that height", async () => {
+        const name = "porte-h-gris-g-vitree-h2";
+        const prefabId = mapLayerPrefabId("Carte Portes", name);
+        const entity = {
+            entityId: "glazed-high",
+            x: 128,
+            y: 128,
+            depth: 0,
+            texture: { key: `${name}.png` },
+            getPrefab: () => ({ collectionName: "Carte Portes", id: prefabId, imagePath: `${name}.png` }),
+            setDepth: () => entity,
+        } as unknown as Entity;
+        const asked: string[] = [];
+        const animator = new DoorAnimator(
+            {} as Phaser.Scene,
+            () => [entity],
+            (collectionName: string, id: string) => {
+                asked.push(id.split(":")[1]);
+                return Promise.resolve({ collectionName, id, imagePath: `${id}.png` } as unknown as EntityPrefab);
+            },
+            () => {},
+            () => {},
+            () => [],
+        );
+        animator.update(0, [], { x: 0, y: 0 });
+        await vi.waitFor(() => expect(asked).toHaveLength(14));
+        const frames = [0, 1, 2, 3, 4, 5, 6];
+        expect(asked.sort()).toEqual(
+            [...frames.map((frame) => `${name}-${frame}`), ...frames.map((frame) => `${name}-b${frame}`)].sort(),
+        );
+    });
+});

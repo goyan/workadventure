@@ -37,6 +37,17 @@ export interface DoorRef {
      * model always gives it the height 1.
      */
     height?: WallHeight;
+    /** A glazed door (horizontal only); absent for a plain one. */
+    glazed?: boolean;
+}
+
+/**
+ * A door as the model stores it: its height always told, the glazed flag only for a glazed horizontal door. The model
+ * replaces its entries instead of changing them: copies of a door read before a change keep what they were.
+ */
+function storedDoor(door: DoorRef, height: WallHeight, glazed: boolean): DoorRef {
+    const plain: DoorRef = { orientation: door.orientation, x: door.x, y: door.y, height };
+    return glazed && door.orientation === "h" ? { ...plain, glazed: true } : plain;
 }
 
 /** The height of a door, 1 when it does not tell. */
@@ -115,7 +126,7 @@ export class MapLayerModel {
         this.walls.set(edgeKey(orientation, x, y), { orientation, x, y, tint, height });
         const door = this.getDoorOn(orientation, x, y);
         if (door && doorHeight(door) > height) {
-            door.height = height;
+            this.doors.set(edgeKey(door.orientation, door.x, door.y), storedDoor(door, height, door.glazed === true));
         }
         const windowHeight = orientation === "h" ? this.windowHeights.get(edgeKey("h", x, y)) : undefined;
         if (windowHeight !== undefined && windowHeight > height) {
@@ -192,24 +203,36 @@ export class MapLayerModel {
             const wallHeight = this.lowerWallOf(door);
             height = doorHeight(door) > wallHeight ? wallHeight : doorHeight(door);
         }
-        this.doors.set(edgeKey(door.orientation, door.x, door.y), {
-            orientation: door.orientation,
-            x: door.x,
-            y: door.y,
-            height,
-        });
+        this.doors.set(edgeKey(door.orientation, door.x, door.y), storedDoor(door, height, door.glazed === true));
+        return true;
+    }
+
+    /**
+     * Makes the horizontal door centered on (door.x, door.y) glazed or plain, keeping its height. False without such a
+     * door, or for a vertical one (never glazed).
+     */
+    public setDoorGlazed(door: DoorRef, glazed: boolean): boolean {
+        const key = edgeKey(door.orientation, door.x, door.y);
+        const placed = this.doors.get(key);
+        if (!placed || placed.orientation !== "h") {
+            return false;
+        }
+        this.doors.set(key, storedDoor(placed, doorHeight(placed), glazed));
         return true;
     }
 
     /**
      * Changes the height of the horizontal door centered on the vertex of `door`, brought down to the height of the lower
-     * of its walls. A vertical door has no height.
+     * of its walls; a glazed door stays glazed. A vertical door has no height of its own.
      */
     public setDoorHeight(door: DoorRef, height: WallHeight): boolean {
         const placed = this.doors.get(edgeKey(door.orientation, door.x, door.y));
         if (!placed || placed.orientation !== "h") return false;
         const wallHeight = this.lowerWallOf(placed);
-        placed.height = height > wallHeight ? wallHeight : height;
+        this.doors.set(
+            edgeKey(placed.orientation, placed.x, placed.y),
+            storedDoor(placed, height > wallHeight ? wallHeight : height, placed.glazed === true),
+        );
         return true;
     }
 

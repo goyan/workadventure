@@ -17,7 +17,7 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
@@ -356,6 +356,26 @@
             label={$LL.menu.settings.clouds()}
             labelPosition="right"
         />
+        {#if $cloudsShownStore}
+            <div class="flex flex-col gap-1" data-testid="weather-clouds-height">
+                <span class="text-sm text-white">{$LL.menu.settings.cloudsHeight.label()}</span>
+                <div class="flex items-center gap-4">
+                    <span class="w-14 shrink-0 text-xs text-white/50">{$LL.menu.settings.cloudsHeight.low()}</span>
+                    <div class="grow">
+                        <RangeSlider
+                            id="weather-clouds-height"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            bind:value={$cloudsHeightStore}
+                        />
+                    </div>
+                    <span class="w-20 shrink-0 text-end text-xs text-white/50">
+                        {$LL.menu.settings.cloudsHeight.always()}
+                    </span>
+                </div>
+            </div>
+        {/if}
         <InputSwitch
             id="lamp-effects-enabled"
             bind:value={$lampEffectsEnabledStore}

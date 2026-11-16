@@ -37,6 +37,7 @@ const door: MapLayerPiece = {
     frame: 7,
     reverse: false,
     height: 1,
+    glazed: false,
 };
 
 describe("wallTargetAlpha", () => {

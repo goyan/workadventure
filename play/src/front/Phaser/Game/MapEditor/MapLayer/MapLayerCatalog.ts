@@ -176,7 +176,8 @@ export function lintelPrefabName(tint: WallTint, ends: FacadeEnds, wall: WallHei
 }
 
 /**
- * Name of a piece of a door; without `frame`, the closed door. The suffix of the height comes before the one of the frame.
+ * Name of a piece of a door; without `frame`, the closed door. A glazed door (horizontal only) has `-vitree` after its
+ * side; then comes the suffix of the height, then the one of the frame (`porte-h-gris-g-vitree-h2-b3`).
  * A horizontal door has its own height; a vertical door has the height of its wall (it is raised with its cap, to stay
  * seen from above).
  */
@@ -187,8 +188,10 @@ export function doorPrefabName(
     frame?: number,
     pushedTowardsViewer = false,
     height: WallHeight = 1,
+    glazed = false,
 ): string {
-    const base = `porte-${orientation}-${tint}-${side}${heightSuffix(height)}`;
+    const glazing = glazed && orientation === "h" ? "-vitree" : "";
+    const base = `porte-${orientation}-${tint}-${side}${glazing}${heightSuffix(height)}`;
     if (frame === undefined || frame === DOOR_CLOSED_FRAME) {
         return base;
     }
@@ -215,6 +218,7 @@ export type MapLayerPiece =
           frame: number;
           reverse: boolean;
           height: WallHeight;
+          glazed: boolean;
       };
 
 const TINTS = MAP_LAYER_WALL_TINTS.join("|");
@@ -226,7 +230,7 @@ const WINDOW_NAME = new RegExp(`^fenetre-(${TINTS})-(mid|left|right|single)${HEI
 const VERTICAL_NAME = new RegExp(`^mur-vertical-(${TINTS})${HEIGHT}$`);
 const END_NAME = new RegExp(`^bout-(${TINTS})${HEIGHT}$`);
 const LINTEL_NAME = new RegExp(`^linteau-(${TINTS})-(mid|left|right|single)-h([2-4])-o([1-3])$`);
-const DOOR_NAME = new RegExp(`^porte-(h|v)-(${TINTS})-(g|d|haut|bas)${HEIGHT}(?:-(b)?(\\d))?$`);
+const DOOR_NAME = new RegExp(`^porte-(h|v)-(${TINTS})-(g|d|haut|bas)(-vitree)?${HEIGHT}(?:-(b)?(\\d))?$`);
 const JOINT_NAME = new RegExp(`^raccord-(N?E?S?W?)${HEIGHT}$`);
 
 /** The height told by the suffix of a name (the regular expressions only let 2 to 4 through). */
@@ -292,11 +296,16 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
         if (!door) {
             return undefined;
         }
-        const frame = door[6] === undefined ? DOOR_CLOSED_FRAME : Number(door[6]);
-        if (door[6] !== undefined && frame >= DOOR_CLOSED_FRAME) {
+        const frame = door[7] === undefined ? DOOR_CLOSED_FRAME : Number(door[7]);
+        if (door[7] !== undefined && frame >= DOOR_CLOSED_FRAME) {
             return undefined;
         }
         const orientation = door[1] as "h" | "v";
+        const glazed = door[4] !== undefined;
+        // Seen from above, a vertical door is a line: it has no glazed variant.
+        if (glazed && orientation === "v") {
+            return undefined;
+        }
         const side = door[3] as DoorSide;
         if ((DOOR_SIDES[orientation] as readonly string[]).includes(side) === false) {
             return undefined;
@@ -307,8 +316,9 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
             tint: door[2] as WallTint,
             side,
             frame,
-            reverse: door[5] === "b",
-            height: readHeight(door[4]),
+            reverse: door[6] === "b",
+            height: readHeight(door[5]),
+            glazed,
         };
     }
     return undefined;

@@ -52,6 +52,8 @@ export interface MapSnowSettings {
     cloudCover?: number;
     /** Real weather only (never saved): where the wind comes from (degrees, 0 north), which moves the clouds. */
     windFrom?: number;
+    /** Real weather only (never saved): wind speed (km/h), which sets how fast the clouds go. */
+    windSpeed?: number;
 }
 
 /**

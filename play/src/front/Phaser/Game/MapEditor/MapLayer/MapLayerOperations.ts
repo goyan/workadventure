@@ -112,6 +112,7 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                               x: item.x / size + 1,
                               y: (item.y + wallRise(piece.height)) / size,
                               height: piece.height,
+                              ...(piece.glazed ? { glazed: true } : {}),
                           }
                         : {
                               orientation: "v",
@@ -430,6 +431,12 @@ export function doorPixelRect(door: DoorRef): { x: number; y: number; width: num
           };
 }
 
+/** The door placed on the wall segment under a world position, if any. */
+export function doorUnderPoint(model: MapLayerModel, worldX: number, worldY: number): DoorRef | undefined {
+    const wall = wallAtPoint(model, worldX, worldY);
+    return wall ? model.getDoorOn(wall.orientation, wall.x, wall.y) : undefined;
+}
+
 /** A door the cursor would place, and whether the walls under it allow it. */
 export interface DoorCandidate extends DoorRef {
     valid: boolean;
@@ -483,30 +490,66 @@ export function doorHeightFor(model: MapLayerModel, door: DoorRef, setting: Door
 }
 
 /**
- * What a click of the door mode does: place a door, give a placed horizontal door (same vertex) another height, or
- * nothing (no wall to take a door, or a placed door that already has that height).
+ * What a click of the door mode does: place a door, change a placed horizontal door (the one under the pointer), or
+ * nothing (no wall to take a door, nothing a click could change). A placed door gets the settings of the panel, its
+ * height (Auto or chosen) and glazed or plain; when it has them already, a click flips it, glazed to plain or plain to
+ * glazed, as long as the catalog has the glazed doors.
  */
 export interface DoorPlan {
     door: DoorRef;
     height: WallHeight;
+    glazed: boolean;
     action: "place" | "update" | "invalid";
 }
 
-export function planDoorAt(model: MapLayerModel, worldX: number, worldY: number, setting: DoorHeightSetting): DoorPlan {
+/** Settings of the door mode, besides the height: the glazed switch, and what the catalogs have. */
+export interface DoorPlanOptions {
+    /** The switch of the panel, the glazed doors being in the catalog: whether new doors are glazed. */
+    glazed?: boolean;
+    /** Whether the catalog has the glazed doors (a plain door can only be made glazed then). */
+    glazedAvailable?: boolean;
+    /** Heights the catalogs have for the plain and the glazed doors; a door of another height goes back to 1. */
+    heightsAvailable?: (glazed: boolean) => readonly WallHeight[];
+}
+
+export function planDoorAt(
+    model: MapLayerModel,
+    worldX: number,
+    worldY: number,
+    setting: DoorHeightSetting,
+    options: DoorPlanOptions = {},
+): DoorPlan {
+    const heightOf = (door: DoorRef, glazed: boolean): WallHeight => {
+        const height = doorHeightFor(model, door, setting);
+        return options.heightsAvailable && !options.heightsAvailable(glazed).includes(height) ? 1 : height;
+    };
     const candidate = doorCandidateAt(model, worldX, worldY);
-    const door: DoorRef = { orientation: candidate.orientation, x: candidate.x, y: candidate.y };
-    const height = doorHeightFor(model, door, setting);
-    if (candidate.valid) return { door, height, action: "place" };
-    const placed = model.hasDoorAt(door.orientation, door.x, door.y)
-        ? model.getDoorOn(door.orientation, door.x, door.y)
-        : undefined;
-    const update = placed !== undefined && placed.orientation === "h" && doorHeight(placed) !== height;
-    return { door, height, action: update ? "update" : "invalid" };
+    if (candidate.valid) {
+        const door: DoorRef = { orientation: candidate.orientation, x: candidate.x, y: candidate.y };
+        const glazed = door.orientation === "h" && options.glazed === true;
+        return { door, height: heightOf(door, glazed), glazed, action: "place" };
+    }
+    const placed = doorUnderPoint(model, worldX, worldY);
+    if (placed?.orientation !== "h") {
+        const door: DoorRef = { orientation: candidate.orientation, x: candidate.x, y: candidate.y };
+        return { door, height: doorHeightFor(model, door, setting), glazed: false, action: "invalid" };
+    }
+    const door: DoorRef = { orientation: "h", x: placed.x, y: placed.y };
+    const wasGlazed = placed.glazed === true;
+    const glazed = options.glazed === true;
+    const height = heightOf(placed, glazed);
+    if (height !== doorHeight(placed) || glazed !== wasGlazed) return { door, height, glazed, action: "update" };
+    // The door has the settings already: a click flips it.
+    if (!wasGlazed && options.glazedAvailable !== true) return { door, height, glazed, action: "invalid" };
+    return { door, height: heightOf(placed, !wasGlazed), glazed: !wasGlazed, action: "update" };
 }
 
 export function applyDoorPlan(model: MapLayerModel, plan: DoorPlan, bounds: MapBounds): void {
-    if (plan.action === "place") applyDoor(model, { ...plan.door, height: plan.height }, bounds);
-    if (plan.action === "update") model.setDoorHeight(plan.door, plan.height);
+    if (plan.action === "place") applyDoor(model, { ...plan.door, height: plan.height, glazed: plan.glazed }, bounds);
+    if (plan.action === "update") {
+        model.setDoorGlazed(plan.door, plan.glazed);
+        model.setDoorHeight(plan.door, plan.height);
+    }
 }
 
 /** Sets a door and gives its horizontal segments the floor of the room, unless they already have one. */

@@ -477,6 +477,18 @@ describe("manual camera pan", () => {
         expect(get(cameraDetachedStore)).toBe(false);
     });
 
+    it("in a focus zone, brings a dragged view back on the zone, not on the avatar, when the avatar moves", () => {
+        const { camera, manager, limits } = setup();
+        limits.focusTarget = { x: 600, y: 500 };
+        manager.startManualPan();
+        manager.panBy(300, 200);
+        camera.preRender();
+        manager.resumePlayerFollow();
+        camera.preRender();
+        expect({ x: camera.midPoint.x, y: camera.midPoint.y }).toEqual({ x: 600, y: 500 });
+        expect(get(cameraDetachedStore)).toBe(false);
+    });
+
     it("keeps layout offsets out of a detached view and restores them when recentering", () => {
         const game = document.createElement("div");
         game.id = "game";

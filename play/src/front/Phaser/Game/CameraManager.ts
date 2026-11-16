@@ -828,9 +828,11 @@ export class CameraManager extends EventEmitter {
     }
 
     public resumePlayerFollow(): void {
-        if (this.manuallyDetached) {
-            this.startFollowPlayer(this.scene.CurrentPlayer, 500);
-        }
+        if (!this.manuallyDetached) return;
+        // Still in a focus zone: back on the zone as it was framed, not on the avatar.
+        const focus = this.waScaleManager.getFocusTarget();
+        if (focus) this.animateToFocus({ x: focus.x, y: focus.y }, 500);
+        else this.startFollowPlayer(this.scene.CurrentPlayer, 500);
     }
 
     private setManuallyDetached(detached: boolean): void {

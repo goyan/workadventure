@@ -20,6 +20,7 @@ import {
 import type { WallHeight } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import { MapLayerModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
 import { computePlacements } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerAutotile";
+import { applyHeight } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerHeightEdit";
 import {
     applyDoor,
     applyFloor,
@@ -128,6 +129,7 @@ describe("wall heights: parsing", () => {
             frame: 3,
             reverse: true,
             height: 2,
+            glazed: false,
         });
         expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-d")).toMatchObject({ frame: 7, height: 1 });
         expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-v-gris-haut")).toMatchObject({ height: 1 });
@@ -684,5 +686,78 @@ describe("door heights: Auto, and a door set again on a placed door", () => {
         expect(plan).toMatchObject({ action: "place", height: 1, door: { orientation: "v", x: 6, y: 3 } });
         applyDoorPlan(model, plan, bounds);
         expect(planDoorAt(model, 6 * 32, 3 * 32 + 12, 3).action).toBe("invalid");
+    });
+});
+
+describe("glazed high doors", () => {
+    it("names and reads a glazed door of a height, glazed before the height, the height before the frame", () => {
+        expect(doorPrefabName("h", "gris", "g", undefined, false, 2, true)).toBe("porte-h-gris-g-vitree-h2");
+        expect(doorPrefabName("h", "gris", "d", 3, true, 3, true)).toBe("porte-h-gris-d-vitree-h3-b3");
+        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-d-vitree-h3-b3")).toEqual({
+            kind: "door",
+            orientation: "h",
+            tint: "gris",
+            side: "d",
+            frame: 3,
+            reverse: true,
+            height: 3,
+            glazed: true,
+        });
+        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-g-h2-vitree")).toBeUndefined();
+        expect(read(MAP_LAYER_DOOR_COLLECTION, "porte-v-gris-haut-vitree-h2")).toBeUndefined();
+    });
+
+    it("draws a glazed door of 2 in a wall of 4 under its lintels, and reads it back in both orders", () => {
+        const model = new MapLayerModel();
+        for (let x = 1; x < 5; x++) model.setWall("h", x, 3, "gris", 4);
+        expect(model.setDoor({ orientation: "h", x: 3, y: 3, height: 2, glazed: true })).toBe(true);
+        const items = names(model);
+        expect(items).toContain("porte-h-gris-g-vitree-h2@64,64");
+        expect(items).toContain("porte-h-gris-d-vitree-h2@96,64");
+        expect(items.filter((name) => name.startsWith("linteau"))).toEqual([
+            "linteau-gris-mid-h4-o2@64,0",
+            "linteau-gris-mid-h4-o2@96,0",
+        ]);
+        const placements = computePlacements(model);
+        for (const order of [placements, [...placements].reverse()]) {
+            const rebuilt = modelFromPlacedPrefabs(order);
+            expect([...rebuilt.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: 2, glazed: true }]);
+            expect(names(rebuilt)).toEqual(items);
+        }
+    });
+
+    it("keeps a door glazed when its height changes, and its height when it is made plain", () => {
+        const model = new MapLayerModel();
+        for (let x = 1; x < 5; x++) model.setWall("h", x, 3, "gris", 4);
+        model.setDoor({ orientation: "h", x: 3, y: 3, height: 2, glazed: true });
+        applyHeight(model, [{ kind: "door", door: { orientation: "h", x: 3, y: 3 } }], 3);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: 3, glazed: true }]);
+        model.setDoorGlazed({ orientation: "h", x: 3, y: 3 }, false);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: 3 }]);
+        // Lowering the wall lowers the glazed door, which stays glazed.
+        model.setDoorGlazed({ orientation: "h", x: 3, y: 3 }, true);
+        model.setWall("h", 2, 3, "gris", 2);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 3, y: 3, height: 2, glazed: true }]);
+    });
+
+    it("applies the settings of the panel to a placed door, or flips it when it has them", () => {
+        const model = new MapLayerModel();
+        for (let x = 1; x < 5; x++) model.setWall("h", x, 3, "gris", 4);
+        model.setDoor({ orientation: "h", x: 3, y: 3, height: 1 });
+        const at = { x: 3 * 32 - 10, y: 3 * 32 + 20 };
+        const options = { glazed: true, glazedAvailable: true };
+        expect(planDoorAt(model, at.x, at.y, "auto", options)).toMatchObject({
+            action: "update",
+            height: 2,
+            glazed: true,
+        });
+        model.setDoorHeight({ orientation: "h", x: 3, y: 3 }, 2);
+        model.setDoorGlazed({ orientation: "h", x: 3, y: 3 }, true);
+        // It has the settings already: the click flips it, as without heights.
+        expect(planDoorAt(model, at.x, at.y, "auto", options)).toMatchObject({
+            action: "update",
+            height: 2,
+            glazed: false,
+        });
     });
 });

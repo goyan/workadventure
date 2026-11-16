@@ -50,6 +50,27 @@ describe("door prefabs", () => {
         expect(doorPrefabName("v", "gris", "haut", 2, true)).toBe("porte-v-gris-haut-b2");
         expect(doorPrefabName("v", "gris", "haut", 7, true)).toBe("porte-v-gris-haut");
     });
+
+    it("names and reads glazed horizontal doors, never glazed vertical ones", () => {
+        const read = (name: string) => parseMapLayerPrefab("Carte Portes", mapLayerPrefabId("Carte Portes", name));
+        expect(doorPrefabName("h", "gris", "g", undefined, false, 1, true)).toBe("porte-h-gris-g-vitree");
+        expect(doorPrefabName("h", "gris", "d", 3, true, 1, true)).toBe("porte-h-gris-d-vitree-b3");
+        expect(doorPrefabName("h", "gris", "g", 3)).toBe("porte-h-gris-g-3");
+        expect(read("porte-h-gris-d-vitree-b3")).toEqual({
+            kind: "door",
+            orientation: "h",
+            tint: "gris",
+            side: "d",
+            frame: 3,
+            reverse: true,
+            height: 1,
+            glazed: true,
+        });
+        expect(read("porte-h-gris-g-vitree")).toMatchObject({ frame: 7, glazed: true });
+        expect(read("porte-h-gris-g")).toMatchObject({ glazed: false });
+        expect(read("porte-v-gris-haut-vitree")).toBeUndefined();
+        expect(read("porte-h-gris-g-vitree-7")).toBeUndefined();
+    });
 });
 
 describe("doors", () => {

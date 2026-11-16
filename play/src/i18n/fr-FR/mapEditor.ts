@@ -507,6 +507,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         floors: "Sol",
         walls: "Style de mur",
+        glazedDoor: "Vitrée",
+        glazedDoorHint:
+            "Pour les nouvelles portes horizontales. Cliquez sur une porte horizontale posée pour lui donner ces réglages, ou pour la rendre vitrée ou pleine si elle les a déjà.",
         heights: {
             wall: "Hauteur du mur",
             door: "Hauteur de la porte",

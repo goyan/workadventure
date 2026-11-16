@@ -1617,7 +1617,7 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
 - Déplacer : en mode « Fenêtre », appuyer sur une fenêtre posée et la glisser ; au relâcher elle passe sur le segment
   visé s'il peut la recevoir (mur horizontal libre, même sur un autre mur), sinon elle reste (« windowInvalid »). Les
   murs ne bougent pas ; relâcher sur son propre segment ne fait rien. Un déplacement = une entrée d'annulation.
-- On voit à travers : la vitre de l'image est semi-transparente (alpha 128). Ce que la façade cache (avatar collé au mur
+- On voit à travers : la vitre de l'image est semi-transparente (bleu ciel `#90d6f1`, bande `#579be1` en haut, alpha 180). Ce que la façade cache (avatar collé au mur
   côté nord, haut d'un meuble, sol de la pièce derrière) apparaît dans la vitre ; aucun code de rendu dédié.
 - Stockage : une entité WAM de la collection `Carte Fenêtres` (`fenetre-<teinte>-<bout>`, mêmes bouts, place, collision et
   profondeur que la façade qu'elle remplace). Le mur reste dans le modèle sous la fenêtre (`MapLayerModel.setWindow`) :
@@ -1702,6 +1702,26 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   façades, raccords de bout d'un mur de hauteur 1 sur le débord de 6 px de sa façade, linteau sur le chapeau de sa porte ou de sa fenêtre (12 px), bout d'un mur vertical
   haut sur la façade d'un mur plus bas, porte verticale sous un T sur la face du mur du dessus ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
+
+Portes vitrées (interrupteur « Vitrée » du mode Porte) :
+
+- Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre claire (bleu et
+  bande des fenêtres, mais 45 % d'opacité, avec un reflet en diagonale), poignée et cadre gardés ; on voit nettement à
+  travers, même porte entrouverte. Une porte
+  verticale reste pleine (vue de dessus, c'est un trait).
+- Interrupteur éteint par défaut, gardé le temps de la page : il choisit la variante des **nouvelles** portes
+  horizontales. Un clic sur une porte horizontale déjà posée lui donne les réglages du panneau (vitrée ou pleine selon
+  l'interrupteur, hauteur Auto ou choisie) ; si elle les a déjà, il l'inverse (pleine ↔ vitrée), comme avant les murs
+  hauts (aperçu vert sur la porte, une entrée d'annulation). Grisé quand le catalogue de la salle n'a pas les portes vitrées :
+  les nouvelles portes sont alors pleines et un clic ne rend pas vitrée une porte pleine.
+- Stockage : `DoorRef.glazed` (absent pour une porte pleine), porté par le nom des pièces
+  `porte-h-<teinte>-<g|d>-vitree` puis le suffixe d'image (`-3`, `-b3`) ; une porte verticale vitrée n'existe pas.
+  Ouverture, collision, verrou et toc toc identiques à une porte pleine. Images générées par
+  `tools/build_door_prefabs.mjs` du dépôt infra.
+- Avec les murs hauts : vitrée et hauteur sont indépendantes, `porte-h-<teinte>-<g|d>-vitree-h<M>` (vitree, puis la
+  hauteur, puis l'image). Une porte vitrée de hauteur M n'est proposée que si le catalogue a
+  `porte-h-<teinte>-g-vitree-h<M>`, sinon elle retombe à la hauteur 1. Changer la hauteur d'une porte vitrée (mode
+  Hauteur, mur abaissé) la laisse vitrée ; dehors, fondu et profondeur : comme la porte pleine de même hauteur.
 
 ## Confirmation avant de libérer son bureau
 

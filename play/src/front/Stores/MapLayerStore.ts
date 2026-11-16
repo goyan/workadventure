@@ -43,6 +43,8 @@ export const mapLayerHeightRequestStore = writable<WallHeight | undefined>(undef
 /** Heights whose pieces the loaded catalogs have (1 is always there). */
 export const mapLayerWallHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
 export const mapLayerDoorHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
+/** Heights the door catalog has for the glazed doors (`porte-h-<teinte>-g-vitree-hN`); a glazed door of another height goes back to 1. */
+export const mapLayerGlazedDoorHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
 export const mapLayerWindowHeightsAvailableStore = writable<readonly WallHeight[]>([1]);
 
 /** Image URL of a sample of each floor family and wall tint, shown in the panel. Filled once the catalogs are loaded. */
@@ -54,6 +56,12 @@ export const mapLayerCatalogAvailableStore = writable<boolean | undefined>(undef
 
 /** Whether the door catalog is loaded in the current room: the door mode is disabled without it. */
 export const mapLayerDoorsAvailableStore = writable<boolean>(false);
+
+/** Whether the door catalog of the current room has the glazed doors: the "Glazed" switch is disabled without them. */
+export const mapLayerGlazedDoorsAvailableStore = writable<boolean>(false);
+
+/** Whether the door mode places glazed horizontal doors; kept for the page, like the wall tint. */
+export const mapLayerDoorGlazedStore = writable<boolean>(false);
 
 /** Whether the window catalog is loaded in the current room: the window mode is disabled without it. */
 export const mapLayerWindowsAvailableStore = writable<boolean>(false);

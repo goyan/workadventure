@@ -8,6 +8,9 @@ import {
     mapLayerCatalogAvailableStore,
     mapLayerDoorHeightStore,
     mapLayerDoorHeightsAvailableStore,
+    mapLayerDoorGlazedStore,
+    mapLayerGlazedDoorHeightsAvailableStore,
+    mapLayerGlazedDoorsAvailableStore,
     mapLayerDoorsAvailableStore,
     mapLayerHeightRequestStore,
     mapLayerHeightSelectionStore,
@@ -57,7 +60,6 @@ import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLay
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
 import { cellKey } from "../MapLayer/MapLayerModel";
 import {
-    DOOR_AUTO_MAX_HEIGHT,
     applyDoorPlan,
     applyFloor,
     applyRoom,
@@ -67,6 +69,7 @@ import {
     moveWindow,
     cellsBetween,
     doorPixelRect,
+    doorUnderPoint,
     eraseAt,
     eraseTargetAt,
     floodFillCells,
@@ -77,7 +80,7 @@ import {
     vertexAt,
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
-import type { DoorHeightSetting, MapBounds, Point } from "../MapLayer/MapLayerOperations";
+import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MapEditorTool } from "./MapEditorTool";
 
 /** The chosen height, or 1 when the catalogs of the room do not have its pieces. */
@@ -253,8 +256,10 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerCatalogAvailableStore.set(undefined);
         // The doors of the previous room must not stay available while this room's catalogs are checked.
         mapLayerDoorsAvailableStore.set(false);
+        mapLayerGlazedDoorsAvailableStore.set(false);
         mapLayerWindowsAvailableStore.set(false);
         mapLayerWallHeightsAvailableStore.set([1]);
+        mapLayerGlazedDoorHeightsAvailableStore.set([1]);
         mapLayerDoorHeightsAvailableStore.set([1]);
         mapLayerWindowHeightsAvailableStore.set([1]);
         const manager = this.scene.getEntitiesCollectionsManager();
@@ -278,6 +283,17 @@ export class MapLayerEditorTool extends MapEditorTool {
         mapLayerDoorsAvailableStore.set(door !== undefined);
         // The door button is disabled without doors: leave a mode that could not draw anything.
         if (door === undefined && get(mapLayerModeStore) === "door") mapLayerModeStore.set("wall");
+        // The glazed doors are optional within the doors: without them the switch is off and doors are plain.
+        const glazedDoor =
+            door &&
+            (await manager.getEntityPrefab(
+                MAP_LAYER_DOOR_COLLECTION,
+                mapLayerPrefabId(
+                    MAP_LAYER_DOOR_COLLECTION,
+                    doorPrefabName("h", "blanc", "g", undefined, false, 1, true),
+                ),
+            ));
+        mapLayerGlazedDoorsAvailableStore.set(glazedDoor !== undefined);
         // The windows are optional too.
         const glazing = await manager.getEntityPrefab(
             MAP_LAYER_WINDOW_COLLECTION,
@@ -296,7 +312,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             );
             return MAP_LAYER_WALL_HEIGHTS.filter((_, index) => found[index]);
         };
-        const [wallHeights, doorHeights, windowHeights] = await Promise.all([
+        const [wallHeights, doorHeights, windowHeights, glazedDoorHeights] = await Promise.all([
             heightsWith((height) => [
                 MAP_LAYER_WALL_COLLECTION,
                 mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, facadePrefabName(tint, "mid", height)),
@@ -316,9 +332,20 @@ export class MapLayerEditorTool extends MapEditorTool {
                       MAP_LAYER_WINDOW_COLLECTION,
                       mapLayerPrefabId(MAP_LAYER_WINDOW_COLLECTION, windowPrefabName(tint, "mid", height)),
                   ]),
+            // A glazed door of a height is offered when the catalog has it (`porte-h-<teinte>-g-vitree-hN`).
+            glazedDoor === undefined
+                ? Promise.resolve<WallHeight[]>([1])
+                : heightsWith((height) => [
+                      MAP_LAYER_DOOR_COLLECTION,
+                      mapLayerPrefabId(
+                          MAP_LAYER_DOOR_COLLECTION,
+                          doorPrefabName("h", tint, "g", undefined, false, height, true),
+                      ),
+                  ]),
         ]);
         mapLayerWallHeightsAvailableStore.set(wallHeights);
         mapLayerDoorHeightsAvailableStore.set(doorHeights);
+        mapLayerGlazedDoorHeightsAvailableStore.set(glazedDoorHeights);
         mapLayerWindowHeightsAvailableStore.set(windowHeights);
         // A height the catalogs do not have goes back to 1.
         mapLayerWallHeightStore.update((height) => availableHeight(height, wallHeights));
@@ -480,7 +507,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.clearPreview();
         if (operation) {
             this.commit(operation);
-        } else if (mode === "door") {
+        } else if (mode === "door" && !this.onPlacedDoor(gesture)) {
             mapLayerStatusStore.set("doorInvalid");
         } else if (mode === "window" && !this.droppedInPlace(gesture)) {
             mapLayerStatusStore.set("windowInvalid");
@@ -582,14 +609,16 @@ export class MapLayerEditorTool extends MapEditorTool {
                     return;
                 };
             case "door": {
-                // A new door, or another height for the door already placed there; the model of the commit is read again.
-                const plan = planDoorAt(gesture.baseModel, worldPath.end.x, worldPath.end.y, doorSetting);
+                // A new door, or the settings of the panel (height, glazed) for the door placed there, or a flip of a
+                // door that has them already; the model of the commit is read again.
+                const options = this.doorPlanOptions();
+                const plan = planDoorAt(gesture.baseModel, worldPath.end.x, worldPath.end.y, doorSetting, options);
                 return plan.action === "invalid"
                     ? undefined
                     : (model, bounds) =>
                           applyDoorPlan(
                               model,
-                              planDoorAt(model, worldPath.end.x, worldPath.end.y, doorSetting),
+                              planDoorAt(model, worldPath.end.x, worldPath.end.y, doorSetting, options),
                               bounds,
                           );
             }
@@ -804,20 +833,37 @@ export class MapLayerEditorTool extends MapEditorTool {
         }
     }
 
-    /** The two segments the door would replace: green when it can be placed there, red when it cannot. */
-    /** The two segments the door would replace (or the door whose height would change): green, or red when it cannot. */
+    /**
+     * The door a click would place (or the placed door it would change): green when the click does something, red when
+     * it does not.
+     */
     private drawDoorPreview(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
-        const plan = planDoorAt(model, world.x, world.y, this.doorHeightSetting());
+        const plan = planDoorAt(model, world.x, world.y, this.doorHeightSetting(), this.doorPlanOptions());
         const { x, y, width, height } = doorPixelRect(plan.door);
         graphics.fillStyle(plan.action !== "invalid" ? 0x2ecc71 : 0xff3b30, 0.45).fillRect(x, y, width, height);
     }
 
-    /** The height setting of the doors, an explicit height the catalogs do not have going back to 1. */
+    /** The height setting of the doors: Auto, or the chosen height (one the catalogs lack goes back to 1 in the plan). */
     private doorHeightSetting(): DoorHeightSetting {
-        const available = get(mapLayerDoorHeightsAvailableStore);
-        const setting = get(mapLayerDoorHeightStore);
-        if (setting === "auto") return available.includes(DOOR_AUTO_MAX_HEIGHT) ? "auto" : 1;
-        return availableHeight(setting, available);
+        return get(mapLayerDoorHeightStore);
+    }
+
+    /** The glazed switch and what the catalogs have, for the plan of a door-mode click. */
+    private doorPlanOptions(): DoorPlanOptions {
+        const glazedAvailable = get(mapLayerGlazedDoorsAvailableStore);
+        const plain = get(mapLayerDoorHeightsAvailableStore);
+        const glazedHeights = get(mapLayerGlazedDoorHeightsAvailableStore);
+        return {
+            glazed: get(mapLayerDoorGlazedStore) && glazedAvailable,
+            glazedAvailable,
+            heightsAvailable: (glazed) => (glazed ? glazedHeights : plain),
+        };
+    }
+
+    /** Whether a door-mode click hit a placed horizontal door: it changes or flips it, or explains nothing when it cannot. */
+    private onPlacedDoor(gesture: Gesture): boolean {
+        const door = doorUnderPoint(gesture.baseModel, gesture.currentWorld.x, gesture.currentWorld.y);
+        return door?.orientation === "h";
     }
 
     /** The segments a window drag passes over: green where a window can go, red where it cannot. */
