@@ -1680,12 +1680,18 @@ Murs hauts (réglage « Hauteur » de l'outil Carte) :
   s'estompe : la suite continue de segments horizontaux de la même ligne, du côté de cet espace seulement (une partie
   du mur qui borde une autre pièce au nord reste opaque ; une portion de hauteur 1 ne s'estompe pas mais ne coupe pas
   la suite). Un mur vertical haut ne s'estompe que si son chapeau passe sur le corps de l'avatar, à 16 px de sa ligne.
-  Sans grille du dehors, seule la géométrie compte.
+  Sans grille du dehors, seule la géométrie compte. Un raccord droit (`raccord-EW`, toute hauteur) est posé sur les
+  chapeaux de ses deux façades, dessinés à l'identique : translucide par-dessus, il ferait un carré plus clair (deux
+  images à 45 ou 55 % superposées) ; il est donc invisible tant que son mur est estompé et revient à 1 au moment où les
+  façades y reviennent.
   Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
   s'oublie dehors.
 - Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
   l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
-  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; superpositions
+  translucides restantes (dessins différents, non corrigées) : raccords d'angle, de T, de croix et de bout sur le chapeau
+  et le débord de 6 px des façades, linteau sur le chapeau de sa porte ou de sa fenêtre (12 px), bout d'un mur vertical
+  haut sur la façade d'un mur plus bas, porte verticale sous un T sur la face du mur du dessus ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
   dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
 
 ## Confirmation avant de libérer son bureau

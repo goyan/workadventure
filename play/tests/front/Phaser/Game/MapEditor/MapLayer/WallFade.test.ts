@@ -65,6 +65,9 @@ interface FakeWall extends FadableWall {
     name: string;
 }
 
+/** A straight joint (`raccord-EW`, at any height): drawn over the caps of the two facades it joins. */
+const isStraight = (wall: FakeWall): boolean => /^raccord-EW(-h\d)?$/.test(wall.name);
+
 /** The walls of a closed room (cells 5 to 8 by 6 to 8) of the given height, with a door of height 1 on its south wall. */
 function room(height: WallHeight) {
     const model = new MapLayerModel();
@@ -225,7 +228,10 @@ describe("WallFade", () => {
         const { fade, walls, facade, setEditor } = setup(2);
         setEditor(true);
         fade.update(WALL_FADE_MS);
-        expect(walls.every((wall) => Math.abs(wall.alpha - WALL_EDIT_ALPHA) < 1e-6)).toBe(true);
+        // The straight joints are hidden over the caps of their facades (see "pieces drawn over the same cap").
+        expect(walls.every((wall) => Math.abs(wall.alpha - (isStraight(wall) ? 0 : WALL_EDIT_ALPHA)) < 1e-6)).toBe(
+            true,
+        );
         setEditor(false);
         fade.update(WALL_FADE_MS);
         expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
@@ -346,7 +352,8 @@ describe("WallFade: vertical walls and their joints", () => {
             (wall) => wall.name.startsWith("raccord-") && wall.y === 9 * 32 - 32 && !isJointWithoutEastWest(wall),
         );
         expect(southJoints.length).toBeGreaterThan(0);
-        for (const joint of southJoints) expect(joint.alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+        // The straight ones are hidden over the caps of the facades, the corners keep the opacity of the wall.
+        for (const joint of southJoints) expect(joint.alpha).toBeCloseTo(isStraight(joint) ? 0 : WALL_ROOM_ALPHA, 6);
     });
 
     it("leaves the joints of the side walls of a high room opaque, like their strips", () => {
@@ -378,7 +385,10 @@ describe("WallFade: the high wall the player walks behind", () => {
         // Behind its second segment: north of its foot (y = 352), under the top of its image (y = 256).
         const scene = settle(model, { x: 3 * 32 + 16, y: 300 });
         expect(scene.alphaOf((wall) => wall.name.startsWith("facade"))).toEqual(Array(8).fill(WALL_ROOM_ALPHA));
-        expect(scene.alphaOf((wall) => wall.name.startsWith("raccord"))).toEqual(Array(9).fill(WALL_ROOM_ALPHA));
+        expect(scene.alphaOf((wall) => wall.name.startsWith("raccord") && !isStraight(wall))).toEqual(
+            Array(2).fill(WALL_ROOM_ALPHA),
+        );
+        expect(scene.alphaOf(isStraight)).toEqual(Array(7).fill(0));
         scene.moveTo({ x: 3 * 32 + 16, y: 200 });
         expect(scene.walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
     });
@@ -401,5 +411,51 @@ describe("WallFade: the high wall the player walks behind", () => {
             wall.x === 5 * 32 - 6 && (wall.name.startsWith("mur-vertical") || isJointWithoutEastWest(wall));
         expect(scene.walls.filter(shared).length).toBeGreaterThan(0);
         expect(scene.alphaOf(shared).every((alpha) => alpha === 1)).toBe(true);
+    });
+});
+
+describe("WallFade: pieces drawn over the same cap", () => {
+    /** A straight wall of height 3 on the line 10, columns 2 to 9, alone outdoors. */
+    function straightWall() {
+        const model = new MapLayerModel();
+        for (let x = 2; x < 10; x++) model.setWall("h", x, 10, "gris", 3);
+        return model;
+    }
+
+    it("hides the straight joints of a faded wall: the caps of the facades under them are the same", () => {
+        // Behind the wall: it fades.
+        const scene = settle(straightWall(), { x: 3 * 32 + 16, y: 300 });
+        expect(scene.alphaOf(isStraight)).toEqual(Array(7).fill(0));
+        expect(scene.alphaOf((wall) => wall.name.startsWith("facade"))).toEqual(Array(8).fill(WALL_ROOM_ALPHA));
+        // The joints at the ends of the wall draw its closing outline: they keep the opacity of the wall.
+        expect(scene.alphaOf((wall) => /^raccord-[EW]-h3$/.test(wall.name))).toEqual([
+            WALL_ROOM_ALPHA,
+            WALL_ROOM_ALPHA,
+        ]);
+        // North of the top of the wall: opaque again, every piece at 1.
+        scene.moveTo({ x: 3 * 32 + 16, y: 200 });
+        expect(scene.walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
+    });
+
+    it("hides them in the editor too, and shows them again only once the facades are opaque", () => {
+        const { walls, grid } = sceneOf(straightWall());
+        let editorOpen = true;
+        const fade = new WallFade(
+            () => walls,
+            () => grid,
+            () => ({ x: 400, y: 600 }),
+            () => editorOpen,
+            () => undefined,
+        );
+        fade.update(WALL_FADE_MS);
+        expect(walls.filter(isStraight).every((wall) => wall.alpha === 0)).toBe(true);
+        expect(walls.find((wall) => wall.name.startsWith("facade"))?.alpha).toBeCloseTo(WALL_EDIT_ALPHA, 6);
+        editorOpen = false;
+        fade.update(WALL_FADE_MS / 2);
+        // Half way: the facades are still see-through, the joints stay hidden (no brighter square over the cap).
+        expect(walls.find((wall) => wall.name.startsWith("facade"))?.alpha).toBeLessThan(1);
+        expect(walls.filter(isStraight).every((wall) => wall.alpha === 0)).toBe(true);
+        fade.update(WALL_FADE_MS / 2);
+        expect(walls.every((wall) => Math.abs(wall.alpha - 1) < 1e-6)).toBe(true);
     });
 });

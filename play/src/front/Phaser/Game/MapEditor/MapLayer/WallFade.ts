@@ -223,6 +223,10 @@ interface FadeEntry {
     elapsed: number;
     /** A piece that appeared on the map takes its opacity at once, with no fade. */
     snap: boolean;
+    /** A straight joint (arms E and W only): drawn over the caps of its two facades, the same as them. */
+    overCap: boolean;
+    /** Opacity of the piece in the fade; the one drawn differs for a hidden straight joint (`overCap`). */
+    opacity: number;
 }
 
 /**
@@ -323,13 +327,10 @@ export class WallFade {
                     entry.snap = false;
                     entry.target = target;
                     entry.elapsed = WALL_FADE_MS;
-                    if (Math.abs(entry.wall.alpha - target) >= 1e-6) {
-                        entry.wall.setAlpha(target);
-                        redraw = true;
-                    }
+                    if (this.show(entry, target)) redraw = true;
                 } else if (target !== entry.target) {
                     entry.target = target;
-                    entry.from = entry.wall.alpha;
+                    entry.from = this.current(entry);
                     entry.elapsed = 0;
                 }
             }
@@ -353,18 +354,36 @@ export class WallFade {
         if (redraw) this.markDirty();
     }
 
-    /** Moves the opacity of a piece one step towards its target. Returns whether it changed. */
+    /** Moves the opacity of a piece one step towards its target. Returns whether what is drawn changed. */
     private step(entry: FadeEntry, deltaMs: number): boolean {
-        const alpha = entry.wall.alpha;
-        if (Math.abs(alpha - entry.target) < 1e-6) return false;
+        const value = this.current(entry);
+        // At its target: only keep what is drawn in line (someone else may have reset a hidden joint).
+        if (Math.abs(value - entry.target) < 1e-6) return this.show(entry, value);
         if (entry.elapsed >= WALL_FADE_MS) {
             // Someone else changed the opacity (the editor resets it when it dims the other entities): fade back.
-            entry.from = alpha;
+            entry.from = value;
             entry.elapsed = 0;
         }
         entry.elapsed = Math.min(WALL_FADE_MS, entry.elapsed + deltaMs);
         const progress = entry.elapsed / WALL_FADE_MS;
-        entry.wall.setAlpha(progress >= 1 ? entry.target : entry.from + (entry.target - entry.from) * progress);
+        return this.show(entry, progress >= 1 ? entry.target : entry.from + (entry.target - entry.from) * progress);
+    }
+
+    /** The opacity of a piece in the fade: what it is drawn with, but for a hidden straight joint. */
+    private current(entry: FadeEntry): number {
+        return entry.overCap ? entry.opacity : entry.wall.alpha;
+    }
+
+    /**
+     * Gives a piece its opacity in the fade. A straight joint lies over the caps of its two facades, drawn the same:
+     * see-through over them, it would make a brighter square (two translucent images one over the other), so it is
+     * hidden until its wall is opaque again, and shows again at the same time as the facades reach 1.
+     */
+    private show(entry: FadeEntry, opacity: number): boolean {
+        entry.opacity = opacity;
+        const drawn = entry.overCap ? (opacity >= 1 - 1e-6 ? 1 : 0) : opacity;
+        if (entry.wall.alpha === drawn) return false;
+        entry.wall.setAlpha(drawn);
         return true;
     }
 
@@ -431,6 +450,12 @@ export class WallFade {
                 elapsed: 0,
                 // The pieces of the first reading fade in; the ones that appear later take their opacity at once.
                 snap: this.started,
+                overCap:
+                    piece.kind === "joint" &&
+                    piece.arms.length === 2 &&
+                    piece.arms.includes("E") &&
+                    piece.arms.includes("W"),
+                opacity: wall.alpha,
             };
             next.set(wall, entry);
             fresh.push(entry);
