@@ -53,6 +53,7 @@ const woka: DeepPartial<Translation["woka"]> = {
         closeActions: "Fermer les actions",
         profile: "Afficher le profil",
         businessCard: "Carte de visite",
+        releaseAnimals: "Relâcher mes animaux ({count})",
     },
     swimwear: {
         auto: "Selon l’avatar",

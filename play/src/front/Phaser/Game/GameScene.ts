@@ -2437,6 +2437,16 @@ export class GameScene extends DirtyScene {
         return this._waveManager;
     }
 
+    /** How many animals the local player tamed (see JungleCompanions). */
+    public tamedAnimalCount(): number {
+        return this.gameJungle?.tamedAnimalCount() ?? 0;
+    }
+
+    /** Lets every animal the local player tamed go back to its wandering. */
+    public releaseTamedAnimals(): void {
+        this.gameJungle?.releaseTamedAnimals();
+    }
+
     public get torchManager(): TorchManager | undefined {
         return this._torchManager;
     }

@@ -10,6 +10,8 @@ const trigger: BaseTranslation = {
     sit: "[SPACE] to sit down 🪑",
     avatarAction: "[SPACE] to {action}",
     swim: "[SPACE] to swim 🏊",
+    jungleTame: "[SPACE] to tame this animal 🐾",
+    jungleRelease: "[SPACE] to let your companion go 🐾",
     mobile: {
         cowebsite: "👆 to open web site 👀",
         jitsiRoom: "👆 to enter Jitsi 👀",

@@ -398,6 +398,25 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             );
         });
 
+        it("lets one's tamed animals go from the own-avatar wheel, offered only with an animal", () => {
+            const self = Object.assign(Object.create(Player.prototype) as Player, {
+                playerName: "Me",
+                sprites: new Map([["body1", mock<Phaser.GameObjects.Sprite>()]]),
+            });
+            scene.tamedAnimalCount.mockReturnValue(0);
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            expect(get(wokaMenuStore)?.actions.some(({ testId }) => testId === "avatar-release-animals")).toBe(false);
+            wokaMenuStore.clear();
+            scene.tamedAnimalCount.mockReturnValue(2);
+            handler.handlePointerUpEvent(pointer(0, 1), [self]);
+            const action = get(wokaMenuStore)?.actions.find(({ testId }) => testId === "avatar-release-animals");
+            expect(action?.icon).toBe("paw");
+            expect(action?.actionName).toBe(get(LL).woka.menu.releaseAnimals({ count: 2 }));
+            action?.callback();
+            expect(scene.releaseTamedAnimals.mock.calls).toHaveLength(1);
+            expect(get(wokaMenuStore)).toBeUndefined();
+        });
+
         it.each([false, true])("toggles the torch from the own-avatar wheel when equipped is %s", (equipped) => {
             torchEquippedStore.set(equipped);
             const torchManager = mock<TorchManager>();

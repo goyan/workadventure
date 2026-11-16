@@ -44,6 +44,28 @@ describe("PopUpTriggerActionMessage", () => {
         expect(second).toHaveBeenCalledTimes(2);
     });
 
+    it("once the prompt is gone, the interaction key runs nothing, even after its action changed", async () => {
+        const target = document.createElement("div");
+        const input = fakeUserInputManager();
+        const first = vi.fn();
+        const second = vi.fn();
+        const props = $state({
+            message: "[SPACE] to tame this animal",
+            onclick: first,
+            userInputManager: input.manager,
+        });
+        component = mount(PopUpTriggerActionMessage, { target, props });
+        flushSync();
+        props.onclick = second;
+        flushSync();
+        const mounted = component;
+        component = undefined;
+        await unmount(mounted, { outro: false });
+        input.pressSpace();
+        expect(first).not.toHaveBeenCalled();
+        expect(second).not.toHaveBeenCalled();
+    });
+
     it("listens to the interaction key once, and not any more once gone", async () => {
         const target = document.createElement("div");
         const input = fakeUserInputManager();

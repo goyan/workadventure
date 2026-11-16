@@ -169,8 +169,8 @@ describe("JungleManager", () => {
             throw new Error("no call found");
         }
 
-        function setUp(options: { moving?: boolean; distance?: number; hidden?: boolean } = {}) {
-            const { moving = false, distance = 0, hidden = false } = options;
+        function setUp(options: { moving?: boolean; distance?: number; hidden?: boolean; led?: boolean } = {}) {
+            const { moving = false, distance = 0, hidden = false, led = false } = options;
             const { source, apply } = makeSource();
             const play = vi.fn<JungleHearing["play"]>();
             // Filled once the plan is applied: the first animal of the plan.
@@ -184,6 +184,7 @@ describe("JungleManager", () => {
                         ? { x: shown.caller.nest.x, y: shown.caller.nest.y, moving }
                         : undefined,
                 hidden: () => hidden,
+                led: () => led,
                 volume: () => 0.5,
                 play,
             };
@@ -226,6 +227,12 @@ describe("JungleManager", () => {
             manager?.refresh();
             manager?.update(off.now);
             expect(off.play).not.toHaveBeenCalled();
+        });
+
+        it("a tamed animal following its master does not call, indoors or out", () => {
+            const { play, now } = setUp({ led: true });
+            manager?.update(now);
+            expect(play).not.toHaveBeenCalled();
         });
 
         it("no call in a leg without one", () => {
