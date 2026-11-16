@@ -5,6 +5,35 @@ import { WeatherType, type WAMFileFormat } from "@workadventure/map-editor";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
 const sounds = vi.hoisted(() => ({ update: vi.fn() }));
+// The blocks (fog, clouds, shadows) painted on a canvas in the game: here, drawn on the graphics of the fixture.
+const surface = vi.hoisted(() => ({
+    graphics: undefined as
+        | undefined
+        | {
+              fillStyle: (color: number, alpha?: number) => unknown;
+              fillRect: (x: number, y: number, width: number, height: number) => unknown;
+          },
+}));
+vi.mock("../../../../../src/front/Phaser/Game/Weather/BlockSurface", () => ({
+    createBlockSurface: () => ({
+        begin(): void {},
+        paint(
+            blocks: readonly { x: number; y: number; width: number; height: number; level: number }[],
+            color: number,
+            alphaOf: (level: number) => number,
+        ): void {
+            for (let level = 1; level <= 8; level++) {
+                const ofLevel = blocks.filter((block) => block.level === level);
+                if (ofLevel.length === 0) continue;
+                surface.graphics?.fillStyle(color, alphaOf(level));
+                for (const block of ofLevel) surface.graphics?.fillRect(block.x, block.y, block.width, block.height);
+            }
+        },
+        end(): void {},
+        hide(): void {},
+        destroy(): void {},
+    }),
+}));
 const ground = vi.hoisted(() => ({ update: vi.fn(), destroy: vi.fn() }));
 vi.mock("../../../../../src/front/Phaser/Game/Weather/SnowGround", () => ({
     SnowGround: class {
@@ -55,6 +84,7 @@ function fixture(): {
     graphics.setVisible.mockReturnValue(graphics);
     graphics.clear.mockReturnValue(graphics);
     scene.add.graphics.mockReturnValue(graphics);
+    surface.graphics = graphics;
     const map = mockDeep<ReturnType<GameScene["getGameMap"]>>();
     const file = mockDeep<NonNullable<ReturnType<typeof map.getWamFile>>>();
     const wam: WAMFileFormat = {
