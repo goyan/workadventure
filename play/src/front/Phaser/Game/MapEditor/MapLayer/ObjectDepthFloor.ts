@@ -9,10 +9,15 @@ export interface DepthBox {
 
 export interface WallDepthBox extends DepthBox {
     depth: number;
+    /**
+     * Bottom of the piece on the ground, when its image is drawn above it: the cap of a high wall (a joint, a vertical
+     * strip, a lintel) is raised over the tiles north of the wall, yet the wall stands where its foot is.
+     */
+    footY?: number;
 }
 
-function footRow(box: DepthBox): number {
-    return Math.floor((box.y + box.height - 1) / MAP_LAYER_TILE_SIZE);
+function footRow(box: DepthBox & { footY?: number }): number {
+    return Math.floor(((box.footY ?? box.y + box.height) - 1) / MAP_LAYER_TILE_SIZE);
 }
 
 function overlaps(a: DepthBox, b: DepthBox): boolean {

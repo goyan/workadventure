@@ -26,6 +26,16 @@ describe("applyWallDepthFloor", () => {
         expect(applyWallDepthFloor(naturalDepth, table, [wall])).toBe(naturalDepth);
     });
 
+    it("reads the foot of a high wall piece on the ground, not under its raised image", () => {
+        // The joint of a wall 3 tiles high standing on the row of the foot of the table: its image is drawn 64 px higher,
+        // on the first row, but the wall stands on the third one, where the table is behind it.
+        const joint = { x: 64, y: 0, width: 12, height: 12, depth: 12 + 21 + 64, footY: 96 };
+        expect(applyWallDepthFloor(naturalDepth, table, [joint])).toBe(naturalDepth);
+        // The same image without a raised foot is a wall of the first row: the table stands in front of it.
+        const low = { x: 64, y: 0, width: 12, height: 12, depth: 12 + 21 };
+        expect(applyWallDepthFloor(naturalDepth, table, [low])).toBeGreaterThan(low.depth);
+    });
+
     it("does not lower an object already above the wall", () => {
         const wall = { x: 64, y: 32, width: 32, height: 32, depth: 10 };
         expect(applyWallDepthFloor(500, table, [wall])).toBe(500);

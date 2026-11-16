@@ -1714,6 +1714,82 @@ Fenêtres (mode « Fenêtre » de l'outil Carte) :
   lampes (`MAP_LAYER_WALL_LIKE_COLLECTIONS`). Les images (dérivées des façades du pack) sont générées par
   `tools/build_window_prefabs.mjs` du dépôt infra et restent dans le dépôt privé.
 
+Murs hauts (réglage « Hauteur » de l'outil Carte) :
+
+- Hauteur choisie de 1 à 4 cases, une par mode : murs (et murs d'une pièce), portes, fenêtres. Une hauteur n'est proposée
+  que si le catalogue chargé en a les pièces (`facade-blanc-mid-hN`, `porte-h-blanc-g-hM`, `fenetre-blanc-mid-hM`) ;
+  sinon bouton grisé avec une explication, et la pose se fait en hauteur 1. Tracer sur un mur existant le remplace.
+- Géométrie : un mur de hauteur N est le mur de hauteur 1 remonté de `32 × (N − 1)` px (`wallRise`), face de
+  `20 + 32 × (N − 1)` px. Le pied, les collisions, le « dehors », la lumière (torche, lampes), le chemin et la zone de
+  clic des modes de tracé (rangée du pied) ne changent pas. Une carte sans pièce `-h` se lit et se dessine comme avant
+  (placements figés dans `MapLayerHeights.test.ts`).
+- Noms (contrat avec le catalogue privé ; hauteur 1 = nom sans suffixe, `-h1` refusé) : `facade-<t>-<bouts>-hN`,
+  `mur-vertical-<t>-hN`, `bout-<t>-hN`, `raccord-<bras>-hN`, `fenetre-<t>-<bouts>-hM`, `porte-h-<t>-<g|d>-hM` (images
+  d'animation `-hM-<n>` / `-hM-b<n>`), `linteau-<t>-<bouts>-hN-oM` (mur plein au-dessus d'une porte ou d'une fenêtre de
+  hauteur M < N), `porte-v-<t>-<haut|bas>-hN` (porte verticale : toujours la hauteur de son mur, le plus bas de ses deux
+  segments, sans réglage propre).
+- Modèle : `WallEdge.height`, hauteur propre des portes horizontales (`DoorRef.height`) et des fenêtres
+  (`getWindowHeight`), ramenée à celle du mur (pose, ou mur abaissé). Relecture : chaque pièce haute à sa place
+  remontée ; la hauteur du mur au-dessus d'une ouverture vient du linteau ; résultat indépendant de l'ordre des objets.
+- Raccords par niveau : sur un sommet, un raccord par hauteur présente, reliant les murs de cette hauteur. Une façade ne
+  continue que vers un voisin au moins aussi haut, sinon elle se ferme (le plus bas continue sous elle). Un mur
+  horizontal plus haut qu'un niveau cache ce niveau, sauf le bras sud. Un mur vertical seul à un niveau reçoit son
+  `bout` à ce niveau. Porte ou fenêtre plus basse que son mur : linteau, raccords au niveau du mur. Porte verticale dans
+  un mur vertical haut : remontée avec son chapeau (`wallRise(N)`), pour rester visible de dessus ; aucune bande sur ses
+  deux segments (le passage reste libre), raccords de ses sommets extérieurs au niveau du mur, comme en hauteur 1.
+- Outil « Pièce » (`applyRoom`, toutes hauteurs) : tout le rectangle tracé est du sol visible. Le mur nord va sur la
+  ligne au-dessus du rectangle (il se tient sur la rangée au-dessus, son pied au bord haut du rectangle, et la rangée
+  « ombre » tombe sur la première rangée du rectangle), les murs de côté le rejoignent ; au bord haut de la carte, le mur
+  nord reste sur la première rangée. Le sol est posé sur le rectangle et sur la rangée où se tient le mur sud (l'avatar
+  y marche jusqu'au pied du mur, un mur haut translucide la montre), sans écraser un sol déjà là sur cette rangée, et
+  jamais sous le mur nord ; aucun sol n'est retiré. Les pièces déjà tracées ne sont pas modifiées. Conséquence pour
+  les zones calées sur le sol (`snapRectToFloors`) : la zone d'une pièce neuve s'étend aussi sur la rangée de son mur
+  sud.
+- Hauteur des portes : le mode Porte propose « Auto 1 2 3 4 », Auto par défaut : la porte prend la hauteur de son mur
+  (le plus bas de ses deux segments), 2 cases au plus (`DOOR_AUTO_MAX_HEIGHT`) ; un choix 1 à 4 est ramené à la hauteur
+  du mur. Cliquer en mode Porte sur une porte horizontale déjà posée (même sommet) lui donne la hauteur qui serait posée
+  si elle diffère, en une commande ; sinon rien (aperçu vert seulement dans le premier cas, `planDoorAt`). Les fenêtres
+  n'ont pas d'Auto, et poser une fenêtre sur une fenêtre ne change pas sa hauteur (code séparé : mode Hauteur).
+- Mode « Hauteur » (`MapLayerHeightEdit`, logique pure testée ; l'outil ne fait que dessiner et valider) : un clic sur un
+  mur, une porte ou une fenêtre déjà posés le sélectionne (surligné en bleu, contour blanc au survol), sur **toute son
+  image**, dessus remonté compris ; quand plusieurs images sont sous le pointeur, celle dont le pied est le plus au sud
+  (dessinée devant), et le linteau devant la porte ou la fenêtre dont il couvre le chapeau. Glisser depuis un élément
+  sélectionne les segments de sa ligne jusqu'à celui sous le pointeur, avec la porte ou la fenêtre qu'ils portent ; un
+  clic dans le vide (ou Échap, ou un autre mode) vide la sélection. La rangée 1 à 4 montre la hauteur commune (aucune
+  si elle est mixte) et applique celle cliquée en une commande (un Ctrl+Z), la sélection restant : les murs d'abord,
+  teinte conservée (baisser un mur baisse sa porte ou sa fenêtre), puis portes et fenêtres, ramenées à leur mur
+  (`setDoorHeight`, `setWindowHeight`). Une porte verticale se sélectionne comme ses deux segments de mur. Les
+  hauteurs que le catalogue n'a pas pour tout ce qui est sélectionné sont grisées.
+- Transparence (`WallFade`, pour soi seulement, rien n'est envoyé) : éditeur ouvert, murs, portes et fenêtres à 45 % ;
+  en jeu, quand les pieds de son avatar sont dans une pièce (`OutdoorGrid.roomAt`, cases d'intérieur reliées), les
+  pièces de hauteur ≥ 2 **devant** elle (les murs horizontaux dont le pied est juste au sud de la pièce, `roomsBehind`),
+  avec leurs portes, fenêtres et linteaux et les raccords à bras est ou ouest de leur chapeau, à 55 %. Le mur du fond
+  et les murs de côté (bandes, bouts, raccords sans bras est ni ouest, portes verticales) restent opaques : ils ne
+  cachent rien de la pièce, et ce qui est derrière eux ne doit pas se voir à travers. En plus, dedans comme dehors,
+  quand son avatar passe derrière une pièce d'un mur horizontal de hauteur ≥ 2 (`wallHidesPlayer` : au nord de son
+  pied, sous le haut de son image, dans sa largeur à une demi-largeur d'avatar près) **et** se trouve dans le même
+  espace que le sol juste au nord de ce pied (même pièce, ou dehors tous les deux), c'est **tout le mur droit** qui
+  s'estompe : la suite continue de segments horizontaux de la même ligne, du côté de cet espace seulement (une partie
+  du mur qui borde une autre pièce au nord reste opaque ; une portion de hauteur 1 ne s'estompe pas mais ne coupe pas
+  la suite). Un mur vertical haut ne s'estompe que si son chapeau passe sur le corps de l'avatar, à 16 px de sa ligne.
+  Sur la rangée d'un mur horizontal haut, en venant du dehors (case « mur » de la grille, sans pièce gardée), l'espace
+  de l'avatar est celui du sol juste au nord de la pièce de mur derrière laquelle il se tient : le mur reste estompé
+  jusqu'à son pied. Sans grille du dehors, seule la géométrie compte. Un raccord droit (`raccord-EW`, toute hauteur) est posé sur les
+  chapeaux de ses deux façades, dessinés à l'identique : translucide par-dessus, il ferait un carré plus clair (deux
+  images à 45 ou 55 % superposées) ; il est donc invisible tant que son mur est estompé et revient à 1 au moment où les
+  façades y reviennent. Même règle pour le raccord de bout (bras E ou W seul) d'un mur de hauteur ≥ 2 : ses façades,
+  fenêtres et linteaux à bout ferment eux-mêmes leur chapeau avec les pixels de ce raccord (catalogue, infra 4a8fa35) ;
+  en hauteur 1 le raccord de bout reste dessiné (`isDrawnByCapsUnder`).
+  Fondu de 200 ms. Sur la rangée d'un mur (case « mur » de la grille), la dernière pièce connue est gardée ; elle
+  s'oublie dehors.
+- Limites connues : changer d'outil dans l'éditeur remet un instant les murs à l'opaque (`EntitiesManager` réinitialise
+  l'opacité des pièces de la carte), le fondu la rétablit ; cliquer sur la partie remontée d'un mur haut ne le vise pas
+  dans les modes gomme, porte et fenêtre (rangée du pied ; le mode Hauteur, lui, vise toute l'image) ; superpositions
+  translucides restantes (dessins différents, non corrigées) : raccords d'angle, de T et de croix sur le chapeau des
+  façades, raccords de bout d'un mur de hauteur 1 sur le débord de 6 px de sa façade, linteau sur le chapeau de sa porte ou de sa fenêtre (12 px), bout d'un mur vertical
+  haut sur la façade d'un mur plus bas, porte verticale sous un T sur la face du mur du dessus ; un mur vertical bas rejoint par un mur vertical plus haut n'a pas de règle
+  dédiée ; ombre au sol inchangée. **Rendu non vu à l'écran ; catalogue des pièces hautes dans le dépôt privé.**
+
 Portes vitrées (interrupteur « Vitrée » du mode Porte) :
 
 - Variante des portes **horizontales** : les deux panneaux de chaque vantail laissent place à une vitre claire (bleu et
@@ -1721,13 +1797,18 @@ Portes vitrées (interrupteur « Vitrée » du mode Porte) :
   travers, même porte entrouverte. Une porte
   verticale reste pleine (vue de dessus, c'est un trait).
 - Interrupteur éteint par défaut, gardé le temps de la page : il choisit la variante des **nouvelles** portes
-  horizontales. Un clic sur une porte horizontale déjà posée l'inverse (pleine ↔ vitrée), quel que soit l'interrupteur
-  (aperçu vert sur la porte, une entrée d'annulation). Grisé quand le catalogue de la salle n'a pas les portes vitrées :
+  horizontales. Un clic sur une porte horizontale déjà posée lui donne les réglages du panneau (vitrée ou pleine selon
+  l'interrupteur, hauteur Auto ou choisie) ; si elle les a déjà, il l'inverse (pleine ↔ vitrée), comme avant les murs
+  hauts (aperçu vert sur la porte, une entrée d'annulation). Grisé quand le catalogue de la salle n'a pas les portes vitrées :
   les nouvelles portes sont alors pleines et un clic ne rend pas vitrée une porte pleine.
 - Stockage : `DoorRef.glazed` (absent pour une porte pleine), porté par le nom des pièces
   `porte-h-<teinte>-<g|d>-vitree` puis le suffixe d'image (`-3`, `-b3`) ; une porte verticale vitrée n'existe pas.
   Ouverture, collision, verrou et toc toc identiques à une porte pleine. Images générées par
   `tools/build_door_prefabs.mjs` du dépôt infra.
+- Avec les murs hauts : vitrée et hauteur sont indépendantes, `porte-h-<teinte>-<g|d>-vitree-h<M>` (vitree, puis la
+  hauteur, puis l'image). Une porte vitrée de hauteur M n'est proposée que si le catalogue a
+  `porte-h-<teinte>-g-vitree-h<M>`, sinon elle retombe à la hauteur 1. Changer la hauteur d'une porte vitrée (mode
+  Hauteur, mur abaissé) la laisse vitrée ; dehors, fondu et profondeur : comme la porte pleine de même hauteur.
 
 ## Confirmation avant de libérer son bureau
 

@@ -15,14 +15,20 @@ export const OUTDOOR_WALL_COLLECTIONS: readonly string[] = [
 
 const WALL = 1;
 const OUTDOOR = 2;
+/** In `rooms`: a cell that belongs to no room (outdoors or in a wall). */
+const NO_ROOM = -1;
 
-/** Which cells of the map are outdoors. Outside the map counts as outdoors. */
+/**
+ * Which cells of the map are outdoors. Outside the map counts as outdoors. The indoor cells are grouped in rooms: the
+ * sets of cells reached from one another without crossing a wall.
+ */
 export class OutdoorGrid {
     private constructor(
         public readonly cols: number,
         public readonly rows: number,
         public readonly cellSize: number,
         private readonly cells: Uint8Array,
+        private readonly rooms: Int32Array,
     ) {}
 
     static fromWalls(mapWidth: number, mapHeight: number, cellSize: number, walls: Iterable<Rect>): OutdoorGrid {
@@ -64,7 +70,64 @@ export class OutdoorGrid {
             if (row > 0) visit(col, row - 1);
             if (row < rows - 1) visit(col, row + 1);
         }
-        return new OutdoorGrid(cols, rows, cellSize, cells);
+        return new OutdoorGrid(cols, rows, cellSize, cells, OutdoorGrid.numberRooms(cols, rows, cells));
+    }
+
+    /** Numbers the connected sets of cells that are neither a wall nor outdoors, from 0. */
+    private static numberRooms(cols: number, rows: number, cells: Uint8Array): Int32Array {
+        const rooms = new Int32Array(cols * rows).fill(NO_ROOM);
+        let next = 0;
+        const queue: number[] = [];
+        for (let start = 0; start < cells.length; start++) {
+            if (cells[start] !== 0 || rooms[start] !== NO_ROOM) continue;
+            const room = next++;
+            rooms[start] = room;
+            queue.length = 0;
+            queue.push(start);
+            for (let head = 0; head < queue.length; head++) {
+                const index = queue[head];
+                const col = index % cols;
+                const row = (index - col) / cols;
+                const neighbours = [
+                    col > 0 ? index - 1 : -1,
+                    col < cols - 1 ? index + 1 : -1,
+                    row > 0 ? index - cols : -1,
+                    row < rows - 1 ? index + cols : -1,
+                ];
+                for (const neighbour of neighbours) {
+                    if (neighbour < 0 || cells[neighbour] !== 0 || rooms[neighbour] !== NO_ROOM) continue;
+                    rooms[neighbour] = room;
+                    queue.push(neighbour);
+                }
+            }
+        }
+        return rooms;
+    }
+
+    /** Room (a closed set of indoor cells) under a point; undefined outdoors, in a wall or off the map. */
+    roomAt(x: number, y: number): number | undefined {
+        const col = Math.floor(x / this.cellSize);
+        const row = Math.floor(y / this.cellSize);
+        if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return undefined;
+        const room = this.rooms[row * this.cols + col];
+        return room === NO_ROOM ? undefined : room;
+    }
+
+    /** Rooms with a cell within one cell of the rectangle (the rooms a wall borders). */
+    roomsTouching(rect: Rect): ReadonlySet<number> {
+        const found = new Set<number>();
+        const size = this.cellSize;
+        const firstCol = Math.max(0, Math.floor(rect.x / size) - 1);
+        const lastCol = Math.min(this.cols - 1, Math.ceil((rect.x + rect.width) / size));
+        const firstRow = Math.max(0, Math.floor(rect.y / size) - 1);
+        const lastRow = Math.min(this.rows - 1, Math.ceil((rect.y + rect.height) / size));
+        for (let row = firstRow; row <= lastRow; row++) {
+            for (let col = firstCol; col <= lastCol; col++) {
+                const room = this.rooms[row * this.cols + col];
+                if (room !== NO_ROOM) found.add(room);
+            }
+        }
+        return found;
     }
 
     isOutdoorCell(col: number, row: number): boolean {

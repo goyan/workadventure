@@ -67,6 +67,7 @@ export { default as IconHistory } from "~icons/tabler/history";
 export { default as IconPoint } from "~icons/tabler/point";
 export { default as IconDoor } from "~icons/tabler/door";
 export { default as IconWindow } from "~icons/tabler/window";
+export { default as IconArrowAutofitHeight } from "~icons/tabler/arrow-autofit-height";
 export { default as IconDoorExit } from "~icons/tabler/door-exit";
 export { default as IconUserMinus } from "~icons/tabler/user-minus";
 export { default as IconInbox } from "~icons/tabler/mailbox";

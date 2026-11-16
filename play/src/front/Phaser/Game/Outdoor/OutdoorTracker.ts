@@ -1,3 +1,4 @@
+import { mapLayerGroundRect, parseMapLayerPrefab, type MapLayerPiece } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, OutdoorGrid, type Rect } from "./OutdoorGrid";
 
 /** Cell size of the team maps. */
@@ -85,18 +86,41 @@ export interface OutdoorSourceEntity {
     displayHeight: number;
     scaleX: number;
     scaleY: number;
-    getPrefab(): { collectionName: string; imagePath: string };
+    getPrefab(): { collectionName: string; id: string; imagePath: string };
+}
+
+/**
+ * Where a piece of the map layer stands for the outdoors, when it is not its own image: a piece of height 2 or more
+ * stands where its piece of height 1 would (`mapLayerGroundRect`), a raised vertical door included. A lintel counts for
+ * nothing: the door or the window under it stands on the ground, and a wall there would close the doorway.
+ * Undefined: the image of the prefab (the pieces of height 1).
+ */
+function groundRectFor(
+    piece: MapLayerPiece | undefined,
+    x: number,
+    y: number,
+): { x: number; y: number; width: number; height: number } | undefined {
+    if (piece === undefined || piece.kind === "floor") return undefined;
+    if (piece.kind === "lintel") {
+        return { x, y, width: 0, height: 0 };
+    }
+    if (piece.height === 1) return undefined;
+    return mapLayerGroundRect(piece, x, y);
 }
 
 /**
  * Where an entity stands, sized by its prefab image: an opening door swaps to a taller frame, which must neither
- * reopen the room nor trigger a recomputation at every passage.
+ * reopen the room nor trigger a recomputation at every passage. A high wall, door or window stands where its piece of
+ * height 1 would: the outdoors are read on the ground, whatever the height of the walls.
  */
 export function entityOutdoorRect(
     entity: OutdoorSourceEntity,
     prefabFrameSize: (imagePath: string) => { width: number; height: number } | undefined,
 ): OutdoorEntity {
     const prefab = entity.getPrefab();
+    // The pieces of the map layer are never scaled: they are placed at the size of their catalog image.
+    const ground = groundRectFor(parseMapLayerPrefab(prefab.collectionName, prefab.id), entity.x, entity.y);
+    if (ground) return { collectionName: prefab.collectionName, ...ground };
     const frame = prefabFrameSize(prefab.imagePath);
     return {
         collectionName: prefab.collectionName,

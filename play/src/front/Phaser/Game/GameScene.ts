@@ -68,6 +68,7 @@ import { localUserStore } from "@wa/front/Connection/LocalUserStore";
 import { HtmlUtils } from "@wa/front/WebRtc/HtmlUtils";
 import { Loader } from "@wa/front/Phaser/Components/Loader";
 import { RemotePlayer } from "@wa/front/Phaser/Entity/RemotePlayer";
+import type { Entity } from "@wa/front/Phaser/ECS/Entity";
 import { AVATAR_ACTION_VARIABLE } from "@wa/front/Phaser/Entity/AvatarAction";
 import { SWIMWEAR_VARIABLE, SWIMWEAR_COLOR_VARIABLE } from "@wa/front/Phaser/Entity/Swimwear";
 import { SelectCharacterScene, SelectCharacterSceneName } from "@wa/front/Phaser/Login/SelectCharacterScene";
@@ -264,9 +265,12 @@ import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } fr
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
+import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import type { Entity } from "../ECS/Entity";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
+import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -277,6 +281,8 @@ import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
+import { MAP_LAYER_WALL_LIKE_COLLECTIONS } from "./MapEditor/MapLayer/MapLayerCatalog";
+import { WallFade } from "./MapEditor/MapLayer/WallFade";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { takesSteps } from "./Ice/Steps";
 import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
@@ -482,7 +488,11 @@ export class GameScene extends DirtyScene {
     private nightManager: NightManager | undefined;
     private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
+    /** Trees of the nature catalogue swaying with the wind of the map weather. */
+    private treeSway: TreeSway | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
+    /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
+    private wallFade: WallFade | undefined;
     private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
@@ -1504,9 +1514,12 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.wallFade?.destroy();
+        this.wallFade = undefined;
         this.lampManager?.destroy();
         this.lampManager = undefined;
         this.weatherManager?.destroy();
+        this.treeSway?.destroy();
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
@@ -1581,7 +1594,21 @@ export class GameScene extends DirtyScene {
         return this.seasonalThemeManager?.activeTheme();
     }
 
+    /** The walls, doors and windows of the map layer, among the entities of the map. */
+    private *mapLayerWallEntities(): Generator<Entity> {
+        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(entity.getPrefab().collectionName)) yield entity;
+        }
+    }
+
     /** Outdoor cells of the map, shared by the weather and the seasonal theme. */
+    /** The trees of the nature catalogue placed on the map, for them to sway with the wind. */
+    private *swayingTrees(): Generator<{ id: string; object: Entity }> {
+        for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
+            if (isSwayingTree(entity.getPrefab().id)) yield { id, object: entity };
+        }
+    }
+
     public getOutdoorGrid(): OutdoorGrid | undefined {
         return this.outdoorTracker?.grid;
     }
@@ -1783,6 +1810,7 @@ export class GameScene extends DirtyScene {
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
+            this.wallFade?.update(delta);
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
@@ -1793,6 +1821,7 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            this.treeSway?.update(time, serverDate?.getTime() ?? time);
             this.updateFootsteps();
             this.updateOverheardLoudness();
         }
@@ -2997,9 +3026,28 @@ export class GameScene extends DirtyScene {
                         };
                     },
                 );
+                this.wallFade?.destroy();
+                this.wallFade = new WallFade(
+                    () => this.mapLayerWallEntities(),
+                    () => this.getOutdoorGrid(),
+                    // The feet, as the torch reads the outdoors.
+                    () => ({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y }),
+                    () => this.mapEditorModeManager?.isActive() ?? false,
+                    () => this.markDirty(),
+                );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     seasonalTheme: () => this.getSeasonalTheme(),
+                });
+                this.treeSway?.destroy();
+                this.treeSway = new TreeSway(this, {
+                    trees: () => this.swayingTrees(),
+                    windSpeed: () =>
+                        shownWeatherSettings(
+                            this.getGameMap().getWamFile()?.getWam().settings,
+                            this.nightManager?.serverDate(),
+                        )?.windSpeed,
+                    enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                 });
                 this.seasonalThemeManager?.destroy();
                 this.seasonalThemeManager = new SeasonalThemeManager(this, {
