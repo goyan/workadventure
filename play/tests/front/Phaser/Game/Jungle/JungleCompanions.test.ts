@@ -5,7 +5,7 @@ import {
     JUNGLE_COMPANION_EXPIRY_MS,
 } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanionProtocol";
 import type { JungleCompanionMessage } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanionProtocol";
-import { JungleCompanions } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanions";
+import { joinedUserId, JungleCompanions } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanions";
 import type { JungleCompanionWorld } from "../../../../../src/front/Phaser/Game/Jungle/JungleCompanions";
 import type { JungleAnimal } from "../../../../../src/front/Phaser/Game/Jungle/JunglePlan";
 import type { WanderLead } from "../../../../../src/front/Phaser/Game/Wander/WanderingCharactersManager";
@@ -427,5 +427,20 @@ describe("JungleCompanions", () => {
         expect(setLead).toHaveBeenLastCalledWith(LION.id, undefined);
         expect(leads.size).toBe(0);
         expect(prompt.kind).toBeUndefined();
+    });
+});
+
+describe("joinedUserId", () => {
+    it("gives the id of the player once the room is joined, and nothing before instead of throwing", () => {
+        expect(joinedUserId(undefined)).toBeUndefined();
+        expect(joinedUserId({ getUserId: () => 12 })).toBe(12);
+        // RoomConnection.getUserId throws until the room is joined: an exception there stops the game loop.
+        expect(
+            joinedUserId({
+                getUserId: () => {
+                    throw new Error("UserId cannot be null!");
+                },
+            }),
+        ).toBeUndefined();
     });
 });
