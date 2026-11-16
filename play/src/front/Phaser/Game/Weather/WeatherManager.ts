@@ -1,7 +1,7 @@
 import { WeatherType } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { cloudsShownStore, weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
+import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
@@ -102,6 +102,7 @@ export class WeatherManager {
     private editing = false;
     private weatherShown = true;
     private cloudsShown = true;
+    private cloudsHeight = 0;
     /** Where the sky has drifted to with the wind of the map (the real one, or the usual drift). */
     private readonly skyDrift = new SkyDrift();
     private readonly reducedMotion: boolean;
@@ -121,6 +122,7 @@ export class WeatherManager {
             mapEditorModeStore.subscribe((editing) => (this.editing = editing)),
             weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
             cloudsShownStore.subscribe((shown) => (this.cloudsShown = shown)),
+            cloudsHeightStore.subscribe((height) => (this.cloudsHeight = height)),
         ];
         this.graphics = scene.add
             .graphics()
@@ -265,7 +267,7 @@ export class WeatherManager {
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
                 const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
                 const levels = fieldLevels(canvas, size, patches);
-                const body = covering.alpha * cloudZoomFade(this.screenScale());
+                const body = covering.alpha * this.zoomFade();
                 this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
             }
             if (weather === WeatherType.Snow) {
@@ -354,7 +356,7 @@ export class WeatherManager {
         const fieldView = { x: field.x, y: field.y, width: field.columns * size, height: field.rows * size };
         const patches = cloudPatches(epoch, fieldView, shownCloudiness(cloudiness), this.reducedMotion, sky);
         const levels = fieldLevels(field, size, patches);
-        const fade = cloudZoomFade(zoom);
+        const fade = cloudZoomFade(zoom, this.cloudsHeight);
         if (shadowOffset) {
             // The shadows stay on the ground, also zoomed in under the clouds.
             const alpha = CLOUD_SHADOW_ALPHA * sunlight.shadows;
@@ -389,6 +391,11 @@ export class WeatherManager {
                 cloudAlpha(level, tint.alpha),
             );
         }
+    }
+
+    /** How much of the clouds shows at this zoom, at the height this person set for them. */
+    private zoomFade(): number {
+        return cloudZoomFade(this.screenScale(), this.cloudsHeight);
     }
 
     /**

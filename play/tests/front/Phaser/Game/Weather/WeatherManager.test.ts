@@ -79,7 +79,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     },
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
-const { cloudsShownStore, weatherEffectsEnabledStore } = await import("../../../../../src/front/Stores/WeatherStore");
+const { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } =
+    await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { autoWeatherAt, cloudinessAt, slotStart } =
     await import("../../../../../src/front/Phaser/Game/Weather/WeatherSchedule");
@@ -99,6 +100,7 @@ afterEach(() => {
     ground.destroy.mockClear();
     weatherEffectsEnabledStore.set(true);
     cloudsShownStore.set(true);
+    cloudsHeightStore.set(0);
     mapEditorModeStore.set(false);
     seasonalThemeModeStore.set(SeasonalThemeMode.Auto);
 });
@@ -563,6 +565,21 @@ describe("weather rendering lifecycle", () => {
             const near = painted(2);
             expect(near.colors.size).toBe(0);
             expect(near.shadowCalls).toBeGreaterThan(0);
+        });
+
+        it("keeps the clouds at every zoom for whoever raised them to the top (a personal setting)", () => {
+            cloudsHeightStore.set(1);
+            const { scene, graphics, wam } = fixture();
+            wam.settings = { weather: WeatherType.Cloudy };
+            scene.cameras.main.zoom = 2;
+            scene.cameras.main.worldView.width = 2100;
+            scene.cameras.main.worldView.height = 2100;
+            manager = new WeatherManager(scene);
+            manager.update(0, at, false, sun);
+            const colors = new Set(
+                graphics.fillStyle.mock.calls.filter(([color]) => color !== 0x000000).map(([color]) => color),
+            );
+            expect(colors.has(0xffffff)).toBe(true);
         });
 
         it("moves 15 times a second, so they glide", () => {

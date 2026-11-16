@@ -226,9 +226,14 @@ export function cloudTones(
  */
 const ZOOM_WHOLE = 0.8;
 const ZOOM_GONE = 1.4;
-export function cloudZoomFade(screenScale: number): number {
-    if (!Number.isFinite(screenScale)) return 1;
-    return 1 - clamp01((screenScale - ZOOM_WHOLE) / (ZOOM_GONE - ZOOM_WHOLE));
+/**
+ * `height` (0 to 1, a personal setting) raises the clouds: the zoom that passes under them is `1 / (1 - height)` times
+ * closer (twice at 0.5, four times at 0.75), and at 1 one never passes under them.
+ */
+export function cloudZoomFade(screenScale: number, height = 0): number {
+    if (!Number.isFinite(screenScale) || height >= 1) return 1;
+    const higher = 1 / (1 - clamp01(height));
+    return 1 - clamp01((screenScale - ZOOM_WHOLE * higher) / ((ZOOM_GONE - ZOOM_WHOLE) * higher));
 }
 
 /** Height of the clouds and longest shadow, in tiles. */
