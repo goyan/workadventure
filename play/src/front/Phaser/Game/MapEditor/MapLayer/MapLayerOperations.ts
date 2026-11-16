@@ -1,4 +1,4 @@
-import type { FloorFamily, WallTint } from "./MapLayerCatalog";
+import type { FloorFamily, WallHeight, WallTint } from "./MapLayerCatalog";
 import {
     MAP_LAYER_TILE_SIZE,
     DOOR_CLOSED_FRAME,
@@ -7,6 +7,7 @@ import {
     WALL_THICKNESS,
     facadeLeftExtension,
     parseMapLayerPrefab,
+    wallRise,
 } from "./MapLayerCatalog";
 import type { DoorRef, WallEdgeRef, WallOrientation } from "./MapLayerModel";
 import { MapLayerModel, cellKey, doorEdges, edgeKey } from "./MapLayerModel";
@@ -39,6 +40,16 @@ function inBounds(cell: Point, bounds: MapBounds): boolean {
 export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLayerModel {
     const model = new MapLayerModel();
     const size = MAP_LAYER_TILE_SIZE;
+    /**
+     * Height of the wall above a door or a window, read from the lintel over it; applied once every piece is read, so
+     * that the result does not depend on the order of the pieces.
+     */
+    const lintels = new Map<string, { x: number; y: number; height: WallHeight }>();
+    /** A segment read twice keeps the highest of its heights: reading never lowers a wall, nor the door on it. */
+    const setWall = (orientation: WallOrientation, x: number, y: number, tint: WallTint, height: WallHeight): void => {
+        const known = model.getWall(orientation, x, y)?.height ?? 1;
+        model.setWall(orientation, x, y, tint, known > height ? known : height);
+    };
     for (const item of items) {
         const piece = parseMapLayerPrefab(item.collectionName, item.prefabId);
         if (!piece) {
@@ -52,29 +63,40 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                 break;
             case "window":
             case "facade": {
-                // The sprite fills the tile row of its line and may start left of the column. Walls drawn when the cap
-                // was centered on the line (half a wall higher) are still read, and redrawn in place on the next edit.
+                // The sprite fills the tile row of its line, raised by the height of the wall, and may start left of
+                // the column. Walls of height 1 drawn when the cap was centered on the line (half a wall higher) are
+                // still read, and redrawn in place on the next edit.
                 const x = (item.x + facadeLeftExtension(piece.ends)) / size;
-                const y = item.y / size;
+                const y = (item.y + wallRise(piece.height)) / size;
                 const legacyY = (item.y + WALL_HALF) / size;
                 if (Number.isInteger(x) && Number.isInteger(y)) {
-                    model.setWall("h", x, y, piece.tint);
-                    if (piece.kind === "window") model.setWindow(x, y);
-                } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
-                    model.setWall("h", x, legacyY, piece.tint);
+                    setWall("h", x, y, piece.tint, piece.height);
+                    if (piece.kind === "window") model.setWindow(x, y, piece.height);
+                } else if (piece.height === 1 && Number.isInteger(x) && Number.isInteger(legacyY)) {
+                    setWall("h", x, legacyY, piece.tint, 1);
                 }
                 break;
             }
             case "vertical": {
-                // The strip is centered on its grid line and starts under the joint of its first vertex (same legacy
-                // reading as the facades, with the strip half a wall higher).
+                // The strip is centered on its grid line and starts under the joint of its first vertex, raised by the
+                // height of the wall (same legacy reading as the facades, with the strip half a wall higher).
                 const x = (item.x + WALL_HALF) / size;
-                const y = (item.y - WALL_THICKNESS) / size;
+                const y = (item.y + wallRise(piece.height) - WALL_THICKNESS) / size;
                 const legacyY = (item.y - WALL_HALF) / size;
                 if (Number.isInteger(x) && Number.isInteger(y)) {
-                    model.setWall("v", x, y, piece.tint);
-                } else if (Number.isInteger(x) && Number.isInteger(legacyY)) {
-                    model.setWall("v", x, legacyY, piece.tint);
+                    setWall("v", x, y, piece.tint, piece.height);
+                } else if (piece.height === 1 && Number.isInteger(x) && Number.isInteger(legacyY)) {
+                    setWall("v", x, legacyY, piece.tint, 1);
+                }
+                break;
+            }
+            case "lintel": {
+                // Derived from the wall, but the only piece that tells the height of the wall above an opening.
+                const x = (item.x + facadeLeftExtension(piece.ends)) / size;
+                const y = (item.y + wallRise(piece.height)) / size;
+                if (Number.isInteger(x) && Number.isInteger(y)) {
+                    const known = lintels.get(edgeKey("h", x, y))?.height ?? 1;
+                    lintels.set(edgeKey("h", x, y), { x, y, height: known > piece.height ? known : piece.height });
                 }
                 break;
             }
@@ -85,7 +107,12 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                 }
                 const door: DoorRef =
                     piece.orientation === "h"
-                        ? { orientation: "h", x: item.x / size + 1, y: item.y / size }
+                        ? {
+                              orientation: "h",
+                              x: item.x / size + 1,
+                              y: (item.y + wallRise(piece.height)) / size,
+                              height: piece.height,
+                          }
                         : {
                               orientation: "v",
                               x: (item.x + DOOR_VERTICAL_WIDTH / 2) / size,
@@ -93,7 +120,7 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
                           };
                 if (Number.isInteger(door.x) && Number.isInteger(door.y)) {
                     for (const edge of doorEdges(door)) {
-                        model.setWall(edge.orientation, edge.x, edge.y, piece.tint);
+                        setWall(edge.orientation, edge.x, edge.y, piece.tint, piece.height);
                     }
                     model.setDoor(door);
                 }
@@ -103,6 +130,12 @@ export function modelFromPlacedPrefabs(items: Iterable<PlacedPrefabLike>): MapLa
             case "end":
                 // Derived from the walls: nothing to read.
                 break;
+        }
+    }
+    for (const lintel of lintels.values()) {
+        const wall = model.getWall("h", lintel.x, lintel.y);
+        if (wall && wall.height < lintel.height) {
+            model.setWall("h", wall.x, wall.y, wall.tint, lintel.height);
         }
     }
     return model;
@@ -286,6 +319,7 @@ export function applyWalls(
     edges: readonly WallEdgeRef[],
     tint: WallTint,
     bounds: MapBounds,
+    height: WallHeight = 1,
 ): void {
     for (const edge of edges) {
         const inside =
@@ -293,7 +327,7 @@ export function applyWalls(
                 ? edge.x >= 0 && edge.x < bounds.columns && edge.y >= 0 && edge.y < bounds.rows
                 : edge.x >= 0 && edge.x <= bounds.columns && edge.y >= 0 && edge.y < bounds.rows;
         if (inside) {
-            model.setWall(edge.orientation, edge.x, edge.y, tint);
+            model.setWall(edge.orientation, edge.x, edge.y, tint, height);
         }
     }
 }
@@ -447,18 +481,19 @@ export function windowEdgesBetween(model: MapLayerModel, fromCell: Point, toCell
  * stay where they are. Without a window to move, or with a target that cannot take it, nothing changes.
  */
 export function moveWindow(model: MapLayerModel, fromCell: Point, toCell: Point): boolean {
-    if (!model.hasWindow(fromCell.x, fromCell.y)) return false;
+    const height = model.getWindowHeight(fromCell.x, fromCell.y);
+    if (height === undefined) return false;
     model.removeWindow(fromCell.x, fromCell.y);
-    if (model.setWindow(toCell.x, toCell.y)) return true;
-    model.setWindow(fromCell.x, fromCell.y);
+    if (model.setWindow(toCell.x, toCell.y, height)) return true;
+    model.setWindow(fromCell.x, fromCell.y, height);
     return false;
 }
 
-/** Sets a window on each segment that can take one. Returns how many were set. */
-export function applyWindows(model: MapLayerModel, edges: readonly WallEdgeRef[]): number {
+/** Sets a window of the given height on each segment that can take one. Returns how many were set. */
+export function applyWindows(model: MapLayerModel, edges: readonly WallEdgeRef[], height: WallHeight = 1): number {
     let count = 0;
     for (const edge of edges) {
-        if (edge.orientation === "h" && model.setWindow(edge.x, edge.y)) count++;
+        if (edge.orientation === "h" && model.setWindow(edge.x, edge.y, height)) count++;
     }
     return count;
 }

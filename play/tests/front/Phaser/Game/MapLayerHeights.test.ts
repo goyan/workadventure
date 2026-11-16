@@ -22,10 +22,14 @@ import {
     applyDoor,
     applyFloor,
     applyWalls,
+    applyWindows,
     lineWallEdges,
+    modelFromPlacedPrefabs,
+    moveWindow,
     rectangleCells,
     roomWallEdges,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
+import type { PlacedPrefabLike } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
 
 const bounds = { columns: 20, rows: 20 };
 
@@ -268,5 +272,122 @@ describe("wall heights: maps of walls of height 1", () => {
         model.setWindow(1, 1);
         model.setWindow(2, 1);
         expect(names(model)).toEqual(BEFORE_HIGH_WALLS.mixed);
+    });
+});
+
+/** What a model means, in a form that compares regardless of the order it was filled in. */
+function state(model: MapLayerModel): string[] {
+    return [
+        ...Array.from(
+            model.getWalls(),
+            (wall) => `wall ${wall.orientation}:${wall.x},${wall.y} ${wall.tint} h${wall.height}`,
+        ),
+        ...Array.from(model.getDoors(), (door) => `door ${door.orientation}:${door.x},${door.y} h${door.height ?? 1}`),
+        ...Array.from(
+            model.getWindows(),
+            (pane) => `window ${pane.x},${pane.y} h${model.getWindowHeight(pane.x, pane.y)}`,
+        ),
+    ].sort();
+}
+
+function item(collectionName: string, name: string, x: number, y: number): PlacedPrefabLike {
+    return { collectionName, prefabId: mapLayerPrefabId(collectionName, name), x, y };
+}
+
+describe("wall heights: model", () => {
+    it("gives a wall the height 1 unless told otherwise, and keeps the heights in a copy", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 0, 0, "gris");
+        model.setWall("h", 1, 0, "gris", 3);
+        model.setWall("h", 2, 0, "gris", 3);
+        model.setWall("v", 4, 0, "blanc", 2);
+        expect(model.setDoor({ orientation: "h", x: 2, y: 0, height: 2 })).toBe(true);
+        model.setWall("h", 5, 0, "gris", 4);
+        expect(model.setWindow(5, 0, 3)).toBe(true);
+        expect(model.getWall("h", 0, 0)?.height).toBe(1);
+        expect(state(model.clone())).toEqual(state(model));
+        expect(state(model)).toContain("door h:2,0 h2");
+        expect(state(model)).toContain("window 5,0 h3");
+    });
+
+    it("brings a door or a window down to the height of its wall", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 0, 0, "gris", 2);
+        model.setWall("h", 1, 0, "gris", 3);
+        model.setWall("h", 3, 0, "gris", 2);
+        expect(model.setDoor({ orientation: "h", x: 1, y: 0, height: 4 })).toBe(true);
+        expect(model.setWindow(3, 0, 4)).toBe(true);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 1, y: 0, height: 2 }]);
+        expect(model.getWindowHeight(3, 0)).toBe(2);
+        model.setWall("h", 1, 0, "gris", 1);
+        model.setWall("h", 3, 0, "gris", 1);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 1, y: 0, height: 1 }]);
+        expect(model.getWindowHeight(3, 0)).toBe(1);
+        expect(model.getWindowHeight(0, 0)).toBeUndefined();
+    });
+
+    it("gives a vertical door no height", () => {
+        const model = new MapLayerModel();
+        model.setWall("v", 0, 0, "gris", 4);
+        model.setWall("v", 0, 1, "gris", 4);
+        expect(model.setDoor({ orientation: "v", x: 0, y: 1, height: 3 })).toBe(true);
+        expect([...model.getDoors()]).toEqual([{ orientation: "v", x: 0, y: 1, height: 1 }]);
+    });
+
+    it("lets the operations set high walls and keep the height of a moved window", () => {
+        const model = new MapLayerModel();
+        applyWalls(model, lineWallEdges({ x: 0, y: 2 }, { x: 4, y: 2 }), "brique", bounds, 3);
+        expect(Array.from(model.getWalls(), (wall) => wall.height)).toEqual([3, 3, 3, 3]);
+        applyWalls(model, lineWallEdges({ x: 0, y: 3 }, { x: 1, y: 3 }), "brique", bounds);
+        expect(model.getWall("h", 0, 3)?.height).toBe(1);
+        expect(applyWindows(model, [{ orientation: "h", x: 1, y: 2 }], 2)).toBe(1);
+        expect(moveWindow(model, { x: 1, y: 2 }, { x: 3, y: 2 })).toBe(true);
+        expect(model.getWindowHeight(3, 2)).toBe(2);
+        applyDoor(model, { orientation: "h", x: 1, y: 2, height: 2 }, bounds);
+        expect([...model.getDoors()]).toEqual([{ orientation: "h", x: 1, y: 2, height: 2 }]);
+    });
+});
+
+describe("wall heights: reading the map", () => {
+    const readBothWays = (items: PlacedPrefabLike[]): string[] => {
+        const forward = state(modelFromPlacedPrefabs(items));
+        expect(state(modelFromPlacedPrefabs([...items].reverse()))).toEqual(forward);
+        return forward;
+    };
+
+    it("reads the height of a facade and of a vertical wall from their names, at their raised place", () => {
+        expect(readBothWays([item(MAP_LAYER_WALL_COLLECTION, "facade-gris-mid-h2", 64, 96 - 32)])).toEqual([
+            "wall h:2,3 gris h2",
+        ]);
+        expect(readBothWays([item(MAP_LAYER_WALL_COLLECTION, "mur-vertical-gris-h3", 64 - 6, 96 + 12 - 64)])).toEqual([
+            "wall v:2,3 gris h3",
+        ]);
+    });
+
+    it("does not read a high wall at the place of an old wall half a cap higher", () => {
+        expect(readBothWays([item(MAP_LAYER_WALL_COLLECTION, "facade-gris-mid-h2", 64, 96 - 32 - 6)])).toEqual([]);
+    });
+
+    it("gives the walls under a door the height of the lintel over it, whatever the order", () => {
+        expect(
+            readBothWays([
+                item(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-g", 64, 96),
+                item(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-d", 96, 96),
+                item(MAP_LAYER_WALL_COLLECTION, "linteau-gris-mid-h2-o1", 64, 96 - 32),
+                item(MAP_LAYER_WALL_COLLECTION, "linteau-gris-mid-h2-o1", 96, 96 - 32),
+            ]),
+        ).toEqual(["door h:3,3 h1", "wall h:2,3 gris h2", "wall h:3,3 gris h2"]);
+    });
+
+    it("reads a door of 2 in a wall of 4 and a window of 2 in a wall of 2", () => {
+        expect(
+            readBothWays([
+                item(MAP_LAYER_WALL_COLLECTION, "linteau-gris-left-h4-o2", 64 - 6, 96 - 96),
+                item(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-g-h2", 64, 96 - 32),
+                item(MAP_LAYER_DOOR_COLLECTION, "porte-h-gris-d-h2", 96, 96 - 32),
+                item(MAP_LAYER_WALL_COLLECTION, "linteau-gris-right-h4-o2", 96, 96 - 96),
+                item(MAP_LAYER_WINDOW_COLLECTION, "fenetre-gris-mid-h2", 256, 96 - 32),
+            ]),
+        ).toEqual(["door h:3,3 h2", "wall h:2,3 gris h4", "wall h:3,3 gris h4", "wall h:8,3 gris h2", "window 8,3 h2"]);
     });
 });

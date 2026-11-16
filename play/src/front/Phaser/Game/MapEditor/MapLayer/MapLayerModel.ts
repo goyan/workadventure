@@ -1,4 +1,4 @@
-import type { FloorFamily, WallTint } from "./MapLayerCatalog";
+import type { FloorFamily, WallHeight, WallTint } from "./MapLayerCatalog";
 
 export type WallOrientation = "h" | "v";
 
@@ -12,6 +12,8 @@ export interface WallEdge {
     x: number;
     y: number;
     tint: WallTint;
+    /** In tiles, 1 to 4. */
+    height: WallHeight;
 }
 
 export interface FloorCell {
@@ -30,6 +32,16 @@ export interface DoorRef {
     orientation: WallOrientation;
     x: number;
     y: number;
+    /**
+     * Height of a horizontal door, at most the one of its walls; 1 when absent. A vertical door is seen from above: the
+     * model always gives it the height 1.
+     */
+    height?: WallHeight;
+}
+
+/** The height of a door, 1 when it does not tell. */
+export function doorHeight(door: DoorRef): WallHeight {
+    return door.height ?? 1;
 }
 
 /** The two wall segments a door stands on, first one first. */
@@ -70,13 +82,16 @@ export class MapLayerModel {
     private readonly doors = new Map<string, DoorRef>();
     /** Horizontal wall segments drawn as a window. The wall stays in the model under it, like under a door. */
     private readonly windows = new Map<string, WallEdgeRef>();
+    /** Height of each window, by the key of its segment: at most the one of its wall. */
+    private readonly windowHeights = new Map<string, WallHeight>();
 
     public clone(): MapLayerModel {
         const copy = new MapLayerModel();
-        for (const door of this.doors.values()) copy.doors.set(edgeKey(door.orientation, door.x, door.y), door);
         for (const floor of this.floors.values()) copy.setFloor(floor.x, floor.y, floor.family);
-        for (const wall of this.walls.values()) copy.setWall(wall.orientation, wall.x, wall.y, wall.tint);
+        for (const wall of this.walls.values()) copy.setWall(wall.orientation, wall.x, wall.y, wall.tint, wall.height);
+        for (const door of this.doors.values()) copy.doors.set(edgeKey(door.orientation, door.x, door.y), { ...door });
         for (const pane of this.windows.values()) copy.windows.set(edgeKey("h", pane.x, pane.y), pane);
+        for (const [key, height] of this.windowHeights) copy.windowHeights.set(key, height);
         return copy;
     }
 
@@ -92,8 +107,20 @@ export class MapLayerModel {
         return this.floors.get(cellKey(x, y));
     }
 
-    public setWall(orientation: WallOrientation, x: number, y: number, tint: WallTint): void {
-        this.walls.set(edgeKey(orientation, x, y), { orientation, x, y, tint });
+    /**
+     * Sets a wall segment, replacing the one that was there. A door or a window of the segment higher than the new wall
+     * is brought down to its height.
+     */
+    public setWall(orientation: WallOrientation, x: number, y: number, tint: WallTint, height: WallHeight = 1): void {
+        this.walls.set(edgeKey(orientation, x, y), { orientation, x, y, tint, height });
+        const door = this.getDoorOn(orientation, x, y);
+        if (door && doorHeight(door) > height) {
+            door.height = height;
+        }
+        const windowHeight = orientation === "h" ? this.windowHeights.get(edgeKey("h", x, y)) : undefined;
+        if (windowHeight !== undefined && windowHeight > height) {
+            this.windowHeights.set(edgeKey("h", x, y), height);
+        }
     }
 
     /** Removing a wall segment also removes the door or the window that stands on it. */
@@ -118,16 +145,25 @@ export class MapLayerModel {
         return this.hasWall("h", x, y) && this.getDoorOn("h", x, y) === undefined && !this.hasWindow(x, y);
     }
 
-    public setWindow(x: number, y: number): boolean {
-        if (!this.canSetWindow(x, y)) {
+    /** Sets a window of the given height, brought down to the height of its wall. */
+    public setWindow(x: number, y: number, height: WallHeight = 1): boolean {
+        const wall = this.getWall("h", x, y);
+        if (!wall || !this.canSetWindow(x, y)) {
             return false;
         }
         this.windows.set(edgeKey("h", x, y), { orientation: "h", x, y });
+        this.windowHeights.set(edgeKey("h", x, y), height > wall.height ? wall.height : height);
         return true;
     }
 
     public removeWindow(x: number, y: number): boolean {
+        this.windowHeights.delete(edgeKey("h", x, y));
         return this.windows.delete(edgeKey("h", x, y));
+    }
+
+    /** Height of the window of the horizontal segment (x, y); undefined without a window. */
+    public getWindowHeight(x: number, y: number): WallHeight | undefined {
+        return this.windowHeights.get(edgeKey("h", x, y));
     }
 
     public hasWindow(x: number, y: number): boolean {
@@ -138,11 +174,25 @@ export class MapLayerModel {
         return this.windows.values();
     }
 
+    /** Sets a door; a horizontal door is brought down to the height of the lower of its two walls. */
     public setDoor(door: DoorRef): boolean {
         if (!this.canSetDoor(door)) {
             return false;
         }
-        this.doors.set(edgeKey(door.orientation, door.x, door.y), { ...door });
+        let height: WallHeight = 1;
+        if (door.orientation === "h") {
+            height = doorHeight(door);
+            for (const edge of doorEdges(door)) {
+                const wallHeight = this.getWall(edge.orientation, edge.x, edge.y)?.height ?? 1;
+                if (wallHeight < height) height = wallHeight;
+            }
+        }
+        this.doors.set(edgeKey(door.orientation, door.x, door.y), {
+            orientation: door.orientation,
+            x: door.x,
+            y: door.y,
+            height,
+        });
         return true;
     }
 
