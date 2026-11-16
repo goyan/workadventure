@@ -11,12 +11,16 @@
 
     let { message, onclick, userInputManager }: Props = $props();
 
+    // One listener for the life of the popup, calling the current action: a popup shown again under the same uuid
+    // keeps this component and only gets new props (see popupStore.addPopup).
+    const onSpace = (): void => onclick();
+
     onMount(() => {
-        userInputManager.addSpaceEventListener(onclick);
+        userInputManager.addSpaceEventListener(onSpace);
     });
 
     onDestroy(() => {
-        userInputManager.removeSpaceEventListener(onclick);
+        userInputManager.removeSpaceEventListener(onSpace);
     });
 </script>
 
