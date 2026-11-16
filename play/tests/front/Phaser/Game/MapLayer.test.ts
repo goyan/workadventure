@@ -418,34 +418,76 @@ describe("wallBarriers", () => {
     });
 });
 
-describe("room tool: the floor under the south wall", () => {
-    it("lays the floor of the room on the row its south wall stands on, between its side walls", () => {
+describe("room tool: the walls around the rectangle, its floor all seen", () => {
+    const walls = (model: MapLayerModel): string[] =>
+        Array.from(model.getWalls(), (wall) => `${wall.orientation}:${wall.x},${wall.y}`).sort();
+
+    it("puts the north wall on the row above the rectangle, the side walls up to it", () => {
         const model = new MapLayerModel();
         applyRoom(model, { x: 2, y: 2 }, { x: 4, y: 3 }, "gris", "parquet-clair", bounds);
-        // The south wall stands on the line 4, on the tile row 4: the avatar walks up to its foot there.
-        for (const x of [2, 3, 4]) expect(model.getFloor(x, 4)?.family).toBe("parquet-clair");
+        // North wall on the line 1 (it stands on the row 1, its foot at the top of the rectangle), south wall on the
+        // line 4, side walls on the lines 2 and 5 from the row 1 to the row 3.
+        expect(walls(model)).toEqual(
+            [
+                "h:2,1",
+                "h:3,1",
+                "h:4,1",
+                "h:2,4",
+                "h:3,4",
+                "h:4,4",
+                "v:2,1",
+                "v:2,2",
+                "v:2,3",
+                "v:5,1",
+                "v:5,2",
+                "v:5,3",
+            ].sort(),
+        );
+    });
+
+    it("lays the floor on the whole rectangle and on the row of the south wall, none under the north wall", () => {
+        const model = new MapLayerModel();
+        applyRoom(model, { x: 2, y: 2 }, { x: 4, y: 3 }, "gris", "parquet-clair", bounds);
+        for (const y of [2, 3, 4]) {
+            for (const x of [2, 3, 4]) expect(model.getFloor(x, y)?.family).toBe("parquet-clair");
+        }
+        for (const x of [2, 3, 4]) expect(model.getFloor(x, 1)).toBeUndefined();
         expect(model.getFloor(1, 4)).toBeUndefined();
         expect(model.getFloor(5, 4)).toBeUndefined();
         expect(model.getFloor(3, 5)).toBeUndefined();
-        expect(model.hasWall("h", 3, 4)).toBe(true);
-        // The shaded floor stays the row under the north wall; the row of the south wall is plain.
+        // The shaded floor falls on the first row of the rectangle, right under the north wall; the row of the south
+        // wall is plain.
         const floors = names(model).filter((name) => name.startsWith("sol-"));
         expect(floors.filter((name) => name.includes("ombre"))).toEqual([
-            "sol-parquet-clair-ombre@128,96",
-            "sol-parquet-clair-ombre@64,96",
-            "sol-parquet-clair-ombre@96,96",
+            "sol-parquet-clair-ombre@128,64",
+            "sol-parquet-clair-ombre@64,64",
+            "sol-parquet-clair-ombre@96,64",
         ]);
         expect(floors).toContain("sol-parquet-clair-uni@96,128");
     });
 
-    it("keeps a floor already on the row of the south wall, and still fills the room itself", () => {
+    it("never removes a floor already there, and keeps it on the row of the south wall", () => {
         const model = new MapLayerModel();
+        model.setFloor(3, 1, "pierre-grise");
         model.setFloor(3, 4, "pierre-grise");
         model.setFloor(3, 3, "pierre-grise");
         applyRoom(model, { x: 2, y: 2 }, { x: 4, y: 3 }, "gris", "parquet-clair", bounds, 2);
+        expect(model.getFloor(3, 1)?.family).toBe("pierre-grise");
         expect(model.getFloor(3, 4)?.family).toBe("pierre-grise");
         expect(model.getFloor(2, 4)?.family).toBe("parquet-clair");
         expect(model.getFloor(3, 3)?.family).toBe("parquet-clair");
         expect(model.getWall("h", 3, 4)?.height).toBe(2);
+        expect(model.getWall("h", 3, 1)?.height).toBe(2);
+    });
+
+    it("keeps the north wall on the first row of a rectangle at the top of the map", () => {
+        const model = new MapLayerModel();
+        applyRoom(model, { x: 2, y: 0 }, { x: 4, y: 1 }, "gris", "parquet-clair", bounds);
+        expect(walls(model).filter((wall) => wall.startsWith("h:"))).toEqual(
+            ["h:2,0", "h:3,0", "h:4,0", "h:2,2", "h:3,2", "h:4,2"].sort(),
+        );
+        expect(walls(model)).toContain("v:2,0");
+        expect(walls(model)).not.toContain("v:2,-1");
+        for (const y of [0, 1, 2]) expect(model.getFloor(3, y)?.family).toBe("parquet-clair");
     });
 });

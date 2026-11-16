@@ -333,9 +333,12 @@ export function applyWalls(
 }
 
 /**
- * A room on the rectangle of tiles between `a` and `b`: its walls on its border lines and its floor. The south wall
- * stands on the tile row under the rectangle, where the avatar walks up to its foot: that row gets the floor of the room
- * too, between the side walls, where it has none yet (a translucent high wall shows it).
+ * A room whose floor is the rectangle of tiles between `a` and `b`, all of it seen. A wall stands on the tile row of its
+ * grid line: the north wall goes on the line above the rectangle (it stands on the row above, its foot on the top of
+ * the rectangle) and the side walls reach up to it; at the top of the map, with no row above, it stays on the first row.
+ * The south wall stands on the row under the rectangle, where the avatar walks up to its foot: that row gets the floor
+ * of the room too, between the side walls, where it has none yet (a translucent high wall shows it). No floor is ever
+ * removed, and none is laid under the north wall.
  */
 export function applyRoom(
     model: MapLayerModel,
@@ -346,7 +349,9 @@ export function applyRoom(
     bounds: MapBounds,
     height: WallHeight = 1,
 ): void {
-    applyWalls(model, roomWallEdges(a, b), tint, bounds, height);
+    const top = Math.min(a.y, b.y);
+    const northRow = top > 0 ? top - 1 : top;
+    applyWalls(model, roomWallEdges({ x: a.x, y: northRow }, { x: b.x, y: Math.max(a.y, b.y) }), tint, bounds, height);
     applyFloor(model, rectangleCells(a, b), family, bounds);
     const southRow = Math.max(a.y, b.y) + 1;
     const underSouthWall = rectangleCells(
