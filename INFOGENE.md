@@ -1812,6 +1812,22 @@ marcher et zoomer ; désactiver les effets dans une seule session et recharger p
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
 l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
 
+### Arbres : feuilles d'automne et neige
+
+Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent
+(`Nature/TreeSeasonEffects.ts`, calculs purs dans `TreeLeafFall.ts` et `TreeSnowLoad.ts`) :
+
+- **Automne** : des feuilles partent du feuillage et tombent au pied de l'arbre, poussées dans le sens du vent
+  (6 à la fois au plus par arbre, 15 % de ces chutes par temps calme, toutes à partir de 80 km/h). Un tapis reste au
+  sol autour du pied, sous les personnages : de rien le 1er septembre à 40 feuilles par arbre le 30 novembre (la moitié
+  hors saison, avec le thème personnel Automne).
+- **Neige** (météo de la carte, fonte, ou thème Noël) : la neige se pose au sommet de l'arbre et descend le long du
+  feuillage (charge = couverture de neige de la carte × cycle propre à l'arbre, de 15 % à 100 % en 150 à 270 s), puis
+  se décroche au seuil : deux paquets tombent, un de chaque côté. L'image sans neige est dessinée par-dessus l'image
+  d'hiver, coupée par le haut ; seuls les arbres qui ont une image d'hiver sont concernés.
+- Tout vient de l'heure du serveur et de l'identifiant de l'arbre : même rendu pour tous, sans réseau. Rien en mode
+  édition, ni avec la météo masquée ou le mouvement réduit ; dehors et à l'écran seulement ; 15 dessins par seconde.
+
 ### Suite météo et raccourcis (PR 136)
 
 - Outils → Météo → Automatique : ciel clair, pluie, orage, neige, changement toutes les 30 minutes sur l’heure serveur. Les choix fixes restent disponibles. Le cycle conserve sa phase après reconnexion.
