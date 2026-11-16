@@ -129,20 +129,20 @@ reste possible).
   serveur** (`/server-time`, l'horloge de la nuit ; l'heure du poste en attendant) et d'une graine tirée de l'**id
   utilisateur** du porteur (`torchFlickerSeed`, jamais `Math.random`) : chaque navigateur voit la même flamme pour la
   même personne, et deux torches ne battent pas ensemble.
-  - *Respiration* : bruit de valeur lissé (smoothstep), deux octaves de 0,35 et 0,9 Hz, ±10 % autour de 87 %.
-  - *Crépitement* : bruit de 6 Hz, ±3 %. La lumière est échantillonnée 15 fois par seconde : au-delà de 7,5 Hz un
+  - _Respiration_ : bruit de valeur lissé (smoothstep), deux octaves de 0,35 et 0,9 Hz, ±10 % autour de 87 %.
+  - _Crépitement_ : bruit de 6 Hz, ±3 %. La lumière est échantillonnée 15 fois par seconde : au-delà de 7,5 Hz un
     bruit se replierait en un plus lent (repliement), d'où 6 Hz, soit 2 à 3 échantillons par alternance.
-  - *Rafales* : temps découpé en créneaux de 8 s, au plus une rafale par créneau, qui commence dans ses 3 premières
+  - _Rafales_ : temps découpé en créneaux de 8 s, au plus une rafale par créneau, qui commence dans ses 3 premières
     secondes (deux rafales à 5 s d'écart au moins) ; chute de 30 à 35 % en 150 ms puis retour exponentiel en 1,7 s.
     Uniquement **dehors** (grille extérieure de la météo, aux pieds de l'avatar ; sans grille, dehors), selon la
     météo de la carte telle qu'elle est affichée, sans le thème saisonnier personnel (`GameScene.getMapWeather`) :
     brise 0,25 (chance 37,5 % par créneau), pluie 0,6 (62 %), orage 1 (90 %, chute 35 %), brouillard 0,1 (air
     calme). Dedans, aucun vent. `torchWind(weather, outdoor, knownWind)` prend déjà un vent réel de 0 à 1 :
     l'emplacement prévu pour la vitesse du vent d'Open-Meteo, non branchée.
-  - *Allumage* : équipée, la torche monte de 0 à sa lumière en 0,5 s, chez soi et chez ceux qui voient la variable
+  - _Allumage_ : équipée, la torche monte de 0 à sa lumière en 0,5 s, chez soi et chez ceux qui voient la variable
     changer ; une torche déjà allumée quand on la voit pour la première fois (arrivée dans la salle) l'est tout de
     suite. Le voile de nuit suit l'allumage, pas le scintillement ni les rafales.
-  - *Couleur* : la teinte de la lumière suit sa luminosité, rouge orangé `#ff4a14` jusqu'à 40 %, jaune chaud
+  - _Couleur_ : la teinte de la lumière suit sa luminosité, rouge orangé `#ff4a14` jusqu'à 40 %, jaune chaud
     `#ffa83a` à 100 % (vers `#ff9432` à la luminosité habituelle de 87 %) ; changée par une teinte, sans redessiner la forme.
     La flamme dans la main garde ses couleurs (dessinée en `Graphics`, sans teinte).
 
@@ -157,6 +157,7 @@ reste possible).
   que le seuil de la lueur est 0,1 (raisonnement sur la luminance, non mesuré à l'écran). Mouvement réduit : lumière fixe (ni respiration, ni
   crépitement, ni rafales, ni allumage), couleur fixe selon l'intensité. La forme et la portée de la lumière restent
   fixes : son polygone part de la flamme sans tenir compte de son mouvement.
+
 - **Flamme dans la main** : elle ondule, 30 images par seconde, sur son propre pas (indépendant des 15 pas de la
   lumière, sans recalcul du polygone) : sa pointe penche de 1,8 px au plus, sa hauteur varie de 13 % et sa largeur de
   10 % (sommes d'ondes de 1,7 à 4,4 Hz sans mesure commune, décalées par porteur : deux flammes ne battent pas
@@ -215,8 +216,7 @@ dalle par case. Une partie des dalles s'allume en cyan, violet ou magenta, avec 
 - **Photosensibilité** : une dalle s'allume au plus trois fois par seconde et un battement n'est pris qu'au plus trois
   fois par seconde (WCAG 2.3.1), quels que soient la musique et le motif. Avec la préférence système de mouvement
   réduit, la piste est quatre fois plus lente, sans éclat sur les battements, avec des fondus de plus d'une seconde.
-- **Taille** : sélectionner la piste dans l'éditeur affiche **Taille de la piste** (largeur et hauteur en cases, de 2 à
-  60) et quatre poignées aux coins, qui vont de case en case. La taille est portée par la propriété existante
+- **Taille** : sélectionner la piste dans l'éditeur affiche **Taille de la piste** (largeur et hauteur en cases, de 2 à 60) et quatre poignées aux coins, qui vont de case en case. La taille est portée par la propriété existante
   `lampPropertyData` : le format des cartes est inchangé. L'effet couvre exactement l'objet et le suit quand on le
   déplace. Sans réglage, la piste fait la taille de son image (4 × 4 cases).
 - La piste est dessinée au sol, sous les avatars et les meubles, et au-dessus de l'obscurité d'une pièce dont les
@@ -231,7 +231,6 @@ une simple image.
 Recette : poser la piste, l'étirer par une poignée puis par les curseurs, annuler, la déplacer ; fermer l'éditeur et
 regarder les motifs s'enchaîner ; `?lampDemo` (ou un Jam dans la zone) pour les battements ; mouvement réduit du
 système pour la version lente.
-
 
 ## Lampe RGB à ombres portées
 
@@ -1463,9 +1462,9 @@ au-delà du palier de résistance revient au zoom d'avant l'éditeur.
   4 Réglages de carte, 6 fermer l'éditeur, 7 Sélection, 8 Carte ; 5 reste à l'émote du jeu. L'infobulle de chaque outil de la
   barre affiche son numéro. Ctrl / Cmd / Alt + chiffre ne change pas d'outil. Sans droit d'édition, une touche d'outil
   indisponible ne fait rien (avant, 2 fermait l'éditeur) ; 1 ouvre toujours l'Explorer.
-- **Fermer avec la touche `** : inchangé, la touche qui tape « ` » ferme l'éditeur, de même qu'une touche morte placée sur
-  la touche `Backquote` (clavier US international). Les autres touches mortes ne ferment plus l'éditeur : le ^ d'un clavier
-  français le fermait (`event.key` « Dead »). La touche ² d'un AZERTY PC ne le fermait pas et ne le ferme toujours pas.
+- **Fermer avec la touche `** : inchangé, la touche qui tape « `» ferme l'éditeur, de même qu'une touche morte placée sur
+la touche`Backquote` (clavier US international). Les autres touches mortes ne ferment plus l'éditeur : le ^ d'un clavier
+français le fermait (`event.key` « Dead »). La touche ² d'un AZERTY PC ne le fermait pas et ne le ferme toujours pas.
 - **Outil Carte, tracé** : pendant un geste, le pointeur est capturé par le canvas (`MapDragPointerCapture`, comme le glisser
   de l'Explorer). Passer sur le panneau, la barre d'actions ou une bulle vidéo n'annule plus le pinceau, la gomme ou la pièce ;
   Échap, une perte de capture bouton enfoncé ou la perte du focus de la fenêtre annulent toujours le tracé.
@@ -1811,6 +1810,22 @@ Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo d
 marcher et zoomer ; désactiver les effets dans une seule session et recharger pour vérifier la préférence.
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper
 l’environnement pendant la pluie puis recharger. Vérifier aussi l’arrêt des sons en ciel clair et pendant l’édition.
+
+### Arbres : feuilles d'automne et neige
+
+Les arbres qui se balancent (`Nature:tree-*`, `Nature/TreeSway.ts`) réagissent à la saison qu'ils affichent
+(`Nature/TreeSeasonEffects.ts`, calculs purs dans `TreeLeafFall.ts` et `TreeSnowLoad.ts`) :
+
+- **Automne** : des feuilles partent du feuillage et tombent au pied de l'arbre, poussées dans le sens du vent
+  (6 à la fois au plus par arbre, 15 % de ces chutes par temps calme, toutes à partir de 80 km/h). Un tapis reste au
+  sol autour du pied, sous les personnages : de rien le 1er septembre à 40 feuilles par arbre le 30 novembre (la moitié
+  hors saison, avec le thème personnel Automne).
+- **Neige** (météo de la carte, fonte, ou thème Noël) : la neige se pose au sommet de l'arbre et descend le long du
+  feuillage (charge = couverture de neige de la carte × cycle propre à l'arbre, de 15 % à 100 % en 150 à 270 s), puis
+  se décroche au seuil : deux paquets tombent, un de chaque côté. L'image sans neige est dessinée par-dessus l'image
+  d'hiver, coupée par le haut ; seuls les arbres qui ont une image d'hiver sont concernés.
+- Tout vient de l'heure du serveur et de l'identifiant de l'arbre : même rendu pour tous, sans réseau. Rien en mode
+  édition, ni avec la météo masquée ou le mouvement réduit ; dehors et à l'écran seulement ; 15 dessins par seconde.
 
 ### Suite météo et raccourcis (PR 136)
 

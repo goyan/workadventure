@@ -153,7 +153,7 @@ export class TreeSway {
 }
 
 /** A tree's own time in its swing, 0 to 1, from its id: the same for everyone. */
-function phaseOf(id: string): number {
+export function phaseOf(id: string): number {
     let hash = 2166136261;
     for (let index = 0; index < id.length; index++) {
         hash = Math.imul(hash ^ id.charCodeAt(index), 16777619);
