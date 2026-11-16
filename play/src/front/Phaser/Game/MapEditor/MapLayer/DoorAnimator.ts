@@ -532,7 +532,14 @@ export class DoorAnimator {
                               closed.collectionName,
                               mapLayerPrefabId(
                                   closed.collectionName,
-                                  doorPrefabName(piece.orientation, piece.tint, piece.side, frame, reverse),
+                                  doorPrefabName(
+                                      piece.orientation,
+                                      piece.tint,
+                                      piece.side,
+                                      frame,
+                                      reverse,
+                                      piece.glazed,
+                                  ),
                               ),
                           ),
                 ),
