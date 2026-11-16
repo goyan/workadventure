@@ -81,7 +81,7 @@ describe("JungleCompanions", () => {
         companions.update(16);
         expect(leads.has(LION.id)).toBe(true);
         expect(leads.get(LION.id)?.poseAt(16)).toMatchObject({ x: 320, y: 320 });
-        // Its companion stands two tiles behind at most: the prompt does not sit on the interaction key.
+        // Right after taming, it is still next to its master: the same key lets it go.
         expect(prompt.kind).toBe("release");
     });
 
@@ -117,6 +117,38 @@ describe("JungleCompanions", () => {
         companions.update(JUNGLE_COMPANION_ANNOUNCE_MS);
         expect(sent).toHaveLength(count + 1);
         expect(sent.at(-1)).toEqual({ animal: LION.id, since: 1_000_000 });
+    });
+
+    it("announces from a timer too: the frames stop in a hidden tab", () => {
+        const { world, sent, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        prompt.action?.();
+        const count = sent.length;
+        companions.announce(JUNGLE_COMPANION_ANNOUNCE_MS);
+        expect(sent).toHaveLength(count + 1);
+        expect(sent.at(-1)).toEqual({ animal: LION.id, since: 1_000_000 });
+    });
+
+    it("a gap in its announces longer than their expiry releases the companion: the others have let it go", () => {
+        const { world, sent, prompt } = makeWorld();
+        const companions = new JungleCompanions(world);
+        companions.update(0);
+        prompt.action?.();
+        companions.announce(JUNGLE_COMPANION_EXPIRY_MS + 1);
+        expect(sent.at(-1)).toEqual({ animal: null, since: 0 });
+        companions.update(JUNGLE_COMPANION_EXPIRY_MS + 2);
+        expect(prompt.kind).toBe("tame");
+    });
+
+    it("a master coming back into view has its companion at their feet, not where it was last seen", () => {
+        const { world, feet, leads } = makeWorld();
+        const companions = new JungleCompanions(world);
+        companions.receive(9, JUNGLE_COMPANION_EVENT, { animal: LION.id, since: 500 }, 0);
+        companions.update(0);
+        expect(leads.get(LION.id)?.poseAt(0)).toBeUndefined();
+        feet.set(9, { x: 480, y: 352 });
+        expect(leads.get(LION.id)?.poseAt(16)).toMatchObject({ x: 480, y: 352 });
     });
 
     it("an animal another player tamed follows them, cannot be tamed, and goes back once released", () => {

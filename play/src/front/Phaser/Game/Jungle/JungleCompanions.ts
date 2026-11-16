@@ -3,6 +3,7 @@ import type { Point } from "../Wander/WanderSchedule";
 import { JungleCompanionFollower } from "./JungleCompanionFollow";
 import {
     JUNGLE_COMPANION_ANNOUNCE_MS,
+    JUNGLE_COMPANION_EXPIRY_MS,
     JungleCompanionClaims,
     decodeJungleCompanion,
     jungleCompanionOwners,
@@ -81,12 +82,29 @@ export class JungleCompanions {
             // Someone tamed it first: their message crossed ours. Given up without a word.
             this.release();
         }
-        if (this.local && nowMs - this.lastAnnounce >= JUNGLE_COMPANION_ANNOUNCE_MS) {
-            this.lastAnnounce = nowMs;
-            this.world.send({ animal: this.local.animal, since: this.local.since });
-        }
+        this.announce(nowMs);
         this.updateLeads(owners, animals);
         this.updatePrompt(owners, animals);
+    }
+
+    /**
+     * Tells the room about the companion when it is time: called every frame and by a timer of its own, as the frames
+     * stop in a hidden tab. After a gap longer than the expiry (a tab hidden long, its timers slowed down), the others
+     * have let the companion go: so does this player.
+     */
+    public announce(nowMs: number): void {
+        if (!this.local || nowMs - this.lastAnnounce < JUNGLE_COMPANION_ANNOUNCE_MS) return;
+        if (nowMs - this.lastAnnounce > JUNGLE_COMPANION_EXPIRY_MS) {
+            this.release();
+            return;
+        }
+        this.lastAnnounce = nowMs;
+        this.world.send({ animal: this.local.animal, since: this.local.since });
+    }
+
+    /** The page goes away (reload, tab closed): the companion is released at once rather than when its claim expires. */
+    public releaseNow(): void {
+        if (this.local) this.release();
     }
 
     public destroy(): void {
@@ -119,13 +137,18 @@ export class JungleCompanions {
         for (const [animal, owner] of owners) {
             if (this.led.has(animal)) continue;
             const start = this.world.animalPose(animal) ?? animals.get(animal)?.nest ?? { x: 0, y: 0 };
-            const follower = new JungleCompanionFollower(start, this.nowMs);
+            let follower: JungleCompanionFollower | undefined = new JungleCompanionFollower(start, this.nowMs);
             this.led.set(animal, { owner, sheetPath: animals.get(animal)?.sheetPath });
             this.world.setLead(animal, {
                 poseAt: (nowMs) => {
                     const feet = this.world.playerFeet(owner);
-                    // Its master is out of view: so is it, neither here nor around its nest.
-                    if (!feet) return undefined;
+                    if (!feet) {
+                        // Its master is out of view: so is it, neither here nor around its nest. Back in view, it is
+                        // at their feet (it went with them), not where it was last seen.
+                        follower = undefined;
+                        return undefined;
+                    }
+                    follower ??= new JungleCompanionFollower(feet, nowMs);
                     return follower.poseAt(nowMs, feet, !this.world.playerInWater(owner));
                 },
             });

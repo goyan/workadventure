@@ -12,7 +12,7 @@ import type { GameScene } from "../GameScene";
 import { InteractionPrompt } from "../Water/InteractionPrompt";
 import type { WanderingCharactersManager } from "../Wander/WanderingCharactersManager";
 import type { Point } from "../Wander/WanderSchedule";
-import { encodeJungleCompanion } from "./JungleCompanionProtocol";
+import { JUNGLE_COMPANION_ANNOUNCE_MS, encodeJungleCompanion } from "./JungleCompanionProtocol";
 import { JungleCompanions } from "./JungleCompanions";
 import { loadJungleSounds, playJungleSound } from "./JungleCries";
 import { JungleManager } from "./JungleManager";
@@ -40,6 +40,8 @@ export class GameJungle {
     private readonly companionEvents: Subscription | undefined;
     private readonly tamePrompt: InteractionPrompt;
     private readonly releasePrompt: InteractionPrompt;
+    private readonly announceTimer: ReturnType<typeof setInterval>;
+    private readonly pageHideListener = (): void => this.companions.releaseNow();
     private readonly updateListener = (): void => {
         const now = Date.now();
         this.manager.update(now);
@@ -119,6 +121,9 @@ export class GameJungle {
                 this.releasePrompt.hide();
             },
         });
+        // Not a timer of the scene: those stop with the frames, in a hidden tab.
+        this.announceTimer = setInterval(() => this.companions.announce(Date.now()), JUNGLE_COMPANION_ANNOUNCE_MS);
+        window.addEventListener("pagehide", this.pageHideListener);
         this.companionEvents = scene.connection?.receivedEventMessageStream.subscribe(({ name, data, senderId }) =>
             this.companions.receive(senderId, name, data, Date.now()),
         );
@@ -133,6 +138,8 @@ export class GameJungle {
     }
 
     public destroy(): void {
+        clearInterval(this.announceTimer);
+        window.removeEventListener("pagehide", this.pageHideListener);
         this.companionEvents?.unsubscribe();
         this.companions.destroy();
         this.timer.remove();

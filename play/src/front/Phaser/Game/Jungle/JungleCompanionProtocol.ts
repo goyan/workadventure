@@ -8,8 +8,11 @@ import { z } from "zod";
 export const JUNGLE_COMPANION_EVENT = "infogene.jungle.companion";
 /** A master tells the room about its companion this often: a player who just arrived knows it within that time. */
 export const JUNGLE_COMPANION_ANNOUNCE_MS = 5_000;
-/** A claim not announced again for that long is over: its master left the map or reloaded the page. */
-export const JUNGLE_COMPANION_EXPIRY_MS = 15_000;
+/**
+ * A claim not announced again for that long is over: its master is gone without a word (a crash, a lost network; a
+ * departure or a reload says it). Longer than a minute: the timers of a tab hidden for long run once a minute.
+ */
+export const JUNGLE_COMPANION_EXPIRY_MS = 75_000;
 
 const JungleCompanionMessageSchema = z.object({
     /** The id of the animal (`jungle:<tree id>`), null once released. */
