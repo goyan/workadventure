@@ -1,6 +1,12 @@
 import type { BaseTranslation, Translation } from "../i18n-types";
 
 const actionbar = {
+    perf: {
+        fps: "{fps} fps",
+        detail: "worst {worst} ms · update {update} · render {render}",
+        waiting: "measuring…",
+        help: "Images a second, longest wait between two images, average time to work out and to draw an image (in ms), over the last half second.",
+    },
     understand: "Got it!",
     edit: "Edit",
     cancel: "Cancel",

@@ -107,6 +107,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             hintChristmas: "Noël : la neige remplace le sol extérieur et la météo de la carte.",
             hintNone: "Aucun décor saisonnier.",
         },
+        perfCounter: "Afficher le compteur de performances (images par seconde) près de la barre d'actions",
         lightShare: {
             title: "Partager mes réglages de lumière",
             help: "Un code qui porte tous les réglages de lumière (nuit, lumière indirecte, soleil, lune, ombres) : à envoyer à quelqu'un, qui le colle ici.",

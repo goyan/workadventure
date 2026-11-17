@@ -14,6 +14,7 @@
     import { screenSharingAvailableStore } from "../../Stores/ScreenSharingStore";
     import { isInRemoteConversation } from "../../Stores/StreamableCollectionStore";
     import { pictureInPictureSupportedStore } from "../../Stores/PeerStore";
+    import { perfShownStore } from "../../Stores/PerfStore";
     import MediaSettingsList from "./MediaSettingsList/MediaSettingsList.svelte";
     import CameraMenuItem from "./MenuIcons/CameraMenuItem.svelte";
     import MicrophoneMenuItem from "./MenuIcons/MicrophoneMenuItem.svelte";
@@ -25,6 +26,7 @@
     import VisibilityChecker from "./VisibilityChecker.svelte";
     import ContextualMenuItems from "./MenuIcons/ContextualMenuItems.svelte";
     import CloseChatMenuItem from "./MenuIcons/CloseChatMenuItem.svelte";
+    import PerfCounter from "./PerfCounter.svelte";
     import PictureInPictureMenuItem from "./MenuIcons/PictureInPictureMenuItem.svelte";
 
     let rightDiv: HTMLDivElement | undefined = $state();
@@ -67,6 +69,9 @@
                     <div
                         class="flex justify-center relative gap-1 @md/actions:gap-2 @xl/actions:gap-4 z-[1] mx-1 @md/actions:mx-2 @xl/actions:mx-4"
                     >
+                        {#if $perfShownStore}
+                            <div class="hidden @md/actions:flex items-center"><PerfCounter /></div>
+                        {/if}
                         <div class="hidden @sm/actions:flex items-center">
                             <ContextualMenuItems />
                         </div>

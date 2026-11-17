@@ -353,6 +353,7 @@ import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
+import { PerfMonitor } from "./Perf/PerfMonitor";
 import { skyWeatherFactor } from "./Night/SkyLight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
 import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
@@ -529,6 +530,7 @@ export class GameScene extends DirtyScene {
     // Lions and tigers around the outdoor trees, given to the wandering characters (see GameJungle).
     private gameJungle: GameJungle | undefined;
     private nightManager: NightManager | undefined;
+    private perfMonitor: PerfMonitor | undefined;
     private lampManager: LampManager | undefined;
     private gameSwitches: GameSwitches | undefined;
     private weatherManager: WeatherManager | undefined;
@@ -1592,6 +1594,8 @@ export class GameScene extends DirtyScene {
         this.konamiCodeDetector?.destroy();
         this.duckRushManager?.destroy();
         this.nightManager?.destroy();
+        this.perfMonitor?.destroy();
+        this.perfMonitor = undefined;
         this.wallFade?.destroy();
         this.wallFade = undefined;
         this.fadedWallFloor?.destroy();
@@ -3297,6 +3301,8 @@ export class GameScene extends DirtyScene {
                 // One veil at a time.
                 this.nightManager?.destroy();
                 this.nightManager = new NightManager(this, () => this.skyWeatherFactor());
+                this.perfMonitor?.destroy();
+                this.perfMonitor = new PerfMonitor(this.events, this.game.events);
                 // The objects of the map that are lamps; `?lampDemo` lights them with a made-up beat. One set at a time.
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);

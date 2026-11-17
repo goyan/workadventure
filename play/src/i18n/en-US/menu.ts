@@ -105,6 +105,7 @@ const menu: BaseTranslation = {
             hintChristmas: "Christmas: snow replaces the outdoor ground and the map weather.",
             hintNone: "No seasonal decor.",
         },
+        perfCounter: "Show the performance counter (images a second) next to the action bar",
         lightShare: {
             title: "Share my light settings",
             help: "A code that carries all the light settings (night, indirect light, sun, moon, shadows): send it to somebody, who pastes it here.",
