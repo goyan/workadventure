@@ -275,6 +275,7 @@ import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { FloorSpike } from "./Floors/FloorSpike";
+import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
@@ -2101,6 +2102,7 @@ export class GameScene extends DirtyScene {
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
+        character.setFloorZ(decodeFloorZ(update.player.variables.get(FLOOR_Z_VARIABLE)));
         character.setTorchIntensity(update.player.variables.get(TORCH_INTENSITY_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
@@ -3088,6 +3090,12 @@ export class GameScene extends DirtyScene {
                         () => wallBarriers(readMapLayerEntityStates(entitiesManager)),
                         () => entitiesManager.getEntities().values(),
                         () => ({ open: get(mapEditorModeStore), level: get(mapLayerLevelStore) }),
+                        (z) =>
+                            this.playerVariablesManager?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
+                                public: true,
+                                persist: false,
+                                scope: "room",
+                            }),
                     );
                 }
                 this.treeSeasonEffects?.destroy();
@@ -5426,6 +5434,9 @@ ${escapedMessage}
         );
         player.setTorchIntensity(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_INTENSITY_VARIABLE),
+        );
+        player.setFloorZ(
+            decodeFloorZ(this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(FLOOR_Z_VARIABLE)),
         );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),

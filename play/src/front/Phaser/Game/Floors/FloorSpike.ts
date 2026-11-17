@@ -8,6 +8,7 @@ import { floorStep } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
 import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
+import { floorZToShare } from "./FloorProtocol";
 
 /**
  * TRIAL of the raised floors, enabled by `?palier=piece`, `?palier=1` or `?palier=<cellX>,<cellY>`: the floors are
@@ -134,6 +135,9 @@ export class FloorSpike {
     private barriers: TileBarriers | undefined;
     private barriersAge = 0;
     private mapAge = 0;
+    /** The altitude last told to the other players, and the time since. */
+    private shared = 0;
+    private sinceShared = 0;
     private mapSignature = "";
 
     constructor(
@@ -146,6 +150,8 @@ export class FloorSpike {
         private readonly readEntities: () => Iterable<FloorEntity>,
         /** The map editor: whether it is open, and the floor being edited. */
         private readonly editor: () => { open: boolean; level: number },
+        /** Tells the other players the altitude of the avatar. */
+        private readonly share: (z: number) => void,
     ) {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_LEVEL_DEPTH * 2.5);
@@ -204,6 +210,13 @@ export class FloorSpike {
         this.prev = result.p;
         this.state = result.state;
         avatar.setFloorZ(result.state.elevation);
+        this.sinceShared += delta;
+        const toShare = floorZToShare(this.state, this.shared, this.sinceShared);
+        if (toShare !== undefined) {
+            this.shared = toShare;
+            this.sinceShared = 0;
+            this.share(toShare);
+        }
         this.fade(this.model, result.p, delta);
 
         this.label.setVisible(this.origin !== undefined);
