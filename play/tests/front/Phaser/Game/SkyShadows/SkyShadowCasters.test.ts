@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+import { MapLayerModel } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
+import {
+    OBJECT_SHADOW_RISE,
+    readShadowCasters,
+    wallShadowBoxes,
+} from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowCasters";
+import type { ShadowSourceEntity } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowCasters";
+
+function entity(overrides: Partial<ShadowSourceEntity> & Pick<ShadowSourceEntity, "prefab">): ShadowSourceEntity {
+    return { x: 100, y: 200, displayWidth: 64, displayHeight: 96, elevation: 0, ...overrides };
+}
+
+describe("wallShadowBoxes", () => {
+    it("stands a horizontal wall on its foot, the bottom of its face, as high as its tiles", () => {
+        const model = new MapLayerModel();
+        // On the line 2, over the column 1: drawn on the row 2, its foot on the bottom of that row (y = 96).
+        model.setWall("h", 1, 2, "blanc");
+        model.setWall("h", 2, 2, "blanc");
+        expect(wallShadowBoxes(model)).toEqual([{ x: 32, y: 90, width: 64, height: 6, rise: 32 }]);
+    });
+
+    it("gives a high wall its height: two tiles high, 64 px", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 1, 4, "blanc", 2);
+        expect(wallShadowBoxes(model)).toEqual([{ x: 32, y: 154, width: 32, height: 6, rise: 64 }]);
+    });
+
+    it("stands a vertical wall on the ground a row lower than its top is drawn, where the avatars meet it", () => {
+        const model = new MapLayerModel();
+        model.setWall("v", 3, 1, "blanc");
+        model.setWall("v", 3, 2, "blanc");
+        expect(wallShadowBoxes(model)).toEqual([{ x: 90, y: 64, width: 12, height: 64, rise: 32 }]);
+    });
+});
+
+describe("readShadowCasters", () => {
+    it("reads the tall objects (castsShadow) by their collision, at the height of an object", () => {
+        const { casters } = readShadowCasters([
+            entity({
+                prefab: {
+                    collectionName: "Mobilier",
+                    id: "armoire",
+                    castsShadow: true,
+                    collisionRectangles: [{ x: 0, y: 64, width: 64, height: 32 }],
+                },
+            }),
+            // A low object lets the light pass.
+            entity({ prefab: { collectionName: "Mobilier", id: "table" } }),
+        ]);
+        expect(casters?.boxes).toEqual([{ x: 100, y: 264, width: 64, height: 32, rise: OBJECT_SHADOW_RISE }]);
+        expect(casters?.trees).toEqual([]);
+    });
+
+    it("reads the trees of the nature catalogue as a crown on a trunk, the foot at the bottom middle of the image", () => {
+        const { casters } = readShadowCasters([
+            entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),
+        ]);
+        expect(casters?.boxes).toEqual([]);
+        expect(casters?.trees).toHaveLength(1);
+        const [tree] = casters?.trees ?? [];
+        expect(tree.x).toBe(132);
+        expect(tree.y).toBe(296);
+        expect(tree.crownRadius).toBeGreaterThan(16);
+        expect(tree.crownRadius).toBeLessThan(32);
+        expect(tree.crownHeight + tree.crownRadius).toBeLessThanOrEqual(96);
+        expect(tree.crownHeight).toBeGreaterThan(48);
+    });
+
+    it("leaves out what stands on a raised floor (shadows are cast on the ground only) and the walking animals", () => {
+        const { casters } = readShadowCasters([
+            entity({ elevation: 64, prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),
+            entity({
+                prefab: {
+                    collectionName: "Animaux",
+                    id: "canard",
+                    castsShadow: true,
+                    wander: { sheetPath: "canard.png" },
+                    collisionRectangles: [{ x: 0, y: 0, width: 32, height: 32 }],
+                },
+            }),
+        ]);
+        expect(casters).toEqual({ boxes: [], trees: [] });
+    });
+
+    it("does not read the walls again when nothing changed since a signature", () => {
+        const tree = entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } });
+        const { signature } = readShadowCasters([tree]);
+        expect(readShadowCasters([tree], signature).casters).toBeUndefined();
+        expect(readShadowCasters([{ ...tree, x: 101 }], signature).casters?.trees).toHaveLength(1);
+    });
+
+    it("changes its signature only when something that casts a shadow changes", () => {
+        const tree = entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } });
+        const table = entity({ prefab: { collectionName: "Mobilier", id: "table" } });
+        const first = readShadowCasters([tree, table]).signature;
+        expect(readShadowCasters([tree]).signature).toBe(first);
+        expect(readShadowCasters([{ ...tree, x: 101 }]).signature).not.toBe(first);
+    });
+});

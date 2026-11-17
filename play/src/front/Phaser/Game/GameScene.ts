@@ -268,7 +268,7 @@ import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
-import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -344,6 +344,9 @@ import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
+import { skyWeatherFactor } from "./Night/SkyLight";
+import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
+import type { ShadowSourceEntity } from "./SkyShadows/SkyShadowCasters";
 import { LampManager } from "./Lamps/LampManager";
 import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
@@ -513,6 +516,7 @@ export class GameScene extends DirtyScene {
     private nightManager: NightManager | undefined;
     private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
+    private skyShadowManager: SkyShadowManager | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
     /** The bent images the swaying trees are drawn with. */
@@ -1570,6 +1574,8 @@ export class GameScene extends DirtyScene {
         this.lampManager?.destroy();
         this.lampManager = undefined;
         this.weatherManager?.destroy();
+        this.skyShadowManager?.destroy();
+        this.skyShadowManager = undefined;
         this.treeSway?.destroy();
         this.treePoses?.destroy();
         this.treePoses = undefined;
@@ -1682,6 +1688,32 @@ export class GameScene extends DirtyScene {
         for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
             if (isSwayingTree(entity.getPrefab().id)) yield { id, object: entity };
         }
+    }
+
+    /** The objects of the map as their shadows of the sky need them. */
+    private *shadowSourceEntities(): Generator<ShadowSourceEntity> {
+        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            yield {
+                x: entity.x,
+                y: entity.y,
+                displayWidth: entity.displayWidth,
+                displayHeight: entity.displayHeight,
+                elevation: entity.getElevation(),
+                prefab: entity.getPrefab(),
+            };
+        }
+    }
+
+    /**
+     * The share of the direct light of the sky the weather shown to this person lets through (skyWeatherFactor): all
+     * of it with the weather effects hidden or the clouds turned off, as the sky then looks clear.
+     */
+    private skyWeatherFactor(): number {
+        if (!get(weatherEffectsEnabledStore)) return 1;
+        const theme = this.getSeasonalTheme();
+        const cloudiness =
+            theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
+        return skyWeatherFactor(this.getDesktopWeather(), cloudiness);
     }
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
@@ -1966,6 +1998,7 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            this.skyShadowManager?.update(time);
             this.treeSway?.update(time, serverDate?.getTime() ?? time);
             // After the swaying: the bare image over a snowy tree bends as its tree does.
             this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
@@ -3169,7 +3202,7 @@ export class GameScene extends DirtyScene {
                 this.gameJungle = new GameJungle(this, this.wanderingCharactersManager);
                 // One veil at a time.
                 this.nightManager?.destroy();
-                this.nightManager = new NightManager(this);
+                this.nightManager = new NightManager(this, () => this.skyWeatherFactor());
                 // The objects of the map that are lamps; `?lampDemo` lights them with a made-up beat. One set at a time.
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);
@@ -3214,6 +3247,15 @@ export class GameScene extends DirtyScene {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     raisedCover: () => this.raisedWeatherCover(),
                     seasonalTheme: () => this.getSeasonalTheme(),
+                });
+                // The shadows of the sun and of the moon, outdoors. One set at a time.
+                this.skyShadowManager?.destroy();
+                this.skyShadowManager = new SkyShadowManager(this, {
+                    light: () => this.nightManager?.skyLight(),
+                    entities: () => this.shadowSourceEntities(),
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
+                    enabled: () => !get(mapEditorModeStore),
                 });
                 this.treeSway?.destroy();
                 this.treePoses?.destroy();

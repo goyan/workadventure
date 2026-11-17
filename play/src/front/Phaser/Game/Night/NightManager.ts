@@ -18,6 +18,7 @@ import {
     sunPositionAt,
 } from "./NightClock";
 import type { SunPosition } from "./NightClock";
+import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -25,6 +26,8 @@ import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
+import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
+import type { SkyLight } from "./SkyLight";
 
 /** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
@@ -60,9 +63,17 @@ export class NightManager {
     private opacity = 0;
     private lastClockAt: number | undefined;
     private sun: SunPosition | undefined;
+    private light: SkyLight | undefined;
     private previous: NightFrame | undefined;
 
-    constructor(private readonly scene: GameScene) {
+    /**
+     * `skyWeather`: the share of the direct light of the sky the weather lets through (skyWeatherFactor), 1 by
+     * default.
+     */
+    constructor(
+        private readonly scene: GameScene,
+        private readonly skyWeather: () => number = () => 1,
+    ) {
         this.overlay = new NightOverlay(scene);
         this.forcedMinutes = parseNightAt(window.location.search, import.meta.env.DEV);
         this.readAreas();
@@ -106,9 +117,21 @@ export class NightManager {
                 this.mode === NightMode.Computer || this.forcedMinutes !== undefined,
                 shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
             );
-            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
+            // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
+            // turned off the map stays in daylight: the sun alone, while it is up, as for the clouds.
+            this.light =
+                sunAt === undefined
+                    ? undefined
+                    : skyLightAt(
+                          sunForClouds(this.sun, this.disabled),
+                          this.disabled ? undefined : moonPositionAt(sunAt, place),
+                          moonPhaseAt(sunAt).illuminated,
+                          this.skyWeather(),
+                      );
+            // A bright moon takes a little of the veil away.
+            this.opacity = sunAt === undefined ? 0 : moonlitNightOpacity(nightOpacityAt(sunAt, place), this.light);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -169,6 +192,14 @@ export class NightManager {
     /** Where the sun of the map is, at the instant and place of the night (updated once a second). */
     public sunPosition(): SunPosition | undefined {
         return sunForClouds(this.sun, this.disabled);
+    }
+
+    /**
+     * The light of the sky that casts the shadows (SkyLight), at the instant and place of the night (updated once a
+     * second); undefined without one.
+     */
+    public skyLight(): SkyLight | undefined {
+        return this.light;
     }
 
     public serverDate(): Date | undefined {

@@ -142,6 +142,50 @@ describe("personal night clock choice", () => {
         expect(manager.isNight()).toBe(true);
     });
 
+    it("lights the night a little under the full moon, and gives the moon as the light of the sky", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        // Full moon of 2026-11-24 (15:53 in Paris), risen at 16:22: at 23:00 it stands high in the south-east.
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: fullMoonNight }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const light = manager.skyLight();
+        expect(light?.body).toBe("moon");
+        expect(light?.elevation).toBeGreaterThan(40);
+        const opacity = (draw.mock.calls[0]?.[0] as { opacity: number } | undefined)?.opacity ?? 0;
+        expect(opacity).toBeLessThan(0.6);
+        expect(opacity).toBeGreaterThanOrEqual(0.48);
+        expect(manager.isNight()).toBe(true);
+    });
+
+    it("dims the light of the sky with the weather, and gives no moon with the night turned off", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        // A response for each clock: a body is read once.
+        vi.stubGlobal(
+            "fetch",
+            vi.fn().mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ now: fullMoonNight })))),
+        );
+        manager = new NightManager(createScene(), () => 0.5);
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const clear = manager.skyLight()?.intensity ?? 0;
+        expect(clear).toBeGreaterThan(0);
+        manager.destroy();
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        expect(manager.skyLight()?.intensity).toBeCloseTo(clear * 2, 6);
+        nightModeStore.set(NightMode.Disabled);
+        manager.update(2000);
+        expect(manager.skyLight()).toBeUndefined();
+    });
+
     it("reads the computer's own date and time as Paris time for the sun", async () => {
         vi.useFakeTimers();
         vi.setSystemTime(new Date("2026-06-21T12:00:00Z"));
@@ -159,11 +203,15 @@ describe("personal night clock choice", () => {
         await vi.advanceTimersByTimeAsync(0);
         manager.update(0);
         expect(manager.isNight()).toBe(false);
-        // At 23:00, past the civil dusk of 22:40: night.
+        // At 23:00, past the civil dusk of 22:40: night, a little lighter under the half moon then standing in the
+        // south-west (moonlitNightOpacity).
         vi.spyOn(Date.prototype, "getHours").mockReturnValue(23);
         vi.spyOn(Date.prototype, "getMinutes").mockReturnValue(0);
         manager.update(2000);
-        expect(draw).toHaveBeenCalledWith(expect.objectContaining({ opacity: 0.6 }));
+        const opacity = (draw.mock.calls[0]?.[0] as { opacity: number } | undefined)?.opacity ?? 0;
+        expect(opacity).toBeLessThan(0.6);
+        expect(opacity).toBeGreaterThanOrEqual(0.48);
+        expect(manager.isNight()).toBe(true);
     });
 
     it("pierces the veil with the lights of the RGB lamps, and draws it again when one changes shape", async () => {
