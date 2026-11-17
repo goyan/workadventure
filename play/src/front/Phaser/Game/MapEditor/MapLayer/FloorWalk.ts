@@ -30,6 +30,8 @@ const LOW_END = 0.5;
 const FOOT_WALL = 18;
 /** A move longer than this in one frame is a teleport: the avatar is read again as standing on the ground. */
 const TELEPORT_PX = 48;
+/** Height an avatar needs to walk under a stair with an open side. */
+const HEADROOM_PX = 40;
 /** A point on the edge of a tile belongs to the tiles of both sides. */
 const EDGE = 0.01;
 
@@ -107,6 +109,24 @@ function obstacleBox(stair: PlacedStair): PixelBox {
     return g;
 }
 
+/**
+ * The part of `obstacleBox` from the foot of the stair up to `until` of its way (1: all of it): what blocks an avatar
+ * of the floor it starts from, when the rest leaves headroom.
+ */
+function lowPart(stair: PlacedStair, until: number): PixelBox {
+    const box = obstacleBox(stair);
+    switch (stair.shape.direction) {
+        case "n":
+            return { ...box, y: box.y + box.height * (1 - until), height: box.height * until };
+        case "s":
+            return { ...box, height: box.height * until };
+        case "e":
+            return { ...box, width: box.width * until };
+        case "o":
+            return { ...box, x: box.x + box.width * (1 - until), width: box.width * until };
+    }
+}
+
 /** Whether a point of the screen, at this altitude, is over a slab; a point on an edge counts for both sides. */
 function overSlab(model: FloorModel, elevation: number, screen: Pt): boolean {
     const size = MAP_LAYER_TILE_SIZE;
@@ -176,11 +196,17 @@ export function floorStep(
                 // The stair stands on this floor: one steps on it by its first steps, and it blocks elsewhere.
                 const box = obstacleBox(stair);
                 if (!inside(ground, box)) continue;
-                if (inside(prevGround, box) || progressOnScreen(stair, ground) < LOW_END) {
+                // With an open side, there is headroom under its high end: an avatar of this floor walks under it.
+                const headroomFrom = stair.shape.open ? HEADROOM_PX / (stair.top - stair.base) : Infinity;
+                const progress = progressOnScreen(stair, ground);
+                if (progress >= headroomFrom) continue;
+                const prevInside = inside(prevGround, box);
+                const prevUnder = prevInside && progressOnScreen(stair, prevGround) >= headroomFrom;
+                if (!prevUnder && (prevInside || progress < LOW_END)) {
                     next = { elevation: level, stair: index, lane: isHorizontal(stair) ? ground.y : undefined };
                     break;
                 }
-                const kept = keepOut(prevGround, ground, box);
+                const kept = keepOut(prevGround, ground, lowPart(stair, Math.min(1, headroomFrom)));
                 point = { x: kept.x, y: kept.y - level };
             } else if (stair.top === level) {
                 // The stair arrives on this floor: one steps on it over its top edge.

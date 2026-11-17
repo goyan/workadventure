@@ -192,6 +192,46 @@ describe("floorStep", () => {
         expect(result).toEqual({ state: { elevation: 0 }, p: { x: 178, y: 30 } });
     });
 
+    describe("a stair with an open side", () => {
+        const openStair = (open: boolean): FloorModel => {
+            const model = new FloorModel();
+            slabs(model, 52, 4, 2, 7, 4);
+            // On the ground: x from 64 (foot) to 128 (top), the row 3 (y 96..128). It is 40 px high from x = 113.
+            model.addStair({ ...stair("e"), open }, { x: 2, y: 3 }, 0);
+            return model;
+        };
+
+        it("lets an avatar of the ground walk under its high end", () => {
+            const under = walk(openStair(true), { x: 120, y: 90 }, [{ y: 140 }]);
+            expect(under).toEqual({ state: { elevation: 0 }, p: { x: 120, y: 140 } });
+        });
+
+        it("still stops it where there is no headroom", () => {
+            const blocked = walk(openStair(true), { x: 100, y: 90 }, [{ y: 140 }]);
+            expect(blocked.state).toEqual({ elevation: 0 });
+            expect(blocked.p.y).toBeLessThanOrEqual(96);
+        });
+
+        it("still takes it up by its first steps, and down to the ground", () => {
+            const up = walk(openStair(true), { x: 56, y: 112 }, [{ x: 140 }]);
+            expect(up.state).toEqual({ elevation: 52 });
+            const down = walk(openStair(true), { x: 140, y: 60 }, [{ x: 56 }], { elevation: 52 });
+            expect(down).toEqual({ state: { elevation: 0 }, p: { x: 56, y: 112 } });
+        });
+
+        it("does not take up the stair an avatar that walks under it towards its foot", () => {
+            // Under the high end, then west along the row: stopped where the headroom ends, still on the ground.
+            const along = walk(openStair(true), { x: 120, y: 90 }, [{ y: 112 }, { x: 70 }]);
+            expect(along.state).toEqual({ elevation: 0 });
+            expect(along.p.x).toBeGreaterThanOrEqual(113);
+        });
+
+        it("is a wall all along when its side is full", () => {
+            const blocked = walk(openStair(false), { x: 120, y: 90 }, [{ y: 140 }]);
+            expect(blocked.p.y).toBeLessThanOrEqual(96);
+        });
+    });
+
     it("reads an avatar that jumped (a teleport) as standing on the ground", () => {
         const model = northModel();
         const result = floorStep(model, { elevation: 52 }, { x: 176, y: 90 }, { x: 600, y: 400 });

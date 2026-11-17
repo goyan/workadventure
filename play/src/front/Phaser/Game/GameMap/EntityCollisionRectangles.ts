@@ -3,6 +3,7 @@ import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRect
 import { getBlockingRectangles, getSolidRectangles } from "../../../Utils/EntityHitbox";
 import type { Entity } from "../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { parseAnyLevelPrefab } from "../MapEditor/MapLayer/MapLayerLevels";
 import type { Player } from "../../Player/Player";
 import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import { isPathClearOfStaticGroups, staticGroupsRectangles } from "./StaticGroupsPath";
@@ -93,7 +94,9 @@ export class EntityCollisionRectangles {
         // An object standing on a raised floor never writes its grid to the tile layer, which is the ground's: all it
         // blocks is rectangles, for the avatars of its floor only (see `createCollider`).
         if (elevationOf(entity) > 0) {
-            return prefab.wander ? [] : getBlockingRectangles(prefab, this.getCellSize());
+            // The doors of a raised floor are not animated yet: they leave the way free instead of staying shut.
+            const isDoor = parseAnyLevelPrefab(prefab.collectionName, prefab.id)?.kind === "door";
+            return prefab.wander || isDoor ? [] : getBlockingRectangles(prefab, this.getCellSize());
         }
         return getSolidRectangles({ x: entity.x, y: entity.y }, prefab, this.getCellSize());
     }
