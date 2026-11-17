@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FloorModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
-import { floorStep } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorWalk";
+import { floorStep, restoredFloorState } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorWalk";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
@@ -53,6 +53,19 @@ function northModel(): FloorModel {
     model.addStair(stair("n"), { x: 5, y: 6 }, 0);
     return model;
 }
+
+describe("restoredFloorState", () => {
+    it("puts the avatar back on the floor it stood on before a reload, when a slab is still under it", () => {
+        const model = new FloorModel();
+        model.setSlab(52, 3, 5, "parquet-clair");
+        // On the screen the avatar is 52 px north of the tile (3, 5) it stands over.
+        expect(restoredFloorState(model, { x: 3 * 32 + 10, y: 5 * 32 + 10 - 52 }, 52)).toEqual({ elevation: 52 });
+        // No slab under it any more, or another floor: the ground.
+        expect(restoredFloorState(model, { x: 6 * 32 + 10, y: 5 * 32 + 10 - 52 }, 52)).toBeUndefined();
+        expect(restoredFloorState(model, { x: 3 * 32 + 10, y: 5 * 32 + 10 - 84 }, 84)).toBeUndefined();
+        expect(restoredFloorState(model, { x: 3 * 32 + 10, y: 5 * 32 + 10 }, 0)).toBeUndefined();
+    });
+});
 
 describe("floorStep", () => {
     it("takes the avatar up a stair going north, onto the floor", () => {

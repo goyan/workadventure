@@ -2224,6 +2224,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   son mur de devant, pas sous son pied ; estompé (55 %), ce mur laissait voir le sol en haut et le terrain de dehors
   en bas, en deux tons. Le jeu dessine, pour soi seulement et sans rien poser sur la carte, le sol de la pièce sous
   les cases sans sol d'un mur haut estompé ; rien dans l'éditeur.
+- **Altitude après un rechargement** (`LastPlayerPosition.ts`, `FloorSpike.restore`) : la dernière position gardée
+  dans le navigateur porte l'altitude du palier (`floorZ`, absent au sol) ; au rechargement (un déploiement recharge
+  la page), l'avatar est reposé sur ce palier si une de ses dalles est encore sous lui, sinon au sol. Sur un
+  escalier, la dernière position gardée reste celle d'avant l'escalier.
 - **Dalles en verre** : interrupteur « Dalles en verre » du mode Dalles ; pièce `dalle-verre` de `Carte Paliers`
   (`SLAB_GLASS_FAMILY`, une famille de dalle qui n'est pas un sol du rez-de-chaussée), translucide comme les
   vitres : on voit à travers ce qui est sous le palier. Grisé tant que le catalogue de la salle n'a pas la pièce.
