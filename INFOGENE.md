@@ -2145,11 +2145,33 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
     rouge = dalles retirées pour la trémie. Un escalier posé sans arrivée garde ses cases d'arrivée barrées d'orange.
   - « Gomme de palier » : rectangle pour les dalles, clic sur un escalier qui part du niveau courant.
   - Les pièces de palier sont réservées à l'outil Carte (`isMapLayerPrefab`) : les autres outils ne les prennent pas.
+- **Altitude partagée** (`Floors/FloorProtocol.ts`) : variable de joueur `_floorZ`, publique et non sauvegardée
+  (patron de la torche) ; exacte sur un palier, par pas de 4 px et au plus toutes les 150 ms sur un escalier ; un
+  ancien client ou une valeur invalide = au sol.
+- **Objets sur un palier** : un objet posé ou déplacé prend l'altitude du palier dessiné sous son pied
+  (`placementElevation`, milieu du bas de l'image), 0 ailleurs ; l'interrupteur « Poser au sol, sous les paliers » du
+  panneau Objets le laisse au sol (meubler sous une mezzanine). Tri dans la bande de son niveau, collisions en
+  rectangles pour les avatars de son niveau seulement (rien dans la couche de cases, qui est celle du sol), même
+  transparence que son palier.
+- **Tableau accroché** (`applyHungOnWallDepth`) : un objet dont toute l'image tient sur la face sud de murs (un
+  tableau en haut d'un mur haut) est dessiné par-dessus ces murs ; s'il dépasse du chapeau ou du côté, il reste
+  derrière.
+- **Murs, portes et fenêtres sur un palier** (`MapLayerLevels.ts`) : mêmes pièces dans des collections à part
+  (`Carte Murs Paliers`, `Carte Portes Paliers`, `Carte Fenêtres Paliers`), avec l'altitude de leur palier. Tout ce
+  qui lit les murs du sol (lumière, dehors, chemin, portes, transparence) ne les voit pas, sans rien savoir des
+  paliers. Les modes Mur, Pièce, Porte, Fenêtre, Hauteur et Gomme travaillent au niveau choisi : l'outil lit les
+  pièces du niveau comme si elles étaient au sol, applique le modèle et l'autotile du sol, et replace le résultat au
+  niveau. Une pièce tracée sur un palier pose ses dalles avec ses murs. Le dessus de murs posés sur un palier est un
+  niveau proposé, nommé par la somme des hauteurs (« Niveau 2+2 »). Les portes d'étage laissent le passage libre
+  (pas encore animées).
+- **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
+  40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
 - **Cas pris en charge** : mezzanine sur murs de 2, 3 ou 4 ; escalier du sol à chaque niveau ; escaliers courts entre
-  niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2.
-- **Pas encore** : murs, portes et meubles sur un palier ; altitude partagée entre joueurs (les autres voient
-  l'avatar au sol) ; chemin par double-clic entre niveaux ; garde-corps dessiné ; compagnons, animaux, zones et bulles
-  ignorent le niveau ; images définitives.
+  niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2 ; pièce,
+  murs et meubles sur un palier ; étage sur étage.
+- **Pas encore** : portes d'étage animées ; sièges, objets à interaction et piscines sur un palier (coupés en
+  hauteur) ; transparence des murs d'étage devant l'avatar ; chemin par double-clic entre niveaux ; garde-corps
+  dessiné ; compagnons, animaux, zones et bulles ignorent le niveau ; images définitives.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
 
