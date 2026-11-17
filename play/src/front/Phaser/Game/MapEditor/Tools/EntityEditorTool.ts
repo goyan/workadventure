@@ -32,12 +32,12 @@ import { UpdateEntityFrontCommand } from "../Commands/Entity/UpdateEntityFrontCo
 import { UploadEntityFrontCommand } from "../Commands/Entity/UploadEntityFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
 import { isPlacementFree, shouldSnapToGrid } from "../EntityPlacementSnapping";
+import { newSwitchProperties } from "../../Switches/SwitchWiring";
 import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 
 import Key = Phaser.Input.Keyboard.Key;
 import Pointer = Phaser.Input.Pointer;
 import GameObject = Phaser.GameObjects.GameObject;
-import { newSwitchProperties } from "../../Switches/SwitchWiring";
 
 export class EntityEditorTool extends EntityRelatedEditorTool {
     /** Altitude of the floor the object being placed would stand on: the one drawn under the pointer. */
