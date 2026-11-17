@@ -3,7 +3,7 @@ import { ConnectionError, ConnectionErrorReason } from "livekit-client";
 import type { Subscription } from "rxjs";
 import * as Sentry from "@sentry/svelte";
 import type { Readable } from "svelte/store";
-import { parseJamSpaceName } from "@workadventure/map-editor";
+import { parseJamSpaceName, parseKaraokeStageSpaceName } from "@workadventure/map-editor";
 import type { SpaceInterface } from "../Space/SpaceInterface";
 import type { StreamableSubjects } from "../Space/SpacePeerManager/SpacePeerManager";
 import { CommunicationMessageType } from "../Space/SpacePeerManager/CommunicationMessageType";
@@ -40,7 +40,9 @@ export class LivekitConnection {
         private _screenSharingLocalStreamStore: Readable<LocalStreamStoreValue | undefined>,
         private _streamingMegaphoneStore = streamingMegaphoneStore,
     ) {
-        this.isJamSpace = parseJamSpaceName(this.space.getName()) !== undefined;
+        this.isJamSpace =
+            parseJamSpaceName(this.space.getName()) !== undefined ||
+            parseKaraokeStageSpaceName(this.space.getName()) !== undefined;
         if (this.isJamSpace) {
             this.unregisterJamMusicPublisher = registerJamMusicPublisher(this.space.getName(), {
                 publishJamMusic: (mediaStream) => this.publishJamMusic(mediaStream),

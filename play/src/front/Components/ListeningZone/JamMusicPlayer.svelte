@@ -22,4 +22,10 @@
 </script>
 
 <!-- The music alone: its volume and its silence are not the voices'. The player reuses the output device the user picked. -->
-<AudioStream {streamStore} outputDeviceId={$speakerSelectedStore} isBlocked={blocked} volume={jamMusicVolumeStore} />
+<AudioStream
+    conversation={false}
+    {streamStore}
+    outputDeviceId={$speakerSelectedStore}
+    isBlocked={blocked}
+    volume={jamMusicVolumeStore}
+/>

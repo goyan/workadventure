@@ -51,12 +51,14 @@
     import { jamAudioSession } from "../ListeningZone/GameJamAudioSession";
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
-    import { requestedMicrophoneDeviceIdStore } from "../Stores/MediaStore";
+    import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
+    import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
     import ActionBarButton from "./ActionBar/ActionBarButton.svelte";
+    import SilentBlock from "./ActionBar/SilentBlock.svelte";
 
     import HelpWebRtcSettingsPopup from "./HelpSettings/HelpWebRtcSettingsPopup.svelte";
     import HelpNotificationSettingsPopup from "./HelpSettings/HelpNotificationSettingPopup.svelte";
@@ -408,6 +410,15 @@
 
     <div class="flex min-h-full flex-col-reverse mobile:flex-col">
         <section id="main-layout-main" class="pb-0 flex-1 pointer-events-none h-full w-full relative">
+            <!-- A silent-zone notice must not resize the action bar and move the clock and music dock. -->
+            {#if $silentStore && !$hideActionBarStoreBecauseOfChatBar}
+                <div
+                    class="absolute top-0 inset-x-0 mx-auto w-fit max-w-[80%] z-[301]"
+                    data-testid="silent-zone-banner"
+                >
+                    <SilentBlock />
+                </div>
+            {/if}
             <div class="fixed z-[1000] bottom-0 start-0 right-0 m-auto w-max mobile:w-[98vw] md:max-w-[80%]">
                 <div class="popups flex items-end relative w-full justify-center mobile:mb-24 mb-4 h-[calc(100%-96px)]">
                     {#each $popupStore.slice().reverse() as popup, index (popup.uuid)}

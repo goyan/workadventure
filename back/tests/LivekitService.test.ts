@@ -332,6 +332,16 @@ describe("LiveKitService publish rights", () => {
         return claims.video?.canPublishSources as unknown as string[] | undefined;
     }
 
+    it("lets a singer publish only the mic and denies every publication to the audience", async () => {
+        const singer = await createService().generateToken("karaoke-space", user, { jamRole: "singer" });
+        expect(await publishSources(singer)).toEqual(["microphone"]);
+        const audience = await createService().generateToken("karaoke-space", user, { jamRole: "audience" });
+        const claims = await new TokenVerifier("api-key", "api-secret").verify(audience);
+        expect(claims.video?.canPublish).toBe(false);
+        expect(claims.video?.canSubscribe).toBe(true);
+        expect(await publishSources(audience)).toEqual([]);
+    });
+
     it("lets an ordinary token publish the four ordinary sources", async () => {
         const token = await createService().generateToken("space", user);
 
