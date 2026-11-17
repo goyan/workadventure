@@ -1,11 +1,17 @@
 import * as Phaser from "phaser";
 import { getPrefabCollisionRectangles } from "../../../Utils/PrefabCollisionRectangles";
-import { getSolidRectangles } from "../../../Utils/EntityHitbox";
+import { getBlockingRectangles, getSolidRectangles } from "../../../Utils/EntityHitbox";
 import type { Entity } from "../../ECS/Entity";
 import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { parseAnyLevelPrefab } from "../MapEditor/MapLayer/MapLayerLevels";
 import type { Player } from "../../Player/Player";
 import type { ObstacleRectangle } from "../../../Utils/RectangleObstacles";
 import { isPathClearOfStaticGroups, staticGroupsRectangles } from "./StaticGroupsPath";
+
+/** Altitude of the floor an entity stands on; 0 on the ground. */
+function elevationOf(entity: Entity): number {
+    return entity.getElevation();
+}
 
 interface EntityCollisionState {
     entity: Entity;
@@ -84,14 +90,25 @@ export class EntityCollisionRectangles {
 
     private getRectangles(entity: Entity) {
         const prefab = entity.getPrefab();
-        return this.kind === "water"
-            ? prefab.water
-            : getSolidRectangles({ x: entity.x, y: entity.y }, prefab, this.getCellSize());
+        if (this.kind === "water") return prefab.water;
+        // An object standing on a raised floor never writes its grid to the tile layer, which is the ground's: all it
+        // blocks is rectangles, for the avatars of its floor only (see `createCollider`).
+        if (elevationOf(entity) > 0) {
+            // The doors of a raised floor are not animated yet: they leave the way free instead of staying shut.
+            const isDoor = parseAnyLevelPrefab(prefab.collectionName, prefab.id)?.kind === "door";
+            return prefab.wander || isDoor ? [] : getBlockingRectangles(prefab, this.getCellSize());
+        }
+        return getSolidRectangles({ x: entity.x, y: entity.y }, prefab, this.getCellSize());
     }
 
     private createCollider(player: Player, state: EntityCollisionState): Phaser.Physics.Arcade.Collider {
         if (this.kind === "water") {
-            return this.scene.physics.add.collider(player, state.group, undefined, () => !player.isSwimming());
+            return this.scene.physics.add.collider(
+                player,
+                state.group,
+                undefined,
+                () => !player.isSwimming() && player.isOnFloor(elevationOf(state.entity)),
+            );
         }
         const prefab = state.entity.getPrefab();
         // The walls of the map layer are barriers for the pathfinder: a path never goes through them. While the avatar
@@ -101,7 +118,10 @@ export class EntityCollisionRectangles {
             player,
             state.group,
             undefined,
-            () => !(isWall && player.isWalkingPath()) && !player.isSittingOn(state.entity.entityId),
+            () =>
+                !(isWall && player.isWalkingPath()) &&
+                !player.isSittingOn(state.entity.entityId) &&
+                player.isOnFloor(elevationOf(state.entity)),
         );
     }
 
@@ -134,9 +154,15 @@ export class EntityCollisionRectangles {
         if (this.kind === "water" && player.isSwimming()) {
             return [];
         }
-        return Array.from(this.states.values())
-            .filter((state) => !isMapLayerPrefab(state.entity.getPrefab().collectionName, state.entity.getPrefab().id))
-            .map((state) => state.group);
+        return (
+            Array.from(this.states.values())
+                .filter(
+                    (state) => !isMapLayerPrefab(state.entity.getPrefab().collectionName, state.entity.getPrefab().id),
+                )
+                // The paths are computed on the ground: what stands on a raised floor is not in their way.
+                .filter((state) => elevationOf(state.entity) === 0)
+                .map((state) => state.group)
+        );
     }
 
     public destroy(): void {

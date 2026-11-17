@@ -1,3 +1,5 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
+import type { AreaPosition } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type {
     AreaChangeCallback,
@@ -98,11 +100,11 @@ export class GameMapFrontWrapper {
     /**
      * oldPosition is the previous position of the player.
      */
-    private oldPosition: { x: number; y: number } | undefined;
+    private oldPosition: AreaPosition | undefined;
     /**
      * position is the current position of the player.
      */
-    private position: { x: number; y: number } | undefined;
+    private position: AreaPosition | undefined;
 
     /**
      * Manager for renderable, interactive objects that players can work with.
@@ -813,13 +815,14 @@ export class GameMapFrontWrapper {
      * Sets the position of the current player (in pixels)
      * This will trigger events if properties are changing.
      */
-    public setPosition(x: number, y: number) {
+    public setPosition(x: number, y: number, z = 0) {
         const map = this.getMap();
         if (!map.width || !map.height) {
             return;
         }
         this.oldPosition = this.position;
-        this.position = { x, y };
+        // With the altitude of the floor the player is on: an area only applies to its floor.
+        this.position = { x, y, z };
         const areasChanged = this.gameMap
             .getWamFile()
             ?.getGameMapAreas()
@@ -1022,10 +1025,18 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        elevation = 0,
     ): boolean {
         return (
-            this.getPlacementBlocker(topLeftPos, width, height, collisionGrid, oldTopLeftPos, ignoreCollisionGrid) ===
-            undefined
+            this.getPlacementBlocker(
+                topLeftPos,
+                width,
+                height,
+                collisionGrid,
+                oldTopLeftPos,
+                ignoreCollisionGrid,
+                elevation,
+            ) === undefined
         );
     }
 
@@ -1037,6 +1048,8 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        /** Altitude of the floor the object goes on: the areas of that floor give the right to place it. */
+        elevation = 0,
     ): PlacementBlocker | undefined {
         this.lastPlacementBlocker = undefined;
         const canEntityBePlaced = this.canEntityBePlaced(
@@ -1053,6 +1066,7 @@ export class GameMapFrontWrapper {
         const entityCenterCoordinates = {
             x: Math.ceil(topLeftPos.x + width / 2),
             y: Math.ceil(topLeftPos.y + height / 2),
+            z: elevation,
         };
         if (!this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)) {
             return "permission";
@@ -1331,10 +1345,13 @@ export class GameMapFrontWrapper {
     }
 
     private isPlayerInsideAreaByCoordinates(
-        areaCoordinates: { x: number; y: number; width: number; height: number },
-        playerPosition: { x: number; y: number },
+        areaCoordinates: { x: number; y: number; width: number; height: number; elevation?: number },
+        playerPosition: AreaPosition,
     ): boolean {
-        return this.isInsideAreaByCoordinates(areaCoordinates, playerPosition);
+        return (
+            isAtAreaLevel(areaCoordinates, playerPosition.z ?? 0) &&
+            this.isInsideAreaByCoordinates(areaCoordinates, playerPosition)
+        );
     }
 
     public listenAreaCreation(areaData: AreaData): void {

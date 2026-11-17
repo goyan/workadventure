@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import type { FloorFamily, WallHeight, WallTint } from "../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import type { DoorHeightSetting } from "../Phaser/Game/MapEditor/MapLayer/MapLayerOperations";
+import type { StairDirection, StairWidth } from "../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
 export type MapLayerMode =
     | "wall"
@@ -11,7 +12,10 @@ export type MapLayerMode =
     | "door"
     | "window"
     | "height"
-    | "erase";
+    | "erase"
+    | "slab"
+    | "slabErase"
+    | "stair";
 
 export const mapLayerModeStore = writable<MapLayerMode>("wall");
 export const mapLayerFloorFamilyStore = writable<FloorFamily>("carrelage-gris");
@@ -73,5 +77,55 @@ export type MapLayerStatus =
     | "doorsUnavailable"
     | "windowInvalid"
     | "windowsUnavailable"
+    | "slabOnGround"
+    | "stairInvalid"
+    | "stairNoArrival"
     | "failed";
 export const mapLayerStatusStore = writable<MapLayerStatus | undefined>(undefined);
+
+/** The modes that edit the raised floors: slabs, their eraser, stairs. */
+export function isFloorMode(mode: MapLayerMode): mode is "slab" | "slabErase" | "stair" {
+    return mode === "slab" || mode === "slabErase" || mode === "stair";
+}
+
+/** Whether the catalog of the raised floors (slabs and stairs) is loaded in the current room. */
+export const mapLayerFloorsAvailableStore = writable<boolean>(false);
+/** The floor being edited: its altitude in pixels above the ground; 0 is the ground. */
+export const mapLayerLevelStore = writable<number>(0);
+/** The floors the panel offers above the ground, lowest first. */
+export const mapLayerLevelsStore = writable<readonly number[]>([]);
+/** Among them, the floors that have slabs on the map, lowest first: the first one is the floor 1, and so on. */
+export const mapLayerBuiltLevelsStore = writable<readonly number[]>([]);
+/** Armed by the panel: the next click on the map picks the floor under the pointer instead of drawing. */
+export const mapLayerPickLevelStore = writable<boolean>(false);
+
+/** The stair the stair mode places. */
+export const mapLayerStairDirectionStore = writable<StairDirection>("n");
+export const mapLayerStairWidthStore = writable<StairWidth>(1);
+/** The floor the stair goes up to; undefined (or a floor out of reach): the first one a stair can reach. */
+export const mapLayerStairTargetStore = writable<number | undefined>(undefined);
+/** Whether its side is open (its stringer only) instead of full. */
+export const mapLayerStairOpenStore = writable<boolean>(false);
+
+/**
+ * The modes that draw walls, doors and windows: they edit the level chosen in the panel, the ground or a raised floor.
+ * (The floor modes of the ground always edit the ground: the floor of a raised floor is its slabs.)
+ */
+export function isWallLevelMode(mode: MapLayerMode): boolean {
+    return (
+        mode === "wall" ||
+        mode === "room" ||
+        mode === "door" ||
+        mode === "window" ||
+        mode === "height" ||
+        mode === "erase"
+    );
+}
+
+/** Whether the catalogs of the walls of the raised floors are loaded in the current room. */
+export const mapLayerUpperWallsAvailableStore = writable<boolean>(false);
+
+/** Whether a mode shows the choice of the level: the modes of the raised floors, and the wall modes once they can. */
+export function usesLevel(mode: MapLayerMode, upperWallsAvailable: boolean): boolean {
+    return isFloorMode(mode) || (upperWallsAvailable && isWallLevelMode(mode));
+}

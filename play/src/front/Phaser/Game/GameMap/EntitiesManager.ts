@@ -1,3 +1,4 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import {
@@ -17,6 +18,12 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { LL } from "../../../../i18n/i18n-svelte";
+import { floorLevelTiles } from "../MapEditor/MapLayer/MapLayerFloors";
+import { FLOOR_PREVIEW_DEPTH } from "../MapEditor/MapLayer/FloorDepth";
+import type { PlacedFloorPiece } from "../MapEditor/MapLayer/FloorModel";
+import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
+import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
 import { shownWeatherSettings } from "../Weather/RealWeatherClient";
 import { snowCoverage } from "../Weather/SnowCover";
@@ -33,7 +40,7 @@ import {
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
 } from "../../../Stores/MapEditorStore";
-import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION, isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
@@ -286,6 +293,10 @@ export class EntitiesManager extends EventEmitter {
     /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */
     private getTileCollisionGrid(entity: Entity): number[][] | undefined {
         const prefab = entity.getPrefab();
+        // The tile layer is the ground's: an object on a raised floor blocks with rectangles, for its floor only.
+        if (entity.getElevation() > 0) {
+            return undefined;
+        }
         if (!prefab.collisionGrid?.some((row) => row.includes(1))) {
             return undefined;
         }
@@ -495,15 +506,46 @@ export class EntitiesManager extends EventEmitter {
                 const depthOffset = entity.getPrefab().depthOffset ?? 0;
                 const tileDim = this.scene.getGameMapFrontWrapper().getTileDimensions();
                 const snapToGrid = this.isSnappingToGrid();
+                // The object goes on the level under the pointer (or the one chosen in the panel): its grid is the
+                // one of that level, drawn its altitude further north.
+                this.dragFloorPieces ??= this.placedFloorPieces();
+                const level = placementElevation(
+                    this.dragFloorPieces,
+                    { x: pointer.worldX, y: pointer.worldY, width: 0, height: 1 },
+                    get(mapEditorPlacementLevelStore),
+                );
                 entity.x = snapToGrid ? Math.floor(dragX / tileDim.width) * tileDim.width : Math.floor(dragX);
-                entity.y = snapToGrid ? Math.floor(dragY / tileDim.height) * tileDim.height : Math.floor(dragY);
+                entity.y = snapToGrid
+                    ? Math.floor((dragY + level) / tileDim.height) * tileDim.height - level
+                    : Math.floor(dragY);
                 entity.updateDepth(depthOffset);
+                if (this.dragFloorPieces.length > 0) {
+                    // On a map with raised floors: the object stays in sight over them while it is dragged, with
+                    // the name of the level it would be dropped on next to the pointer.
+                    entity.setDepth(FLOOR_PREVIEW_DEPTH - 1);
+                    this.dragLevelLabel ??= this.scene.add.text(0, 0, "", {
+                        fontSize: "11px",
+                        color: "#ffffff",
+                        backgroundColor: "#1b2a41",
+                        padding: { x: 3, y: 1 },
+                    });
+                    this.dragLevelLabel.setDepth(FLOOR_PREVIEW_DEPTH);
+                    this.dragLevelLabel.setText(
+                        level === 0
+                            ? get(LL).mapEditor.mapLayer.floorLevel.ground()
+                            : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(level) }),
+                    );
+                    this.dragLevelLabel.setPosition(pointer.worldX + 14, pointer.worldY + 14);
+                    this.dragLevelLabel.setVisible(true);
+                }
 
                 this.changeEntityTint(entity);
             }
         });
         entity.on(Phaser.Input.Events.DRAG_END, (pointer: Pointer, dragX: number, dragY: number) => {
             entityPlacementBlockerStore.set(undefined);
+            this.dragFloorPieces = undefined;
+            this.dragLevelLabel?.setVisible(false);
             if (
                 get(mapEditorModeStore) &&
                 this.isEntityEditorToolActive() &&
@@ -511,28 +553,35 @@ export class EntitiesManager extends EventEmitter {
             ) {
                 mapEditorSelectedEntityDraggedStore.set(false);
                 if (
-                    !this.scene
-                        .getGameMapFrontWrapper()
-                        .canEntityBePlacedOnMap(
-                            entity.getTopLeft(),
-                            entity.displayWidth,
-                            entity.displayHeight,
-                            entity.getCollisionGrid(),
-                            entity.getOldPosition(),
-                            this.isFreePlacement(),
-                        )
+                    !this.scene.getGameMapFrontWrapper().canEntityBePlacedOnMap(
+                        entity.getTopLeft(),
+                        entity.displayWidth,
+                        entity.displayHeight,
+                        entity.getCollisionGrid(),
+                        entity.getOldPosition(),
+                        // On a raised floor, what stands on the ground under it is not in the way.
+                        this.isFreePlacement() || this.elevationAt(pointer.worldX, pointer.worldY) > 0,
+                        this.elevationAt(pointer.worldX, pointer.worldY),
+                    )
                 ) {
                     const oldPos = entity.getOldPosition();
                     entity.setPosition(oldPos.x, oldPos.y);
                     entity.clearTint();
                 } else {
+                    const oldPos = entity.getOldPosition();
                     if (this.ctrlKey?.isDown || isCopyModifier(pointer.event)) {
                         this.copyEntity(entity);
+                    } else if (entity.getPosition().x === oldPos.x && entity.getPosition().y === oldPos.y) {
+                        // A click, not a move: the object keeps its place and its level, whatever is drawn under
+                        // the pointer.
+                        entity.updateDepth(entity.getPrefab().depthOffset ?? 0);
                     } else {
                         const data: Partial<EntityData> = {
                             id: entity.entityId,
                             x: entity.x,
                             y: entity.y,
+                            // Dropped on a raised floor, the object stands on it; elsewhere on the ground.
+                            elevation: this.elevationAt(pointer.worldX, pointer.worldY),
                         };
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
@@ -629,6 +678,49 @@ export class EntitiesManager extends EventEmitter {
         });
     }
 
+    /**
+     * Altitude an object gets where its image is placed: the one of the raised floor drawn under its foot, the ground
+     * otherwise, or when the editor is set to place under the floors.
+     */
+    /**
+     * Altitude of the raised floor drawn under a point of the screen: where an object pointed there goes. The ground
+     * where there is none, or when the editor is set to place under the floors.
+     */
+    public elevationAt(worldX: number, worldY: number): number {
+        // A point is the foot of an image one pixel high.
+        return this.placementElevation({ x: worldX, y: worldY, width: 0, height: 1 });
+    }
+
+    /** The slabs and stairs of the map, read once per drag of an object. */
+    private dragFloorPieces: PlacedFloorPiece[] | undefined;
+    /** The name of the level a dragged object would be dropped on, next to the pointer. */
+    private dragLevelLabel: Phaser.GameObjects.Text | undefined;
+
+    /** Altitude of the highest raised floor drawn under a point of the screen, whatever the editor is set to. */
+    public levelDrawnAt(worldX: number, worldY: number): number {
+        return placementElevation(this.placedFloorPieces(), { x: worldX, y: worldY, width: 0, height: 1 }, "auto");
+    }
+
+    public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
+        return placementElevation(this.placedFloorPieces(), image, get(mapEditorPlacementLevelStore));
+    }
+
+    private placedFloorPieces(): PlacedFloorPiece[] {
+        const placed = [];
+        for (const entity of this.entities.values()) {
+            const prefab = entity.getPrefab();
+            if (prefab.collectionName !== MAP_LAYER_FLOOR_SLAB_COLLECTION) continue;
+            placed.push({
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getEntityData().elevation,
+            });
+        }
+        return placed;
+    }
+
     private copyEntity(entity: Entity): void {
         const positionToPlaceCopyAt = { ...entity.getPosition() };
         const oldPos = entity.getOldPosition();
@@ -714,7 +806,9 @@ export class EntitiesManager extends EventEmitter {
         }
 
         this.entities.forEach((entity, entityId) => {
+            // Only what stands on the floor of the area: the objects of another floor are drawn there, not in it.
             if (
+                isAtAreaLevel(area, entity.getElevation()) &&
                 gameMapFrontWrapper.isInsideAreaByCoordinates(
                     { x: area.x, y: area.y, width: area.width, height: area.height },
                     {

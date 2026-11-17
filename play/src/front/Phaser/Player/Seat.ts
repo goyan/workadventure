@@ -1,5 +1,6 @@
 import { PositionMessage_Direction } from "@workadventure/messages";
 import type { EntityPrefab, InteractionTrigger } from "@workadventure/map-editor";
+import { GROUND_DEPTH_SCALE } from "../Game/MapEditor/MapLayer/FloorDepth";
 import type { GameScene } from "../Game/GameScene";
 import type { Character } from "../Entity/Character";
 import type { GameMapFrontWrapper } from "../Game/GameMap/GameMapFrontWrapper";
@@ -29,6 +30,8 @@ export interface Seat {
     feet: { x: number; y: number };
     /** The image of the object: a double-click anywhere on it aims at its seats. */
     image?: { x: number; y: number; width: number; height: number };
+    /** Altitude of the floor the seat stands on (0 or absent: the ground). */
+    elevation?: number;
 }
 
 function toPositionDirection(direction: string): PositionMessage_Direction {
@@ -44,20 +47,21 @@ function toPositionDirection(direction: string): PositionMessage_Direction {
     }
 }
 
-let seatsCache: { scene: GameScene; frame: number; seats: Seat[] } | undefined;
+let seatsCache: { scene: GameScene; frame: number; seats: Seat[]; ground: Seat[] } | undefined;
 
 /**
  * Every seat of the map. Asked every frame by every character (depth) and animal: computed once per frame, since the
  * map editor may move, add or change seats at any time.
  */
-export function getSeats(scene: GameScene): Seat[] {
+export function getSeats(scene: GameScene, elevation = 0): Seat[] {
     const frame = scene.game?.loop?.frame ?? -1;
-    if (seatsCache && seatsCache.scene === scene && seatsCache.frame === frame) {
-        return seatsCache.seats;
+    if (!seatsCache || seatsCache.scene !== scene || seatsCache.frame !== frame) {
+        const seats = computeSeats(scene);
+        seatsCache = { scene, frame, seats, ground: seats.filter((seat) => (seat.elevation ?? 0) === 0) };
     }
-    const seats = computeSeats(scene);
-    seatsCache = { scene, frame, seats };
-    return seats;
+    // The seats of one floor: a seat of another floor is drawn over a place it does not stand on.
+    if (elevation < 2) return seatsCache.ground;
+    return seatsCache.seats.filter((seat) => Math.abs((seat.elevation ?? 0) - elevation) < 2);
 }
 
 function computeSeats(scene: GameScene): Seat[] {
@@ -71,9 +75,12 @@ function computeSeats(scene: GameScene): Seat[] {
     const categories = scene.wamFile?.settings?.categories;
     const seats: Seat[] = [];
     for (const [entityId, entity] of entitiesManager.getEntities()) {
+        const elevation = entity.getElevation();
         const prefab = entity.getPrefab();
         const direction = toPositionDirection(prefab.direction);
-        const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -1 : 1);
+        // One step of the depth of the ground: on a raised floor the depths of a floor are squeezed in its band.
+        const depthStep = elevation > 0 ? 1 / GROUND_DEPTH_SCALE : 1;
+        const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -depthStep : depthStep);
         const { interaction, trigger } = getObjectInteraction(prefab, categories);
         const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
         if (prefab.seat) {
@@ -89,11 +96,16 @@ function computeSeats(scene: GameScene): Seat[] {
                     trigger: interaction === "sit" ? trigger : "auto",
                     feet: { x: entity.x + tile.x * width, y: entity.y + tile.y * height },
                     image,
+                    elevation,
                 });
             });
         } else if (interaction === "sit") {
             seats.push(
-                ...deduceSeats(entityId, entity, direction, depth, width, trigger).map((seat) => ({ ...seat, image })),
+                ...deduceSeats(entityId, entity, direction, depth, width, trigger).map((seat) => ({
+                    ...seat,
+                    image,
+                    elevation,
+                })),
             );
         }
     }
@@ -166,9 +178,10 @@ export function findSeatUnderFeet(
     scene: GameScene,
     feet: { x: number; y: number },
     body?: { x: number; y: number; width: number; height: number },
+    elevation = 0,
 ): Seat | undefined {
     const { width, height } = scene.getGameMapFrontWrapper().getTileDimensions();
-    const seats = getSeats(scene);
+    const seats = getSeats(scene, elevation);
     const onTile = seats.find(
         (seat) => Math.abs(seat.feet.x - feet.x) < width / 2 && Math.abs(seat.feet.y - feet.y) < height / 2,
     );
@@ -202,9 +215,10 @@ export function findSeatAtPoint(
     scene: GameScene,
     point: { x: number; y: number },
     accept: (seat: Seat) => boolean = () => true,
+    elevation = 0,
 ): Seat | undefined {
     let nearest: { seat: Seat; distance: number } | undefined;
-    for (const seat of getSeats(scene)) {
+    for (const seat of getSeats(scene, elevation)) {
         const image = seat.image;
         if (
             !image ||

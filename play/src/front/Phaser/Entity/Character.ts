@@ -40,6 +40,7 @@ import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
 import { SpeechDomElement } from "./SpeechDomElement";
@@ -381,17 +382,22 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
         const tile = this.scene.getGameMapFrontWrapper()?.getTileDimensions() ?? { width: 32, height: 32 };
-        const nearby = isWithinOneTileOfWater(
-            getWaterRectangles(this.scene),
-            { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
-            tile,
-        );
+        // On a raised floor or a stair, the water of the ground is under the character: no swimwear near it.
+        const nearby =
+            this.floorZ === 0 &&
+            isWithinOneTileOfWater(
+                getWaterRectangles(this.scene),
+                { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
+                tile,
+            );
         if (inWater || nearby) this.swimwearEffect ??= new SwimwearEffect(this.scene, this);
         this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle, this.swimwearColor);
     }
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
     protected isSwimmingHere(): boolean {
+        // The water is on the ground: a character on a raised floor or a stair drawn over a pool does not swim.
+        if (this.floorZ > 0) return false;
         return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
     }
 
@@ -400,7 +406,8 @@ export abstract class Character extends Container implements OutlineableInterfac
      * The position is enough, as for the water: nothing more is sent over the network.
      */
     protected isOnIceHere(): boolean {
-        if (!this.scene) return false;
+        // The ice is on the ground too.
+        if (!this.scene || this.floorZ > 0) return false;
         return (
             isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
             !this.isSwimmingHere()
@@ -446,6 +453,32 @@ export abstract class Character extends Container implements OutlineableInterfac
     public setSwimwear(value: unknown): void {
         this.swimwearStyle = readSwimwear(value);
         this.scene.markDirty();
+    }
+
+    /** SPIKE (floors study): altitude of the floor the character stands on, in pixels above the ground. */
+    private floorZ = 0;
+    public getFloorZ(): number {
+        return this.floorZ;
+    }
+
+    /**
+     * Whether the things of the ground stop the character: not once it is on a stair or a raised floor, where they are
+     * under it (the stair itself keeps it between its sides).
+     */
+    public isNearGround(): boolean {
+        return this.floorZ < 2;
+    }
+
+    /** Whether the character stands on the floor of this altitude (0: the ground), stairs apart. */
+    public isOnFloor(elevation: number): boolean {
+        return Math.abs(this.floorZ - elevation) < 2;
+    }
+
+    public setFloorZ(z: number): void {
+        if (this.floorZ === z) return;
+        this.floorZ = z;
+        this.depthCache = undefined;
+        this.setDepthIfNeeded(this.computeDepth());
     }
 
     private setDepthIfNeeded(depth: number): void {
@@ -659,11 +692,17 @@ export abstract class Character extends Container implements OutlineableInterfac
     private computeDepth(): number {
         if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
             const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
-            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
+            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY }, undefined, this.floorZ);
             const actionObject = takesObjectPlace(this.avatarAction)
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;
-            this.depthCache = { x: this.x, y: this.y, depth: actionObject?.depth ?? seat?.depth ?? this.y + 16 };
+            // Floors: everything standing on a raised floor is drawn over everything standing lower.
+            const groundDepth = actionObject?.depth ?? seat?.depth ?? this.y + 16;
+            this.depthCache = {
+                x: this.x,
+                y: this.y,
+                depth: floorDepth(this.floorZ, groundDepth),
+            };
             // The treadmill under a runner moves its belt (recomputed with the depth: on each move or action change).
             this.scene.treadmillBelts.setRunner(
                 this,

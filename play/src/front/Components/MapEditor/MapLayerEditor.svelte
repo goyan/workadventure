@@ -27,11 +27,25 @@
         mapLayerWindowHeightStore,
         mapLayerWindowHeightsAvailableStore,
         mapLayerWindowsAvailableStore,
+        isFloorMode,
+        mapLayerFloorsAvailableStore,
+        mapLayerLevelStore,
+        mapLayerLevelsStore,
+        mapLayerStairDirectionStore,
+        mapLayerStairTargetStore,
+        mapLayerBuiltLevelsStore,
+        mapLayerStairOpenStore,
+        mapLayerStairWidthStore,
     } from "../../Stores/MapLayerStore";
+    import { STAIR_DIRECTIONS, floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+    import { reachableLevels, stairTarget } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
+    import FloorLevelPicker from "./FloorLevelPicker.svelte";
     import {
         IconArrowAutofitHeight,
         IconBrush,
+        IconStack2,
+        IconStairs,
         IconBucket,
         IconDoor,
         IconEraser,
@@ -59,8 +73,42 @@
         { mode: "height", icon: IconArrowAutofitHeight },
     ];
 
+    // The raised floors: slabs laid on the top of the walls, their eraser, and the stairs.
+    const floorModes: { mode: MapLayerMode; icon: typeof IconWall }[] = [
+        { mode: "slab", icon: IconStack2 },
+        { mode: "stair", icon: IconStairs },
+        { mode: "slabErase", icon: IconEraser },
+    ];
+
+    /**
+     * The name of a level: the height in tiles of the walls it stands on, and, once it has slabs on the map, its rank
+     * among the floors (the lowest one is the floor 1).
+     */
+    function levelLabel(level: number, built: readonly number[]): string {
+        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(level) });
+        const rank = built.indexOf(level) + 1;
+        return rank > 0 ? `${name} · ${$LL.mapEditor.mapLayer.floorLevel.built({ rank })}` : name;
+    }
+
+    const stairArrows = { n: "↑", e: "→", s: "↓", o: "←" } as const;
+    // What the stair preview draws on the map, with its colors (see MapLayerFloorEditing).
+    const stairLegend = [
+        { key: "firstStep", color: "#ffffff" },
+        { key: "arrival", color: "#3b82f6" },
+        { key: "missing", color: "#f97316" },
+        { key: "well", color: "#ef4444" },
+        { key: "refused", color: "#ef4444" },
+        { key: "deadEnd", color: "#f97316" },
+    ] as const;
+
+    // The floors a stair can reach from the level being edited, and the one it goes up to.
+    let stairTargets = $derived(reachableLevels($mapLayerLevelStore, $mapLayerLevelsStore));
+    let chosenStairTarget = $derived(stairTarget(stairTargets, $mapLayerBuiltLevelsStore, $mapLayerStairTargetStore));
+
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
+            $mapLayerModeStore !== "slabErase" &&
+            $mapLayerModeStore !== "stair" &&
             $mapLayerModeStore !== "erase" &&
             $mapLayerModeStore !== "door" &&
             $mapLayerModeStore !== "window" &&
@@ -117,7 +165,8 @@
     <button
         type="button"
         disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
-            (mode === "window" && !$mapLayerWindowsAvailableStore)}
+            (mode === "window" && !$mapLayerWindowsAvailableStore) ||
+            (isFloorMode(mode) && !$mapLayerFloorsAvailableStore)}
         class="flex flex-col items-center gap-1 p-2 rounded text-xs disabled:opacity-40 {$mapLayerModeStore === mode
             ? 'bg-secondary'
             : 'bg-white/10 hover:bg-white/20'}"
@@ -149,8 +198,12 @@
     </button>
 {/snippet}
 
-<div class="flex flex-col gap-4 text-white" data-testid="mapLayerEditor">
+<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pe-1 text-white" data-testid="mapLayerEditor">
     <h2 class="text-lg font-bold m-0">{$LL.mapEditor.mapLayer.title()}</h2>
+    {#if $mapLayerCatalogAvailableStore && $mapLayerFloorsAvailableStore}
+        <!-- The level edited, the same as in the objects panel. -->
+        <FloorLevelPicker />
+    {/if}
 
     {#if $mapLayerCatalogAvailableStore === undefined}
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.catalogLoading()}</p>
@@ -181,7 +234,106 @@
                 {/each}
             </div>
         </section>
+        <section class="flex flex-col gap-2">
+            <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.groups.floors()}</h3>
+            <div class="grid grid-cols-3 gap-2">
+                {#each floorModes as { mode, icon } (mode)}
+                    {@render modeButton(mode, icon)}
+                {/each}
+            </div>
+            {#if !$mapLayerFloorsAvailableStore}
+                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.floorLevel.unavailable()}</p>
+            {:else}
+                <details class="text-xs" data-testid="mapLayerFloorGuide">
+                    <summary class="cursor-pointer opacity-80 hover:opacity-100">
+                        {$LL.mapEditor.mapLayer.floorGuide.title()}
+                    </summary>
+                    <ol class="m-0 mt-1 flex list-decimal flex-col gap-1 ps-5 opacity-80">
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step1()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step2()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step3()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step4()}</li>
+                    </ol>
+                </details>
+            {/if}
+        </section>
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
+
+        {#if $mapLayerModeStore === "stair"}
+            <section class="flex flex-col gap-2" data-testid="mapLayerStair">
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.target()}</h3>
+                {#if stairTargets.length === 0}
+                    <p class="m-0 text-xs text-warning">{$LL.mapEditor.mapLayer.stair.noTarget()}</p>
+                {:else}
+                    <div class="flex flex-wrap gap-2">
+                        {#each stairTargets as level (level)}
+                            <button
+                                type="button"
+                                class="px-3 py-1 rounded text-xs {chosenStairTarget === level
+                                    ? 'bg-secondary'
+                                    : 'bg-white/10 hover:bg-white/20'}"
+                                aria-pressed={chosenStairTarget === level}
+                                title={$LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
+                                data-testid="mapLayerStairTarget-{level}"
+                                onclick={() => mapLayerStairTargetStore.set(level)}
+                            >
+                                {levelLabel(level, $mapLayerBuiltLevelsStore)}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.direction()}</h3>
+                <div class="flex flex-wrap gap-2">
+                    {#each STAIR_DIRECTIONS as direction (direction)}
+                        <button
+                            type="button"
+                            class="px-3 py-1 rounded text-xs {$mapLayerStairDirectionStore === direction
+                                ? 'bg-secondary'
+                                : 'bg-white/10 hover:bg-white/20'}"
+                            aria-pressed={$mapLayerStairDirectionStore === direction}
+                            data-testid="mapLayerStairDirection-{direction}"
+                            onclick={() => mapLayerStairDirectionStore.set(direction)}
+                        >
+                            <span aria-hidden="true">{stairArrows[direction]}</span>
+                            {$LL.mapEditor.mapLayer.stair.directions[direction]()}
+                        </button>
+                    {/each}
+                </div>
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.width()}</h3>
+                <div class="flex gap-2">
+                    {#each [1, 2] as const as width (width)}
+                        <button
+                            type="button"
+                            class="px-3 py-1 rounded text-xs {$mapLayerStairWidthStore === width
+                                ? 'bg-secondary'
+                                : 'bg-white/10 hover:bg-white/20'}"
+                            aria-pressed={$mapLayerStairWidthStore === width}
+                            onclick={() => mapLayerStairWidthStore.set(width)}
+                        >
+                            {width}
+                        </button>
+                    {/each}
+                </div>
+                <InputSwitch
+                    id="map-layer-stair-open"
+                    label={$LL.mapEditor.mapLayer.stair.openSide()}
+                    bind:value={$mapLayerStairOpenStore}
+                    margin="mt-0"
+                />
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stairLegend.title()}</h3>
+                <ul class="m-0 flex list-none flex-col gap-1 p-0 text-xs opacity-90" data-testid="mapLayerStairLegend">
+                    {#each stairLegend as { key, color } (key)}
+                        <li class="flex items-center gap-2">
+                            <span
+                                class="inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
+                                style="background-color: {color}"
+                            ></span>
+                            {$LL.mapEditor.mapLayer.stairLegend[key]()}
+                        </li>
+                    {/each}
+                </ul>
+            </section>
+        {/if}
 
         {#if $mapLayerModeStore === "door"}
             <section class="flex flex-col gap-1">

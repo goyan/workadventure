@@ -5,7 +5,8 @@ import type { GameScene } from "../GameScene";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { ServerNightClock } from "../Night/ServerNightClock";
 import { lampSource } from "./LampReconcile";
-import { LightObstacleReader } from "./LightObstacleReader";
+import { LightObstaclesByLevel } from "./LightObstacleReader";
+import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
 import { isTurning, rgbLampBeamDirection } from "./RgbLampRotation";
@@ -87,7 +88,7 @@ export class RgbLamps {
     private serverClock: ServerNightClock | undefined;
 
     // The obstacles of the map, as last read: each lamp checks whether what stops its own light changed.
-    private readonly obstacles: LightObstacleReader;
+    private readonly obstacles: LightObstaclesByLevel;
 
     constructor(
         private readonly scene: GameScene,
@@ -95,7 +96,7 @@ export class RgbLamps {
         options: RgbLampsOptions = {},
     ) {
         this.unsubscribePreview = rgbLampPreviewStore.subscribe((preview) => (this.preview = preview));
-        this.obstacles = new LightObstacleReader(scene, () => this.tileSize());
+        this.obstacles = new LightObstaclesByLevel(scene, () => this.tileSize());
         this.reducedMotion = options.reducedMotion ?? false;
         // The clock of the server, so that a computer whose clock is wrong turns its lamps with the others; the
         // computer's clock until the server answered (the beams jump once, then).
@@ -200,15 +201,13 @@ export class RgbLamps {
     }
 
     /** The segments that stop a light, the lamp itself apart. */
-    private segmentsFor(id: string, light: LightCone) {
+    private segmentsFor(id: string, light: LightCone, obstacles: LightObstacleReader) {
         const segments = obstacleSegments(light, {
-            grid: this.obstacles.grid,
+            grid: obstacles.grid,
             tileSize: this.tileSize(),
-            walls: this.obstacles.walls,
+            walls: obstacles.walls,
             // A lamp that is itself a tall object does not stand in its own light.
-            rectangles: this.obstacles.casters
-                .filter((caster) => caster.entityId !== id)
-                .map((caster) => caster.rectangle),
+            rectangles: obstacles.casters.filter((caster) => caster.entityId !== id).map((caster) => caster.rectangle),
         });
         const segmentsKey = segments
             .map((segment) => `${segment.ax},${segment.ay},${segment.bx},${segment.by}`)
@@ -218,11 +217,13 @@ export class RgbLamps {
 
     /** A lamp that does not turn: drawn again when it was moved or set, or when what stops its light changed. */
     private drawStill(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
+        // What stops the light on the floor of the map the lamp stands on.
+        const obstacles = this.obstacles.at(lamp.entity.getElevation());
         const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity}`;
-        if (key === lamp.key && lamp.obstaclesVersion === this.obstacles.version) {
+        if (key === lamp.key && lamp.obstaclesVersion === obstacles.version) {
             return false;
         }
-        const { segments, segmentsKey } = this.segmentsFor(id, light);
+        const { segments, segmentsKey } = this.segmentsFor(id, light, obstacles);
         let drawn = false;
         if (key !== lamp.key || segmentsKey !== lamp.segmentsKey) {
             lamp.visual.draw(light, litPolygon(light, segments), rgbLampColour(color), intensity);
@@ -232,7 +233,7 @@ export class RgbLamps {
         }
         lamp.key = key;
         lamp.segmentsKey = segmentsKey;
-        lamp.obstaclesVersion = this.obstacles.version;
+        lamp.obstaclesVersion = obstacles.version;
         // It may turn again later: its full turn is cast again then.
         lamp.turnKey = "";
         lamp.fullTurn = undefined;
@@ -244,12 +245,14 @@ export class RgbLamps {
      * changed. True when its beam must be drawn now (its full turn is new).
      */
     private castFullTurn(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
+        // What stops the light on the floor of the map the lamp stands on.
+        const obstacles = this.obstacles.at(lamp.entity.getElevation());
         const turnKey = `${light.x},${light.y},${light.radius},${light.angle},${color},${intensity}`;
-        if (turnKey === lamp.turnKey && lamp.obstaclesVersion === this.obstacles.version && lamp.fullTurn) {
+        if (turnKey === lamp.turnKey && lamp.obstaclesVersion === obstacles.version && lamp.fullTurn) {
             return false;
         }
-        const { segments, segmentsKey } = this.segmentsFor(id, light);
-        lamp.obstaclesVersion = this.obstacles.version;
+        const { segments, segmentsKey } = this.segmentsFor(id, light, obstacles);
+        lamp.obstaclesVersion = obstacles.version;
         if (turnKey === lamp.turnKey && segmentsKey === lamp.segmentsKey && lamp.fullTurn) {
             // An obstacle changed elsewhere on the map: this light stays as it is.
             return false;

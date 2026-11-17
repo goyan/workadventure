@@ -3,6 +3,7 @@
     import { onDestroy } from "svelte";
     import { derived, get } from "svelte/store";
     import { LL } from "../../../../i18n/i18n-svelte";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
@@ -19,6 +20,7 @@
     } from "../../../Stores/MapEditorStore";
     import Input from "../../Input/Input.svelte";
     import InputSwitch from "../../Input/InputSwitch.svelte";
+    import FloorLevelPicker from "../FloorLevelPicker.svelte";
     import ButtonClose from "../../Input/ButtonClose.svelte";
     import Button from "../../UI/Button.svelte";
     import { getEntityCategory, isHiddenFromLibrary, isSameCategory } from "../../../Utils/EntityCategory";
@@ -301,6 +303,10 @@
                 alignLabel="center"
             />
         </div>
+        {#if $mapLayerBuiltLevelsStore.length > 0}
+            <!-- The level the objects are placed on (the same picker as in the map tool): only with raised floors. -->
+            <FloorLevelPicker />
+        {/if}
         <p class="retro-hint m-0" data-testid="entityEditorShortcuts">
             {$LL.mapEditor.entityEditor.header.shortcuts()}
         </p>

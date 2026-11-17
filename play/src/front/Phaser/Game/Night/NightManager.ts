@@ -212,12 +212,14 @@ export class NightManager {
         this.areas = lightableAreas(areas, mapWidth, mapHeight);
     }
 
-    private players(): { id: string; x: number; y: number }[] {
+    private players(): { id: string; x: number; y: number; z: number }[] {
         // Raw sprite positions, as given to GameMapFrontWrapper.setPosition: NightLights adds the feet offset, the
         // halos are centred on them (the body). Animals are not players: they carry no light.
-        const players = [{ id: this.localId, x: this.scene.CurrentPlayer.x, y: this.scene.CurrentPlayer.y }];
+        // With the floor each one stands on: an area is lit by the players of its floor.
+        const local = this.scene.CurrentPlayer;
+        const players = [{ id: this.localId, x: local.x, y: local.y, z: local.getFloorZ() }];
         for (const [key, player] of this.scene.MapPlayersByKey) {
-            players.push({ id: String(key), x: player.x, y: player.y });
+            players.push({ id: String(key), x: player.x, y: player.y, z: player.getFloorZ() });
         }
         return players;
     }

@@ -102,6 +102,15 @@ describe("NightLights", () => {
         expect(dark.update(1000, [a], [nearBottom])).toEqual([]);
     });
 
+    it("only counts the players of the floor of the map an area belongs to", () => {
+        const upstairs = { ...area("up", 300, 300, 50, 50), elevation: 52 };
+        // On the ground, drawn where the area of the raised floor is: not in it; on that floor: in it.
+        expect(isInLightableArea({ x: 320, y: 320 }, [upstairs])).toBe(false);
+        expect(isInLightableArea({ x: 320, y: 320, z: 52 }, [upstairs])).toBe(true);
+        // And somebody on the raised floor does not light an area of the ground under it.
+        expect(isInLightableArea({ x: 320, y: 320, z: 52 }, [area("ground", 300, 300, 50, 50)])).toBe(false);
+    });
+
     it("tells whether a player stands in one of the areas, by its feet", () => {
         const b = area("b", 300, 300, 50, 50);
         expect(isInLightableArea({ x: 120, y: a.y - 10 }, [b, a])).toBe(true);

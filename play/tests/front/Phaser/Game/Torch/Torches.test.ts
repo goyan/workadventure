@@ -71,7 +71,7 @@ const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
 function entity(id: string, x: number, y: number, model: EntityPrefab): Entity {
     return Object.assign(
         { entityId: id, x, y },
-        { getPrefab: () => model, getProperties: () => [] },
+        { getPrefab: () => model, getProperties: () => [], getElevation: () => 0 },
     ) as unknown as Entity;
 }
 

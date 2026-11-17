@@ -460,6 +460,8 @@ message ModifyAreaMessage {
   // every property" would arrive identically. Leave it unset to keep the area's current properties.
   optional bool modifyProperties = 8;
   optional bool modifyServerData = 9;
+  // Optional so that a move or a property edit leaves the floor of the area untouched. See AreaData.elevation.
+  optional uint32 elevation = 10;
 }
 
 message DeleteAreaMessage {
@@ -479,6 +481,8 @@ message CreateAreaMessage {
   // Set by the map-storage when its property hooks changed `properties` (a new chat room, the copy of
   // an uploaded file...): the client that created the area must then apply them too.
   optional bool modifyServerData = 8;
+  // See AreaData.elevation (libs/map-editor).
+  optional uint32 elevation = 9;
 }
 
 message CreateEntityMessage {
@@ -497,6 +501,8 @@ message CreateEntityMessage {
   optional bool modifyServerData = 10;
   // See EntityData.depthStep (libs/map-editor). 11: upstream took 10 for modifyServerData.
   optional sint32 depthStep = 11;
+  // See EntityData.elevation (libs/map-editor).
+  optional uint32 elevation = 12;
 }
 
 message DeleteEntityMessage {
@@ -602,6 +608,8 @@ message ModifyEntityMessage {
   uint32 height = 8;
   // Optional so that a move or a property edit leaves the manual stacking untouched. See EntityData.depthStep.
   optional sint32 depthStep = 9;
+  // Optional so that a move or a property edit leaves the floor of the entity untouched. See EntityData.elevation.
+  optional uint32 elevation = 10;
 }
 
 // Transport envelope for websocket frames sent from front to pusher.

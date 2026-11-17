@@ -7,6 +7,7 @@ import type { FrontCommand } from "../Commands/FrontCommand";
 import { computePlacements, diffPlacements, placementKey } from "./MapLayerAutotile";
 import type { MapLayerDiff, PlacedMapLayerEntity } from "./MapLayerAutotile";
 import { mapLayerPieceSize, parseMapLayerPrefab } from "./MapLayerCatalog";
+import { parseAnyLevelPrefab } from "./MapLayerLevels";
 import { modelFromPlacedPrefabs } from "./MapLayerOperations";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
 
@@ -67,7 +68,8 @@ export function buildMapLayerCommands(
         (entityId) => new DeleteEntityFrontCommand(wamFile, entityId, undefined, entitiesManager),
     );
     for (const item of diff.toCreate) {
-        const piece = parseMapLayerPrefab(item.collectionName, item.prefabId);
+        // A piece of the ground, or the same piece standing on a raised floor (see MapLayerLevels).
+        const piece = parseAnyLevelPrefab(item.collectionName, item.prefabId);
         if (!piece) continue;
         const entityData: WAMEntityData = {
             x: item.x,
@@ -75,6 +77,7 @@ export function buildMapLayerCommands(
             prefabRef: { collectionName: item.collectionName, id: item.prefabId },
             properties: [],
         };
+        if (item.elevation) entityData.elevation = item.elevation;
         commands.push(
             new CreateEntityFrontCommand(
                 wamFile,

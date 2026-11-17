@@ -32,6 +32,8 @@
     import { executeUpdateWAMSettings } from "../../../Phaser/Game/MapEditor/Commands/Facades";
     import { isMapLayerPrefab } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
     import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
+    import FloorLevelPicker from "../FloorLevelPicker.svelte";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import RgbLampEditor from "./RgbLampEditor.svelte";
@@ -46,12 +48,21 @@
     let entitySearchable = $state(false);
     let showDescriptionField = $state(false);
     let selectedEntity: Entity | undefined = undefined;
+    // The level the selected object stands on (0: the ground), for the level picker.
+    let selectedElevation = $state(0);
+
+    function moveToLevel(level: number): void {
+        if (!$mapEditorSelectedEntityStore) return;
+        $mapEditorSelectedEntityStore.setElevation(level);
+        selectedElevation = level;
+    }
 
     let selectedEntityUnsubscriber = mapEditorSelectedEntityStore.subscribe((currentEntity) => {
         if (currentEntity) {
             currentEntity.setEditColor(0x00ffff);
             properties = currentEntity.getProperties() ?? [];
             entityName = currentEntity.getEntityData().name ?? "";
+            selectedElevation = currentEntity.getElevation();
             const descriptionProperty = properties.find((p) => p.type === "entityDescriptionProperties");
             if (!descriptionProperty) {
                 $mapEditorSelectedEntityStore?.addProperty({
@@ -476,6 +487,12 @@
             <IconArrowLeft font-size="12" class="cursor-pointer" />
             <span class="ml-1 cursor-pointer">{$LL.mapEditor.entityEditor.itemPicker.backToSelectObject()}</span>
         </p>
+        {#if $mapLayerBuiltLevelsStore.length > 0 || selectedElevation > 0}
+            <!-- The level the object stands on: choosing another one moves it there, over the same place. -->
+            <div class="my-2">
+                <FloorLevelPicker objectLevel={selectedElevation} onObjectLevel={moveToLevel} />
+            </div>
+        {/if}
         <button
             type="button"
             class="flex flex-row items-center gap-2 p-2 my-2 rounded text-sm bg-danger"

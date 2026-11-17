@@ -381,6 +381,12 @@ export const AreaData = AreaCoordinates.extend({
     visible: z.boolean(),
     name: z.string(),
     properties: AreaDataProperties,
+    /**
+     * Altitude of the raised floor the area belongs to, in pixels above the ground; the ground when absent. Like an
+     * entity (see EntityData.elevation), its rectangle is where it is drawn: over the ground `elevation` further
+     * south. It only applies to the players of that floor.
+     */
+    elevation: z.number().int().min(0).optional(),
 });
 
 export const EntityDataProperty = z.discriminatedUnion("type", [
@@ -565,6 +571,12 @@ export const EntityData = z.object({
      * previous one. Absent or 0 keeps the automatic order, which follows the position of the foot.
      */
     depthStep: z.number().int().optional(),
+    /**
+     * Altitude of the floor the entity stands on, in pixels above the ground of the map: absent or 0 on the ground. The
+     * position (x, y) stays the one of the image, which is drawn that much further north than the place the entity
+     * stands on: that place, on the ground, is (x, y + elevation).
+     */
+    elevation: z.number().int().min(0).optional(),
     prefab: EntityRawPrefab,
     prefabRef: EntityPrefabRef,
 });

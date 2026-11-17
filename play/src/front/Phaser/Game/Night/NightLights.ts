@@ -1,3 +1,4 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import { MathUtils } from "@workadventure/math-utils";
 import { AREA_POSITION_OFFSET_Y } from "@workadventure/map-editor";
 import type { AreaData } from "@workadventure/map-editor";
@@ -10,6 +11,15 @@ export interface NightRect {
     y: number;
     width: number;
     height: number;
+    /** Altitude of the floor of the map the area belongs to (the ground when absent). */
+    elevation?: number;
+}
+
+/** A player as the night reads it: its raw sprite position, and the altitude of the floor it stands on. */
+export interface NightPlayer {
+    x: number;
+    y: number;
+    z?: number;
 }
 
 /** An area to cut out of the night veil. `intensity` goes from 0 (dark) to 1 (fully lit). */
@@ -25,8 +35,12 @@ export function lightableAreas(areas: Iterable<AreaData>, mapWidth: number, mapH
 }
 
 /** Whether a player stands in this area, by its feet: the same rule as the areas themselves (GameMapAreas). */
-function isInArea(player: { x: number; y: number }, area: NightRect): boolean {
-    return MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area);
+function isInArea(player: NightPlayer, area: NightRect): boolean {
+    // An area belongs to a floor of the map: somebody on another one does not light it.
+    return (
+        isAtAreaLevel(area, player.z ?? 0) &&
+        MathUtils.isOverlappingWithRectangle({ x: player.x, y: player.y + AREA_POSITION_OFFSET_Y }, area)
+    );
 }
 
 /** Whether two rectangles overlap over at least half of the smaller one: the area is (mostly) that room. */
@@ -40,7 +54,7 @@ export function coversMostly(area: NightRect, room: NightRect): boolean {
 }
 
 /** Whether a player (raw sprite position) stands in one of these areas, by its feet. */
-export function isInLightableArea(player: { x: number; y: number }, areas: readonly NightRect[]): boolean {
+export function isInLightableArea(player: NightPlayer, areas: readonly NightRect[]): boolean {
     return areas.some((area) => isInArea(player, area));
 }
 
@@ -60,7 +74,7 @@ export class NightLights {
     public update(
         now: number,
         areas: readonly AreaData[],
-        players: readonly { x: number; y: number }[],
+        players: readonly NightPlayer[],
         /** An area whose light is put out (a party in it): it fades to dark, occupied or not. */
         putOut: (area: NightRect) => boolean = () => false,
     ): LitArea[] {

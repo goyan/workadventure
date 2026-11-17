@@ -25,8 +25,16 @@ import {
     mapLayerWindowHeightStore,
     mapLayerWindowHeightsAvailableStore,
     mapLayerWindowsAvailableStore,
+    isFloorMode,
+    mapLayerFloorsAvailableStore,
+    mapLayerPickLevelStore,
+    mapLayerLevelStore,
+    mapLayerLevelsStore,
+    isWallLevelMode,
+    mapLayerUpperWallsAvailableStore,
+    usesLevel,
 } from "../../../../Stores/MapLayerStore";
-import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
+import { mapEditorPlacementLevelStore, mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
 import type { FrontCommand } from "../Commands/FrontCommand";
@@ -52,7 +60,7 @@ import {
     parseMapLayerPrefab,
     windowPrefabName,
 } from "../MapLayer/MapLayerCatalog";
-import { computePlacements, diffPlacements, placementKey } from "../MapLayer/MapLayerAutotile";
+import { computePlacements, diffPlacements } from "../MapLayer/MapLayerAutotile";
 import { MAX_ENTITIES_PER_OPERATION, buildMapLayerCommands } from "../MapLayer/MapLayerSync";
 import { applyHeight, buildHeightPicker, selectionHeight } from "../MapLayer/MapLayerHeightEdit";
 import type { HeightPicker, HeightTarget } from "../MapLayer/MapLayerHeightEdit";
@@ -84,7 +92,13 @@ import {
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
+import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
+import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
+import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
+import type { LevelPlaced } from "../MapLayer/MapLayerLevels";
 import { MapEditorTool } from "./MapEditorTool";
+import { MapLayerFloorEditing } from "./MapLayerFloorEditing";
 
 /** The chosen height, or 1 when the catalogs of the room do not have its pieces. */
 function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): WallHeight {
@@ -94,8 +108,8 @@ function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): 
 /** The walls, doors and windows selected in the height mode. */
 const HEIGHT_SELECTION_COLOR = 0x3b82f6;
 
-/** Above every entity, below nothing: the preview must stay readable over furniture. */
-const PREVIEW_DEPTH = 100_000;
+/** Above every entity, those of the raised floors too: the preview must stay readable over them. */
+const PREVIEW_DEPTH = FLOOR_PREVIEW_DEPTH;
 
 /**
  * An edit of the map layer, applied to the model. The same function drives the preview (on a copy of the model
@@ -138,11 +152,14 @@ export class MapLayerEditorTool extends MapEditorTool {
     private heightSelection: HeightTarget[] = [];
     private unsubscribeHeightRequest: (() => void) | undefined;
     private unsubscribeMode: (() => void) | undefined;
+    private unsubscribeLevelChoice: (() => void) | undefined;
     /**
      * Keeps a mouse gesture on the canvas while it crosses HTML overlays (the editor panel, the action bar, video
      * bubbles): without it the browser sends the moves to the overlay and Phaser reports that the pointer left the game.
      */
     private pointerCapture: MapDragPointerCapture | undefined;
+    /** The raised floors: slabs, stairs and their wells. */
+    private floorEditing: MapLayerFloorEditing | undefined;
 
     private readonly pointerDownEventHandler = (pointer: Phaser.Input.Pointer): void => {
         this.handlePointerDown(pointer);
@@ -190,12 +207,22 @@ export class MapLayerEditorTool extends MapEditorTool {
         );
         mapEditorVisibilityStore.set(true);
         mapLayerStatusStore.set(undefined);
+        this.floorEditing = new MapLayerFloorEditing(this.scene, this.mapEditorModeManager, () => this.getBounds());
+        this.floorEditing.activate();
         this.forgetHoverModel();
         this.setHeightSelection([], undefined);
         this.unsubscribeHeightRequest = mapLayerHeightRequestStore.subscribe((height) => {
             if (height === undefined) return;
             mapLayerHeightRequestStore.set(undefined);
             this.applySelectionHeight(height);
+        });
+        // The level chosen in the panel (shared with the objects): a number is the level edited; "auto" follows the
+        // floor drawn under the pointer (see `followPointerLevel`).
+        this.unsubscribeLevelChoice = mapEditorPlacementLevelStore.subscribe((choice) => {
+            if (choice === "auto" || choice === get(mapLayerLevelStore)) return;
+            mapLayerLevelStore.set(choice);
+            this.forgetHoverModel();
+            this.redraw();
         });
         // The selection belongs to the height mode: choosing another mode lets it go.
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
@@ -216,6 +243,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.hover = undefined;
         this.unsubscribeHeightRequest?.();
         this.unsubscribeHeightRequest = undefined;
+        this.unsubscribeLevelChoice?.();
+        this.unsubscribeLevelChoice = undefined;
         this.unsubscribeMode?.();
         this.unsubscribeMode = undefined;
         this.setHeightSelection([], undefined);
@@ -227,6 +256,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         window.removeEventListener("blur", this.cancelEventHandler);
         this.pointerCapture?.destroy();
         this.pointerCapture = undefined;
+        this.floorEditing?.clear();
+        this.floorEditing = undefined;
         this.graphics?.destroy();
         this.graphics = undefined;
         this.setCursor("");
@@ -247,6 +278,24 @@ export class MapLayerEditorTool extends MapEditorTool {
                 this.redraw();
             }
             this.cancelGesture();
+            mapLayerPickLevelStore.set(false);
+        }
+        // Page Up and Page Down change the floor being edited, in the modes of the raised floors.
+        if (
+            (event.key === "PageUp" || event.key === "PageDown") &&
+            usesLevel(get(mapLayerModeStore), get(mapLayerUpperWallsAvailableStore))
+        ) {
+            event.preventDefault();
+            // One level up or down: a level chosen, any level (with or without slabs).
+            mapEditorPlacementLevelStore.set(
+                stepLevel(
+                    steppableLevels(get(mapLayerLevelsStore)),
+                    get(mapLayerLevelStore),
+                    event.key === "PageUp" ? 1 : -1,
+                ),
+            );
+            this.forgetHoverModel();
+            this.redraw();
         }
     }
 
@@ -278,6 +327,21 @@ export class MapLayerEditorTool extends MapEditorTool {
         ]);
         mapLayerCatalogAvailableStore.set(floor !== undefined && wall !== undefined);
         if (floor === undefined || wall === undefined) return;
+        // The walls of the raised floors are optional too: the same pieces in collections of their own.
+        const upperFacade = upperPrefabOf(
+            MAP_LAYER_WALL_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_WALL_COLLECTION, facadePrefabName("blanc", "mid")),
+        );
+        mapLayerUpperWallsAvailableStore.set(
+            (await manager.getEntityPrefab(upperFacade.collectionName, upperFacade.prefabId)) !== undefined,
+        );
+        // The raised floors are optional.
+        const slab = await manager.getEntityPrefab(
+            MAP_LAYER_FLOOR_SLAB_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName("parquet-clair")),
+        );
+        mapLayerFloorsAvailableStore.set(slab !== undefined);
+        if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
         // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
         const door = await manager.getEntityPrefab(
             MAP_LAYER_DOOR_COLLECTION,
@@ -390,24 +454,86 @@ export class MapLayerEditorTool extends MapEditorTool {
         return { columns: map.width ?? 0, rows: map.height ?? 0 };
     }
 
-    private readModel(): MapLayerModel {
-        const items: { x: number; y: number; collectionName: string; prefabId: string }[] = [];
-        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
-            const prefab = entity.getPrefab();
-            items.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
-        }
-        return modelFromPlacedPrefabs(items);
+    /**
+     * The level the wall modes edit: the raised floor chosen in the panel, when the room has the catalogs of the walls
+     * of the floors. The floor modes of the ground always edit the ground (the floor of a raised floor is its slabs,
+     * which have their own modes).
+     */
+    private editedLevel(): number {
+        return isWallLevelMode(get(mapLayerModeStore)) && get(mapLayerUpperWallsAvailableStore)
+            ? get(mapLayerLevelStore)
+            : 0;
     }
 
-    private readPlacedEntities(): PlacedMapLayerEntity[] {
-        const placed: PlacedMapLayerEntity[] = [];
+    /**
+     * A door, a window or a height is set on a wall already there: a click on a wall of another level than the one
+     * being edited goes to the level of that wall, instead of doing nothing.
+     */
+    private retargetLevel(pointer: Phaser.Input.Pointer): void {
+        const mode = get(mapLayerModeStore);
+        if ((mode !== "door" && mode !== "window" && mode !== "height") || !get(mapLayerUpperWallsAvailableStore)) {
+            return;
+        }
+        const current = get(mapLayerLevelStore);
+        const level = levelOfWallAt(
+            (at) => this.readModel(at),
+            get(mapLayerLevelsStore),
+            current,
+            pointer.worldX,
+            pointer.worldY,
+        );
+        if (level !== current) this.setLevel(level);
+    }
+
+    /** Edits a level: the one chosen in the panel too, unless it follows the pointer. */
+    private setLevel(level: number): void {
+        if (get(mapEditorPlacementLevelStore) === "auto") {
+            mapLayerLevelStore.set(level);
+        } else {
+            mapEditorPlacementLevelStore.set(level);
+            mapLayerLevelStore.set(level);
+        }
+        this.forgetHoverModel();
+    }
+
+    /** With the level on "auto": the level edited is the floor drawn under the pointer, the ground elsewhere. */
+    private followPointerLevel(pointer: Phaser.Input.Pointer): void {
+        if (get(mapEditorPlacementLevelStore) !== "auto" || !this.floorEditing) return;
+        const level = this.floorEditing.levelAt({ x: pointer.worldX, y: pointer.worldY });
+        if (level !== get(mapLayerLevelStore)) this.setLevel(level);
+    }
+
+    /** A point of the screen as the level being edited reads it: over the ground further south. */
+    private worldOf(pointer: Phaser.Input.Pointer): Point {
+        return { x: pointer.worldX, y: pointer.worldY + this.editedLevel() };
+    }
+
+    private readLevelEntities(): (LevelPlaced & { entityId: string })[] {
+        const items = [];
         for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
             const prefab = entity.getPrefab();
-            if (parseMapLayerPrefab(prefab.collectionName, prefab.id) === undefined) continue;
-            placed.push({
+            items.push({
                 entityId: entity.entityId,
-                key: placementKey(prefab.collectionName, prefab.id, entity.x, entity.y),
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getElevation(),
             });
+        }
+        return items;
+    }
+
+    /** The model of the level being edited, read as if its pieces stood on the ground. */
+    private readModel(level = this.editedLevel()): MapLayerModel {
+        return modelFromPlacedPrefabs(levelItems(this.readLevelEntities(), level));
+    }
+
+    private readPlacedEntities(level = this.editedLevel()): PlacedMapLayerEntity[] {
+        const placed: PlacedMapLayerEntity[] = [];
+        for (const entity of this.readLevelEntities()) {
+            const key = levelPlacedKey(entity, level);
+            if (key !== undefined) placed.push({ entityId: entity.entityId, key });
         }
         return placed;
     }
@@ -446,7 +572,18 @@ export class MapLayerEditorTool extends MapEditorTool {
             return;
         }
         mapLayerStatusStore.set(undefined);
-        const world = { x: pointer.worldX, y: pointer.worldY };
+        // The pipette: Alt or Cmd + click, or a click armed by the panel, picks the floor under the pointer.
+        if (pointer.event.altKey || pointer.event.metaKey || get(mapLayerPickLevelStore)) {
+            mapLayerPickLevelStore.set(false);
+            this.floorEditing?.pickLevel({ x: pointer.worldX, y: pointer.worldY });
+            this.pointerCapture?.release();
+            this.forgetHoverModel();
+            this.redraw();
+            return;
+        }
+        this.followPointerLevel(pointer);
+        this.retargetLevel(pointer);
+        const world = this.worldOf(pointer);
         const baseModel = this.readModel();
         const startCell = cellAt(world.x, world.y);
         this.gesture = {
@@ -469,7 +606,10 @@ export class MapLayerEditorTool extends MapEditorTool {
         const gesture = this.gesture;
         if (!gesture) {
             if (this.canDraw()) {
-                this.hover = { x: pointer.worldX, y: pointer.worldY };
+                this.followPointerLevel(pointer);
+                // On "auto", a wall of another level under the pointer shows where its door or window would go.
+                if (get(mapEditorPlacementLevelStore) === "auto") this.retargetLevel(pointer);
+                this.hover = this.worldOf(pointer);
                 this.redraw();
             }
             return;
@@ -479,7 +619,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.cancelGesture();
             return;
         }
-        const world = { x: pointer.worldX, y: pointer.worldY };
+        const world = this.worldOf(pointer);
         const previous = cellAt(gesture.currentWorld.x, gesture.currentWorld.y);
         const next = cellAt(world.x, world.y);
         gesture.currentWorld = world;
@@ -493,6 +633,12 @@ export class MapLayerEditorTool extends MapEditorTool {
         const gesture = this.gesture;
         if (!gesture || gesture.pointerId !== pointer.id || pointer.button !== 0) return;
         const mode = get(mapLayerModeStore);
+        if (isFloorMode(mode)) {
+            this.gesture = undefined;
+            this.pointerCapture?.release();
+            this.floorEditing?.commit(gesture.startWorld, gesture.currentWorld);
+            return;
+        }
         if (mode === "height") {
             // A click or a drag selects, it changes nothing on the map.
             this.gesture = undefined;
@@ -647,6 +793,11 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "height":
                 // The height mode selects on pointer up; a height is applied from the panel.
                 return undefined;
+            case "slab":
+            case "slabErase":
+            case "stair":
+                // The floors have their own model: see MapLayerFloorEditing.
+                return undefined;
             case "erase": {
                 // What the press starts on decides what is erased: from a wall, the walls of its line (floors stay);
                 // from a floor, the floors passed over (walls stay).
@@ -686,8 +837,15 @@ export class MapLayerEditorTool extends MapEditorTool {
         if (!graphics) return;
         this.setCursor(this.wantedCursor());
         graphics.clear();
+        // The previews are drawn where the pieces stand; on a raised floor they show its altitude higher.
+        graphics.setY(-this.editedLevel());
         const size = MAP_LAYER_TILE_SIZE;
         const gesture = this.gesture;
+        if (isFloorMode(get(mapLayerModeStore))) {
+            this.floorEditing?.draw(gesture?.startWorld, gesture?.currentWorld ?? this.hover);
+            return;
+        }
+        this.floorEditing?.draw(undefined, undefined);
 
         if (!gesture) {
             if (this.hover) {
@@ -934,20 +1092,38 @@ export class MapLayerEditorTool extends MapEditorTool {
         if (!wamFile) return;
         const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
         const bounds = this.getBounds();
+        const level = this.editedLevel();
 
         // The factory runs inside the command queue, right before execution: it reads the current state of the map.
         const factory = (): readonly FrontCommand[] => {
-            const model = this.readModel();
+            const model = this.readModel(level);
             if (operation(model, bounds) === "fillTooLarge") {
                 mapLayerStatusStore.set("fillTooLarge");
                 return [];
             }
-            const diff = diffPlacements(this.readPlacedEntities(), computePlacements(model));
+            const diff = diffPlacements(
+                this.readPlacedEntities(level),
+                levelPlacements(computePlacements(model), level),
+            );
             if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) {
                 mapLayerStatusStore.set("tooLarge");
                 return [];
             }
-            return buildMapLayerCommands(wamFile, entitiesManager, diff);
+            const commands = buildMapLayerCommands(wamFile, entitiesManager, diff);
+            if (level === 0) return commands;
+            // On a raised floor, the floor of a room is slabs: laid with its walls, in the same undo step.
+            const floors = [...model.getFloors()];
+            const slabs =
+                floors.length === 0
+                    ? []
+                    : this.floorEditing?.commandsFor((floorModel) => {
+                          for (const floor of floors) floorModel.setSlab(level, floor.x, floor.y, floor.family);
+                      });
+            if (slabs === undefined) {
+                mapLayerStatusStore.set("tooLarge");
+                return [];
+            }
+            return [...commands, ...slabs];
         };
 
         this.forgetHoverModel();
@@ -955,6 +1131,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             .executeCommands(factory)
             .then(() => {
                 this.forgetHoverModel();
+                this.floorEditing?.refreshLevels();
                 done?.();
             })
             .catch((error: unknown) => {

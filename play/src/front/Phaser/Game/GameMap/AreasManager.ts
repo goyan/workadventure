@@ -175,6 +175,7 @@ export class AreasManager {
         return this.gameMapAreas.isPlayerInsideArea(areaId, {
             x: this.scene.CurrentPlayer.x,
             y: this.scene.CurrentPlayer.y,
+            z: this.scene.CurrentPlayer.getFloorZ(),
         });
     }
 

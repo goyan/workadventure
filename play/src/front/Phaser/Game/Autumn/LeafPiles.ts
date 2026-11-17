@@ -1,3 +1,4 @@
+import { isRaisedFloorCollection } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FLOOR_COLLECTIONS, MISSING_TEXTURE, type AlphaMask, type SnowEntity } from "../Christmas/SnowCaps";
 import { OUTDOOR_WALL_COLLECTIONS, type OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { leafPileHeight, leafPileSpan, paintLeafPile } from "./LeafPileShape";
@@ -31,7 +32,11 @@ export class LeafPiles {
         for (const entity of entities) {
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
             const { collectionName } = entity.getPrefab();
-            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName) || FLOOR_COLLECTIONS.includes(collectionName))
+            if (
+                OUTDOOR_WALL_COLLECTIONS.includes(collectionName) ||
+                FLOOR_COLLECTIONS.includes(collectionName) ||
+                isRaisedFloorCollection(collectionName)
+            )
                 continue;
             if (!grid.isOutdoorAt(entity.x + entity.displayWidth / 2, entity.y + entity.displayHeight - 1)) continue;
             const pile = this.pileTexture(entity);

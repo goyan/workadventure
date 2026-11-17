@@ -2105,3 +2105,121 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Zones, duplication** : glisser une zone avec Ctrl, Cmd ou Option la duplique (`isAreaDuplicateGesture`), alors que
   Ctrl+clic ouvre le menu contextuel sur Mac. La consigne de l'outil le mentionne. Les écouteurs des touches Ctrl et
   Maj sont retirés à la désactivation : ils s'empilaient à chaque activation et changeaient le curseur des autres outils.
+
+## Paliers et escaliers de l'outil Carte (en cours, branche locale)
+
+Étages posés sur le dessus des murs hauts, reliés par des escaliers. Tout est dessiné par l'outil Carte, section
+« Paliers » du panneau. En chantier : non livré, catalogue provisoire.
+
+- **Principe** : chaque objet posé a une altitude en pixels (`EntityData.elevation`, absente = au sol). La position
+  enregistrée reste celle de l'image, dessinée d'autant plus au nord ; l'endroit au sol est `(x, y + elevation)`.
+  L'avatar garde sa position à l'écran et a une altitude à part (`Character.setFloorZ`). Le champ traverse le
+  protocole (`CreateEntityMessage.elevation`, `ModifyEntityMessage.elevation`) : `play`, `back` et `map-storage`
+  ensemble, un ancien `map-storage` le retire.
+- **Niveaux** : un palier se pose sur des murs de 2, 3 ou 4 cases, à 52, 84 ou 116 px (`floorElevation`). L'interface
+  ne montre jamais de pixels : « Niveau 2 », « Niveau 3 », « Niveau 4 » (hauteur des murs en cases,
+  `floorLevelTiles`), suivi de « palier N » quand le niveau a des dalles (rang parmi les niveaux posés).
+- **Pièces** (collection `Carte Paliers`, contrat avec le catalogue privé, `MapLayerFloors.ts`) : `dalle-<famille>` ;
+  `escalier-<n|e|s|o>-l<1|2>-<montée>[-vide]`, montée `h2`/`h3`/`h4` (du sol au dessus d'un mur : 52, 84, 116 px) ou
+  `m1`/`m2` (entre deux dessus de murs : 32, 64 px), `-vide` = flanc ouvert. Un escalier est un seul objet. Sa longueur
+  au sol est d'une case par case montée (arrondi au-dessus), une de plus vers le sud (sinon il ne descendrait pas
+  l'écran). Les pièces n'ont pas de collision : le jeu garde l'avatar sur les dalles et les escaliers.
+- **Modèle** (`FloorModel.ts`) : dalles par altitude et par case, escaliers avec leur niveau de départ et d'arrivée.
+  Une trémie est simplement des cases sans dalle.
+- **Marche** (`FloorWalk.ts`, pur et testé) : montée et descente dans les quatre directions ; le bord des dalles est un
+  garde-corps (l'avatar garde la largeur de son corps sur les dalles) ; on entre et on sort d'un escalier par son pied,
+  par ses côtés sur sa moitié basse, et par son haut ; un côté longé par un mur est fermé (`stairSideClosed`, d'après
+  `wallBarriers`) ; on ne sort pas en haut d'un escalier qui n'arrive sur aucune dalle ; un avatar dont la dalle
+  disparaît est remis au sol. En hauteur, le sol ne bloque plus et ses objets, sièges, piscines et portes ne
+  réagissent plus à l'avatar.
+- **Rendu** (`FloorDepth.ts`) : une bande de profondeurs par altitude, tout ce qui est en hauteur passe au-dessus de
+  ce qui est plus bas. Un palier au-dessus de l'avatar, ou vers lequel il monte, s'estompe à 35 % ; les dalles qui
+  couvrent un escalier restent à 55 %. Dans l'éditeur, les niveaux au-dessus du niveau édité sont à 30 %.
+- **Éditeur** (`MapLayerFloorEditing.ts`, `FloorOperations.ts`) :
+  - « Niveau » : choisi à la main ; pipette par Alt+clic, Cmd+clic ou le bouton « Prendre le niveau sous le
+    pointeur » ; le nom du niveau suit le pointeur (un même point de l'écran est une case de chaque niveau).
+  - « Dalles de palier » : rectangle au niveau choisi (le mode quitte le sol tout seul).
+  - « Escalier » : « Part du » (niveau courant), « Monte jusqu'à » (niveaux atteignables ; par défaut un niveau déjà
+    posé), direction, largeur, flanc vide. La trémie est découpée dans le palier d'arrivée et rebouchée au retrait.
+    Aperçu : rond = première marche, flèche = arrivée, bleu = dalles d'arrivée, orange = pas de dalle à l'arrivée,
+    rouge = dalles retirées pour la trémie. Un escalier posé sans arrivée garde ses cases d'arrivée barrées d'orange.
+  - « Gomme de palier » : rectangle pour les dalles, clic sur un escalier qui part du niveau courant.
+  - Les pièces de palier sont réservées à l'outil Carte (`isMapLayerPrefab`) : les autres outils ne les prennent pas.
+- **Altitude partagée** (`Floors/FloorProtocol.ts`) : variable de joueur `_floorZ`, publique et non sauvegardée
+  (patron de la torche) ; exacte sur un palier, par pas de 4 px et au plus toutes les 150 ms sur un escalier ; un
+  ancien client ou une valeur invalide = au sol.
+- **Objets sur un palier** : le panneau Objets propose « Poser sur » dès que la carte a un palier : **Auto** (le
+  palier dessiné sous le pointeur, le sol s'il n'y en a pas), **Sol** (meubler sous une mezzanine) ou un niveau posé
+  (`mapEditorPlacementLevelStore`, `placementElevation`). L'aperçu passe au-dessus du palier, se cale sur ses dalles et
+  affiche le nom du niveau ; un objet déplacé suit la même règle au lâcher. Tri dans la bande de son niveau, collisions en
+  rectangles pour les avatars de son niveau seulement (rien dans la couche de cases, qui est celle du sol), même
+  transparence que son palier.
+- **Tableau accroché** (`applyHungOnWallDepth`) : c'est le niveau de l'objet qui dit s'il est accroché. Au sol
+  (niveau 0, et donc en **Auto** hors d'un palier), un objet dont l'image tombe sur la face d'un mur haut est
+  **derrière** ce mur, caché par lui. Avec un niveau au-dessus du sol choisi dans le sélecteur, sans dalle de ce
+  niveau sous son pied et avec toute son image sur la face sud de murs, il est dessiné juste par-dessus ces murs.
+- **Murs, portes et fenêtres sur un palier** (`MapLayerLevels.ts`) : mêmes pièces dans des collections à part
+  (`Carte Murs Paliers`, `Carte Portes Paliers`, `Carte Fenêtres Paliers`), avec l'altitude de leur palier. Tout ce
+  qui lit les murs du sol (lumière, dehors, chemin, portes, transparence) ne les voit pas, sans rien savoir des
+  paliers. Les modes Mur, Pièce, Porte, Fenêtre, Hauteur et Gomme travaillent au niveau choisi : l'outil lit les
+  pièces du niveau comme si elles étaient au sol, applique le modèle et l'autotile du sol, et replace le résultat au
+  niveau. Une pièce tracée sur un palier pose ses dalles avec ses murs. Le dessus de murs posés sur un palier est un
+  niveau proposé, nommé par la somme des hauteurs (« Niveau 2+2 »). Les portes d'étage s'ouvrent pour les
+  personnages de leur niveau (`Floors/UpperDoors.ts` : un animateur des portes du sol par niveau, nourri des pièces et
+  des personnages de ce niveau vus comme au sol) ; celles du sol ne s'ouvrent plus pour un personnage en hauteur.
+- **En hauteur, le sol ne réagit pas** : pas de nage, de tenue de bain ni de glisse au-dessus d'une piscine ou d'une
+  patinoire ; pas de chapeau de neige ni de tas de feuilles sur les pièces de palier (`isRaisedFloorCollection`).
+- **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
+  40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
+- **Sélecteur de niveau commun** (`FloorLevelPicker.svelte`, en haut du panneau Carte et du panneau Objets ; choix
+  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, une ligne Niveau − / +
+  (n'importe quel niveau, une case de mur à la fois, avec ou sans dalles : `steppableLevels`) et Palier − / + (palier
+  posé suivant ou précédent). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
+  clic en mode Porte, Fenêtre ou Hauteur sur un mur d'un autre niveau passe à ce niveau (`levelOfWallAt`).
+- **Profondeurs** : les bandes des paliers commencent au-dessus de tout le sol, objets « au-dessus des avatars »
+  compris (un arbre derrière une maison est caché par son étage), et restent sous les calques de recouvrement.
+- **Cas pris en charge** : mezzanine sur murs de 2, 3 ou 4 ; escalier du sol à chaque niveau ; escaliers courts entre
+  niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2 ; pièce,
+  murs et meubles sur un palier ; étage sur étage.
+- **Par niveau** : sièges (`getSeats(scene, altitude)`), objets à action et objets à interaction ne valent que
+  pour le palier où ils sont posés ; une fléchette de Nerf vole à la hauteur du tireur (elle ne touche que les
+  joueurs de ce palier, et les murs du sol seulement tirée du sol) ; on n'apprivoise un animal que depuis le sol ; les
+  autres joueurs s'estompent avec leur palier.
+- **Trajet par double-clic et « Y aller »** (`FloorPath.ts`, `GameScene.floorWalkTo`) : dès que le départ ou
+  l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
+  (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un
+  escalier, ou pour un trajet qui reste au sol : trajet ordinaire. Les meubles des paliers ne sont pas contournés.
+- **Bulles par niveau** (`back/src/Model/FloorLevel.ts`) : le `back` lit l'altitude que le navigateur publie dans
+  la variable de joueur `_floorZ` ; deux joueurs ne forment une bulle, et n'en écoutent une, que sur le même palier
+  (moins de 6 px d'écart : deux niveaux peuvent n'être qu'à 12 px). Monter ou descendre fait quitter la bulle ; à
+  mi-escalier, aucune bulle. Aucun changement de protocole.
+- **Zones par niveau** : champ facultatif `AreaData.elevation` (absent = sol, aucune migration ; protobuf
+  `CreateAreaMessage.elevation = 9`, `ModifyAreaMessage.elevation = 10`). Le rectangle d'une zone est là où on la
+  voit, comme un objet. Une zone ne vaut que pour les joueurs de son palier (`isAtAreaLevel`, `GameMapAreas` reçoit
+  la position avec son altitude) : entrée et sortie, verrou et toquer, collision d'une zone fermée, compte des
+  occupants, objets d'un bureau perso, suivi des zones côté `back` (`AreaZoneTracker`). Une réservation de bureau ne
+  peut pas changer le niveau d'une zone. `play`, `back` et `map-storage` ensemble.
+- **Éditeur de zones** : le sélecteur de niveau commun en haut du panneau ; une zone est créée au niveau choisi (en
+  Auto, sur le palier dessiné sous elle) ; avec un niveau choisi, les zones des autres niveaux sont estompées et ne
+  se saisissent plus ; en Auto, là où des zones de plusieurs niveaux se recouvrent, celles du palier sous le
+  pointeur ; « Niveau de cette zone » dans le panneau d'une zone la déplace de niveau au-dessus du même endroit.
+- **Aussi par niveau de zone** : le droit de poser, déplacer ou supprimer un objet dans une zone (bureau perso,
+  zone à droits) se lit sur les zones du palier de l'objet, côté front et côté `map-storage` ; une zone n'est
+  allumée la nuit que par les joueurs de son palier ; une lampe ou une piste de danse se rattache à la zone
+  d'écoute de son palier ; les bruits de pas « dedans » suivent le palier du joueur. Une zone dessinée sur un palier
+  s'aligne sur la grille de ses dalles.
+- **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
+  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; une zone de départ en
+  hauteur fait apparaître au sol ; les portes d'étage sont lues fermées par les lumières ; images définitives.
+- **Lumières par palier** (`LightObstaclesByLevel`) : une lampe RGB et une torche sont arrêtées par les murs et
+  les objets hauts du palier où elles se trouvent, pas par ceux du sol ni par les cases de la carte ; sur un
+  escalier, ou sur un palier sans rien de posé, rien ne les arrête. Une piste de danse posée sur un palier est
+  dessinée par-dessus ses dalles. Une zone d'étage se déplace et se redimensionne à la souris sur la grille de son
+  palier.
+- **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
+  d'essai en mémoire (`Floors/FloorSpike.ts`).
+
+Recette : tracer une pièce à murs de 2 ; poser les dalles au niveau 2 ; poser un escalier du sol (sa trémie se
+découpe) ; fermer l'éditeur, monter, marcher jusqu'aux bords, redescendre, passer dessous (le palier s'estompe) ;
+ajouter un palier niveau 4 et un escalier « part du niveau 2, monte jusqu'à niveau 4 » ; vérifier la pipette, la
+gomme, annuler et rétablir ; recharger la page (les altitudes sont conservées).

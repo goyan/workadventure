@@ -3,6 +3,7 @@ import type { Subscription } from "rxjs";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import Debug from "debug";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { nerfEquippedStore, nerfHeartsStore } from "../../../Stores/NerfStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
@@ -52,6 +53,8 @@ interface Projectile {
     /** Last frame that moved the dart (its birth before the first one). */
     lastAt: number;
     senderId: number;
+    /** Altitude of the shooter when it fired (0: the ground): the dart flies at that height. */
+    z: number;
     /** Where the shooter stood: a shot fired from the prison hurts nobody. */
     originX: number;
     originY: number;
@@ -170,6 +173,7 @@ export class NerfManager {
             const body = character.getCollisionRectangle();
             return {
                 id,
+                character,
                 obstacles: new RectangleObstacles(
                     [{ ...body, y: body.y - CHARACTER_BODY_HEIGHT, height: body.height + CHARACTER_BODY_HEIGHT }],
                     { offsetX: 0, offsetY: 0, width: 0, height: 0 },
@@ -190,7 +194,12 @@ export class NerfManager {
                 x: projectile.startX + projectile.dx * distance,
                 y: projectile.startY + projectile.dy * distance,
             };
-            const targets = bodies.filter(({ id }) => id !== projectile.senderId);
+            // A dart flies at the height of its shooter: it meets the players of that floor only, and the walls and
+            // furniture of the ground only when fired from the ground.
+            const targets = bodies.filter(
+                ({ id, character }) => id !== projectile.senderId && character.isOnFloor(projectile.z),
+            );
+            const onGround = projectile.z < 2;
             // Sample the complete travelled segment: a slow frame must not let a dart skip a blocked tile.
             const steps = Math.max(1, Math.ceil(Math.hypot(next.x - projectile.x, next.y - projectile.y) / 4));
             let previous = { x: projectile.x, y: projectile.y };
@@ -208,9 +217,10 @@ export class NerfManager {
                 if (
                     hitId !== undefined ||
                     cell === undefined ||
-                    cell === PathTileType.Collider ||
-                    obstacles.blocksSegment(previous, point) ||
-                    obstacles.blocksPoint(point)
+                    (onGround &&
+                        (cell === PathTileType.Collider ||
+                            obstacles.blocksSegment(previous, point) ||
+                            obstacles.blocksPoint(point)))
                 ) {
                     impactPoint = point;
                     break;
@@ -227,7 +237,7 @@ export class NerfManager {
             } else {
                 projectile.x = next.x;
                 projectile.y = next.y;
-                projectile.sprite.setPosition(next.x, next.y).setDepth(next.y);
+                projectile.sprite.setPosition(next.x, next.y).setDepth(floorDepth(projectile.z, next.y));
             }
         }
         this.publishHearts(time);
@@ -259,7 +269,12 @@ export class NerfManager {
         const sprite = this.scene.add.graphics();
         sprite.fillStyle(0x208edd).fillRect(-4, -1, 7, 3);
         sprite.fillStyle(0xff8d24).fillRect(3, -1, 3, 3);
-        sprite.setPosition(x, y).setRotation(Math.atan2(pose.dy, pose.dx)).setDepth(y);
+        const shooter =
+            senderId === this.scene.connection?.getUserId()
+                ? this.scene.CurrentPlayer
+                : this.scene.MapPlayersByKey.get(senderId);
+        const z = shooter?.getFloorZ() ?? 0;
+        sprite.setPosition(x, y).setRotation(Math.atan2(pose.dy, pose.dx)).setDepth(floorDepth(z, y));
         // The first update also checks the path to the muzzle: a barrel protruding through a wall cannot shoot past it.
         this.projectiles.add({
             sprite,
@@ -272,6 +287,7 @@ export class NerfManager {
             bornAt: now,
             lastAt: now,
             senderId,
+            z,
             originX: shot.x,
             originY: shot.y,
         });

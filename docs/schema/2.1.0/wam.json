@@ -624,6 +624,10 @@
               "depthStep": {
                 "type": "integer"
               },
+              "elevation": {
+                "type": "integer",
+                "minimum": 0
+              },
               "prefabRef": {
                 "type": "object",
                 "properties": {
@@ -1340,6 +1344,10 @@
                     }
                   ]
                 }
+              },
+              "elevation": {
+                "type": "integer",
+                "minimum": 0
               }
             },
             "required": [

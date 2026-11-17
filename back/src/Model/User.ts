@@ -18,6 +18,7 @@ import type { PositionNotifier } from "../Model/PositionNotifier";
 import type { Zone } from "../Model/Zone";
 import { PlayerVariables } from "../Services/PlayersRepository/PlayerVariables";
 import { getPlayersVariablesRepository } from "../Services/PlayersRepository/PlayersVariablesRepository";
+import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./FloorLevel";
 import type { BrothersFinder } from "./BrothersFinder";
 import type { CustomJsonReplacerInterface } from "./CustomJsonReplacerInterface";
 import type { Group } from "./Group";
@@ -128,6 +129,13 @@ export class User implements Movable, CustomJsonReplacerInterface {
             sayMessage,
             tabId,
         );
+    }
+
+    /** Altitude of the avatar on the raised floors of the map, as its browser publishes it (0: the ground). */
+    private floorZ = 0;
+
+    public getFloorZ(): number {
+        return this.floorZ;
     }
 
     public getPosition(): PointInterface {
@@ -253,6 +261,9 @@ export class User implements Movable, CustomJsonReplacerInterface {
         }
 
         const setVariable = details.setVariable;
+        if (setVariable?.name === FLOOR_Z_VARIABLE) {
+            this.floorZ = decodeFloorZ(setVariable.value);
+        }
         if (setVariable) {
             const scope = setVariable.scope;
             if (scope === SetPlayerVariableMessage_Scope.WORLD) {

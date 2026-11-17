@@ -1,14 +1,15 @@
 import path from "path";
-import * as Sentry from "@sentry/node";
-import { Metadata } from "@grpc/grpc-js";
-import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
 import {
+    isAtAreaLevel,
     canUpdateListeningZoneJams,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
 } from "@workadventure/map-editor";
+import * as Sentry from "@sentry/node";
+import { Metadata } from "@grpc/grpc-js";
+import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import type {
@@ -81,6 +82,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
+import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { BrothersFinder } from "./BrothersFinder";
@@ -138,7 +140,8 @@ export class GameRoom implements BrothersFinder {
     private readonly _userLeaveStream = new Subject<User>();
     public readonly userLeaveStream = this._userLeaveStream.asObservable();
 
-    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface }>();
+    /** `oldFloorZ`: set when the user changed of floor of the map (see FloorLevel), its position unchanged. */
+    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface; oldFloorZ?: number }>();
     public readonly userMoveStream = this._userMoveStream.asObservable();
 
     private readonly _destroyRoomStream = new Subject<void>();
@@ -536,9 +539,15 @@ export class GameRoom implements BrothersFinder {
 
     updatePlayerDetails(user: User, playerDetailsMessage: SetPlayerDetailsMessage) {
         const wasSilent = user.silent;
+        const floorBefore = user.getFloorZ();
         user.updateDetails(playerDetailsMessage);
         if (user.group !== undefined && user.silent) {
             this.leaveGroup(user);
+        } else if (!sameFloor(floorBefore, user.getFloorZ())) {
+            // On another floor now: out of the bubble of the floor left, in with whoever stands next on this one.
+            this.updateUserGroup(user);
+            // And out of the areas of the floor left, into the ones of this one.
+            this._userMoveStream.next({ user, oldPosition: user.getPosition(), oldFloorZ: floorBefore });
         } else if (wasSilent && !user.silent) {
             // Back from a silent status (DND, sound blocked...): join whoever is next to us, without waiting for a move.
             this.updateUserGroup(user);
@@ -582,6 +591,12 @@ export class GameRoom implements BrothersFinder {
                 }
             }
         } else {
+            // Gone to another floor than the others of its bubble (up a stair): it leaves them.
+            const other = group.getUsers().find((member) => member !== user);
+            if (other && !sameFloor(user.getFloorZ(), other.getFloorZ())) {
+                this.leaveGroup(user);
+                return;
+            }
             let hasKickOutSomeone = false;
             let followingMembers: User[] = [];
 
@@ -732,6 +747,10 @@ export class GameRoom implements BrothersFinder {
             if (currentUser.silent) {
                 continue;
             }
+            // Drawn at the same place on another floor of the map: not next to each other.
+            if (!sameFloor(user.getFloorZ(), currentUser.getFloorZ())) {
+                continue;
+            }
 
             const distance = GameRoom.computeDistance(user, currentUser); // compute distance between peers.
 
@@ -743,6 +762,9 @@ export class GameRoom implements BrothersFinder {
 
         for (const group of this.groups.queryCircle(userPosition.x, userPosition.y, this.groupRadius)) {
             if (group.isFull() || group.isLocked()) {
+                continue;
+            }
+            if (!sameFloor(user.getFloorZ(), group.getFloorZ())) {
                 continue;
             }
             const distance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), group.getPosition());
@@ -1093,7 +1115,7 @@ export class GameRoom implements BrothersFinder {
      */
     public hasUsersInArea(area: AreaData): boolean {
         for (const user of this.users.values()) {
-            if (GameRoom.isPositionInArea(user.getPosition(), area)) {
+            if (isAtAreaLevel(area, user.getFloorZ()) && GameRoom.isPositionInArea(user.getPosition(), area)) {
                 return true;
             }
         }

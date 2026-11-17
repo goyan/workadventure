@@ -109,6 +109,7 @@ export class GameJungle {
             animals: () => wanderers.tameableCharacters(),
             animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
+            playerOnGround: () => scene.CurrentPlayer.isNearGround(),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),
             send: (message) => {
                 const { name, data } = encodeJungleCompanion(message);

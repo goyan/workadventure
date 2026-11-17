@@ -151,6 +151,7 @@ export class TorchManager {
                 y: character.y,
                 direction: character.lastDirection,
                 seated: character.isSeated(),
+                floorZ: character.getFloorZ(),
                 intensity: glow.value,
                 // The night veil: the intensity set, lit up with the torch (one rise, no flicker nor gust).
                 strength: veil.value * torchIgnition(litForMs, REDUCED_MOTION),

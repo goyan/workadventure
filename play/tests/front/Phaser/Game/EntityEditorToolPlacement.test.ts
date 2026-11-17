@@ -134,6 +134,8 @@ describe("EntityEditorTool placement", () => {
         });
         entities = new Map();
         entitiesManager = mock<EntitiesManager>();
+        // No raised floor on this map: everything is placed on the ground.
+        entitiesManager.elevationAt.mockReturnValue(0);
         entitiesManager.getEntities.mockReturnValue(entities);
         entitiesManager.addEntity.mockImplementation((entityId: string, data: WAMEntityData) => {
             const prefab = [floorPrefab, furniturePrefab, wallPrefab].find(

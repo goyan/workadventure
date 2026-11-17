@@ -12,6 +12,9 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
+import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
+import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
+import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
 import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
@@ -24,6 +27,7 @@ import { isTreadmillBelt } from "../../Utils/ObjectCategories";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import {
+    WALL_THICKNESS,
     MAP_LAYER_FLOOR_DEPTH,
     isMapLayerPrefab,
     mapLayerGroundBottom,
@@ -32,10 +36,16 @@ import {
 import {
     applyDepthStep,
     applySupportDepthFloor,
+    applyHungOnWallDepth,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
-import type { DepthStepRange, SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import type {
+    DepthStepRange,
+    SupportDepthBox,
+    WallDepthBox,
+    WallFaceBox,
+} from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -97,6 +107,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             name: data.name ?? "",
             properties: data.properties ?? [],
             depthStep: data.depthStep ?? 0,
+            elevation: data.elevation ?? 0,
         };
         this.prefab = prefab;
 
@@ -180,16 +191,35 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public get canEdit(): boolean {
         // Checked at the top-left corner (the entity position), like map-storage does: it is the only point
         // of the entity the server knows, so any other point would let the UI offer edits the server refuses.
-        return (this.scene as GameScene).getEntityPermissions().canEdit({ x: this.x, y: this.y });
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canEdit({ x: this.x, y: this.y, z: this.entityData.elevation });
     }
 
     public get canRead(): boolean {
-        return (this.scene as GameScene).getEntityPermissions().canRead(this.getCenter());
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canRead({ ...this.getCenter(), z: this.entityData.elevation });
     }
 
     /**
      * This method is being used after command execution from outside and it will not trigger any emits
      */
+    /**
+     * Moves the entity to another level (0: the ground), over the same place of the ground: its image is drawn the
+     * difference of altitude higher or lower. Saved like any other edit of the entity.
+     */
+    public setElevation(elevation: number): void {
+        if (elevation === this.entityData.elevation) return;
+        const y = this.y + this.entityData.elevation - elevation;
+        this.emit(EntityEvent.Updated, this.appendId({ y, elevation }));
+    }
+
+    /** Altitude of the floor the entity stands on, in pixels above the ground: 0 on the ground. */
+    public getElevation(): number {
+        return this.entityData.elevation;
+    }
+
     public updateEntity(dataToModify: Partial<WAMEntityData>): void {
         deepmergeInto(this.entityData, dataToModify);
         // TODO: Find a way to update it without need of using conditions
@@ -382,24 +412,47 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
      * level above the ground tiles: nothing, neither a character nor a companion walking over a tile row, may go under.
      */
     public updateDepth(depthOffset: number = this.prefab.depthOffset ?? 0): void {
+        const floorPiece = parseFloorPiece(this.prefab.collectionName, this.prefab.id);
+        if (floorPiece) {
+            // A slab or a stair of the raised floors: in the band of depths of its altitude.
+            this.setDepth(floorPieceDepth(floorPiece, this.x, this.y, this.entityData.elevation));
+            return;
+        }
+        const hung = this.updateGroundDepth(depthOffset);
+        // Standing on a raised floor: the same order among the things of its floor, in the band of its altitude.
+        // (What is always over everything, like a ceiling lamp, stays where it is; what hangs on a wall is drawn
+        // right over that wall.)
+        if (!hung && this.entityData.elevation > 0 && this.depth < FLOOR_LEVEL_DEPTH) {
+            this.setDepth(floorDepth(this.entityData.elevation, this.depth));
+        }
+    }
+
+    /** The depth the entity has standing on the ground, sorted by its foot. */
+    /** Returns whether the object hangs on the face of a wall (it is then drawn right over that wall). */
+    private updateGroundDepth(depthOffset: number): boolean {
         if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
-            return;
+            return false;
         }
         if (this.prefab.layer === "floor" || this.prefab.layer === "overhead") {
             // Fixed levels, whatever the position of the players: under all of them (a pool, a rug) or over all of
             // them (a ceiling lamp). Among themselves, the manual stacking of the editor still applies.
             this.automaticDepth = getLayerDepth(this.prefab.layer, this.y + this.displayHeight);
             this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
-            return;
+            return false;
         }
         const naturalDepth = this.y + this.displayHeight + depthOffset;
         if (isMapLayerPrefab(this.prefab.collectionName, this.prefab.id)) {
             this.setDepth(naturalDepth);
-            return;
+            return false;
         }
+        const elevation = this.entityData.elevation;
+        // Above the ground with a slab of its altitude under its foot: it stands on that floor. Without one, it
+        // may hang on a wall.
+        let standsOnFloor = false;
         const box = { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight };
         const walls: WallDepthBox[] = [];
+        const faces: WallFaceBox[] = [];
         const supports: SupportDepthBox[] = [];
         for (const neighbour of this.getOverlappingEntities()) {
             const prefab = neighbour.getPrefab();
@@ -411,8 +464,39 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                 depth: neighbour.depth,
                 naturalDepth: neighbour.y + neighbour.displayHeight + (prefab.depthOffset ?? 0),
             };
+            if (
+                elevation > 0 &&
+                neighbour.getElevation() === elevation &&
+                parseFloorPiece(prefab.collectionName, prefab.id) !== undefined &&
+                box.y + box.height > neighbour.y &&
+                box.y + box.height <= neighbour.y + neighbour.displayHeight + 1
+            ) {
+                standsOnFloor = true;
+            }
+            const anyLevelPiece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
             const piece = parseMapLayerPrefab(prefab.collectionName, prefab.id);
-            if (piece) {
+            if (anyLevelPiece && !piece) {
+                // A wall of a raised floor: something can hang on its face too.
+                if (
+                    anyLevelPiece.kind === "facade" ||
+                    anyLevelPiece.kind === "lintel" ||
+                    anyLevelPiece.kind === "end"
+                ) {
+                    faces.push({
+                        ...neighbourBox,
+                        y: neighbour.y + WALL_THICKNESS,
+                        height: neighbour.displayHeight - WALL_THICKNESS,
+                    });
+                }
+            } else if (piece) {
+                if (piece.kind === "facade" || piece.kind === "lintel" || piece.kind === "end") {
+                    // The south face of the wall, under its cap: where a painting hangs.
+                    faces.push({
+                        ...neighbourBox,
+                        y: neighbour.y + WALL_THICKNESS,
+                        height: neighbour.displayHeight - WALL_THICKNESS,
+                    });
+                }
                 if (depthOffset < 0 && piece.kind !== "floor") {
                     // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
                     walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
@@ -422,11 +506,16 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             }
         }
         // Sorted above its foot: a wall crossing it must not hide it when it stands on the tile in front of that wall.
-        const wallDepth = applyWallDepthFloor(naturalDepth, box, walls);
+        // Hung on the face of a wall (a painting up a high wall): over that wall.
+        // Only above the ground: on the ground the same image stands behind the wall.
+        const behindWalls = applyWallDepthFloor(naturalDepth, box, walls);
+        const wallDepth = elevation > 0 && !standsOnFloor ? applyHungOnWallDepth(behindWalls, box, faces) : behindWalls;
+        const hung = wallDepth !== behindWalls;
         // An object standing on another one (a plant on a table) is drawn over it.
         this.automaticDepth = applySupportDepthFloor(wallDepth, box, supports);
         // Then the manual stacking chosen in the editor, relative to the images it overlaps.
         this.setDepth(applyDepthStep(this.automaticDepth, this.entityData.depthStep, this.getStackableDepths()));
+        return hung;
     }
 
     /** Depths of the images this one overlaps. The floors stay under everything: no object goes below them. */

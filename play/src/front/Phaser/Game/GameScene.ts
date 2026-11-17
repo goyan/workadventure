@@ -158,6 +158,7 @@ import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore"
 import {
     mapEditorModeStore,
     mapEditorSelectedToolStore,
+    mapEditorPlacementLevelStore,
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
@@ -263,16 +264,27 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { floorPath } from "./MapEditor/MapLayer/FloorPath";
+import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
+import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
 import { isSwayingTree, TreeSway } from "./Nature/TreeSway";
 import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
+import { FloorSpike } from "./Floors/FloorSpike";
+import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
+import { UpperDoors } from "./Floors/UpperDoors";
+import type { RaisedCharacter } from "./Floors/UpperDoors";
+import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
+import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
 import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
@@ -471,6 +483,8 @@ export class GameScene extends DirtyScene {
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
     private doorAnimator: DoorAnimator | undefined;
+    /** The doors of the raised floors. */
+    private upperDoors: UpperDoors | undefined;
     private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
     private skateboardSounds: SkateboardSounds | undefined;
@@ -498,6 +512,8 @@ export class GameScene extends DirtyScene {
     private treePoses: TreePoseTextures | undefined;
     /** Leaves falling from the autumn trees, snow building up on the snowy ones and falling off them. */
     private treeSeasonEffects: TreeSeasonEffects | undefined;
+    /** SPIKE (floors study), `?palier=1`. */
+    public floorSpike: FloorSpike | undefined;
     private outdoorTracker: OutdoorTracker | undefined;
     /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
     private wallFade: WallFade | undefined;
@@ -1323,7 +1339,11 @@ export class GameScene extends DirtyScene {
             this.CurrentPlayer.finishFollowingPath(true);
             // clear properties in case we are moved on the same layer / area in order to trigger them
             this.gameMapFrontWrapper.clearCurrentProperties();
-            this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y);
+            this.gameMapFrontWrapper.setPosition(
+                this.CurrentPlayer.x,
+                this.CurrentPlayer.y,
+                this.CurrentPlayer.getFloorZ(),
+            );
 
             // TODO: we should have a "teleport" parameter to explicitly say the user teleports and should not be moved in 200ms to the new place.
             this.handleCurrentPlayerHasMovedEvent({
@@ -1532,6 +1552,8 @@ export class GameScene extends DirtyScene {
         this.treePoses = undefined;
         this.treeSeasonEffects?.destroy();
         this.treeSeasonEffects = undefined;
+        this.floorSpike?.destroy();
+        this.floorSpike = undefined;
         this.seasonalThemeManager?.destroy();
         this.seasonalThemeManager = undefined;
         this.skateboardSounds?.destroy();
@@ -1569,11 +1591,11 @@ export class GameScene extends DirtyScene {
     /** The areas the local player stands in, and their personal desk: doors and footsteps are only heard there. */
     private getHearingZones(): HearingZone[] {
         const zones: HearingZone[] =
-            this.gameMapFrontWrapper
-                .getGameMap()
-                .getWamFile()
-                ?.getGameMapAreas()
-                .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
+            this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({
+                x: this.CurrentPlayer.x,
+                y: this.CurrentPlayer.y,
+                z: this.CurrentPlayer.getFloorZ(),
+            }) ?? [];
         const personalArea = get(personalAreaDataStore);
         return personalArea ? [...zones, personalArea] : zones;
     }
@@ -1670,8 +1692,11 @@ export class GameScene extends DirtyScene {
                         };
                     }),
                 (x, y) =>
-                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({ x, y })
-                        .length ?? 0) > 0,
+                    (this.gameMapFrontWrapper
+                        .getGameMap()
+                        .getWamFile()
+                        ?.getGameMapAreas()
+                        .getAreasOnPosition({ x, y, z: this.CurrentPlayer.getFloorZ() }).length ?? 0) > 0,
             );
             this.footstepSounds = new FootstepSounds(
                 (key, { volume, detune, pan }) => {
@@ -1715,7 +1740,11 @@ export class GameScene extends DirtyScene {
                 riding: this.CurrentPlayer.isRidingVehicle() && localUserStore.getVehicle() === Vehicle.Skateboard,
                 moving: this.CurrentPlayer.isVehicleMoving(),
                 indoor:
-                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition(listener)
+                    (this.gameMapFrontWrapper
+                        .getGameMap()
+                        .getWamFile()
+                        ?.getGameMapAreas()
+                        .getAreasOnPosition({ x: listener.x, y: listener.y, z: this.CurrentPlayer.getFloorZ() })
                         .length ?? 0) > 0,
             },
             this.mapEditorModeManager?.isActive() ?? false,
@@ -1762,11 +1791,26 @@ export class GameScene extends DirtyScene {
         });
         const localUuid = this._knockManager?.localUuid;
         const listener = asDoorCharacter(this.CurrentPlayer, localUuid === "" ? undefined : localUuid);
-        const characters: DoorCharacter[] = [listener];
-        if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
+        // SPIKE (floors study): an avatar on a raised floor does not open the doors of the ground.
+        const characters: DoorCharacter[] = this.CurrentPlayer.getFloorZ() > 0 ? [] : [listener];
+        // (A companion follows its master: on a raised floor with them, it does not open the doors of the ground.)
+        // The characters of a raised floor open the doors of their own floor (see UpperDoors).
+        const raised: RaisedCharacter[] = [];
+        const localZ = this.CurrentPlayer.getFloorZ();
+        if (localZ > 0) raised.push({ character: listener, elevation: localZ });
+        if (this.CurrentPlayer.companion) {
+            const companion = asDoorCharacter(this.CurrentPlayer.companion);
+            if (localZ > 0) raised.push({ character: companion, elevation: localZ });
+            else characters.push(companion);
+        }
         for (const player of this.MapPlayersByKey.values()) {
-            characters.push(asDoorCharacter(player, player.userUuid));
-            if (player.companion) characters.push(asDoorCharacter(player.companion));
+            const z = player.getFloorZ();
+            const people = [asDoorCharacter(player, player.userUuid)];
+            if (player.companion) people.push(asDoorCharacter(player.companion));
+            for (const character of people) {
+                if (z > 0) raised.push({ character, elevation: z });
+                else characters.push(character);
+            }
         }
         // The animals open the doors without a sound.
         this.duckRushManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
@@ -1775,6 +1819,18 @@ export class GameScene extends DirtyScene {
         );
         const locks = this._knockManager?.getDoorLocks();
         this.doorAnimator.update(time, characters, listener, locks);
+        this.upperDoors ??= new UpperDoors(
+            this,
+            () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+            (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
+            (key, volume) => {
+                volume *= get(doorVolumeStore);
+                if (volume > 0) this.sound.play(key, { volume });
+            },
+            () => this.markDirty(),
+            () => this.getHearingZones(),
+        );
+        this.upperDoors.update(time, raised, listener);
         // Red padlocks on the doors of the locked areas, for everyone.
         this.doorLockIcons ??= new DoorLockIcons(this, () => this.markDirty());
         this.doorLockIcons.update(this.doorAnimator.getLockedDoorMarkers(locks?.zones ?? []));
@@ -2092,6 +2148,7 @@ export class GameScene extends DirtyScene {
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
+        character.setFloorZ(decodeFloorZ(update.player.variables.get(FLOOR_Z_VARIABLE)));
         character.setTorchIntensity(update.player.variables.get(TORCH_INTENSITY_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
         character.setSwimwear(update.player.variables.get(SWIMWEAR_VARIABLE));
@@ -3012,7 +3069,11 @@ export class GameScene extends DirtyScene {
                         y: this.CurrentPlayer.y,
                     }) || [];
 
-                this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y);
+                this.gameMapFrontWrapper.setPosition(
+                    this.CurrentPlayer.x,
+                    this.CurrentPlayer.y,
+                    this.CurrentPlayer.getFloorZ(),
+                );
 
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
@@ -3049,8 +3110,12 @@ export class GameScene extends DirtyScene {
                 this.wallFade = new WallFade(
                     () => this.mapLayerWallEntities(),
                     () => this.getOutdoorGrid(),
-                    // The feet, as the torch reads the outdoors.
-                    () => ({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y }),
+                    // The feet, as the torch reads the outdoors. On a raised floor or a stair the avatar is in no room of
+                    // the ground and behind none of its walls: they all stay opaque under it.
+                    () =>
+                        this.CurrentPlayer.getFloorZ() > 0
+                            ? { x: -1_000_000, y: -1_000_000 }
+                            : { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y },
                     () => this.mapEditorModeManager?.isActive() ?? false,
                     () => this.markDirty(),
                 );
@@ -3069,6 +3134,40 @@ export class GameScene extends DirtyScene {
                     poseTexture: (key, pose) => treePoses.key(key, pose),
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                 });
+                // The raised floors: the ones placed on the map, or a trial layout asked by `?palier=`.
+                if (!this.floorSpike) {
+                    const entitiesManager = this.gameMapFrontWrapper.getEntitiesManager();
+                    this.floorSpike = new FloorSpike(
+                        this,
+                        () => this.CurrentPlayer,
+                        new URLSearchParams(window.location.search).get("palier") ?? undefined,
+                        () => wallBarriers(readMapLayerEntityStates(entitiesManager)),
+                        () => entitiesManager.getEntities().values(),
+                        () => {
+                            // The level shown in the editor: the one the map tool works on (it follows the pointer
+                            // in "auto"); in the other tools the one chosen in the panel, every floor in "auto".
+                            const choice = get(mapEditorPlacementLevelStore);
+                            const level =
+                                get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
+                                    ? get(mapLayerLevelStore)
+                                    : choice === "auto"
+                                      ? Number.POSITIVE_INFINITY
+                                      : choice;
+                            return { open: get(mapEditorModeStore), level };
+                        },
+                        (z) => {
+                            // The areas only apply to their floor: a change of floor is a move for them.
+                            this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y, z);
+                            return this.playerVariablesManager?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
+                                public: true,
+                                persist: false,
+                                scope: "room",
+                            });
+                        },
+                        (levels) => mapLayerBuiltLevelsStore.set(levels),
+                        () => this.MapPlayersByKey.values(),
+                    );
+                }
                 this.treeSeasonEffects?.destroy();
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
                     trees: () => this.swayingTrees(),
@@ -4888,6 +4987,15 @@ ${escapedMessage}
         speed: number | undefined = undefined,
         stopDistance: number | undefined = undefined,
     ): Promise<{ x: number; y: number; cancelled: boolean }> {
+        // Through the raised floors and their stairs, when the walk starts from one or ends on one.
+        const floorWalk = this.floorWalkTo(position);
+        if (floorWalk) {
+            const result = await this.CurrentPlayer.setPathToFollow(
+                floorWalk,
+                speed ?? this.CurrentPlayer.walkingSpeed,
+            );
+            return { x: result.x, y: result.y, cancelled: result.cancelled };
+        }
         const pathfindingManager = this.getPathfindingManager();
 
         // The collision grid can change while the path is followed (an area gets locked or full...): the
@@ -4933,6 +5041,55 @@ ${escapedMessage}
         // stands right before the blocking tile: warn about the area blocking the destination.
         this.displayPathBlockedWarning(position);
         return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: true };
+    }
+
+    /** The floor drawn at a point of the screen (0: the ground): what stands on another one is out of reach there. */
+    public floorLevelAt(point: { x: number; y: number }): number {
+        const floors = this.floorSpike?.walkContext();
+        return floors ? levelUnderPoint(floors.model, point.x, point.y) : 0;
+    }
+
+    /**
+     * The walk to a point through the raised floors (see `floorPath`); undefined for a walk that stays on the ground,
+     * from a stair, or when no stair leads there: the ordinary walk of the ground then applies.
+     */
+    private floorWalkTo(position: { x: number; y: number }): { x: number; y: number }[] | undefined {
+        const floors = this.floorSpike?.walkContext();
+        if (!floors || floors.state.stair !== undefined) return undefined;
+        if (floors.state.elevation < 2 && levelUnderPoint(floors.model, position.x, position.y) === 0) {
+            return undefined;
+        }
+        const grid = this.gameMapFrontWrapper.getSharedCollisionGrid();
+        // The walls of each floor, read once per walk (a door is passable: it opens when the avatar comes near).
+        const placed = Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) => {
+            const prefab = entity.getPrefab();
+            return {
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getElevation(),
+            };
+        });
+        const barriers = new Map<number, TileBarriers>();
+        const barriersOf = (level: number): TileBarriers => {
+            let found = barriers.get(level);
+            if (!found) {
+                found = wallBarriers(levelItems(placed, level));
+                barriers.set(level, found);
+            }
+            return found;
+        };
+        return floorPath({
+            model: floors.model,
+            blocked: (level, from, to) => barriersOf(level).blocksMove(from, to),
+            groundWalkable: (x, y) => {
+                const cell = grid[y]?.[x];
+                return cell !== undefined && cell !== PathTileType.Collider;
+            },
+            from: { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, elevation: floors.state.elevation },
+            to: position,
+        });
     }
 
     /** The live collisions of the map for a computed walk of the player: tiles, walls, and object hitboxes. */
@@ -5159,7 +5316,7 @@ ${escapedMessage}
     private handleCurrentPlayerHasMovedEvent(event: HasPlayerMovedInterface): void {
         //listen event to share position of user
         this.pushPlayerPosition(event);
-        this.gameMapFrontWrapper.setPosition(event.x, event.y);
+        this.gameMapFrontWrapper.setPosition(event.x, event.y, this.CurrentPlayer.getFloorZ());
         this.activatablesManager.updateActivatableObjectsDistances([
             ...Array.from(this.MapPlayersByKey.values()),
             ...this.actionableItems.values(),
@@ -5191,6 +5348,8 @@ ${escapedMessage}
                     object1: Body | StaticBody | Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody,
                     object2: Body | StaticBody | Tile | Phaser.Types.Physics.Arcade.GameObjectWithBody,
                 ) => {},
+                // SPIKE (floors study): the ground does not block an avatar on a raised floor.
+                () => this.CurrentPlayer.isNearGround(),
             );
             this.gameMapFrontWrapper.configureTileCollisions(phaserLayer);
             if (DEBUG_MODE) {
@@ -5403,6 +5562,9 @@ ${escapedMessage}
         );
         player.setTorchIntensity(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_INTENSITY_VARIABLE),
+        );
+        player.setFloorZ(
+            decodeFloorZ(this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(FLOOR_Z_VARIABLE)),
         );
         player.setAvatarAction(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(AVATAR_ACTION_VARIABLE),

@@ -8,6 +8,7 @@ import {
     PositionMessage_Direction,
     RoomJoinedMessage,
     SetPlayerDetailsMessage,
+    SetPlayerVariableMessage_Scope,
 } from "@workadventure/messages";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
@@ -284,6 +285,79 @@ describe("GameRoom", () => {
             SetPlayerDetailsMessage.fromPartial({ availabilityStatus: AvailabilityStatus.ONLINE }),
         );
         expect(connectCalledNumber).toBe(2);
+    });
+
+    describe("raised floors", () => {
+        /** What the browser of a player sends when its avatar changes of altitude. */
+        const floorZ = (z: number | string) =>
+            SetPlayerDetailsMessage.fromPartial({
+                setVariable: {
+                    name: "_floorZ",
+                    value: typeof z === "number" ? JSON.stringify(z) : z,
+                    public: true,
+                    persist: false,
+                    scope: SetPlayerVariableMessage_Scope.ROOM,
+                },
+            });
+        async function roomWithTwo(): Promise<{ world: GameRoom; user1: User; user2: User; connected: () => number }> {
+            let connectCalledNumber = 0;
+            const world = await GameRoom.create(
+                ROOM_URL,
+                () => {
+                    connectCalledNumber++;
+                },
+                () => {},
+                160,
+                160,
+                () => {},
+                () => {},
+                () => {},
+                emote,
+                () => {},
+                () => {},
+                () => {},
+                () => {},
+            );
+            const user1 = await world.join(createMockUserSocket().socket, createJoinRoomMessage("1", 100, 100));
+            const user2 = await world.join(createMockUserSocket().socket, createJoinRoomMessage("2", 500, 100));
+            return { world, user1, user2, connected: () => connectCalledNumber };
+        }
+
+        it("does not connect two users drawn at the same place on two floors", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user2, floorZ(52));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(0);
+            expect(user1.group).toBeUndefined();
+        });
+
+        it("connects two users of the same raised floor, and not of two floors 12 px apart", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user1, floorZ(104));
+            world.updatePlayerDetails(user2, floorZ(116));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(0);
+
+            world.updatePlayerDetails(user2, floorZ(104));
+            expect(connected()).toBe(2);
+        });
+
+        it("takes out of its bubble a user who goes up to another floor", async () => {
+            const { world, user1, user2, connected } = await roomWithTwo();
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(2);
+
+            world.updatePlayerDetails(user2, floorZ(52));
+            expect(user2.group).toBeUndefined();
+            expect(user1.group).toBeUndefined();
+        });
+
+        it("reads a value that is not an altitude as the ground", async () => {
+            const { world, user2, connected } = await roomWithTwo();
+            world.updatePlayerDetails(user2, floorZ("abc"));
+            world.updatePosition(user2, new Point(101, 100));
+            expect(connected()).toBe(2);
+        });
     });
 
     it("should connect 3 users", async () => {

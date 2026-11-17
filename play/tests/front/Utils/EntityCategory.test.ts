@@ -27,6 +27,8 @@ describe("EntityCategory", () => {
 
     it("hides the floors and walls of the map tool and of the former catalogs from the library", () => {
         const hidden = (collectionName: string) => isHiddenFromLibrary({ collectionName });
+        // The slabs and the stairs of the raised floors are drawn by the map tool too.
+        expect(hidden("Carte Paliers")).toBe(true);
         expect(hidden("Carte Murs")).toBe(true);
         expect(hidden("Infogène Sols")).toBe(true);
         expect(hidden("Infogène Murs fins")).toBe(true);

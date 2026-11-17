@@ -224,6 +224,19 @@ export class AreaPreview extends Rectangle {
         this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
     }
 
+    /**
+     * Moves the area to another floor of the map (0: the ground), over the same place of the ground: its rectangle
+     * is drawn the difference of altitude higher or lower. Saved like any other edit of the area.
+     */
+    public setElevation(elevation: number): void {
+        const current = this.areaData.elevation ?? 0;
+        if (elevation === current) return;
+        // The altitude is written in the former data too, so that undoing sends the area back to its floor.
+        const oldAreaData = { ...structuredClone(this.areaData), elevation: current };
+        const data = { id: this.areaData.id, y: this.areaData.y + current - elevation, elevation };
+        this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
+    }
+
     public getId(): string {
         return this.areaData.id;
     }
@@ -329,7 +342,9 @@ export class AreaPreview extends Rectangle {
             if (pointer.isDown && this.selected && !this.squareSelected) {
                 // Areas always stay on the tile grid.
                 const topLeftX = Math.round((dragX - this.displayWidth * 0.5) / 32) * 32;
-                const topLeftY = Math.round((dragY - this.displayHeight * 0.5) / 32) * 32;
+                // On the grid of the floor of the map the area belongs to: drawn its altitude further north.
+                const level = this.areaData.elevation ?? 0;
+                const topLeftY = Math.round((dragY - this.displayHeight * 0.5 + level) / 32) * 32 - level;
                 this.x = Math.round(topLeftX + this.displayWidth * 0.5);
                 this.y = Math.round(topLeftY + this.displayHeight * 0.5);
                 this.updateSquaresPositions();
@@ -378,7 +393,8 @@ export class AreaPreview extends Rectangle {
                 const oldY = square.y;
 
                 square.x = Math.round(dragX / 32) * 32;
-                square.y = Math.round(dragY / 32) * 32;
+                const level = this.areaData.elevation ?? 0;
+                square.y = Math.round((dragY + level) / 32) * 32 - level;
 
                 let newWidth = 0;
                 let newHeight = 0;

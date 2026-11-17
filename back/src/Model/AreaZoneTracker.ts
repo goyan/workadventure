@@ -1,7 +1,9 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import type { AreaData, AreaDataProperty } from "@workadventure/map-editor";
 
 import type { Observable } from "rxjs";
 import { Subject } from "rxjs";
+import type { User } from "./User";
 import type { GameRoom } from "./GameRoom";
 
 type AreaZoneTrackerGameRoom = Pick<GameRoom, "userLeaveStream" | "userMoveStream" | "getWamManager" | "getUsers">;
@@ -26,7 +28,7 @@ export class AreaZoneTracker {
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.userLeaveStream.subscribe((user) => {
             for (const { area, propertyTypes } of this.trackedAreas.values()) {
-                const wasInside = AreaZoneTracker.isPositionInArea(user.getPosition(), area);
+                const wasInside = AreaZoneTracker.isUserInArea(user, area);
 
                 if (wasInside) {
                     for (const propertyType of propertyTypes) {
@@ -38,10 +40,13 @@ export class AreaZoneTracker {
 
         // No need to unsubscribe since GameRoom.destroy completes this stream.
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
-        gameRoom.userMoveStream.subscribe(({ user, oldPosition }) => {
+        gameRoom.userMoveStream.subscribe(({ user, oldPosition, oldFloorZ }) => {
             for (const { area, propertyTypes } of this.trackedAreas.values()) {
-                const wasInside = AreaZoneTracker.isPositionInArea(oldPosition, area);
-                const isInside = AreaZoneTracker.isPositionInArea(user.getPosition(), area);
+                // An area only applies to the users of its floor: going up or down is entering or leaving it.
+                const wasInside =
+                    isAtAreaLevel(area, oldFloorZ ?? user.getFloorZ()) &&
+                    AreaZoneTracker.isPositionInArea(oldPosition, area);
+                const isInside = AreaZoneTracker.isUserInArea(user, area);
 
                 for (const propertyType of propertyTypes) {
                     if (!wasInside && isInside) {
@@ -123,9 +128,8 @@ export class AreaZoneTracker {
         }
 
         for (const user of this.gameRoom.getUsers().values()) {
-            const userPosition = user.getPosition();
-            const wasInside = AreaZoneTracker.isPositionInArea(userPosition, previousArea);
-            const isInside = AreaZoneTracker.isPositionInArea(userPosition, updatedArea);
+            const wasInside = AreaZoneTracker.isUserInArea(user, previousArea);
+            const isInside = AreaZoneTracker.isUserInArea(user, updatedArea);
 
             for (const propertyType of allTrackedPropertyTypes) {
                 const wasTracked = previousTrackedPropertyTypes.has(propertyType);
@@ -144,6 +148,11 @@ export class AreaZoneTracker {
                 }
             }
         }
+    }
+
+    /** Whether a user is in an area: on its floor, and in its rectangle. */
+    public static isUserInArea(user: Pick<User, "getPosition" | "getFloorZ">, area: AreaData): boolean {
+        return isAtAreaLevel(area, user.getFloorZ()) && AreaZoneTracker.isPositionInArea(user.getPosition(), area);
     }
 
     public static isPositionInArea(position: { x: number; y: number }, area: AreaData): boolean {
