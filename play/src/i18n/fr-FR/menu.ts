@@ -53,6 +53,22 @@ const menu: DeepPartial<Translation["menu"]> = {
             low: "Basse",
             always: "Toujours visibles",
         },
+        skyLight: {
+            sun: "Ombres et lumière du soleil",
+            moon: "Ombres et lumière de la lune",
+            phaseCurve: {
+                label: "Intensité de la lune selon sa phase",
+                linear: "Linéaire",
+                realistic: "Réaliste",
+            },
+            intensityMin: "Intensité minimale",
+            intensityMax: "Intensité maximale",
+            colorMin: "Couleur minimale",
+            colorMax: "Couleur maximale",
+            shadowMin: "Longueur minimale des ombres",
+            shadowMax: "Longueur maximale des ombres",
+            tiles: "cases",
+        },
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
         jungle: "Afficher les animaux de la jungle",
         ambiance: {

@@ -15,7 +15,14 @@ vi.mock("../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowLayer", () => 
 }));
 const { SkyShadowManager } = await import("../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowManager");
 
-const sun: SkyLight = { body: "sun", azimuth: 180, elevation: 30, intensity: 1, color: 0xfff6e6 };
+const sun: SkyLight = {
+    body: "sun",
+    azimuth: 180,
+    elevation: 30,
+    intensity: 1,
+    color: 0xfff6e6,
+    shadowLength: { min: 0, max: 128 },
+};
 const tree: ShadowSourceEntity = {
     x: 100,
     y: 100,

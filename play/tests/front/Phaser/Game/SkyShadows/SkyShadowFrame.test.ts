@@ -10,7 +10,14 @@ import type { ShadowFrame } from "../../../../../src/front/Phaser/Game/SkyShadow
 
 const view = { x: 0, y: 0, width: 800, height: 600 };
 const frame: ShadowFrame = {
-    light: { body: "sun", azimuth: 180, elevation: 30, intensity: 1, color: 0xffffff },
+    light: {
+        body: "sun",
+        azimuth: 180,
+        elevation: 30,
+        intensity: 1,
+        color: 0xffffff,
+        shadowLength: { min: 0, max: 128 },
+    },
     casters: "walls",
     outdoorVersion: 1,
     view,
@@ -29,6 +36,15 @@ describe("shadowRedraw", () => {
         expect(shadowRedraw(drawn, { ...frame, light: { ...frame.light, azimuth: 180.5 } })).toBe("draw");
         expect(shadowRedraw(drawn, { ...frame, light: { ...frame.light, elevation: 29.4 } })).toBe("draw");
         expect(shadowRedraw(drawn, { ...frame, light: { ...frame.light, body: "moon" } })).toBe("draw");
+    });
+
+    it("draws again at once when the length limits or the colour of the shadows are set otherwise", () => {
+        expect(shadowRedraw(drawn, { ...frame, light: { ...frame.light, shadowLength: { min: 0, max: 64 } } })).toBe(
+            "draw",
+        );
+        expect(shadowRedraw(drawn, { ...frame, light: { ...frame.light, shadowLength: { min: 32, max: 128 } } })).toBe(
+            "draw",
+        );
     });
 
     it("draws again when the walls, the objects, the outdoors or the zoom change", () => {

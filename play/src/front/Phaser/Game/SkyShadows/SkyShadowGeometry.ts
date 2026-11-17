@@ -1,11 +1,13 @@
 import type { Point } from "../Lamps/RgbLampGeometry";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { boundedTo } from "../Night/SkyLight";
+import type { Range } from "../Night/SkyLight";
 
 export type { Point };
 
 const DEG = Math.PI / 180;
 
-/** The longest shadow the sky casts, in map pixels: 4 tiles, whatever the height and however low the light. */
+/** The longest shadow the sky casts by default, in map pixels: 4 tiles, whatever the height and however low the light. */
 export const SHADOW_MAX_LENGTH = 4 * MAP_LAYER_TILE_SIZE;
 /** The crown of a tree throws a disc this many points round. */
 const CROWN_POINTS = 16;
@@ -16,6 +18,8 @@ const CROWN_MAX_STRETCH = 2;
 export interface ShadowLight {
     azimuth: number;
     elevation: number;
+    /** The shortest and the longest shadow, in map pixels (SkyLight.shadowLength); 0 to SHADOW_MAX_LENGTH without. */
+    shadowLength?: Range;
 }
 
 /**
@@ -54,11 +58,13 @@ export function shadowDirection(azimuth: number): Point {
 
 /**
  * Where the shadow of a point `height` map pixels above the ground falls, from the foot of that point: away from the
- * light, `height / tan(elevation)` long, SHADOW_MAX_LENGTH at most. Undefined with the light at or under the horizon.
+ * light, `height / tan(elevation)` long, kept within the length limits of the light (a minimum above the maximum gives
+ * the maximum). Undefined with the light at or under the horizon.
  */
 export function shadowOffset(height: number, light: ShadowLight): Point | undefined {
     if (light.elevation <= 0) return undefined;
-    const length = Math.min(SHADOW_MAX_LENGTH, height / Math.tan(light.elevation * DEG));
+    const limits = light.shadowLength ?? { min: 0, max: SHADOW_MAX_LENGTH };
+    const length = boundedTo(height / Math.tan(light.elevation * DEG), limits);
     const direction = shadowDirection(light.azimuth);
     return { x: direction.x * length, y: direction.y * length };
 }

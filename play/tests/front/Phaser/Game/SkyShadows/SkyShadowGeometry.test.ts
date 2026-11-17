@@ -60,6 +60,21 @@ describe("shadowDirection / shadowOffset", () => {
         expect(SHADOW_MAX_LENGTH).toBe(4 * 32);
     });
 
+    it("keeps the length within the limits of the light: never past its maximum, at least its minimum", () => {
+        const length = (height: number, elevation: number, min: number, max: number): number => {
+            const offset = shadowOffset(height, { azimuth: 180, elevation, shadowLength: { min, max } });
+            return Math.hypot(offset?.x ?? 0, offset?.y ?? 0);
+        };
+        // A high sun: 32 px over tan(60°), whatever the maximum set.
+        for (const max of [32, 64, 128, 256]) expect(length(32, 60, 0, max)).toBeCloseTo(32 / Math.sqrt(3), 6);
+        // A low sun: the maximum set, never more.
+        for (const max of [32, 64, 128, 256]) expect(length(64, 3, 0, max)).toBeCloseTo(max, 6);
+        // A minimum: even at noon a wall keeps a shadow that long.
+        expect(length(32, 80, 48, 128)).toBeCloseTo(48, 6);
+        // A minimum above the maximum: the maximum wins.
+        expect(length(32, 80, 96, 64)).toBeCloseTo(64, 6);
+    });
+
     it("gives no shadow with the light at or under the horizon", () => {
         expect(shadowOffset(32, { azimuth: 180, elevation: 0 })).toBeUndefined();
         expect(shadowOffset(32, { azimuth: 180, elevation: -4 })).toBeUndefined();

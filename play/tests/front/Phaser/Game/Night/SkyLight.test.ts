@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { moonPhaseAt, moonPositionAt } from "../../../../../src/front/Phaser/Game/Night/MoonClock";
 import { NIGHT_MAX_OPACITY, sunPositionAt } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 import {
+    DEFAULT_SKY_LIGHT_SETTINGS,
     MOON_LIGHT_MAX,
     moonlitNightOpacity,
     skyLightAt,
@@ -11,6 +12,11 @@ import {
 
 const blue = (color: number): number => color & 0xff;
 const red = (color: number): number => (color >> 16) & 0xff;
+
+const LINEAR = {
+    ...DEFAULT_SKY_LIGHT_SETTINGS,
+    moon: { ...DEFAULT_SKY_LIGHT_SETTINGS.moon, phaseCurve: "linear" as const },
+};
 
 const high = { elevation: 40, azimuth: 180 };
 const low = { elevation: 3, azimuth: 240 };
@@ -35,9 +41,9 @@ describe("skyLightAt", () => {
         expect(blue(light?.color ?? 0)).toBeLessThan(blue(noon?.color ?? 0));
     });
 
-    it("is the moon at night, cold and much weaker than the sun, in proportion to its lit fraction", () => {
+    it("is the moon at night, cold and much weaker than the sun, in proportion to its lit fraction (linear)", () => {
         const full = skyLightAt(down, high, 1);
-        const half = skyLightAt(down, high, 0.5);
+        const half = skyLightAt(down, high, 0.5, 1, LINEAR);
         expect(full?.body).toBe("moon");
         expect(full?.intensity).toBeCloseTo(MOON_LIGHT_MAX, 6);
         expect(MOON_LIGHT_MAX).toBeLessThanOrEqual(0.4);

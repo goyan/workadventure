@@ -54,6 +54,7 @@
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
     import NightSettings from "./NightSettings.svelte";
+    import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
     import MapWeatherSection from "./MapWeatherSection.svelte";
     import {
@@ -376,6 +377,7 @@
                 </div>
             </div>
         {/if}
+        <SkyLightSettings />
         <InputSwitch
             id="lamp-effects-enabled"
             bind:value={$lampEffectsEnabledStore}

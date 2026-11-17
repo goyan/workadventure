@@ -3,6 +3,7 @@ import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
+import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
@@ -27,7 +28,7 @@ import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
 import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
-import type { SkyLight } from "./SkyLight";
+import type { SkyLight, SkyLightSettings } from "./SkyLight";
 
 /** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
@@ -51,6 +52,8 @@ export class NightManager {
     private readonly unsubscribeParty: Unsubscriber;
     private readonly unsubscribeLamps: Unsubscriber;
     private readonly unsubscribeTorches: Unsubscriber;
+    private readonly unsubscribeSkyLight: Unsubscriber;
+    private skyLightSettings: SkyLightSettings | undefined;
     private partyRooms: readonly NightRect[] = [];
     // The lights of the RGB lamps and of the torches, each written by its own owner, and both together.
     private rgbLamps: readonly RgbLampLight[] = [];
@@ -98,6 +101,12 @@ export class NightManager {
             this.lamps = [...this.rgbLamps, ...this.torches];
             this.scene.markDirty();
         });
+        this.unsubscribeSkyLight = skyLightSettingsStore.subscribe((settings) => {
+            this.skyLightSettings = settings;
+            // A setting changed: the light is computed again at the next image, not at the next second.
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
         this.unsubscribeMode = nightModeStore.subscribe((mode) => {
             this.mode = mode;
             this.disabled = mode === NightMode.Disabled;
@@ -129,6 +138,7 @@ export class NightManager {
                           this.disabled ? undefined : moonPositionAt(sunAt, place),
                           moonPhaseAt(sunAt).illuminated,
                           this.skyWeather(),
+                          this.skyLightSettings,
                       );
             // A bright moon takes a little of the veil away.
             this.opacity = sunAt === undefined ? 0 : moonlitNightOpacity(nightOpacityAt(sunAt, place), this.light);
@@ -214,6 +224,7 @@ export class NightManager {
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();
+        this.unsubscribeSkyLight();
         this.overlay.destroy();
     }
 

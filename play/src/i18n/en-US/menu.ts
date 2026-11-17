@@ -52,6 +52,22 @@ const menu: BaseTranslation = {
             low: "Low",
             always: "Always visible",
         },
+        skyLight: {
+            sun: "Sun shadows and light",
+            moon: "Moon shadows and light",
+            phaseCurve: {
+                label: "Moon intensity by phase",
+                linear: "Linear",
+                realistic: "Realistic",
+            },
+            intensityMin: "Minimum intensity",
+            intensityMax: "Maximum intensity",
+            colorMin: "Minimum colour",
+            colorMax: "Maximum colour",
+            shadowMin: "Minimum shadow length",
+            shadowMax: "Maximum shadow length",
+            tiles: "tiles",
+        },
         lampDemo: "Show the demo lamps next to my avatar",
         jungle: "Show the jungle animals",
         ambiance: {

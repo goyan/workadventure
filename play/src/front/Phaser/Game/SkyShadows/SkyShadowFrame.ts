@@ -44,6 +44,8 @@ export function shadowRedraw(drawn: DrawnShadows | undefined, frame: ShadowFrame
         Math.abs(light.azimuth - drawn.light.azimuth) >= LIGHT_STEP ||
         Math.abs(light.elevation - drawn.light.elevation) >= LIGHT_STEP ||
         light.color !== drawn.light.color ||
+        light.shadowLength.min !== drawn.light.shadowLength.min ||
+        light.shadowLength.max !== drawn.light.shadowLength.max ||
         frame.casters !== drawn.casters ||
         frame.outdoorVersion !== drawn.outdoorVersion ||
         frame.zoom !== drawn.zoom ||

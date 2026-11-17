@@ -3255,6 +3255,7 @@ export class GameScene extends DirtyScene {
                     entities: () => this.shadowSourceEntities(),
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
+                    // Each body has its own switch, read with the light (NightManager.skyLight).
                     enabled: () => !get(mapEditorModeStore),
                 });
                 this.treeSway?.destroy();

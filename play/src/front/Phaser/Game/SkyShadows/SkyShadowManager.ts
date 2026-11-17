@@ -3,7 +3,7 @@ import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { readShadowCasters } from "./SkyShadowCasters";
 import type { ShadowSourceEntity } from "./SkyShadowCasters";
-import { SHADOW_MAX_LENGTH, shadowPolygons } from "./SkyShadowGeometry";
+import { shadowPolygons } from "./SkyShadowGeometry";
 import type { Point, ShadowCasters } from "./SkyShadowGeometry";
 import { indoorRuns, SHADOW_COLOR, shadowAlpha, shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
@@ -104,9 +104,9 @@ export class SkyShadowManager {
         this.layer.destroy();
     }
 
-    /** The shadows that may fall in the area: those of the casters standing in it or less than a shadow away. */
+    /** The shadows that may fall in the area: those of the casters standing in it or less than the longest shadow away. */
     private polygonsOver(area: WeatherView, light: SkyLight): Point[][] {
-        const reach = SHADOW_MAX_LENGTH;
+        const reach = light.shadowLength.max;
         const near = (x: number, y: number, width: number, height: number): boolean =>
             x + width >= area.x - reach &&
             y + height >= area.y - reach &&

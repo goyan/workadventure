@@ -45,6 +45,7 @@ const { NightMode, nightModeStore, nightDateStore } = await import("../../../../
 const { NightManager } = await import("../../../../../src/front/Phaser/Game/Night/NightManager");
 const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/RgbLampStore");
 const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
+const { moonLightLimits, moonLightShownStore } = await import("../../../../../src/front/Stores/SkyLightStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
@@ -53,6 +54,8 @@ afterEach(() => {
     nightModeStore.set(NightMode.Server);
     rgbLampLightsStore.set([]);
     torchLightsStore.set([]);
+    moonLightShownStore.set(true);
+    moonLightLimits.intensityMax.set(1);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -184,6 +187,26 @@ describe("personal night clock choice", () => {
         nightModeStore.set(NightMode.Disabled);
         manager.update(2000);
         expect(manager.skyLight()).toBeUndefined();
+    });
+
+    it("follows the personal settings of the moon at once, without waiting for the next second", async () => {
+        vi.useFakeTimers();
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        const fullMoonNight = Date.parse("2026-11-24T22:00:00Z");
+        vi.setSystemTime(fullMoonNight);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: fullMoonNight }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        manager.update(0);
+        const usual = manager.skyLight()?.intensity ?? 0;
+        moonLightLimits.intensityMax.set(0.5);
+        manager.update(16);
+        expect(manager.skyLight()?.intensity).toBeCloseTo(usual / 2, 6);
+        moonLightShownStore.set(false);
+        manager.update(32);
+        expect(manager.skyLight()).toBeUndefined();
+        // Without the moon, the veil is the full night again.
+        expect(draw).toHaveBeenLastCalledWith(expect.objectContaining({ opacity: 0.6 }));
     });
 
     it("reads the computer's own date and time as Paris time for the sun", async () => {
