@@ -2148,9 +2148,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Altitude partagée** (`Floors/FloorProtocol.ts`) : variable de joueur `_floorZ`, publique et non sauvegardée
   (patron de la torche) ; exacte sur un palier, par pas de 4 px et au plus toutes les 150 ms sur un escalier ; un
   ancien client ou une valeur invalide = au sol.
-- **Objets sur un palier** : un objet posé ou déplacé prend l'altitude du palier dessiné sous son pied
-  (`placementElevation`, milieu du bas de l'image), 0 ailleurs ; l'interrupteur « Poser au sol, sous les paliers » du
-  panneau Objets le laisse au sol (meubler sous une mezzanine). Tri dans la bande de son niveau, collisions en
+- **Objets sur un palier** : le panneau Objets propose « Poser sur » dès que la carte a un palier : **Auto** (le
+  palier dessiné sous le pointeur, le sol s'il n'y en a pas), **Sol** (meubler sous une mezzanine) ou un niveau posé
+  (`mapEditorPlacementLevelStore`, `placementElevation`). L'aperçu passe au-dessus du palier, se cale sur ses dalles et
+  affiche le nom du niveau ; un objet déplacé suit la même règle au lâcher. Tri dans la bande de son niveau, collisions en
   rectangles pour les avatars de son niveau seulement (rien dans la couche de cases, qui est celle du sol), même
   transparence que son palier.
 - **Tableau accroché** (`applyHungOnWallDepth`) : un objet dont toute l'image tient sur la face sud de murs (un
@@ -2162,15 +2163,18 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   paliers. Les modes Mur, Pièce, Porte, Fenêtre, Hauteur et Gomme travaillent au niveau choisi : l'outil lit les
   pièces du niveau comme si elles étaient au sol, applique le modèle et l'autotile du sol, et replace le résultat au
   niveau. Une pièce tracée sur un palier pose ses dalles avec ses murs. Le dessus de murs posés sur un palier est un
-  niveau proposé, nommé par la somme des hauteurs (« Niveau 2+2 »). Les portes d'étage laissent le passage libre
-  (pas encore animées).
+  niveau proposé, nommé par la somme des hauteurs (« Niveau 2+2 »). Les portes d'étage s'ouvrent pour les
+  personnages de leur niveau (`Floors/UpperDoors.ts` : un animateur des portes du sol par niveau, nourri des pièces et
+  des personnages de ce niveau vus comme au sol) ; celles du sol ne s'ouvrent plus pour un personnage en hauteur.
+- **En hauteur, le sol ne réagit pas** : pas de nage, de tenue de bain ni de glisse au-dessus d'une piscine ou d'une
+  patinoire ; pas de chapeau de neige ni de tas de feuilles sur les pièces de palier (`isRaisedFloorCollection`).
 - **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
   40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
 - **Cas pris en charge** : mezzanine sur murs de 2, 3 ou 4 ; escalier du sol à chaque niveau ; escaliers courts entre
   niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2 ; pièce,
   murs et meubles sur un palier ; étage sur étage.
-- **Pas encore** : portes d'étage animées ; sièges, objets à interaction et piscines sur un palier (coupés en
-  hauteur) ; transparence des murs d'étage devant l'avatar ; chemin par double-clic entre niveaux ; garde-corps
+- **Pas encore** : sièges, objets à interaction et piscines sur un palier (coupés en hauteur) ; zones verrouillées
+  pour les portes d'étage ; transparence des murs d'étage devant l'avatar ; chemin par double-clic entre niveaux ; garde-corps
   dessiné ; compagnons, animaux, zones et bulles ignorent le niveau ; images définitives.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
