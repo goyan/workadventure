@@ -19,6 +19,59 @@ describe("wallSegments", () => {
         expect(wallSegments(model, closed)).toEqual([{ ax: 32, ay: 70, bx: 64, by: 70 }]);
     });
 
+    it("stops the light on the cap of a high wall, drawn above its foot: its whole face is lit from the south", () => {
+        const model = new MapLayerModel();
+        model.setWall("h", 1, 4, "blanc", 2);
+        model.setWall("h", 2, 4, "blanc", 2);
+        const segments = wallSegments(model, closed);
+        // The cap of a wall two tiles high is drawn one tile north of the cap of a low wall (y = 134): at 102.
+        expect(segments).toContainEqual({ ax: 32, ay: 102, bx: 64, by: 102 });
+        expect(segments).toContainEqual({ ax: 64, ay: 102, bx: 96, by: 102 });
+        expect(segments.some((segment) => segment.ay === 134 && segment.by === 134)).toBe(false);
+        const fromSouth = litPolygon({ x: 64, y: 180, radius: 200, direction: 270, angle: 360 }, segments);
+        // The face, from the foot of the wall up to its cap: lit. Behind the wall: dark.
+        expect(isLit(fromSouth, { x: 64, y: 150 })).toBe(true);
+        expect(isLit(fromSouth, { x: 64, y: 110 })).toBe(true);
+        expect(isLit(fromSouth, { x: 64, y: 90 })).toBe(false);
+        // From the room behind it, the light stops on the cap: it does not light the face on the other side.
+        const fromNorth = litPolygon({ x: 64, y: 60, radius: 200, direction: 90, angle: 360 }, segments);
+        expect(isLit(fromNorth, { x: 64, y: 90 })).toBe(true);
+        expect(isLit(fromNorth, { x: 64, y: 120 })).toBe(false);
+    });
+
+    it("casts no shadow on the face of a high wall from a light at its foot", () => {
+        const model = new MapLayerModel();
+        for (const x of [1, 2, 3, 4, 5, 6]) model.setWall("h", x, 4, "blanc", 2);
+        // A light right under the wall, at its east end: the face far to the west is lit up to its cap.
+        const polygon = litPolygon(
+            { x: 200, y: 150, radius: 400, direction: 180, angle: 360 },
+            wallSegments(model, closed),
+        );
+        for (const x of [180, 140, 100, 60, 40]) {
+            expect(isLit(polygon, { x, y: 106 })).toBe(true);
+        }
+    });
+
+    it("lets no light through the face of a high wall where a wall leaves it towards the south", () => {
+        const model = new MapLayerModel();
+        for (const x of [1, 2, 3, 4]) model.setWall("h", x, 4, "blanc", 2);
+        // A wall going down from the middle of the high wall: two spaces south of it.
+        model.setWall("v", 3, 4, "blanc", 2);
+        model.setWall("v", 3, 5, "blanc", 2);
+        model.setWall("v", 3, 6, "blanc", 2);
+        const light = { x: 70, y: 170, radius: 300, direction: 0, angle: 360 };
+        const polygon = litPolygon(light, wallSegments(model, closed));
+        expect(isLit(polygon, { x: 80, y: 120 })).toBe(true);
+        // On the other side of the wall going down: dark, also right under the cap of the high wall.
+        for (const point of [
+            { x: 110, y: 110 },
+            { x: 120, y: 125 },
+            { x: 130, y: 160 },
+        ]) {
+            expect(isLit(polygon, point)).toBe(false);
+        }
+    });
+
     it("puts a vertical wall on its grid line, between the middles of the caps of its two ends", () => {
         const model = new MapLayerModel();
         model.setWall("v", 3, 1, "blanc");
