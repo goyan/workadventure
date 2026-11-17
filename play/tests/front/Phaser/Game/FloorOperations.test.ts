@@ -15,6 +15,7 @@ import {
     stairArrivalCells,
     stairHasArrival,
     stairTarget,
+    stairTargets,
     stepLevel,
     steppableLevels,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
@@ -209,5 +210,16 @@ describe("floor operations", () => {
         expect(reachableLevels(116, levels)).toEqual([]);
         // No stair goes up 20 px.
         expect(reachableLevels(84, [104, 116])).toEqual([116]);
+    });
+
+    it("offers a stair the levels one or two tiles up from any floor, built or not", () => {
+        const levels = [52, 84, 116];
+        // From the highest wall top, a stair still goes up: to the levels 5 and 6, whose slabs come after.
+        expect(stairTargets(116, levels)).toEqual([148, 180]);
+        expect(stairTargets(148, levels)).toEqual([180, 212]);
+        // From the ground, only the tops of walls, as before.
+        expect(stairTargets(0, levels)).toEqual([52, 84, 116]);
+        // A level that walls standing on a floor give (116 + 52) is offered with them.
+        expect(stairTargets(116, [...levels, 168])).toEqual([148, 168, 180]);
     });
 });

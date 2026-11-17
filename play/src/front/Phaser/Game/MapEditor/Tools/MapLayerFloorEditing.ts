@@ -38,7 +38,7 @@ import {
     floorPlacementKey,
     levelUnderPoint,
     placeStair,
-    reachableLevels,
+    stairTargets,
     removeStairAt,
     stairArrivalCells,
     stairHasArrival,
@@ -187,7 +187,7 @@ export class MapLayerFloorEditing {
     /** The stair the mode would place from the level being edited; undefined when no floor is in reach of a stair. */
     private stairShape(): StairShape | undefined {
         const level = get(mapLayerLevelStore);
-        const reachable = reachableLevels(level, get(mapLayerLevelsStore));
+        const reachable = stairTargets(level, get(mapLayerLevelsStore));
         const target = stairTarget(reachable, get(mapLayerBuiltLevelsStore), get(mapLayerStairTargetStore));
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
         if (rise === undefined) return undefined;
