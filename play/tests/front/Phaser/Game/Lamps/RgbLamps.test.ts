@@ -21,7 +21,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
         private readonly fake: FakeVisual;
         public textureKey = "";
         constructor(_scene: unknown, id: string) {
-            this.fake = { id, draws: [], visible: true, destroyed: false };
+            // Like the real one, hidden until its lamp shows it.
+            this.fake = { id, draws: [], visible: false, destroyed: false };
             this.textureKey = `rgb-lamp:${id}`;
             visuals.push(this.fake);
         }
@@ -93,6 +94,8 @@ const freeGrid = (): number[][] => Array.from({ length: 40 }, () => Array.from({
 /** What the lamps are given in place of the clock of the server and of the preference of the system. */
 const clock = { now: 0 };
 let reducedMotion = false;
+/** The lamps a switch put out. */
+const switchedOff = new Set<string>();
 
 function setup(grid = freeGrid()) {
     const scene = mockDeep<GameScene>();
@@ -105,7 +108,12 @@ function setup(grid = freeGrid()) {
     wrapper.getMap.mockReturnValue({ tilewidth: 32, tileheight: 32 } as ReturnType<typeof wrapper.getMap>);
     scene.getGameMapFrontWrapper.mockReturnValue(wrapper);
     scene.isDoorOpen.mockImplementation((id: string) => state.openDoors.has(id));
-    const lamps = new RgbLamps(scene, 5, { now: () => clock.now, reducedMotion });
+    const lamps = new RgbLamps(scene, 5, {
+        now: () => clock.now,
+        reducedMotion,
+        isOn: (id) => !switchedOff.has(id),
+        fadeNow: () => clock.now,
+    });
     return { scene, state, lamps, worldView };
 }
 
@@ -117,6 +125,7 @@ afterEach(() => {
     rgbLampPreviewStore.set(undefined);
     clock.now = 0;
     reducedMotion = false;
+    switchedOff.clear();
 });
 
 function start(entities: Entity[], grid?: number[][]) {
@@ -321,6 +330,89 @@ describe("RgbLamps", () => {
         lamps.destroy();
         expect(visuals[0].destroyed).toBe(true);
         expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+});
+
+describe("RgbLamps a switch puts out", () => {
+    it("gives no light at all once out: nothing drawn, nothing through the night veil", () => {
+        switchedOff.add("a");
+        start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws).toEqual([]);
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+    });
+
+    it("fades out over 200 ms when switched off, then leaves the night veil", () => {
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+
+        switchedOff.add("a");
+        tick();
+        clock.now = 100;
+        tick();
+        expect(visuals[0].draws.at(-1)?.intensity).toBeCloseTo(0.5);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+
+        scene.markDirty.mockClear();
+        clock.now = 200;
+        tick();
+        expect(visuals[0].visible).toBe(false);
+        expect(get(rgbLampLightsStore)).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it("lights again at full strength when switched back on", () => {
+        switchedOff.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+
+        switchedOff.delete("a");
+        tick();
+        clock.now = 200;
+        tick();
+
+        expect(visuals[0].visible).toBe(true);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+    });
+
+    it("costs nothing while it stays out", () => {
+        switchedOff.add("a");
+        const { tick, scene } = start([lamp("a", 624, 624).entity]);
+        scene.markDirty.mockClear();
+        tick();
+        tick();
+        expect(visuals[0].draws).toEqual([]);
+        expect(scene.markDirty.mock.calls.length).toBe(0);
+    });
+
+    it("shines in the map editor even when out, so that it can be set", () => {
+        switchedOff.add("a");
+        const { tick } = start([lamp("a", 624, 624).entity]);
+        tick(true);
+        expect(visuals[0].visible).toBe(true);
+        expect(visuals[0].draws.at(-1)?.intensity).toBe(1);
+        expect(get(rgbLampLightsStore)).toHaveLength(1);
+    });
+
+    it("does not turn while it is out", () => {
+        switchedOff.add("a");
+        const made = lamp("a", 624, 624);
+        made.fake.properties = [
+            {
+                id: "p",
+                type: "rgbLampPropertyData",
+                color: "#ff0000",
+                radius: 6,
+                direction: 90,
+                angle: 90,
+                rotation: true,
+                rotationSpeed: 30,
+            },
+        ];
+        const { tick } = start([made.entity]);
+        clock.now = 500;
+        tick();
+        expect(visuals[0].draws).toEqual([]);
     });
 });
 

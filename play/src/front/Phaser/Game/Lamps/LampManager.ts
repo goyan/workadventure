@@ -24,6 +24,8 @@ import type { Entity } from "../../ECS/Entity";
 import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
 import type { GameScene } from "../GameScene";
+import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
+import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
 import { SpotifyMusicSignal } from "./SpotifyMusicSignal";
 import {
     jamOfSpaces,
@@ -156,6 +158,7 @@ export class LampManager {
     private demo: { bpm: number } | undefined;
     private readonly systemReducedMotion: boolean;
     private readonly unsubscribers: Unsubscriber[] = [];
+    private entityStates: EntityStatesManager | undefined;
     private editorOpen = false;
     private effectsEnabled = true;
     private musicSource = LampMusicSource.Rooms;
@@ -203,8 +206,13 @@ export class LampManager {
         ensureLampTextures(scene);
         this.zoneLights = new LampZoneLights(scene, LAMP_DEPTH, ROOM_SHADE_DEPTH);
         this.systemReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH, { reducedMotion: this.systemReducedMotion });
+        this.rgbLamps = new RgbLamps(scene, LAMP_DEPTH, {
+            reducedMotion: this.systemReducedMotion,
+            // The switches of the map: a lamp one of them put out gives no light.
+            isOn: (entityId) => this.entityStates?.isOn(entityId) ?? true,
+        });
         this.unsubscribers = [
+            entityStatesManagerStore.subscribe((states) => (this.entityStates = states)),
             lampEffectsEnabledStore.subscribe((enabled) => {
                 this.effectsEnabled = enabled;
                 this.watchJukeboxMusic();
