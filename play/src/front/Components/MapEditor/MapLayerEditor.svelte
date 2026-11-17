@@ -304,6 +304,27 @@
 
         {#if $mapLayerModeStore === "stair"}
             <section class="flex flex-col gap-2" data-testid="mapLayerStair">
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.target()}</h3>
+                {#if stairTargets.length === 0}
+                    <p class="m-0 text-xs text-warning">{$LL.mapEditor.mapLayer.stair.noTarget()}</p>
+                {:else}
+                    <div class="flex flex-wrap gap-2">
+                        {#each stairTargets as level (level)}
+                            <button
+                                type="button"
+                                class="px-3 py-1 rounded text-xs {chosenStairTarget === level
+                                    ? 'bg-secondary'
+                                    : 'bg-white/10 hover:bg-white/20'}"
+                                aria-pressed={chosenStairTarget === level}
+                                title={$LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
+                                data-testid="mapLayerStairTarget-{level}"
+                                onclick={() => mapLayerStairTargetStore.set(level)}
+                            >
+                                {levelLabel(level, $mapLayerBuiltLevelsStore)}
+                            </button>
+                        {/each}
+                    </div>
+                {/if}
                 <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.direction()}</h3>
                 <div class="flex flex-wrap gap-2">
                     {#each STAIR_DIRECTIONS as direction (direction)}
@@ -336,27 +357,6 @@
                         </button>
                     {/each}
                 </div>
-                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stair.target()}</h3>
-                {#if stairTargets.length === 0}
-                    <p class="m-0 text-xs text-warning">{$LL.mapEditor.mapLayer.stair.noTarget()}</p>
-                {:else}
-                    <div class="flex flex-wrap gap-2">
-                        {#each stairTargets as level (level)}
-                            <button
-                                type="button"
-                                class="px-3 py-1 rounded text-xs {chosenStairTarget === level
-                                    ? 'bg-secondary'
-                                    : 'bg-white/10 hover:bg-white/20'}"
-                                aria-pressed={chosenStairTarget === level}
-                                title={$LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
-                                data-testid="mapLayerStairTarget-{level}"
-                                onclick={() => mapLayerStairTargetStore.set(level)}
-                            >
-                                {levelLabel(level, $mapLayerBuiltLevelsStore)}
-                            </button>
-                        {/each}
-                    </div>
-                {/if}
                 <InputSwitch
                     id="map-layer-stair-open"
                     label={$LL.mapEditor.mapLayer.stair.openSide()}

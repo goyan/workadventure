@@ -545,7 +545,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             unavailable: "Cette salle n’a pas de catalogue de paliers.",
         },
         stair: {
-            direction: "Monte vers",
+            direction: "Direction de la montée",
             directions: { n: "Nord", e: "Est", s: "Sud", o: "Ouest" },
             width: "Largeur",
             target: "Monte jusqu’à",

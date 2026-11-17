@@ -533,7 +533,7 @@ const mapEditor: BaseTranslation = {
             unavailable: "This room has no catalog of raised floors.",
         },
         stair: {
-            direction: "Goes up towards",
+            direction: "Direction it goes up",
             directions: { n: "North", e: "East", s: "South", o: "West" },
             width: "Width",
             target: "Goes up to",
