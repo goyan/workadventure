@@ -91,6 +91,7 @@ import {
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
 import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
+import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
 import type { LevelPlaced } from "../MapLayer/MapLayerLevels";
 import { MapEditorTool } from "./MapEditorTool";
@@ -104,8 +105,8 @@ function availableHeight(chosen: WallHeight, available: readonly WallHeight[]): 
 /** The walls, doors and windows selected in the height mode. */
 const HEIGHT_SELECTION_COLOR = 0x3b82f6;
 
-/** Above every entity, below nothing: the preview must stay readable over furniture. */
-const PREVIEW_DEPTH = 100_000;
+/** Above every entity, those of the raised floors too: the preview must stay readable over them. */
+const PREVIEW_DEPTH = FLOOR_PREVIEW_DEPTH;
 
 /**
  * An edit of the map layer, applied to the model. The same function drives the preview (on a copy of the model
@@ -603,6 +604,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         if (!gesture) {
             if (this.canDraw()) {
                 this.followPointerLevel(pointer);
+                // On "auto", a wall of another level under the pointer shows where its door or window would go.
+                if (get(mapEditorPlacementLevelStore) === "auto") this.retargetLevel(pointer);
                 this.hover = this.worldOf(pointer);
                 this.redraw();
             }
