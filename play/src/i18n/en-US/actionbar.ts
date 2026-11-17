@@ -39,6 +39,8 @@ const actionbar = {
         now: "Now",
         inHours: "+{hours} h",
         cell: "{when}: {weather}",
+        cellWithWind: "{when}: {weather}, wind at {speed} km/h",
+        windSpeed: "{speed} km/h",
         unknown: "Unknown forecast",
         close: "Hide the weather",
         defaultCity: "Paris",

@@ -7,7 +7,9 @@ const HOUR = 60 * 60 * 1000;
 const NOW = new Date("2026-11-14T11:22:12Z");
 
 const cells = vi.hoisted(
-    (): { value: { at: number; weather?: string; temperature?: number; cloudiness?: number }[] } => ({ value: [] }),
+    (): {
+        value: { at: number; weather?: string; temperature?: number; cloudiness?: number; windSpeed?: number }[];
+    } => ({ value: [] }),
 );
 const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => ({ settings: [], dates: [] }));
 const wamSettings = vi.hoisted((): { value: unknown } => ({ value: {} }));
@@ -23,6 +25,9 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 now: label("Now"),
                 inHours: ({ hours }: { hours: number }) => `+${hours} h`,
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
+                cellWithWind: ({ when, weather, speed }: { when: string; weather: string; speed: number }) =>
+                    `${when}: ${weather}, wind ${speed} km/h`,
+                windSpeed: ({ speed }: { speed: number }) => `${speed} km/h`,
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
                 defaultCity: label("Paris"),
@@ -221,5 +226,31 @@ describe("WeatherForecastBanner", () => {
             "+1 h: Cloudy",
             "+4 h: Rain",
         ]);
+    });
+    it("shows the wind speed for now only, and nothing when the wind is unknown", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "rain", temperature: 8.2, windSpeed: 23 },
+            { at: NOW.getTime() + HOUR, weather: "storm", temperature: 9.6, windSpeed: 41 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "rain" },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Rain, wind 23 km/h",
+            "+1 h: Storm",
+            "+4 h: Rain",
+        ]);
+        expect(shown.map((cell) => cell.querySelector('[data-testid="weather-banner-wind"]')?.textContent)).toEqual([
+            "23 km/h",
+            undefined,
+            undefined,
+        ]);
+        expect(shown[0].querySelector('[data-testid="weather-banner-wind-icon"]')).not.toBeNull();
+
+        cells.value = cells.value.map((cell) => ({ at: cell.at, weather: cell.weather }));
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-banner-wind"]')).toBeNull();
+        expect(target.querySelector('[data-testid="weather-banner-wind-icon"]')).toBeNull();
     });
 });
