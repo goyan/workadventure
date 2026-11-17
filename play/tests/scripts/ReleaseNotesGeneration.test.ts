@@ -66,6 +66,21 @@ describe("release history generation", () => {
         expect(serialized).not.toContain("upstream baseline");
     });
 
+    it("publishes the features and fixes of the map tool (carte) too, not its tests nor the back", () => {
+        const feature = commit("feat(carte): Portes vitrées");
+        commit("test(carte): empreintes");
+        commit("feat(back): Côté serveur seulement");
+        const fix = commit("fix(carte): Gomme le long des murs");
+
+        execFileSync(execPath, [script], { cwd: repository });
+        const notes: unknown = JSON.parse(readFileSync(join(repository, "play/src/common/release-notes.json"), "utf8"));
+
+        expect(notes).toEqual([
+            { id: fix, date, author: "Contributor", type: "fix", description: "Gomme le long des murs" },
+            { id: feature, date, author: "Contributor", type: "feat", description: "Portes vitrées" },
+        ]);
+    });
+
     it("publishes the front commits of a pull request merged with a merge commit, at the date of the merge", () => {
         git(["switch", "-q", "-c", "feature"]);
         const feature = commit("feat(front): Bruits de pas");
