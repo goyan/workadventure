@@ -541,6 +541,43 @@ describe("SelectionEditorTool", () => {
         expect(get(mapEditorSelectionStore)).toMatchObject({ entityCount: 1, areaCount: 0, mode: "paste" });
     });
 
+    it("rewires a pasted switch to the copies of its targets, and lets go of the targets left behind", async () => {
+        addEntity("switch-original", 32, 32, furniturePrefab, {
+            properties: [
+                {
+                    id: "wiring",
+                    type: "switchPropertyData",
+                    key: "on",
+                    targets: { mode: "ids", ids: ["lamp-original", "lamp-elsewhere"] },
+                },
+            ],
+        });
+        addEntity("lamp-original", 64, 32, furniturePrefab);
+        addEntity("lamp-elsewhere", 600, 600, furniturePrefab);
+        userIsEditorStore.set(true);
+        select(0, 0, 128, 96);
+        tool.copySelection();
+        tool.pasteSelection();
+        emitPointerDown(pointerAt(canvas, 300, 300));
+        emitPointerUp(pointerAt(canvas, 300, 300, { pressed: false }));
+        await vi.waitFor(() => expect(get(mapEditorSelectionStore).busy).toBe(false));
+
+        const originals = ["switch-original", "lamp-original", "lamp-elsewhere"];
+        const pasted = Object.entries(wamFile.getGameMapEntities().getEntities()).filter(
+            ([id]) => !originals.includes(id),
+        );
+        expect(pasted).toHaveLength(2);
+        const pastedSwitch = pasted.find(([, data]) => (data.properties ?? []).length > 0);
+        const pastedLamp = pasted.find(([, data]) => (data.properties ?? []).length === 0);
+        expect(pastedSwitch?.[1].properties).toEqual([
+            { id: "wiring", type: "switchPropertyData", key: "on", targets: { mode: "ids", ids: [pastedLamp?.[0]] } },
+        ]);
+        // The original keeps its own wiring.
+        expect(wamFile.getGameMapEntities().getEntity("switch-original")?.properties?.[0]).toMatchObject({
+            targets: { mode: "ids", ids: ["lamp-original", "lamp-elsewhere"] },
+        });
+    });
+
     it("moves a group by one snapped delta and leaves relative offsets intact", async () => {
         addEntity("first", 32, 32, floorPrefab);
         addEntity("second", 128, 96, wallPrefab, { width: 64 });

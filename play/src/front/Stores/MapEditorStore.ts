@@ -65,6 +65,11 @@ export const mapEditorSnapEnabledStore = writable<boolean>(true);
 
 export const mapEditorEntityModeStore = writable<MapEditorEntityToolMode>("ADD");
 
+/**
+ * The switch being wired in the entity editor (its id): a click on a lamp adds it to the objects the switch commands,
+ * or removes it, instead of selecting it.
+ */
+export const mapEditorSwitchWiringStore = writable<string | undefined>(undefined);
 /** Eraser of the entity tool: a click on an object, or a drag over objects, deletes them. */
 export const mapEditorEntityEraserStore = writable<boolean>(false);
 /**

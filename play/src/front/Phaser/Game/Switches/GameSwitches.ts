@@ -9,7 +9,9 @@ import type { GameScene } from "../GameScene";
 import { zoneOf } from "../Lamps/LampJam";
 import { lampSource } from "../Lamps/LampReconcile";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
+import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
 import { SwitchIndicator } from "./SwitchIndicator";
+import { SwitchWiringView, wiringOf } from "./SwitchWiringView";
 import { entityStateKeysOf, resolveSwitchTargets, switchPressValue, type SwitchableTarget } from "./SwitchTargets";
 
 /** The switches of the map are looked for this often: one appears or goes as the map is edited. */
@@ -32,8 +34,10 @@ export class GameSwitches {
     private states: EntityStatesManager | undefined;
     private lastReconcileAt: number | undefined;
     private switches: Entity[] = [];
+    private readonly wiringView: SwitchWiringView;
 
     constructor(private readonly scene: GameScene) {
+        this.wiringView = new SwitchWiringView(scene);
         this.unsubscribe = entityStatesManagerStore.subscribe((states) => (this.states = states));
     }
 
@@ -96,6 +100,18 @@ export class GameSwitches {
         };
     }
 
+    /** The switches that command this object now, by their ids. */
+    public switchesCommanding(entityId: string): string[] {
+        const commanding: string[] = [];
+        for (const [id, entity] of this.entities()) {
+            const property = switchPropertyOf(entity);
+            if (property && this.targetsOf(entity, property).some((target) => target.id === entityId)) {
+                commanding.push(id);
+            }
+        }
+        return commanding;
+    }
+
     /** At every image: the small lights follow their switch and the state of its targets. */
     public update(now: number): void {
         if (this.lastReconcileAt === undefined || now - this.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
@@ -112,14 +128,27 @@ export class GameSwitches {
             const lit = this.targetsOf(entity, property).some((target) => this.isOn(target.id));
             changed = indicator.update(entity, lit) || changed;
         }
+        changed = this.drawWiring() || changed;
         if (changed) {
             // The scene is only drawn when something changed.
             this.scene.markDirty();
         }
     }
 
+    /**
+     * In the map editor, the switch that is selected shows what it commands: a line to each of its targets, and a
+     * ring around them. True when what is drawn changed.
+     */
+    private drawWiring(): boolean {
+        const selected = get(mapEditorModeStore) ? get(mapEditorSelectedEntityStore) : undefined;
+        const property = selected ? switchPropertyOf(selected) : undefined;
+        const wiring = selected && property ? wiringOf(selected, this.targetsOf(selected, property)) : undefined;
+        return this.wiringView.draw(wiring);
+    }
+
     public destroy(): void {
         this.unsubscribe();
+        this.wiringView.destroy();
         for (const indicator of this.indicators.values()) {
             indicator.destroy();
         }

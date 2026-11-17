@@ -6,6 +6,7 @@ import debug from "debug";
 import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuid } from "uuid";
+import { rewireSwitchProperties } from "../../Switches/SwitchWiring";
 import { userIsAdminStore, userIsEditorStore } from "../../../../Stores/GameStore";
 import {
     mapEditorCopiedEntityDataPropertiesStore,
@@ -688,6 +689,16 @@ export class SelectionEditorTool extends MapEditorTool {
             // Entities of the map as they will be once the commands have run.
             const movedPositions = new Map<string, { x: number; y: number }>();
             const createdStates: MapLayerEntityState[] = [];
+            // The id each copied object will have: a copied switch commands the copies of its targets (a pattern has
+            // no ids to tell them by: its switches come without their chosen targets).
+            const copiedIds = new Map<string, string>();
+            if (mode === "paste") {
+                for (const item of items) {
+                    if (item.kind === "entity" && item.id !== "") {
+                        copiedIds.set(item.id, uuid());
+                    }
+                }
+            }
             for (const item of items) {
                 if (mode === "move") {
                     if (item.kind === "entity") {
@@ -718,9 +729,11 @@ export class SelectionEditorTool extends MapEditorTool {
                         nextAreaIds.push(item.id);
                     }
                 } else if (item.kind === "entity") {
-                    const id = uuid();
+                    const id = copiedIds.get(item.id) ?? uuid();
+                    const copy = structuredClone(item.data);
                     const data: WAMEntityData = {
-                        ...structuredClone(item.data),
+                        ...copy,
+                        properties: rewireSwitchProperties(copy.properties, copiedIds),
                         x: item.data.x + delta.x,
                         y: item.data.y + delta.y,
                     };
