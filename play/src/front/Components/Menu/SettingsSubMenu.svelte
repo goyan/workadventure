@@ -57,6 +57,7 @@
     import InputRadioBox from "../Input/InputRadioBox.svelte";
     import Select from "../Input/Select.svelte";
     import Chip from "../UI/Chip.svelte";
+    import { perfShownStore } from "../../Stores/PerfStore";
     import SoundEffectsSettings from "./SoundEffectsSettings.svelte";
     import SpotifySettings from "./SpotifySettings.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
@@ -490,6 +491,12 @@
             <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.realisticHelp()}</p>
         </div>
         <LightSettingsShare />
+        <InputSwitch
+            id="perf-counter-shown"
+            bind:value={$perfShownStore}
+            label={$LL.menu.settings.perfCounter()}
+            labelPosition="right"
+        />
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>
             <SeasonalThemeSettings />

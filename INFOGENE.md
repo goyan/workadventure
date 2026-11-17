@@ -428,6 +428,14 @@ n'a pas de position à lui (comme un va-et-vient).
   `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
   couleur, portée et intensité d'une lampe comme elle sera la nuit. Les zones ajoutées ou déplacées ne comptent pour
   la nuit qu'à la fermeture de l'éditeur ; les torches n'y éclairent pas.
+- **Compteur de performances (réglage personnel)** : Paramètres → Ambiance, « Afficher le compteur de performances »
+  (`perfShownStore`, masqué par défaut) affiche, à gauche du groupe central de la barre d'actions (à partir d'une
+  largeur moyenne), sur la dernière demi-seconde : images par seconde, plus longue attente entre deux images (une
+  saccade que la moyenne cache), temps moyen de calcul de la scène et de rendu d'une image, en ms ; texte en couleur
+  d'alerte sous 30 images/s ou au-delà de 50 ms d'attente. `Perf/PerfMeter.ts` (calcul), `Perf/PerfMonitor.ts`
+  (écoute les événements `preupdate`/`postupdate` de la scène et `prerender`/`postrender` du jeu, seulement quand le
+  compteur est affiché). Le jeu ne redessine que quand quelque chose a changé : le temps de rendu d'une scène au repos
+  est proche de zéro.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
   (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 32 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle

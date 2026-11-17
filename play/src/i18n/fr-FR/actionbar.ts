@@ -2,6 +2,12 @@ import type { Translation } from "../i18n-types";
 import type { DeepPartial } from "../DeepPartial";
 
 const actionbar: DeepPartial<Translation["actionbar"]> = {
+    perf: {
+        fps: "{fps} images/s",
+        detail: "pire {worst} ms · calcul {update} · rendu {render}",
+        waiting: "mesure…",
+        help: "Images par seconde, plus longue attente entre deux images, temps moyen de calcul et de rendu d'une image (en ms), sur la dernière demi-seconde.",
+    },
     understand: "C'est compris",
     edit: "Modifier",
     cancel: "Annuler",
