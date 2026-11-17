@@ -10,6 +10,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         editionFailed: "Votre modification n'a pas pu être enregistrée et a été annulée.",
     },
     sideBar: {
+        nightInEditor: "Éclairage du jeu dans l'éditeur",
+        nightInEditorOn: "Éclairage du jeu affiché dans l'éditeur (cliquer pour revenir au plein jour)",
+        nightInEditorOff: "Voir dans l'éditeur le même éclairage qu'en jeu, pour régler les lampes",
         areaEditor: "Outil d'édition de zone",
         entityEditor: "Outil d'édition d'entités",
         tileEditor: "Outil d'édition de tuiles",

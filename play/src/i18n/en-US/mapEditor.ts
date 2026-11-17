@@ -9,6 +9,9 @@ const mapEditor: BaseTranslation = {
         editionFailed: "Your change could not be saved and has been undone.",
     },
     sideBar: {
+        nightInEditor: "Lighting of the game in the editor",
+        nightInEditorOn: "Lighting of the game shown in the editor (click for plain daylight)",
+        nightInEditorOff: "See in the editor the same lighting as in the game, to set the lamps",
         areaEditor: "Area editor tool",
         entityEditor: "Entity editor tool",
         tileEditor: "Tile editor tool",

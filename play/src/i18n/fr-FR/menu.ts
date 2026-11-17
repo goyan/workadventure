@@ -136,6 +136,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             ambienceFullShare: "Ambiance maximale quand {percent} % de la pièce est éclairée",
             bounce: "Rebond sur les murs : {percent} % de la lumière renvoyée (0 : aucun)",
             softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
+            keptInEditor: "Même éclairage dans l'éditeur de carte qu'en jeu, pour régler les lampes",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:
                 "La nuit, une pièce n'est éclairée que par ses lampes (interrupteurs, capteurs). Réglage personnel.",
