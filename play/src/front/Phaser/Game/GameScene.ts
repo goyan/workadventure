@@ -1,7 +1,3 @@
-import type { TileBarriers } from "../../Utils/TileBarriers";
-import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
-import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
-import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import * as Sentry from "@sentry/svelte";
 import * as Phaser from "phaser";
 import type { Subscription } from "rxjs";
@@ -268,11 +264,15 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { floorPath } from "./MapEditor/MapLayer/FloorPath";
+import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
+import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";

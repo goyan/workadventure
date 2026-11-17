@@ -7,10 +7,7 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
-    import {
-        mapEditorEntityEraserStore,
-        mapEditorSnapEnabledStore,
-    } from "../../../Stores/MapEditorStore";
+    import { mapEditorEntityEraserStore, mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
         mapEditorDeleteCustomEntityEventStore,

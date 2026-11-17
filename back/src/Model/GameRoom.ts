@@ -1,5 +1,6 @@
 import path from "path";
-import { isAtAreaLevel ,
+import {
+    isAtAreaLevel,
     canUpdateListeningZoneJams,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
