@@ -350,7 +350,9 @@ import { skyWeatherFactor } from "./Night/SkyLight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
 import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
 import { SkyMovingShadows } from "./SkyShadows/SkyMovingShadows";
-import type { AnimalShadowSource, AvatarShadowSource } from "./SkyShadows/SkyMovingShadows";
+import type { MovingShadowSource } from "./SkyShadows/SkyMovingShadows";
+import { drawableSource } from "./SkyShadows/SkyShadowPicture";
+import { NATURE_PREFIX } from "./SkyShadows/SkyShadowCasters";
 import type { ShadowSourceEntity } from "./SkyShadows/SkyShadowCasters";
 import { LampManager } from "./Lamps/LampManager";
 import { parseLampDemo } from "./Lamps/LampDemo";
@@ -1708,8 +1710,22 @@ export class GameScene extends DirtyScene {
 
     /** The objects of the map as their shadows of the sky need them. */
     private *shadowSourceEntities(): Generator<ShadowSourceEntity> {
+        // The pictures are only read for the realistic shadows of the trees.
+        const pictures = this.skyShadowCategories?.treeShape === "realistic";
         for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            const frame = pictures && entity.getPrefab().id.startsWith(NATURE_PREFIX) ? entity.frame : undefined;
             yield {
+                picture:
+                    frame && drawableSource(frame.source.image)
+                        ? {
+                              key: `${entity.texture.key}:${frame.name}`,
+                              source: frame.source.image,
+                              cutX: frame.cutX,
+                              cutY: frame.cutY,
+                              cutWidth: frame.cutWidth,
+                              cutHeight: frame.cutHeight,
+                          }
+                        : undefined,
                 x: entity.x,
                 y: entity.y,
                 displayWidth: entity.displayWidth,
@@ -1721,18 +1737,20 @@ export class GameScene extends DirtyScene {
     }
 
     /** The avatars that throw a shadow of the sky now: this person and the others. */
-    private *shadowAvatars(): Generator<AvatarShadowSource> {
+    private *shadowAvatars(): Generator<MovingShadowSource> {
+        // The body of an avatar, for its oval shadow: narrower than its frame.
+        const body = { width: 24, height: 30 };
         const own = this.CurrentPlayer?.skyShadowSource();
-        if (own) yield { id: "me", ...own };
+        if (own) yield { id: "me", ...body, ...own };
         for (const [userId, player] of this.MapPlayersByKey) {
             const source = player.skyShadowSource();
-            if (source) yield { id: userId, ...source };
+            if (source) yield { id: userId, ...body, ...source };
         }
     }
 
     /** The animals that walk around, as their oval shadows need them. */
-    private shadowAnimals(): AnimalShadowSource[] {
-        const animals: AnimalShadowSource[] = [];
+    private shadowAnimals(): MovingShadowSource[] {
+        const animals: MovingShadowSource[] = [];
         this.wanderingCharactersManager?.forEachShownCharacter((id, sprite) => {
             // The body of an animal fills about two thirds of its frame, in width as in height.
             animals.push({
@@ -1741,6 +1759,8 @@ export class GameScene extends DirtyScene {
                 y: sprite.y,
                 width: sprite.displayWidth * 0.7,
                 height: sprite.displayHeight * 0.6,
+                sprites: [sprite],
+                scale: sprite.scaleX,
             });
         });
         return animals;
@@ -3315,7 +3335,13 @@ export class GameScene extends DirtyScene {
                     avatars: () => this.shadowAvatars(),
                     animals: () => this.shadowAnimals(),
                     isOutdoorAt: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
-                    categories: () => this.skyShadowCategories ?? { avatars: true, animals: true },
+                    categories: () =>
+                        this.skyShadowCategories ?? {
+                            avatars: true,
+                            animals: true,
+                            avatarShape: "realistic",
+                            animalShape: "oval",
+                        },
                     enabled: () => !get(mapEditorModeStore),
                 });
                 // And the sun and the moon through the windows, with the switches of each body.

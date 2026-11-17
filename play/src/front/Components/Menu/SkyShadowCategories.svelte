@@ -1,9 +1,15 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
-    import { skyShadowCategoryStores } from "../../Stores/SkyLightStore";
+    import { skyShadowCategoryStores, skyShadowShapeStores } from "../../Stores/SkyLightStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
+    import SegmentedControl from "./SegmentedControl.svelte";
 
     const { walls, objects, trees, details, avatars, animals } = skyShadowCategoryStores;
+    const { trees: treeShape, avatars: avatarShape, animals: animalShape } = skyShadowShapeStores;
+    const shapes = $derived([
+        { value: "oval" as const, label: $LL.menu.settings.skyLight.casters.shape.oval() },
+        { value: "realistic" as const, label: $LL.menu.settings.skyLight.casters.shape.realistic() },
+    ]);
 </script>
 
 <details class="rounded-xl border border-white/10 bg-black/10 text-sm" data-testid="sky-shadow-categories">
@@ -31,6 +37,16 @@
             label={$LL.menu.settings.skyLight.casters.trees()}
             labelPosition="right"
         />
+        {#if $trees}
+            <div class="ps-4">
+                <SegmentedControl
+                    ariaLabel="{$LL.menu.settings.skyLight.casters.trees()} : {$LL.menu.settings.skyLight.casters.shape.label()}"
+                    bind:value={$treeShape}
+                    dataTestId="sky-shadow-trees-shape"
+                    options={shapes}
+                />
+            </div>
+        {/if}
         <InputSwitch
             id="sky-shadow-details"
             bind:value={$details}
@@ -43,11 +59,31 @@
             label={$LL.menu.settings.skyLight.casters.avatars()}
             labelPosition="right"
         />
+        {#if $avatars}
+            <div class="ps-4">
+                <SegmentedControl
+                    ariaLabel="{$LL.menu.settings.skyLight.casters.avatars()} : {$LL.menu.settings.skyLight.casters.shape.label()}"
+                    bind:value={$avatarShape}
+                    dataTestId="sky-shadow-avatars-shape"
+                    options={shapes}
+                />
+            </div>
+        {/if}
         <InputSwitch
             id="sky-shadow-animals"
             bind:value={$animals}
             label={$LL.menu.settings.skyLight.casters.animals()}
             labelPosition="right"
         />
+        {#if $animals}
+            <div class="ps-4">
+                <SegmentedControl
+                    ariaLabel="{$LL.menu.settings.skyLight.casters.animals()} : {$LL.menu.settings.skyLight.casters.shape.label()}"
+                    bind:value={$animalShape}
+                    dataTestId="sky-shadow-animals-shape"
+                    options={shapes}
+                />
+            </div>
+        {/if}
     </div>
 </details>

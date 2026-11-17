@@ -88,6 +88,27 @@ describe("readShadowCasters", () => {
         expect(rock.trunkWidth).toBe(0);
     });
 
+    it("reads a tree as its own picture laid on the ground when the trees are set to realistic", () => {
+        const picture = { key: "oak:0", source: {}, cutX: 0, cutY: 0, cutWidth: 64, cutHeight: 96 };
+        const tree = entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" }, picture });
+        const categories = { walls: true, objects: true, trees: true, details: true, treeShape: "realistic" as const };
+        const realistic = readShadowCasters([tree], undefined, categories);
+        expect(realistic.casters?.trees).toEqual([]);
+        // Its foot at the bottom middle of its image, as wide and as high as it is shown.
+        expect(realistic.casters?.pictures).toEqual([{ x: 132, y: 296, width: 64, height: 96, picture }]);
+        // The shape is part of what is drawn: going back to ovals reads the map again.
+        const oval = readShadowCasters([tree], realistic.signature);
+        expect(oval.casters?.trees).toHaveLength(1);
+        expect(oval.casters?.pictures).toEqual([]);
+        // A tree whose picture cannot be read keeps its oval.
+        const unread = readShadowCasters(
+            [entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } })],
+            undefined,
+            categories,
+        );
+        expect(unread.casters?.trees).toHaveLength(1);
+    });
+
     it("leaves out the categories turned off, and reads the map again when one is turned back on", () => {
         const entities = [
             entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),
@@ -111,7 +132,7 @@ describe("readShadowCasters", () => {
             details: false,
         });
         expect(none.signature).not.toBe(all.signature);
-        expect(none.casters).toEqual({ boxes: [], trees: [], details: [] });
+        expect(none.casters).toEqual({ boxes: [], trees: [], details: [], pictures: [] });
         expect(readShadowCasters(entities, none.signature).casters?.trees).toHaveLength(1);
     });
 
@@ -143,7 +164,7 @@ describe("readShadowCasters", () => {
                 },
             }),
         ]);
-        expect(casters).toEqual({ boxes: [], trees: [], details: [] });
+        expect(casters).toEqual({ boxes: [], trees: [], details: [], pictures: [] });
     });
 
     it("does not read the walls again when nothing changed since a signature", () => {

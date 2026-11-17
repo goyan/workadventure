@@ -76,6 +76,11 @@ const menu: DeepPartial<Translation["menu"]> = {
                 details: "Rochers, herbes, fleurs et souches",
                 avatars: "Avatars",
                 animals: "Animaux",
+                shape: {
+                    label: "Forme de l'ombre",
+                    oval: "Ovale",
+                    realistic: "Réaliste",
+                },
             },
             advanced: "Réglages avancés",
         },

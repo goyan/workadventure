@@ -10,7 +10,8 @@ import {
 import type { MapLayerModel } from "../MapEditor/MapLayer/MapLayerModel";
 import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
 import { mergeShadowBoxes } from "./SkyShadowGeometry";
-import type { ShadowBox, ShadowCasters, ShadowTree } from "./SkyShadowGeometry";
+import type { ShadowBox, ShadowCasters, ShadowPictureCaster, ShadowTree } from "./SkyShadowGeometry";
+import type { ShadowPicture, ShadowShape } from "./SkyShadowPicture";
 
 /** How high a tall object (`castsShadow`) stands, in map pixels: a tile and a half (a cupboard, a shelf). */
 export const OBJECT_SHADOW_RISE = 1.5 * MAP_LAYER_TILE_SIZE;
@@ -33,7 +34,7 @@ function isShadowTree(entity: ShadowSourceEntity): boolean {
 }
 
 /** The nature catalogue: what is not a tree in it is a low detail (a rock, a tuft of grass, flowers, a stump). */
-const NATURE_PREFIX = "Nature:";
+export const NATURE_PREFIX = "Nature:";
 /** A detail throws the shadow of a low mound: this share of the width of its image round, half its image high. */
 const DETAIL_RADIUS_SHARE = 0.35;
 
@@ -43,6 +44,8 @@ export interface ShadowCategories {
     objects: boolean;
     trees: boolean;
     details: boolean;
+    /** A crown on a trunk (oval, by default), or the picture of each tree laid on the ground (realistic). */
+    treeShape?: ShadowShape;
 }
 const ALL_CATEGORIES: ShadowCategories = { walls: true, objects: true, trees: true, details: true };
 
@@ -90,6 +93,8 @@ export interface ShadowSourceEntity {
     displayWidth: number;
     displayHeight: number;
     elevation: number;
+    /** Its picture as it is shown now, when a canvas can draw it: for a realistic shadow. */
+    picture?: ShadowPicture;
     prefab: Pick<EntityPrefab, "collectionName" | "id"> &
         Partial<Pick<EntityPrefab, "castsShadow" | "collisionRectangles" | "collisionGrid" | "wander">>;
 }
@@ -137,8 +142,10 @@ export function readShadowCasters(
     const objects: ShadowBox[] = [];
     const trees: ShadowTree[] = [];
     const details: ShadowTree[] = [];
+    const pictures: ShadowPictureCaster[] = [];
+    const realisticTrees = categories.treeShape === "realistic";
     const on = (shown: boolean): string => (shown ? "1" : "0");
-    let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)};`;
+    let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)}${on(realisticTrees)};`;
     for (const entity of entities) {
         const { prefab } = entity;
         if (entity.elevation >= RAISED) continue;
@@ -148,6 +155,18 @@ export function readShadowCasters(
             signature += `w${prefab.id}@${entity.x},${entity.y};`;
         } else if (isShadowTree(entity)) {
             if (!categories.trees) continue;
+            if (realisticTrees && entity.picture) {
+                const laid = {
+                    x: entity.x + entity.displayWidth / 2,
+                    y: entity.y + entity.displayHeight,
+                    width: entity.displayWidth,
+                    height: entity.displayHeight,
+                    picture: entity.picture,
+                };
+                pictures.push(laid);
+                signature += `p${laid.x},${laid.y},${laid.width},${laid.height},${laid.picture.key};`;
+                continue;
+            }
             const tree = treeOf(entity);
             trees.push(tree);
             signature += `t${tree.x},${tree.y},${tree.crownRadius},${tree.crownHeight};`;
@@ -165,5 +184,5 @@ export function readShadowCasters(
     }
     if (signature === unchangedSince) return { casters: undefined, signature };
     const boxes = pieces.length > 0 ? [...wallShadowBoxes(modelFromPlacedPrefabs(pieces)), ...objects] : objects;
-    return { casters: { boxes, trees, details }, signature };
+    return { casters: { boxes, trees, details, pictures }, signature };
 }

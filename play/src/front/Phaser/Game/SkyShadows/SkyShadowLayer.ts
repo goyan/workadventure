@@ -1,6 +1,19 @@
 import * as Phaser from "phaser";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import type { Point } from "./SkyShadowGeometry";
+import { drawableSource } from "./SkyShadowPicture";
+import type { ShadowPicture } from "./SkyShadowPicture";
+
+/** A picture laid on the ground as a shadow: its foot, its size, and how it is turned and stretched (fallenShadowPose). */
+export interface LaidPicture {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotation: number;
+    stretch: number;
+    picture: ShadowPicture;
+}
 
 /**
  * Depth of the shadows: on the ground, over the map tiles (0), the floors of the map layer (0.5) and the grass of the
@@ -38,6 +51,7 @@ export class SkyShadowLayer {
         indoor: readonly WeatherView[],
         color: number,
         alpha: number,
+        pictures: readonly LaidPicture[] = [],
     ): void {
         const scale = Math.min(1, zoom, MAX_TEXELS / area.width, MAX_TEXELS / area.height);
         const width = Math.max(1, Math.ceil(area.width * scale));
@@ -61,6 +75,33 @@ export class SkyShadowLayer {
             });
             context.closePath();
             context.fill();
+        }
+        if (pictures.length > 0) {
+            // Each picture from its foot, turned away from the light and stretched to the length of its shadow.
+            for (const laid of pictures) {
+                const source = drawableSource(laid.picture.source);
+                if (!source || laid.picture.cutWidth <= 0 || laid.picture.cutHeight <= 0) continue;
+                context.save();
+                context.translate((laid.x - area.x) * scale, (laid.y - area.y) * scale);
+                context.rotate(laid.rotation);
+                context.scale(scale, scale * laid.stretch);
+                context.drawImage(
+                    source,
+                    laid.picture.cutX,
+                    laid.picture.cutY,
+                    laid.picture.cutWidth,
+                    laid.picture.cutHeight,
+                    -laid.width / 2,
+                    -laid.height,
+                    laid.width,
+                    laid.height,
+                );
+                context.restore();
+            }
+            // Everything drawn so far is shadow: the pictures take its colour, where they are not transparent.
+            context.globalCompositeOperation = "source-in";
+            context.fillRect(0, 0, width, height);
+            context.globalCompositeOperation = "source-over";
         }
         for (const rect of indoor) {
             context.clearRect(

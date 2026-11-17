@@ -75,6 +75,11 @@ const menu: BaseTranslation = {
                 details: "Rocks, grass, flowers and stumps",
                 avatars: "Avatars",
                 animals: "Animals",
+                shape: {
+                    label: "Shape of the shadow",
+                    oval: "Oval",
+                    realistic: "Realistic",
+                },
             },
             advanced: "Advanced settings",
         },

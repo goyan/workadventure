@@ -3,6 +3,8 @@ import type * as Phaser from "phaser";
 import type { SkyLight } from "../Night/SkyLight";
 import { SHADOW_COLOR, shadowAlpha } from "./SkyShadowFrame";
 import { fallenShadowPose, ovalShadowPose } from "./SkyMovingShadowPose";
+import { drawableSource } from "./SkyShadowPicture";
+import type { ShadowShape } from "./SkyShadowPicture";
 
 /**
  * Depth of the shadows of what walks: on the ground, just over the shadows of what stands (SkyShadowLayer, 0.7) and
@@ -14,34 +16,31 @@ const NO_LIGHT = 0.005;
 const OVAL_TEXTURE = "sky-oval-shadow";
 const OVAL_SIZE = 32;
 
-/** An avatar as its shadow needs it: its feet (map pixels) and the sprites it is drawn with, one over the other. */
-export interface AvatarShadowSource {
+/**
+ * Something that walks, as its shadow needs it: its feet and the size of its body (map pixels), and the sprites it is
+ * drawn with, one over the other, shown `scale` times their frame.
+ */
+export interface MovingShadowSource {
     id: string | number;
-    x: number;
-    y: number;
-    sprites: readonly Phaser.GameObjects.Sprite[];
-}
-
-/** An animal that walks around: its feet and the size of its body (map pixels). */
-export interface AnimalShadowSource {
-    id: string;
     x: number;
     y: number;
     width: number;
     height: number;
+    sprites: readonly Phaser.GameObjects.Sprite[];
+    scale?: number;
 }
 
 export interface SkyMovingShadowsOptions {
     /** The light of the sky (NightManager.skyLight). */
     light: () => SkyLight | undefined;
     /** The avatars that may throw a shadow now (not the hidden ones, nor the ones swimming or on a raised floor). */
-    avatars: () => Iterable<AvatarShadowSource>;
+    avatars: () => Iterable<MovingShadowSource>;
     /** The animals that walk around and are shown. */
-    animals: () => Iterable<AnimalShadowSource>;
+    animals: () => Iterable<MovingShadowSource>;
     /** Whether a point of the map is outdoors: the sky throws no shadow in a room. Everywhere without a grid. */
     isOutdoorAt: (x: number, y: number) => boolean;
-    /** Which of them throw a shadow, for this person. */
-    categories: () => { avatars: boolean; animals: boolean };
+    /** Which of them throw a shadow, and of which shape, for this person. */
+    categories: () => { avatars: boolean; animals: boolean; avatarShape: ShadowShape; animalShape: ShadowShape };
     /** False in the map editor. */
     enabled: () => boolean;
 }
@@ -61,18 +60,6 @@ interface OvalShadow {
     state: string;
 }
 
-/** What a browser can draw on a canvas, among what a texture of the game may hold. */
-function drawableSource(source: unknown): CanvasImageSource | undefined {
-    if (
-        source instanceof HTMLImageElement ||
-        source instanceof HTMLCanvasElement ||
-        (typeof ImageBitmap !== "undefined" && source instanceof ImageBitmap)
-    ) {
-        return source;
-    }
-    return undefined;
-}
-
 const cssColor = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
 
 /**
@@ -81,7 +68,7 @@ const cssColor = (color: number): string => `#${color.toString(16).padStart(6, "
  * the map is drawn again. The silhouette of an avatar is drawn again only when one of its sprites changes its frame.
  */
 export class SkyMovingShadows {
-    private readonly avatars = new Map<string | number, AvatarShadow>();
+    private readonly avatars = new Map<string, AvatarShadow>();
     private readonly ovals = new Map<string, OvalShadow>();
     private generation = 0;
     private broken = false;
@@ -120,43 +107,40 @@ export class SkyMovingShadows {
         const alpha = shadowAlpha(light);
         let changed = false;
 
-        const seenAvatars = new Set<string | number>();
+        const seenAvatars = new Set<string>();
         const seenOvals = new Set<string>();
-        if (categories.avatars) {
-            for (const avatar of this.options.avatars()) {
-                if (avatar.sprites.length === 0 || !this.options.isOutdoorAt(avatar.x, avatar.y)) continue;
-                const shadow = this.avatarShadow(avatar);
-                if (shadow.drawable) {
-                    seenAvatars.add(avatar.id);
-                    const height = shadow.texture.height;
-                    const pose = fallenShadowPose(height, light);
-                    if (!pose) continue;
-                    const state = `${avatar.x},${avatar.y},${pose.rotation},${pose.stretch},${alpha},${shadow.frames}`;
-                    if (state !== shadow.state) {
-                        shadow.state = state;
-                        shadow.image
-                            .setPosition(avatar.x, avatar.y)
-                            .setRotation(pose.rotation)
-                            .setScale(1, pose.stretch)
-                            .setAlpha(alpha)
-                            .setVisible(true);
-                        changed = true;
-                    }
-                } else {
-                    // Its sprites cannot be read (a texture kept by the graphics card only): an oval, as an animal.
-                    const id = `avatar:${avatar.id}`;
+        const kinds: [string, boolean, ShadowShape, () => Iterable<MovingShadowSource>][] = [
+            ["avatar", categories.avatars, categories.avatarShape, this.options.avatars],
+            ["animal", categories.animals, categories.animalShape, this.options.animals],
+        ];
+        for (const [kind, shown, shape, sources] of kinds) {
+            if (!shown) continue;
+            for (const source of sources()) {
+                if (!this.options.isOutdoorAt(source.x, source.y)) continue;
+                const id = `${kind}:${source.id}`;
+                // Its true silhouette, when asked for and when its sprites can be read; an oval otherwise.
+                const shadow =
+                    shape === "realistic" && source.sprites.length > 0 ? this.avatarShadow(id, source) : undefined;
+                if (!shadow?.drawable) {
                     seenOvals.add(id);
-                    const body = { x: avatar.x, y: avatar.y, width: OVAL_SIZE, height: OVAL_SIZE };
-                    changed = this.placeOval(id, body, light, alpha) || changed;
+                    changed = this.placeOval(id, source, light, alpha) || changed;
+                    continue;
                 }
-            }
-        }
-        if (categories.animals) {
-            for (const animal of this.options.animals()) {
-                if (!this.options.isOutdoorAt(animal.x, animal.y)) continue;
-                const id = `animal:${animal.id}`;
-                seenOvals.add(id);
-                changed = this.placeOval(id, animal, light, alpha) || changed;
+                seenAvatars.add(id);
+                const scale = source.scale ?? 1;
+                const pose = fallenShadowPose(shadow.texture.height * scale, light);
+                if (!pose) continue;
+                const state = `${source.x},${source.y},${pose.rotation},${pose.stretch},${scale},${alpha},${shadow.frames}`;
+                if (state !== shadow.state) {
+                    shadow.state = state;
+                    shadow.image
+                        .setPosition(source.x, source.y)
+                        .setRotation(pose.rotation)
+                        .setScale(scale, scale * pose.stretch)
+                        .setAlpha(alpha)
+                        .setVisible(true);
+                    changed = true;
+                }
             }
         }
 
@@ -179,21 +163,21 @@ export class SkyMovingShadows {
         if (changed) this.scene.markDirty();
     }
 
-    /** The shadow of an avatar, its silhouette drawn again when one of its sprites changed its frame. */
-    private avatarShadow(avatar: AvatarShadowSource): AvatarShadow {
+    /** The shadow of an avatar or of an animal, its silhouette drawn again when one of its sprites changed its frame. */
+    private avatarShadow(id: string, avatar: MovingShadowSource): AvatarShadow {
         const frames = avatar.sprites
             .map(
                 (sprite) =>
                     `${sprite.texture.key}:${sprite.frame.name}:${sprite.flipX ? 1 : 0}:${sprite.visible ? 1 : 0}`,
             )
             .join("|");
-        let shadow = this.avatars.get(avatar.id);
+        let shadow = this.avatars.get(id);
         const first = avatar.sprites[0].frame;
         const width = Math.max(1, first.cutWidth);
         const height = Math.max(1, first.cutHeight);
         if (shadow && (shadow.texture.width !== width || shadow.texture.height !== height)) {
             this.destroyAvatar(shadow);
-            this.avatars.delete(avatar.id);
+            this.avatars.delete(id);
             shadow = undefined;
         }
         if (!shadow) {
@@ -206,7 +190,7 @@ export class SkyMovingShadows {
                 .setDepth(SKY_MOVING_SHADOW_DEPTH)
                 .setVisible(false);
             shadow = { image, texture, frames: "", drawable: false, state: "" };
-            this.avatars.set(avatar.id, shadow);
+            this.avatars.set(id, shadow);
         }
         if (frames !== shadow.frames) {
             shadow.frames = frames;

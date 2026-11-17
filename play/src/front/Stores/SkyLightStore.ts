@@ -2,6 +2,7 @@ import { derived } from "svelte/store";
 import type { Readable } from "svelte/store";
 import { DEFAULT_SHADOW_TILES, MAX_SHADOW_TILES } from "../Phaser/Game/Night/SkyLight";
 import type { BodyLightSettings, MoonPhaseCurve, SkyLightSettings } from "../Phaser/Game/Night/SkyLight";
+import type { ShadowShape } from "../Phaser/Game/SkyShadows/SkyShadowPicture";
 import {
     createPersistedChoiceStore,
     createPersistedNumberStore,
@@ -81,6 +82,17 @@ export const skyShadowCategoryStores = {
     animals: createPersistedSwitchStore("skyShadowAnimals", true),
 };
 
+/**
+ * How the shadow of each kind that can have its true silhouette is drawn: a plain oval or that silhouette. To compare
+ * how they look and what they cost.
+ */
+export const SHADOW_SHAPES: readonly ShadowShape[] = ["oval", "realistic"];
+export const skyShadowShapeStores = {
+    trees: createPersistedChoiceStore<ShadowShape>("skyShadowTreeShape", SHADOW_SHAPES, "oval"),
+    avatars: createPersistedChoiceStore<ShadowShape>("skyShadowAvatarShape", SHADOW_SHAPES, "realistic"),
+    animals: createPersistedChoiceStore<ShadowShape>("skyShadowAnimalShape", SHADOW_SHAPES, "oval"),
+};
+
 export interface SkyShadowCategories {
     walls: boolean;
     objects: boolean;
@@ -88,6 +100,9 @@ export interface SkyShadowCategories {
     details: boolean;
     avatars: boolean;
     animals: boolean;
+    treeShape: ShadowShape;
+    avatarShape: ShadowShape;
+    animalShape: ShadowShape;
 }
 
 export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
@@ -98,6 +113,19 @@ export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
         skyShadowCategoryStores.details,
         skyShadowCategoryStores.avatars,
         skyShadowCategoryStores.animals,
+        skyShadowShapeStores.trees,
+        skyShadowShapeStores.avatars,
+        skyShadowShapeStores.animals,
     ],
-    ([walls, objects, trees, details, avatars, animals]) => ({ walls, objects, trees, details, avatars, animals }),
+    ([walls, objects, trees, details, avatars, animals, treeShape, avatarShape, animalShape]) => ({
+        walls,
+        objects,
+        trees,
+        details,
+        avatars,
+        animals,
+        treeShape,
+        avatarShape,
+        animalShape,
+    }),
 );

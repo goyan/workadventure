@@ -9,6 +9,8 @@ import type { Point, ShadowCasters, ShadowTree } from "./SkyShadowGeometry";
 import { indoorRuns, SHADOW_COLOR, shadowAlpha, shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
 import { SkyShadowLayer } from "./SkyShadowLayer";
+import type { LaidPicture } from "./SkyShadowLayer";
+import { fallenShadowPose } from "./SkyMovingShadowPose";
 
 /** What throws the shadows is looked at again twice a second at most: an object being dragged is not read at every image. */
 const CASTERS_INTERVAL_MS = 500;
@@ -120,13 +122,40 @@ export class SkyShadowManager {
         const area = shadowArea(frame.view);
         const grid = this.options.outdoorGrid();
         const indoor = grid ? indoorRuns((column, row) => grid.isOutdoorCell(column, row), grid.cellSize, area) : [];
-        this.layer.draw(area, frame.zoom, this.polygonsOver(area, light), indoor, SHADOW_COLOR, shadowAlpha(light));
+        this.layer.draw(
+            area,
+            frame.zoom,
+            this.polygonsOver(area, light),
+            indoor,
+            SHADOW_COLOR,
+            shadowAlpha(light),
+            this.picturesOver(area, light),
+        );
         this.drawn = { ...frame, area };
         this.scene.markDirty();
     }
 
     public destroy(): void {
         this.layer.destroy();
+    }
+
+    /** The trees drawn as their own picture that may throw a shadow in the area, each laid away from the light. */
+    private picturesOver(area: WeatherView, light: SkyLight): LaidPicture[] {
+        const reach = light.shadowLength.max;
+        const laid: LaidPicture[] = [];
+        for (const caster of this.casters.pictures ?? []) {
+            if (
+                caster.x + caster.width / 2 < area.x - reach ||
+                caster.x - caster.width / 2 > area.x + area.width + reach ||
+                caster.y < area.y - reach ||
+                caster.y - caster.height > area.y + area.height + reach
+            ) {
+                continue;
+            }
+            const pose = fallenShadowPose(caster.height, light);
+            if (pose) laid.push({ ...caster, ...pose });
+        }
+        return laid;
     }
 
     /** The shadows that may fall in the area: those of the casters standing in it or less than the longest shadow away. */

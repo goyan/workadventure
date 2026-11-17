@@ -2,6 +2,7 @@ import type { Point } from "../Lamps/RgbLampGeometry";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { boundedTo } from "../Night/SkyLight";
 import type { Range } from "../Night/SkyLight";
+import type { ShadowPicture } from "./SkyShadowPicture";
 
 export type { Point };
 
@@ -43,11 +44,22 @@ export interface ShadowTree {
     trunkWidth: number;
 }
 
+/** Something whose shadow is its own picture laid on the ground: its foot (bottom middle) and its size as shown. */
+export interface ShadowPictureCaster {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    picture: ShadowPicture;
+}
+
 export interface ShadowCasters {
     boxes: readonly ShadowBox[];
     trees: readonly ShadowTree[];
     /** The low things of the nature catalogue (rocks, grass, flowers, stumps): a small crown without a trunk. */
     details?: readonly ShadowTree[];
+    /** The trees set to a realistic shadow: not polygons, their picture laid away from the light (fallenShadowPose). */
+    pictures?: readonly ShadowPictureCaster[];
 }
 
 /**
