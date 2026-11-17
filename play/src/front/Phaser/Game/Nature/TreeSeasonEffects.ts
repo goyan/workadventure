@@ -122,6 +122,9 @@ export class TreeSeasonEffects {
             // A tree stands where its foot is: the middle of its bottom edge.
             if (!this.options.isOutdoor(box.x + box.width / 2, box.y + box.height - 1)) continue;
             if (autumn) {
+                // Evergreens and palms keep their leaves: their autumn image is their summer one.
+                const seasons = object.getPrefab().seasonal;
+                if (seasons && seasons[Season.Autumn] === seasons[Season.Summer]) continue;
                 for (const leaf of groundLeaves(phaseOf(id), fallen, box)) {
                     this.ground.fillStyle(leaf.color, 0.9);
                     this.ground.fillRect(leaf.x, leaf.y, leaf.vertical ? 3 : 4, leaf.vertical ? 4 : 3);
@@ -177,7 +180,9 @@ export class TreeSeasonEffects {
         const prefab = object.getPrefab();
         const snowyPath = prefab.seasonal?.[Season.Winter];
         if (!snowyPath || !this.scene.textures.exists(snowyPath)) return undefined;
-        const barePath = prefab.seasonal?.[this.options.bareSeason()];
+        // Under the snow the foliage is green: an autumn tree is replaced by its snowy one, never shown orange.
+        const bareSeason = this.options.bareSeason();
+        const barePath = prefab.seasonal?.[bareSeason === Season.Autumn ? Season.Summer : bareSeason];
         const path = barePath && this.scene.textures.exists(barePath) ? barePath : prefab.imagePath;
         return path !== snowyPath && this.scene.textures.exists(path) ? path : undefined;
     }

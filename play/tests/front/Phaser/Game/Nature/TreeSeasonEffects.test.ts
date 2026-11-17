@@ -131,6 +131,15 @@ function fixture(
 const at = (second: number) => 1_700_000_000_000 + second * 1000;
 
 describe("TreeSeasonEffects", () => {
+    it("drops no leaf from an evergreen, whose autumn image is its summer one", () => {
+        const { effects, graphics, ground, trees } = fixture({ season: Season.Autumn });
+        const evergreen = { spring: "fir.png", summer: "fir.png", autumn: "fir.png", winter: "fir-snow.png" };
+        for (const { object } of trees) object.getPrefab = () => ({ imagePath: "fir.png", seasonal: evergreen });
+        effects.update(0, at(0));
+        expect(graphics.fillRect).not.toHaveBeenCalled();
+        expect(ground.fillRect).not.toHaveBeenCalled();
+    });
+
     it("drops leaves under the autumn trees in view, and nothing in summer", () => {
         const { effects, graphics, markDirty, state, images } = fixture();
         effects.update(0, at(0));
@@ -196,9 +205,9 @@ describe("TreeSeasonEffects", () => {
             expect(images[0].alpha).toBe(1);
             alphas.push(1 - images[0].snow / 0.75);
         }
-        // Only the seasonal tree in view gets its bare image, right over it.
+        // Only the seasonal tree in view gets its bare image, right over it: green, even in autumn.
         expect(images.length).toBe(1);
-        expect(images[0].key).toBe("autumn.png");
+        expect(images[0].key).toBe("green.png");
         expect(images[0].x).toBe(trees[0].object.x);
         expect(images[0].depth).toBeGreaterThan(trees[0].object.depth);
         expect(images[0].depth).toBeLessThan(trees[0].object.depth + 1);
@@ -214,7 +223,7 @@ describe("TreeSeasonEffects", () => {
     it("bends the bare image as its tree sways, the trunk where the tree stands", () => {
         const { effects, images, trees } = fixture({ season: Season.Winter, pose: 3 });
         effects.update(0, at(0));
-        expect(images[0].key).toBe("autumn.png@3");
+        expect(images[0].key).toBe("green.png@3");
         // Twice as big as its image, as the tree: the 4 px of room on each side take 8 on the map.
         expect(images[0].x).toBe(trees[0].object.x - 8);
         expect(images[0].displayWidth).toBe(80);

@@ -1,12 +1,27 @@
 import * as Phaser from "phaser";
-import { JUNGLE_TREE_PREFIX } from "../Jungle/JunglePlan";
 import { POSE_PAD, treePose } from "./TreePoses";
 
 export { swayAmplitude, swayFrequency, treeSwayAngle } from "./TreePoses";
 
-/** Trees of the nature catalogue: the ones that sway in the wind (the same the jungle animals gather around). */
+/** The families of the nature catalogue that are all trees, snowy and seasonal ones included. */
+const SWAYING_TREE_PREFIXES = [
+    "Nature:tree-",
+    "Nature:seasonal-",
+    "Nature:snow-tree-",
+    "Nature:snow-evergreen-",
+    "Nature:winter-auto-",
+];
+/** The trees of the first nature set (oaks, palms, bare trees): its other objects are stumps, rocks, bushes, grass. */
+const SWAYING_NATURE_SET = new Set(["nature-1", "nature-2", "nature-3", "nature-4", "nature-5", "nature-6"]);
+
+/**
+ * Trees of the nature catalogue: the ones that sway in the wind, and whose snow and leaves follow the season. A tree
+ * replaced by its snowy image in winter is the same object: it keeps swaying.
+ */
 export function isSwayingTree(prefabId: string): boolean {
-    return prefabId.startsWith(JUNGLE_TREE_PREFIX);
+    if (SWAYING_TREE_PREFIXES.some((prefix) => prefabId.startsWith(prefix))) return true;
+    const family = /^Nature:(nature-\d+):/.exec(prefabId)?.[1];
+    return family !== undefined && SWAYING_NATURE_SET.has(family);
 }
 
 /** A placed tree as the swaying needs it (an `Entity` fits). */
