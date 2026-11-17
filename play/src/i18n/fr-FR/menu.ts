@@ -113,6 +113,10 @@ const menu: DeepPartial<Translation["menu"]> = {
             computer: "Heure de mon ordinateur",
             disabled: "Désactivé",
             disable: "Désactiver la nuit",
+            darkness: "Obscurité de la nuit : {percent} %",
+            darknessLight: "Claire",
+            darknessDark: "Très sombre",
+            darknessReset: "Revenir à 60 %",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:
                 "La nuit, une pièce n'est éclairée que par ses lampes (interrupteurs, capteurs). Réglage personnel.",

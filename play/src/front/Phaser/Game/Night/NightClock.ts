@@ -3,6 +3,9 @@ import type { MapPlace } from "../../../../common/RealWeather";
 
 /** Darkness of the night veil once night has fully fallen. */
 export const NIGHT_MAX_OPACITY = 0.6;
+/** How dark each player may set the full night (the opacity of the veil): from a light dusk to almost black. */
+export const NIGHT_DARKNESS_MIN = 0.3;
+export const NIGHT_DARKNESS_MAX = 0.95;
 
 // The night follows the real sun of the place of the map (Paris by default), for everybody, as the clock does.
 const PARIS = { latitude: PARIS_LATITUDE, longitude: PARIS_LONGITUDE };
@@ -148,6 +151,17 @@ export function sunPositionAt(date: Date, place: MapPlace = PARIS): SunPosition 
  */
 export function sunPlaceOf(clockReadAsParis: boolean, mapPlace: MapPlace | undefined): MapPlace | undefined {
     return clockReadAsParis ? undefined : mapPlace;
+}
+
+/**
+ * The opacity of the veil for a player who set how dark the full night is (`darkness`, NIGHT_MAX_OPACITY by default):
+ * the dusk and the dawn keep their share of it, the day stays clear.
+ */
+export function nightOpacityWith(opacity: number, darkness: number): number {
+    const kept = Number.isFinite(darkness)
+        ? Math.min(NIGHT_DARKNESS_MAX, Math.max(NIGHT_DARKNESS_MIN, darkness))
+        : NIGHT_MAX_OPACITY;
+    return (opacity / NIGHT_MAX_OPACITY) * kept;
 }
 
 /**

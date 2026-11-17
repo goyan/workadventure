@@ -2,7 +2,13 @@ import type { Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { NightMode, nightModeStore, nightDateStore, realisticNightStore } from "../../../Stores/NightStore";
+import {
+    NightMode,
+    nightDarknessStore,
+    nightModeStore,
+    nightDateStore,
+    realisticNightStore,
+} from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
@@ -11,7 +17,9 @@ import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
 import {
+    NIGHT_MAX_OPACITY,
     nightOpacityAt,
+    nightOpacityWith,
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
@@ -69,6 +77,8 @@ export class NightManager {
     private disabled = false;
     private realistic = false;
     private readonly unsubscribeRealistic: Unsubscriber;
+    private readonly unsubscribeDarkness: Unsubscriber;
+    private darkness = NIGHT_MAX_OPACITY;
     private opacity = 0;
     private lastClockAt: number | undefined;
     private sun: SunPosition | undefined;
@@ -118,6 +128,12 @@ export class NightManager {
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
+        this.unsubscribeDarkness = nightDarknessStore.subscribe((darkness) => {
+            this.darkness = darkness;
+            // The veil is worked out again at the next image, not at the next second.
+            this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
         this.unsubscribeRealistic = realisticNightStore.subscribe((realistic) => {
             this.realistic = realistic;
             // The rooms fade in or out at the next image.
@@ -158,7 +174,10 @@ export class NightManager {
                           this.skyLightSettings,
                       );
             // A bright moon takes a little of the veil away.
-            this.opacity = sunAt === undefined ? 0 : moonlitNightOpacity(nightOpacityAt(sunAt, place), this.light);
+            this.opacity =
+                sunAt === undefined
+                    ? 0
+                    : moonlitNightOpacity(nightOpacityWith(nightOpacityAt(sunAt, place), this.darkness), this.light);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -241,6 +260,7 @@ export class NightManager {
         this.unsubscribeEditor();
         this.unsubscribeMode();
         this.unsubscribeRealistic();
+        this.unsubscribeDarkness();
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();

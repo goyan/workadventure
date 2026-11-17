@@ -19,7 +19,8 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
-    import { realisticNightStore } from "../../Stores/NightStore";
+    import { nightDarknessStore, realisticNightStore } from "../../Stores/NightStore";
+    import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
@@ -400,6 +401,35 @@
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
             <NightSettings />
+            <div class="flex flex-col gap-1" data-testid="night-darkness">
+                <span class="text-sm text-white">
+                    {$LL.menu.settings.night.darkness({ percent: Math.round($nightDarknessStore * 100) })}
+                </span>
+                <div class="flex items-center gap-4">
+                    <span class="w-14 shrink-0 text-xs text-white/50">{$LL.menu.settings.night.darknessLight()}</span>
+                    <div class="grow">
+                        <RangeSlider
+                            id="night-darkness"
+                            min={NIGHT_DARKNESS_MIN}
+                            max={NIGHT_DARKNESS_MAX}
+                            step={0.05}
+                            bind:value={$nightDarknessStore}
+                        />
+                    </div>
+                    <span class="w-20 shrink-0 text-end text-xs text-white/50">
+                        {$LL.menu.settings.night.darknessDark()}
+                    </span>
+                </div>
+                {#if $nightDarknessStore !== NIGHT_MAX_OPACITY}
+                    <button
+                        type="button"
+                        class="self-start text-xs text-white/60 underline"
+                        onclick={() => nightDarknessStore.set(NIGHT_MAX_OPACITY)}
+                    >
+                        {$LL.menu.settings.night.darknessReset()}
+                    </button>
+                {/if}
+            </div>
             <InputSwitch
                 id="night-realistic-lighting"
                 bind:value={$realisticNightStore}
