@@ -9,6 +9,7 @@ import {
 import {
     ambienceFullShareStore,
     ambienceStrengthStore,
+    lightBounceStore,
     lightSoftEdgeStore,
     nightDarknessStore,
     realisticNightStore,
@@ -67,6 +68,7 @@ const LIGHT_SETTINGS: Readonly<Record<string, Setting>> = {
     ambienceStrength: number(ambienceStrengthStore),
     ambienceFullShare: number(ambienceFullShareStore),
     lightSoftEdge: number(lightSoftEdgeStore),
+    lightBounce: number(lightBounceStore),
     sunShown: onOff(sunLightShownStore),
     moonShown: onOff(moonLightShownStore),
     moonPhaseCurve: choice(moonPhaseCurveStore, MOON_PHASE_CURVES),

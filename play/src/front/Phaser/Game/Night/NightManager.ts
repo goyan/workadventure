@@ -10,6 +10,7 @@ import {
     realisticNightStore,
     ambienceFullShareStore,
     ambienceStrengthStore,
+    lightBounceStore,
     lightSoftEdgeStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
@@ -19,7 +20,7 @@ import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
+import { setLightBounceStrength, setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
 import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
@@ -158,7 +159,13 @@ export class NightManager {
             setLightSoftEdgePx(px);
             this.scene.markDirty();
         });
+        const unsubscribeBounce = lightBounceStore.subscribe((strength) => {
+            // The lamps are cast again with what their walls send back.
+            setLightBounceStrength(strength);
+            this.scene.markDirty();
+        });
         this.unsubscribeIndirect = () => {
+            unsubscribeBounce();
             unsubscribeStrength();
             unsubscribeFullShare();
             unsubscribeSoftEdge();

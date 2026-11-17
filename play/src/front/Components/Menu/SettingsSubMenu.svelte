@@ -22,6 +22,7 @@
     import {
         ambienceFullShareStore,
         ambienceStrengthStore,
+        lightBounceStore,
         lightSoftEdgeStore,
         nightDarknessStore,
         realisticNightStore,
@@ -468,6 +469,10 @@
                     >{$LL.menu.settings.night.softEdge({ pixels: Math.round($lightSoftEdgeStore) })}</span
                 >
                 <RangeSlider id="night-light-soft-edge" min={0} max={32} step={2} bind:value={$lightSoftEdgeStore} />
+                <span class="text-sm text-white">
+                    {$LL.menu.settings.night.bounce({ percent: Math.round($lightBounceStore * 100) })}
+                </span>
+                <RangeSlider id="night-light-bounce" min={0} max={1} step={0.05} bind:value={$lightBounceStore} />
             </div>
             <InputSwitch
                 id="night-realistic-lighting"

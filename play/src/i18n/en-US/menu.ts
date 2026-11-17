@@ -132,6 +132,7 @@ const menu: BaseTranslation = {
                 "At night a room a light comes into is faintly lit all over, and the edge of the lights is softened. Personal settings.",
             ambienceStrength: "Room ambience: up to {percent:number}% of the veil (0: none)",
             ambienceFullShare: "Strongest ambience when {percent:number}% of the room is lit",
+            bounce: "Bounce off the walls: {percent:number}% of the light sent back (0: none)",
             softEdge: "Edge of the lights softened over {pixels:number} px (0: sharp)",
             realistic: "Realistic lighting: rooms no longer light up on their own",
             realisticHelp: "At night a room is only lit by its lamps (switches, sensors). Personal setting.",

@@ -134,6 +134,7 @@ const menu: DeepPartial<Translation["menu"]> = {
                 "La nuit, une pièce où entre de la lumière est faiblement éclairée partout, et le bord des lumières est adouci. Réglages personnels.",
             ambienceStrength: "Ambiance des pièces : jusqu'à {percent} % du voile (0 : aucune)",
             ambienceFullShare: "Ambiance maximale quand {percent} % de la pièce est éclairée",
+            bounce: "Rebond sur les murs : {percent} % de la lumière renvoyée (0 : aucun)",
             softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:

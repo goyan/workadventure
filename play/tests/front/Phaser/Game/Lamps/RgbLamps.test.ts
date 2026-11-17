@@ -40,6 +40,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
 
 const { RgbLamps } = await import("../../../../../src/front/Phaser/Game/Lamps/RgbLamps");
 const { rgbLampLightsStore, rgbLampPreviewStore } = await import("../../../../../src/front/Stores/RgbLampStore");
+const { setLightBounceStrength } = await import("../../../../../src/front/Phaser/Game/Lamps/LightSoftEdge");
 
 const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
     id: "prefab",
@@ -126,6 +127,7 @@ afterEach(() => {
     clock.now = 0;
     reducedMotion = false;
     switchedOff.clear();
+    setLightBounceStrength(0);
 });
 
 function start(entities: Entity[], grid?: number[][]) {
@@ -239,6 +241,54 @@ describe("RgbLamps", () => {
         tick();
         expect(visuals[0].draws).toHaveLength(2);
         expect(isLit(visuals[0].draws[1].polygon, { x: 640, y: 780 })).toBe(true);
+    });
+
+    it("sends light back from the wall it falls on, once the bounce is set: small lights in front of the wall", () => {
+        setLightBounceStrength(0.5);
+        const grid = freeGrid();
+        // A wall two tiles south of the lamp, five tiles wide: its north side is at y = 704.
+        for (let x = 18; x <= 22; x++) grid[22][x] = 1;
+        start([lamp("a", 624, 624).entity], grid);
+
+        const bounces = visuals.filter((visual) => visual.id.startsWith("a:bounce:"));
+        expect(bounces.length).toBeGreaterThan(0);
+        for (const bounce of bounces) {
+            const { light, intensity } = bounce.draws[0];
+            expect(light.y).toBeLessThan(704);
+            expect(light.y).toBeGreaterThan(690);
+            expect(light.angle).toBe(180);
+            expect(intensity).toBeGreaterThan(0);
+            expect(intensity).toBeLessThan(0.5);
+            expect(bounce.visible).toBe(true);
+            // Lit on the side of the lamp, not through the wall.
+            expect(isLit(bounce.draws[0].polygon, { x: light.x, y: light.y - 20 })).toBe(true);
+            expect(isLit(bounce.draws[0].polygon, { x: light.x, y: 760 })).toBe(false);
+        }
+        const published = get(rgbLampLightsStore).map((light) => light.id);
+        expect(published).toContain("a");
+        expect(published).toContain("a:bounce:0");
+    });
+
+    it("sends nothing back without a wall, nor once a switch put the lamp out", () => {
+        setLightBounceStrength(0.5);
+        start([lamp("open", 624, 624).entity]);
+        expect(visuals.filter((visual) => visual.id.includes(":bounce:"))).toEqual([]);
+
+        const grid = freeGrid();
+        for (let x = 18; x <= 22; x++) grid[22][x] = 1;
+        current?.destroy();
+        visuals.length = 0;
+        const { tick } = start([lamp("a", 624, 624).entity], grid);
+        switchedOff.add("a");
+        // The lamp fades out: put out for good a moment later.
+        tick();
+        clock.now += 1000;
+        tick();
+
+        expect(visuals.filter((visual) => visual.id.startsWith("a:bounce:")).every((visual) => !visual.visible)).toBe(
+            true,
+        );
+        expect(get(rgbLampLightsStore)).toEqual([]);
     });
 
     it("is not drawn again when the map changes out of its reach", () => {
