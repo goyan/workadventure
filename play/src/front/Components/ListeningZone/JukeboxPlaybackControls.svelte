@@ -5,6 +5,7 @@
     import type { SpotifyPlaybackState } from "../../Interfaces/DesktopAppInterfaces";
     import type { JamRoom } from "../../ListeningZone/ListeningZoneController";
     import { controlJukeboxPlayback } from "../../Spotify/HomeJam";
+    import { watchSpotifyPlayback } from "../../Spotify/SpotifyPlaybackStore";
     import PlayerPauseIcon from "../Icons/PlayerPauseIcon.svelte";
     import PlayerPlayIcon from "../Icons/PlayerPlayIcon.svelte";
     import TooltipAbove from "./TooltipAbove.svelte";
@@ -50,11 +51,11 @@
         [SpotifyPlaybackCommand.Repeat]: "m17 1 4 4-4 4V6H6v5H4V4h13zm-10 22-4-4 4-4v3h11v-5h2v7H7z",
     };
     onMount(() =>
-        window.WAD?.watchSpotifyPlayback?.((state) => {
+        watchSpotifyPlayback((state) => {
             playback = state;
             // Spotify reached the state asked for, or never will: its own report is the truth again.
             if (pending && (state?.playing === pending.playing || Date.now() > pending.until)) pending = undefined;
-        }),
+        }, window.WAD),
     );
 
     /** Spotify confirms a play or a pause within this delay, or the button shows its actual state again. */

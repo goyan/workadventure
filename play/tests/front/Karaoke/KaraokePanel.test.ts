@@ -246,6 +246,41 @@ describe("KaraokePanel", () => {
         expect(fill()).toBe("");
     });
 
+    it("reads every synced line holding Arabic right to left, Latin-only lines left to right, without reordering words", async () => {
+        await settle();
+        request.mockResolvedValueOnce({
+            ...found,
+            syncedLyrics: "[00:01.00]مرحبا Spotify بالعالم\n[00:02.00]Hello بالعالم again\n[00:03.00]Hello world",
+        });
+        flushSync(() => playback.set({ ...initial, track: { title: "Mixed song", artist: "Test artist" } }));
+        await settle();
+        const lines = [...target.querySelectorAll("[data-line]")];
+        expect(lines.map((line) => line.getAttribute("dir"))).toEqual(["rtl", "rtl", "ltr"]);
+        expect(lines.map((line) => line.textContent)).toEqual([
+            "مرحبا Spotify بالعالم",
+            "Hello بالعالم again",
+            "Hello world",
+        ]);
+    });
+
+    it("applies the same direction rule to each unsynchronized paragraph", async () => {
+        await settle();
+        request.mockResolvedValueOnce({
+            ...found,
+            syncedLyrics: "",
+            plainLyrics: "مرحبا Spotify\nHello بالعالم\nHello world",
+        });
+        flushSync(() => playback.set({ ...initial, track: { title: "Mixed plain song", artist: "Test artist" } }));
+        await settle();
+        const lines = [...target.querySelectorAll(".karaoke-plain-line")];
+        expect(lines.map((line) => line.getAttribute("dir"))).toEqual(["rtl", "rtl", "ltr"]);
+        expect(lines.map((line) => line.textContent?.trim())).toEqual([
+            "مرحبا Spotify",
+            "Hello بالعالم",
+            "Hello world",
+        ]);
+    });
+
     it("shows how far the track is only when its duration is known", async () => {
         await settle();
         expect(target.querySelector('[role="progressbar"]')).toBeNull();

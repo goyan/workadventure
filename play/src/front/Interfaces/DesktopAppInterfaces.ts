@@ -191,6 +191,21 @@ export interface DesktopSpotifyMusicFrame {
     barStartMs?: number;
 }
 
+/** Where the WorkAdventure desktop app is downloaded: its latest release. */
+export const DESKTOP_APP_URL = "https://github.com/aminekun90/workadventure-desktop/releases/latest";
+
+/**
+ * Spotify's analysis of the playing track, through the WorkAdventure extension for Spicetify: per segment (about
+ * 0.2 s), its start and duration in milliseconds, its loudest level in dB, and the strength of the 12 notes of the
+ * scale (C to B, each 0 to 9). No sound.
+ */
+export interface DesktopSpotifyAnalysis {
+    uri: string;
+    segments: [startMs: number, durationMs: number, loudness: number, pitches: string][];
+    /** The synced lyrics Spotify shows for the track, line by line: absent when it has none synced. */
+    lyrics?: [startMs: number, text: string][];
+}
+
 export enum SpotifyPlaybackCommand {
     Play = "play",
     Pause = "pause",
@@ -221,6 +236,8 @@ export interface SpotifyPlaybackState {
 export type WorkAdventureDesktopApi = {
     desktop: boolean;
     watchSpotifyMusic?: (callback: (frame: DesktopSpotifyMusicFrame | null) => void) => () => void;
+    /** Optional: the analysis of the playing track, sent once per track, for the karaoke's melody. */
+    watchSpotifyAnalysis?: (callback: (analysis: DesktopSpotifyAnalysis | null) => void) => () => void;
     /** Optional: direct controls in the desktop toolbar; existing web settings keep their places. */
     onEnvironmentRequest?: (callback: (request: DesktopEnvironmentRequest) => void) => void;
     reportEnvironment?: (state: DesktopEnvironmentState | null) => void;

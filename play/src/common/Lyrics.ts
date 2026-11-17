@@ -17,7 +17,7 @@ export const LyricsResultSchema = z.discriminatedUnion("status", [
         plainLyrics: z.string().max(100_000),
         syncedLyrics: z.string().max(100_000),
         instrumental: z.boolean(),
-        source: z.enum(["lrclib", "lyrics.ovh"]),
+        source: z.enum(["lrclib", "lyrics.ovh", "spotify"]),
     }),
     z.object({ status: z.literal("missing") }),
 ]);
