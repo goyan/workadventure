@@ -83,8 +83,22 @@
         onchange?.();
     }
 
+    /**
+     * "Link lamps": from then on a click on any lamp of the map, wherever it is, adds it to what the switch commands
+     * or removes it. A switch that commanded its room keeps the lamps of the room as a start.
+     */
     function toggleWiring(): void {
-        mapEditorSwitchWiringStore.set(wiring ? undefined : entity.entityId);
+        if (wiring) {
+            mapEditorSwitchWiringStore.set(undefined);
+            return;
+        }
+        if (property.targets.mode !== "ids") {
+            const ids = (scene.getSwitches()?.targetsOf(entity, property) ?? []).map((target) => target.id);
+            property.targets = { mode: "ids", ids };
+            property.resolvedTargets = undefined;
+            onchange?.();
+        }
+        mapEditorSwitchWiringStore.set(entity.entityId);
     }
 
     function saveTags(): void {
@@ -308,18 +322,16 @@
             {#if property.targets.mode === "zone" && targetCount === 0}
                 <p class="m-0 mb-2 text-sm text-warning" data-testid="switchNoTarget">{labels.noTarget()}</p>
             {/if}
-            {#if property.targets.mode === "ids"}
-                <button
-                    type="button"
-                    class="btn btn-sm {wiring ? 'btn-secondary' : 'btn-light btn-ghost'} mb-3"
-                    data-testid="switchPickTargets"
-                    onclick={toggleWiring}
-                >
-                    {wiring ? labels.pickDone() : labels.pick()}
-                </button>
-                {#if wiring}
-                    <p class="m-0 mb-3 text-sm text-white/70">{labels.pickHelp()}</p>
-                {/if}
+            <button
+                type="button"
+                class="btn btn-sm {wiring ? 'btn-secondary' : 'btn-light'} mb-3"
+                data-testid="switchPickTargets"
+                onclick={toggleWiring}
+            >
+                {wiring ? labels.pickDone() : labels.pick()}
+            </button>
+            {#if wiring}
+                <p class="m-0 mb-3 text-sm text-white/70">{labels.pickHelp()}</p>
             {/if}
             <label class="flex flex-col gap-1 text-sm">
                 {labels.allowedTags()}
