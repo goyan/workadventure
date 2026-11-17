@@ -68,6 +68,14 @@ describe("SnowCaps", () => {
         expect(scene.add.rectangle.mock.calls).toHaveLength(0);
     });
 
+    it("skips the slabs, the stairs and the walls of the raised floors", () => {
+        // A slab is drawn north of the tile it covers: over the outdoors, it is still not an object standing there.
+        const { scene, caps } = setup();
+        caps.rebuild([entity(0, 0, "Carte Paliers"), entity(0, 0, "Carte Murs Paliers")], grid);
+        expect(scene.add.image.mock.calls).toHaveLength(0);
+        expect(scene.add.rectangle.mock.calls).toHaveLength(0);
+    });
+
     it("frosts outdoor floors", () => {
         const { scene, caps } = setup();
         caps.rebuild([entity(0, 0, "Carte Sols"), entity(32, 0, "Infogène Sols")], grid);

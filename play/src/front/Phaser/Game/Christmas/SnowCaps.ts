@@ -1,4 +1,4 @@
-import { MAP_LAYER_FLOOR_COLLECTION } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_FLOOR_COLLECTION, isRaisedFloorCollection } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { OUTDOOR_WALL_COLLECTIONS, type OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { paintSnowCap } from "./SnowCapShape";
 
@@ -49,7 +49,7 @@ export class SnowCaps {
             // Not loaded yet: Phaser shows its placeholder texture, which must not get snow.
             if (!entity.visible || entity.texture.key === MISSING_TEXTURE) continue;
             const { collectionName, seasonal } = entity.getPrefab();
-            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName)) continue;
+            if (OUTDOOR_WALL_COLLECTIONS.includes(collectionName) || isRaisedFloorCollection(collectionName)) continue;
             // Seasonal objects (trees) carry their own snow in their winter image.
             if (seasonal) continue;
             // An object stands where its feet are: the middle of its bottom edge.

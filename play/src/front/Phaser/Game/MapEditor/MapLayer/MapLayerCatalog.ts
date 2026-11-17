@@ -40,6 +40,14 @@ export const MAP_LAYER_UPPER_SUFFIX = " Paliers";
 export const MAP_LAYER_UPPER_COLLECTIONS: readonly string[] = MAP_LAYER_WALL_LIKE_COLLECTIONS.map(
     (name) => name + MAP_LAYER_UPPER_SUFFIX,
 );
+/**
+ * Whether a collection is one of the raised floors: their slabs and stairs, or the walls standing on them. Their
+ * pieces are drawn north of where they stand: what looks at the place of an object on the ground leaves them out.
+ */
+export function isRaisedFloorCollection(collectionName: string): boolean {
+    return collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION || MAP_LAYER_UPPER_COLLECTIONS.includes(collectionName);
+}
+
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,

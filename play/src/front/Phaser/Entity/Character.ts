@@ -382,17 +382,22 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
         const tile = this.scene.getGameMapFrontWrapper()?.getTileDimensions() ?? { width: 32, height: 32 };
-        const nearby = isWithinOneTileOfWater(
-            getWaterRectangles(this.scene),
-            { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
-            tile,
-        );
+        // On a raised floor or a stair, the water of the ground is under the character: no swimwear near it.
+        const nearby =
+            this.floorZ === 0 &&
+            isWithinOneTileOfWater(
+                getWaterRectangles(this.scene),
+                { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
+                tile,
+            );
         if (inWater || nearby) this.swimwearEffect ??= new SwimwearEffect(this.scene, this);
         this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle, this.swimwearColor);
     }
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
     protected isSwimmingHere(): boolean {
+        // The water is on the ground: a character on a raised floor or a stair drawn over a pool does not swim.
+        if (this.floorZ > 0) return false;
         return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
     }
 
@@ -401,7 +406,8 @@ export abstract class Character extends Container implements OutlineableInterfac
      * The position is enough, as for the water: nothing more is sent over the network.
      */
     protected isOnIceHere(): boolean {
-        if (!this.scene) return false;
+        // The ice is on the ground too.
+        if (!this.scene || this.floorZ > 0) return false;
         return (
             isOnIce(getIceRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y }) &&
             !this.isSwimmingHere()

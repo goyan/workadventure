@@ -1773,8 +1773,12 @@ export class GameScene extends DirtyScene {
         const listener = asDoorCharacter(this.CurrentPlayer, localUuid === "" ? undefined : localUuid);
         // SPIKE (floors study): an avatar on a raised floor does not open the doors of the ground.
         const characters: DoorCharacter[] = this.CurrentPlayer.getFloorZ() > 0 ? [] : [listener];
-        if (this.CurrentPlayer.companion) characters.push(asDoorCharacter(this.CurrentPlayer.companion));
+        // (A companion follows its master: on a raised floor with them, it does not open the doors of the ground.)
+        if (this.CurrentPlayer.companion && this.CurrentPlayer.getFloorZ() === 0) {
+            characters.push(asDoorCharacter(this.CurrentPlayer.companion));
+        }
         for (const player of this.MapPlayersByKey.values()) {
+            if (player.getFloorZ() > 0) continue;
             characters.push(asDoorCharacter(player, player.userUuid));
             if (player.companion) characters.push(asDoorCharacter(player.companion));
         }
