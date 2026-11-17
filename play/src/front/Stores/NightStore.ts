@@ -51,3 +51,9 @@ export const nightDarknessStore = createPersistedNumberStore(
 
 /** Current clock shown by the map, updated by the existing night-mode tick. */
 export const nightDateStore = writable<Date | undefined>(undefined);
+
+/**
+ * How much light bounces around the rooms and how soft the edge of the lights is, for this player, from 0 (direct
+ * light only, sharp edges) to 1; kept in the browser.
+ */
+export const indirectLightStore = createPersistedNumberStore("nightIndirectLight", 0.5, 0, 1);

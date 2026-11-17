@@ -6,6 +6,7 @@ import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { ServerNightClock } from "../Night/ServerNightClock";
 import { lampSource } from "./LampReconcile";
 import { LightObstaclesByLevel } from "./LightObstacleReader";
+import { lightSoftEdgeVersion } from "./LightSoftEdge";
 import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
@@ -248,7 +249,7 @@ export class RgbLamps {
     private drawStill(id: string, lamp: PlacedRgbLamp, light: LightCone, color: string, intensity: number): boolean {
         // What stops the light on the floor of the map the lamp stands on.
         const obstacles = this.obstacles.at(lamp.entity.getElevation());
-        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity}`;
+        const key = `${light.x},${light.y},${light.radius},${light.direction},${light.angle},${color},${intensity},${lightSoftEdgeVersion()}`;
         if (key === lamp.key && lamp.obstaclesVersion === obstacles.version) {
             return false;
         }
@@ -341,6 +342,10 @@ export class RgbLamps {
                     size: lamp.light.radius * 2,
                     textureKey: lamp.visual.textureKey,
                     revision: lamp.revision,
+                    polygon: lamp.visual.polygon,
+                    // The strength of the lamp is drawn into its texture, which pierces the veil as it is.
+                    elevation: lamp.entity.getElevation(),
+                    ...(lamp.visual.strength < 1 ? { ambient: lamp.visual.strength } : {}),
                 });
             }
         }

@@ -8,6 +8,7 @@ import {
     nightModeStore,
     nightDateStore,
     realisticNightStore,
+    indirectLightStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
@@ -16,6 +17,7 @@ import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
+import { setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
 import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
@@ -28,10 +30,11 @@ import {
     sunPositionAt,
 } from "./NightClock";
 import type { SunPosition } from "./NightClock";
+import { lightSoftEdgePx, roomAmbience } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
-import type { NightRect } from "./NightLights";
+import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
@@ -78,6 +81,12 @@ export class NightManager {
     private realistic = false;
     private readonly unsubscribeRealistic: Unsubscriber;
     private readonly unsubscribeDarkness: Unsubscriber;
+    private readonly unsubscribeIndirect: Unsubscriber;
+    private indirect = 0;
+    // The light bounced around the rooms, worked out again only when the lights, the rooms or the setting changed.
+    private ambience:
+        | { lamps: readonly RgbLampLight[]; areas: readonly AreaData[]; indirect: number; lit: readonly LitArea[] }
+        | undefined;
     private darkness = NIGHT_MAX_OPACITY;
     private opacity = 0;
     private lastClockAt: number | undefined;
@@ -126,6 +135,12 @@ export class NightManager {
             this.skyLightSettings = settings;
             // A setting changed: the light is computed again at the next image, not at the next second.
             this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
+        this.unsubscribeIndirect = indirectLightStore.subscribe((indirect) => {
+            this.indirect = indirect;
+            // The lights are drawn again with their new edge, and the veil with the new bounced light.
+            setLightSoftEdgePx(lightSoftEdgePx(indirect));
             this.scene.markDirty();
         });
         this.unsubscribeDarkness = nightDarknessStore.subscribe((darkness) => {
@@ -218,7 +233,8 @@ export class NightManager {
                 height: camera.worldView.height,
                 zoom: camera.zoom,
             },
-            lit,
+            // A room a light comes into is lit faintly all over, unless it was put out for a party.
+            lit: [...lit, ...this.roomAmbience().filter((area) => !putOut(area))],
             halos,
             lamps: this.lamps,
             fading: this.lights.isFading() || this.halos.isAnimating(),
@@ -242,6 +258,30 @@ export class NightManager {
         return sunForClouds(this.sun, this.disabled);
     }
 
+    /** The light bounced around the rooms the lights come into (see roomAmbience), as areas to cut out of the veil. */
+    private roomAmbience(): readonly LitArea[] {
+        const { ambience } = this;
+        if (
+            ambience !== undefined &&
+            ambience.lamps === this.lamps &&
+            ambience.areas === this.areas &&
+            ambience.indirect === this.indirect
+        ) {
+            return ambience.lit;
+        }
+        const lit = roomAmbience(
+            this.areas,
+            this.lamps.map((lamp) => ({
+                polygon: lamp.polygon,
+                intensity: lamp.ambient ?? lamp.intensity,
+                elevation: lamp.elevation,
+            })),
+            this.indirect,
+        );
+        this.ambience = { lamps: this.lamps, areas: this.areas, indirect: this.indirect, lit };
+        return lit;
+    }
+
     /**
      * The light of the sky that casts the shadows (SkyLight), at the instant and place of the night (updated once a
      * second); undefined without one.
@@ -261,6 +301,7 @@ export class NightManager {
         this.unsubscribeMode();
         this.unsubscribeRealistic();
         this.unsubscribeDarkness();
+        this.unsubscribeIndirect();
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();

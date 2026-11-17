@@ -3,6 +3,7 @@ import type { RgbLampLight } from "../../../Stores/RgbLampStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { LightObstaclesByLevel } from "../Lamps/LightObstacleReader";
+import { lightSoftEdgeVersion } from "../Lamps/LightSoftEdge";
 import type { LightCone } from "../Lamps/RgbLampGeometry";
 import { RgbLampVisual } from "../Lamps/RgbLampVisual";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
@@ -50,6 +51,8 @@ interface LitTorch {
     strength: number;
     /** The colour last given to the light. */
     colour: number;
+    /** The floor of the map the bearer stood on when the light was last drawn. */
+    floorZ: number;
 }
 
 /**
@@ -135,10 +138,11 @@ export class Torches {
                     intensity: undefined,
                     strength: bearer.strength,
                     colour: bearer.colour,
+                    floorZ: bearer.floorZ ?? 0,
                 };
                 this.torches.set(bearer.id, torch);
             }
-            const key = `${Math.round(bearer.x)},${Math.round(bearer.y)},${bearer.direction},${bearer.seated},${Math.round(bearer.floorZ ?? 0)}`;
+            const key = `${Math.round(bearer.x)},${Math.round(bearer.y)},${bearer.direction},${bearer.seated},${Math.round(bearer.floorZ ?? 0)},${lightSoftEdgeVersion()}`;
             if (key !== torch.key || torch.obstaclesVersion !== this.obstacles.at(bearer.floorZ ?? 0).version) {
                 waiting.push({ bearer, torch, key });
             }
@@ -175,6 +179,7 @@ export class Torches {
                 torch.visual.setVisible(!this.editorOpen);
             }
             torch.visual.draw(light, polygon, torch.colour);
+            torch.floorZ = bearer.floorZ ?? 0;
             torch.light = light;
             torch.key = key;
             torch.segmentsKey = segmentsKey;
@@ -244,6 +249,8 @@ export class Torches {
                         textureKey: torch.visual.textureKey,
                         revision: torch.revision,
                         intensity: torch.strength,
+                        polygon: torch.visual.polygon,
+                        elevation: torch.floorZ,
                     });
                 }
             }

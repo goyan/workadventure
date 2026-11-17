@@ -392,6 +392,18 @@ n'a pas de position à lui (comme un va-et-vient).
   95 % (très sombre), 60 % par défaut comme avant ; c'est l'opacité du voile en pleine nuit (`nightDarknessStore`,
   gardé dans le navigateur, `nightOpacityWith`) : crépuscule et aube en gardent leur part, la lune l'éclaircit comme
   avant, lampes, torches et halos le percent comme avant. « Revenir à 60 % » sous le curseur.
+- **Lumière indirecte (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, curseur de 0 à 100 %, 50 % par
+  défaut (`indirectLightStore`, gardé dans le navigateur). Deux effets, la nuit : (1) **ambiance par pièce**
+  (`Night/AmbientLight.ts`, `roomAmbience`) : une pièce (zone de la carte) où entre la lumière d'une lampe RGB ou
+  d'une torche, par sa porte ou depuis un coin, est éclaircie partout ; l'éclaircissement suit la part de la surface
+  de la pièce éclairée directement (plein à 30 %), chaque lumière comptant pour sa force, jusqu'à la moitié du voile à
+  100 % ; recalculé seulement quand les lumières, les zones ou le réglage changent ; (2) **bords adoucis** : le
+  bord de la lumière d'une lampe ou d'une torche est flouté dans sa texture, jusqu'à une demi-case à 100 %
+  (`LightSoftEdge`, flou du canevas ; bord net sur un navigateur sans filtre de canevas). À 0 : lumière directe seule,
+  bords nets, comme avant. Limites : l'ambiance éclaircit le voile sans le teinter de la couleur de la lampe, ne vaut
+  que dans une zone (rien dehors ni dans une pièce sans zone), ne compte pas la lumière de lune entrée par les
+  fenêtres, et le flou déborde d'autant derrière un mur ; pas de vrai rebond (une lumière ne tourne pas au coin
+  d'une porte).
 - **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
   réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
   (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et

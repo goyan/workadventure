@@ -115,6 +115,11 @@ const menu: BaseTranslation = {
             darknessLight: "Light",
             darknessDark: "Very dark",
             darknessReset: "Back to 60%",
+            indirect: "Indirect light: {percent:number}%",
+            indirectNone: "None",
+            indirectFull: "Strong",
+            indirectHelp:
+                "A room a light comes into is faintly lit all over, and the edge of the lights is softened. Personal setting.",
             realistic: "Realistic lighting: rooms no longer light up on their own",
             realisticHelp: "At night a room is only lit by its lamps (switches, sensors). Personal setting.",
         },
