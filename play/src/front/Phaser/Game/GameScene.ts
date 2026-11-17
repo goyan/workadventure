@@ -270,6 +270,9 @@ import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
+import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
+import { RaisedCover } from "./Weather/RaisedCover";
 import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -404,6 +407,9 @@ const debug = Debug("GameScene");
 
 // Safety cap for moveTo() reroutes when the collision grid keeps changing while the path is followed.
 const MAX_PATH_REROUTES = 5;
+
+/** The pieces of a wall two tiles high or more, by their identifier (`…-h2`, `…-h3`, `…-h4`). */
+const TALL_WALL = /-h[234](?:[-:]|$)/;
 
 export class GameScene extends DirtyScene {
     Terrains: Array<Tileset>;
@@ -1645,6 +1651,38 @@ export class GameScene extends DirtyScene {
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
         return this.outdoorTracker?.grid;
+    }
+
+    private weatherCover: { at: number; cover: RaisedCover } | undefined;
+
+    /**
+     * What the weather must not be drawn on although it is over outdoor tiles: the slabs of a raised floor that
+     * stands in a room, and the walls two tiles high or more (and the ones of the raised floors), whose images
+     * reach north of the tiles they stand on. Read again from the map twice a second at most.
+     */
+    private raisedWeatherCover(): RaisedCover | undefined {
+        const now = this.time.now;
+        if (this.weatherCover && now - this.weatherCover.at < 500) return this.weatherCover.cover;
+        const grid = this.getOutdoorGrid();
+        const cover = new RaisedCover();
+        if (grid) {
+            for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+                const prefab = entity.getPrefab();
+                const elevation = entity.getElevation();
+                const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
+                if (parseFloorPiece(prefab.collectionName, prefab.id)?.kind === "slab") {
+                    // A slab is where it is drawn; the tile it covers is its altitude further south.
+                    if (elevation > 0 && !grid.isOutdoorAt(entity.x + 16, entity.y + elevation + 16)) cover.add(image);
+                } else if (
+                    groundPrefabOfUpper(prefab.collectionName, prefab.id) !== undefined ||
+                    (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName) && TALL_WALL.test(prefab.id))
+                ) {
+                    cover.add(image);
+                }
+            }
+        }
+        this.weatherCover = { at: now, cover };
+        return cover;
     }
 
     /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
@@ -3121,6 +3159,7 @@ export class GameScene extends DirtyScene {
                 );
                 this.weatherManager = new WeatherManager(this, {
                     outdoorGrid: () => this.getOutdoorGrid(),
+                    raisedCover: () => this.raisedWeatherCover(),
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
                 this.treeSway?.destroy();

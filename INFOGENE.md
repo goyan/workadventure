@@ -2106,10 +2106,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   Ctrl+clic ouvre le menu contextuel sur Mac. La consigne de l'outil le mentionne. Les écouteurs des touches Ctrl et
   Maj sont retirés à la désactivation : ils s'empilaient à chaque activation et changeaient le curseur des autres outils.
 
-## Paliers et escaliers de l'outil Carte (en cours, branche locale)
+## Paliers et escaliers de l'outil Carte
 
 Étages posés sur le dessus des murs hauts, reliés par des escaliers. Tout est dessiné par l'outil Carte, section
-« Paliers » du panneau. En chantier : non livré, catalogue provisoire.
+« Paliers » du panneau. Livré en beta le 2026-11-17 (PR #263) ; images du catalogue provisoires.
 
 - **Principe** : chaque objet posé a une altitude en pixels (`EntityData.elevation`, absente = au sol). La position
   enregistrée reste celle de l'image, dessinée d'autant plus au nord ; l'endroit au sol est `(x, y + elevation)`.
@@ -2208,7 +2208,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   allumée la nuit que par les joueurs de son palier ; une lampe ou une piste de danse se rattache à la zone
   d'écoute de son palier ; les bruits de pas « dedans » suivent le palier du joueur. Une zone dessinée sur un palier
   s'aligne sur la grille de ses dalles.
-- **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
+- **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
+  la météo ne se dessine ni sur les dalles d'un palier situé dans une pièce ni sur le haut des murs de 2 cases et
+  plus (`Weather/RaisedCover.ts`).
+- **Pas encore** : zones verrouillées pour les portes d'étage ; transparence des murs
   d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; une zone de départ en
   hauteur fait apparaître au sol ; les portes d'étage sont lues fermées par les lumières ; images définitives.
 - **Lumières par palier** (`LightObstaclesByLevel`) : une lampe RGB et une torche sont arrêtées par les murs et

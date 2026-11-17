@@ -382,23 +382,24 @@ export abstract class Character extends Container implements OutlineableInterfac
         }
         this.swimEffect.update(this.scene.time.now, this.sprites.values());
         const tile = this.scene.getGameMapFrontWrapper()?.getTileDimensions() ?? { width: 32, height: 32 };
-        // On a raised floor or a stair, the water of the ground is under the character: no swimwear near it.
-        const nearby =
-            this.floorZ === 0 &&
-            isWithinOneTileOfWater(
-                getWaterRectangles(this.scene),
-                { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
-                tile,
-            );
+        // The water of the floor the character stands on: the one of another floor is only drawn there.
+        const nearby = isWithinOneTileOfWater(
+            getWaterRectangles(this.scene, this.floorZ),
+            { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y },
+            tile,
+        );
         if (inWater || nearby) this.swimwearEffect ??= new SwimwearEffect(this.scene, this);
         this.swimwearEffect?.update(inWater || nearby, inWater, this.sprites, this.swimwearStyle, this.swimwearColor);
     }
 
     /** Whether the body of the character is in the water: what the other players see of a swimmer. */
     protected isSwimmingHere(): boolean {
-        // The water is on the ground: a character on a raised floor or a stair drawn over a pool does not swim.
-        if (this.floorZ > 0) return false;
-        return isPointInWater(getWaterRectangles(this.scene), { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y });
+        // The water of its floor only: a character on a raised floor or a stair drawn over a pool of the ground does
+        // not swim, and it swims in a pool of its own floor.
+        return isPointInWater(getWaterRectangles(this.scene, this.floorZ), {
+            x: this.x,
+            y: this.y + BODY_CENTER_OFFSET_Y,
+        });
     }
 
     /**

@@ -3,6 +3,7 @@ import {
     DIVE_DEPTH,
     DIVE_DISTANCE,
     findDiveTarget,
+    getWaterRectangles,
     intersectsWater,
     isPointInWater,
     isWithinOneTileOfWater,
@@ -53,5 +54,45 @@ describe("pool swimwear boundary", () => {
         expect(isWithinOneTileOfWater([pool], { x: 68, y: 84 }, { width: 32, height: 16 })).toBe(true);
         expect(isWithinOneTileOfWater([pool], { x: 68, y: 83 }, { width: 32, height: 16 })).toBe(false);
         expect(isWithinOneTileOfWater([], { x: 100, y: 100 }, { width: 32, height: 32 })).toBe(false);
+    });
+});
+
+describe("getWaterRectangles on a map with raised floors", () => {
+    let frame = 1000;
+    /** A map with one pool on the ground and one on a floor 52 px up, drawn at the same place. */
+    function sceneWithTwoPools() {
+        const pool = (elevation: number) => ({
+            x: 64,
+            y: 64,
+            getElevation: () => elevation,
+            getPrefab: () => ({ name: "pool", tags: [], water: [{ x: 0, y: 0, width: 32, height: 32 }] }),
+        });
+        frame += 1;
+        return {
+            game: { loop: { frame } },
+            wamFile: { settings: { categories: undefined } },
+            getGameMapFrontWrapper: () => ({
+                getEntitiesManager: () => ({
+                    getEntities: () =>
+                        new Map([
+                            ["ground", pool(0)],
+                            ["upstairs", pool(52)],
+                        ]),
+                }),
+            }),
+        } as unknown as Parameters<typeof getWaterRectangles>[0];
+    }
+
+    it("gives the water of the ground by default, and the water of a raised floor by its altitude", () => {
+        const scene = sceneWithTwoPools();
+        expect(getWaterRectangles(scene)).toHaveLength(1);
+        expect(getWaterRectangles(scene, 52)).toHaveLength(1);
+        expect(getWaterRectangles(scene, 52)[0]).not.toBe(getWaterRectangles(scene)[0]);
+    });
+
+    it("gives no water on a stair, nor on a floor without a pool", () => {
+        const scene = sceneWithTwoPools();
+        expect(getWaterRectangles(scene, 24)).toEqual([]);
+        expect(getWaterRectangles(scene, 116)).toEqual([]);
     });
 });
