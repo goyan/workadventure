@@ -9,9 +9,12 @@
     import { LyricsTrackSchema, lyricsRecordingKey } from "../../../common/Lyrics";
     import type { LyricsTrack } from "../../../common/Lyrics";
     import { activeLyricIndex, parseLrc } from "../../Karaoke/Lrc";
+    import type { LyricLine } from "../../Karaoke/Lrc";
     import { fetchLyrics } from "../../Karaoke/LyricsApi";
     import { LyricsLoader } from "../../Karaoke/LyricsLoader";
-    import { centeredScrollTop, lyricLineProgress } from "../../Karaoke/LyricsView";
+    import { karaokeStagesStore } from "../../Karaoke/KaraokeStage";
+    import { centeredScrollTop, lyricDirection, lyricInSungOrder, lyricLineProgress } from "../../Karaoke/LyricsView";
+    import { KARAOKE_COUNTDOWN_BEATS, karaokeCountdown } from "../../Karaoke/KaraokeShow";
     import { karaokePositionMs, readFailedText } from "../../Karaoke/JamKaraoke";
     import type { KaraokePlayback } from "../../Karaoke/JamKaraoke";
     import type { JamLinkSave, JamRoom } from "../../ListeningZone/ListeningZoneController";
@@ -42,6 +45,10 @@
         linkSave,
         audience,
         stage,
+        show,
+        artworkUrl,
+        game = false,
+        onplayable,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
@@ -56,7 +63,14 @@
         /** Where the host's last new invite link stands (kept by the controller). */
         linkSave?: JamLinkSave;
         audience?: Snippet;
-        stage?: Snippet;
+        /** Gets whether the song can be sung: synced lyrics found (undefined while they load). */
+        stage?: Snippet<[boolean | undefined]>;
+        /** The stage show over the lyrics in Game mode: note highway, turn intro, applause, results. */
+        show?: Snippet<[boolean | undefined, readonly LyricLine[]]>;
+        artworkUrl?: string;
+        game?: boolean;
+        /** Told whether the song can be sung, each time it changes (undefined while its lyrics load). */
+        onplayable?: (playable: boolean | undefined) => void;
     } = $props();
 
     let loadState = $derived(loader.state);
@@ -82,13 +96,42 @@
         ]),
     );
     let result = $derived($loadState.status === "ready" ? $loadState.lyrics : undefined);
-    let found = $derived(result?.status === "found" ? result : undefined);
-    let lines = $derived(parseLrc(found?.syncedLyrics ?? ""));
+    let stageLyrics = $derived($karaokeStagesStore.get(room.jam.hostUuid)?.lyrics);
+    /** The synced lyrics Spotify shows the host, for the playing track: the same timing as the music. */
+    let spotifyLines = $derived(
+        !override && stageLyrics?.recordingKey === currentKey
+            ? stageLyrics.lines.map(([atMs, text]) => ({ atMs, text }))
+            : undefined,
+    );
+    let found = $derived(
+        spotifyLines
+            ? ({
+                  status: "found",
+                  plainLyrics: "",
+                  syncedLyrics: "",
+                  instrumental: false,
+                  source: "spotify",
+              } as const)
+            : result?.status === "found"
+              ? result
+              : undefined,
+    );
+    let lines = $derived(spotifyLines ?? parseLrc(found?.syncedLyrics ?? ""));
+    let playable = $derived(
+        spotifyLines?.length
+            ? true
+            : $loadState.status === "loading"
+              ? undefined
+              : !!found && !found.instrumental && lines.length > 0,
+    );
     // Without a playback position the synchronized lyrics are only read: nothing is dimmed nor followed.
     let following = $derived(lines.length > 0 && playback.positionAt > 0);
     let position = $derived(karaokePositionMs(playback, now, offsetMs));
     let active = $derived(following ? activeLyricIndex(lines, position) : -1);
     let fill = $derived(lyricLineProgress(lines, active, position, track?.durationMs));
+    let countdown = $derived(
+        game && following && playback.playing ? karaokeCountdown(lines, position, active) : undefined,
+    );
     let trackProgress = $derived(
         playback.track?.durationMs && playback.positionAt > 0
             ? karaokePositionMs(playback, now) / playback.track.durationMs
@@ -141,6 +184,10 @@
         ].filter((action) => !!action),
     );
     let pastingLink = $state(false);
+    $effect(() => {
+        const current = playable;
+        untrack(() => onplayable?.(current));
+    });
     let offsetLabel = $derived(`${offsetMs > 0 ? "+" : ""}${(offsetMs / 1000).toFixed(2)} s`);
 
     $effect(() => {
@@ -277,7 +324,9 @@
 <div
     data-jam-theme={$jamThemeStore}
     data-jam-style={$jamStyleStore}
-    class="jam-surface karaoke-panel pointer-events-auto absolute left-4 top-4 z-[310] flex max-h-[calc(100%-6rem)] w-[min(22rem,calc(100%-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
+    class="jam-surface karaoke-panel pointer-events-auto absolute left-4 top-4 z-[310] isolate flex max-h-[calc(100%-6rem)] {game
+        ? 'w-[min(52rem,calc(100%-2rem))]'
+        : 'w-[min(22rem,calc(100%-2rem))]'} flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
     aria-label={$LL.spotify.karaoke.title()}
     role="dialog"
     tabindex="-1"
@@ -293,6 +342,12 @@
         }
     }}
 >
+    {#if game}
+        <div class="karaoke-backdrop" aria-hidden="true" class:karaoke-backdrop-playing={playback.playing}>
+            {#if artworkUrl}<img src={artworkUrl} alt="" class="karaoke-backdrop-art" />{/if}
+            <span class="karaoke-aurora"></span>
+        </div>
+    {/if}
     <div class="flex items-start gap-3 px-4 pt-4">
         <span
             class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--jam-accent,#1ed760)]/15 text-[var(--jam-accent,#1ed760)]"
@@ -306,10 +361,16 @@
                 <p class="m-0 truncate text-white/70">· {room.jam.title ?? room.jam.hostName}</p>
             </div>
             {#if track}
-                <p dir="auto" class="m-0 truncate text-base font-bold leading-tight" title={track.title}>
+                <p
+                    dir={lyricDirection(track.title)}
+                    class="m-0 truncate text-base font-bold leading-tight"
+                    title={track.title}
+                >
                     {track.title}
                 </p>
-                <p dir="auto" class="m-0 truncate text-sm text-white/70" title={track.artist}>{track.artist}</p>
+                <p dir={lyricDirection(track.artist)} class="m-0 truncate text-sm text-white/70" title={track.artist}>
+                    {track.artist}
+                </p>
             {/if}
         </div>
         <button
@@ -324,233 +385,285 @@
     {#if audience}
         <div class="shrink-0 px-4 pt-3">{@render audience()}</div>
     {/if}
-    {#if stage}
-        <div class="shrink-0 px-4 pt-3">{@render stage()}</div>
-    {/if}
-    {#if mine && linkSave}
-        <p
-            class="m-0 px-4 pt-2 text-xs {linkSave.status === 'failed'
-                ? 'text-red-400'
-                : linkSave.status === 'saved'
-                  ? 'text-[var(--jam-accent,#1ed760)]'
-                  : 'text-white/70'}"
-            role={linkSave.status === "failed" ? "alert" : "status"}
-            data-testid="karaoke-link-save"
-        >
-            {linkSave.status === "failed"
-                ? $LL.spotify.listeningZone.jamStatus.linkFailed()
-                : linkSave.status === "saved"
-                  ? $LL.spotify.listeningZone.jamStatus.linkSaved()
-                  : $LL.spotify.listeningZone.jamStatus.linkSaving()}
-        </p>
-    {/if}
-    {#if trackProgress !== undefined}
-        <div
-            class="mx-4 mt-3 h-1 shrink-0 overflow-hidden rounded-full bg-white/15"
-            role="progressbar"
-            aria-label={track?.title}
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow={Math.round(trackProgress * 100)}
-        >
-            <div
-                class="karaoke-track-progress h-full rounded-full bg-[var(--jam-accent,#1ed760)]"
-                style:width={`${trackProgress * 100}%`}
-            ></div>
-        </div>
-    {/if}
-
-    {#if $loadState.status === "loading"}
-        <div class="flex flex-col items-center gap-4 px-6 py-8" role="status">
-            <div class="flex w-full flex-col items-center gap-3 motion-safe:animate-pulse" aria-hidden="true">
-                <span class="h-4 w-3/5 rounded-full bg-white/15"></span>
-                <span class="h-5 w-4/5 rounded-full bg-white/25"></span>
-                <span class="h-4 w-1/2 rounded-full bg-white/15"></span>
-                <span class="h-4 w-2/3 rounded-full bg-white/10"></span>
-            </div>
-            <p class="m-0 text-sm text-white/80">{$LL.spotify.karaoke.loading()}</p>
-        </div>
-    {:else if $loadState.status === "error"}
-        {@render notice(IconAlertTriangle, $LL.spotify.karaoke.error())}
-        <div class="flex justify-center pb-4">
-            <Button size="sm" onclick={retry}>{$LL.spotify.karaoke.retry()}</Button>
-        </div>
-    {:else if found?.instrumental}
-        {@render notice(IconMusic, $LL.spotify.karaoke.instrumental())}
-    {:else if found}
-        {#if !lines.length}
-            <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
-                <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.unsynced()}
-            </p>
-        {:else if refreshJam || issueText}
-            {@render issueNotice()}
-        {:else if !playback.positionAt}
-            <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
-                <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.noPosition()}
-            </p>
-        {:else if !playback.playing}
-            <p class="m-0 px-4 pt-3 text-xs">
-                <span class="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-white/80">
-                    <PlayerPauseIcon height="h-3.5" width="w-3.5" strokeColor="stroke-white/80" hover="" />
-                    {$LL.spotify.karaoke.paused()}
-                </span>
-            </p>
+    <div class="karaoke-board min-h-0 flex flex-1 flex-col" class:karaoke-game-board={game}>
+        {#if stage}
+            <div class="karaoke-controls shrink-0 px-4 pt-3">{@render stage(playable)}</div>
         {/if}
-        <div
-            class="relative mt-2 flex min-h-0 flex-1 basis-96 flex-col has-[[role=textbox]:focus-visible]:outline has-[[role=textbox]:focus-visible]:outline-2 has-[[role=textbox]:focus-visible]:-outline-offset-2 has-[[role=textbox]:focus-visible]:outline-white/70"
-        >
-            <div
-                bind:this={lyricsContainer}
-                class="karaoke-lyrics relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 select-text focus:outline-none"
-                class:karaoke-stage={following}
-                tabindex="0"
-                role="textbox"
-                aria-readonly="true"
-                aria-multiline="true"
-                aria-label={$LL.spotify.karaoke.title()}
-                data-testid="karaoke-lyrics"
-            >
-                {#if lines.length}
-                    {#each lines as line, index (index)}
-                        <p
-                            dir="auto"
-                            data-line={index}
-                            aria-current={index === active ? "true" : undefined}
-                            class="karaoke-line m-0 min-h-7 py-2 text-center text-lg font-bold leading-snug {!following
-                                ? 'text-white/90'
-                                : index === active
-                                  ? 'scale-105 text-[var(--jam-accent,#1ed760)]'
-                                  : index < active
-                                    ? 'text-white/55'
-                                    : 'text-white/80'}"
-                            class:karaoke-gap={!line.text}
-                        >
-                            <span
-                                class:karaoke-fill={index === active}
-                                style:--karaoke-fill={index === active && fill !== undefined
-                                    ? `${Math.round(fill * 1000) / 10}%`
-                                    : undefined}>{line.text}</span
-                            >
-                        </p>
-                    {/each}
-                {:else}
-                    <div class="py-3">
-                        {#each found.plainLyrics.split(/\r?\n/) as line, index (index)}
-                            <p
-                                dir="auto"
-                                class="karaoke-plain-line m-0 min-h-6 text-base leading-relaxed text-white/90"
-                            >
-                                {line}
-                            </p>
-                        {/each}
+        <div class="karaoke-song relative min-h-0 flex flex-1 flex-col">
+            {#if show}{@render show(playable, lines)}{/if}
+            {#if mine && linkSave}
+                <p
+                    class="m-0 px-4 pt-2 text-xs {linkSave.status === 'failed'
+                        ? 'text-red-400'
+                        : linkSave.status === 'saved'
+                          ? 'text-[var(--jam-accent,#1ed760)]'
+                          : 'text-white/70'}"
+                    role={linkSave.status === "failed" ? "alert" : "status"}
+                    data-testid="karaoke-link-save"
+                >
+                    {linkSave.status === "failed"
+                        ? $LL.spotify.listeningZone.jamStatus.linkFailed()
+                        : linkSave.status === "saved"
+                          ? $LL.spotify.listeningZone.jamStatus.linkSaved()
+                          : $LL.spotify.listeningZone.jamStatus.linkSaving()}
+                </p>
+            {/if}
+            {#if trackProgress !== undefined}
+                <div
+                    class="mx-4 mt-3 h-1 shrink-0 overflow-hidden rounded-full bg-white/15"
+                    role="progressbar"
+                    aria-label={track?.title}
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow={Math.round(trackProgress * 100)}
+                >
+                    <div
+                        class="karaoke-track-progress h-full rounded-full bg-[var(--jam-accent,#1ed760)]"
+                        style:width={`${trackProgress * 100}%`}
+                    ></div>
+                </div>
+            {/if}
+
+            {#if !spotifyLines && $loadState.status === "loading"}
+                <div class="flex flex-col items-center gap-4 px-6 py-8" role="status">
+                    <div class="flex w-full flex-col items-center gap-3 motion-safe:animate-pulse" aria-hidden="true">
+                        <span class="h-4 w-3/5 rounded-full bg-white/15"></span>
+                        <span class="h-5 w-4/5 rounded-full bg-white/25"></span>
+                        <span class="h-4 w-1/2 rounded-full bg-white/15"></span>
+                        <span class="h-4 w-2/3 rounded-full bg-white/10"></span>
                     </div>
+                    <p class="m-0 text-sm text-white/80">{$LL.spotify.karaoke.loading()}</p>
+                </div>
+            {:else if !spotifyLines && $loadState.status === "error"}
+                {@render notice(IconAlertTriangle, $LL.spotify.karaoke.error())}
+                <div class="flex justify-center pb-4">
+                    <Button size="sm" onclick={retry}>{$LL.spotify.karaoke.retry()}</Button>
+                </div>
+            {:else if found?.instrumental}
+                {@render notice(IconMusic, $LL.spotify.karaoke.instrumental())}
+            {:else if found}
+                {#if !lines.length}
+                    <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
+                        <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.unsynced()}
+                    </p>
+                {:else if refreshJam || issueText}
+                    {@render issueNotice()}
+                {:else if !playback.positionAt}
+                    <p class="m-0 flex items-start gap-1.5 px-4 pt-3 text-xs text-white/70">
+                        <IconInfoCircle font-size="14" class="mt-px shrink-0" />{$LL.spotify.karaoke.noPosition()}
+                    </p>
+                {:else if !playback.playing}
+                    <p class="m-0 px-4 pt-3 text-xs">
+                        <span class="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-white/80">
+                            <PlayerPauseIcon height="h-3.5" width="w-3.5" strokeColor="stroke-white/80" hover="" />
+                            {$LL.spotify.karaoke.paused()}
+                        </span>
+                    </p>
                 {/if}
-            </div>
-            {#if manualScroll && following}
-                <div class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+                <div
+                    class="relative mt-2 flex min-h-0 flex-1 basis-96 flex-col has-[[role=textbox]:focus-visible]:outline has-[[role=textbox]:focus-visible]:outline-2 has-[[role=textbox]:focus-visible]:-outline-offset-2 has-[[role=textbox]:focus-visible]:outline-white/70"
+                >
+                    <div
+                        bind:this={lyricsContainer}
+                        class="karaoke-lyrics relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 select-text focus:outline-none"
+                        class:karaoke-stage={following}
+                        class:karaoke-lyrics-game={game}
+                        tabindex="0"
+                        role="textbox"
+                        aria-readonly="true"
+                        aria-multiline="true"
+                        aria-label={$LL.spotify.karaoke.title()}
+                        data-testid="karaoke-lyrics"
+                    >
+                        {#if lines.length}
+                            {#each lines as line, index (index)}
+                                {#if countdown?.line === index}
+                                    <div class="karaoke-countdown" aria-hidden="true" data-testid="karaoke-countdown">
+                                        {#each Array.from({ length: KARAOKE_COUNTDOWN_BEATS }, (_, dot) => dot) as dot (dot)}
+                                            <span class:karaoke-countdown-on={dot < countdown.beats}></span>
+                                        {/each}
+                                    </div>
+                                {/if}
+                                <p
+                                    dir={lyricDirection(line.text)}
+                                    data-line={index}
+                                    aria-current={index === active ? "true" : undefined}
+                                    class="karaoke-line m-0 min-h-7 py-2 text-center text-lg font-bold leading-snug {!following
+                                        ? 'text-white/90'
+                                        : index === active
+                                          ? 'scale-105 text-[var(--jam-accent,#1ed760)]'
+                                          : index < active
+                                            ? 'text-white/55'
+                                            : 'text-white/80'}"
+                                    class:karaoke-gap={!line.text}
+                                >
+                                    <span
+                                        class:karaoke-fill={index === active}
+                                        style:--karaoke-fill={index === active && fill !== undefined
+                                            ? `${Math.round(fill * 1000) / 10}%`
+                                            : undefined}>{lyricInSungOrder(line.text)}</span
+                                    >
+                                </p>
+                            {/each}
+                        {:else}
+                            <div class="py-3">
+                                {#each found.plainLyrics.split(/\r?\n/) as line, index (index)}
+                                    <p
+                                        dir={lyricDirection(line)}
+                                        class="karaoke-plain-line m-0 min-h-6 text-base leading-relaxed text-white/90"
+                                    >
+                                        {lyricInSungOrder(line)}
+                                    </p>
+                                {/each}
+                            </div>
+                        {/if}
+                    </div>
+                    {#if manualScroll && following}
+                        <div class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+                            <button
+                                type="button"
+                                class="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--jam-accent,#1ed760)] px-3 py-1.5 text-sm font-bold text-contrast shadow-lg hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                onclick={() => {
+                                    manualScroll = false;
+                                }}
+                                data-testid="karaoke-follow"
+                                ><IconArrowDown font-size="16" />{$LL.spotify.karaoke.follow()}</button
+                            >
+                        </div>
+                    {/if}
+                </div>
+            {:else if !track && (refreshJam || issueText)}
+                {@render issueNotice()}
+            {:else}
+                {@render notice(IconMusic, track ? $LL.spotify.karaoke.missing() : $LL.spotify.karaoke.noTrack())}
+            {/if}
+
+            {#if playback.next}
+                <p class="m-0 flex items-baseline gap-1.5 px-4 pt-2 text-xs text-white/70" data-testid="karaoke-next">
+                    <span class="shrink-0 font-bold uppercase tracking-wider">{$LL.spotify.karaoke.next()}</span>
+                    <span class="min-w-0 truncate"
+                        ><span class="text-white/90">{playback.next.title}</span> — {playback.next.artist}</span
+                    >
+                </p>
+            {/if}
+            <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/10 px-3 py-2 text-xs">
+                {#if found && lines.length}
                     <button
                         type="button"
-                        class="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--jam-accent,#1ed760)] px-3 py-1.5 text-sm font-bold text-contrast shadow-lg hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        class="karaoke-chip"
+                        class:text-[var(--jam-accent,#1ed760)]={offsetMs !== 0}
+                        aria-expanded={offsetOpen}
+                        aria-label={`${$LL.spotify.karaoke.offset()} (${offsetLabel})`}
+                        title={$LL.spotify.karaoke.offset()}
                         onclick={() => {
-                            manualScroll = false;
+                            offsetOpen = !offsetOpen;
+                            searchOpen = false;
                         }}
-                        data-testid="karaoke-follow"
-                        ><IconArrowDown font-size="16" />{$LL.spotify.karaoke.follow()}</button
+                        data-testid="karaoke-offset-toggle"
+                        ><IconClock font-size="14" /><span class="tabular-nums">{offsetLabel}</span></button
+                    >
+                {/if}
+                <button
+                    type="button"
+                    class="karaoke-chip"
+                    aria-expanded={searchOpen}
+                    onclick={() => {
+                        searchTitle = track?.title ?? "";
+                        searchArtist = track?.artist ?? "";
+                        searchOpen = !searchOpen;
+                        offsetOpen = false;
+                    }}
+                    data-testid="karaoke-choose"><IconSearch font-size="14" />{$LL.spotify.karaoke.choose()}</button
+                >
+                {#if found}
+                    <span class="ml-auto text-[10px] text-white/70">
+                        {$LL.spotify.karaoke.source({
+                            name:
+                                found.source === "spotify"
+                                    ? "Spotify"
+                                    : found.source === "lrclib"
+                                      ? "LRCLIB"
+                                      : "lyrics.ovh",
+                        })}
+                    </span>
+                {/if}
+            </div>
+            {#if offsetOpen && found && lines.length}
+                <div class="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-xs">
+                    <label class="flex min-w-0 flex-1 flex-col gap-1">
+                        <span class="text-white/70">{$LL.spotify.karaoke.offset()}</span>
+                        <input
+                            type="range"
+                            min="-5000"
+                            max="5000"
+                            step="250"
+                            bind:value={offsetMs}
+                            class="w-full min-w-0"
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        class="karaoke-chip self-end"
+                        disabled={offsetMs === 0}
+                        aria-label={$LL.spotify.karaoke.offsetReset()}
+                        title={$LL.spotify.karaoke.offsetReset()}
+                        onclick={() => {
+                            offsetMs = 0;
+                        }}><IconRestore font-size="14" /></button
                     >
                 </div>
             {/if}
+            {#if searchOpen}
+                <form class="flex flex-col gap-2 border-t border-white/10 px-4 py-3" onsubmit={search}>
+                    <label class="text-xs text-white/70"
+                        >{$LL.spotify.karaoke.trackTitle()}<input
+                            class="input-text input-text-sm mt-1 w-full"
+                            maxlength="200"
+                            required
+                            bind:value={searchTitle}
+                        /></label
+                    >
+                    <label class="text-xs text-white/70"
+                        >{$LL.spotify.karaoke.artist()}<input
+                            class="input-text input-text-sm mt-1 w-full"
+                            maxlength="200"
+                            required
+                            bind:value={searchArtist}
+                        /></label
+                    >
+                    <Button type="submit" size="sm">{$LL.spotify.karaoke.search()}</Button>
+                </form>
+            {/if}
         </div>
-    {:else if !track && (refreshJam || issueText)}
-        {@render issueNotice()}
-    {:else}
-        {@render notice(IconMusic, track ? $LL.spotify.karaoke.missing() : $LL.spotify.karaoke.noTrack())}
-    {/if}
-
-    {#if playback.next}
-        <p class="m-0 flex items-baseline gap-1.5 px-4 pt-2 text-xs text-white/70" data-testid="karaoke-next">
-            <span class="shrink-0 font-bold uppercase tracking-wider">{$LL.spotify.karaoke.next()}</span>
-            <span class="min-w-0 truncate"
-                ><span class="text-white/90">{playback.next.title}</span> — {playback.next.artist}</span
-            >
-        </p>
-    {/if}
-    <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/10 px-3 py-2 text-xs">
-        {#if found && lines.length}
-            <button
-                type="button"
-                class="karaoke-chip"
-                class:text-[var(--jam-accent,#1ed760)]={offsetMs !== 0}
-                aria-expanded={offsetOpen}
-                aria-label={`${$LL.spotify.karaoke.offset()} (${offsetLabel})`}
-                title={$LL.spotify.karaoke.offset()}
-                onclick={() => {
-                    offsetOpen = !offsetOpen;
-                    searchOpen = false;
-                }}
-                data-testid="karaoke-offset-toggle"
-                ><IconClock font-size="14" /><span class="tabular-nums">{offsetLabel}</span></button
-            >
-        {/if}
-        <button
-            type="button"
-            class="karaoke-chip"
-            aria-expanded={searchOpen}
-            onclick={() => {
-                searchTitle = track?.title ?? "";
-                searchArtist = track?.artist ?? "";
-                searchOpen = !searchOpen;
-                offsetOpen = false;
-            }}
-            data-testid="karaoke-choose"><IconSearch font-size="14" />{$LL.spotify.karaoke.choose()}</button
-        >
-        {#if found}
-            <span class="ml-auto text-[10px] text-white/70">
-                {$LL.spotify.karaoke.source({ name: found.source === "lrclib" ? "LRCLIB" : "lyrics.ovh" })}
-            </span>
-        {/if}
     </div>
-    {#if offsetOpen && found && lines.length}
-        <div class="flex items-center gap-2 border-t border-white/10 px-4 py-3 text-xs">
-            <label class="flex min-w-0 flex-1 flex-col gap-1">
-                <span class="text-white/70">{$LL.spotify.karaoke.offset()}</span>
-                <input type="range" min="-5000" max="5000" step="250" bind:value={offsetMs} class="w-full min-w-0" />
-            </label>
-            <button
-                type="button"
-                class="karaoke-chip self-end"
-                disabled={offsetMs === 0}
-                aria-label={$LL.spotify.karaoke.offsetReset()}
-                title={$LL.spotify.karaoke.offsetReset()}
-                onclick={() => {
-                    offsetMs = 0;
-                }}><IconRestore font-size="14" /></button
-            >
-        </div>
-    {/if}
-    {#if searchOpen}
-        <form class="flex flex-col gap-2 border-t border-white/10 px-4 py-3" onsubmit={search}>
-            <label class="text-xs text-white/70"
-                >{$LL.spotify.karaoke.trackTitle()}<input
-                    class="input-text input-text-sm mt-1 w-full"
-                    maxlength="200"
-                    required
-                    bind:value={searchTitle}
-                /></label
-            >
-            <label class="text-xs text-white/70"
-                >{$LL.spotify.karaoke.artist()}<input
-                    class="input-text input-text-sm mt-1 w-full"
-                    maxlength="200"
-                    required
-                    bind:value={searchArtist}
-                /></label
-            >
-            <Button type="submit" size="sm">{$LL.spotify.karaoke.search()}</Button>
-        </form>
-    {/if}
 </div>
 
 <style>
+    @media (min-width: 800px) {
+        .karaoke-game-board {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 19rem;
+            height: min(36rem, 65vh);
+            flex: none;
+        }
+        .karaoke-game-board .karaoke-controls {
+            grid-column: 2;
+            grid-row: 1;
+            overflow-y: auto;
+            padding-bottom: 1rem;
+            border-inline-start: 1px solid color-mix(in srgb, var(--ui-foreground, #fff) 10%, transparent);
+        }
+        .karaoke-game-board .karaoke-song {
+            grid-column: 1;
+            grid-row: 1;
+        }
+    }
+    @media (max-width: 799px) {
+        .karaoke-game-board .karaoke-controls {
+            max-height: 42vh;
+            overflow-y: auto;
+        }
+    }
     .karaoke-chip {
         display: inline-flex;
         align-items: center;
@@ -608,6 +721,86 @@
     .karaoke-plain-line {
         text-align: start;
     }
+    .karaoke-backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        pointer-events: none;
+    }
+    .karaoke-backdrop-art {
+        position: absolute;
+        inset: -15%;
+        width: 130%;
+        height: 130%;
+        object-fit: cover;
+        filter: blur(38px) saturate(1.5) brightness(0.45);
+        animation: karaoke-drift 24s ease-in-out infinite alternate;
+        animation-play-state: paused;
+    }
+    .karaoke-aurora {
+        position: absolute;
+        inset: -30%;
+        background:
+            radial-gradient(
+                40% 35% at 25% 30%,
+                color-mix(in srgb, var(--jam-accent, #1ed760) 35%, transparent),
+                transparent 70%
+            ),
+            radial-gradient(35% 30% at 75% 70%, rgb(168 85 247 / 0.3), transparent 70%),
+            radial-gradient(30% 30% at 60% 20%, rgb(236 72 153 / 0.22), transparent 70%);
+        mix-blend-mode: screen;
+        animation: karaoke-aurora 14s ease-in-out infinite alternate;
+        animation-play-state: paused;
+    }
+    .karaoke-backdrop-playing .karaoke-backdrop-art,
+    .karaoke-backdrop-playing .karaoke-aurora {
+        animation-play-state: running;
+    }
+    .karaoke-lyrics-game .karaoke-line {
+        font-size: 1.375rem;
+        line-height: 1.35;
+    }
+    .karaoke-lyrics-game .karaoke-line[aria-current="true"] {
+        font-size: 1.75rem;
+        filter: drop-shadow(0 0 14px color-mix(in srgb, var(--jam-accent, #1ed760) 55%, transparent));
+    }
+    .karaoke-countdown {
+        display: flex;
+        justify-content: center;
+        gap: 0.6rem;
+        padding-top: 0.5rem;
+    }
+    .karaoke-countdown span {
+        width: 0.75rem;
+        height: 0.75rem;
+        border-radius: 9999px;
+        background: rgb(255 255 255 / 0.15);
+        transition:
+            background 200ms ease,
+            transform 200ms ease;
+    }
+    .karaoke-countdown span.karaoke-countdown-on {
+        background: var(--jam-accent, #1ed760);
+        box-shadow: 0 0 12px var(--jam-accent, #1ed760);
+        transform: scale(1.15);
+    }
+    @keyframes karaoke-drift {
+        from {
+            transform: scale(1) translate(0, 0);
+        }
+        to {
+            transform: scale(1.12) translate(-3%, 2%);
+        }
+    }
+    @keyframes karaoke-aurora {
+        from {
+            transform: rotate(0deg) scale(1);
+        }
+        to {
+            transform: rotate(25deg) scale(1.15);
+        }
+    }
     .karaoke-track-progress {
         transition: width 250ms linear;
     }
@@ -617,6 +810,10 @@
         }
     }
     @media (prefers-reduced-motion: reduce) {
+        .karaoke-backdrop-art,
+        .karaoke-aurora {
+            animation: none;
+        }
         .karaoke-line,
         .karaoke-track-progress {
             transition: none;

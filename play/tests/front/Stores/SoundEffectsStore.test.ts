@@ -26,6 +26,24 @@ afterEach(() => {
 const load = () => import("../../../src/front/Stores/SoundEffectsStore");
 
 describe("personal sound effect volumes", () => {
+    it("cuts every sound including notifications for the singer and restores current preferences", async () => {
+        const stores = await load();
+        const { enterKaraokeSinger } = await import("../../../src/front/Karaoke/KaraokeGameStore");
+        stores.notificationSoundVolumeStore.set(0.6);
+        stores.weatherVolumeStore.set(0.4);
+        const stop = enterKaraokeSinger();
+        const stopSecond = enterKaraokeSinger();
+        expect(get(stores.notificationSoundVolumeStore)).toBe(0);
+        expect(get(stores.weatherVolumeStore)).toBe(0);
+        stores.notificationSoundVolumeStore.setting.set(0.3);
+        expect(localStorage.getItem("notificationSoundVolume")).toBe("0.3");
+        stop();
+        stop();
+        expect(get(stores.notificationSoundVolumeStore)).toBe(0);
+        stopSecond();
+        expect(get(stores.notificationSoundVolumeStore)).toBe(0.3);
+        expect(get(stores.weatherVolumeStore)).toBe(0.4);
+    });
     it("silences the sounds of the game in a silent zone, and gives them back on leaving, settings untouched", async () => {
         const stores = await load();
         stores.weatherVolumeStore.set(0.6);

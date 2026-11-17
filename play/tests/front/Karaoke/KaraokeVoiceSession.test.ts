@@ -26,7 +26,7 @@ it("requests the mic only on singing and releases it when leaving", async () => 
     await session.sing("headset");
     expect(capture).toHaveBeenCalledWith({
         audio: {
-            deviceId: { ideal: "headset" },
+            deviceId: { exact: "headset" },
             echoCancellation: true,
             noiseSuppression: false,
             autoGainControl: false,

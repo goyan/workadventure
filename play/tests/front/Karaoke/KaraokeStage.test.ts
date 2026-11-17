@@ -1,12 +1,22 @@
 import { get, writable } from "svelte/store";
 import { afterEach, expect, it, vi } from "vitest";
-import { KARAOKE_STAGE_ACTION_EVENT, KARAOKE_STAGE_STATE_EVENT, KaraokeStageAction } from "@workadventure/map-editor";
+import {
+    KARAOKE_STAGE_ACTION_EVENT,
+    KARAOKE_STAGE_STATE_EVENT,
+    KARAOKE_SCORE_EVENT,
+    KaraokeStageAction,
+    KaraokeReferenceSource,
+} from "@workadventure/map-editor";
 import type { JamRoom } from "../../../src/front/ListeningZone/ListeningZoneController";
 import {
     startKaraokeStage,
     enableKaraokeGame,
     selectKaraokeSinger,
     karaokeStagesStore,
+    karaokeScoresStore,
+    setKaraokeReference,
+    publishKaraokeScore,
+    requestKaraokeTurn,
 } from "../../../src/front/Karaoke/KaraokeStage";
 
 const room: JamRoom = {
@@ -49,6 +59,7 @@ function harness(local = "host") {
         state: () => get(karaokeStagesStore).get("host"),
         action: (action: KaraokeStageAction) => listener?.(KARAOKE_STAGE_ACTION_EVENT, { ...identity, action }, 2),
         receive: (data: unknown, sender: number) => listener?.(KARAOKE_STAGE_STATE_EVENT, data, sender),
+        score: (data: unknown, sender: number) => listener?.(KARAOKE_SCORE_EVENT, data, sender),
         disconnectGuest: () => {
             users = users.filter((u) => u.uuid !== "guest");
         },
@@ -60,12 +71,12 @@ it("accepts a join immediately after a snapshot request, gives one mic and one a
     enableKaraokeGame(room, true);
     host.action(KaraokeStageAction.Request);
     host.action(KaraokeStageAction.Join);
-    expect(host.state()?.queue).toEqual(["guest"]);
+    expect(host.state()?.singerUuid).toBe("guest");
     const firstTurn = host.state()?.turnId;
     selectKaraokeSinger(room, "guest");
     expect(host.state()?.singerUuid).toBe("guest");
     expect(host.state()?.queue).toEqual([]);
-    expect(host.state()?.turnId).not.toBe(firstTurn);
+    expect(host.state()?.turnId).toBe(firstTurn);
     host.action(KaraokeStageAction.Clap);
     expect(host.state()?.applause).toBe(0);
     selectKaraokeSinger(room, "host");
@@ -111,4 +122,48 @@ it("drops disconnected singers and queued users", () => {
     host.disconnectGuest();
     vi.advanceTimersByTime(2000);
     expect(host.state()?.singerUuid).toBeNull();
+});
+
+it("starts on a free stage immediately and automatically hands the mic to the queued singer", () => {
+    const host = harness();
+    enableKaraokeGame(room, true);
+    selectKaraokeSinger(room, "host");
+    host.action(KaraokeStageAction.Join);
+    expect(host.state()?.queue).toEqual(["guest"]);
+    requestKaraokeTurn(room, KaraokeStageAction.Leave);
+    expect(host.state()).toMatchObject({ singerUuid: "guest", queue: [], applause: 0 });
+});
+
+it("binds accuracy to the authorized singer, turn and melody, and keeps the turn result", () => {
+    const host = harness();
+    enableKaraokeGame(room, true);
+    const reference = {
+        id: crypto.randomUUID(),
+        recordingKey: "song",
+        title: "Song",
+        artist: "Artist",
+        source: KaraokeReferenceSource.UltraStar,
+        notes: [{ startMs: 0, endMs: 1000, midi: 69, golden: false }],
+    };
+    setKaraokeReference(room, reference);
+    selectKaraokeSinger(room, "host");
+    const report = {
+        hostUuid: "host",
+        singerUuid: "host",
+        turnId: host.state()?.turnId ?? "",
+        referenceId: reference.id,
+        score: 9000,
+        accuracy: 90,
+        coverage: 100,
+        combo: 1,
+        finished: false,
+    };
+    publishKaraokeScore(room, { ...report, turnId: crypto.randomUUID() });
+    host.score(report, 2);
+    expect(get(karaokeScoresStore).size).toBe(0);
+    publishKaraokeScore(room, report);
+    expect(get(karaokeScoresStore).get(report.turnId)).toEqual(report);
+    requestKaraokeTurn(room, KaraokeStageAction.Leave);
+    expect(get(karaokeScoresStore).get(report.turnId)?.finished).toBe(true);
+    expect(host.send).toHaveBeenCalledWith(KARAOKE_SCORE_EVENT, { ...report, finished: true }, []);
 });

@@ -265,12 +265,14 @@ import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
 import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
 import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
@@ -533,6 +535,7 @@ export class GameScene extends DirtyScene {
     private _waveManager: WaveManager | undefined;
     private _nerfManager: NerfManager | undefined;
     private _torchManager: TorchManager | undefined;
+    private karaokeSpotlight: KaraokeSpotlight | undefined;
     private _coffeeManager: CoffeeManager | undefined;
     /** Animated treadmills move their belt only while someone runs on them. */
     public readonly treadmillBelts = new TreadmillBelts((entityId) =>
@@ -1591,6 +1594,8 @@ export class GameScene extends DirtyScene {
         nerfEquippedStore.set(false);
         this._torchManager?.destroy();
         this._torchManager = undefined;
+        this.karaokeSpotlight?.destroy();
+        this.karaokeSpotlight = undefined;
         torchEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
@@ -1949,6 +1954,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
+            this.karaokeSpotlight?.update(time);
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
@@ -3511,6 +3517,8 @@ export class GameScene extends DirtyScene {
         this._nerfManager = new NerfManager(this);
         this._torchManager?.destroy();
         this._torchManager = new TorchManager(this);
+        this.karaokeSpotlight?.destroy();
+        this.karaokeSpotlight = new KaraokeSpotlight(this);
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
         this.CurrentPlayer.setSwimwearColor(localUserStore.getSwimwearColor());
 
@@ -3711,6 +3719,20 @@ export class GameScene extends DirtyScene {
             throw new Error("subscribeToStores: the stores are already subscribed.");
         }
         this.storesSubscribed = true;
+        let previousMute = this.sound.mute;
+        let focused = false;
+        const stopAudioFocus = karaokeSingerActiveStore.subscribe((singing) => {
+            if (singing && !focused) previousMute = this.sound.mute;
+            this.sound.mute = singing ? true : previousMute;
+            focused = singing;
+        });
+        this.unsubscribers = [
+            ...this.unsubscribers,
+            () => {
+                stopAudioFocus();
+                this.sound.mute = previousMute;
+            },
+        ];
 
         this.unsubscribers.push(
             mapSnowShownStore.subscribe((shown) => {

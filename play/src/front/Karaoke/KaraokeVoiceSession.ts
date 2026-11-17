@@ -2,10 +2,11 @@ import { FilterType } from "@workadventure/messages";
 import type { SpaceInterface } from "../Space/SpaceInterface";
 import type { SpaceRegistryInterface } from "../Space/SpaceRegistry/SpaceRegistryInterface";
 import { getJamMusicPublisher, onJamMusicPublisherRegistered } from "../ListeningZone/JamMusicStore";
+import { openKaraokeMicrophone } from "./KaraokeMicrophone";
 
 export interface KaraokeVoiceSession {
     join(spaceName: string): Promise<void>;
-    sing(deviceId?: string): Promise<void>;
+    sing(deviceId?: string): Promise<MediaStream | undefined>;
     stop(): Promise<void>;
     leave(): Promise<void>;
 }
@@ -58,16 +59,7 @@ export function createKaraokeVoiceSession(
             await stop();
             const mine = generation;
             const name = spaceName;
-            const captured = await getUserMedia({
-                audio: {
-                    // A remembered headset may be unplugged; use the available mic rather than blocking the turn.
-                    ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
-                    echoCancellation: true,
-                    noiseSuppression: false,
-                    autoGainControl: false,
-                },
-                video: false,
-            });
+            const captured = await openKaraokeMicrophone(getUserMedia, deviceId);
             if (mine !== generation || name !== spaceName) {
                 captured.getTracks().forEach((track) => track.stop());
                 return;
@@ -93,6 +85,7 @@ export function createKaraokeVoiceSession(
                     stop().catch(() => undefined);
                 });
             });
+            return captured;
         },
     };
 }
