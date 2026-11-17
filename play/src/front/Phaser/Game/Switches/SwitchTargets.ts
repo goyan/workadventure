@@ -1,4 +1,4 @@
-import { alignedSwitchValue, isAtAreaLevel } from "@workadventure/map-editor";
+import { alignedSwitchValue, isAtAreaLevel, switchPropertyIn } from "@workadventure/map-editor";
 import type { EntityPrefab, EntityStateKey, EntityStateValue, SwitchPropertyData } from "@workadventure/map-editor";
 
 /** An object of the map a switch may command: where it is, on which floor, and the states it has. */
@@ -63,4 +63,9 @@ export function switchPressValue(
     isOn: (entityId: string) => boolean,
 ): EntityStateValue | undefined {
     return alignedSwitchValue(targets.map((target) => (isOn(target.id) ? "true" : "false")));
+}
+
+/** The switch an object carries, checked: one that is not well formed is not a switch (see switchPropertyIn). */
+export function switchPropertyOf(entity: { getProperties(): readonly unknown[] }): SwitchPropertyData | undefined {
+    return switchPropertyIn(entity.getProperties());
 }

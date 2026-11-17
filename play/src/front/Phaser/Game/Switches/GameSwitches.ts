@@ -12,16 +12,16 @@ import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
 import { SwitchIndicator } from "./SwitchIndicator";
 import { SwitchWiringView, wiringOf } from "./SwitchWiringView";
-import { entityStateKeysOf, resolveSwitchTargets, switchPressValue, type SwitchableTarget } from "./SwitchTargets";
+import {
+    entityStateKeysOf,
+    resolveSwitchTargets,
+    switchPressValue,
+    switchPropertyOf,
+    type SwitchableTarget,
+} from "./SwitchTargets";
 
 /** The switches of the map are looked for this often: one appears or goes as the map is edited. */
 const RECONCILE_INTERVAL_MS = 250;
-
-export function switchPropertyOf(entity: Entity): SwitchPropertyData | undefined {
-    return entity
-        .getProperties()
-        .find((property): property is SwitchPropertyData => property.type === "switchPropertyData");
-}
 
 /**
  * The switches of the map in the game: what a press does (asks the server to set the state of the objects the switch

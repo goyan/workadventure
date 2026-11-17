@@ -4,8 +4,9 @@ import {
     isEntityStateKey,
     isEntityStateValue,
     switchMayReach,
+    switchPropertyIn,
 } from "@workadventure/map-editor";
-import type { EntityStateKey, EntityStateValue, SwitchPropertyData, WAMEntityData } from "@workadventure/map-editor";
+import type { EntityStateKey, EntityStateValue } from "@workadventure/map-editor";
 import type { EntityStateMessage, SetEntityStateMessage } from "@workadventure/messages";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
@@ -49,7 +50,7 @@ export class EntityStateManager {
         }
         const entities = this.room.getWam()?.entities;
         const switchEntity = entities?.[message.switchId];
-        const property = switchEntity ? switchPropertyOf(switchEntity) : undefined;
+        const property = switchPropertyIn(switchEntity?.properties);
         if (!entities || !switchEntity || !property || property.key !== key) {
             return [];
         }
@@ -174,10 +175,4 @@ export class EntityStateManager {
     private hashKey(): string {
         return `entity-states:${this.store?.roomUrl ?? ""}`;
     }
-}
-
-function switchPropertyOf(entity: WAMEntityData): SwitchPropertyData | undefined {
-    return entity.properties?.find(
-        (property): property is SwitchPropertyData => property.type === "switchPropertyData",
-    );
 }

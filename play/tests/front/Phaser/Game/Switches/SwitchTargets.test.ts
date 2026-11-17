@@ -4,6 +4,7 @@ import {
     entityStateKeysOf,
     resolveSwitchTargets,
     switchPressValue,
+    switchPropertyOf,
     type SwitchableTarget,
 } from "../../../../../src/front/Phaser/Game/Switches/SwitchTargets";
 
@@ -86,5 +87,21 @@ describe("switchPressValue", () => {
 
     it("has nothing to do without target", () => {
         expect(switchPressValue([], () => true)).toBeUndefined();
+    });
+});
+
+describe("switchPropertyOf", () => {
+    const entityWith = (...properties: unknown[]) => ({ getProperties: () => properties as never });
+
+    it("reads the switch of an object, with its defaults", () => {
+        expect(switchPropertyOf(entityWith({ id: "p", type: "switchPropertyData" }))?.targets).toEqual({
+            mode: "zone",
+        });
+    });
+
+    it("ignores a switch another editor sent incomplete: the game reads it at every image", () => {
+        expect(
+            switchPropertyOf(entityWith({ id: "p", type: "switchPropertyData", targets: { mode: "ids" } })),
+        ).toBeUndefined();
     });
 });

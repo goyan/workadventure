@@ -1,5 +1,5 @@
 import { isAtAreaLevel } from "./GameMap/GameMapAreas";
-import { ENTITY_STATE_KEYS } from "./types";
+import { ENTITY_STATE_KEYS, SwitchPropertyData } from "./types";
 import type { SwitchTargets } from "./types";
 
 export type EntityStateKey = (typeof ENTITY_STATE_KEYS)[number];
@@ -49,4 +49,24 @@ export function switchMayReach(
         Math.abs(target.x - switchEntity.x) <= SWITCH_MAX_REACH_PX &&
         Math.abs(target.y - switchEntity.y) <= SWITCH_MAX_REACH_PX
     );
+}
+
+/**
+ * The switch among the properties of an object, checked against its schema and with its defaults. The properties of
+ * a map that is being edited are what the last edit command carried, which nothing validates: a switch that is not
+ * well formed is ignored here rather than read by the code that runs at every image or every second.
+ */
+export function switchPropertyIn(properties: readonly unknown[] | undefined): SwitchPropertyData | undefined {
+    const raw = properties?.find(
+        (property) =>
+            typeof property === "object" &&
+            property !== null &&
+            "type" in property &&
+            property.type === "switchPropertyData",
+    );
+    if (raw === undefined) {
+        return undefined;
+    }
+    const parsed = SwitchPropertyData.safeParse(raw);
+    return parsed.success ? parsed.data : undefined;
 }
