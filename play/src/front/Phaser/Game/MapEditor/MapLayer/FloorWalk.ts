@@ -166,6 +166,17 @@ function standsOnFloor(model: FloorModel, elevation: number, screen: Pt): boolea
 }
 
 /**
+ * Where an avatar that stood on a raised floor before a reload stands again: on that floor if one of its slabs is
+ * still under the point (on the screen, the tile `elevation` further south); undefined otherwise: the ground.
+ */
+export function restoredFloorState(model: FloorModel, p: Pt, elevation: number): FloorWalkState | undefined {
+    if (!(elevation > 0)) return undefined;
+    const column = Math.floor(p.x / MAP_LAYER_TILE_SIZE);
+    const row = Math.floor((p.y + elevation) / MAP_LAYER_TILE_SIZE);
+    return model.hasSlab(elevation, column, row) ? { elevation } : undefined;
+}
+
+/**
  * One frame of an avatar among the floors. `prev` is the point between its feet, on the screen, after the last call;
  * `p` where the keys took it since. Returns where it may be and what it stands on: it goes up and down the stairs,
  * stays over the slabs of its floor (their edge is a railing), and cannot walk through the side of a stair.
