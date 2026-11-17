@@ -19,7 +19,7 @@
         IconTexture,
         IconLamp,
         IconMapSearch,
-        IconMoon,
+        IconSunMoon,
         IconSettings,
         IconWall,
     } from "@wa-icons";
@@ -184,7 +184,8 @@
                 </div>
             {/each}
         </div>
-        <!-- Not a tool: keeps the night in the editor, to set the lamps as they will look, or hides it again. -->
+        <!-- Not a tool: shows in the editor the lighting of the game (night veil, bounced light), to set the lamps as
+             they will look, or the plain daylight of the editor again. -->
         <div class="p-2 retro-theme rounded-2xl">
             <div class="tool-button relative">
                 <button
@@ -200,7 +201,7 @@
                     }}
                     type="button"
                 >
-                    <IconMoon font-size="22" />
+                    <IconSunMoon font-size="22" />
                 </button>
                 <div
                     class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
