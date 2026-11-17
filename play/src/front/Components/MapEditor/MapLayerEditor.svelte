@@ -28,12 +28,9 @@
         mapLayerWindowHeightsAvailableStore,
         mapLayerWindowsAvailableStore,
         isFloorMode,
-        mapLayerUpperWallsAvailableStore,
-        usesLevel,
         mapLayerFloorsAvailableStore,
         mapLayerLevelStore,
         mapLayerLevelsStore,
-        mapLayerPickLevelStore,
         mapLayerStairDirectionStore,
         mapLayerStairTargetStore,
         mapLayerBuiltLevelsStore,
@@ -43,10 +40,10 @@
     import { STAIR_DIRECTIONS, floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { reachableLevels, stairTarget } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
+    import FloorLevelPicker from "./FloorLevelPicker.svelte";
     import {
         IconArrowAutofitHeight,
         IconBrush,
-        IconColorPicker,
         IconStack2,
         IconStairs,
         IconBucket,
@@ -203,6 +200,10 @@
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pe-1 text-white" data-testid="mapLayerEditor">
     <h2 class="text-lg font-bold m-0">{$LL.mapEditor.mapLayer.title()}</h2>
+    {#if $mapLayerCatalogAvailableStore && $mapLayerFloorsAvailableStore}
+        <!-- The level edited, the same as in the objects panel. -->
+        <FloorLevelPicker />
+    {/if}
 
     {#if $mapLayerCatalogAvailableStore === undefined}
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.catalogLoading()}</p>
@@ -257,52 +258,6 @@
             {/if}
         </section>
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
-
-        {#if usesLevel($mapLayerModeStore, $mapLayerUpperWallsAvailableStore)}
-            <section class="flex flex-col gap-2" data-testid="mapLayerLevel">
-                <h3 class="m-0 text-sm font-bold">
-                    {$mapLayerModeStore === "stair"
-                        ? $LL.mapEditor.mapLayer.floorLevel.from()
-                        : $LL.mapEditor.mapLayer.floorLevel.title()}
-                </h3>
-                <div class="flex flex-wrap gap-2">
-                    {#each [0, ...$mapLayerLevelsStore] as level (level)}
-                        <button
-                            type="button"
-                            class="px-3 py-1 rounded text-xs {$mapLayerLevelStore === level
-                                ? 'bg-secondary'
-                                : 'bg-white/10 hover:bg-white/20'}"
-                            aria-pressed={$mapLayerLevelStore === level}
-                            title={level === 0
-                                ? $LL.mapEditor.mapLayer.floorLevel.groundHint()
-                                : $LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
-                            data-testid="mapLayerLevel-{level}"
-                            onclick={() => mapLayerLevelStore.set(level)}
-                        >
-                            {level === 0
-                                ? $LL.mapEditor.mapLayer.floorLevel.ground()
-                                : levelLabel(level, $mapLayerBuiltLevelsStore)}
-                        </button>
-                    {/each}
-                </div>
-                <button
-                    type="button"
-                    class="flex items-center gap-2 px-3 py-1 rounded text-xs self-start {$mapLayerPickLevelStore
-                        ? 'bg-secondary'
-                        : 'bg-white/10 hover:bg-white/20'}"
-                    aria-pressed={$mapLayerPickLevelStore}
-                    title={$LL.mapEditor.mapLayer.floorLevel.pickHint()}
-                    data-testid="mapLayerPickLevel"
-                    onclick={() => mapLayerPickLevelStore.update((armed) => !armed)}
-                >
-                    <IconColorPicker font-size="16" />
-                    {$mapLayerPickLevelStore
-                        ? $LL.mapEditor.mapLayer.floorLevel.pickArmed()
-                        : $LL.mapEditor.mapLayer.floorLevel.pick()}
-                </button>
-                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.floorLevel.pickHint()}</p>
-            </section>
-        {/if}
 
         {#if $mapLayerModeStore === "stair"}
             <section class="flex flex-col gap-2" data-testid="mapLayerStair">

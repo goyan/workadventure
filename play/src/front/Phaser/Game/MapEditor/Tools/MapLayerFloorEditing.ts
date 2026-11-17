@@ -4,6 +4,8 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
+import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
+import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
     isFloorMode,
     mapLayerFloorFamilyStore,
@@ -58,8 +60,6 @@ import type { StairShape } from "../MapLayer/MapLayerFloors";
 import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAX_ENTITIES_PER_OPERATION } from "../MapLayer/MapLayerSync";
 
-/** Over the floors and what stands on them, under the interface. */
-const FLOOR_PREVIEW_DEPTH = 890_000;
 const OK_COLOR = 0x22c55e;
 const REFUSED_COLOR = 0xef4444;
 const ERASE_COLOR = 0xf97316;
@@ -98,8 +98,10 @@ export class MapLayerFloorEditing {
         // Slabs are laid above the ground: choosing that mode on the ground goes to a floor, a built one if any.
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
             if (mode !== "slab" || get(mapLayerLevelStore) !== 0) return;
+            // (Unless the level follows the pointer: the slabs then go where a floor is drawn.)
+            if (get(mapEditorPlacementLevelStore) === "auto") return;
             const level = get(mapLayerBuiltLevelsStore)[0] ?? get(mapLayerLevelsStore)[0];
-            if (level !== undefined) mapLayerLevelStore.set(level);
+            if (level !== undefined) mapEditorPlacementLevelStore.set(level);
         });
         this.refreshLevels();
     }
@@ -169,12 +171,17 @@ export class MapLayerFloorEditing {
         const levels = availableLevels(model, wallTops);
         mapLayerLevelsStore.set(levels);
         mapLayerBuiltLevelsStore.set(model.getLevels());
-        if (get(mapLayerLevelStore) !== 0 && !levels.includes(get(mapLayerLevelStore))) mapLayerLevelStore.set(0);
     }
 
     /** The pipette: the floor drawn under the pointer becomes the one being edited. */
     public pickLevel(world: Point): void {
-        mapLayerLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
+        // A level picked on the map is a level chosen: the panel shows it selected.
+        mapEditorPlacementLevelStore.set(levelUnderPoint(this.readModel(), world.x, world.y));
+    }
+
+    /** The floor drawn under a point of the screen (the ground where there is none), from the floors last read. */
+    public levelAt(world: Point): number {
+        return levelUnderPoint(this.previewModel(), world.x, world.y);
     }
 
     /** The stair the mode would place from the level being edited; undefined when no floor is in reach of a stair. */

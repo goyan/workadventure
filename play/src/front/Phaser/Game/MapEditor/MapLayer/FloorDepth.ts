@@ -3,15 +3,27 @@ import { stairFootFromImage } from "./FloorModel";
 import { stairGroundBox } from "./MapLayerFloors";
 import type { FloorPiece } from "./MapLayerFloors";
 
-/** Everything standing on a raised floor is drawn over everything standing lower: one band of depths per altitude. */
-export const FLOOR_LEVEL_DEPTH = 300_000;
+/**
+ * Everything standing on a raised floor is drawn over everything standing lower: one band of depths per altitude.
+ * The bands start over all the depths of the ground, the overhead objects (a tree behind a house is hidden by its
+ * upper floor) and their effects included, and stay under the overlay layers of the map (1 000 000).
+ */
+export const FLOOR_LEVEL_DEPTH = 965_000;
+/** Depth between two altitudes one pixel apart: more than the span of a band. */
+const DEPTH_PER_PIXEL = 80;
+/** The depths of the ground (up to about 960 000) are brought within a band. */
+const GROUND_DEPTH_SCALE = 20_000;
+/** Depths of the previews of the map editor: over the highest floor, under the overlay layers. */
+export const FLOOR_PREVIEW_DEPTH = 999_000;
 
 /**
  * Depth of what stands at an altitude, `groundDepth` being the depth it would have on the ground (sorted by its foot):
- * unchanged on the ground; above, in the band of its altitude, still sorted by its foot.
+ * unchanged on the ground; above, in the band of its altitude, still sorted as on the ground.
  */
 export function floorDepth(elevation: number, groundDepth: number): number {
-    return elevation > 0 ? FLOOR_LEVEL_DEPTH + elevation * 1000 + groundDepth / 16 : groundDepth;
+    return elevation > 0
+        ? FLOOR_LEVEL_DEPTH + elevation * DEPTH_PER_PIXEL + groundDepth / GROUND_DEPTH_SCALE
+        : groundDepth;
 }
 
 /**
@@ -23,7 +35,7 @@ export function floorDepth(elevation: number, groundDepth: number): number {
 export function floorPieceDepth(piece: FloorPiece, x: number, y: number, elevation: number): number {
     if (piece.kind === "slab") {
         const row = (y + elevation) / MAP_LAYER_TILE_SIZE;
-        return floorDepth(elevation, 0) - 1 + row / 100_000;
+        return floorDepth(elevation, 0) - 1 + row / 1_000_000;
     }
     const foot = stairFootFromImage(piece, x, y, elevation);
     if (!foot) return floorDepth(elevation, y);

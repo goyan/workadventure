@@ -6,8 +6,10 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import { withNewPropertyIds } from "@workadventure/map-editor/src/Utils";
+import { mapLayerPickLevelStore } from "../../../../Stores/MapLayerStore";
+import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import { floorLevelTiles } from "../MapLayer/MapLayerFloors";
-import { floorDepth } from "../MapLayer/FloorDepth";
+import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapLayer/FloorDepth";
 import { LL } from "../../../../../i18n/i18n-svelte";
 import { entityPlacementBlockerStore } from "../../../../Stores/MapEditorStore";
 import {
@@ -345,6 +347,13 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             return;
         }
 
+        // The pipette of the level picker: this click picks the floor under the pointer instead of placing.
+        if (get(mapLayerPickLevelStore)) {
+            mapLayerPickLevelStore.set(false);
+            mapEditorPlacementLevelStore.set(this.entitiesManager.levelDrawnAt(pointer.worldX, pointer.worldY));
+            return;
+        }
+
         if (get(mapEditorEntityModeStore) === "EDIT" && gameObjects.length === 0) {
             mapEditorEntityModeStore.set("ADD");
             if (document.activeElement instanceof HTMLElement) {
@@ -501,7 +510,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
                 backgroundColor: "#1b2a41",
                 padding: { x: 3, y: 1 },
             });
-            this.levelLabel.setDepth(890_000);
+            this.levelLabel.setDepth(FLOOR_PREVIEW_DEPTH);
             this.levelLabel.setText(
                 get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(elevation) }),
             );

@@ -3,7 +3,7 @@ import type { TileBarriers } from "../../../Utils/TileBarriers";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
 import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
-import { FLOOR_LEVEL_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
+import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { floorStep } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
 import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
@@ -156,7 +156,7 @@ export class FloorSpike {
         private readonly onLevels: (levels: number[]) => void,
     ) {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
-        this.label.setDepth(FLOOR_LEVEL_DEPTH * 2.5);
+        this.label.setDepth(FLOOR_PREVIEW_DEPTH);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
     }
 

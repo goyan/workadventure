@@ -17,6 +17,7 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import type { PlacedFloorPiece } from "../MapEditor/MapLayer/FloorModel";
 import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
@@ -650,7 +651,16 @@ export class EntitiesManager extends EventEmitter {
         return this.placementElevation({ x: worldX, y: worldY, width: 0, height: 1 });
     }
 
+    /** Altitude of the highest raised floor drawn under a point of the screen, whatever the editor is set to. */
+    public levelDrawnAt(worldX: number, worldY: number): number {
+        return placementElevation(this.placedFloorPieces(), { x: worldX, y: worldY, width: 0, height: 1 }, "auto");
+    }
+
     public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
+        return placementElevation(this.placedFloorPieces(), image, get(mapEditorPlacementLevelStore));
+    }
+
+    private placedFloorPieces(): PlacedFloorPiece[] {
         const placed = [];
         for (const entity of this.entities.values()) {
             const prefab = entity.getPrefab();
@@ -663,7 +673,7 @@ export class EntitiesManager extends EventEmitter {
                 elevation: entity.getEntityData().elevation,
             });
         }
-        return placementElevation(placed, image, get(mapEditorPlacementLevelStore));
+        return placed;
     }
 
     private copyEntity(entity: Entity): void {

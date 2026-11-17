@@ -266,3 +266,17 @@ export function stepLevel(levels: readonly number[], current: number, delta: 1 |
     const index = Math.max(0, all.indexOf(current));
     return all[Math.min(all.length - 1, Math.max(0, index + delta))];
 }
+
+/** The highest level the editor steps to: 10 tiles above the walls of 2 tiles. */
+const HIGHEST_LEVEL = floorElevation(2) + 10 * MAP_LAYER_TILE_SIZE;
+
+/**
+ * The levels the editor steps through with "Level +" and "Level -": `levels` (the ones offered, see
+ * `availableLevels`) and, above the walls of 2 tiles, one level per tile, lowest first. Any level can be reached, not
+ * only the ones that already have slabs.
+ */
+export function steppableLevels(levels: readonly number[]): number[] {
+    const all = new Set<number>(levels);
+    for (let level = floorElevation(2); level <= HIGHEST_LEVEL; level += MAP_LAYER_TILE_SIZE) all.add(level);
+    return [...all].filter((level) => level > 0).sort((a, b) => a - b);
+}

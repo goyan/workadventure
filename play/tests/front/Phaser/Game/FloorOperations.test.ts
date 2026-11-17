@@ -16,6 +16,7 @@ import {
     stairHasArrival,
     stairTarget,
     stepLevel,
+    steppableLevels,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
@@ -188,6 +189,15 @@ describe("floor operations", () => {
         expect(stepLevel(levels, 0, -1)).toBe(0);
         // A level that is no longer offered: from the ground.
         expect(stepLevel(levels, 104, 1)).toBe(52);
+    });
+
+    it("lists the levels one steps through with Level + and Level -: one per tile above the walls of 2 tiles", () => {
+        const levels = steppableLevels([52, 84, 104, 116]);
+        // The tops of walls of 2, 3, 4 tiles, the levels of the map between them, then one more tile each time.
+        expect(levels.slice(0, 6)).toEqual([52, 84, 104, 116, 148, 180]);
+        expect(levels.at(-1)).toBe(372);
+        expect(stepLevel(levels, 116, 1)).toBe(148);
+        expect(stepLevel(levels, 52, -1)).toBe(0);
     });
 
     it("tells the floors a stair can reach from a floor", () => {

@@ -34,7 +34,7 @@ import {
     mapLayerUpperWallsAvailableStore,
     usesLevel,
 } from "../../../../Stores/MapLayerStore";
-import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
+import { mapEditorPlacementLevelStore, mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
 import type { FrontCommand } from "../Commands/FrontCommand";
@@ -90,7 +90,7 @@ import {
 } from "../MapLayer/MapLayerOperations";
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
-import { stepLevel } from "../MapLayer/FloorOperations";
+import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
 import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
 import type { LevelPlaced } from "../MapLayer/MapLayerLevels";
 import { MapEditorTool } from "./MapEditorTool";
@@ -148,6 +148,7 @@ export class MapLayerEditorTool extends MapEditorTool {
     private heightSelection: HeightTarget[] = [];
     private unsubscribeHeightRequest: (() => void) | undefined;
     private unsubscribeMode: (() => void) | undefined;
+    private unsubscribeLevelChoice: (() => void) | undefined;
     /**
      * Keeps a mouse gesture on the canvas while it crosses HTML overlays (the editor panel, the action bar, video
      * bubbles): without it the browser sends the moves to the overlay and Phaser reports that the pointer left the game.
@@ -211,6 +212,14 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerHeightRequestStore.set(undefined);
             this.applySelectionHeight(height);
         });
+        // The level chosen in the panel (shared with the objects): a number is the level edited; "auto" follows the
+        // floor drawn under the pointer (see `followPointerLevel`).
+        this.unsubscribeLevelChoice = mapEditorPlacementLevelStore.subscribe((choice) => {
+            if (choice === "auto" || choice === get(mapLayerLevelStore)) return;
+            mapLayerLevelStore.set(choice);
+            this.forgetHoverModel();
+            this.redraw();
+        });
         // The selection belongs to the height mode: choosing another mode lets it go.
         this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
             if (mode !== "height" && this.heightSelection.length > 0) {
@@ -230,6 +239,8 @@ export class MapLayerEditorTool extends MapEditorTool {
         this.hover = undefined;
         this.unsubscribeHeightRequest?.();
         this.unsubscribeHeightRequest = undefined;
+        this.unsubscribeLevelChoice?.();
+        this.unsubscribeLevelChoice = undefined;
         this.unsubscribeMode?.();
         this.unsubscribeMode = undefined;
         this.setHeightSelection([], undefined);
@@ -271,8 +282,13 @@ export class MapLayerEditorTool extends MapEditorTool {
             usesLevel(get(mapLayerModeStore), get(mapLayerUpperWallsAvailableStore))
         ) {
             event.preventDefault();
-            mapLayerLevelStore.set(
-                stepLevel(get(mapLayerLevelsStore), get(mapLayerLevelStore), event.key === "PageUp" ? 1 : -1),
+            // One level up or down: a level chosen, any level (with or without slabs).
+            mapEditorPlacementLevelStore.set(
+                stepLevel(
+                    steppableLevels(get(mapLayerLevelsStore)),
+                    get(mapLayerLevelStore),
+                    event.key === "PageUp" ? 1 : -1,
+                ),
             );
             this.forgetHoverModel();
             this.redraw();
@@ -462,10 +478,25 @@ export class MapLayerEditorTool extends MapEditorTool {
             pointer.worldX,
             pointer.worldY,
         );
-        if (level !== current) {
+        if (level !== current) this.setLevel(level);
+    }
+
+    /** Edits a level: the one chosen in the panel too, unless it follows the pointer. */
+    private setLevel(level: number): void {
+        if (get(mapEditorPlacementLevelStore) === "auto") {
             mapLayerLevelStore.set(level);
-            this.forgetHoverModel();
+        } else {
+            mapEditorPlacementLevelStore.set(level);
+            mapLayerLevelStore.set(level);
         }
+        this.forgetHoverModel();
+    }
+
+    /** With the level on "auto": the level edited is the floor drawn under the pointer, the ground elsewhere. */
+    private followPointerLevel(pointer: Phaser.Input.Pointer): void {
+        if (get(mapEditorPlacementLevelStore) !== "auto" || !this.floorEditing) return;
+        const level = this.floorEditing.levelAt({ x: pointer.worldX, y: pointer.worldY });
+        if (level !== get(mapLayerLevelStore)) this.setLevel(level);
     }
 
     /** A point of the screen as the level being edited reads it: over the ground further south. */
@@ -546,6 +577,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.redraw();
             return;
         }
+        this.followPointerLevel(pointer);
         this.retargetLevel(pointer);
         const world = this.worldOf(pointer);
         const baseModel = this.readModel();
@@ -570,6 +602,7 @@ export class MapLayerEditorTool extends MapEditorTool {
         const gesture = this.gesture;
         if (!gesture) {
             if (this.canDraw()) {
+                this.followPointerLevel(pointer);
                 this.hover = this.worldOf(pointer);
                 this.redraw();
             }
