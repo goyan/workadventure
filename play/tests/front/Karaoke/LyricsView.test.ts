@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { centeredScrollTop, lyricLineProgress } from "../../../src/front/Karaoke/LyricsView";
+import {
+    centeredScrollTop,
+    lyricDirection,
+    lyricInSungOrder,
+    lyricLineProgress,
+} from "../../../src/front/Karaoke/LyricsView";
 
 const lines = [
     { atMs: 1000, text: "First" },
@@ -46,5 +51,36 @@ describe("centeredScrollTop", () => {
 
     it("never scrolls above the first lines", () => {
         expect(centeredScrollTop(50, 40, 300)).toBe(0);
+    });
+});
+
+describe("lyricDirection", () => {
+    it.each([
+        ["ما كاين فلانة ولا فلان وراح الأمان", "rtl"],
+        ["دّاتني c’est la vie ياو", "rtl"],
+        ["c’est la vie, la vie الدنيا هانية يا أختي", "rtl"],
+        ["Then freeze that verse when we see dollar signs", "ltr"],
+        ["", "ltr"],
+    ])("reads %j as %s", (text, direction) => {
+        expect(lyricDirection(text)).toBe(direction);
+    });
+});
+
+describe("lyricInSungOrder", () => {
+    it("puts back in order a mixed line typed for a left to right display, ending with a leading word", () => {
+        expect(lyricInSungOrder("عندي الدنيا وما فيها proud إلا أنت mommy يا")).toBe(
+            "يا mommy إلا أنت proud عندي الدنيا وما فيها",
+        );
+    });
+    it.each([
+        "دّاتني la nuit عايش",
+        "دّاتني c’est la vie ياو",
+        "c’est la vie, la vie الدنيا هانية يا أختي",
+        "la vida يدي في يدين الخوت هكذا نعيشوا",
+        "ما كاين فلانة ولا فلان وراح الأمان يا",
+        "Then freeze that verse when we see dollar signs",
+        "",
+    ])("leaves %j as typed", (text) => {
+        expect(lyricInSungOrder(text)).toBe(text);
     });
 });

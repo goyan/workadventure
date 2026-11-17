@@ -6,10 +6,26 @@ import {
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
+    KARAOKE_STAGE_STATE_EVENT,
+    KaraokeStageStateSchema,
+    KARAOKE_SCORE_EVENT,
+    KaraokeScoreReportSchema,
+    KARAOKE_LEADERBOARD_EVENT,
+    KARAOKE_LEADERBOARD_MIN_COVERAGE,
+    KARAOKE_LEADERBOARD_REQUEST_EVENT,
+    KaraokeLeaderboardRequestSchema,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
-import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
+import type {
+    WAMFileFormat,
+    AreaData,
+    AreaDataProperty,
+    KaraokeReference,
+    KaraokeScoreReport,
+    KaraokeSongLeaderboard,
+    KaraokeStageState,
+} from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import type {
@@ -98,6 +114,7 @@ import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
+import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
 import type { BubbleListeningCallbacks } from "./BubbleListeners";
@@ -115,6 +132,8 @@ export class GameRoom implements BrothersFinder {
     // Users, sorted by ID
     private readonly users: SpatialMap<number, User>;
     private readonly usersByUuid = new Map<string, Set<User>>();
+    private readonly karaokeStages = new Map<string, KaraokeStageState>();
+    private readonly karaokeScoreTimes = new Map<string, number>();
     // Users indexed by composite key (userUuid + tabId), used to detect reconnections from the same tab
     // and immediately kill stale connections instead of waiting for ping timeout
     private readonly usersByTabKey = new Map<string, User>();
@@ -131,6 +150,7 @@ export class GameRoom implements BrothersFinder {
     private listeningZoneManager: ListeningZoneManager | undefined;
     private entityStateManager: EntityStateManager | undefined;
     private switchTriggers: SwitchTriggerEvaluator | undefined;
+    private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
     private nextUserId = 1;
@@ -273,6 +293,10 @@ export class GameRoom implements BrothersFinder {
         // Keeps the Jam rooms of the listening zones: saved across restarts, closed once their host left the map.
         // This is automatically cleaned up when the room is destroyed since it listens to the destroyRoomStream.
         gameRoom.listeningZoneManager = new ListeningZoneManager(gameRoom, {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        gameRoom.karaokeLeaderboard = new KaraokeLeaderboardManager({
             repository: await getVariablesRepository(),
             roomUrl,
         });
@@ -514,6 +538,8 @@ export class GameRoom implements BrothersFinder {
             set.delete(user);
             if (set.size === 0) {
                 this.usersByUuid.delete(user.uuid);
+                this.karaokeStages.delete(user.uuid);
+                this.karaokeScoreTimes.delete(user.uuid);
             }
         }
 
@@ -1769,7 +1795,94 @@ export class GameRoom implements BrothersFinder {
         this.privateMessages.send(sender, data);
     }
 
+    private recordKaraokeScore(
+        reference: Pick<KaraokeReference, "recordingKey" | "title" | "artist">,
+        singer: User,
+        score: KaraokeScoreReport,
+    ): void {
+        this.karaokeLeaderboard
+            ?.record(reference, {
+                singerUuid: singer.uuid,
+                name: singer.name.slice(0, 200),
+                score: score.score,
+                accuracy: score.accuracy,
+                at: Date.now(),
+            })
+            .then((board) => {
+                if (board) {
+                    this.sendSubMessageToRoom({
+                        message: {
+                            $case: "receivedEventMessage",
+                            receivedEventMessage: karaokeLeaderboardEvent(board),
+                        },
+                    });
+                }
+            })
+            .catch((error) => console.error("Could not save a karaoke ranking", error));
+    }
+
+    public getKaraokeStage(hostUuid: string): KaraokeStageState | undefined {
+        const stage = this.karaokeStages.get(hostUuid);
+        return stage?.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0 ? undefined : stage;
+    }
+
     public dispatchEvent(name: string, data: unknown, senderId: number | "RoomApi", targetUserIds: number[]): void {
+        if (name === KARAOKE_LEADERBOARD_EVENT) return;
+        if (name === KARAOKE_LEADERBOARD_REQUEST_EVENT) {
+            const parsed = KaraokeLeaderboardRequestSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender) return;
+            this.karaokeLeaderboard
+                ?.get(parsed.data.recordingKey)
+                .then((board) => {
+                    if (board) {
+                        sender.emitInBatch({
+                            message: {
+                                $case: "receivedEventMessage",
+                                receivedEventMessage: karaokeLeaderboardEvent(board),
+                            },
+                        });
+                    }
+                })
+                .catch((error) => console.error("Could not read a karaoke ranking", error));
+            return;
+        }
+        if (name === KARAOKE_SCORE_EVENT) {
+            const parsed = KaraokeScoreReportSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender || sender.uuid !== parsed.data.singerUuid) return;
+            const score = parsed.data;
+            const stage = this.getKaraokeStage(score.hostUuid);
+            if (
+                !stage?.enabled ||
+                stage.singerUuid !== sender.uuid ||
+                stage.turnId !== score.turnId ||
+                stage.reference?.id !== score.referenceId
+            )
+                return;
+            const jams = parseListeningZoneJams(
+                this.getAreaPropertyVariable(stage.areaId, stage.propertyId, LISTENING_ZONE_JAM_VARIABLE),
+            );
+            if (!jams.some((jam) => jam.hostUuid === stage.hostUuid)) return;
+            if (score.finished && stage.reference && score.coverage >= KARAOKE_LEADERBOARD_MIN_COVERAGE) {
+                this.recordKaraokeScore(stage.reference, sender, score);
+            }
+            const now = Date.now();
+            if (now - (this.karaokeScoreTimes.get(stage.hostUuid) ?? -Infinity) < 200) return;
+            this.karaokeScoreTimes.set(stage.hostUuid, now);
+        }
+        if (name === KARAOKE_STAGE_STATE_EVENT) {
+            const parsed = KaraokeStageStateSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender || sender.uuid !== parsed.data.hostUuid) return;
+            const stage = parsed.data;
+            const jams = parseListeningZoneJams(
+                this.getAreaPropertyVariable(stage.areaId, stage.propertyId, LISTENING_ZONE_JAM_VARIABLE),
+            );
+            if (!jams.some((jam) => jam.hostUuid === sender.uuid)) return;
+            if (stage.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0) return;
+            this.karaokeStages.set(sender.uuid, stage);
+        }
         if (name === privateMessageEventName)
             throw new PrivateMessageRefusedError("Private messages require a dedicated query");
         if (targetUserIds.length === 0) {
@@ -1875,4 +1988,8 @@ export class GameRoom implements BrothersFinder {
         this._userLeaveStream.complete();
         this._destroyRoomStream.complete();
     }
+}
+
+function karaokeLeaderboardEvent(board: KaraokeSongLeaderboard): { name: string; data: unknown; senderId: undefined } {
+    return { name: KARAOKE_LEADERBOARD_EVENT, data: board, senderId: undefined };
 }

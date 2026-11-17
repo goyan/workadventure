@@ -8,7 +8,14 @@ const NOW = new Date("2026-11-14T11:22:12Z");
 
 const cells = vi.hoisted(
     (): {
-        value: { at: number; weather?: string; temperature?: number; cloudiness?: number; windSpeed?: number }[];
+        value: {
+            at: number;
+            weather?: string;
+            temperature?: number;
+            cloudiness?: number;
+            windSpeed?: number;
+            windFrom?: number;
+        }[];
     } => ({ value: [] }),
 );
 const forecastAsked = vi.hoisted((): { settings: unknown[]; dates: Date[] } => ({ settings: [], dates: [] }));
@@ -27,7 +34,38 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
                 cellWithWind: ({ when, weather, speed }: { when: string; weather: string; speed: number }) =>
                     `${when}: ${weather}, wind ${speed} km/h`,
+                cellWithWindFrom: ({
+                    when,
+                    weather,
+                    from,
+                    speed,
+                }: {
+                    when: string;
+                    weather: string;
+                    from: string;
+                    speed: number;
+                }) => `${when}: ${weather}, wind from the ${from} at ${speed} km/h`,
                 windSpeed: ({ speed }: { speed: number }) => `${speed} km/h`,
+                windPoint: {
+                    n: label("N"),
+                    ne: label("NE"),
+                    e: label("E"),
+                    se: label("SE"),
+                    s: label("S"),
+                    sw: label("SW"),
+                    w: label("W"),
+                    nw: label("NW"),
+                },
+                windFrom: {
+                    n: label("north"),
+                    ne: label("north-east"),
+                    e: label("east"),
+                    se: label("south-east"),
+                    s: label("south"),
+                    sw: label("south-west"),
+                    w: label("west"),
+                    nw: label("north-west"),
+                },
                 unknown: label("Unknown forecast"),
                 close: label("Hide the weather"),
                 defaultCity: label("Paris"),
@@ -252,5 +290,47 @@ describe("WeatherForecastBanner", () => {
         flushSync();
         expect(target.querySelector('[data-testid="weather-banner-wind"]')).toBeNull();
         expect(target.querySelector('[data-testid="weather-banner-wind-icon"]')).toBeNull();
+    });
+    it("shows where the wind comes from with an arrow pointing where it goes, for now only", () => {
+        cells.value = [
+            { at: NOW.getTime(), weather: "cloudy", temperature: 16, windSpeed: 22, windFrom: 315 },
+            { at: NOW.getTime() + HOUR, weather: "rain", temperature: 16, windSpeed: 20, windFrom: 90 },
+            { at: NOW.getTime() + 4 * HOUR, weather: "rain" },
+        ];
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown.map((cell) => cell.getAttribute("aria-label"))).toEqual([
+            "Now: Cloudy, wind from the north-west at 22 km/h",
+            "+1 h: Rain",
+            "+4 h: Rain",
+        ]);
+        expect(shown.map((cell) => cell.querySelector('[data-testid="weather-banner-wind"]')?.textContent)).toEqual([
+            "NW 22 km/h",
+            undefined,
+            undefined,
+        ]);
+        // A north-west wind goes south-east: the diagonal arrow (north-east) turned a quarter turn clockwise.
+        const arrow = shown[0].querySelector<SVGElement>('[data-testid="weather-banner-wind-arrow"]');
+        expect(arrow?.getAttribute("data-towards")).toBe("135");
+        expect(arrow?.style.transform).toBe("rotate(90deg)");
+        // The arrow takes the place of the gusts.
+        expect(shown[0].querySelector('[data-testid="weather-banner-wind-icon"]')).toBeNull();
+        expect(target.querySelectorAll('[data-testid="weather-banner-wind-arrow"]')).toHaveLength(1);
+    });
+    it("shows no direction without a wind speed, and the gusts when only the direction is unknown", () => {
+        cells.value = [{ at: NOW.getTime(), weather: "rain", windFrom: 315 }];
+        render();
+        expect(target.querySelector('[data-testid="weather-banner-cell"]')?.getAttribute("aria-label")).toBe(
+            "Now: Rain",
+        );
+        expect(target.querySelector('[data-testid="weather-banner-wind-arrow"]')).toBeNull();
+        expect(target.querySelector('[data-testid="weather-banner-wind"]')).toBeNull();
+
+        cells.value = [{ at: NOW.getTime(), weather: "rain", windSpeed: 23 }];
+        nightDate().set(new Date(NOW.getTime() + 1000));
+        flushSync();
+        expect(target.querySelector('[data-testid="weather-banner-wind"]')?.textContent).toBe("23 km/h");
+        expect(target.querySelector('[data-testid="weather-banner-wind-icon"]')).not.toBeNull();
+        expect(target.querySelector('[data-testid="weather-banner-wind-arrow"]')).toBeNull();
     });
 });

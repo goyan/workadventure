@@ -9,7 +9,7 @@ import {
     type MicrophoneTrackPublishedMessage,
     FilterType,
 } from "@workadventure/messages";
-import { parseJamSpaceName } from "@workadventure/map-editor";
+import { parseJamSpaceName, parseKaraokeStageSpaceName } from "@workadventure/map-editor";
 import { LIVEKIT_SWITCH_ON_CPU_LIMITATION, MAX_USERS_FOR_WEBRTC } from "../Enum/EnvironmentVariable";
 import { adminApi, type RecordingEventPayload } from "../Services/AdminApi";
 import type { LivekitCredentialsResponse } from "../Services/Repository/LivekitCredentialsResponse";
@@ -77,7 +77,8 @@ export class DefaultInitialStateFactory implements InitialStateFactory {
         // it is a media space all the same, or it would never reach LiveKit nor invite anyone.
         const carriesMedia =
             propertiesToSync.some((prop) => ["cameraState", "microphoneState", "screenSharingState"].includes(prop)) ||
-            parseJamSpaceName(space.getSpaceName()) !== undefined;
+            parseJamSpaceName(space.getSpaceName()) !== undefined ||
+            parseKaraokeStageSpaceName(space.getSpaceName()) !== undefined;
 
         return carriesMedia ? new WebRTCState(space, users, usersToNotify) : new VoidState();
     }
@@ -201,7 +202,9 @@ export class CommunicationManager implements ICommunicationManager {
             dependencies.autoRecorder ?? new AutoRecorder(this.space, () => this.lifecycleManager.getCurrentState());
         this._sessionAnalytics.onSessionChanged = (session) => this.autoRecorder.sessionChanged(session);
 
-        this.livekitOnly = parseJamSpaceName(this.space.getSpaceName()) !== undefined;
+        this.livekitOnly =
+            parseJamSpaceName(this.space.getSpaceName()) !== undefined ||
+            parseKaraokeStageSpaceName(this.space.getSpaceName()) !== undefined;
 
         // Initialize transition policy with LiveKit availability checker
         this.policy =

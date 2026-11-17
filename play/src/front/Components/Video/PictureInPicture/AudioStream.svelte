@@ -7,12 +7,14 @@
     import { userActivationManager } from "../../../Stores/UserActivationStore";
     import { audioContextManager } from "../../../WebRtc/AudioContextManager";
     import { applySinkId, SINK_ID_TIMEOUT_MS } from "../../../WebRtc/AudioOutputManager";
+    import { karaokeGameActiveStore } from "../../../Karaoke/KaraokeGameStore";
 
     interface Props {
         streamStore: Readable<MediaStream | undefined>;
         outputDeviceId?: string;
         isBlocked: Readable<boolean>;
         volume: Readable<number>;
+        conversation?: boolean;
         onselectoutputaudiodeviceerror?: () => void;
     }
 
@@ -21,19 +23,21 @@
         outputDeviceId = undefined,
         isBlocked,
         volume,
+        conversation = true,
         onselectoutputaudiodeviceerror,
     }: Props = $props();
 
     const debug = Debug("AudioStream");
 
     let audioElement: HTMLAudioElement | undefined = $state();
+    let effectiveVolume = $derived(conversation && $karaokeGameActiveStore ? 0 : $volume);
 
     $effect(() => {
         if (audioElement) {
-            audioElement.volume = $volume;
+            audioElement.volume = effectiveVolume;
         }
         if (webAudioGain) {
-            webAudioGain.gain.value = $volume;
+            webAudioGain.gain.value = effectiveVolume;
         }
     });
 
@@ -98,7 +102,7 @@
         webAudioStream = stream;
         webAudioSource = context.createMediaStreamSource(stream);
         webAudioGain = context.createGain();
-        webAudioGain.gain.value = $volume;
+        webAudioGain.gain.value = effectiveVolume;
         webAudioSource.connect(webAudioGain);
         webAudioGain.connect(context.destination);
         debug("Audio playback routed through WebAudio fallback");

@@ -38,11 +38,13 @@ export interface JamMusicPublisher {
 }
 
 const jamMusicPublishers = new Map<string, JamMusicPublisher>();
+export const jamMusicPublishersStore = writable<ReadonlyMap<string, JamMusicPublisher>>(new Map());
 const publisherWatchers = new Set<{ spaceName: string; callback: (publisher: JamMusicPublisher) => void }>();
 
 /** Makes the publisher of a Jam space reachable by its name; returns what takes it away. */
 export function registerJamMusicPublisher(spaceName: string, publisher: JamMusicPublisher): () => void {
     jamMusicPublishers.set(spaceName, publisher);
+    jamMusicPublishersStore.set(new Map(jamMusicPublishers));
     for (const watcher of [...publisherWatchers]) {
         if (watcher.spaceName === spaceName) {
             watcher.callback(publisher);
@@ -51,6 +53,7 @@ export function registerJamMusicPublisher(spaceName: string, publisher: JamMusic
     return () => {
         if (jamMusicPublishers.get(spaceName) === publisher) {
             jamMusicPublishers.delete(spaceName);
+            jamMusicPublishersStore.set(new Map(jamMusicPublishers));
         }
     };
 }
