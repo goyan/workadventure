@@ -2148,10 +2148,11 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   (objets, murs, garde-corps, avatars, escaliers qui en partent) ; dehors au sol, un bâtiment reste entier et seules
   les dalles autour de l'avatar s'estompent (`aboveLevelShows`). **En dessous** : un seul voile gris foncé (`0x2b2f38`,
   0,7) posé juste sous la bande de l'étage courant (rien n'est filtré objet par objet), en fondu de 300 ms à l'arrivée,
-  retiré d'un coup dès qu'on redescend (`veilAlphaToward`). Les escaliers qui viennent d'en dessous passent au-dessus
-  du voile (`stairDepth`, profondeur recalculée par `floorPieceDepth`) ; un escalier dessiné par-dessus l'avatar passe
-  à 50 % (`stairCoversAvatar`). Trois chevrons blancs avancent sur chaque escalier visible dans le sens de la montée
-  (14 pas par cycle de 1,4 s, fixes si mouvement réduit) ; à 2 cases ou moins d'un bout (case lue au sol,
+  retiré d'un coup dès qu'on redescend (`veilAlphaToward`). **Escaliers** : seuls ceux qui partent de l'étage courant
+  ou y arrivent sont visibles (`stairShows`) ; un escalier entre deux autres étages semblerait partir d'ici. Ceux qui
+  arrivent d'en dessous passent au-dessus du voile (`stairDepth`, profondeur recalculée par `floorPieceDepth`) ; un
+  escalier dessiné par-dessus l'avatar passe à 50 % (`stairCoversAvatar`). Pas de flèche animée sur les marches
+  (essayées puis retirées : bruit visuel) ; à 2 cases ou moins d'un bout (case lue au sol,
   `avatarGroundTile`) une étiquette nomme l'étage de l'autre bout (« Niveau 2 ↑ », « Sol ↓ »). Sous l'horloge, la
   pile des étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte
   sans palier : rien de tout cela.
