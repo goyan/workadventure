@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onDestroy } from "svelte";
+    import { onDestroy, untrack } from "svelte";
     import type { SwitchPropertyData } from "@workadventure/map-editor";
     import { LL } from "../../../../i18n/i18n-svelte";
     import type { Entity } from "../../../Phaser/ECS/Entity";
@@ -15,7 +15,11 @@
         onclose?: () => void;
     }
 
-    let { entity, property = $bindable(), onchange, onclose }: Props = $props();
+    let { entity: selected, property = $bindable(), onchange, onclose }: Props = $props();
+    // The object as it was when the panel opened (the panel is made anew for another object). Never read again from
+    // the props: while the object is deselected the prop is undefined before the panel is taken down, and reading it
+    // then broke the whole editor.
+    const entity = untrack(() => selected);
 
     const labels = $derived($LL.mapEditor.properties.switchPropertyData);
     const wiring = $derived($mapEditorSwitchWiringStore === entity.entityId);
