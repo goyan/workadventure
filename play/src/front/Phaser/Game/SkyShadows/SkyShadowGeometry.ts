@@ -141,8 +141,18 @@ function treeShadow(tree: ShadowTree, light: ShadowLight): Point[][] {
         { x: centre.x - across.x * half, y: centre.y - across.y * half },
         { x: tree.x - across.x * half, y: tree.y - across.y * half },
     ];
-    // Without a trunk (a rock, a tuft of grass): the crown alone.
-    return tree.trunkWidth > 0 ? [trunk, crown] : [crown];
+    if (tree.trunkWidth > 0) return [trunk, crown];
+    // Without a trunk (a rock, a tuft of grass): one shape from under it to where its top falls, never a disc left
+    // alone further away. Under it: a flat round base, half a radius above its foot.
+    const base: Point[] = [];
+    for (let step = 0; step < CROWN_POINTS; step++) {
+        const angle = (step / CROWN_POINTS) * 2 * Math.PI;
+        base.push({
+            x: tree.x + Math.cos(angle) * tree.crownRadius,
+            y: tree.y - tree.crownRadius / 2 + (Math.sin(angle) * tree.crownRadius) / 2,
+        });
+    }
+    return [convexHull([...base, ...crown])];
 }
 
 /**

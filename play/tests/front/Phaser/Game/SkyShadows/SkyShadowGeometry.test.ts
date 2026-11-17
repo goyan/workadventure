@@ -118,6 +118,19 @@ describe("shadowPolygons", () => {
         expect(polygons.some((polygon) => polygon.length >= 12)).toBe(true);
     });
 
+    it("keeps the shadow of a low detail (no trunk) joined to its foot, however low the light", () => {
+        const rock = { x: 200, y: 300, crownRadius: 12, crownHeight: 16, trunkWidth: 0 };
+        // A low sun in the south: the top of the rock falls 16 / tan(12°) = 75 px north of its foot.
+        const light = { azimuth: 180, elevation: 12 };
+        const polygons = shadowPolygons({ boxes: [], trees: [], details: [rock] }, light);
+        expect(polygons).toHaveLength(1);
+        // One shape from under the rock to where its top falls, with no gap between them.
+        expect(inAny(polygons, 200, 296)).toBe(true);
+        expect(inAny(polygons, 200, 260)).toBe(true);
+        expect(inAny(polygons, 200, 300 - 75)).toBe(true);
+        expect(inAny(polygons, 200 + 30, 260)).toBe(false);
+    });
+
     it("casts nothing without a light high enough", () => {
         expect(shadowPolygons({ boxes: [wall], trees: [] }, { azimuth: 180, elevation: -1 })).toEqual([]);
     });

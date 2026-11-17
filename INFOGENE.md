@@ -2072,7 +2072,12 @@ un avatar invisible, à la nage, sur un palier ou dans une pièce ; ovale de rep
 Les petits éléments du catalogue nature (rochers, herbes, fleurs, souches) projettent une petite ombre ronde, avec
 les ombres fixes. **Par catégorie** (Paramètres → Ambiance → « Ce qui projette une ombre », personnel, gardé dans le
 navigateur) : murs, meubles et objets hauts, arbres, petits éléments, avatars, animaux, pour le soleil comme pour la
-lune. Limites : silhouette d'un avatar non coupée au bord d'une pièce, véhicule et compagnon sans ombre propre.
+lune. **Forme au choix** pour les arbres, les avatars et les animaux, « Ovale » ou « Réaliste » (défauts : arbres et
+animaux en ovale, avatars en réaliste), pour comparer le rendu et le coût : un arbre réaliste est sa propre image
+couchée au sol, dessinée dans la texture des ombres fixes puis remplie de leur couleur ; un animal réaliste a sa
+silhouette comme un avatar. Mesuré une fois en local (carte d'équipe, 169 arbres, 34 personnages) : redessin des ombres
+fixes 0,35 ms en réaliste contre 0,24 ms en ovale, mise à jour des ombres mobiles 0,016 ms par image.
+Limites : silhouette d'un avatar non coupée au bord d'une pièce, véhicule et compagnon sans ombre propre.
 
 **Ombres** (`SkyShadows/`) : les murs de l'outil Carte (pied du mur, hauteur = nombre de cases ; portes et fenêtres
 comptées comme mur), les objets `castsShadow` (rectangles de collision, 1,5 case de haut) et les arbres du catalogue nature (`Nature:tree-*`, et les `nature-`, `snow-tree-`, `seasonal-`, `winter-auto-` de deux cases de haut ou plus)
