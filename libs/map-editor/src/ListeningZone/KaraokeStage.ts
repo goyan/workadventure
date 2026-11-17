@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { KaraokeReferenceSchema } from "./KaraokeScore";
 
 export const KARAOKE_STAGE_STATE_EVENT = "workadventure.karaoke-stage-state";
 export const KARAOKE_STAGE_ACTION_EVENT = "workadventure.karaoke-stage-action";
@@ -13,6 +14,17 @@ export const KaraokeStageStateSchema = KaraokeStageIdentitySchema.extend({
     singerUuid: z.string().min(1).max(256).nullable(),
     queue: z.array(z.string().min(1).max(256)).max(20),
     applause: z.number().int().min(0).max(100_000),
+    reference: KaraokeReferenceSchema.optional(),
+    /** The synced lyrics Spotify shows the host for the playing track, [startMs, text] per line. */
+    lyrics: z
+        .object({
+            recordingKey: z.string().min(1).max(1000),
+            lines: z
+                .array(z.tuple([z.number().int().min(0).max(86_400_000), z.string().max(300)]))
+                .min(1)
+                .max(1000),
+        })
+        .optional(),
 });
 export type KaraokeStageState = z.infer<typeof KaraokeStageStateSchema>;
 export enum KaraokeStageAction {
