@@ -313,6 +313,50 @@ côte à côte (même faisceau au même moment) ; 120 tr/min avec 10° d'ouvertu
 d'une porte qui s'ouvre ; de nuit ; mouvement réduit du système ; effets lumineux coupés puis rallumés pour soi ; une dizaine de lampes tournantes à l'écran pour le
 débit d'images.
 
+## Interrupteurs
+
+Un **interrupteur** allume et éteint des lampes RGB, pour tout le monde. Plusieurs interrupteurs peuvent commander la
+même lampe, et un interrupteur plusieurs lampes : l'état (allumée ou éteinte) appartient à la lampe, un interrupteur
+n'a pas de position à lui (comme un va-et-vient).
+
+- **Poser** : éditeur, section **Lampes**, objet **Interrupteur**. Il commande aussitôt **les lampes de sa pièce**.
+  N'importe quel autre objet peut devenir interrupteur : le sélectionner et ajouter la propriété **Interrupteur**. Une
+  lampe peut l'être aussi, et se commander elle-même.
+- **Câbler** (panneau de l'interrupteur) :
+  - **Les lampes de cette pièce** : les lampes RGB de la plus petite zone de la carte où se tient le pied de
+    l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ajoutée plus tard dans la
+    pièce est commandée sans rien refaire. Hors de toute pièce, l'interrupteur ne commande rien et le panneau le dit.
+  - **Lampes choisies** : bouton **Choisir sur la carte**, puis un clic sur une lampe l'ajoute ou la retire (un pas
+    d'annulation par clic), **Terminer** pour finir. 200 lampes au plus.
+  - L'interrupteur sélectionné montre ses cibles : un trait jaune et un cercle. Une lampe sélectionnée affiche
+    « Commandée par n interrupteurs ».
+  - **Réservé aux tags** : liste de tags séparés par des virgules ; vide, tout le monde peut l'actionner.
+- **En jeu** : clic ou touche d'interaction sur l'interrupteur. Si une de ses lampes est allumée, tout s'éteint ;
+  sinon tout s'allume. Un petit voyant sur l'objet est vert quand une de ses lampes est allumée. La lampe s'allume ou
+  s'éteint en fondu de 200 ms (aussitôt si le système demande moins d'animations). Une lampe éteinte ne donne plus
+  aucune lumière et ne perce plus le voile de nuit ; une lampe en rotation ne tourne plus. Dans l'éditeur, toutes les
+  lampes restent allumées pour pouvoir les régler.
+- **Par défaut tout est allumé** : une carte faite avant les interrupteurs ne change pas.
+- **Copier, coller** : un interrupteur collé avec ses lampes commande les copies ; les lampes choisies qui n'ont pas
+  été copiées avec lui sont retirées de la copie. Un motif ne garde pas les lampes choisies (utiliser le mode pièce).
+  Le bouton ⧉ Dupliquer garde les mêmes lampes : c'est un second interrupteur pour elles.
+- **Format** : le câblage est dans la carte (propriété d'objet `switchPropertyData` : `key`, `targets` en
+  `{ mode: "zone" }` ou `{ mode: "ids", ids }`, `allowedTags`). L'état n'est **pas** dans la carte : le serveur
+  (`back`, `EntityStateManager`) le tient, l'envoie à l'entrée dans la salle et à chaque changement, et le garde dans
+  Redis (hash `entity-states:<salle>`, seulement les lampes éteintes) : il survit à une salle vide et à un
+  redémarrage. Un appui ne modifie jamais la carte et n'entre pas dans annuler/rétablir. Entrée de catalogue :
+  `switch: true` donne la propriété à la pose.
+- **Contrôles du serveur** : l'interrupteur existe et commande cette clé, les tags du joueur conviennent, chaque cible
+  existe et est listée (lampes choisies) ou au même niveau et à 60 cases au plus (lampes de la pièce : le serveur n'a
+  pas les catalogues, c'est le front qui trouve la pièce) ; 5 appuis par seconde et par joueur, 3 changements par
+  seconde et par lampe, quel que soit le nombre de joueurs.
+- **Déploiement** : `play`, `back` et `map-storage` ensemble (nouveau message, nouvelle propriété de la carte) ; une
+  image plus ancienne de `map-storage` retirerait la propriété. Un front plus ancien voit toutes les lampes allumées.
+- **Cadre pour la suite** : les états possibles sont une liste fermée (`ENTITY_STATE_KEYS`, aujourd'hui `on`) et le
+  genre d'objet qui les porte se déclare à un seul endroit (`entityStateKeysOf`). Un volet (`open`) s'y ajoutera sans
+  nouveau message. Les lampes de Jam et la piste de danse suivent la musique et ne sont pas commandées. Les règles
+  automatiques (présence, proximité, horaires) ne sont pas faites.
+
 ## Paroles de karaoké
 
 Le bouton **Karaoké** d'un Jam Spotify ou d'un Jukebox ouvre les paroles à gauche,
