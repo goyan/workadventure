@@ -25,6 +25,7 @@
         lightBounceStore,
         lightSoftEdgeStore,
         nightDarknessStore,
+        nightInEditorStore,
         realisticNightStore,
     } from "../../Stores/NightStore";
     import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
@@ -474,6 +475,12 @@
                 </span>
                 <RangeSlider id="night-light-bounce" min={0} max={1} step={0.05} bind:value={$lightBounceStore} />
             </div>
+            <InputSwitch
+                id="night-kept-in-editor"
+                bind:value={$nightInEditorStore}
+                label={$LL.menu.settings.night.keptInEditor()}
+                labelPosition="right"
+            />
             <InputSwitch
                 id="night-realistic-lighting"
                 bind:value={$realisticNightStore}

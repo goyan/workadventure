@@ -414,6 +414,11 @@ n'a pas de position à lui (comme un va-et-vient).
   lampe est redessinée. Limites : un seul rebond ; pas pour une lampe tournante (gyrophare) ni pour les torches ni la
   lumière de lune ; les objets hauts renvoient comme des murs ; coût : jusqu'à 6 lancers de rayons et 6 petites
   textures de plus par lampe.
+- **Nuit gardée dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
+  édite ; le **bouton lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Garder la nuit dans l'éditeur de carte », Paramètres → Ambiance → Cycle jour/nuit,
+  `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
+  couleur, portée et intensité d'une lampe comme elle sera la nuit. Les zones ajoutées ou déplacées ne comptent pour
+  la nuit qu'à la fermeture de l'éditeur ; les torches n'y éclairent pas.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
   (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 32 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
