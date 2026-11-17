@@ -569,7 +569,7 @@ export class EntitiesManager extends EventEmitter {
                     const oldPos = entity.getOldPosition();
                     if (this.ctrlKey?.isDown || isCopyModifier(pointer.event)) {
                         this.copyEntity(entity);
-                    } else if (entity.x === oldPos.x && entity.y === oldPos.y) {
+                    } else if (entity.getPosition().x === oldPos.x && entity.getPosition().y === oldPos.y) {
                         // A click, not a move: the object keeps its place and its level, whatever is drawn under
                         // the pointer.
                         entity.updateDepth(entity.getPrefab().depthOffset ?? 0);

@@ -292,6 +292,15 @@ describe("Native entity clicks while selecting a group", () => {
             expect(updates).toHaveLength(0);
         });
 
+        it("leaves an object that was only clicked where it is, on its level", () => {
+            entity.getPosition.mockReturnValue({ x: 32, y: 32 });
+
+            releaseDrag({});
+
+            expect(copies).toHaveLength(0);
+            expect(updates).toHaveLength(0);
+        });
+
         it("moves the object without a modifier", () => {
             releaseDrag({});
 
