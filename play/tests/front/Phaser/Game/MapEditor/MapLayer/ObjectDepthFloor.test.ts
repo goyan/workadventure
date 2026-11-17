@@ -3,6 +3,7 @@ import {
     applyDepthStep,
     applySupportDepthFloor,
     applyHungOnWallDepth,
+    standsOnSameFloor,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/ObjectDepthFloor";
@@ -146,5 +147,21 @@ describe("applyHungOnWallDepth", () => {
         const painting = { x: 68, y: 120, width: 24, height: 20 };
         expect(applyHungOnWallDepth(400, painting, faces)).toBe(400);
         expect(applyHungOnWallDepth(140, painting, [])).toBe(140);
+    });
+});
+
+describe("standsOnSameFloor", () => {
+    it("keeps the neighbours of the same floor of the map", () => {
+        expect(standsOnSameFloor(0, { elevation: 0, floorPiece: false })).toBe(true);
+        expect(standsOnSameFloor(52, { elevation: 52, floorPiece: false })).toBe(true);
+    });
+
+    it("leaves out an object of another floor: a pool of a raised floor does not carry a fireplace of the ground", () => {
+        expect(standsOnSameFloor(0, { elevation: 52, floorPiece: false })).toBe(false);
+        expect(standsOnSameFloor(52, { elevation: 0, floorPiece: false })).toBe(false);
+    });
+
+    it("leaves out the slabs and stairs: they are the floor, not something on it", () => {
+        expect(standsOnSameFloor(52, { elevation: 52, floorPiece: true })).toBe(false);
     });
 });

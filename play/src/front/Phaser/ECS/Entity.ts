@@ -36,6 +36,7 @@ import {
 import {
     applyDepthStep,
     applySupportDepthFloor,
+    standsOnSameFloor,
     applyHungOnWallDepth,
     applyWallDepthFloor,
     getDepthStepRange,
@@ -501,7 +502,13 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                     // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
                     walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
                 }
-            } else if (this.prefab.seat === undefined) {
+            } else if (
+                this.prefab.seat === undefined &&
+                standsOnSameFloor(elevation, {
+                    elevation: neighbour.getElevation(),
+                    floorPiece: parseFloorPiece(prefab.collectionName, prefab.id) !== undefined,
+                })
+            ) {
                 supports.push({ ...neighbourBox, collisionGrid: prefab.collisionGrid });
             }
         }
@@ -524,7 +531,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.prefab.layer,
             this.getOverlappingEntities()
                 .filter(
-                    (entity) => parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor",
+                    (entity) =>
+                        parseMapLayerPrefab(entity.prefab.collectionName, entity.prefab.id)?.kind !== "floor" &&
+                        standsOnSameFloor(this.entityData.elevation, {
+                            elevation: entity.getElevation(),
+                            floorPiece: parseFloorPiece(entity.prefab.collectionName, entity.prefab.id) !== undefined,
+                        }),
                 )
                 .map((entity) => ({ layer: entity.prefab.layer, depth: entity.depth })),
         );

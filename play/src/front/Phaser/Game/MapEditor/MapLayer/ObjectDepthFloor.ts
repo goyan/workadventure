@@ -89,6 +89,15 @@ export interface SupportDepthBox extends DepthBox {
  * - its foot is inside the support's image and is naturally in front of the support. The support may have been raised
  *   above that natural depth (a shelf against a wall), which would otherwise hide the object behind it.
  */
+/**
+ * Whether a neighbour drawn over an object counts for what the object stands on, and for its manual stacking: only
+ * what stands on the same floor of the map. An object of another floor is only drawn there (a pool of a raised floor
+ * over a fireplace of the ground), and the slabs and stairs of the raised floors are the floor itself.
+ */
+export function standsOnSameFloor(elevation: number, neighbour: { elevation: number; floorPiece: boolean }): boolean {
+    return neighbour.elevation === elevation && !neighbour.floorPiece;
+}
+
 export function applySupportDepthFloor(
     naturalDepth: number,
     object: DepthBox,
