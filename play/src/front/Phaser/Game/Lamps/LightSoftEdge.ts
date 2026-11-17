@@ -21,3 +21,18 @@ export function lightSoftEdgePxNow(): number {
 export function lightSoftEdgeVersion(): number {
     return version;
 }
+
+/** The share of its light a wall sends back (see bounceSources), a personal setting too; 0: none. */
+let bounceStrength = 0;
+
+export function setLightBounceStrength(strength: number): void {
+    if (strength !== bounceStrength) {
+        bounceStrength = strength;
+        // The same version as the softening: the lights are drawn again, with their bounces.
+        version++;
+    }
+}
+
+export function lightBounceStrengthNow(): number {
+    return bounceStrength;
+}

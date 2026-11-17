@@ -404,8 +404,18 @@ n'a pas de position à lui (comme un va-et-vient).
   teinter de la couleur de la lampe, ne vaut que dans une zone (rien dehors ni dans une pièce sans zone), ne compte
   pas la lumière de lune entrée par les fenêtres, et le flou déborde d'autant derrière un mur ; pas de vrai rebond
   (une lumière ne tourne pas au coin d'une porte).
+- **Rebond de la lumière sur les murs (réglage personnel)** : curseur « Rebond sur les murs » (`lightBounceStore`,
+  40 % par défaut, 0 : aucun), avec les réglages de lumière indirecte. Chaque tronçon de mur qu'une lampe RGB **fixe**
+  éclaire renvoie une petite lumière (`Lamps/LightBounce.ts`, `bounceSources`) : un demi-tour posé 4 px devant le mur,
+  tourné vers le côté de la lampe, de la couleur de la lampe, d'autant plus fort que la lumière y est forte et que le
+  tronçon est long (un tronçon de plus de 4 cases en renvoie plusieurs), portée de 2 à 5 cases ; au plus 6 par lampe,
+  les plus forts. Chacun est une vraie lumière, lancée contre les mêmes obstacles : elle perce le voile de nuit et
+  compte pour l'ambiance des pièces ; ainsi la lumière **tourne au coin d'une porte**. Recalculé seulement quand la
+  lampe est redessinée. Limites : un seul rebond ; pas pour une lampe tournante (gyrophare) ni pour les torches ni la
+  lumière de lune ; les objets hauts renvoient comme des murs ; coût : jusqu'à 6 lancers de rayons et 6 petites
+  textures de plus par lampe.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
-  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 31 réglages personnels de lumière (obscurité de la nuit,
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 32 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
   forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
   lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu

@@ -58,3 +58,5 @@ export const ambienceStrengthStore = createPersistedNumberStore("nightAmbienceSt
 export const ambienceFullShareStore = createPersistedNumberStore("nightAmbienceFullShare", 0.3, 0.05, 1);
 /** How far the edge of the lights is softened, in map pixels (0: sharp), up to a tile. */
 export const lightSoftEdgeStore = createPersistedNumberStore("nightLightSoftEdge", 8, 0, 32);
+/** The share of its light a wall sends back, for this player (0: no bounce): a light then turns the corner of a door. */
+export const lightBounceStore = createPersistedNumberStore("nightLightBounce", 0.4, 0, 1);
