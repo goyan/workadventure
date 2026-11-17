@@ -437,6 +437,19 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.isOnIceHere();
     }
 
+    /**
+     * What its shadow of the sky is drawn from (SkyMovingShadows): its feet and its sprites. Undefined when it throws
+     * none on the ground: hidden, swimming, or standing on a raised floor.
+     */
+    public skyShadowSource(): { x: number; y: number; sprites: Sprite[] } | undefined {
+        if (this.invisible || !this.visible || this.floorZ >= 2 || this.isInWater()) return undefined;
+        return {
+            x: this.x,
+            y: this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y,
+            sprites: [...this.sprites.values()],
+        };
+    }
+
     /** Whether the character is drawn swimming (its body in the water), for everyone. */
     public isInWater(): boolean {
         return this.swimEffect?.isActive ?? false;

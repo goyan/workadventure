@@ -47,6 +47,8 @@ export class TreeSway {
     private readonly reducedMotion: boolean;
     private lastFrameAt = -Infinity;
     private poses = new Map<string, { object: SwayingObject; pose: number }>();
+    /** Changes whenever a tree takes another pose: what follows the trees (their shadows) is drawn again then. */
+    public version = 0;
     private saved: { object: SwayingObject; x: number; texture: string }[] = [];
 
     constructor(
@@ -68,6 +70,7 @@ export class TreeSway {
         if (this.reducedMotion || !this.options.enabled()) {
             if (this.poses.size > 0) {
                 this.poses.clear();
+                this.version += 1;
                 this.scene.markDirty();
             }
             return;
@@ -85,7 +88,10 @@ export class TreeSway {
             if (pose !== 0) poses.set(tree.id, { object: tree.object, pose });
         }
         this.poses = poses;
-        if (changed) this.scene.markDirty();
+        if (changed) {
+            this.version += 1;
+            this.scene.markDirty();
+        }
     }
 
     private readonly lean = (): void => {
