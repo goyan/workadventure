@@ -35,6 +35,7 @@
     import FloorLevelPicker from "../FloorLevelPicker.svelte";
     import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
+    import { selfSensorProperty } from "../../../Phaser/Game/Switches/SwitchWiring";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import RgbLampEditor from "./RgbLampEditor.svelte";
@@ -282,7 +283,10 @@
                     height: LAMP_LIGHT_DEFAULT_TILES,
                 };
             case "switchPropertyData":
-                return { id, type, key: "on", targets: { mode: "zone" } };
+                // A lamp made a switch commands itself; any other object, the lamps of its room.
+                return $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind === "rgb"
+                    ? { id, type, key: "on", targets: { mode: "ids", ids: [$mapEditorSelectedEntityStore.entityId] } }
+                    : { id, type, key: "on", targets: { mode: "zone" } };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -655,6 +659,22 @@
         {#if $mapEditorSelectedEntityStore.getPrefab().lamp?.kind === "rgb" && $mapEditorSelectedEntityStore.visible}
             {#key $mapEditorSelectedEntityStore.entityId}
                 <RgbLampEditor entity={$mapEditorSelectedEntityStore} />
+                {#if !properties.some((property) => property.type === "switchPropertyData")}
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-light btn-ghost m-2"
+                        data-testid="lampAddSensor"
+                        onclick={() => {
+                            if (!$mapEditorSelectedEntityStore) return;
+                            $mapEditorSelectedEntityStore.addProperty(
+                                selfSensorProperty($mapEditorSelectedEntityStore.entityId, uuid),
+                            );
+                            properties = $mapEditorSelectedEntityStore.getProperties();
+                        }}
+                    >
+                        {$LL.mapEditor.properties.switchPropertyData.addSensorToLamp()}
+                    </button>
+                {/if}
                 <p class="m-2 text-sm text-white/70" data-testid="lampSwitchCount">
                     {$LL.mapEditor.properties.switchPropertyData.commandedBy({
                         count:

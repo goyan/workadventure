@@ -1,4 +1,4 @@
-import { SWITCH_MAX_TARGETS } from "@workadventure/map-editor";
+import { SWITCH_MAX_TARGETS, SwitchTrigger } from "@workadventure/map-editor";
 import type { EntityDataProperties, EntityPrefab, SwitchPropertyData } from "@workadventure/map-editor";
 
 /**
@@ -42,12 +42,54 @@ export function rewireSwitchProperties(
     );
 }
 
+/** A presence sensor on the room of the switch, with the defaults (30 s). */
+export function roomPresenceTrigger(): SwitchTrigger {
+    return SwitchTrigger.parse({ type: "presence", scope: "room" });
+}
+
+/** A presence sensor around the switch, with the defaults (3 tiles, 30 s). */
+export function proximityPresenceTrigger(): SwitchTrigger {
+    return SwitchTrigger.parse({ type: "presence", scope: "proximity" });
+}
+
+/** A timer for the night, with the defaults. */
+export function hoursTrigger(): SwitchTrigger {
+    return { type: "hours", from: "18:00", to: "08:00" };
+}
+
 /**
  * The properties an object placed from the catalog starts with: one whose catalog entry says `switch` commands the
- * lamps of its room at once, without anything to set.
+ * lamps of its room at once, without anything to set — by hand (`true`), as a presence sensor of its room
+ * (`"presence"`) or as a timer (`"hours"`).
  */
 export function newSwitchProperties(prefab: Pick<EntityPrefab, "switch">, newId: () => string): EntityDataProperties {
-    return prefab.switch === true
-        ? [{ id: newId(), type: "switchPropertyData", key: "on", targets: { mode: "zone" } }]
-        : [];
+    if (prefab.switch === undefined || prefab.switch === false) {
+        return [];
+    }
+    const property: SwitchPropertyData = {
+        id: newId(),
+        type: "switchPropertyData",
+        key: "on",
+        targets: { mode: "zone" },
+    };
+    if (prefab.switch === "presence") {
+        property.trigger = roomPresenceTrigger();
+    } else if (prefab.switch === "hours") {
+        property.trigger = hoursTrigger();
+    }
+    return [property];
+}
+
+/**
+ * A lamp that carries its own sensor: it lights itself when somebody is within 3 tiles, and goes out 30 s after
+ * they left. It can be given other lamps to command, like any switch.
+ */
+export function selfSensorProperty(lampId: string, newId: () => string): SwitchPropertyData {
+    return {
+        id: newId(),
+        type: "switchPropertyData",
+        key: "on",
+        targets: { mode: "ids", ids: [lampId] },
+        trigger: proximityPresenceTrigger(),
+    };
 }
