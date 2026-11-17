@@ -158,6 +158,7 @@ import { currentPlayerWokaStore } from "@wa/front/Stores/CurrentPlayerWokaStore"
 import {
     mapEditorModeStore,
     mapEditorSelectedToolStore,
+    mapEditorPlacementLevelStore,
     mapEditorWamSettingsEditorToolCurrentMenuItemStore,
     WAM_SETTINGS_EDITOR_TOOL_MENU_ITEM,
 } from "@wa/front/Stores/MapEditorStore";
@@ -3090,8 +3091,12 @@ export class GameScene extends DirtyScene {
                 this.wallFade = new WallFade(
                     () => this.mapLayerWallEntities(),
                     () => this.getOutdoorGrid(),
-                    // The feet, as the torch reads the outdoors.
-                    () => ({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y }),
+                    // The feet, as the torch reads the outdoors. On a raised floor or a stair the avatar is in no room of
+                    // the ground and behind none of its walls: they all stay opaque under it.
+                    () =>
+                        this.CurrentPlayer.getFloorZ() > 0
+                            ? { x: -1_000_000, y: -1_000_000 }
+                            : { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y },
                     () => this.mapEditorModeManager?.isActive() ?? false,
                     () => this.markDirty(),
                 );
@@ -3119,7 +3124,18 @@ export class GameScene extends DirtyScene {
                         new URLSearchParams(window.location.search).get("palier") ?? undefined,
                         () => wallBarriers(readMapLayerEntityStates(entitiesManager)),
                         () => entitiesManager.getEntities().values(),
-                        () => ({ open: get(mapEditorModeStore), level: get(mapLayerLevelStore) }),
+                        () => {
+                            // The level shown in the editor: the one the map tool works on (it follows the pointer
+                            // in "auto"); in the other tools the one chosen in the panel, every floor in "auto".
+                            const choice = get(mapEditorPlacementLevelStore);
+                            const level =
+                                get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
+                                    ? get(mapLayerLevelStore)
+                                    : choice === "auto"
+                                      ? Number.POSITIVE_INFINITY
+                                      : choice;
+                            return { open: get(mapEditorModeStore), level };
+                        },
                         (z) =>
                             this.playerVariablesManager?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
                                 public: true,
