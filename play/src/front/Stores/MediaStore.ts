@@ -23,6 +23,7 @@ import {
     createBackgroundTransformer,
 } from "../WebRtc/BackgroundProcessor/createBackgroundTransformer";
 import { LL } from "../../i18n/i18n-svelte";
+import { soundEffectsSilencedStore } from "./SoundEffectsStore";
 import { currentRoomStore } from "./CurrentRoomStore";
 import { gameSceneIsLoadedStore } from "./GameSceneStore";
 import { MediaStreamConstraintsError } from "./Errors/MediaStreamConstraintsError";
@@ -427,6 +428,10 @@ export const inCowebsiteZone = derived(
 );
 
 export const silentStore = createSilentStore();
+// A silent zone (a Teams meeting room is one) also cuts the sounds of the game; they come back on leaving.
+export const unsubscribeSoundEffectsSilencing = silentStore.subscribe((silent) =>
+    soundEffectsSilencedStore.set(silent),
+);
 
 export const availabilityStatusStore = derived(
     [

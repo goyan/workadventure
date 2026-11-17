@@ -51,14 +51,14 @@ const previewFamilies: Partial<Record<DesktopSoundSetting, PreviewedSoundFamily>
 };
 
 const soundStores = {
-    [DesktopSoundSetting.Footsteps]: footstepVolumeStore,
-    [DesktopSoundSetting.Skateboard]: skateboardVolumeStore,
-    [DesktopSoundSetting.Weather]: weatherVolumeStore,
-    [DesktopSoundSetting.Doors]: doorVolumeStore,
-    [DesktopSoundSetting.Nerf]: nerfVolumeStore,
-    [DesktopSoundSetting.Jungle]: jungleVolumeStore,
-    [DesktopSoundSetting.Map]: mapSoundsVolumeStore,
-    [DesktopSoundSetting.Notifications]: notificationSoundVolumeStore,
+    [DesktopSoundSetting.Footsteps]: footstepVolumeStore.setting,
+    [DesktopSoundSetting.Skateboard]: skateboardVolumeStore.setting,
+    [DesktopSoundSetting.Weather]: weatherVolumeStore.setting,
+    [DesktopSoundSetting.Doors]: doorVolumeStore.setting,
+    [DesktopSoundSetting.Nerf]: nerfVolumeStore.setting,
+    [DesktopSoundSetting.Jungle]: jungleVolumeStore.setting,
+    [DesktopSoundSetting.Map]: mapSoundsVolumeStore.setting,
+    [DesktopSoundSetting.Notifications]: notificationSoundVolumeStore.setting,
 };
 
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
@@ -126,14 +126,14 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
         lampMusicSource: get(lampMusicSourceStore),
         jungle: get(jungleEnabledStore),
         sounds: {
-            footstepVolume: get(footstepVolumeStore),
-            skateboardVolume: get(skateboardVolumeStore),
-            weatherVolume: get(weatherVolumeStore),
-            doorVolume: get(doorVolumeStore),
-            nerfVolume: get(nerfVolumeStore),
-            jungleVolume: get(jungleVolumeStore),
-            mapSoundsVolume: get(mapSoundsVolumeStore),
-            notificationSoundVolume: get(notificationSoundVolumeStore),
+            footstepVolume: get(footstepVolumeStore.setting),
+            skateboardVolume: get(skateboardVolumeStore.setting),
+            weatherVolume: get(weatherVolumeStore.setting),
+            doorVolume: get(doorVolumeStore.setting),
+            nerfVolume: get(nerfVolumeStore.setting),
+            jungleVolume: get(jungleVolumeStore.setting),
+            mapSoundsVolume: get(mapSoundsVolumeStore.setting),
+            notificationSoundVolume: get(notificationSoundVolumeStore.setting),
         },
         canEditWeather: Boolean(
             get(mapEditorActivated) &&

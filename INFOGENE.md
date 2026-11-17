@@ -45,7 +45,10 @@ clé de salle = empreinte du lien Teams, avance d'alarme). Fichiers `MacCompanio
 compagnons animaux d'upstream.
 
 La propriété de zone `teamsMeetingRoomPropertyData` (« Salle de réunion Teams ») marque les salles ; elle est muette
-comme `silent`. Le rappel d'une réunion à clé propose **Y aller** : la salle est demandée (déjà prise par la réunion,
+comme `silent`. Une zone silencieuse (donc une salle Teams) coupe aussi les sons du jeu pour qui s'y trouve :
+pas, skateboard, météo, portes, Nerf, animaux de la jungle, sons de la carte et musique relayée d'une Jam
+(`soundEffectsSilencedStore`, volumes lus à 0) ; ils reviennent à la sortie, les réglages ne bougent pas
+(`VolumeStore.setting`). Les notifications (coucou, toc toc, réunion, message) restent audibles. Le rappel d'une réunion à clé propose **Y aller** : la salle est demandée (déjà prise par la réunion,
 sinon la première libre) et l'avatar y marche **sans ouvrir Teams** (un nouvel onglet dans le clic mettait le jeu en
 arrière-plan, ce qui annule la marche : il fallait recliquer). La marche vise la case libre de la salle la plus proche
 de son centre qu'un chemin atteint (`PathfindingManager.nearestReachablePointIn`, toute la salle parcourue) : une table

@@ -26,6 +26,40 @@ afterEach(() => {
 const load = () => import("../../../src/front/Stores/SoundEffectsStore");
 
 describe("personal sound effect volumes", () => {
+    it("silences the sounds of the game in a silent zone, and gives them back on leaving, settings untouched", async () => {
+        const stores = await load();
+        stores.weatherVolumeStore.set(0.6);
+        stores.jungleVolumeStore.set(0.4);
+        const heard: number[] = [];
+        const unsubscribe = stores.weatherVolumeStore.subscribe((volume) => heard.push(volume));
+
+        stores.soundEffectsSilencedStore.set(true);
+        for (const store of [
+            stores.footstepVolumeStore,
+            stores.skateboardVolumeStore,
+            stores.weatherVolumeStore,
+            stores.doorVolumeStore,
+            stores.nerfVolumeStore,
+            stores.jungleVolumeStore,
+            stores.mapSoundsVolumeStore,
+        ]) {
+            expect(get(store)).toBe(0);
+        }
+        // What calls the player is still heard: a knock on the door, a wave, a meeting.
+        expect(get(stores.notificationSoundVolumeStore)).toBe(0.15);
+        // The settings keep what the player chose, also for a slider moved while in the zone.
+        expect(get(stores.weatherVolumeStore.setting)).toBe(0.6);
+        stores.jungleVolumeStore.setting.set(0.3);
+        expect(get(stores.jungleVolumeStore)).toBe(0);
+        expect(localStorage.getItem("weatherVolume")).toBe("0.6");
+
+        stores.soundEffectsSilencedStore.set(false);
+        expect(get(stores.weatherVolumeStore)).toBe(0.6);
+        expect(get(stores.jungleVolumeStore)).toBe(0.3);
+        expect(heard).toEqual([0.6, 0, 0.6]);
+        unsubscribe();
+    });
+
     it("starts every volume at 15% and preserves explicit saved volumes", async () => {
         const first = await load();
         for (const store of [
