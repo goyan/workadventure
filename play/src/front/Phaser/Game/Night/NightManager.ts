@@ -6,6 +6,7 @@ import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/Night
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
+import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
@@ -54,10 +55,13 @@ export class NightManager {
     private readonly unsubscribeTorches: Unsubscriber;
     private readonly unsubscribeSkyLight: Unsubscriber;
     private skyLightSettings: SkyLightSettings | undefined;
+    private readonly unsubscribeWindows: Unsubscriber;
     private partyRooms: readonly NightRect[] = [];
     // The lights of the RGB lamps and of the torches, each written by its own owner, and both together.
     private rgbLamps: readonly RgbLampLight[] = [];
     private torches: readonly RgbLampLight[] = [];
+    // The moonlight that comes in through the windows (SkyWindowLightManager).
+    private windows: readonly RgbLampLight[] = [];
     private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
@@ -93,12 +97,17 @@ export class NightManager {
         });
         this.unsubscribeLamps = rgbLampLightsStore.subscribe((lamps) => {
             this.rgbLamps = lamps;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
             this.scene.markDirty();
         });
         this.unsubscribeTorches = torchLightsStore.subscribe((torches) => {
             this.torches = torches;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
+            this.scene.markDirty();
+        });
+        this.unsubscribeWindows = skyWindowLightsStore.subscribe((windows) => {
+            this.windows = windows;
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
             this.scene.markDirty();
         });
         this.unsubscribeSkyLight = skyLightSettingsStore.subscribe((settings) => {
@@ -225,6 +234,7 @@ export class NightManager {
         this.unsubscribeLamps();
         this.unsubscribeTorches();
         this.unsubscribeSkyLight();
+        this.unsubscribeWindows();
         this.overlay.destroy();
     }
 

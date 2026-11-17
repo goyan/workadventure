@@ -346,6 +346,7 @@ import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
 import { skyWeatherFactor } from "./Night/SkyLight";
 import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
+import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
 import type { ShadowSourceEntity } from "./SkyShadows/SkyShadowCasters";
 import { LampManager } from "./Lamps/LampManager";
 import { parseLampDemo } from "./Lamps/LampDemo";
@@ -517,6 +518,7 @@ export class GameScene extends DirtyScene {
     private lampManager: LampManager | undefined;
     private weatherManager: WeatherManager | undefined;
     private skyShadowManager: SkyShadowManager | undefined;
+    private skyWindowLightManager: SkyWindowLightManager | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
     /** The bent images the swaying trees are drawn with. */
@@ -1576,6 +1578,8 @@ export class GameScene extends DirtyScene {
         this.weatherManager?.destroy();
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
+        this.skyWindowLightManager?.destroy();
+        this.skyWindowLightManager = undefined;
         this.treeSway?.destroy();
         this.treePoses?.destroy();
         this.treePoses = undefined;
@@ -1999,6 +2003,7 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.sunPosition(),
             );
             this.skyShadowManager?.update(time);
+            this.skyWindowLightManager?.update(time);
             this.treeSway?.update(time, serverDate?.getTime() ?? time);
             // After the swaying: the bare image over a snowy tree bends as its tree does.
             this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
@@ -3256,6 +3261,15 @@ export class GameScene extends DirtyScene {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
                     // Each body has its own switch, read with the light (NightManager.skyLight).
+                    enabled: () => !get(mapEditorModeStore),
+                });
+                // And the sun and the moon through the windows, with the switches of each body.
+                this.skyWindowLightManager?.destroy();
+                this.skyWindowLightManager = new SkyWindowLightManager(this, {
+                    light: () => this.nightManager?.skyLight(),
+                    entities: () => this.shadowSourceEntities(),
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
                     enabled: () => !get(mapEditorModeStore),
                 });
                 this.treeSway?.destroy();

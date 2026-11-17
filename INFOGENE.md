@@ -2089,6 +2089,12 @@ Sous chaque astre activé, des **limites** (curseurs) :
   hauteur / tan(élévation) est ramenée dans la plage ; avec un minimum, même à midi un obstacle garde cette ombre.
 Un minimum au-dessus du maximum est ramené au maximum (`boundedTo`).
 
+**Par les fenêtres** (`SkyShadows/SkyWindowLight*`) : par chaque fenêtre et porte vitrée de l'outil Carte entre le
+dehors et une pièce, dont la face reçoit l'astre, une tache de lumière sur le sol de la pièce (entre les rayons qui
+passent par le bas et le haut de la vitre, inclinée avec l'astre, 4 cases au plus), de la teinte de l'astre, ajoutée,
+gardée dans les cases de la pièce (`OutdoorGrid.roomAt`). La nuit, la lune y perce un peu le voile. Interrupteur et
+limites d'intensité et de couleur de son astre ; la longueur maximale des ombres borne la tache, pas la minimale. Hauteur de vitre approchée (8 px au-dessus du sol jusqu'à 6 px sous le haut de l'ouverture).
+
 **Limites** : sol seulement (rien à l'étage, objets des paliers ignorés) ; une ombre tombe sous les murs et objets
 voisins au lieu de monter sur leur façade ; un soleil haut au sud cache presque toute l'ombre derrière le mur qui la
 projette (vue 3/4) ; tuiles de collision Tiled sans hauteur, donc sans ombre ; état des portes ignoré.

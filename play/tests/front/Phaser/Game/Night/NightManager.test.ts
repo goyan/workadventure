@@ -46,6 +46,7 @@ const { NightManager } = await import("../../../../../src/front/Phaser/Game/Nigh
 const { rgbLampLightsStore } = await import("../../../../../src/front/Stores/RgbLampStore");
 const { torchLightsStore } = await import("../../../../../src/front/Stores/TorchStore");
 const { moonLightLimits, moonLightShownStore } = await import("../../../../../src/front/Stores/SkyLightStore");
+const { skyWindowLightsStore } = await import("../../../../../src/front/Stores/SkyWindowLightStore");
 
 let manager: InstanceType<typeof NightManager> | undefined;
 afterEach(() => {
@@ -56,6 +57,7 @@ afterEach(() => {
     torchLightsStore.set([]);
     moonLightShownStore.set(true);
     moonLightLimits.intensityMax.set(1);
+    skyWindowLightsStore.set([]);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.useRealTimers();
@@ -287,6 +289,22 @@ describe("personal night clock choice", () => {
                     { ...torch, x: 101 },
                 ],
             }),
+        );
+    });
+    it("pierces the veil with the moonlight that comes in through the windows", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-01-15T20:00:00Z"));
+        vi.spyOn(performance, "now").mockReturnValue(0);
+        vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ now: Date.now() }))));
+        manager = new NightManager(createScene());
+        await vi.advanceTimersByTimeAsync(0);
+        const torch = { id: "torch:2", x: 100, y: 200, size: 352, textureKey: "rgb-lamp:torch:2:88", revision: 1 };
+        const windows = { id: "sky-windows", x: 0, y: 0, size: 1200, textureKey: "sky-windows:0", revision: 3 };
+        torchLightsStore.set([torch]);
+        skyWindowLightsStore.set([{ ...windows, intensity: 0.2 }]);
+        manager.update(0);
+        expect(draw).toHaveBeenLastCalledWith(
+            expect.objectContaining({ lamps: [torch, { ...windows, intensity: 0.2 }] }),
         );
     });
 });
