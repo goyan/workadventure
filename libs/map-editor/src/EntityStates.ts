@@ -127,7 +127,7 @@ const SENSOR_TILE_PX = 32;
  * Whether a presence sensor senses somebody (a player, a wandering animal) standing at `position`, on the floor at
  * the altitude `floorZ`. The one rule, shared by the server (the players) and the front (the animals, which only the
  * browsers know of): in the `area` the sensor watches, on the floor of that area; or around the sensor or in its cone,
- * on its own floor. The walls do not count.
+ * on its own floor. The walls do not count. A sensor of its building senses nothing here (see below).
  */
 export function switchPresenceSenses(
     sensor: { x: number; y: number; elevation?: number },
@@ -150,6 +150,10 @@ export function switchPresenceSenses(
                 position,
             )
         );
+    }
+    if (trigger.scope === "building") {
+        // The walls of the map are only known to the browsers: they report who is in the building of a sensor.
+        return false;
     }
     return (
         area !== undefined &&

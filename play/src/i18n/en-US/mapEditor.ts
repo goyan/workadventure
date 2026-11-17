@@ -355,10 +355,12 @@ const mapEditor: BaseTranslation = {
             scope: {
                 room: "in this room",
                 area: "in the area",
+                building: "in the building",
                 proximity: "around the sensor",
                 cone: "in a cone in front of the sensor",
             },
             noRoom: "This sensor is in no room: choose an area, the proximity or the cone.",
+            noBuilding: "This sensor is outdoors: it is in no building (walls of the Map tool).",
             tiles: "Reach (tiles)",
             direction: "Direction (degrees, 90 = downwards)",
             angle: "Opening (degrees)",

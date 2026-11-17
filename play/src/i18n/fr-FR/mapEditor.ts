@@ -367,10 +367,12 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             scope: {
                 room: "dans cette pièce",
                 area: "dans la zone",
+                building: "dans le bâtiment",
                 proximity: "autour du capteur",
                 cone: "dans un cône devant le capteur",
             },
             noRoom: "Ce capteur n'est dans aucune pièce : choisissez une zone, la proximité ou le cône.",
+            noBuilding: "Ce capteur est dehors : il n'est dans aucun bâtiment (murs de l'outil Carte).",
             tiles: "Portée (cases)",
             direction: "Direction (degrés, 90 = vers le bas)",
             angle: "Ouverture (degrés)",

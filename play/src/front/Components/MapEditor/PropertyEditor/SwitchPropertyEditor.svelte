@@ -64,7 +64,9 @@
         onchange?.();
     }
 
-    function setScope(scope: "room" | "area" | "proximity" | "cone"): void {
+    const hasBuilding = $derived(scene.getSwitches()?.buildingBoundsOf(entity) !== undefined);
+
+    function setScope(scope: "room" | "area" | "proximity" | "cone" | "building"): void {
         if (property.trigger?.type !== "presence") return;
         property.trigger.scope = scope;
         property.trigger.areaId = scope === "area" ? areas[0]?.id : undefined;
@@ -146,7 +148,7 @@
             {#if property.trigger?.type === "presence"}
                 {@const trigger = property.trigger}
                 <div class="mb-3 flex flex-col gap-1 text-sm">
-                    {#each ["room", "area", "proximity", "cone"] as const as scope (scope)}
+                    {#each ["room", "area", "building", "proximity", "cone"] as const as scope (scope)}
                         <label class="flex items-center gap-2">
                             <input
                                 type="radio"
@@ -161,6 +163,9 @@
                     {/each}
                     {#if trigger.scope === "room" && !hasRoom}
                         <p class="m-0 text-warning" data-testid="switchNoRoom">{labels.noRoom()}</p>
+                    {/if}
+                    {#if trigger.scope === "building" && !hasBuilding}
+                        <p class="m-0 text-warning" data-testid="switchNoBuilding">{labels.noBuilding()}</p>
                     {/if}
                     {#if trigger.scope === "area"}
                         <select

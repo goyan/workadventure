@@ -351,6 +351,14 @@ n'a pas de position à lui (comme un va-et-vient).
     faisceau d'une lampe). Les lampes s'éteignent après un délai sans personne (0 à 600 s, **30 s** par défaut). Les
     avatars comptent, et les **animaux promeneurs** (posés sur la carte, de la jungle, apprivoisés) ; un capteur ne
     sent que son niveau, les animaux sont au sol ; les murs ne comptent pas.
+  - **Présence dans le bâtiment** : quelqu'un n'importe où dans le bâtiment du capteur, à n'importe quel étage —
+    pour les déclenchements globaux (toutes les lampes d'un bâtiment, plus tard ses volets). Un **bâtiment** est le
+    bloc d'un seul tenant de cases qui ne sont pas dehors, murs compris (`labelBuildings`, à partir de la grille
+    dedans/dehors des murs de l'outil Carte) ; deux bâtiments qui ne se touchent que par un coin restent distincts.
+    Capteur sélectionné : le rectangle qui entoure son bâtiment est dessiné. Un capteur posé dehors ne se déclenche
+    jamais (le panneau le dit). Comme le serveur n'a pas les murs de la carte, c'est chaque navigateur qui signale
+    que **son** avatar (ou un de ses animaux) est dans le bâtiment d'un capteur, par le même message que pour les
+    animaux ; le serveur réunit les signalements et applique le délai d'extinction.
   - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure de Paris**, peut passer minuit ; pas de jours de la semaine.
   - Capteur sélectionné dans l'éditeur : la zone, le disque ou le cône qu'il surveille est dessiné en bleu.
   - Un capteur ou une minuterie ne s'actionne pas à la main.

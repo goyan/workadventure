@@ -210,6 +210,15 @@ describe("switchPresenceSenses", () => {
         ).toBe(true);
     });
 
+    it("cannot tell by itself who is in a building: only the browsers know the walls of the map", () => {
+        const building = SwitchTrigger.parse({ type: "presence", scope: "building" }) as Extract<
+            SwitchTrigger,
+            { type: "presence" }
+        >;
+        expect(switchPresenceSenses(sensorAt, building, undefined, { x: 176, y: 176 }, 0)).toBe(false);
+        expect(switchPresenceSenses(sensorAt, building, area, { x: 100, y: 100 }, 0)).toBe(false);
+    });
+
     it("senses in its cone only", () => {
         const cone = presence("cone", { direction: 90, angle: 90 });
         expect(switchPresenceSenses(sensorAt, cone, undefined, { x: 176, y: 176 + 90 }, 0)).toBe(true);

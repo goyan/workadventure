@@ -313,13 +313,15 @@ const SwitchHour = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
  * What uses a switch without anybody touching it; the server decides (see SwitchTriggerEvaluator in the back).
  * - presence: somebody is in the room of the switch (`scope: "room"`, `areaId` found by the editor), in a chosen area
  *   (`scope: "area"`, `areaId`), within `tiles` of it on its floor (`scope: "proximity"`), or in a cone in front of
- *   it (`scope: "cone"`, like the beam of a lamp). It lets go `offDelay` seconds after the last person left.
+ *   it (`scope: "cone"`, like the beam of a lamp), or anywhere in the building it stands in (`scope: "building"`:
+ *   the cells that are not outdoors and touch one another, walls included — only the browsers know them, so they
+ *   report it). It lets go `offDelay` seconds after the last person left.
  * - hours: the time in Paris is between `from` (included) and `to` (excluded); the range may pass midnight.
  */
 export const SwitchTrigger = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("presence"),
-        scope: z.enum(["room", "area", "proximity", "cone"]),
+        scope: z.enum(["room", "area", "proximity", "cone", "building"]),
         areaId: z.string().optional(),
         tiles: z.number().int().min(1).max(SWITCH_PROXIMITY_MAX_TILES).default(SWITCH_PROXIMITY_DEFAULT_TILES),
         offDelay: z.number().int().min(0).max(SWITCH_OFF_DELAY_MAX_S).default(SWITCH_OFF_DELAY_DEFAULT_S),

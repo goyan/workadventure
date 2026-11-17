@@ -709,7 +709,8 @@
                                     "room",
                                     "area",
                                     "proximity",
-                                    "cone"
+                                    "cone",
+                                    "building"
                                   ]
                                 },
                                 "areaId": {

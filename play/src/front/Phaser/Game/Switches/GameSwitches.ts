@@ -11,6 +11,7 @@ import { toLampZone } from "../Lamps/LampJam";
 import { lampSource } from "../Lamps/LampReconcile";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
+import { buildingAt, buildingBounds, buildingSensorsWithSomebody, labelBuildings, type Buildings } from "./Buildings";
 import { SwitchIndicator } from "./SwitchIndicator";
 import { SwitchAnimalReporter, sensorsWithAnimals, type AnimalSensor } from "./SwitchAnimalReports";
 import { syncedSensorProperty } from "./SwitchSensorSync";
@@ -53,6 +54,7 @@ export class GameSwitches {
     private commandingIds = new Map<string, string[]>();
     private readonly wiringView: SwitchWiringView;
     private readonly animalReporter = new SwitchAnimalReporter();
+    private buildingsRead: { version: number; buildings: Buildings } | undefined;
 
     constructor(private readonly scene: GameScene) {
         this.wiringView = new SwitchWiringView(scene);
@@ -201,10 +203,58 @@ export class GameSwitches {
         }
         const animals: { x: number; y: number }[] = [];
         this.scene.getWanderingCharactersManager()?.forEachWalker((position) => animals.push(position));
-        const report = this.animalReporter.next(sensorsWithAnimals(sensors, animals), now);
+        const sensed = sensorsWithAnimals(sensors, animals);
+        // The sensors of a building: the walls of the map are only known here too. My own avatar counts as well (each
+        // browser tells for its own), wherever it is in the building and on whatever floor.
+        const ofBuilding = sensors.filter((sensor) => sensor.trigger.scope === "building");
+        if (ofBuilding.length > 0) {
+            const buildings = this.buildings();
+            if (buildings) {
+                const player = this.scene.CurrentPlayer;
+                const occupied = [
+                    buildingAt(buildings, { x: player.x, y: player.y + player.getFloorZ() }),
+                    ...animals.map((animal) => buildingAt(buildings, animal)),
+                ];
+                sensed.push(
+                    ...buildingSensorsWithSomebody(
+                        ofBuilding.map((sensor) => ({
+                            id: sensor.id,
+                            building: buildingAt(buildings, { x: sensor.x + 16, y: sensor.y + 16 + sensor.elevation }),
+                        })),
+                        occupied,
+                    ),
+                );
+            }
+        }
+        const report = this.animalReporter.next(sensed, now);
         if (report) {
             this.scene.connection?.emitReportSwitchPresence(report);
         }
+    }
+
+    /** The buildings of the map, worked out again only when its walls changed. */
+    private buildings(): Buildings | undefined {
+        const grid = this.scene.getOutdoorGrid();
+        if (!grid) {
+            return undefined;
+        }
+        const version = this.scene.getOutdoorVersion();
+        if (!this.buildingsRead || this.buildingsRead.version !== version) {
+            this.buildingsRead = { version, buildings: labelBuildings(grid) };
+        }
+        return this.buildingsRead.buildings;
+    }
+
+    /** The rectangle around the building the object stands in, if it stands in one. */
+    public buildingBoundsOf(entity: Entity): { x: number; y: number; width: number; height: number } | undefined {
+        const buildings = this.buildings();
+        if (!buildings) {
+            return undefined;
+        }
+        return buildingBounds(
+            buildings,
+            buildingAt(buildings, { x: entity.x + 16, y: entity.y + 16 + entity.getElevation() }),
+        );
     }
 
     /** What the selected sensor watches, to be drawn in the map editor. */
@@ -223,6 +273,10 @@ export class GameSwitches {
                 direction: trigger.direction,
                 angle: trigger.scope === "cone" ? trigger.angle : 360,
             };
+        }
+        if (trigger.scope === "building") {
+            const bounds = this.buildingBoundsOf(entity);
+            return bounds ? { kind: "rect", ...bounds } : undefined;
         }
         const areaId = trigger.scope === "room" ? this.roomAreaIdOf(entity) : trigger.areaId;
         const area = areaId

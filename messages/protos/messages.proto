@@ -726,8 +726,9 @@ message SetEntityStateMessage {
   string value = 4;
 }
 
-// A browser tells which presence sensors of the map one of its wandering animals stands in: all of them at each
-// report, none once the last animal left. Only the browsers know where the animals are.
+// A browser tells which presence sensors of the map sense something only it can tell: one of its wandering animals in
+// a sensor, or its own player anywhere in the building of a sensor "of its building" (the server has neither the
+// animals nor the walls of the map). All of them at each report, none once nothing is sensed any more.
 message ReportSwitchPresenceMessage {
   repeated string switchIds = 1;
 }
