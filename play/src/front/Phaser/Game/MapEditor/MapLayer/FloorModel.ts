@@ -1,5 +1,5 @@
 import { MAP_LAYER_TILE_SIZE } from "./MapLayerCatalog";
-import type { FloorFamily } from "./MapLayerCatalog";
+import type { SlabFamily } from "./MapLayerFloors";
 import { parseFloorPiece, stairGroundBox, stairRun, stairScreenBox } from "./MapLayerFloors";
 import type { PixelBox, StairShape, TilePoint } from "./MapLayerFloors";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
@@ -14,7 +14,7 @@ export interface PlacedSlab {
     x: number;
     y: number;
     elevation: number;
-    family: FloorFamily;
+    family: SlabFamily;
 }
 
 export interface PlacedStair {
@@ -91,7 +91,7 @@ export class FloorModel {
         return model;
     }
 
-    public setSlab(elevation: number, x: number, y: number, family: FloorFamily): void {
+    public setSlab(elevation: number, x: number, y: number, family: SlabFamily): void {
         this.slabs.set(key(elevation, x, y), { x, y, elevation, family });
     }
 
@@ -122,7 +122,7 @@ export class FloorModel {
         return this.slabs.has(key(elevation, x, y));
     }
 
-    public slabAt(elevation: number, x: number, y: number): FloorFamily | undefined {
+    public slabAt(elevation: number, x: number, y: number): SlabFamily | undefined {
         return this.slabs.get(key(elevation, x, y))?.family;
     }
 

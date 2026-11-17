@@ -552,6 +552,9 @@ const mapEditor: BaseTranslation = {
             openSide: "Open side",
         },
         walls: "Wall style",
+        glassSlab: "Glass slabs",
+        glassSlabHint:
+            "See-through slabs: what is under the floor shows through them. Greyed out when the catalog of the room has no glass slab.",
         glazedDoor: "Glazed",
         glazedDoorHint:
             "For new horizontal doors. Click a placed horizontal door to give it the settings above, or to make it glazed or plain when it has them.",

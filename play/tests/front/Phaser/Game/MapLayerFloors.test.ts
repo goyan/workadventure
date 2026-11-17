@@ -146,4 +146,14 @@ describe("raised floors of the map layer", () => {
         // Beyond its ends, the altitude of the end.
         expect(stairElevationAt(west, foot, { x: 100, y: 650 })).toBe(84);
     });
+
+    it("names and reads a glass slab, a slab that is no floor of the ground", () => {
+        expect(slabPrefabName("verre")).toBe("dalle-verre");
+        expect(parseFloorPiece("Carte Paliers", "Carte Paliers:dalle-verre:Default:Down")).toEqual({
+            kind: "slab",
+            family: "verre",
+        });
+        // The floors of the ground have no glass.
+        expect(parseFloorPiece("Carte Sols", "Carte Sols:sol-verre-uni:Default:Down")).toBeUndefined();
+    });
 });

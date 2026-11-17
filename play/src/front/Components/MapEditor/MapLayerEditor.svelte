@@ -14,6 +14,8 @@
         mapLayerDoorsAvailableStore,
         mapLayerGlazedDoorHeightsAvailableStore,
         mapLayerGlazedDoorsAvailableStore,
+        mapLayerGlassSlabsAvailableStore,
+        mapLayerSlabGlassStore,
         mapLayerHeightRequestStore,
         mapLayerHeightSelectionStore,
         mapLayerFloorFamilyStore,
@@ -413,7 +415,20 @@
             </section>
         {/if}
 
-        {#if usesFloor}
+        {#if $mapLayerModeStore === "slab"}
+            <section class="flex flex-col gap-1">
+                <InputSwitch
+                    id="map-layer-glass-slab"
+                    label={$LL.mapEditor.mapLayer.glassSlab()}
+                    bind:value={$mapLayerSlabGlassStore}
+                    disabled={!$mapLayerGlassSlabsAvailableStore}
+                    margin="mt-0"
+                />
+                <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.glassSlabHint()}</p>
+            </section>
+        {/if}
+
+        {#if usesFloor && !($mapLayerModeStore === "slab" && $mapLayerSlabGlassStore && $mapLayerGlassSlabsAvailableStore)}
             <section class="flex flex-col gap-2">
                 <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.floors()}</h3>
                 <div class="grid grid-cols-[repeat(auto-fill,minmax(5rem,1fr))] gap-2">
