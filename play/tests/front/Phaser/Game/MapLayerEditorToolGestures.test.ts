@@ -787,4 +787,61 @@ describe("MapLayerEditorTool gestures", () => {
         // The door on the segments 0 and 1 of the line 2, not a door centered on the cursor.
         expect(previewGraphics.fillRect.mock.lastCall?.slice(0, 2)).toEqual([0, 64]);
     });
+
+    /** Floors under the wall of the line 2 and the row below it (entity ids `sol-x-y`). */
+    function placeFloors(): void {
+        for (const x of [0, 1, 2]) {
+            for (const y of [2, 3]) {
+                const entity = mock<Entity>({ entityId: `sol-${x}-${y}`, x: x * 32, y: y * 32 });
+                entity.getPrefab.mockReturnValue(
+                    prefab(
+                        MAP_LAYER_FLOOR_COLLECTION,
+                        `${MAP_LAYER_FLOOR_COLLECTION}:sol-parquet-clair-uni:Default:Down`,
+                    ),
+                );
+                entities.set(`sol-${x}-${y}`, entity);
+            }
+        }
+    }
+
+    function deletedIds(): string[] {
+        expect(modeManager.executeCommands.mock.calls).toHaveLength(1);
+        const factory = modeManager.executeCommands.mock.calls[0][0] as () => readonly object[];
+        return factory()
+            .filter((command) => command.constructor.name === "DeleteEntityFrontCommand")
+            .map((command) => (command as { entityId?: string }).entityId)
+            .filter((id): id is string => id !== undefined)
+            .sort();
+    }
+
+    it("erases the walls of a drag that starts on a wall, never the floors under them", async () => {
+        placeWall();
+        placeFloors();
+        await activate();
+        mapLayerModeStore.set("erase");
+        down(40, 80);
+        move(60, 84);
+        move(90, 90);
+        up(90, 90);
+        const deleted = deletedIds();
+        expect(deleted).toEqual(expect.arrayContaining(["facade-blanc-mid", "facade-blanc-right"]));
+        // A floor may be redrawn (its shade under a wall changes), never removed: as many floors created as deleted.
+        const floorsDeleted = deleted.filter((id) => id.startsWith("sol-")).length;
+        const floorsCreated = committedPieces().created.filter((name) => name.startsWith("sol-")).length;
+        expect(floorsCreated).toBe(floorsDeleted);
+    });
+
+    it("erases only floors on a drag that starts on a floor, never a wall it crosses", async () => {
+        placeWall();
+        placeFloors();
+        await activate();
+        mapLayerModeStore.set("erase");
+        down(40, 110);
+        move(40, 90);
+        move(40, 70);
+        up(40, 70);
+        const deleted = deletedIds();
+        expect(deleted).toEqual(expect.arrayContaining(["sol-1-3"]));
+        expect(deleted.filter((id) => !id.startsWith("sol-"))).toEqual([]);
+    });
 });

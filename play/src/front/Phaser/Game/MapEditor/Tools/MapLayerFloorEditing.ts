@@ -134,7 +134,7 @@ export class MapLayerFloorEditing {
                 y: entity.y,
                 collectionName: prefab.collectionName,
                 prefabId: prefab.id,
-                elevation: entity.getEntityData().elevation,
+                elevation: entity.getElevation(),
             });
         }
         return FloorModel.fromPlaced(items);

@@ -1492,7 +1492,7 @@ commandes de l'autre ; cette version ne comporte pas de verrou côté serveur.
 
 L'outil « Corbeille » (raccourci `5`) est supprimé : chaque outil a sa propre suppression.
 
-- **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation).
+- **Carte** : sa gomme n'efface que les sols et murs de la couche carte (un geste = une entrée d'annulation). Ce que le geste touche au départ décide : parti d'un mur (ou d'une porte, d'une fenêtre), il efface les segments de la ligne de ce mur (rangée d'un mur horizontal, colonne d'un vertical), de la case de départ à celle d'arrivée, avec leurs portes et fenêtres, sans toucher aux sols ; parti d'un sol, il n'efface que les sols survolés, jamais un mur traversé. Un clic efface ce qui est sous le curseur (porte ou fenêtre d'abord, puis le mur). Un mur vertical se vise à 10 px de part et d'autre de son axe (`ERASER_VERTICAL_HIT_WIDTH`). Pendant le glisser, ce qui partira est en rouge.
 - **Objets** : un bouton « Gomme » (à bascule) supprime l'objet cliqué ou survolé le bouton enfoncé ; un bouton « Supprimer »
   dans le panneau de l'objet sélectionné le supprime (la touche Suppr reste). Les sols et murs de la couche carte
   n'en font jamais partie : ils se gomment avec l'outil Carte, qui garde leurs raccords cohérents.

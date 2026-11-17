@@ -179,13 +179,17 @@ export function shownWeatherSettings(
 }
 
 /**
- * The weather this person will see now, in one hour and in four hours (the weather banner), the tried one included.
- * It only reads what the game already asked for (the game follows the place of a map in Real at every image).
+ * The weather this person will see now, in one hour and in four hours (the weather banner), the tried one included,
+ * with the real temperature of the place. Asked each second while the banner shows: it follows the place of the map
+ * whatever its weather (the game itself only follows it for a map in Real), so its temperature is known too.
  */
 export function shownWeatherForecast(settings: MapSnowSettings | undefined, date: Date): ForecastCell[] {
     const shown = withWeatherPreview(settings, preview);
+    follow(shown?.weatherLocation);
+    const known = knownFor(shown?.weatherLocation);
+    // Outside Real, only the temperature is read from the timeline: a pending answer is no reason to blank the weather.
     const real: RealForecastState =
-        shown?.weather === WeatherType.Real ? knownFor(shown.weatherLocation) : { status: "unavailable" };
+        shown?.weather === WeatherType.Real || known.status === "known" ? known : { status: "unavailable" };
     return weatherForecast(shown, date.getTime(), real);
 }
 

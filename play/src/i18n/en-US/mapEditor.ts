@@ -496,7 +496,7 @@ const mapEditor: BaseTranslation = {
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
-            erase: "Hold the button to erase walls and floors. Objects are kept.",
+            erase: "Start on a wall and drag along it to erase its segments (doors and windows included), or start on a floor to erase floors. A click erases what is under the cursor. Objects are kept.",
             slab: "Choose a level, then drag a rectangle to lay the slabs of a raised floor.",
             slabErase: "Drag a rectangle to remove slabs of the level, or click a stair that starts from it.",
             stair: "Click the tile of the first step, on the level the stair starts from. Hover the map to see where it arrives.",

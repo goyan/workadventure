@@ -107,7 +107,7 @@ describe("RealWeatherClient", () => {
         expect(client.shownWeatherSettings(real(brest), at(6 * MINUTE))?.weather).toBe(WeatherType.Automatic);
     });
 
-    it("the banner reads what is known without asking, blank for a place not followed yet", async () => {
+    it("the banner asks the place of the map itself, blank in Real until it answers", async () => {
         fetchMock.mockResolvedValue(timeline(WeatherType.Fog));
         expect(client.shownWeatherForecast(real(), at()).map((cell) => cell.weather)).toEqual([
             undefined,
@@ -115,14 +115,31 @@ describe("RealWeatherClient", () => {
             undefined,
         ]);
         await vi.advanceTimersByTimeAsync(0);
-        expect(fetchMock).not.toHaveBeenCalled();
-        client.shownWeatherSettings(real(), at());
-        await vi.advanceTimersByTimeAsync(0);
+        expect(asked()[0].searchParams.get("latitude")).toBe("45.75");
         expect(client.shownWeatherForecast(real(), at()).map((cell) => cell.weather)).toEqual([
             WeatherType.Fog,
             WeatherType.Fog,
             WeatherType.Fog,
         ]);
+    });
+
+    it("the banner shows the real temperature of the place under a weather that is not the real one", async () => {
+        fetchMock.mockResolvedValue(timeline(WeatherType.Fog));
+        const snowing = { weather: WeatherType.Snow, weatherLocation: brest };
+        expect(client.shownWeatherForecast(snowing, at()).map((cell) => cell.weather)).toEqual([
+            WeatherType.Snow,
+            WeatherType.Snow,
+            WeatherType.Snow,
+        ]);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(asked()[0].searchParams.get("latitude")).toBe("48.39");
+        expect(client.shownWeatherForecast(snowing, at())).toMatchObject([
+            { weather: WeatherType.Snow, temperature: 5 },
+            { weather: WeatherType.Snow, temperature: 5 },
+            { weather: WeatherType.Snow, temperature: 5 },
+        ]);
+        // The game itself still follows the weather of the map, not the real one.
+        expect(client.shownWeatherSettings(snowing, at())?.weather).toBe(WeatherType.Snow);
     });
 
     it("shows the weather being tried, until the panel closes", () => {
