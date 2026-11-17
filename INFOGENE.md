@@ -358,10 +358,12 @@ n'a pas de position à lui (comme un va-et-vient).
     Capteur sélectionné : le rectangle qui entoure son bâtiment est dessiné. Un capteur posé dehors ne se déclenche
     jamais (le panneau le dit). Comme le serveur n'a pas les murs de la carte, c'est chaque navigateur qui signale
     que **son** avatar (ou un de ses animaux) est dans le bâtiment d'un capteur, par le même message que pour les
-    animaux ; le serveur réunit les signalements et applique le délai d'extinction.
+    animaux ; le serveur réunit les signalements et applique le délai d'extinction. Un onglet en arrière-plan ne
+    signale plus rien : pour ces capteurs, le serveur garde le dernier signalement d'un joueur tant qu'il est dans la
+    salle et n'a pas bougé depuis.
   - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure de Paris**, peut passer minuit ; pas de jours de la semaine.
   - Capteur sélectionné dans l'éditeur : la zone, le disque ou le cône qu'il surveille est dessiné en bleu.
-  - Un capteur ou une minuterie ne s'actionne pas à la main.
+  - Un capteur ou une minuterie ne s'actionne pas à la main (le serveur refuse aussi l'appui).
   - **Lampe à capteur intégré** : sur une lampe RGB, bouton **Ajouter un capteur à cette lampe** (elle s'allume quand
     quelqu'un est à moins de 3 cases, s'éteint 30 s après). Ajouter la propriété Interrupteur à une lampe la câble sur
     elle-même ; on peut lui ajouter d'autres lampes.
@@ -373,12 +375,19 @@ n'a pas de position à lui (comme un va-et-vient).
   - **Qui décide** : le serveur, une fois par seconde, pour les seuls objets à déclencheur (`SwitchTriggerEvaluator`) ;
     il écrit dans le même magasin d'état. Il ne sait pas ce qu'est une lampe ni la taille d'un objet : l'**éditeur
     ouvert** enregistre dans la carte la pièce du capteur (`trigger.areaId`) et ses lampes (`resolvedTargets`), et les
-    remet à jour quand on déplace le capteur ou qu'on ajoute une lampe (un pas d'annulation à part) ; le centre d'un
+    remet à jour quand on déplace le capteur ou qu'on ajoute une lampe, quel que soit l'outil de l'éditeur en cours,
+    **hors de l'historique** d'annulation (jamais deux fois la même mise à jour en moins de 5 s) ; un capteur collé
+    oublie la pièce et les lampes de son original ; le centre d'un
     capteur est pris à une demi-case de son coin. Les animaux n'existent que dans les navigateurs : chacun signale au
     serveur les capteurs où se trouve un de ses animaux (`ReportSwitchPresenceMessage`, répété toutes les 2 s, oublié
     après 5 s) ; sans joueur connecté, aucun animal ne compte.
+  - **Propriété mal formée** : la carte en cours d'édition garde ce que la dernière commande portait, sans validation.
+    Le jeu et le serveur lisent donc un interrupteur par un lecteur validé (`switchPropertyIn`) : incomplet, il prend
+    ses valeurs par défaut ; mal formé, il est ignoré ; un déclencheur mal formé en fait un interrupteur manuel.
   - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; pas de fuseau du lieu de la carte ; un
-    client modifié peut tenir un capteur allumé en signalant un animal.
+    client modifié peut tenir un capteur allumé en signalant un animal ; un joueur immobile dont le navigateur avait
+    signalé un animal dans un bâtiment y tient les lampes allumées tant qu'il ne bouge pas ; la lampe dupliquée (⧉)
+    d'une lampe à capteur intégré commande encore l'originale (à recâbler).
 - **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
   réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
   (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et
