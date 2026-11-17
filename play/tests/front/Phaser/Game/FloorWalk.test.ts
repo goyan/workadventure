@@ -250,4 +250,15 @@ describe("floorStep", () => {
         const result = floorStep(model, { elevation: 52 }, { x: 176, y: 90 }, { x: 600, y: 400 });
         expect(result).toEqual({ state: { elevation: 0 }, p: { x: 600, y: 400 } });
     });
+
+    it("takes the avatar up and down a new short stair going north (one tile on the ground)", () => {
+        const model = new FloorModel();
+        slabs(model, 52, 4, 2, 7, 4);
+        // Run of 1 tile: on the ground from y = 160 (top, the south edge of the floor) to y = 192 (foot).
+        model.addStair({ direction: "n", width: 1, rise: 52, open: false, short: true }, { x: 5, y: 5 }, 0);
+        const top = walk(model, { x: 176, y: 198 }, [{ x: 176, y: 90 }]);
+        expect(top.state).toEqual({ elevation: 52 });
+        const down = walk(model, top.p, [{ x: 176, y: 210 }], top.state);
+        expect(down.state).toEqual({ elevation: 0 });
+    });
 });
