@@ -90,8 +90,6 @@ const spotify: DeepPartial<Translation["spotify"]> = {
             start: "Lancer la soirée karaoké",
             hostNeeds:
                 "Pour animer une soirée karaoké, il faut l’app desktop WorkAdventure avec son extension Spotify : elle prépare la mélodie de chaque morceau.",
-            singerNeeds:
-                "Pour chanter, il faut l’app desktop WorkAdventure. Ici, tu peux suivre la scène et applaudir.",
             installDesktop: "Installer l’app desktop",
             unavailable: "Pas de karaoké pour ce morceau : il n’a pas de paroles synchronisées.",
             startHint: "Tu montes sur scène en premier, les autres rejoignent la file.",

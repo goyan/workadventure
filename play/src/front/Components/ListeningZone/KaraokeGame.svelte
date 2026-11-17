@@ -55,9 +55,8 @@
     let failed = $state(false);
     let clapped = $state(false);
     let autoStart = $state(false);
-    /** Singing goes through the desktop app; hosting also needs its Spotify extension, which gives the melody. */
-    const onDesktop = window.WAD?.desktop === true;
-    let canHost = $derived(onDesktop && $listenAlongAvailableStore);
+    /** Anyone sings, browsers included; hosting needs the desktop app and its Spotify extension, which give the melody. */
+    let canHost = $derived(window.WAD?.desktop === true && $listenAlongAvailableStore);
     onMount(enterKaraokeGame);
 
     $effect(() => {
@@ -216,8 +215,6 @@
                         onclick={() => requestKaraokeTurn(room, KaraokeStageAction.Leave)}
                         >✋ {$LL.spotify.karaoke.game.leave()}</button
                     >
-                {:else if !onDesktop}
-                    {@render install($LL.spotify.karaoke.game.singerNeeds())}
                 {:else}
                     <button type="button" class="karaoke-cta" onclick={takeTurn} data-testid="karaoke-join">
                         <span class="karaoke-cta-icon" aria-hidden="true">🙋</span>{$LL.spotify.karaoke.game.myTurn()}

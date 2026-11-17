@@ -87,7 +87,6 @@ const spotify: BaseTranslation = {
             start: "Start the karaoke night",
             hostNeeds:
                 "Hosting a karaoke night needs the WorkAdventure desktop app with its Spotify extension: it prepares the melody of each song.",
-            singerNeeds: "Singing needs the WorkAdventure desktop app. Here, you can follow the stage and applaud.",
             installDesktop: "Install the desktop app",
             unavailable: "No karaoke for this song: it has no synced lyrics.",
             startHint: "You take the stage first, the others join the queue.",
