@@ -39,7 +39,7 @@
         mapLayerStairWidthStore,
     } from "../../Stores/MapLayerStore";
     import { STAIR_DIRECTIONS, floorElevation } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
-    import { reachableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
+    import { reachableLevels, stairTarget } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import {
         IconArrowAutofitHeight,
@@ -95,11 +95,7 @@
 
     // The floors a stair can reach from the level being edited, and the one it goes up to.
     let stairTargets = $derived(reachableLevels($mapLayerLevelStore, $mapLayerLevelsStore));
-    let stairTarget = $derived(
-        $mapLayerStairTargetStore !== undefined && stairTargets.includes($mapLayerStairTargetStore)
-            ? $mapLayerStairTargetStore
-            : stairTargets[0],
-    );
+    let chosenStairTarget = $derived(stairTarget(stairTargets, $mapLayerBuiltLevelsStore, $mapLayerStairTargetStore));
 
     let usesFloor = $derived(
         $mapLayerModeStore !== "wall" &&
@@ -318,10 +314,10 @@
                         {#each stairTargets as level (level)}
                             <button
                                 type="button"
-                                class="px-3 py-1 rounded text-xs {stairTarget === level
+                                class="px-3 py-1 rounded text-xs {chosenStairTarget === level
                                     ? 'bg-secondary'
                                     : 'bg-white/10 hover:bg-white/20'}"
-                                aria-pressed={stairTarget === level}
+                                aria-pressed={chosenStairTarget === level}
                                 data-testid="mapLayerStairTarget-{level}"
                                 onclick={() => mapLayerStairTargetStore.set(level)}
                             >

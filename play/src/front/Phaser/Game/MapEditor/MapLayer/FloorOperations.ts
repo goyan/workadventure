@@ -218,3 +218,16 @@ export function reachableLevels(from: number, levels: readonly number[]): number
 export function stairRiseBetween(from: number, to: number): StairRise | undefined {
     return STAIR_RISES.find((rise) => from + rise === to);
 }
+
+/**
+ * The floor a new stair goes up to, among the ones in reach: the one asked when it is in reach; otherwise the lowest
+ * one that already has slabs (a stair to a floor without slabs leads nowhere), or else the lowest one.
+ */
+export function stairTarget(
+    reachable: readonly number[],
+    built: readonly number[],
+    asked: number | undefined,
+): number | undefined {
+    if (asked !== undefined && reachable.includes(asked)) return asked;
+    return reachable.find((level) => built.includes(level)) ?? reachable[0];
+}

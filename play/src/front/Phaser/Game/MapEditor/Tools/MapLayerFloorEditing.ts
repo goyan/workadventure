@@ -37,6 +37,7 @@ import {
     reachableLevels,
     removeStairAt,
     stairRiseBetween,
+    stairTarget,
 } from "../MapLayer/FloorOperations";
 import type { PlacedFloorEntity } from "../MapLayer/FloorOperations";
 import { floorPieceSize, parseFloorPiece, stairGroundBox, stairScreenBox } from "../MapLayer/MapLayerFloors";
@@ -125,8 +126,7 @@ export class MapLayerFloorEditing {
     private stairShape(): StairShape | undefined {
         const level = get(mapLayerLevelStore);
         const reachable = reachableLevels(level, get(mapLayerLevelsStore));
-        const wanted = get(mapLayerStairTargetStore);
-        const target = wanted !== undefined && reachable.includes(wanted) ? wanted : reachable[0];
+        const target = stairTarget(reachable, get(mapLayerBuiltLevelsStore), get(mapLayerStairTargetStore));
         const rise = target === undefined ? undefined : stairRiseBetween(level, target);
         if (rise === undefined) return undefined;
         return {

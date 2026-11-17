@@ -12,6 +12,7 @@ import {
     placeStair,
     reachableLevels,
     removeStairAt,
+    stairTarget,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
@@ -137,6 +138,16 @@ describe("floor operations", () => {
         expect(availableLevels(model)).toEqual([52, 84, 116]);
         model.setSlab(104, 1, 1, "parquet-clair");
         expect(availableLevels(model)).toEqual([52, 84, 104, 116]);
+    });
+
+    it("sends a stair to the floor asked, else to one that has slabs, else to the first in reach", () => {
+        // From the top of walls of 2 tiles, the floors of the walls of 3 and 4 are in reach.
+        expect(stairTarget([84, 116], [52, 116], 84)).toBe(84);
+        // Nothing asked (or a floor out of reach): the floor that is built, not the first of the list.
+        expect(stairTarget([84, 116], [52, 116], undefined)).toBe(116);
+        expect(stairTarget([84, 116], [52, 116], 52)).toBe(116);
+        expect(stairTarget([84, 116], [52], undefined)).toBe(84);
+        expect(stairTarget([], [52], undefined)).toBeUndefined();
     });
 
     it("tells the floors a stair can reach from a floor", () => {
