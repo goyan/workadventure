@@ -3205,6 +3205,7 @@ export class GameScene extends DirtyScene {
                         },
                         (levels) => mapLayerBuiltLevelsStore.set(levels),
                         () => this.MapPlayersByKey.values(),
+                        (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );
                 }
                 this.treeSeasonEffects?.destroy();
