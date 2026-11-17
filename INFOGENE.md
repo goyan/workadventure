@@ -324,10 +324,14 @@ n'a pas de position à lui (comme un va-et-vient).
   lampe peut l'être aussi, et se commander elle-même.
 - **Câbler** (panneau de l'interrupteur) :
   - **Les lampes de cette pièce** : les lampes RGB de la plus petite zone de la carte où se tient le pied de
-    l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ajoutée plus tard dans la
+    l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ou un interrupteur
+    juste hors d'une pièce lui appartient quand même : jusqu'à 4 cases au-dessus (lampe accrochée au mur du haut),
+    une case sur les autres côtés ; entre deux pièces, la plus proche (`roomIdAt`). Une lampe ajoutée plus tard dans la
     pièce est commandée sans rien refaire. Hors de toute pièce, l'interrupteur ne commande rien et le panneau le dit.
-  - **Lampes choisies** : bouton **Choisir sur la carte**, puis un clic sur une lampe l'ajoute ou la retire (un pas
-    d'annulation par clic), **Terminer** pour finir. 200 lampes au plus.
+  - **Lampes choisies** : bouton **🔗 Lier des lampes** (toujours visible, sur l'interrupteur comme sur le capteur
+    et la minuterie), puis un clic sur une lampe, où qu'elle soit sur la carte, la lie ou la délie (un pas
+    d'annulation par clic), **Terminer** pour finir. Parti du mode pièce, le bouton garde les lampes de la pièce
+    comme point de départ. 200 lampes au plus.
   - L'interrupteur sélectionné montre ses cibles : un trait jaune et un cercle. Une lampe sélectionnée affiche
     « Commandée par n interrupteurs ».
   - **Réservé aux tags** : liste de tags séparés par des virgules ; vide, tout le monde peut l'actionner.
@@ -364,6 +368,11 @@ n'a pas de position à lui (comme un va-et-vient).
     après 5 s) ; sans joueur connecté, aucun animal ne compte.
   - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; pas de fuseau du lieu de la carte ; un
     client modifié peut tenir un capteur allumé en signalant un animal.
+- **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
+  réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
+  (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et
+  les torches) percent le voile ; chaque avatar garde son halo. Sert à essayer interrupteurs et capteurs avant le
+  voile de nuit réaliste. Les autres joueurs ne sont pas concernés.
 - **Par défaut tout est allumé** : une carte faite avant les interrupteurs ne change pas.
 - **Copier, coller** : un interrupteur collé avec ses lampes commande les copies ; les lampes choisies qui n'ont pas
   été copiées avec lui sont retirées de la copie. Un motif ne garde pas les lampes choisies (utiliser le mode pièce).
