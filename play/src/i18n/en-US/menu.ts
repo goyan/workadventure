@@ -105,6 +105,18 @@ const menu: BaseTranslation = {
             hintChristmas: "Christmas: snow replaces the outdoor ground and the map weather.",
             hintNone: "No seasonal decor.",
         },
+        lightShare: {
+            title: "Share my light settings",
+            help: "A code that carries all the light settings (night, indirect light, sun, moon, shadows): send it to somebody, who pastes it here.",
+            copy: "Copy the code of my settings",
+            copied: "Code copied.",
+            copyByHand: "The browser refused the copy: select the code and copy it.",
+            code: "Code of my light settings",
+            paste: "Paste a code you received",
+            apply: "Apply",
+            applied: "{count:number} settings applied.",
+            unknown: "This is not a code of light settings.",
+        },
         night: {
             label: "Day/night cycle",
             server: "Server time",

@@ -107,6 +107,18 @@ const menu: DeepPartial<Translation["menu"]> = {
             hintChristmas: "Noël : la neige remplace le sol extérieur et la météo de la carte.",
             hintNone: "Aucun décor saisonnier.",
         },
+        lightShare: {
+            title: "Partager mes réglages de lumière",
+            help: "Un code qui porte tous les réglages de lumière (nuit, lumière indirecte, soleil, lune, ombres) : à envoyer à quelqu'un, qui le colle ici.",
+            copy: "Copier le code de mes réglages",
+            copied: "Code copié.",
+            copyByHand: "Copie refusée par le navigateur : sélectionnez le code et copiez-le.",
+            code: "Code de mes réglages de lumière",
+            paste: "Coller un code reçu",
+            apply: "Appliquer",
+            applied: "{count} réglages appliqués.",
+            unknown: "Ce n'est pas un code de réglages de lumière.",
+        },
         night: {
             label: "Cycle jour/nuit",
             server: "Heure du serveur",

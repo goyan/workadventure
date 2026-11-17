@@ -61,6 +61,7 @@
     import SettingsSection from "./SettingsSection.svelte";
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
+    import LightSettingsShare from "./LightSettingsShare.svelte";
     import NightSettings from "./NightSettings.svelte";
     import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
@@ -476,6 +477,7 @@
             />
             <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.realisticHelp()}</p>
         </div>
+        <LightSettingsShare />
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>
             <SeasonalThemeSettings />

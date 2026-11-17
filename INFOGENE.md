@@ -404,6 +404,14 @@ n'a pas de position à lui (comme un va-et-vient).
   teinter de la couleur de la lampe, ne vaut que dans une zone (rien dehors ni dans une pièce sans zone), ne compte
   pas la lumière de lune entrée par les fenêtres, et le flou déborde d'autant derrière un mur ; pas de vrai rebond
   (une lumière ne tourne pas au coin d'une porte).
+- **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 31 réglages personnels de lumière (obscurité de la nuit,
+  éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
+  forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
+  lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu
+  (code d'une version plus récente) est ignoré. Les noms des réglages (`Stores/LightSettings.ts`) font partie du
+  code : ne jamais en réutiliser un pour autre chose. Hors du code : mode du cycle jour/nuit, nuages, effets des
+  lampes de Jam.
 - **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
   réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
   (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et
