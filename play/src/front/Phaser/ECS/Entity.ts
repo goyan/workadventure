@@ -26,6 +26,7 @@ import type { ActivatableInterface } from "../Game/ActivatableInterface";
 import { isTreadmillBelt } from "../../Utils/ObjectCategories";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
+import { switchPropertyOf } from "../Game/Switches/SwitchTargets";
 import {
     WALL_THICKNESS,
     MAP_LAYER_FLOOR_DEPTH,
@@ -776,6 +777,16 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                             (this.scene as GameScene).getEntityAudioManager().play(this.entityId, playAudioProperty);
                         },
                     });
+                    break;
+                }
+                case "switchPropertyData": {
+                    // A switch: sets the state of the objects it commands (see GameSwitches).
+                    // Read through the checked reader: the property may come from an edit command as it was sent.
+                    const switchProperty = switchPropertyOf(this);
+                    const action = switchProperty
+                        ? (this.scene as GameScene).getSwitches()?.actionOf(this, switchProperty)
+                        : undefined;
+                    if (action) actions.push(action);
                     break;
                 }
                 case "openFile": {

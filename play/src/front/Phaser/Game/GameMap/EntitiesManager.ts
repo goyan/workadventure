@@ -39,7 +39,10 @@ import {
     mapEditorSelectedEntityStore,
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
+    mapEditorSwitchWiringStore,
 } from "../../../Stores/MapEditorStore";
+import { entityStateKeysOf, switchPropertyOf } from "../Switches/SwitchTargets";
+import { toggleSwitchTarget } from "../Switches/SwitchWiring";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
@@ -635,6 +638,10 @@ export class EntitiesManager extends EventEmitter {
                     document.activeElement.blur();
                 }
 
+                if (this.wireSwitchTo(entity)) {
+                    return;
+                }
+
                 if (get(mapEditorEntityEraserStore)) {
                     // The eraser of the entity tool deletes the object instead of selecting it.
                     this.eraseEntity(entity);
@@ -791,6 +798,30 @@ export class EntitiesManager extends EventEmitter {
 
     private isExplorerToolActive(): boolean {
         return get(mapEditorSelectedToolStore) === EditorToolName.ExploreTheRoom;
+    }
+
+    /**
+     * While a switch is being wired (see mapEditorSwitchWiringStore), a click on an object the switch can command
+     * adds it to its targets, or removes it. True when the click was used for that.
+     */
+    private wireSwitchTo(entity: Entity): boolean {
+        const switchId = get(mapEditorSwitchWiringStore);
+        const switchEntity = switchId === undefined ? undefined : this.entities.get(switchId);
+        const property = switchEntity ? switchPropertyOf(switchEntity) : undefined;
+        if (!switchEntity || !property) {
+            mapEditorSwitchWiringStore.set(undefined);
+            return false;
+        }
+        // The switch itself may be one of its targets: a lamp made a switch turns itself on and off.
+        if (!entityStateKeysOf(entity.getPrefab()).includes(property.key)) {
+            return false;
+        }
+        // One update of the switch: a single step to undo.
+        switchEntity.setProperty(toggleSwitchTarget(property, entity.entityId));
+        // The panel of the switch shows its targets: it reads them again.
+        mapEditorSelectedEntityStore.set(switchEntity);
+        this.scene.markDirty();
+        return true;
     }
 
     public getEntities(): Map<string, Entity> {

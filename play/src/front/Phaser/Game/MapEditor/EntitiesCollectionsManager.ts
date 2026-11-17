@@ -147,6 +147,7 @@ export class EntitiesCollectionsManager {
                                     : undefined,
                                 lamp: entity.lamp,
                                 castsShadow: entity.castsShadow,
+                                switch: entity.switch,
                                 type: entity.type,
                                 ownerId: entity.ownerId,
                             });

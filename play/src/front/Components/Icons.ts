@@ -124,6 +124,7 @@ export { default as IconWorldCog } from "~icons/tabler/world-cog";
 export { default as IconMapSearch } from "~icons/tabler/map-search";
 export { default as IconUsersGroup } from "~icons/tabler/users-group";
 export { default as IconLamp } from "~icons/tabler/lamp";
+export { default as IconSwitch } from "~icons/tabler/toggle-right";
 export { default as IconTexture } from "~icons/tabler/texture";
 export { default as IconTools } from "~icons/tabler/tools";
 export { default as IconMessageShare } from "~icons/tabler/message-2-share";

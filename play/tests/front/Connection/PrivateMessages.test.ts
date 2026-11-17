@@ -70,6 +70,7 @@ const roomJoinedMessage: ServerToClientMessage = {
             canEdit: false,
             companionTexture: undefined,
             areaPropertyVariable: [],
+            entityState: [],
         },
     },
 };

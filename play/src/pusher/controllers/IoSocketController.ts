@@ -1066,6 +1066,7 @@ export class IoSocketController {
                             case "itemEventMessage":
                             case "variableMessage":
                             case "setAreaPropertyVariableMessage":
+                            case "setEntityStateMessage":
                             case "entityMessage":
                             case "emotePromptMessage":
                             case "duckRushPromptMessage":

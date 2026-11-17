@@ -259,6 +259,7 @@ import { type Avatar, ConversationBubble } from "@wa/front/Phaser/Entity/Convers
 import { DarkenOutsideAreaEffect } from "@wa/front/Phaser/Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "@wa/front/Stores/PersonalDeskStore";
 import { areaPropertyVariablesManagerStore } from "@wa/front/Stores/AreaPropertyVariablesStore";
+import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 import { ApplicationManager } from "@wa/front/Chat/Applications/ApplicationManager";
 import { audioPlaybackStore, handleSuspendedAudioContext } from "@wa/front/Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
@@ -312,6 +313,8 @@ import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
+import { EntityStatesManager } from "./EntityStates/EntityStatesManager";
+import { GameSwitches } from "./Switches/GameSwitches";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
 import { DynamicAreaManager } from "./DynamicAreaManager";
 import { PlayerMovement } from "./PlayerMovement";
@@ -504,6 +507,7 @@ export class GameScene extends DirtyScene {
     private preloading = true;
     private sharedVariablesManager!: SharedVariablesManager;
     private areaPropertyVariablesManager!: AreaPropertyVariablesManager;
+    private entityStatesManager: EntityStatesManager | undefined;
     private playerVariablesManager!: PlayerVariablesManager;
     private scriptingEventsManager!: ScriptingEventsManager;
     private followManager!: FollowManager;
@@ -515,6 +519,7 @@ export class GameScene extends DirtyScene {
     private gameJungle: GameJungle | undefined;
     private nightManager: NightManager | undefined;
     private lampManager: LampManager | undefined;
+    private gameSwitches: GameSwitches | undefined;
     private weatherManager: WeatherManager | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
@@ -1511,6 +1516,9 @@ export class GameScene extends DirtyScene {
         this.playerVariablesManager?.close();
         this.areaPropertyVariablesManager?.destroy();
         areaPropertyVariablesManagerStore.set(undefined);
+        this.entityStatesManager?.destroy();
+        this.entityStatesManager = undefined;
+        entityStatesManagerStore.set(undefined);
         this.scriptingEventsManager?.close();
         this.embeddedWebsiteManager?.close();
         this.scriptingVideoManager?.close();
@@ -1573,6 +1581,8 @@ export class GameScene extends DirtyScene {
         this.fadedWallFloor = undefined;
         this.lampManager?.destroy();
         this.lampManager = undefined;
+        this.gameSwitches?.destroy();
+        this.gameSwitches = undefined;
         this.weatherManager?.destroy();
         this.treeSway?.destroy();
         this.treePoses?.destroy();
@@ -1665,6 +1675,11 @@ export class GameScene extends DirtyScene {
     }
 
     /** The raised floor a point of the screen stands on at this altitude, for what must stay within it (lights). */
+    /** The switches of the map (see GameSwitches); undefined before the map is ready. */
+    public getSwitches(): GameSwitches | undefined {
+        return this.gameSwitches;
+    }
+
     public raisedFloorZoneAt(
         elevation: number,
         x: number,
@@ -1954,6 +1969,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
+            this.gameSwitches?.update(time);
             this.karaokeSpotlight?.update(time);
             desktopApi.reportEnvironment(time);
             const serverDate = this.nightManager?.serverDate();
@@ -3183,6 +3199,9 @@ export class GameScene extends DirtyScene {
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);
                 this.lampManager = new LampManager(this, { demo: lampDemo });
+                // The switches of the map: what a press does, and the small light each one carries.
+                this.gameSwitches?.destroy();
+                this.gameSwitches = new GameSwitches(this);
                 this.weatherManager?.destroy();
                 this.skateboardSounds?.destroy();
                 this.outdoorTracker = new OutdoorTracker(
@@ -3464,6 +3483,9 @@ export class GameScene extends DirtyScene {
             room.areaPropertyVariables,
         );
         areaPropertyVariablesManagerStore.set(this.areaPropertyVariablesManager);
+        this.entityStatesManager?.destroy();
+        this.entityStatesManager = new EntityStatesManager(this.connection, room.entityStates);
+        entityStatesManagerStore.set(this.entityStatesManager);
         listeningZoneNamesStore.set(
             new Map(
                 [...(this.getGameMap().getWamFile()?.getGameMapAreas().getAreas().values() ?? [])]

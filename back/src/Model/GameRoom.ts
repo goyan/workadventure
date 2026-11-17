@@ -33,12 +33,14 @@ import type {
     DuckRushEventMessage,
     EmoteEventMessage,
     EntityEvent,
+    EntityStateMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
     MapJitsiData,
     MapThirdPartyData,
     ServerToClientMessage,
+    SetEntityStateMessage,
     SetPlayerDetailsMessage,
     SubToPusherRoomMessage,
 } from "@workadventure/messages";
@@ -110,6 +112,7 @@ import { User } from "./User";
 import type { PointInterface } from "./Websocket/PointInterface";
 import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
+import { EntityStateManager } from "./EntityStateManager";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
@@ -144,6 +147,7 @@ export class GameRoom implements BrothersFinder {
     // Ephemeral variables attached to area properties (not persisted)
     private readonly areaPropertyVariablesManager = new AreaPropertyVariablesManager();
     private listeningZoneManager: ListeningZoneManager | undefined;
+    private entityStateManager: EntityStateManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -298,6 +302,12 @@ export class GameRoom implements BrothersFinder {
         await gameRoom.listeningZoneManager
             .restore()
             .catch((error) => console.error("Could not restore the Jam rooms of the listening zones", error));
+        // Keeps the state of the objects that can be switched (a lamp on or off): saved across restarts.
+        gameRoom.entityStateManager = new EntityStateManager(gameRoom, {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        await gameRoom.entityStateManager.restore();
 
         return gameRoom;
     }
@@ -1072,6 +1082,16 @@ export class GameRoom implements BrothersFinder {
 
         const changed = this.setAreaPropertyVariable(areaId, propertyId, key, value);
         return { success: true, changed };
+    }
+
+    /** The use of a switch of the map by a user: sets the state of the objects it commands. */
+    public pressSwitch(user: Pick<User, "uuid" | "tags">, message: SetEntityStateMessage): string[] {
+        return this.entityStateManager?.press(user, message) ?? [];
+    }
+
+    /** The states of the objects of the map that differ from their default, sent to a user who joins the room. */
+    public getEntityStates(): EntityStateMessage[] {
+        return this.entityStateManager?.getAll() ?? [];
     }
 
     /**

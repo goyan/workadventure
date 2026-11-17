@@ -34,6 +34,7 @@
     import { getEntityCategory, withCategory } from "../../../Utils/EntityCategory";
     import FloorLevelPicker from "../FloorLevelPicker.svelte";
     import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
+    import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
     import RgbLampEditor from "./RgbLampEditor.svelte";
@@ -148,6 +149,14 @@
     function onUpdateProperty(property: EntityDataProperty) {
         if ($mapEditorSelectedEntityStore) {
             $mapEditorSelectedEntityStore.updateProperty($state.snapshot(property));
+        }
+    }
+
+    /** Replaces the property whole (updateProperty merges: a list in it, the targets of a switch, would only grow). */
+    function onSetProperty(property: EntityDataProperty) {
+        if ($mapEditorSelectedEntityStore) {
+            $mapEditorSelectedEntityStore.setProperty($state.snapshot(property));
+            properties = $mapEditorSelectedEntityStore.getProperties();
         }
     }
 
@@ -272,6 +281,8 @@
                     width: LAMP_LIGHT_DEFAULT_TILES,
                     height: LAMP_LIGHT_DEFAULT_TILES,
                 };
+            case "switchPropertyData":
+                return { id, type, key: "on", targets: { mode: "zone" } };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -510,6 +521,17 @@
                 }}
             />
         </div>
+        <!-- Any object can be made a switch, once: using it turns its lamps on or off. -->
+        {#if !properties.some((property) => property.type === "switchPropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="switchPropertyData"
+                    onclick={() => {
+                        onAddProperty("switchPropertyData");
+                    }}
+                />
+            </div>
+        {/if}
         <!-- A lamp (its catalog entry says so) can have the size of its light set, once. A dance floor has its own
              size editor (see DanceFloorSizeEditor), an RGB lamp its own settings (see RgbLampEditor). -->
         {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "rgb" && !properties.some((property) => property.type === "lampPropertyData")}
@@ -633,6 +655,15 @@
         {#if $mapEditorSelectedEntityStore.getPrefab().lamp?.kind === "rgb" && $mapEditorSelectedEntityStore.visible}
             {#key $mapEditorSelectedEntityStore.entityId}
                 <RgbLampEditor entity={$mapEditorSelectedEntityStore} />
+                <p class="m-2 text-sm text-white/70" data-testid="lampSwitchCount">
+                    {$LL.mapEditor.properties.switchPropertyData.commandedBy({
+                        count:
+                            gameManager
+                                .getCurrentGameScene()
+                                .getSwitches()
+                                ?.switchesCommanding($mapEditorSelectedEntityStore.entityId).length ?? 0,
+                    })}
+                </p>
             {/key}
         {/if}
         {#if $mapEditorSelectedEntityStore.visible}
@@ -706,6 +737,17 @@
                                 }}
                                 onchange={() => onUpdateProperty(properties[i])}
                             />
+                        {:else if properties[i].type === "switchPropertyData"}
+                            {#if $mapEditorSelectedEntityStore}
+                                <SwitchPropertyEditor
+                                    entity={$mapEditorSelectedEntityStore}
+                                    bind:property={properties[i]}
+                                    onclose={() => {
+                                        onDeleteProperty(property.id);
+                                    }}
+                                    onchange={() => onSetProperty(properties[i])}
+                                />
+                            {/if}
                         {:else if properties[i].type === "lampPropertyData"}
                             {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "rgb"}
                                 <LampPropertyEditor

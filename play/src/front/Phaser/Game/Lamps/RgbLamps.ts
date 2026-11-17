@@ -9,6 +9,7 @@ import { LightObstaclesByLevel } from "./LightObstacleReader";
 import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
+import { RgbLampPower } from "./RgbLampPower";
 import { isTurning, rgbLampBeamDirection } from "./RgbLampRotation";
 import { rgbLampColour, rgbLampLight, rgbLampSettingsOf, type RgbLampSettings } from "./RgbLampSettings";
 import { RgbLampVisual } from "./RgbLampVisual";
@@ -55,6 +56,10 @@ export interface RgbLampsOptions {
     now?: () => number;
     /** The preference of the system: turning lamps stand still. */
     reducedMotion?: boolean;
+    /** Whether a switch left the lamp on (see EntityStatesManager); every lamp is on when absent. */
+    isOn?: (entityId: string) => boolean;
+    /** The clock the fade of a lamp switched on or off follows: the one of the computer when absent. */
+    fadeNow?: () => number;
 }
 
 function isRgbLamp(entity: Entity): boolean {
@@ -84,6 +89,9 @@ export class RgbLamps {
     private frame = 0;
     private readonly reducedMotion: boolean;
     private readonly now: () => number;
+    private readonly isOn: (entityId: string) => boolean;
+    private readonly fadeNow: () => number;
+    private readonly power: RgbLampPower;
     // Asked for the time only once a lamp turns: a map without one sends nothing to the server.
     private serverClock: ServerNightClock | undefined;
 
@@ -98,6 +106,9 @@ export class RgbLamps {
         this.unsubscribePreview = rgbLampPreviewStore.subscribe((preview) => (this.preview = preview));
         this.obstacles = new LightObstaclesByLevel(scene, () => this.tileSize());
         this.reducedMotion = options.reducedMotion ?? false;
+        this.isOn = options.isOn ?? ((): boolean => true);
+        this.fadeNow = options.fadeNow ?? Date.now;
+        this.power = new RgbLampPower(() => this.reducedMotion);
         // The clock of the server, so that a computer whose clock is wrong turns its lamps with the others; the
         // computer's clock until the server answered (the beams jump once, then).
         this.now =
@@ -120,6 +131,7 @@ export class RgbLamps {
             if (entities.get(id) !== lamp.entity || !isRgbLamp(lamp.entity)) {
                 lamp.visual.destroy();
                 this.lamps.delete(id);
+                this.power.forget(id);
                 removed = true;
             }
         }
@@ -167,11 +179,28 @@ export class RgbLamps {
         let changed = false;
         for (const [id, lamp] of this.lamps) {
             const { entity } = lamp;
+            // A lamp a switch put out gives no light, and nothing through the night veil. In the map editor every
+            // lamp shines, so that it can be set.
+            const power = editorOpen ? 1 : this.power.level(id, this.isOn(id), this.fadeNow());
+            const shown = entity.visible && power > 0;
+            if (power === 0) {
+                if (lamp.light || lamp.visible) {
+                    // Drawn again from scratch once it is back on.
+                    lamp.light = undefined;
+                    lamp.key = "";
+                    lamp.turnKey = "";
+                    lamp.fullTurn = undefined;
+                    lamp.visible = false;
+                    lamp.visual.setVisible(false);
+                    changed = true;
+                }
+                continue;
+            }
             // Read at every image: a script will be able to drive the lamp through its property.
             const settings =
                 this.preview?.entityId === id ? this.preview.settings : rgbLampSettingsOf(entity.getProperties());
             const light = rgbLampLight(lampSource(entity, entity.getPrefab().lamp?.anchor), settings, tileSize);
-            const intensity = settings.intensity ?? 1;
+            const intensity = (settings.intensity ?? 1) * power;
             if (isTurning(settings, still)) {
                 time ??= this.now();
                 const direction = rgbLampBeamDirection(settings, time, still);
@@ -186,8 +215,8 @@ export class RgbLamps {
             } else {
                 changed = this.drawStill(id, lamp, light, settings.color, intensity) || changed;
             }
-            if (lamp.visible !== entity.visible) {
-                lamp.visible = entity.visible;
+            if (lamp.visible !== shown) {
+                lamp.visible = shown;
                 lamp.visual.setVisible(lamp.visible);
                 changed = true;
             }

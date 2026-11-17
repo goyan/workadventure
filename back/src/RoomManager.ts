@@ -228,6 +228,10 @@ const roomManager = {
                             socketManager.handleEntityMessage(room, message.message.entityMessage);
                             break;
                         }
+                        case "setEntityStateMessage": {
+                            socketManager.handleSetEntityStateEvent(room, user, message.message.setEntityStateMessage);
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }

@@ -617,6 +617,89 @@
                         "type"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
+                        },
+                        "buttonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/buttonLabel"
+                        },
+                        "hideButtonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/hideButtonLabel"
+                        },
+                        "resourceUrl": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/resourceUrl"
+                        },
+                        "serverData": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/serverData"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "switchPropertyData"
+                        },
+                        "key": {
+                          "type": "string",
+                          "enum": [
+                            "on"
+                          ],
+                          "default": "on"
+                        },
+                        "targets": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "type": "string",
+                                  "const": "ids"
+                                },
+                                "ids": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  },
+                                  "maxItems": 200
+                                }
+                              },
+                              "required": [
+                                "mode",
+                                "ids"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "mode": {
+                                  "type": "string",
+                                  "const": "zone"
+                                }
+                              },
+                              "required": [
+                                "mode"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ],
+                          "default": {
+                            "mode": "zone"
+                          }
+                        },
+                        "allowedTags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }

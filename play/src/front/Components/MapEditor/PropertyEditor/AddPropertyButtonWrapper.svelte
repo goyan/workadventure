@@ -37,6 +37,7 @@
         IconHeadphones,
         IconCalendar,
         IconLamp,
+        IconSwitch,
     } from "@wa-icons";
 
     interface Props {
@@ -411,6 +412,19 @@
         }}
         testId="addTooltipProperty"
         img={IconTooltip}
+    />
+{/if}
+{#if property === "switchPropertyData"}
+    <AddPropertyButton
+        headerText={$LL.mapEditor.properties.switchPropertyData.label()}
+        descriptionText={$LL.mapEditor.properties.switchPropertyData.description()}
+        style={`z-index: 204;${isActive ? "background-color: #4156f6;" : ""}`}
+        testId="switchPropertyData"
+        {disabled}
+        onclick={(event) => {
+            onclick?.(event);
+        }}
+        img={IconSwitch}
     />
 {/if}
 {#if property === "lampPropertyData"}

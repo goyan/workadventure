@@ -235,6 +235,8 @@ export class RoomConnection implements RoomConnection {
         value: unknown;
     }>();
     public readonly areaPropertyVariableMessageStream = this._areaPropertyVariableMessageStream.asObservable();
+    private readonly _entityStateMessageStream = new Subject<{ entityId: string; key: string; value: string }>();
+    public readonly entityStateMessageStream = this._entityStateMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -455,6 +457,10 @@ export class RoomConnection implements RoomConnection {
                                     });
                                     break;
                                 }
+                                case "entityStateMessage": {
+                                    this._entityStateMessageStream.next(subMessage.entityStateMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -658,6 +664,7 @@ export class RoomConnection implements RoomConnection {
                         companionTexture: roomJoinedMessage.companionTexture,
                         playerVariables,
                         areaPropertyVariables,
+                        entityStates: roomJoinedMessage.entityState ?? [],
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -1152,6 +1159,16 @@ export class RoomConnection implements RoomConnection {
                     name,
                     value: JSON.stringify(value),
                 },
+            },
+        });
+    }
+
+    /** The use of a switch of the map: asks the server to set the state `key` of the objects it commands. */
+    emitSetEntityState(switchId: string, entityIds: string[], key: string, value: string): void {
+        this.send({
+            message: {
+                $case: "setEntityStateMessage",
+                setEntityStateMessage: { switchId, entityIds, key, value },
             },
         });
     }
@@ -2329,6 +2346,7 @@ export class RoomConnection implements RoomConnection {
         this._duckRushEventMessageStream.complete();
         this._variableMessageStream.complete();
         this._areaPropertyVariableMessageStream.complete();
+        this._entityStateMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();
