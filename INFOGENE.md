@@ -2010,7 +2010,10 @@ panneau ; sauvegarder les applique à tous.
 **Bandeau** (menu des applications → « Météo », choix gardé dans le navigateur) : maintenant, +1 h et +4 h sous
 l'horloge, températures en mode Réel, programme saisonnier en Automatique. Pour « Maintenant », la vitesse du vent
 réel du lieu (km/h arrondis, `wind_speed_10m` déjà lu, aucune requête de plus), avec une petite icône de rafales ; rien
-si le vent est inconnu ; pas pour +1 h et +4 h, pour que le bandeau tienne sur un écran étroit.
+si le vent est inconnu ; pas pour +1 h et +4 h, pour que le bandeau tienne sur un écran étroit. Quand sa direction est
+connue (`wind_direction_10m`, déjà lu), une flèche vers là où va le vent remplace les rafales, suivie de la provenance
+sur 8 points (« ↘ NO 22 km/h », secteurs de 45° centrés, `WindDirection.ts`) ; flèche tournée par quarts de tour pour
+rester nette ; pas de direction sans vitesse ni par vent arrondi à 0 km/h.
 
 **Pusher** : `/real-weather` et `/real-weather/places`, authentifiés, 30 requêtes par minute et par joueur
 (`PerUserRateLimiter`, partagé avec les paroles) ; 20 nouveaux lieux et 30 recherches par minute pour tout le pusher,
