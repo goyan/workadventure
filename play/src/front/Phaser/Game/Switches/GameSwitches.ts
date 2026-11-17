@@ -21,6 +21,7 @@ import {
     resolveSwitchTargets,
     roomIdAt,
     switchPressValue,
+    switchPropertyOf,
     type SwitchableTarget,
 } from "./SwitchTargets";
 
@@ -30,12 +31,6 @@ const RECONCILE_INTERVAL_MS = 250;
 /** A switch stands in the room its foot is in. */
 function footOf(entity: Entity): { x: number; y: number } {
     return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight - 1 };
-}
-
-export function switchPropertyOf(entity: Entity): SwitchPropertyData | undefined {
-    return entity
-        .getProperties()
-        .find((property): property is SwitchPropertyData => property.type === "switchPropertyData");
 }
 
 /**

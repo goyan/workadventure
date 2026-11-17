@@ -5,6 +5,7 @@ import {
     resolveSwitchTargets,
     roomIdAt,
     switchPressValue,
+    switchPropertyOf,
     type SwitchableTarget,
 } from "../../../../../src/front/Phaser/Game/Switches/SwitchTargets";
 
@@ -157,5 +158,21 @@ describe("resolveSwitchTargets by room", () => {
         const nowhere: SwitchableTarget = lamp("nowhere", 0, 0);
         const targets = resolveSwitchTargets(property({ mode: "zone" }), "office", 0, [onWall, elsewhere, nowhere]);
         expect(targets.map((target) => target.id)).toEqual(["wall"]);
+    });
+});
+
+describe("switchPropertyOf", () => {
+    const entityWith = (...properties: unknown[]) => ({ getProperties: () => properties as never });
+
+    it("reads the switch of an object, with its defaults", () => {
+        expect(switchPropertyOf(entityWith({ id: "p", type: "switchPropertyData" }))?.targets).toEqual({
+            mode: "zone",
+        });
+    });
+
+    it("ignores a switch another editor sent incomplete: the game reads it at every image", () => {
+        expect(
+            switchPropertyOf(entityWith({ id: "p", type: "switchPropertyData", targets: { mode: "ids" } })),
+        ).toBeUndefined();
     });
 });

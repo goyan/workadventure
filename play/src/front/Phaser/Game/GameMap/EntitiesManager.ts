@@ -41,8 +41,7 @@ import {
     mapEditorSnapEnabledStore,
     mapEditorSwitchWiringStore,
 } from "../../../Stores/MapEditorStore";
-import { switchPropertyOf } from "../Switches/GameSwitches";
-import { entityStateKeysOf } from "../Switches/SwitchTargets";
+import { entityStateKeysOf, switchPropertyOf } from "../Switches/SwitchTargets";
 import { toggleSwitchTarget } from "../Switches/SwitchWiring";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";

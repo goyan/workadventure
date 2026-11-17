@@ -9,6 +9,7 @@ import {
     isEntityStateKey,
     isEntityStateValue,
     switchMayReach,
+    switchPropertyIn,
 } from "../src";
 
 describe("entity states", () => {
@@ -101,5 +102,30 @@ describe("a catalog entry that is a switch", () => {
 
     it("fails open: an invalid `switch` leaves the object as a plain one", () => {
         expect(EntityRawPrefab.parse({ ...prefab, switch: "yes" }).switch).toBeUndefined();
+    });
+});
+
+describe("switchPropertyIn", () => {
+    it("gives the switch of an object with its defaults, even when the map sent it without targets", () => {
+        expect(switchPropertyIn([{ id: "p", type: "switchPropertyData" }])).toEqual({
+            id: "p",
+            type: "switchPropertyData",
+            key: "on",
+            targets: { mode: "zone" },
+        });
+    });
+
+    it("ignores a switch that is not well formed, instead of handing it to the code that trusts its shape", () => {
+        expect(switchPropertyIn([{ id: "p", type: "switchPropertyData", targets: { mode: "ids" } }])).toBeUndefined();
+        expect(switchPropertyIn([{ id: "p", type: "switchPropertyData", targets: "all" }])).toBeUndefined();
+        const tooMany = Array.from({ length: SWITCH_MAX_TARGETS + 1 }, (_, index) => `l${index}`);
+        expect(
+            switchPropertyIn([{ id: "p", type: "switchPropertyData", targets: { mode: "ids", ids: tooMany } }]),
+        ).toBeUndefined();
+    });
+
+    it("gives nothing for an object without switch", () => {
+        expect(switchPropertyIn(undefined)).toBeUndefined();
+        expect(switchPropertyIn([{ id: "o", type: "openWebsite" }, null, "x"])).toBeUndefined();
     });
 });

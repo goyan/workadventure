@@ -1,6 +1,6 @@
 import { isAtAreaLevel } from "./GameMap/GameMapAreas";
-import { ENTITY_STATE_KEYS } from "./types";
-import type { SwitchPropertyData, SwitchTargets, SwitchTrigger } from "./types";
+import { ENTITY_STATE_KEYS, SwitchPropertyData } from "./types";
+import type { SwitchTargets, SwitchTrigger } from "./types";
 
 export type EntityStateKey = (typeof ENTITY_STATE_KEYS)[number];
 export type EntityStateValue = "true" | "false";
@@ -163,4 +163,24 @@ export function switchPresenceSenses(
         position.y >= area.y &&
         position.y <= area.y + area.height
     );
+}
+
+/**
+ * The switch among the properties of an object, checked against its schema and with its defaults. The properties of
+ * a map that is being edited are what the last edit command carried, which nothing validates: a switch that is not
+ * well formed is ignored here rather than read by the code that runs at every image or every second.
+ */
+export function switchPropertyIn(properties: readonly unknown[] | undefined): SwitchPropertyData | undefined {
+    const raw = properties?.find(
+        (property) =>
+            typeof property === "object" &&
+            property !== null &&
+            "type" in property &&
+            property.type === "switchPropertyData",
+    );
+    if (raw === undefined) {
+        return undefined;
+    }
+    const parsed = SwitchPropertyData.safeParse(raw);
+    return parsed.success ? parsed.data : undefined;
 }

@@ -70,6 +70,24 @@ function createHarness({
 }
 
 describe("EntityStateManager", () => {
+    it("reads a switch the map holds without targets as a room switch, instead of failing", () => {
+        const wam = wamWith();
+        // What a live edit command leaves in the map: nothing fills the defaults of the schema in.
+        const raw = wam.entities.switch.properties?.[0] as unknown as Record<string, unknown>;
+        delete raw.targets;
+        delete raw.key;
+        const { press } = createHarness({ wam });
+
+        expect(press(["l1", "far"])).toEqual(["l1"]);
+    });
+
+    it("ignores the press of a switch that is not well formed", () => {
+        const { manager, press } = createHarness({ wam: wamWith({ targets: { mode: "ids" } }) });
+
+        expect(press(["l1"])).toEqual([]);
+        expect(manager.getAll()).toEqual([]);
+    });
+
     it("sets the state of the targets of a switch and tells the room", () => {
         const { manager, sent, press, repository } = createHarness();
 
