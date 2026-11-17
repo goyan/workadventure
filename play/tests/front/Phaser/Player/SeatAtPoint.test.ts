@@ -28,6 +28,7 @@ function sceneWith(...objects: PlacedObject[]): GameScene {
                 displayWidth: object.width,
                 displayHeight: object.height,
                 getPrefab: () => object.prefab as unknown as EntityPrefab,
+                getElevation: () => 0,
             },
         ]),
     );

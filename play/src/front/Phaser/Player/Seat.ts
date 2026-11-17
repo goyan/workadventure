@@ -71,6 +71,9 @@ function computeSeats(scene: GameScene): Seat[] {
     const categories = scene.wamFile?.settings?.categories;
     const seats: Seat[] = [];
     for (const [entityId, entity] of entitiesManager.getEntities()) {
+        // A seat on a raised floor (or hung up a wall) is drawn over the ground it does not stand on: nobody sits on
+        // it from there. (Sitting on a raised floor is not handled yet.)
+        if (entity.getElevation() > 0) continue;
         const prefab = entity.getPrefab();
         const direction = toPositionDirection(prefab.direction);
         const depth = entity.depth + (direction === PositionMessage_Direction.UP ? -1 : 1);
