@@ -147,6 +147,43 @@ describe("raised floors of the map layer", () => {
         expect(stairElevationAt(west, foot, { x: 100, y: 650 })).toBe(84);
     });
 
+    it("names and reads the new stairs (-v2), short ones, before the open side", () => {
+        const id = (name: string) => `${MAP_LAYER_FLOOR_SLAB_COLLECTION}:${name}:Default:Down`;
+        expect(stairPrefabName({ direction: "n", width: 1, rise: 52, open: false, short: true })).toBe(
+            "escalier-n-l1-h2-v2",
+        );
+        expect(stairPrefabName({ direction: "e", width: 2, rise: 116, open: true, short: true })).toBe(
+            "escalier-e-l2-h4-v2-vide",
+        );
+        expect(parseFloorPiece(MAP_LAYER_FLOOR_SLAB_COLLECTION, id("escalier-s-l1-h3-v2"))).toEqual({
+            kind: "stair",
+            direction: "s",
+            width: 1,
+            rise: 84,
+            open: false,
+            short: true,
+        });
+        // The stairs already placed keep their name and shape: no `short` field.
+        expect(parseFloorPiece(MAP_LAYER_FLOOR_SLAB_COLLECTION, id("escalier-n-l1-h2"))).not.toHaveProperty("short");
+        expect(parseFloorPiece(MAP_LAYER_FLOOR_SLAB_COLLECTION, id("escalier-n-l1-h2-vide-v2"))).toBeUndefined();
+    });
+
+    it("gives a new stair one tile of run north, east and west; going south, the run it always had", () => {
+        expect(stairRun("n", 52, true)).toBe(1);
+        expect(stairRun("e", 116, true)).toBe(1);
+        expect(stairRun("o", 84, true)).toBe(1);
+        expect(stairRun("s", 84, true)).toBe(stairRun("s", 84));
+        const foot = { x: 10, y: 20 };
+        const north = { direction: "n", width: 1, rise: 52, open: false, short: true } as const;
+        expect(stairGroundBox(north, foot)).toEqual({ x: 320, y: 640, width: 32, height: 32 });
+        // On the screen: one tile plus its rise.
+        expect(stairScreenBox(north, foot)).toEqual({ x: 320, y: 640 - 52, width: 32, height: 32 + 52 });
+        // Up its whole rise over one tile.
+        expect(stairElevationAt(north, foot, { x: 336, y: 672 })).toBe(0);
+        expect(stairElevationAt(north, foot, { x: 336, y: 656 })).toBe(26);
+        expect(stairElevationAt(north, foot, { x: 336, y: 640 })).toBe(52);
+    });
+
     it("names and reads a glass slab, a slab that is no floor of the ground", () => {
         expect(slabPrefabName("verre")).toBe("dalle-verre");
         expect(parseFloorPiece("Carte Paliers", "Carte Paliers:dalle-verre:Default:Down")).toEqual({

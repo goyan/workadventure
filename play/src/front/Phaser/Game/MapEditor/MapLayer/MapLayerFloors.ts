@@ -49,6 +49,11 @@ export interface StairShape {
     rise: StairRise;
     /** Whether its side is open (only its stringer is drawn, the ground shows under it) instead of full. */
     open: boolean;
+    /**
+     * A new stair (`-v2`): one tile of run north, east and west (going south it cannot be shorter than its rise), and
+     * drawn lit from above. Absent on the stairs placed before them, which keep their run and look.
+     */
+    short?: boolean;
 }
 
 export type FloorPiece = { kind: "slab"; family: SlabFamily } | ({ kind: "stair" } & StairShape);
@@ -75,11 +80,12 @@ export function slabPrefabName(family: SlabFamily): string {
 }
 
 export function stairPrefabName(stair: StairShape): string {
-    return `escalier-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}${stair.open ? "-vide" : ""}`;
+    const version = stair.short ? "-v2" : "";
+    return `escalier-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}${version}${stair.open ? "-vide" : ""}`;
 }
 
 const SLAB_NAME = new RegExp(`^dalle-(${SLAB_FAMILIES.join("|")})$`);
-const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[2-4]|m[12])(-vide)?$/;
+const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[2-4]|m[12])(-v2)?(-vide)?$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not a slab or a stair. */
 export function parseFloorPiece(collectionName: string, prefabId: string): FloorPiece | undefined {
@@ -99,15 +105,24 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
     const direction = STAIR_DIRECTIONS.find((candidate) => candidate === stair?.[1]);
     const rise = STAIR_RISES.find((candidate) => STAIR_RISE_NAMES[candidate] === stair?.[3]);
     if (!stair || !direction || !rise) return undefined;
-    return { kind: "stair", direction, width: stair[2] === "2" ? 2 : 1, rise, open: stair[4] !== undefined };
+    return {
+        kind: "stair",
+        direction,
+        width: stair[2] === "2" ? 2 : 1,
+        rise,
+        open: stair[5] !== undefined,
+        ...(stair[4] ? { short: true } : {}),
+    };
 }
 
 /**
  * Length of a stair on the ground, in tiles: one per tile it goes up (rounded up). Going south, the avatar goes down the screen by
  * its run and up by its rise: one more tile keeps it going down.
  */
-export function stairRun(direction: StairDirection, rise: StairRise): number {
+export function stairRun(direction: StairDirection, rise: StairRise, short = false): number {
     const tiles = Math.ceil(rise / MAP_LAYER_TILE_SIZE);
+    // A new stair takes one tile, except going south, where the run must stay longer than the rise.
+    if (short && direction !== "s") return 1;
     return direction === "s" ? tiles + 1 : tiles;
 }
 
@@ -118,7 +133,7 @@ export function stairRun(direction: StairDirection, rise: StairRise): number {
  */
 export function stairGroundBox(stair: StairShape, foot: TilePoint): PixelBox {
     const size = MAP_LAYER_TILE_SIZE;
-    const run = stairRun(stair.direction, stair.rise) * size;
+    const run = stairRun(stair.direction, stair.rise, stair.short) * size;
     const across = stair.width * size;
     switch (stair.direction) {
         case "n":

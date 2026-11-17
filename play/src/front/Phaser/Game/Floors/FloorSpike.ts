@@ -1,4 +1,12 @@
 import * as Phaser from "phaser";
+import { get } from "svelte/store";
+import { LL } from "../../../../i18n/i18n-svelte";
+import {
+    floorLevelCurrentStore,
+    floorLevelName,
+    floorLevelsBuiltStore,
+    floorLevelsHiddenStore,
+} from "../../../Stores/FloorLevelsStore";
 import { floorGroups, floorGroupBounds } from "../MapEditor/MapLayer/FloorGroups";
 import type { FloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import { stairEnds } from "../MapEditor/MapLayer/FloorPath";
@@ -9,15 +17,33 @@ import type { LevelPlaced } from "../MapEditor/MapLayer/MapLayerLevels";
 import { modelFromPlacedPrefabs } from "../MapEditor/MapLayer/MapLayerOperations";
 import type { TileBarriers } from "../../../Utils/TileBarriers";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
-import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
+import { FloorModel, stairFootFromImage } from "../MapEditor/MapLayer/FloorModel";
 import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
-import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
+import { FLOOR_PREVIEW_DEPTH, floorDepth, floorPieceDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { floorStep, restoredFloorState } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
-import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+import { parseFloorPiece, stairGroundBox } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
 import { FloorRailingsView } from "./FloorRailingsView";
 import { floorZToShare } from "./FloorProtocol";
+import {
+    ABOVE_ALPHA,
+    ABOVE_TINT,
+    aboveLevelShows,
+    STAIR_OVER_AVATAR_ALPHA,
+    stairCoversAvatar,
+    stairDepth,
+    stairShows,
+    veilAlphaToward,
+    VEIL_ALPHA,
+    VEIL_COLOR,
+    currentLevels,
+    fadeToward,
+    levelLook,
+    veilDepth,
+} from "./LevelFocus";
+import { avatarGroundTile, stairLabels } from "./StairHints";
+import { StairHintsView } from "./StairHintsView";
 
 /**
  * TRIAL of the raised floors, enabled by `?palier=piece`, `?palier=1` or `?palier=<cellX>,<cellY>`: the floors are
@@ -32,8 +58,8 @@ export interface FloorAvatar {
 
 /** The point read for the avatar, under its centre: between its feet. */
 const FEET_OFFSET_Y = 12;
-/** Opacity of a floor the avatar is under, or climbs to. */
-const HIDDEN_ALPHA = 0.35;
+/** Opacity of a floor the avatar is under, or climbs to: a grey veil (LevelFocus). */
+const HIDDEN_ALPHA = ABOVE_ALPHA;
 /** Opacity of the slabs that hide a stair. */
 const OVER_STAIR_ALPHA = 0.55;
 const FADE_MS = 200;
@@ -58,6 +84,8 @@ interface LevelDrawing {
     show(alpha: number): void;
     /** The slabs of the level placed on the map, where they are drawn. */
     slabEntities: FloorEntity[];
+    /** Whether its slabs are greyed: a floor above the avatar. */
+    tinted?: boolean;
 }
 
 /** A slab or a stair placed on the map (an `Entity` fits). */
@@ -67,6 +95,12 @@ export interface FloorEntity {
     setAlpha(alpha: number): unknown;
     getPrefab(): { collectionName: string; id: string };
     getEntityData(): { elevation?: number };
+    /** Greys a slab of a floor above the avatar; undone by clearTint. */
+    setTint?(color: number): unknown;
+    clearTint?(): unknown;
+    /** Where it is drawn among the others: a stair is lifted over the veil of the floors under the avatar. */
+    depth?: number;
+    setDepth?(depth: number): unknown;
     /** The size of its image, for a stair: what it hides on the screen. */
     displayWidth?: number;
     displayHeight?: number;
@@ -103,6 +137,9 @@ interface StairDrawing {
     shown: number;
     /** The floor it stands on, when it does not start from the ground. */
     floor: LevelDrawing | undefined;
+    /** Its own depth (as `Entity` sorts it), and where its foot row ends on the ground. */
+    ownDepth: number;
+    groundBottom: number;
 }
 
 /** Opacity of the floors above the one being edited, in the map editor. */
@@ -192,9 +229,6 @@ const RESTORE_RETRY_MS = 300;
 /** Walked further than this, the avatar is not where it was before the reload: nothing to restore. */
 const RESTORE_REACH_PX = 8;
 
-/** A floor that hides the room the avatar is in, without standing over it, is not drawn at all. */
-const OUT_OF_SIGHT_ALPHA = 0;
-
 export interface FloorOccupant {
     /** Where it is drawn: tells the floor it stands on among the ones of its altitude. */
     x?: number;
@@ -217,6 +251,12 @@ export class FloorSpike {
     private readonly fadedOccupants = new Set<FloorOccupant>();
     private readonly drawings: Phaser.GameObjects.Graphics[] = [];
     private readonly label: Phaser.GameObjects.Text;
+    /** The dark veil over the floors under the avatar (LevelFocus), and how opaque it is now. */
+    private readonly veil: Phaser.GameObjects.Rectangle;
+    private veilAlpha = 0;
+    private readonly reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    /** The label of the floor a stair leads to. */
+    private readonly hints: StairHintsView;
     private barriers: TileBarriers | undefined;
     private barriersAge = 0;
     private mapAge = 0;
@@ -247,6 +287,8 @@ export class FloorSpike {
         this.railings = new FloorRailingsView(scene);
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
+        this.hints = new StairHintsView(scene);
+        this.veil = scene.add.rectangle(0, 0, 1, 1, VEIL_COLOR).setOrigin(0, 0).setAlpha(0).setVisible(false);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
     }
 
@@ -298,6 +340,10 @@ export class FloorSpike {
         for (const drawing of this.drawings) drawing.destroy();
         this.railings.destroy();
         this.label.destroy();
+        this.veil.destroy();
+        this.hints.destroy();
+        floorLevelsBuiltStore.set([]);
+        floorLevelCurrentStore.set(0);
     }
 
     /** For the tests in the browser. */
@@ -367,11 +413,58 @@ export class FloorSpike {
             this.share(toShare);
         }
         this.fade(this.model, result.p, delta);
+        this.updateHints(this.model, result.p);
 
         this.label.setVisible(this.origin !== undefined);
         this.label.setPosition(result.p.x + 14, result.p.y - 44);
         this.label.setText(`z=${Math.round(this.state.elevation)}${this.state.stair === undefined ? "" : " escalier"}`);
     };
+
+    /** Near the end of a stair, the name of the floor at its other end. */
+    private updateHints(model: FloorModel, p: { x: number; y: number }): void {
+        const editorOpen = this.editor().open;
+        const stairs = model.getStairs();
+        const tile = avatarGroundTile(p, this.state.elevation);
+        const labels = editorOpen
+            ? []
+            : stairLabels(stairs, tile, this.state, (elevation) => floorLevelName(get(LL), elevation));
+        this.hints.update(stairs, labels);
+        // The stack of the floors under the clock: the floor stood on, the last one while on a stair.
+        floorLevelsHiddenStore.set(editorOpen);
+        if (this.state.stair === undefined) floorLevelCurrentStore.set(this.state.elevation);
+    }
+
+    /** The room of the ground the avatar is in: its altitude further south than where it is drawn. */
+    private room(p: { x: number; y: number }): number | undefined {
+        return this.roomAt(p.x, p.y + this.state.elevation);
+    }
+
+    /** Where the foot row of a stair placed at (x, y) ends on the ground, in pixels. */
+    private stairGroundBottom(piece: FloorPiece, entity: FloorEntity, elevation: number): number {
+        if (piece.kind !== "stair") return entity.y;
+        const foot = stairFootFromImage(piece, entity.x, entity.y, elevation);
+        if (!foot) return entity.y + (entity.displayHeight ?? 0);
+        const ground = stairGroundBox(piece, foot);
+        return ground.y + ground.height;
+    }
+
+    /** The dark veil over the floors under the avatar: over the whole view, just under the floor the avatar is on. */
+    private updateVeil(depth: number | undefined, delta: number): void {
+        const target = depth === undefined || this.levels.length === 0 ? 0 : VEIL_ALPHA;
+        const next = veilAlphaToward(this.veilAlpha, target, delta, this.reducedMotion);
+        if (next === 0 && this.veilAlpha === 0) return;
+        const changed = next !== this.veilAlpha || (depth !== undefined && depth !== this.veil.depth);
+        this.veilAlpha = next;
+        if (depth !== undefined) this.veil.setDepth(depth);
+        // It covers the view: follow the camera (whose move redraws the scene anyway).
+        const view = this.scene.cameras.main.worldView;
+        this.veil
+            .setPosition(view.x - TILE, view.y - TILE)
+            .setSize(view.width + 2 * TILE, view.height + 2 * TILE)
+            .setAlpha(next)
+            .setVisible(next > 0);
+        if (changed) this.scene.markDirty();
+    }
 
     /**
      * Outdoors, the slabs around the avatar let it show through the floors that hide it, the rest of the building
@@ -400,39 +493,45 @@ export class FloorSpike {
         if (touched.size > 0) this.scene.markDirty();
     }
 
-    /** A floor over the avatar, or the one it climbs to, lets it show through. */
+    /** The floors above the avatar are hidden indoors and up a floor (LevelFocus), the stairs always show. */
     private fade(model: FloorModel, p: { x: number; y: number }, delta: number): void {
-        // The floor the stair the avatar is on goes up to.
-        const climbed = this.state.stair === undefined ? undefined : model.getStairs()[this.state.stair];
-        const climbing = climbed ? this.floorAt(climbed.top, stairEnds(climbed).top) : undefined;
         const editor = this.editor();
         // Where the avatar is on the ground: its altitude further south than where it is drawn.
-        const room = this.roomAt(p.x, p.y + this.state.elevation);
+        const room = this.room(p);
         // The floors that hide the avatar outdoors: they let it show through a window around it.
         const windowed = new Set<LevelDrawing>();
+        // The floors the avatar is on: its own, or both floors of the stair it climbs.
+        const current = currentLevels(this.state, model.getStairs());
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
                 // In the editor, the floors above the one being edited let it show through.
                 if (level.elevation > editor.level) target = EDITOR_ABOVE_ALPHA;
-            } else if (level.elevation > this.state.elevation + 1) {
-                const hides = level.slabEntities.some((slab) => slabCoversAvatar(slab, p));
-                // In the room a floor stands over, one sees the room through it: the whole floor, not only the
-                // slabs right over the avatar.
-                const overRoom = room !== undefined && level.roomsUnder.has(room);
-                if (overRoom || climbing === level) target = HIDDEN_ALPHA;
-                // The floor of another building drawn over the room (its storeys reach north of where it stands):
-                // it is not of this room, and would hide it.
-                else if (room !== undefined && (hides || level.roomsCovered.has(room))) target = OUT_OF_SIGHT_ALPHA;
-                // Outdoors a building stays whole: only the slabs around the avatar let it show through.
-                else if (hides) windowed.add(level);
+            } else if (levelLook(level.elevation, current) === "above") {
+                const shows = aboveLevelShows({
+                    indoors: room !== undefined,
+                    raised: this.state.elevation > 0 || this.state.stair !== undefined,
+                    hidesAvatar: level.slabEntities.some((slab) => slabCoversAvatar(slab, p)),
+                });
+                target = shows.alpha;
+                if (shows.window) windowed.add(level);
             }
             // The slabs over a stair only let it show through from under their floor: standing on that floor, or
             // above it, one sees a plain floor.
-            const seeThrough = editor.open || level.elevation > this.state.elevation + 1;
+            const seeThrough = editor.open || levelLook(level.elevation, current) === "above";
             if (seeThrough !== level.seeThrough) {
                 level.seeThrough = seeThrough;
                 level.show(level.alpha);
+                this.scene.markDirty();
+            }
+            // A floor above the avatar is a grey veil, not a faded floor in its colours.
+            const tinted = !editor.open && target < 1;
+            if (tinted !== (level.tinted ?? false)) {
+                level.tinted = tinted;
+                for (const slab of level.slabEntities) {
+                    if (tinted) slab.setTint?.(ABOVE_TINT);
+                    else slab.clearTint?.();
+                }
                 this.scene.markDirty();
             }
             if (level.alpha === target) continue;
@@ -443,34 +542,51 @@ export class FloorSpike {
             this.scene.markDirty();
         }
         this.fadeWindow(windowed, p, delta);
-        // A stair drawn over the avatar lets it show through: the avatar is under it, or behind it, lower than where
-        // the stair arrives. Not the stair the avatar is on.
+        // The stairs of the floor of the avatar show: they tell how to go up and down (LevelFocus). A stair standing on
+        // a floor above the avatar shows with that floor; one coming from under the avatar is lifted over the veil.
+        const veil = editor.open ? undefined : veilDepth(current);
         for (const stair of this.stairDrawings) {
             const { entity } = stair;
-            const hides =
+            // A stair drawn over the avatar lets it show through, without fading away (it tells the way up).
+            const covers =
                 !editor.open &&
-                this.state.stair === undefined &&
-                this.state.elevation < stair.top - 1 &&
-                p.x + 10 > entity.x &&
-                p.x - 10 < entity.x + (entity.displayWidth ?? 0) &&
-                p.y > entity.y &&
-                p.y - 30 < entity.y + (entity.displayHeight ?? 0);
-            const target = hides ? HIDDEN_ALPHA : 1;
+                stairCoversAvatar(
+                    {
+                        image: {
+                            x: entity.x,
+                            y: entity.y,
+                            width: entity.displayWidth ?? 0,
+                            height: entity.displayHeight ?? 0,
+                        },
+                        groundBottom: stair.groundBottom,
+                        top: stair.top,
+                    },
+                    { x: p.x, y: p.y, elevation: this.state.elevation, onStair: this.state.stair !== undefined },
+                );
+            const target = covers ? STAIR_OVER_AVATAR_ALPHA : 1;
             if (stair.alpha !== target) {
-                const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
-                stair.alpha =
-                    target > stair.alpha
-                        ? Math.min(target, stair.alpha + change)
-                        : Math.max(target, stair.alpha - change);
+                stair.alpha = fadeToward(stair.alpha, target, delta, 1 - STAIR_OVER_AVATAR_ALPHA, this.reducedMotion);
             }
-            // A stair standing on a raised floor is part of that floor: it shows through with it.
-            const shown = Math.min(stair.alpha, stair.floor?.alpha ?? 1);
+            const above = levelLook(stair.base, current) === "above";
+            // Out of the editor, only the stairs leaving or reaching the floor of the avatar show.
+            const shown =
+                !editor.open && !stairShows(stair, current)
+                    ? 0
+                    : above
+                      ? Math.min(stair.alpha, stair.floor?.alpha ?? 1)
+                      : stair.alpha;
             if (shown !== stair.shown) {
                 stair.shown = shown;
                 entity.setAlpha(shown);
                 this.scene.markDirty();
             }
+            const depth = stairDepth(stair.ownDepth, veil, levelLook(stair.base, current));
+            if (entity.depth !== depth) {
+                entity.setDepth?.(depth);
+                this.scene.markDirty();
+            }
         }
+        this.updateVeil(veil, delta);
         // Somebody standing on a floor fades with it, instead of floating over what shows through.
         for (const other of this.others()) {
             const alpha =
@@ -654,6 +770,8 @@ export class FloorSpike {
             .filter(({ piece }) => piece.kind === "stair")
             .map(({ entity, piece, elevation }) => ({
                 entity,
+                ownDepth: floorPieceDepth(piece, entity.x, entity.y, elevation),
+                groundBottom: this.stairGroundBottom(piece, entity, elevation),
                 base: elevation,
                 top: elevation + (piece.kind === "stair" ? piece.rise : 0),
                 // The floor it stands on: the one under the tiles it covers, or under the tile before its first step.

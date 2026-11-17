@@ -275,6 +275,7 @@ import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/Weath
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -3430,7 +3431,10 @@ export class GameScene extends DirtyScene {
                                 scope: "room",
                             });
                         },
-                        (levels) => mapLayerBuiltLevelsStore.set(levels),
+                        (levels) => {
+                            mapLayerBuiltLevelsStore.set(levels);
+                            floorLevelsBuiltStore.set(levels);
+                        },
                         () => this.MapPlayersByKey.values(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );

@@ -12,6 +12,7 @@ import type { GameScene } from "../../../../src/front/Phaser/Game/GameScene";
 import type { MapEditorModeManager } from "../../../../src/front/Phaser/Game/MapEditor/MapEditorModeManager";
 import type { EntitiesCollectionsManager } from "../../../../src/front/Phaser/Game/MapEditor/EntitiesCollectionsManager";
 import { MapLayerEditorTool } from "../../../../src/front/Phaser/Game/MapEditor/Tools/MapLayerEditorTool";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_FLOOR_COLLECTION,
@@ -29,6 +30,7 @@ import {
     mapLayerHeightRequestStore,
     mapLayerHeightSelectionStore,
     mapLayerModeStore,
+    mapLayerShortStairsAvailableStore,
     mapLayerStatusStore,
     mapLayerWallHeightStore,
     mapLayerWallHeightsAvailableStore,
@@ -60,6 +62,7 @@ describe("MapLayerEditorTool gestures", () => {
     let collectionsManager: ReturnType<typeof mock<EntitiesCollectionsManager>>;
     let doorsInCatalog: boolean;
     let glazedDoorsInCatalog: boolean;
+    let shortStairsInCatalog: boolean;
     let windowsInCatalog: boolean;
     /** Whether the catalogs have the pieces of the walls, doors and windows higher than 1. */
     let highPiecesInCatalog: boolean;
@@ -168,6 +171,7 @@ describe("MapLayerEditorTool gestures", () => {
 
         doorsInCatalog = true;
         glazedDoorsInCatalog = true;
+        shortStairsInCatalog = true;
         windowsInCatalog = true;
         highPiecesInCatalog = true;
         collectionsManager = mock<EntitiesCollectionsManager>();
@@ -175,6 +179,11 @@ describe("MapLayerEditorTool gestures", () => {
             if (!highPiecesInCatalog && /-h[2-4](?::|-)/.test(prefabId)) return Promise.resolve(undefined);
             if (collectionName === MAP_LAYER_DOOR_COLLECTION && !doorsInCatalog) return Promise.resolve(undefined);
             if (prefabId.includes("-vitree") && !glazedDoorsInCatalog) return Promise.resolve(undefined);
+            if (collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION) {
+                return Promise.resolve(
+                    prefabId.includes("-v2") && !shortStairsInCatalog ? undefined : prefab(collectionName, prefabId),
+                );
+            }
             if (collectionName === MAP_LAYER_WINDOW_COLLECTION && !windowsInCatalog) return Promise.resolve(undefined);
             if (
                 collectionName === MAP_LAYER_FLOOR_COLLECTION ||
@@ -843,5 +852,15 @@ describe("MapLayerEditorTool gestures", () => {
         const deleted = deletedIds();
         expect(deleted).toEqual(expect.arrayContaining(["sol-1-3"]));
         expect(deleted.filter((id) => !id.startsWith("sol-"))).toEqual([]);
+    });
+
+    it("knows whether the room's catalog has the new short stairs", async () => {
+        await activate();
+        expect(get(mapLayerShortStairsAvailableStore)).toBe(true);
+        tool.destroy();
+        shortStairsInCatalog = false;
+        tool = new MapLayerEditorTool(modeManager);
+        await activate();
+        expect(get(mapLayerShortStairsAvailableStore)).toBe(false);
     });
 });

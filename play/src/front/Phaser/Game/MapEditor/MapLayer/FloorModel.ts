@@ -42,7 +42,7 @@ export function stairImagePosition(shape: StairShape, foot: TilePoint, base: num
 /** The tile of the foot of a stair whose image is at (x, y); undefined when it is not on the grid. */
 export function stairFootFromImage(shape: StairShape, x: number, y: number, base: number): TilePoint | undefined {
     const size = MAP_LAYER_TILE_SIZE;
-    const run = stairRun(shape.direction, shape.rise) * size;
+    const run = stairRun(shape.direction, shape.rise, shape.short) * size;
     const rise = shape.rise;
     // Top-left corner of what the stair covers on the ground.
     const groundX = x;
@@ -84,7 +84,13 @@ export class FloorModel {
                 if (Number.isInteger(x) && Number.isInteger(y)) model.setSlab(elevation, x, y, piece.family);
                 continue;
             }
-            const shape = { direction: piece.direction, width: piece.width, rise: piece.rise, open: piece.open };
+            const shape = {
+                direction: piece.direction,
+                width: piece.width,
+                rise: piece.rise,
+                open: piece.open,
+                ...(piece.short ? { short: true } : {}),
+            };
             const foot = stairFootFromImage(shape, item.x, item.y, elevation);
             if (foot) model.addStair(shape, foot, elevation);
         }

@@ -118,6 +118,18 @@ describe("floor operations", () => {
         expect(model.hasSlab(52, 5, 5)).toBe(false);
     });
 
+    it("places a new short stair: its -v2 piece, a well of one tile, read back as short", () => {
+        const model = new FloorModel();
+        applySlabs(model, 52, { x: 4, y: 2 }, { x: 7, y: 6 }, "parquet-clair", BOUNDS);
+        const short: StairShape = { ...north, short: true };
+        expect(placeStair(model, short, { x: 5, y: 6 }, 0, BOUNDS)).toBe(true);
+        expect(model.hasSlab(52, 5, 6)).toBe(false);
+        expect(model.hasSlab(52, 5, 5)).toBe(true);
+        const placements = computeFloorPlacements(model);
+        expect(placements.map((item) => item.prefabId)).toContain("Carte Paliers:escalier-n-l1-h2-v2:Default:Down");
+        expect(FloorModel.fromPlaced(placements).getStairs()).toEqual(model.getStairs());
+    });
+
     it("refuses a stair out of the map or over another stair of the same floor", () => {
         const model = new FloorModel();
         expect(canPlaceStair(model, north, { x: 5, y: 0 }, 0, BOUNDS)).toBe(false);
