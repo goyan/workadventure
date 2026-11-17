@@ -53,6 +53,8 @@ describe("NerfManager", () => {
         player = mock<Player>({ x: 100, y: 100, lastDirection: PositionMessage_Direction.RIGHT });
         player.getNerfHeading.mockReturnValue(6);
         player.getCollisionRectangle.mockReturnValue({ x: 92, y: 100, width: 16, height: 16 });
+        player.isOnFloor.mockReturnValue(true);
+        player.getFloorZ.mockReturnValue(0);
         scene = mock<GameScene>();
         scene.sys = mock<Phaser.Scenes.Systems>();
         scene.sys.displayList = mock<Phaser.GameObjects.DisplayList>();
@@ -64,6 +66,8 @@ describe("NerfManager", () => {
                 x: 140,
                 y: 180,
                 getCollisionRectangle: () => ({ x: 132, y: 180, width: 16, height: 16 }),
+                isOnFloor: () => true,
+                getFloorZ: () => 0,
             }),
         );
         scene.userInputManager = mock<UserInputManager>({ isControlsEnabled: true });
@@ -244,6 +248,8 @@ describe("NerfManager", () => {
                 x: 180,
                 y: 100,
                 getCollisionRectangle: () => ({ x: 172, y: 100, width: 16, height: 16 }),
+                isOnFloor: () => true,
+                getFloorZ: () => 0,
             }),
         );
         manager.toggleEquipment();
@@ -289,6 +295,8 @@ describe("NerfManager", () => {
                 x: 180,
                 y: 100,
                 getCollisionRectangle: () => ({ x: 172, y: 100, width: 16, height: 16 }),
+                isOnFloor: () => true,
+                getFloorZ: () => 0,
             }),
         );
         manager.toggleEquipment();

@@ -46,6 +46,8 @@ export interface JungleCompanionWorld {
     /** Where an animal is shown, undefined while it is not. */
     animalPose(id: string): Point | undefined;
     editorOpen(): boolean;
+    /** Whether the local player stands on the ground, where the animals are (not on a raised floor over them). */
+    playerOnGround?(): boolean;
     /** The server clock (the computer's until it is known), in ms. */
     serverNow(): number;
     /** Tells the whole room. */
@@ -186,6 +188,7 @@ export class JungleCompanions {
 
     private tame(animal: string): void {
         if (this.local.has(animal) || this.local.size >= JUNGLE_MAX_COMPANIONS || this.world.editorOpen()) return;
+        if (this.world.playerOnGround?.() === false) return;
         // The action may be called late (a prompt of a former frame): the animal must still be within reach and free.
         if (!this.withinReach(animal) || this.others.claims(this.nowMs).some((claim) => claim.animal === animal))
             return;
@@ -268,7 +271,7 @@ export class JungleCompanions {
     private updatePrompt(owners: Map<string, JungleCompanionClaim>, animals: Map<string, JungleAnimal>): void {
         const localId = this.world.localUserId();
         const feet = localId === undefined ? undefined : this.world.playerFeet(localId);
-        if (!feet || this.world.editorOpen()) {
+        if (!feet || this.world.editorOpen() || this.world.playerOnGround?.() === false) {
             this.hidePrompt();
             return;
         }

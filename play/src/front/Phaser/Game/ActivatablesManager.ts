@@ -171,6 +171,11 @@ export class ActivatablesManager {
             if (!object.isActivatable() || !isInRange) {
                 continue;
             }
+            // An object on a raised floor, or hung up a wall, is drawn over the ground it does not stand on: out of
+            // reach from there.
+            if (object instanceof Entity && object.getElevation() > 0) {
+                continue;
+            }
 
             const objectCenter = this.getObjectCenter(object);
             const distanceToCenter = MathUtils.distanceBetween(playerCenter, objectCenter);
