@@ -540,12 +540,7 @@ export class EntitiesManager extends EventEmitter {
                             x: entity.x,
                             y: entity.y,
                             // Dropped on a raised floor, the object stands on it; elsewhere on the ground.
-                            elevation: this.placementElevation({
-                                x: entity.x,
-                                y: entity.y,
-                                width: entity.displayWidth,
-                                height: entity.displayHeight,
-                            }),
+                            elevation: this.elevationAt(pointer.worldX, pointer.worldY),
                         };
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
@@ -646,6 +641,15 @@ export class EntitiesManager extends EventEmitter {
      * Altitude an object gets where its image is placed: the one of the raised floor drawn under its foot, the ground
      * otherwise, or when the editor is set to place under the floors.
      */
+    /**
+     * Altitude of the raised floor drawn under a point of the screen: where an object pointed there goes. The ground
+     * where there is none, or when the editor is set to place under the floors.
+     */
+    public elevationAt(worldX: number, worldY: number): number {
+        // A point is the foot of an image one pixel high.
+        return this.placementElevation({ x: worldX, y: worldY, width: 0, height: 1 });
+    }
+
     public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
         const placed = [];
         for (const entity of this.entities.values()) {

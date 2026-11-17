@@ -276,6 +276,8 @@ import { TreePoseTextures } from "./Nature/TreePoses";
 import { TreeSeasonEffects } from "./Nature/TreeSeasonEffects";
 import { FloorSpike } from "./Floors/FloorSpike";
 import { FLOOR_Z_VARIABLE, decodeFloorZ } from "./Floors/FloorProtocol";
+import { UpperDoors } from "./Floors/UpperDoors";
+import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
@@ -476,6 +478,8 @@ export class GameScene extends DirtyScene {
     private cameraManager!: CameraManager;
     private mapEditorModeManager: MapEditorModeManager | undefined;
     private doorAnimator: DoorAnimator | undefined;
+    /** The doors of the raised floors. */
+    private upperDoors: UpperDoors | undefined;
     private doorLockIcons: DoorLockIcons | undefined;
     private footstepSounds: FootstepSounds | undefined;
     private skateboardSounds: SkateboardSounds | undefined;
@@ -1774,13 +1778,23 @@ export class GameScene extends DirtyScene {
         // SPIKE (floors study): an avatar on a raised floor does not open the doors of the ground.
         const characters: DoorCharacter[] = this.CurrentPlayer.getFloorZ() > 0 ? [] : [listener];
         // (A companion follows its master: on a raised floor with them, it does not open the doors of the ground.)
-        if (this.CurrentPlayer.companion && this.CurrentPlayer.getFloorZ() === 0) {
-            characters.push(asDoorCharacter(this.CurrentPlayer.companion));
+        // The characters of a raised floor open the doors of their own floor (see UpperDoors).
+        const raised: RaisedCharacter[] = [];
+        const localZ = this.CurrentPlayer.getFloorZ();
+        if (localZ > 0) raised.push({ character: listener, elevation: localZ });
+        if (this.CurrentPlayer.companion) {
+            const companion = asDoorCharacter(this.CurrentPlayer.companion);
+            if (localZ > 0) raised.push({ character: companion, elevation: localZ });
+            else characters.push(companion);
         }
         for (const player of this.MapPlayersByKey.values()) {
-            if (player.getFloorZ() > 0) continue;
-            characters.push(asDoorCharacter(player, player.userUuid));
-            if (player.companion) characters.push(asDoorCharacter(player.companion));
+            const z = player.getFloorZ();
+            const people = [asDoorCharacter(player, player.userUuid)];
+            if (player.companion) people.push(asDoorCharacter(player.companion));
+            for (const character of people) {
+                if (z > 0) raised.push({ character, elevation: z });
+                else characters.push(character);
+            }
         }
         // The animals open the doors without a sound.
         this.duckRushManager?.forEachDoorOpener((position) => characters.push({ ...position, silent: true }));
@@ -1789,6 +1803,18 @@ export class GameScene extends DirtyScene {
         );
         const locks = this._knockManager?.getDoorLocks();
         this.doorAnimator.update(time, characters, listener, locks);
+        this.upperDoors ??= new UpperDoors(
+            this,
+            () => this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(),
+            (collectionName, id) => this.getEntitiesCollectionsManager().getEntityPrefab(collectionName, id),
+            (key, volume) => {
+                volume *= get(doorVolumeStore);
+                if (volume > 0) this.sound.play(key, { volume });
+            },
+            () => this.markDirty(),
+            () => this.getHearingZones(),
+        );
+        this.upperDoors.update(time, raised, listener);
         // Red padlocks on the doors of the locked areas, for everyone.
         this.doorLockIcons ??= new DoorLockIcons(this, () => this.markDirty());
         this.doorLockIcons.update(this.doorAnimator.getLockedDoorMarkers(locks?.zones ?? []));

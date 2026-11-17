@@ -6,6 +6,9 @@ import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import { withNewPropertyIds } from "@workadventure/map-editor/src/Utils";
+import { floorLevelTiles } from "../MapLayer/MapLayerFloors";
+import { floorDepth } from "../MapLayer/FloorDepth";
+import { LL } from "../../../../../i18n/i18n-svelte";
 import { entityPlacementBlockerStore } from "../../../../Stores/MapEditorStore";
 import {
     mapEditorCopiedEntityDataPropertiesStore,
@@ -34,6 +37,10 @@ import Pointer = Phaser.Input.Pointer;
 import GameObject = Phaser.GameObjects.GameObject;
 
 export class EntityEditorTool extends EntityRelatedEditorTool {
+    /** Altitude of the floor the object being placed would stand on: the one drawn under the pointer. */
+    private previewElevation = 0;
+    /** The name of that floor, next to the preview. */
+    private levelLabel: Phaser.GameObjects.Text | undefined;
     private handleUpdateEntity: (entityData: EntityData) => void;
     private handleCopyEntity: (data: CopyEntityEventData) => void;
     protected ctrlKey?: Key;
@@ -380,13 +387,8 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             properties: properties ?? [],
             name: properties?.find((p) => p.type === "openFile")?.name ?? undefined,
         };
-        // Placed on a raised floor, the object stands on it.
-        entityData.elevation = this.entitiesManager.placementElevation({
-            x: entityData.x,
-            y: entityData.y,
-            width: this.entityPrefabPreview.displayWidth,
-            height: this.entityPrefabPreview.displayHeight,
-        });
+        // Placed on a raised floor, the object stands on it: the floor shown next to the preview.
+        entityData.elevation = this.previewElevation;
 
         this.mapEditorModeManager
             .executeCommand(
@@ -431,6 +433,8 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             this.entityPrefabPreview.displayWidth,
             this.entityPrefabPreview.displayHeight,
             this.entityPrefab,
+            // On a raised floor, what stands on the ground under it is not in the way.
+            this.isFreePlacement() || this.previewElevation > 0,
         );
     }
 
@@ -448,6 +452,12 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
         return blocker === undefined;
     }
 
+    protected cleanPreview(): void {
+        super.cleanPreview();
+        this.levelLabel?.setVisible(false);
+        this.previewElevation = 0;
+    }
+
     private isSnappingToGrid(): boolean {
         return shouldSnapToGrid(get(mapEditorSnapEnabledStore), this.shiftKey?.isDown ?? false);
     }
@@ -461,21 +471,46 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             return;
         }
 
+        // The object goes on the raised floor drawn under the pointer (or stays on the ground under it, when the
+        // editor is set so): its grid is the one of that floor, drawn its altitude further north.
+        const elevation = this.entitiesManager.elevationAt(pointer.worldX, pointer.worldY);
+        this.previewElevation = elevation;
         if (this.isSnappingToGrid()) {
             const offset = this.getEntityPrefabAlignWithGridOffset();
             this.entityPrefabPreview.setPosition(
                 Math.floor(pointer.worldX / 32) * 32 + offset.x,
-                Math.floor(pointer.worldY / 32) * 32 + offset.y,
+                Math.floor((pointer.worldY + elevation) / 32) * 32 - elevation + offset.y,
             );
         } else {
             this.entityPrefabPreview.setPosition(Math.floor(pointer.worldX), Math.floor(pointer.worldY));
         }
 
         this.entityPrefabPreview.setDepth(
-            this.entityPrefabPreview.y +
-                this.entityPrefabPreview.displayHeight * 0.5 +
-                (this.entityPrefab.depthOffset ?? 0),
+            floorDepth(
+                elevation,
+                this.entityPrefabPreview.y +
+                    this.entityPrefabPreview.displayHeight * 0.5 +
+                    (this.entityPrefab.depthOffset ?? 0),
+            ),
         );
+        // The name of the floor next to the object, so that one sees where it goes.
+        if (elevation > 0) {
+            this.levelLabel ??= this.scene.add.text(0, 0, "", {
+                fontSize: "11px",
+                color: "#ffffff",
+                backgroundColor: "#1b2a41",
+                padding: { x: 3, y: 1 },
+            });
+            this.levelLabel.setDepth(890_000);
+            this.levelLabel.setText(
+                get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(elevation) }),
+            );
+            this.levelLabel.setPosition(
+                this.entityPrefabPreview.x + this.entityPrefabPreview.displayWidth * 0.5 + 4,
+                this.entityPrefabPreview.y - this.entityPrefabPreview.displayHeight * 0.5,
+            );
+        }
+        this.levelLabel?.setVisible(elevation > 0);
     }
 
     private updateEntity(entityData: EntityData) {
