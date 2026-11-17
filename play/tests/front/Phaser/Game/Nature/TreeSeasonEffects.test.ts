@@ -112,7 +112,6 @@ function fixture(
     const effects = new TreeSeasonEffects(scene as never, {
         trees: () => trees,
         season: () => state.season,
-        bareSeason: () => Season.Autumn,
         autumnProgress: () => 0.5,
         windSpeed: () => 80,
         windFrom: () => 270,
@@ -120,8 +119,6 @@ function fixture(
         enabled: () => state.enabled,
         isOutdoor: () => state.outdoor,
         view: () => state.view,
-        pose: () => overrides.pose ?? 0,
-        poseTexture: (key, pose) => `${key}@${pose}`,
         reducedMotion: overrides.reducedMotion ?? false,
     });
     return { effects, graphics, ground, images, markDirty, state, trees };
@@ -196,72 +193,30 @@ describe("TreeSeasonEffects", () => {
         expect(images).toEqual([]);
     });
 
-    it("lets the snow settle on the top of the tree, lower and lower as it builds up", () => {
-        const { effects, images, trees } = fixture({ season: Season.Winter });
-        const alphas: number[] = [];
-        for (let second = 0; second < 600; second += 2) {
-            effects.update(second * 1000, at(second));
-            // The bare image hides its top, where the snowy tree shows; what is left of it is plain.
-            expect(images[0].alpha).toBe(1);
-            alphas.push(1 - images[0].snow / 0.75);
-        }
-        // Only the seasonal tree in view gets its bare image, right over it: green, even in autumn.
-        expect(images.length).toBe(1);
-        expect(images[0].key).toBe("green.png");
-        expect(images[0].x).toBe(trees[0].object.x);
-        expect(images[0].depth).toBeGreaterThan(trees[0].object.depth);
-        expect(images[0].depth).toBeLessThan(trees[0].object.depth + 1);
-        // The snow comes down from the top to the bottom of the foliage (three quarters of the image), then falls off.
-        expect(Math.min(...alphas)).toBeLessThan(0.05);
-        expect(Math.max(...alphas)).toBeGreaterThan(0.8);
-        const drops = alphas.filter((alpha, index) => index > 0 && alpha > alphas[index - 1] + 0.5).length;
-        expect(drops).toBeGreaterThanOrEqual(2);
-        // The tree is 64 px wide, its image 32: drawn twice as big, as the tree.
-        expect(images[0].displayWidth).toBe(64);
+    it("shows the snowy tree whole: nothing is drawn over it, whatever the season under the snow", () => {
+        const { effects, images } = fixture({ season: Season.Winter });
+        for (let second = 0; second < 600; second += 2) effects.update(second * 1000, at(second));
+        expect(images).toEqual([]);
     });
 
-    it("bends the bare image as its tree sways, the trunk where the tree stands", () => {
-        const { effects, images, trees } = fixture({ season: Season.Winter, pose: 3 });
-        effects.update(0, at(0));
-        expect(images[0].key).toBe("green.png@3");
-        // Twice as big as its image, as the tree: the 4 px of room on each side take 8 on the map.
-        expect(images[0].x).toBe(trees[0].object.x - 8);
-        expect(images[0].displayWidth).toBe(80);
-    });
-
-    it("drops snow on each side of the tree when it reaches its threshold", () => {
-        const { effects, graphics, images } = fixture({ season: Season.Winter });
-        let previous = 0;
-        let fell = false;
-        for (let tenth = 0; tenth < 3000 && !fell; tenth++) {
-            graphics.fillRect.mockClear();
-            effects.update(tenth * 100, at(tenth / 10));
-            const alpha = 1 - images[0].snow / 0.75;
-            if (tenth > 0 && alpha > previous + 0.5) {
-                fell = true;
-                const xs = graphics.fillRect.mock.calls.map(([x]) => x as number);
-                expect(xs.some((x) => x < 132)).toBe(true);
-                expect(xs.some((x) => x > 132)).toBe(true);
-            }
-            previous = alpha;
-        }
-        expect(fell).toBe(true);
-    });
-
-    it("carries no more snow than the map has, and drops none while there is little", () => {
-        const { effects, graphics, images } = fixture({ season: Season.Winter, coverage: 0.1 });
+    it("drops snow on each side of the tree now and then", () => {
+        const { effects, graphics } = fixture({ season: Season.Winter });
         for (let tenth = 0; tenth < 3000; tenth++) effects.update(tenth * 100, at(tenth / 10));
-        expect(images[0].snow).toBeLessThanOrEqual(0.1);
+        const xs = graphics.fillRect.mock.calls.map(([x]) => x as number);
+        // The seasonal tree in view stands from 100 to 164: snow falls on both sides of its middle.
+        expect(xs.some((x) => x < 132)).toBe(true);
+        expect(xs.some((x) => x > 132)).toBe(true);
+    });
+
+    it("drops no snow while the map has little", () => {
+        const { effects, graphics } = fixture({ season: Season.Winter, coverage: 0.1 });
+        for (let tenth = 0; tenth < 3000; tenth++) effects.update(tenth * 100, at(tenth / 10));
         expect(graphics.fillRect).not.toHaveBeenCalled();
     });
 
-    it("takes the bare images away when the snow is over, and when destroyed", () => {
-        const { effects, images, state, graphics } = fixture({ season: Season.Winter });
-        effects.update(0, at(0));
-        expect(images[0].destroyed).toBe(false);
-        state.season = Season.Summer;
-        effects.update(1000, at(1));
-        expect(images[0].destroyed).toBe(true);
+    it("removes its drawings when destroyed", () => {
+        const { effects, graphics } = fixture({ season: Season.Winter });
+        for (let tenth = 0; tenth < 3000; tenth++) effects.update(tenth * 100, at(tenth / 10));
         effects.destroy();
         expect(graphics.destroy).toHaveBeenCalled();
     });

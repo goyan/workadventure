@@ -30,7 +30,6 @@ import {
     listeningZoneJamKey,
     type WAMFileFormat,
     WAMSettingsUtils,
-    Season,
     WeatherType,
 } from "@workadventure/map-editor";
 import { wamFileMigration } from "@workadventure/map-editor/src/Migrations/WamFileMigration";
@@ -298,7 +297,6 @@ import type { RaisedCharacter } from "./Floors/UpperDoors";
 import { wallBarriers } from "./MapEditor/MapLayer/MapLayerBarriers";
 import { readMapLayerEntityStates } from "./MapEditor/MapLayer/MapLayerSync";
 import { autumnProgress } from "./Nature/TreeLeafFall";
-import { treeSeasonAt } from "./Nature/SeasonClock";
 import { mapSnowCoverage } from "./Weather/SnowCover";
 import { GameMapFrontWrapper } from "./GameMap/GameMapFrontWrapper";
 import { gameManager } from "./GameManager";
@@ -3462,10 +3460,6 @@ export class GameScene extends DirtyScene {
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
                     trees: () => this.swayingTrees(),
                     season: () => this.gameMapFrontWrapper.getEntitiesManager().getSeason(),
-                    bareSeason: () => {
-                        const serverDate = this.nightManager?.serverDate();
-                        return serverDate ? treeSeasonAt(serverDate, WeatherType.Clear, 0) : Season.Summer;
-                    },
                     autumnProgress: () => autumnProgress(this.nightManager?.serverDate() ?? new Date(Number.NaN)),
                     windSpeed: () => this.shownWeather()?.windSpeed,
                     windFrom: () => this.shownWeather()?.windFrom,
@@ -3475,8 +3469,6 @@ export class GameScene extends DirtyScene {
                     enabled: () => !get(mapEditorModeStore) && get(weatherEffectsEnabledStore),
                     isOutdoor: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
                     view: () => this.cameras.main.worldView,
-                    pose: (id) => this.treeSway?.poseOf(id) ?? 0,
-                    poseTexture: (key, pose) => treePoses.key(key, pose),
                 });
                 this.seasonalThemeManager?.destroy();
                 this.seasonalThemeManager = new SeasonalThemeManager(this, {
