@@ -17,18 +17,24 @@ export interface ForecastCell {
     temperature: number | undefined;
     /** Clouds of a clear sky, 0 to 1; absent without clouds. */
     cloudiness?: number;
+    /** Wind speed (km/h, rounded) of the place of the map, whatever weather the map shows; absent when unknown. */
+    windSpeed?: number;
 }
 
 function withClouds(cell: ForecastCell, cloudiness: number): ForecastCell {
     return cloudiness > 0 ? { ...cell, cloudiness } : cell;
 }
 
+function withWind(cell: ForecastCell, windSpeed: number | undefined): ForecastCell {
+    return windSpeed !== undefined && Number.isFinite(windSpeed) ? { ...cell, windSpeed: Math.round(windSpeed) } : cell;
+}
+
 /**
  * The weather the map will show at each of `hours` from `epoch`, as the game draws it: the real timeline (blank past
  * its end, nothing before the first answer), the seasonal schedule in Automatic or while the real weather is unavailable
  * (the same fallback as the sky), the fixed weather otherwise. A snow out of season is drawn as rain, as in the sky;
- * a Cloudy map is a clear sky with clouds. The temperature is the real one of the place whenever its timeline is known,
- * even under a weather of the schedule or a fixed one.
+ * a Cloudy map is a clear sky with clouds. The temperature and the wind speed are the real ones of the place whenever its
+ * timeline is known, even under a weather of the schedule or a fixed one.
  */
 export function weatherForecast(
     settings: MapSnowSettings | undefined,
@@ -38,8 +44,7 @@ export function weatherForecast(
 ): ForecastCell[] {
     const weather = settings?.weather ?? WeatherType.Clear;
     const realNow = real.status === "known" ? realWeatherAt(real.slots, epoch) : undefined;
-    return hours.map((hour): ForecastCell => {
-        const at = epoch + hour * HOUR_MS;
+    const cellAt = (at: number): ForecastCell => {
         const temperature =
             real.status === "known" ? (realWeatherAt(real.slots, at)?.temperature ?? undefined) : undefined;
         if (weather === WeatherType.Real && real.status === "pending") {
@@ -61,5 +66,10 @@ export function weatherForecast(
         }
         const cell = { at, weather: weatherAtTime(weather, new Date(at)), temperature };
         return withClouds(cell, weather === WeatherType.Cloudy ? AUTO_CLOUDINESS : 0);
+    };
+    return hours.map((hour): ForecastCell => {
+        const at = epoch + hour * HOUR_MS;
+        const windSpeed = real.status === "known" ? realWeatherAt(real.slots, at)?.windSpeed : undefined;
+        return withWind(cellAt(at), windSpeed);
     });
 }

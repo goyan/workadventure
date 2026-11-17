@@ -110,4 +110,29 @@ describe("weatherForecast", () => {
             weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, paris)[1].cloudiness ?? 0,
         ).toBe(cloudinessAt(new Date(NOW + HOUR), auto));
     });
+    it("gives the real wind speed of the place, rounded to the km/h, and nothing when the wind is unknown", () => {
+        const windy = {
+            status: "known" as const,
+            slots: Array.from({ length: 24 }, (_, index) => ({
+                at: NOW + (index - 1) * 15 * 60 * 1000,
+                weather: WeatherType.Clear as const,
+                temperature: 5,
+                ...(index < 8 ? { windSpeed: index < 5 ? 12.4 : 12.6 } : {}),
+            })),
+        };
+        expect(weatherForecast({ weather: WeatherType.Real }, NOW, windy).map((cell) => cell.windSpeed)).toEqual([
+            12,
+            13,
+            undefined,
+        ]);
+        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, windy).map((cell) => cell.windSpeed)).toEqual([
+            12,
+            13,
+            undefined,
+        ]);
+        expect(weatherForecast({ weather: WeatherType.Real }, NOW, windy)[2]).not.toHaveProperty("windSpeed");
+        expect(weatherForecast({ weather: WeatherType.Real }, NOW, { status: "unavailable" })[0]).not.toHaveProperty(
+            "windSpeed",
+        );
+    });
 });

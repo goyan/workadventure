@@ -44,6 +44,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         now: "Maintenant",
         inHours: "+{hours} h",
         cell: "{when} : {weather}",
+        cellWithWind: "{when} : {weather}, vent à {speed} km/h",
+        windSpeed: "{speed} km/h",
         unknown: "Prévision inconnue",
         close: "Masquer la météo",
         defaultCity: "Paris",

@@ -29,6 +29,20 @@
         return cell.weather ? weatherLook(cell.weather, cell.cloudiness) : undefined;
     }
 
+    /** The wind is shown for now only (see the markup); `cell.windSpeed` is narrowed for the template. */
+    function showsWind(cell: ForecastCell, index: number): cell is ForecastCell & { windSpeed: number } {
+        return index === 0 && cell.windSpeed !== undefined;
+    }
+
+    function label(cell: ForecastCell, index: number, look: { name: WeatherType } | undefined): string {
+        const weather = look
+            ? weatherName($LL.mapEditor.settings.weather, look.name)
+            : $LL.actionbar.weatherBanner.unknown();
+        return showsWind(cell, index)
+            ? $LL.actionbar.weatherBanner.cellWithWind({ when: when(index), weather, speed: cell.windSpeed })
+            : $LL.actionbar.weatherBanner.cell({ when: when(index), weather });
+    }
+
     function when(index: number): string {
         const hours = FORECAST_HOURS[index] ?? 0;
         return hours === 0 ? $LL.actionbar.weatherBanner.now() : $LL.actionbar.weatherBanner.inHours({ hours });
@@ -48,12 +62,7 @@
             <div
                 class="flex items-center gap-1"
                 role="img"
-                aria-label={$LL.actionbar.weatherBanner.cell({
-                    when: when(index),
-                    weather: look
-                        ? weatherName($LL.mapEditor.settings.weather, look.name)
-                        : $LL.actionbar.weatherBanner.unknown(),
-                })}
+                aria-label={label(cell, index, look)}
                 data-testid="weather-banner-cell"
             >
                 <span class="text-white/60">{when(index)}</span>
@@ -66,6 +75,37 @@
                     <!-- In the pixel font, a 5 reads as an S and a 7 as a 1: the temperature uses the system font. -->
                     <span class="tabular-nums" style:font-family="var(--ui-font-system)"
                         >{Math.round(cell.temperature)}°</span
+                    >
+                {/if}
+                {#if showsWind(cell, index)}
+                    <!-- Wind for now only: three of them would not fit the banner on a narrow screen. -->
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        shape-rendering="crispEdges"
+                        aria-hidden="true"
+                        class="ms-1 shrink-0"
+                        data-testid="weather-banner-wind-icon"
+                    >
+                        <!-- three gusts with a curl at their end, in the 16x16 pixel art of the weather icons -->
+                        <g fill="#cfd8e3">
+                            <rect x="1" y="4" width="10" height="1" />
+                            <rect x="11" y="2" width="1" height="2" />
+                            <rect x="9" y="1" width="2" height="1" />
+                            <rect x="1" y="8" width="13" height="1" />
+                            <rect x="14" y="6" width="1" height="2" />
+                            <rect x="12" y="5" width="2" height="1" />
+                            <rect x="3" y="12" width="8" height="1" />
+                            <rect x="11" y="13" width="1" height="1" />
+                            <rect x="9" y="14" width="2" height="1" />
+                        </g>
+                    </svg>
+                    <span
+                        class="tabular-nums"
+                        style:font-family="var(--ui-font-system)"
+                        data-testid="weather-banner-wind"
+                        >{$LL.actionbar.weatherBanner.windSpeed({ speed: cell.windSpeed })}</span
                     >
                 {/if}
             </div>
