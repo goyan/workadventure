@@ -2170,6 +2170,13 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   patinoire ; pas de chapeau de neige ni de tas de feuilles sur les pièces de palier (`isRaisedFloorCollection`).
 - **Escalier à flanc vide** (`-vide`) : un avatar du niveau de départ passe dessous là où la hauteur libre atteint
   40 px ; ailleurs, et pour un flanc plein, l'escalier bloque comme avant.
+- **Sélecteur de niveau commun** (`FloorLevelPicker.svelte`, en haut du panneau Carte et du panneau Objets ; choix
+  partagé `mapEditorPlacementLevelStore`) : une ligne Auto · pipette · Sol · paliers posés, une ligne Niveau − / +
+  (n'importe quel niveau, une case de mur à la fois, avec ou sans dalles : `steppableLevels`) et Palier − / + (palier
+  posé suivant ou précédent). **Auto** suit le palier dessiné sous le pointeur, le sol ailleurs. Dans l'outil Carte, un
+  clic en mode Porte, Fenêtre ou Hauteur sur un mur d'un autre niveau passe à ce niveau (`levelOfWallAt`).
+- **Profondeurs** : les bandes des paliers commencent au-dessus de tout le sol, objets « au-dessus des avatars »
+  compris (un arbre derrière une maison est caché par son étage), et restent sous les calques de recouvrement.
 - **Cas pris en charge** : mezzanine sur murs de 2, 3 ou 4 ; escalier du sol à chaque niveau ; escaliers courts entre
   niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2 ; pièce,
   murs et meubles sur un palier ; étage sur étage.
