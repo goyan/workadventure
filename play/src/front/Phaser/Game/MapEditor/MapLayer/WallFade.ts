@@ -268,6 +268,28 @@ export class WallFade {
     private lastPlayer: { x: number; y: number } | undefined;
     /** The room of the player, kept while they stand on the row of a wall (a wall cell of the grid, not outdoors). */
     private playerRoom: number | undefined;
+    /** Goes up each time an opacity changed: what is drawn from the faded walls is only read again then. */
+    private fadeVersion = 0;
+
+    get version(): number {
+        return this.fadeVersion;
+    }
+
+    /**
+     * The images of the pieces of the high horizontal walls that are see-through in play, or on their way back to
+     * opaque: the walls in front of the room of the player and the ones they walk behind. None while the editor is open.
+     */
+    fadedFrontWalls(): Rect[] {
+        if (this.lastEditorOpen !== false) return [];
+        const faded: Rect[] = [];
+        for (const entry of this.entries.values()) {
+            if (entry.piece.kind === "floor" || entry.carrierHeight < 2 || !isHorizontalWallPiece(entry.piece))
+                continue;
+            if (entry.opacity >= 1 - 1e-6 && entry.target >= 1) continue;
+            faded.push({ x: entry.x, y: entry.y, ...mapLayerPieceSize(entry.piece) });
+        }
+        return faded;
+    }
 
     constructor(
         private readonly readWalls: () => Iterable<FadableWall>,
@@ -362,6 +384,7 @@ export class WallFade {
         for (const entry of this.entries.values()) {
             if (this.step(entry, deltaMs)) redraw = true;
         }
+        if (redraw || changed) this.fadeVersion++;
         if (redraw) this.markDirty();
     }
 

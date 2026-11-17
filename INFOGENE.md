@@ -2217,6 +2217,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   arrête la lumière au niveau de son dessus (dessiné au-dessus de son pied), pas à son pied : une lampe ou une
   torche au sud éclaire toute la façade, une lampe dans la pièce derrière n'en éclaire rien. Les côtés de la façade
   sont fermés à ses bouts et là où un mur part vers le sud.
+- **Sol sous un mur estompé** (`FadedWallFloor.ts`, `FadedWallFloorView.ts`) : une pièce a son sol sous le haut de
+  son mur de devant, pas sous son pied ; estompé (55 %), ce mur laissait voir le sol en haut et le terrain de dehors
+  en bas, en deux tons. Le jeu dessine, pour soi seulement et sans rien poser sur la carte, le sol de la pièce sous
+  les cases sans sol d'un mur haut estompé ; rien dans l'éditeur.
 - **Dalles en verre** : interrupteur « Dalles en verre » du mode Dalles ; pièce `dalle-verre` de `Carte Paliers`
   (`SLAB_GLASS_FAMILY`, une famille de dalle qui n'est pas un sol du rez-de-chaussée), translucide comme les
   vitres : on voit à travers ce qui est sous le palier. Grisé tant que le catalogue de la salle n'a pas la pièce.
