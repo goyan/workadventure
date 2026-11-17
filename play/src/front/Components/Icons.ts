@@ -32,6 +32,8 @@ export { default as IconDeselect } from "~icons/tabler/deselect";
 export { default as IconCloudUpload } from "~icons/tabler/cloud-upload";
 export { default as IconCloud } from "~icons/tabler/cloud";
 export { default as IconSunMoon } from "~icons/tabler/sun-moon";
+export { default as IconSun } from "~icons/tabler/sun";
+export { default as IconMoon } from "~icons/tabler/moon";
 export { default as IconMinus } from "~icons/tabler/minus";
 export { default as IconInfoCircle } from "~icons/tabler/info-circle";
 export { default as IconChevronUp } from "~icons/tabler/chevron-up";

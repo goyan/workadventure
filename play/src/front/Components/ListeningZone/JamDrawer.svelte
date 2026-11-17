@@ -1,9 +1,12 @@
 <script lang="ts">
+    import "../../style/jam-theme.css";
     import { fly } from "svelte/transition";
+    import { jamStyleStore, jamThemeStore } from "../../ListeningZone/JamThemeStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { allJamRoomsStore } from "../../ListeningZone/ListeningZoneController";
     import { currentListeningZoneStore } from "../../ListeningZone/ListeningZoneStore";
     import { jamDrawer, type JamDrawer } from "../../ListeningZone/JamDrawerStore";
+    import JamThemePicker from "./JamThemePicker.svelte";
     import ListeningZoneBubble from "./ListeningZoneBubble.svelte";
     import JamRoomsOverview from "./JamRoomsOverview.svelte";
     import { IconChevronRight, IconHeadphones } from "@wa-icons";
@@ -24,9 +27,18 @@
 </script>
 
 {#if shown}
-    <div class="flex items-start gap-1 pointer-events-auto" data-testid="jam-drawer">
+    <div
+        class="jam-surface flex items-start gap-2 pointer-events-auto"
+        data-testid="jam-drawer"
+        data-jam-theme={$jamThemeStore}
+        data-jam-style={$jamStyleStore}
+    >
         {#if $open}
-            <div class="relative" transition:fly={{ x: 320, duration: 200 }} data-testid="jam-drawer-panel">
+            <div class="jam-library relative" transition:fly={{ x: 320, duration: 200 }} data-testid="jam-drawer-panel">
+                <header class="jam-library-header">
+                    <h2 class="jam-library-heading">{$LL.spotify.listeningZone.musicLounge()}</h2>
+                    <JamThemePicker />
+                </header>
                 {#if $currentListeningZoneStore}
                     <ListeningZoneBubble />
                 {:else}
@@ -44,9 +56,9 @@
         {/if}
         <button
             type="button"
-            class="relative flex flex-col items-center gap-0.5 rounded-lg bg-contrast/80 px-2 py-2 text-[#1ed760] backdrop-blur hover:bg-contrast"
+            class="relative flex flex-col items-center gap-0.5 rounded-lg bg-contrast/80 px-2 py-2 text-[var(--jam-accent,#1ed760)] backdrop-blur hover:bg-contrast"
             class:ring-2={listening}
-            class:ring-[#1ed760]={listening}
+            class:ring-[var(--jam-accent,#1ed760)]={listening}
             aria-expanded={$open}
             aria-label={`${label} (${$LL.spotify.listeningZone.jamsButton({ count: $allJamRoomsStore.length })})`}
             title={label}

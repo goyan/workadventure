@@ -150,7 +150,7 @@
         <TooltipAbove label={muteLabel}>
             <button
                 type="button"
-                class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[#1ed760] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-[var(--jam-accent,#1ed760)] hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 onclick={() => jamMusicMutedStore.update((muted) => !muted)}
                 data-testid="jam-audio-mute"
                 aria-label={muteLabel}
@@ -159,16 +159,16 @@
                     <PlayerPlayIcon
                         height="h-5"
                         width="w-5"
-                        strokeColor="stroke-black"
-                        fillColor="fill-black"
+                        strokeColor="stroke-[var(--jam-onaccent,#062b14)]"
+                        fillColor="fill-[var(--jam-onaccent,#062b14)]"
                         hover=""
                     />
                 {:else}
                     <PlayerPauseIcon
                         height="h-5"
                         width="w-5"
-                        strokeColor="stroke-black"
-                        fillColor="fill-black"
+                        strokeColor="stroke-[var(--jam-onaccent,#062b14)]"
+                        fillColor="fill-[var(--jam-onaccent,#062b14)]"
                         hover=""
                     />
                 {/if}
@@ -235,7 +235,11 @@
     .jam-volume::-webkit-slider-runnable-track {
         height: 4px;
         border-radius: 9999px;
-        background: linear-gradient(to right, #1ed760 var(--fill), rgb(255 255 255 / 0.25) var(--fill));
+        background: linear-gradient(
+            to right,
+            var(--jam-accent, #1ed760) var(--fill),
+            color-mix(in srgb, var(--ui-foreground, #fff) 25%, transparent) var(--fill)
+        );
     }
     .jam-volume::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -246,27 +250,27 @@
         margin-top: -5px;
         border: 0;
         border-radius: 9999px;
-        background: #fff;
+        background: var(--ui-foreground, #fff);
     }
     .jam-volume::-moz-range-track {
         height: 4px;
         border-radius: 9999px;
-        background: rgb(255 255 255 / 0.25);
+        background: color-mix(in srgb, var(--ui-foreground, #fff) 25%, transparent);
     }
     .jam-volume::-moz-range-progress {
         height: 4px;
         border-radius: 9999px;
-        background: #1ed760;
+        background: var(--jam-accent, #1ed760);
     }
     .jam-volume::-moz-range-thumb {
         width: 14px;
         height: 14px;
         border: 0;
         border-radius: 9999px;
-        background: #fff;
+        background: var(--ui-foreground, #fff);
     }
     .jam-volume:focus-visible {
-        outline: 2px solid #fff;
+        outline: 2px solid var(--ui-foreground, #fff);
         outline-offset: 4px;
     }
 </style>

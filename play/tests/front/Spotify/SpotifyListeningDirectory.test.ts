@@ -7,6 +7,7 @@ import {
     bindListeningDirectory,
     createListeningByUserUuidStore,
     listeningAlongCountStore,
+    listeningUserNamesStore,
 } from "../../../src/front/Spotify/SpotifyListeningDirectory";
 
 function fakeUser(uuid: string, listening: Writable<SpotifyListening | undefined>): SpaceUserExtended {
@@ -16,6 +17,22 @@ function fakeUser(uuid: string, listening: Writable<SpotifyListening | undefined
 const track: SpotifyListening = { ...EMPTY_SPOTIFY_LISTENING, trackTitle: "Song", artistName: "Artist" };
 
 describe("createListeningByUserUuidStore", () => {
+    it("keeps an extension listener even with track sharing disabled, until they stop or disconnect", () => {
+        const presence = writable<SpotifyListening | undefined>({
+            ...EMPTY_SPOTIFY_LISTENING,
+            listeningAlongUuid: "dj",
+        });
+        const users = writable(new Map([["guest", fakeUser("guest", presence)]]));
+        const store = createListeningByUserUuidStore(users);
+        const unsubscribe = store.subscribe(() => {});
+        expect(get(store).get("guest")?.listeningAlongUuid).toBe("dj");
+        presence.set(EMPTY_SPOTIFY_LISTENING);
+        expect(get(store).size).toBe(0);
+        presence.set({ ...EMPTY_SPOTIFY_LISTENING, listeningAlongUuid: "dj" });
+        users.set(new Map());
+        expect(get(store).size).toBe(0);
+        unsubscribe();
+    });
     it("follows each user's listening, and forgets users who leave or share nothing", () => {
         const aliceListening = writable<SpotifyListening | undefined>(undefined);
         const bobListening = writable<SpotifyListening | undefined>(track);
@@ -44,6 +61,19 @@ describe("createListeningByUserUuidStore", () => {
 });
 
 describe("listeningAlongCountStore", () => {
+    it("resolves audience names from the world space, then clears them on leaving the map", () => {
+        const user = { ...fakeUser("remote", writable<SpotifyListening | undefined>(undefined)), name: "Remote guest" };
+        const users = writable(new Map([["space-remote", user]]));
+        const unbind = bindListeningDirectory(users);
+        const unsubscribe = listeningUserNamesStore.subscribe(() => {});
+        expect(get(listeningUserNamesStore).get("remote")).toBe("Remote guest");
+        users.set(new Map());
+        expect(get(listeningUserNamesStore).size).toBe(0);
+        users.set(new Map([["space-remote", user]]));
+        unbind();
+        expect(get(listeningUserNamesStore).size).toBe(0);
+        unsubscribe();
+    });
     it("counts who plays along with each user, not someone following themselves", () => {
         const along = (followed: string) =>
             writable<SpotifyListening | undefined>({ ...track, listeningAlongUuid: followed });

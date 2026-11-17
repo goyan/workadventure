@@ -69,14 +69,14 @@
 
 {#if zone}
     <div
-        class="w-80 max-w-[90vw] max-h-[70vh] overflow-y-auto overflow-x-hidden bg-contrast/80 backdrop-blur rounded-lg pointer-events-auto"
+        class="w-full max-h-[60vh] overflow-y-auto overflow-x-hidden pointer-events-auto"
         data-testid="listening-zone-bubble"
     >
-        <div class="p-4 flex flex-col gap-3">
+        <div class="p-3 flex flex-col gap-3">
             <!-- The Jam drawer's arrow sits in the top right corner. -->
             <div class="flex items-start gap-3 w-full pe-6">
                 <div
-                    class="shrink-0 w-10 h-10 rounded-full bg-[#1ed760]/20 text-[#1ed760] flex items-center justify-center"
+                    class="shrink-0 w-10 h-10 rounded-full bg-[var(--jam-accent,#1ed760)]/20 text-[var(--jam-accent,#1ed760)] flex items-center justify-center"
                     aria-hidden="true"
                 >
                     <IconHeadphones font-size="20" />
@@ -157,12 +157,12 @@
                         </button>
                         <button
                             type="button"
-                            class="flex flex-col gap-0.5 rounded-lg border border-[#1ed760]/40 bg-[#1ed760]/10 p-2.5 text-start enabled:hover:bg-[#1ed760]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="flex flex-col gap-0.5 rounded-lg border border-[var(--jam-accent,#1ed760)]/40 bg-[var(--jam-accent,#1ed760)]/10 p-2.5 text-start enabled:hover:bg-[var(--jam-accent,#1ed760)]/20 disabled:opacity-50 disabled:cursor-not-allowed"
                             disabled={!canHomeJam}
                             onclick={openHomeJam}
                             data-testid="listening-zone-create-home"
                         >
-                            <span class="text-sm font-bold text-[#1ed760]"
+                            <span class="text-sm font-bold text-[var(--jam-accent,#1ed760)]"
                                 >{$LL.spotify.listeningZone.kindHomeTitle()}</span
                             >
                             <span class="text-xs text-white/60">{$LL.spotify.listeningZone.kindHomeDescription()}</span>
