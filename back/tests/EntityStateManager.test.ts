@@ -70,6 +70,16 @@ function createHarness({
 }
 
 describe("EntityStateManager", () => {
+    it("ignores a press on a switch that has a trigger: a sensor or a timer is not used by hand", () => {
+        const wam = wamWith();
+        const raw = wam.entities.switch.properties?.[0] as unknown as Record<string, unknown>;
+        raw.trigger = { type: "hours", from: "08:00", to: "18:00" };
+        const { manager, press } = createHarness({ wam });
+
+        expect(press(["l1"])).toEqual([]);
+        expect(manager.getAll()).toEqual([]);
+    });
+
     it("reads a switch the map holds without targets as a room switch, instead of failing", () => {
         const wam = wamWith();
         // What a live edit command leaves in the map: nothing fills the defaults of the schema in.

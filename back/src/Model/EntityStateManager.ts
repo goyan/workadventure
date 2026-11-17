@@ -1,6 +1,7 @@
 import {
     ENTITY_STATE_DEFAULT,
     SWITCH_MAX_TARGETS,
+    isAutomaticSwitch,
     isEntityStateKey,
     isEntityStateValue,
     switchMayReach,
@@ -51,7 +52,8 @@ export class EntityStateManager {
         const entities = this.room.getWam()?.entities;
         const switchEntity = entities?.[message.switchId];
         const property = switchPropertyIn(switchEntity?.properties);
-        if (!entities || !switchEntity || !property || property.key !== key) {
+        // A switch with a trigger is used by the server alone (see SwitchTriggerEvaluator), never by hand.
+        if (!entities || !switchEntity || !property || property.key !== key || isAutomaticSwitch(property)) {
             return [];
         }
         const allowedTags = property.allowedTags ?? [];

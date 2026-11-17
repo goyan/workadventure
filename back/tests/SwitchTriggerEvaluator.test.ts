@@ -1,5 +1,5 @@
 import type { WAMFileFormat } from "@workadventure/map-editor";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { SwitchTriggerEvaluator } from "../src/Model/SwitchTriggerEvaluator";
 
 const prefabRef = { collectionName: "lamps", id: "x" };
@@ -326,5 +326,58 @@ describe("SwitchTriggerEvaluator, wandering animals the browsers report", () => 
         h.evaluator.reportAnimals("alice", [...Array.from({ length: 50 }, (_, index) => `x${index}`), "s"]);
         h.advance(1);
         expect(h.tick()).toEqual([]);
+    });
+});
+
+describe("SwitchTriggerEvaluator, a map edited with a switch that is not well formed", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it("ignores a timer without hours instead of failing at every look", () => {
+        const h = createHarness({ ...sensor("s", { type: "hours" }, ["l1"]), ...lamps("l1") });
+
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("ignores a sensor whose property has no targets", () => {
+        const h = createHarness({
+            s: { x: 160, y: 160, prefabRef, properties: [{ id: "p", type: "switchPropertyData", trigger: inRoom }] },
+            ...lamps("l1"),
+        });
+        h.enter(1);
+
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("reads a sensor sent without its settings with their defaults", () => {
+        const h = createHarness({
+            ...sensor("s", { type: "presence", scope: "proximity" }, ["l1"]),
+            ...lamps("l1"),
+        });
+        // 3 tiles around the middle of the sensor by default.
+        h.enter(1, 176 + 100, 176);
+        expect(h.tick()).toEqual([["l1", "false"]]);
+        h.enter(1, 176 + 90, 176);
+        h.advance(1);
+
+        expect(h.tick()).toEqual([["l1", "true"]]);
+    });
+
+    it("keeps looking every second after a look that failed, without letting the error out of its timer", () => {
+        vi.useFakeTimers();
+        const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        const h = createHarness({ ...sensor("s", inRoom, ["l1"]), ...lamps("l1") });
+        const tick = vi.spyOn(h.evaluator, "tick").mockImplementationOnce(() => {
+            throw new Error("unexpected");
+        });
+        h.evaluator.start();
+
+        expect(() => vi.advanceTimersByTime(2000)).not.toThrow();
+
+        h.evaluator.stop();
+        expect(tick).toHaveBeenCalledTimes(2);
+        expect(logged).toHaveBeenCalledTimes(1);
     });
 });

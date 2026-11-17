@@ -3,7 +3,10 @@ import {
     isWithinHours,
     parisMinutesOfDay,
     switchPresenceSenses,
+    switchPropertyIn,
 } from "@workadventure/map-editor";
+import * as Sentry from "@sentry/node";
+import { asError } from "catch-unknown";
 import type { EntityStateKey, EntityStateValue, SwitchPropertyData, WAMEntityData } from "@workadventure/map-editor";
 import type { GameRoom } from "./GameRoom";
 
@@ -53,7 +56,15 @@ export class SwitchTriggerEvaluator {
     ) {}
 
     public start(): void {
-        this.timer ??= setInterval(() => this.tick(), SWITCH_TRIGGER_TICK_MS);
+        this.timer ??= setInterval(() => {
+            try {
+                this.tick();
+            } catch (error) {
+                // An error that left this timer would stop the whole server: the lamps wait for the next look.
+                console.error("Could not look at the triggers of the map", asError(error));
+                Sentry.captureException(error);
+            }
+        }, SWITCH_TRIGGER_TICK_MS);
     }
 
     public stop(): void {
@@ -172,9 +183,8 @@ export class SwitchTriggerEvaluator {
         this.readFor = version;
         this.switches = [];
         for (const [id, entity] of Object.entries(wam?.entities ?? {})) {
-            const property = entity.properties?.find(
-                (candidate): candidate is SwitchPropertyData => candidate.type === "switchPropertyData",
-            );
+            // Checked, with its defaults: the map holds what the last edit command carried (see switchPropertyIn).
+            const property = switchPropertyIn(entity.properties);
             if (property?.trigger) {
                 this.switches.push({ id, entity, property });
             }
