@@ -7,6 +7,7 @@ import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import { SeasonalTheme } from "../Seasonal/SeasonalTheme";
 import type { SunPosition } from "../Night/NightClock";
+import type { RaisedCover } from "./RaisedCover";
 import {
     effectiveWeather,
     FOG_LEVELS,
@@ -83,6 +84,11 @@ const OVERCAST_COLOR = 0x8a94a3;
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
     outdoorGrid?: () => OutdoorGrid | undefined;
+    /**
+     * What is drawn over the outdoors without being outdoors (the slabs of a raised floor in a room, the tall walls):
+     * the weather leaves it alone, as it leaves the rooms.
+     */
+    raisedCover?: () => RaisedCover | undefined;
     /** The personal seasonal theme: Christmas shows snow instead of the map weather, autumn colours the grass. */
     seasonalTheme?: () => SeasonalTheme | undefined;
     /** Overrides the system "reduced motion" setting (read once from matchMedia otherwise). Used by tests. */
@@ -219,7 +225,9 @@ export class WeatherManager {
         }
         const grid = this.options.outdoorGrid?.();
         // Veils cover the outdoor runs of the view only, so rooms stay as they are.
-        const veil = grid ? grid.outdoorRunsInView(view) : [view];
+        const cover = grid ? this.options.raisedCover?.() : undefined;
+        const outdoorRuns = grid ? grid.outdoorRunsInView(view) : [view];
+        const veil = cover ? cover.uncovered(outdoorRuns) : outdoorRuns;
         if (veil.length === 0) {
             // Nothing outside on the screen: nothing to draw, and no reason to draw the map again.
             if (this.visible) {
@@ -233,7 +241,9 @@ export class WeatherManager {
         this.visible = true;
         const epoch = serverDate?.getTime() ?? now;
         const sky = this.skyDrift.at(epoch, cloudDrift(settings?.windFrom, settings?.windSpeed));
-        const isOutdoor = grid ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) : undefined;
+        const isOutdoor = grid
+            ? (x: number, y: number): boolean => grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true
+            : undefined;
         this.graphics.clear().setVisible(true);
         // Cells of the clouds at this zoom, never finer than the fog's 16 px when there is fog (powers of two).
         const cloudBlock = cloudBlockSize(this.scene.cameras.main.zoom);

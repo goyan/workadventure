@@ -30,36 +30,52 @@ export const DIVE_DISTANCE = 24;
 /** How far inside the water a dive lands, so that the whole body is in it. */
 export const DIVE_DEPTH = 14;
 
-let cache: { scene: Phaser.Scene; frame: number; rectangles: WaterRectangle[] } | undefined;
+interface CachedWater {
+    scene: Phaser.Scene;
+    frame: number;
+    ground: WaterRectangle[];
+    raised: (WaterRectangle & { elevation: number })[];
+}
+let cache: CachedWater | undefined;
 
 /**
  * The water of the map: the `water` rectangles of the placed objects. Read every frame by each character, so it is
  * computed once per frame; the map editor may move or edit a pool at any time.
  */
-export function getWaterRectangles(scene: Phaser.Scene): WaterRectangle[] {
+/**
+ * The water of one floor of the map: the ground by default, a raised floor by its altitude. A pool is water for
+ * whoever stands on its floor only: drawn over another one, it is not there.
+ */
+export function getWaterRectangles(scene: Phaser.Scene, elevation = 0): WaterRectangle[] {
+    const all = allWaterRectangles(scene);
+    if (elevation < 2) return all.ground;
+    return all.raised.filter((rectangle) => Math.abs(rectangle.elevation - elevation) < 2);
+}
+
+function allWaterRectangles(scene: Phaser.Scene): CachedWater {
     const frame = scene.game?.loop?.frame ?? -1;
     if (cache && cache.scene === scene && cache.frame === frame) {
-        return cache.rectangles;
+        return cache;
     }
     // The map may not be loaded yet when the first characters are created.
     const gameScene = scene as Partial<GameScene>;
     const entities = gameScene.getGameMapFrontWrapper?.()?.getEntitiesManager?.()?.getEntities();
     const categories = gameScene.wamFile?.settings?.categories;
-    const rectangles: WaterRectangle[] = [];
+    const ground: WaterRectangle[] = [];
+    const raised: (WaterRectangle & { elevation: number })[] = [];
     for (const entity of entities?.values() ?? []) {
         const prefab = entity.getPrefab();
         if (prefab.water?.length) {
             const { trigger } = getObjectInteraction(prefab, categories);
-            rectangles.push(
-                ...getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, prefab.water).map((rectangle) => ({
-                    ...rectangle,
-                    trigger,
-                })),
-            );
+            const elevation = entity.getElevation?.() ?? 0;
+            for (const rectangle of getPrefabCollisionRectangles({ x: entity.x, y: entity.y }, prefab.water)) {
+                if (elevation > 0) raised.push({ ...rectangle, trigger, elevation });
+                else ground.push({ ...rectangle, trigger });
+            }
         }
     }
-    cache = { scene, frame, rectangles };
-    return rectangles;
+    cache = { scene, frame, ground, raised };
+    return cache;
 }
 
 export function isPointInWater(rectangles: WaterRectangle[], point: Point): boolean {

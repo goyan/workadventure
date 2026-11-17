@@ -567,7 +567,8 @@ export class Player extends Character {
      * walking onto the edge: it stops swimming once no part of its body touches the water any more.
      */
     private updateSwimming(): void {
-        const water = this.getFloorZ() > 0 ? [] : getWaterRectangles(this.scene);
+        // The water of the floor the avatar stands on (none on a stair).
+        const water = getWaterRectangles(this.scene, this.getFloorZ());
         const body = this.getBody();
         const inWater = intersectsWater(water, { x: body.x, y: body.y, width: body.width, height: body.height });
         if (this.swimming) {
