@@ -1,6 +1,7 @@
 import { get, writable, type Writable } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
-import { createPersistedSwitchStore } from "./PersistedSwitchStore";
+import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
+import { createPersistedNumberStore, createPersistedSwitchStore } from "./PersistedSwitchStore";
 
 export enum NightMode {
     Server = "server",
@@ -39,6 +40,14 @@ export const nightModeStore = createNightModeStore();
  * keeps their halo. Kept in the browser.
  */
 export const realisticNightStore = createPersistedSwitchStore("nightRealisticLighting", false);
+
+/** How dark the full night is for this player (the opacity of the veil), kept in the browser. */
+export const nightDarknessStore = createPersistedNumberStore(
+    "nightDarkness",
+    NIGHT_MAX_OPACITY,
+    NIGHT_DARKNESS_MIN,
+    NIGHT_DARKNESS_MAX,
+);
 
 /** Current clock shown by the map, updated by the existing night-mode tick. */
 export const nightDateStore = writable<Date | undefined>(undefined);

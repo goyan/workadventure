@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+    NIGHT_DARKNESS_MAX,
+    NIGHT_DARKNESS_MIN,
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
+    nightOpacityWith,
     parisCalendarDay,
     parisWallClockToInstant,
     parseNightAt,
@@ -196,5 +199,28 @@ describe("sunPositionAt", () => {
     it("gives the same elevation as sunElevationAt", () => {
         const at = new Date("2026-11-14T14:00:00Z");
         expect(sunPositionAt(at, paris).elevation).toBe(sunElevationAt(at, paris));
+    });
+});
+
+describe("nightOpacityWith", () => {
+    it("leaves the night as it is at the default darkness", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, NIGHT_MAX_OPACITY)).toBeCloseTo(NIGHT_MAX_OPACITY);
+        expect(nightOpacityWith(0.3, NIGHT_MAX_OPACITY)).toBeCloseTo(0.3);
+    });
+
+    it("makes the full night as dark as the setting, and the dusk in the same proportion", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 0.9)).toBeCloseTo(0.9);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY / 2, 0.9)).toBeCloseTo(0.45);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 0.3)).toBeCloseTo(0.3);
+    });
+
+    it("keeps the day clear whatever the setting", () => {
+        expect(nightOpacityWith(0, 0.95)).toBe(0);
+    });
+
+    it("keeps a setting it cannot read within its limits", () => {
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, 2)).toBeCloseTo(NIGHT_DARKNESS_MAX);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, -1)).toBeCloseTo(NIGHT_DARKNESS_MIN);
+        expect(nightOpacityWith(NIGHT_MAX_OPACITY, Number.NaN)).toBeCloseTo(NIGHT_MAX_OPACITY);
     });
 });
