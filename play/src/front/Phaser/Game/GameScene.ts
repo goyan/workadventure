@@ -1,4 +1,3 @@
-import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import * as Sentry from "@sentry/svelte";
 import * as Phaser from "phaser";
 import type { Subscription } from "rxjs";
@@ -271,6 +270,7 @@ import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
 import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
 import { RaisedCover } from "./Weather/RaisedCover";
