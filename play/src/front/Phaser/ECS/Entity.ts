@@ -26,6 +26,7 @@ import { isTreadmillBelt } from "../../Utils/ObjectCategories";
 import { GameScene } from "../Game/GameScene";
 import type { OutlineableInterface } from "../Game/OutlineableInterface";
 import {
+    WALL_THICKNESS,
     MAP_LAYER_FLOOR_DEPTH,
     isMapLayerPrefab,
     mapLayerGroundBottom,
@@ -34,10 +35,16 @@ import {
 import {
     applyDepthStep,
     applySupportDepthFloor,
+    applyHungOnWallDepth,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
-import type { DepthStepRange, SupportDepthBox, WallDepthBox } from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
+import type {
+    DepthStepRange,
+    SupportDepthBox,
+    WallDepthBox,
+    WallFaceBox,
+} from "../Game/MapEditor/MapLayer/ObjectDepthFloor";
 import { SpeechDomElement } from "../Entity/SpeechDomElement";
 import LL from "../../../i18n/i18n-svelte";
 import { DEBUG_MODE } from "../../Enum/EnvironmentVariable";
@@ -424,6 +431,7 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         }
         const box = { x: this.x, y: this.y, width: this.displayWidth, height: this.displayHeight };
         const walls: WallDepthBox[] = [];
+        const faces: WallFaceBox[] = [];
         const supports: SupportDepthBox[] = [];
         for (const neighbour of this.getOverlappingEntities()) {
             const prefab = neighbour.getPrefab();
@@ -437,6 +445,14 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             };
             const piece = parseMapLayerPrefab(prefab.collectionName, prefab.id);
             if (piece) {
+                if (piece.kind === "facade" || piece.kind === "lintel" || piece.kind === "end") {
+                    // The south face of the wall, under its cap: where a painting hangs.
+                    faces.push({
+                        ...neighbourBox,
+                        y: neighbour.y + WALL_THICKNESS,
+                        height: neighbour.displayHeight - WALL_THICKNESS,
+                    });
+                }
                 if (depthOffset < 0 && piece.kind !== "floor") {
                     // A high wall draws its cap above the tiles north of it: the wall stands where its foot is.
                     walls.push({ ...neighbourBox, footY: mapLayerGroundBottom(piece, neighbour.y) });
@@ -446,7 +462,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             }
         }
         // Sorted above its foot: a wall crossing it must not hide it when it stands on the tile in front of that wall.
-        const wallDepth = applyWallDepthFloor(naturalDepth, box, walls);
+        // Hung on the face of a wall (a painting up a high wall): over that wall.
+        const wallDepth = applyHungOnWallDepth(applyWallDepthFloor(naturalDepth, box, walls), box, faces);
         // An object standing on another one (a plant on a table) is drawn over it.
         this.automaticDepth = applySupportDepthFloor(wallDepth, box, supports);
         // Then the manual stacking chosen in the editor, relative to the images it overlaps.
