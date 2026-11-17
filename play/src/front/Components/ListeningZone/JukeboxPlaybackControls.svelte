@@ -74,9 +74,9 @@
 </script>
 
 <div class="flex flex-col gap-3 rounded-xl bg-black/30 p-3" data-testid="jukebox-player">
-    <div class="flex min-w-0 items-center gap-3">
+    <div class="jam-room-hero min-w-0">
         {#if playback?.track?.artworkUrl}
-            <img src={playback.track.artworkUrl} alt="" class="h-12 w-12 shrink-0 rounded-md object-cover" />
+            <img src={playback.track.artworkUrl} alt="" class="h-16 w-16 shrink-0 rounded-md object-cover" />
         {:else}
             <span
                 class="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-white/10 text-2xl"
@@ -103,9 +103,9 @@
                     type="button"
                     class="relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 {action ===
                     toggle
-                        ? 'bg-[#1ed760] text-black'
+                        ? 'bg-[var(--jam-accent,#1ed760)] text-[var(--jam-onaccent,#062b14)]'
                         : active
-                          ? 'bg-[#1ed760]/15 text-[#1ed760]'
+                          ? 'bg-[var(--jam-accent,#1ed760)]/15 text-[var(--jam-accent,#1ed760)]'
                           : 'bg-transparent text-white/70'} hover:brightness-125 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-40"
                     disabled={!ready}
                     onclick={() => command(action)}
@@ -119,16 +119,16 @@
                         <PlayerPauseIcon
                             height="h-5"
                             width="w-5"
-                            strokeColor="stroke-black"
-                            fillColor="fill-black"
+                            strokeColor="stroke-[var(--jam-onaccent,#062b14)]"
+                            fillColor="fill-[var(--jam-onaccent,#062b14)]"
                             hover=""
                         />
                     {:else if action === SpotifyPlaybackCommand.Play}
                         <PlayerPlayIcon
                             height="h-5"
                             width="w-5"
-                            strokeColor="stroke-black"
-                            fillColor="fill-black"
+                            strokeColor="stroke-[var(--jam-onaccent,#062b14)]"
+                            fillColor="fill-[var(--jam-onaccent,#062b14)]"
                             hover=""
                         />
                     {:else}
@@ -216,7 +216,11 @@
     .player-range::-webkit-slider-runnable-track {
         height: 4px;
         border-radius: 9999px;
-        background: linear-gradient(to right, #1ed760 var(--fill), rgb(255 255 255 / 0.25) var(--fill));
+        background: linear-gradient(
+            to right,
+            var(--jam-accent, #1ed760) var(--fill),
+            color-mix(in srgb, var(--ui-foreground, #fff) 25%, transparent) var(--fill)
+        );
     }
     .player-range::-webkit-slider-thumb {
         -webkit-appearance: none;
@@ -227,27 +231,27 @@
         margin-top: -5px;
         border: 0;
         border-radius: 9999px;
-        background: #fff;
+        background: var(--ui-foreground, #fff);
     }
     .player-range::-moz-range-track {
         height: 4px;
         border-radius: 9999px;
-        background: rgb(255 255 255 / 0.25);
+        background: color-mix(in srgb, var(--ui-foreground, #fff) 25%, transparent);
     }
     .player-range::-moz-range-progress {
         height: 4px;
         border-radius: 9999px;
-        background: #1ed760;
+        background: var(--jam-accent, #1ed760);
     }
     .player-range::-moz-range-thumb {
         width: 14px;
         height: 14px;
         border: 0;
         border-radius: 9999px;
-        background: #fff;
+        background: var(--ui-foreground, #fff);
     }
     .player-range:focus-visible {
-        outline: 2px solid #fff;
+        outline: 2px solid var(--ui-foreground, #fff);
         outline-offset: 4px;
     }
 </style>

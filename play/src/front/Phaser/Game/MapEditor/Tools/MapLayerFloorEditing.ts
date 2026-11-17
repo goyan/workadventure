@@ -4,11 +4,14 @@ import { asError } from "catch-unknown";
 import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
+import { SLAB_GLASS_FAMILY } from "../MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { mapEditorPlacementLevelStore } from "../../../../Stores/MapEditorStore";
 import {
     isFloorMode,
     mapLayerFloorFamilyStore,
+    mapLayerGlassSlabsAvailableStore,
+    mapLayerSlabGlassStore,
     mapLayerLevelStore,
     mapLayerBuiltLevelsStore,
     mapLayerLevelsStore,
@@ -205,7 +208,11 @@ export class MapLayerFloorEditing {
         const from = floorCellAt(start.x, start.y, level);
         const to = floorCellAt(end.x, end.y, level);
         if (mode === "slab") {
-            const family = get(mapLayerFloorFamilyStore);
+            // Of glass when the switch is on and the catalog has the glass slab; else of the floor chosen.
+            const family =
+                get(mapLayerSlabGlassStore) && get(mapLayerGlassSlabsAvailableStore)
+                    ? SLAB_GLASS_FAMILY
+                    : get(mapLayerFloorFamilyStore);
             return (model, bounds) => {
                 applySlabs(model, level, from, to, family, bounds);
                 return true;

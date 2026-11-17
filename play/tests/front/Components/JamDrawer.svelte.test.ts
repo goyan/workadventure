@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
 import { writable } from "svelte/store";
+import { JamStyle, JamTheme, jamStyleStore, jamThemeStore } from "../../../src/front/ListeningZone/JamThemeStore";
 import JamDrawer from "../../../src/front/Components/ListeningZone/JamDrawer.svelte";
 
 const { rooms, currentZone } = vi.hoisted(() => {
@@ -35,8 +36,29 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
     const { readable } = await import("svelte/store");
     return {
         LL: readable({
+            menu: {
+                settings: {
+                    theme: {
+                        label: () => "Theme",
+                        palettes: {
+                            night: () => "Night",
+                            forest: () => "Forest",
+                            ember: () => "Ember",
+                            gameboy: () => "Game Boy",
+                            light: () => "Light",
+                        },
+                    },
+                },
+            },
             spotify: {
                 listeningZone: {
+                    theme: () => "Appearance",
+                    themeWa: () => "Follow WA",
+                    themeDark: () => "Dark",
+                    styleAppleMusic: () => "Switch to Apple Music",
+                    styleSpotify: () => "Switch to Spotify",
+                    themeLight: () => "Light",
+                    musicLounge: () => "Music Lounge",
                     jamsButton: ({ count }: { count: number }) => `${count} Jams`,
                     showDrawer: () => "Show the Jams",
                     hideDrawer: () => "Hide the Jams",
@@ -57,6 +79,8 @@ describe("JamDrawer", () => {
         Element.prototype.animate = vi.fn(
             () => ({ cancel: vi.fn(), finished: new Promise(() => {}), onfinish: null }) as unknown as Animation,
         );
+        jamThemeStore.set(JamTheme.Wa);
+        jamStyleStore.set(JamStyle.Spotify);
         rooms.set([]);
         currentZone.set(undefined);
         open = writable(false);
@@ -116,6 +140,30 @@ describe("JamDrawer", () => {
         expect(tab()).not.toBeNull();
         expect(byTestId("bubble")).not.toBeNull();
         expect(byTestId("overview")).toBeNull();
+    });
+
+    it("keeps the music style independent from brightness and the global palette", () => {
+        rooms.set([{}]);
+        open.set(true);
+        render();
+        const globalPalette = document.documentElement.dataset.retroPalette;
+        const globalPreference = localStorage.getItem("mapEditorRetroPalette");
+        const style = target.querySelector<HTMLButtonElement>('[data-testid="jam-style-toggle"]');
+        if (!style) throw new Error("Style toggle missing");
+        flushSync(() => style.click());
+        for (const theme of [JamTheme.Light, JamTheme.Dark, JamTheme.Wa]) {
+            flushSync(() => target.querySelector<HTMLButtonElement>(`[data-testid="jam-theme-${theme}"]`)?.click());
+            expect(target.querySelector("[data-jam-theme]")?.getAttribute("data-jam-theme")).toBe(theme);
+            expect(target.querySelector("[data-jam-style]")?.getAttribute("data-jam-style")).toBe(JamStyle.AppleMusic);
+            expect(localStorage.getItem("jamAppearance")).toBe(theme);
+        }
+        expect(style.getAttribute("aria-pressed")).toBe("true");
+        expect(style.getAttribute("aria-label")).toBe("Switch to Spotify");
+        flushSync(() => style.click());
+        expect(style.getAttribute("aria-label")).toBe("Switch to Apple Music");
+        expect(localStorage.getItem("jamStyle")).toBe(JamStyle.Spotify);
+        expect(document.documentElement.dataset.retroPalette).toBe(globalPalette);
+        expect(localStorage.getItem("mapEditorRetroPalette")).toBe(globalPreference);
     });
 
     it("marks the icon while a Jam is being listened to", () => {

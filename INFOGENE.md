@@ -2211,6 +2211,9 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
   la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
   (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
+- **Dalles en verre** : interrupteur « Dalles en verre » du mode Dalles ; pièce `dalle-verre` de `Carte Paliers`
+  (`SLAB_GLASS_FAMILY`, une famille de dalle qui n'est pas un sol du rez-de-chaussée), translucide comme les
+  vitres : on voit à travers ce qui est sous le palier. Grisé tant que le catalogue de la salle n'a pas la pièce.
 - **Garde-corps** (`FloorRailings.ts`, `Floors/FloorRailingsView.ts`) : dessinés par le jeu le long de chaque bord
   d'un palier qui donne sur le vide, sans rien poser sur la carte (les paliers déjà construits les reçoivent). Pas
   de garde-corps là où un escalier arrive ou repart, ni le long d'un mur d'étage, ni le long d'un mur d'en dessous

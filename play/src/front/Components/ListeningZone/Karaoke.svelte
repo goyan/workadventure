@@ -7,6 +7,7 @@
     import { isLocalUser, ownJamLinkSaveStore, replaceOwnJamLink } from "../../ListeningZone/ListeningZoneController";
     import { openSpotifySettings } from "../../Stores/MenuStore";
     import KaraokePanel from "./KaraokePanel.svelte";
+    import JamAudience from "./JamAudience.svelte";
 
     let room = $derived($selectedKaraokeRoomStore);
     let host = $derived(room ? $listeningByUserUuidStore.get(room.jam.hostUuid) : undefined);
@@ -43,6 +44,8 @@
             }}
             linkSave={$ownJamLinkSaveStore}
             onclose={() => selectedKaraokeRoomStore.set(undefined)}
-        />
+        >
+            {#snippet audience()}<JamAudience {room} />{/snippet}
+        </KaraokePanel>
     {/key}
 {/if}

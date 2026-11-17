@@ -20,7 +20,10 @@ export function createListeningByUserUuidStore(
         const emit = () => {
             const byUuid = new Map<string, SpotifyListening>();
             for (const { uuid, listening } of listeningBySpaceUserId.values()) {
-                if (isPlayingTrack(listening) || isInJam(listening)) {
+                if (
+                    listening &&
+                    (listening.listeningAlongUuid !== "" || isPlayingTrack(listening) || isInJam(listening))
+                ) {
                     byUuid.set(uuid, listening);
                 }
             }
@@ -63,6 +66,14 @@ export function createListeningByUserUuidStore(
  * Bound to the world space of the current room by the GameScene; empty until then.
  */
 const listeningSource = writable<Readable<ListeningByUserUuid>>(readable(new Map()));
+const worldUsersSource = writable<Readable<Map<string, SpaceUserExtended>>>(readable(new Map()));
+/** Names from the whole map, including listeners whose woka is outside the visible area. */
+export const listeningUserNamesStore: Readable<ReadonlyMap<string, string>> = derived(
+    worldUsersSource,
+    (users, set) =>
+        users.subscribe((members) => set(new Map([...members.values()].map((user) => [user.uuid, user.name])))),
+    new Map(),
+);
 
 export const listeningByUserUuidStore: Readable<ListeningByUserUuid> = readable<ListeningByUserUuid>(
     new Map(),
@@ -92,6 +103,10 @@ export const listeningAlongCountStore: Readable<Map<string, number>> = derived(l
 });
 
 export function bindListeningDirectory(usersStore: Readable<Map<string, SpaceUserExtended>>): () => void {
+    worldUsersSource.set(usersStore);
     listeningSource.set(createListeningByUserUuidStore(usersStore));
-    return () => listeningSource.set(readable(new Map()));
+    return () => {
+        listeningSource.set(readable(new Map()));
+        worldUsersSource.set(readable(new Map()));
+    };
 }

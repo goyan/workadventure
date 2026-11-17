@@ -564,6 +564,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             openSide: "Flanc vide",
         },
         walls: "Style de mur",
+        glassSlab: "Dalles en verre",
+        glassSlabHint:
+            "Des dalles transparentes : on voit à travers ce qui est sous le palier. Grisé si le catalogue de la salle n’a pas la dalle en verre.",
         glazedDoor: "Vitrée",
         glazedDoorHint:
             "Pour les nouvelles portes horizontales. Cliquez sur une porte horizontale posée pour lui donner ces réglages, ou pour la rendre vitrée ou pleine si elle les a déjà.",

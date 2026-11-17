@@ -27,6 +27,7 @@ import {
     mapLayerWindowsAvailableStore,
     isFloorMode,
     mapLayerFloorsAvailableStore,
+    mapLayerGlassSlabsAvailableStore,
     mapLayerPickLevelStore,
     mapLayerLevelStore,
     mapLayerLevelsStore,
@@ -92,7 +93,7 @@ import {
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
-import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION, SLAB_GLASS_FAMILY, slabPrefabName } from "../MapLayer/MapLayerFloors";
 import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
@@ -341,6 +342,12 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerPrefabId(MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName("parquet-clair")),
         );
         mapLayerFloorsAvailableStore.set(slab !== undefined);
+        // The glass slab came later: an older catalog does not have it.
+        const glassSlab = await manager.getEntityPrefab(
+            MAP_LAYER_FLOOR_SLAB_COLLECTION,
+            mapLayerPrefabId(MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName(SLAB_GLASS_FAMILY)),
+        );
+        mapLayerGlassSlabsAvailableStore.set(glassSlab !== undefined);
         if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
         // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
         const door = await manager.getEntityPrefab(
