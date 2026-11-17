@@ -388,7 +388,7 @@ n'a pas de position à lui (comme un va-et-vient).
     client modifié peut tenir un capteur allumé en signalant un animal ; un joueur immobile dont le navigateur avait
     signalé un animal dans un bâtiment y tient les lampes allumées tant qu'il ne bouge pas ; la lampe dupliquée (⧉)
     d'une lampe à capteur intégré commande encore l'originale (à recâbler).
-- **Obscurité de la nuit (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, curseur de 30 % (claire) à
+- **Obscurité de la nuit (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, curseur de 5 % (claire) à
   95 % (très sombre), 60 % par défaut comme avant ; c'est l'opacité du voile en pleine nuit (`nightDarknessStore`,
   gardé dans le navigateur, `nightOpacityWith`) : crépuscule et aube en gardent leur part, la lune l'éclaircit comme
   avant, lampes, torches et halos le percent comme avant. « Revenir à 60 % » sous le curseur.

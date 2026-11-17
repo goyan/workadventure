@@ -3,8 +3,8 @@ import type { MapPlace } from "../../../../common/RealWeather";
 
 /** Darkness of the night veil once night has fully fallen. */
 export const NIGHT_MAX_OPACITY = 0.6;
-/** How dark each player may set the full night (the opacity of the veil): from a light dusk to almost black. */
-export const NIGHT_DARKNESS_MIN = 0.3;
+/** How dark each player may set the full night (the opacity of the veil): from almost no night to almost black. */
+export const NIGHT_DARKNESS_MIN = 0.05;
 export const NIGHT_DARKNESS_MAX = 0.95;
 
 // The night follows the real sun of the place of the map (Paris by default), for everybody, as the clock does.
