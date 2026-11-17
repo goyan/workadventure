@@ -524,6 +524,8 @@ export class GameScene extends DirtyScene {
     private outdoorTracker: OutdoorTracker | undefined;
     /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
     private wallFade: WallFade | undefined;
+    /** The altitude of the raised floor the player stood on before a reload, until the floors are there to take it. */
+    private floorToRestore: number | undefined;
     private fadedWallFloor: FadedWallFloorView | undefined;
     private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
@@ -1394,9 +1396,20 @@ export class GameScene extends DirtyScene {
 
     private readonly saveCurrentPosition = (): void => {
         if (this.CurrentPlayer) {
-            saveLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid, this.CurrentPlayer);
+            this.saveLastPosition(this.CurrentPlayer);
         }
     };
+
+    /**
+     * Keeps where the player is for the next reload, with the raised floor they stand on. Not on a stair, between
+     * two floors: the last place kept stays.
+     */
+    private saveLastPosition(position: PositionInterface): void {
+        // Until the floors are there, the floor to restore is still the one of the player.
+        const floorZ = this.floorSpike ? this.floorSpike.restingElevation() : (this.floorToRestore ?? 0);
+        if (floorZ === undefined) return;
+        saveLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid, position, floorZ);
+    }
 
     public cleanupClosingScene(): void {
         this.saveCurrentPosition();
@@ -2918,15 +2931,23 @@ export class GameScene extends DirtyScene {
                     }
                 }
 
+                const lastPosition = readLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid);
                 const startPosition = computeStartPosition(
                     this.gameMapFrontWrapper,
                     this.mapFile,
-                    this.initPosition ?? readLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid),
+                    this.initPosition ?? lastPosition,
                     urlManager.getStartPositionNameFromUrl(),
                     (position) => this.isPositionAllowedForCurrentUser(position),
                 );
 
                 this.createCurrentPlayer(startPosition);
+                // Back where they were before a reload (a deployment): also on the raised floor they stood on.
+                this.floorToRestore =
+                    lastPosition?.floorZ !== undefined &&
+                    lastPosition.x === startPosition.x &&
+                    lastPosition.y === startPosition.y
+                        ? lastPosition.floorZ
+                        : undefined;
                 this.saveCurrentPosition();
 
                 this.activatablesManager = new ActivatablesManager(this.CurrentPlayer);
@@ -3239,6 +3260,8 @@ export class GameScene extends DirtyScene {
                         () => this.MapPlayersByKey.values(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );
+                    if (this.floorToRestore !== undefined) this.floorSpike.restore(this.floorToRestore);
+                    this.floorToRestore = undefined;
                 }
                 this.treeSeasonEffects?.destroy();
                 this.treeSeasonEffects = new TreeSeasonEffects(this, {
@@ -5501,7 +5524,7 @@ ${escapedMessage}
     }
 
     private doPushPlayerPosition(event: HasPlayerMovedInterface): void {
-        saveLastPlayerPosition(this.roomUrl, localUserStore.getLocalUser()?.uuid, event);
+        this.saveLastPosition(event);
         this.lastMoveEventSent = event;
         this.lastSentTick = this.currentTick;
 

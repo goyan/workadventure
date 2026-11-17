@@ -12,7 +12,7 @@ import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
 import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
 import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
-import { floorStep } from "../MapEditor/MapLayer/FloorWalk";
+import { floorStep, restoredFloorState } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
 import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
@@ -185,6 +185,13 @@ export function stairSideClosed(placed: PlacedStair, side: StairSide, barriers: 
 }
 
 /** Somebody else on the map, as the floors fade it. */
+/** How long the floor of the avatar before a reload is looked for: the catalogs of the map load after the avatar. */
+const RESTORE_MS = 15_000;
+/** The slabs are read again this often meanwhile. */
+const RESTORE_RETRY_MS = 300;
+/** Walked further than this, the avatar is not where it was before the reload: nothing to restore. */
+const RESTORE_REACH_PX = 8;
+
 /** A floor that hides the room the avatar is in, without standing over it, is not drawn at all. */
 const OUT_OF_SIGHT_ALPHA = 0;
 
@@ -200,6 +207,8 @@ export class FloorSpike {
     private model: FloorModel | undefined;
     private state: FloorWalkState = { elevation: 0 };
     private prev: { x: number; y: number } | undefined;
+    /** The floor to put the avatar back on (`restore`), tried until the slabs of the map are read or it moved away. */
+    private restoring: { elevation: number; x: number; y: number; left: number } | undefined;
     private readonly levels: LevelDrawing[] = [];
     private readonly railings: FloorRailingsView;
     private stairDrawings: StairDrawing[] = [];
@@ -260,6 +269,25 @@ export class FloorSpike {
         return { key: level.key, ...floorGroupBounds({ level: elevation, cells, key: level.key }) };
     }
 
+    /**
+     * After a reload, puts the avatar back on the raised floor it stood on. The slabs come with the catalogs of the
+     * map, a moment after the avatar: tried for a few seconds, and given up if the avatar walked away meanwhile.
+     */
+    public restore(elevation: number): void {
+        const avatar = this.avatar();
+        if (!avatar || !(elevation > 0)) return;
+        this.restoring = { elevation, x: avatar.x, y: avatar.y, left: RESTORE_MS };
+    }
+
+    /**
+     * The altitude of the floor the avatar stands on; undefined on a stair, between two floors. While a floor is
+     * being restored, it is that one.
+     */
+    public restingElevation(): number | undefined {
+        if (this.restoring) return this.restoring.elevation;
+        return this.state.stair === undefined ? this.state.elevation : undefined;
+    }
+
     /** The floors of the map and where the avatar is on them, for a computed walk; undefined without floors. */
     public walkContext(): { model: FloorModel; state: FloorWalkState } | undefined {
         return this.model && this.model.getSlabs().length > 0 ? { model: this.model, state: this.state } : undefined;
@@ -310,6 +338,19 @@ export class FloorSpike {
         if (!this.barriers || this.barriersAge <= 0) {
             this.barriers = this.readBarriers();
             this.barriersAge = 2000;
+        }
+        if (this.restoring) {
+            const { elevation, x, y } = this.restoring;
+            this.restoring.left -= delta;
+            const moved = Math.hypot(avatar.x - x, avatar.y - y) > RESTORE_REACH_PX;
+            const state = moved ? undefined : restoredFloorState(this.model, p, elevation);
+            if (state) {
+                this.state = state;
+                this.prev = p;
+            }
+            if (state || moved || this.restoring.left <= 0) this.restoring = undefined;
+            // The slabs are read again soon: they may not be loaded yet.
+            else this.mapAge = Math.min(this.mapAge, RESTORE_RETRY_MS);
         }
         const result = floorStep(this.model, this.state, this.prev ?? p, p, this.closed);
         if (result.p.x !== p.x || result.p.y !== p.y) {

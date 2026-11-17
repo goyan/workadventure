@@ -17,6 +17,16 @@ describe("last player position", () => {
         expect(readLastPlayerPosition("room", "bob")).toBeUndefined();
     });
 
+    it("restores the floor the player stood on, and the ground when none was saved", () => {
+        saveLastPlayerPosition("room", "alice", { x: 400, y: 336 }, 52);
+        expect(readLastPlayerPosition("room", "alice")).toEqual({ x: 400, y: 336, floorZ: 52 });
+        saveLastPlayerPosition("room", "alice", { x: 410, y: 336 });
+        expect(readLastPlayerPosition("room", "alice")).toEqual({ x: 410, y: 336 });
+        // A position saved before the floors existed has no altitude: the ground.
+        localStorage.setItem("lastPlayerPosition", JSON.stringify({ roomUrl: "room", userUuid: "alice", x: 1, y: 2 }));
+        expect(readLastPlayerPosition("room", "alice")).toEqual({ x: 1, y: 2 });
+    });
+
     it("ignores corrupt or invalid coordinates", () => {
         localStorage.setItem("lastPlayerPosition", "{");
         expect(readLastPlayerPosition("room", "alice")).toBeUndefined();
