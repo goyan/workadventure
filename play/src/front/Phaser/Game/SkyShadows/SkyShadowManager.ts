@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/svelte";
 import type { SkyLight } from "../Night/SkyLight";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
@@ -45,6 +46,7 @@ export class SkyShadowManager {
     private castersSignature = "";
     private castersReadAt: number | undefined;
     private drawn: DrawnShadows | undefined;
+    private broken = false;
 
     constructor(
         private readonly scene: SkyShadowScene & ConstructorParameters<typeof SkyShadowLayer>[0],
@@ -53,7 +55,24 @@ export class SkyShadowManager {
         this.layer = new SkyShadowLayer(scene);
     }
 
+    /**
+     * At every image. A failure while drawing (a canvas refused by the browser…) must never escape: it would stop the
+     * loop of the game (a blue page, as with PR #257). It is reported once, and the layer stays off for the scene.
+     */
     public update(now: number): void {
+        if (this.broken) return;
+        try {
+            this.refresh(now);
+        } catch (error) {
+            this.broken = true;
+            Sentry.captureException(error);
+            this.layer.hide();
+            this.drawn = undefined;
+            this.scene.markDirty();
+        }
+    }
+
+    private refresh(now: number): void {
         const light = this.options.light();
         if (!this.options.enabled() || !light || light.intensity < NO_LIGHT) {
             if (this.drawn) {

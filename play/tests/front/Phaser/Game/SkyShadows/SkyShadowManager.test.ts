@@ -118,6 +118,18 @@ describe("SkyShadowManager", () => {
         expect(draw).toHaveBeenCalledTimes(2);
     });
 
+    it("stops drawing, without stopping the game, when drawing fails", () => {
+        const { manager } = setup();
+        draw.mockImplementationOnce(() => {
+            throw new Error("no canvas");
+        });
+        expect(() => manager.update(0)).not.toThrow();
+        expect(hide).toHaveBeenCalled();
+        manager.update(16);
+        manager.update(1000);
+        expect(draw).toHaveBeenCalledTimes(1);
+    });
+
     it("hides the shadows without a light, or when they are turned off (map editor, personal setting)", () => {
         let enabled = true;
         const { manager, setLight } = setup({ enabled: () => enabled });
