@@ -19,17 +19,26 @@ export function toggleSwitchTarget(property: SwitchPropertyData, entityId: strin
 /**
  * The wiring of a switch that was copied: a target copied with it (`copiedIds`: the id of the original to the id of
  * its copy) is commanded through its copy, any other target is let go, so that a copied room never switches the lamps
- * of the room it was copied from.
+ * of the room it was copied from. What the map editor stored for the original (the room of a sensor of its room, the
+ * lamps of that room) is forgotten too: the editor finds them again where the copy stands (see syncedSensorProperty).
  */
 export function rewireSwitch(property: SwitchPropertyData, copiedIds: ReadonlyMap<string, string>): SwitchPropertyData {
+    let rewired = property;
+    if (property.resolvedTargets !== undefined) {
+        rewired = { ...rewired, resolvedTargets: undefined };
+    }
+    const { trigger } = property;
+    if (trigger?.type === "presence" && trigger.scope === "room" && trigger.areaId !== undefined) {
+        rewired = { ...rewired, trigger: { ...trigger, areaId: undefined } };
+    }
     if (property.targets.mode !== "ids") {
-        return property;
+        return rewired;
     }
     const ids = property.targets.ids.flatMap((id) => {
         const copy = copiedIds.get(id);
         return copy === undefined ? [] : [copy];
     });
-    return { ...property, targets: { mode: "ids", ids } };
+    return { ...rewired, targets: { mode: "ids", ids } };
 }
 
 /** The properties of a copied object, its switch rewired (see rewireSwitch). */

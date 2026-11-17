@@ -1,6 +1,10 @@
 import type { SwitchPropertyData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
-import { syncedSensorProperty } from "../../../../../src/front/Phaser/Game/Switches/SwitchSensorSync";
+import {
+    SENSOR_SYNC_RETRY_MS,
+    SensorSyncGate,
+    syncedSensorProperty,
+} from "../../../../../src/front/Phaser/Game/Switches/SwitchSensorSync";
 
 const inRoom = { type: "presence" as const, scope: "room" as const, tiles: 3, offDelay: 30, direction: 90, angle: 90 };
 const property = (overrides: Partial<SwitchPropertyData> = {}): SwitchPropertyData => ({
@@ -57,5 +61,32 @@ describe("syncedSensorProperty", () => {
         expect(synced).toBeDefined();
         expect(synced?.resolvedTargets).toBeUndefined();
         expect(syncedSensorProperty({ ...stored, resolvedTargets: undefined }, "room", ["l1"])).toBeUndefined();
+    });
+});
+
+describe("SensorSyncGate", () => {
+    const synced = property({ trigger: { ...inRoom, areaId: "room" }, resolvedTargets: ["l1"] });
+
+    it("lets a sensor be stored, then not the same thing again at once: the server may have refused it", () => {
+        const gate = new SensorSyncGate();
+
+        expect(gate.mayStore("s", synced, 1000)).toBe(true);
+        expect(gate.mayStore("s", synced, 1250)).toBe(false);
+        expect(gate.mayStore("s", synced, 1000 + SENSOR_SYNC_RETRY_MS - 1)).toBe(false);
+    });
+
+    it("tries the same thing again after a while", () => {
+        const gate = new SensorSyncGate();
+        gate.mayStore("s", synced, 1000);
+
+        expect(gate.mayStore("s", synced, 1000 + SENSOR_SYNC_RETRY_MS)).toBe(true);
+    });
+
+    it("stores at once something else for the same sensor, and the same thing for another sensor", () => {
+        const gate = new SensorSyncGate();
+        gate.mayStore("s", synced, 1000);
+
+        expect(gate.mayStore("s", { ...synced, resolvedTargets: ["l1", "l2"] }, 1250)).toBe(true);
+        expect(gate.mayStore("other", synced, 1250)).toBe(true);
     });
 });

@@ -40,3 +40,34 @@ export function syncedSensorProperty(
     }
     return synced === property ? undefined : synced;
 }
+
+/** The same thing is stored again for a sensor after this long only. */
+export const SENSOR_SYNC_RETRY_MS = 5000;
+
+/**
+ * Keeps the map editor from storing the same thing in a sensor over and over: what it stores may be refused by the
+ * server (the object is not this editor's to change), and what is on the map is then looked at again 4 times a second.
+ */
+export class SensorSyncGate {
+    private readonly stored = new Map<string, { what: string; at: number }>();
+
+    /** Whether to store `synced` in this sensor now; counts it as stored. */
+    public mayStore(entityId: string, synced: SwitchPropertyData, now: number): boolean {
+        const what = JSON.stringify(synced);
+        const last = this.stored.get(entityId);
+        if (last !== undefined && last.what === what && now - last.at < SENSOR_SYNC_RETRY_MS) {
+            return false;
+        }
+        this.stored.set(entityId, { what, at: now });
+        return true;
+    }
+
+    /** Forgets the sensors the map no longer has. */
+    public keep(entityIds: ReadonlySet<string>): void {
+        for (const id of this.stored.keys()) {
+            if (!entityIds.has(id)) {
+                this.stored.delete(id);
+            }
+        }
+    }
+}

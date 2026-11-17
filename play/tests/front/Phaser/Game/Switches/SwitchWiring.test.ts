@@ -62,6 +62,37 @@ describe("rewireSwitch", () => {
         const original = property({ mode: "zone" });
         expect(rewireSwitch(original, new Map([["a", "a2"]]))).toEqual(original);
     });
+
+    it("forgets what the editor stored for the original of a copied sensor: its room and the lamps of that room", () => {
+        const inRoom = { type: "presence" as const, scope: "room" as const, tiles: 3, offDelay: 30, direction: 90 };
+        const original: SwitchPropertyData = {
+            ...property({ mode: "zone" }),
+            trigger: { ...inRoom, angle: 90, areaId: "office" },
+            resolvedTargets: ["l1", "l2"],
+        };
+
+        const copy = rewireSwitch(original, new Map());
+
+        expect(copy.resolvedTargets).toBeUndefined();
+        expect(copy.trigger).toEqual({ ...inRoom, angle: 90 });
+    });
+
+    it("keeps the area somebody chose for a copied sensor", () => {
+        const original: SwitchPropertyData = {
+            ...property({ mode: "ids", ids: ["a"] }),
+            trigger: {
+                type: "presence",
+                scope: "area",
+                areaId: "hall",
+                tiles: 3,
+                offDelay: 30,
+                direction: 90,
+                angle: 90,
+            },
+        };
+
+        expect(rewireSwitch(original, new Map([["a", "a2"]])).trigger).toEqual(original.trigger);
+    });
 });
 
 describe("rewireSwitchProperties", () => {

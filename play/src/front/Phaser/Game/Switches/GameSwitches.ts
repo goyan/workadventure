@@ -9,12 +9,13 @@ import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
 import type { GameScene } from "../GameScene";
 import { toLampZone } from "../Lamps/LampJam";
 import { lampSource } from "../Lamps/LampReconcile";
+import { UpdateEntityFrontCommand } from "../MapEditor/Commands/Entity/UpdateEntityFrontCommand";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
 import { buildingAt, buildingBounds, buildingSensorsWithSomebody, labelBuildings, type Buildings } from "./Buildings";
 import { SwitchIndicator } from "./SwitchIndicator";
 import { SwitchAnimalReporter, sensorsWithAnimals, type AnimalSensor } from "./SwitchAnimalReports";
-import { syncedSensorProperty } from "./SwitchSensorSync";
+import { SensorSyncGate, syncedSensorProperty } from "./SwitchSensorSync";
 import { SwitchWiringView, wiringOf, type SwitchWatchShape } from "./SwitchWiringView";
 import {
     entityStateKeysOf,
@@ -49,6 +50,7 @@ export class GameSwitches {
     private commandingIds = new Map<string, string[]>();
     private readonly wiringView: SwitchWiringView;
     private readonly animalReporter = new SwitchAnimalReporter();
+    private readonly syncGate = new SensorSyncGate();
     private buildingsRead: { version: number; buildings: Buildings } | undefined;
 
     constructor(private readonly scene: GameScene) {
@@ -149,24 +151,52 @@ export class GameSwitches {
     /**
      * With the map editor open: stores in each switch that has a trigger what the server needs (the room of a sensor
      * of its room, the lamps of a switch that commands its room), whenever it changed: a lamp added to the room, the
-     * sensor moved. One update of the object, on its own in the history.
+     * sensor moved. Whatever the tool of the editor in use, and out of the history: an undo must bring back what the
+     * user did, not what is stored here, which is worked out again from the map anyway.
      */
-    private syncSensors(): void {
-        if (!get(mapEditorModeStore)) {
+    private syncSensors(now: number): void {
+        const editor = this.scene.getMapEditorModeManager();
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (!get(mapEditorModeStore) || !editor || !wamFile) {
             return;
         }
+        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
         for (const entity of this.switches) {
             const property = switchPropertyOf(entity);
             if (!property || !isAutomaticSwitch(property) || !entity.canEdit) {
+                continue;
+            }
+            const { x, y } = entity.getEntityData();
+            if (entity.x !== x || entity.y !== y) {
+                // Being dragged: the update would put it back where the map has it. Looked at again once dropped.
                 continue;
             }
             const resolved = this.targetsOf(entity, property)
                 .map((target) => target.id)
                 .slice(0, SWITCH_MAX_TARGETS);
             const synced = syncedSensorProperty(property, this.roomAreaIdOf(entity), resolved);
-            if (synced) {
-                entity.setProperty(synced);
+            if (!synced || !this.syncGate.mayStore(entity.entityId, synced, now)) {
+                continue;
             }
+            const properties = entity
+                .getProperties()
+                .map((existing) => (existing.type === "switchPropertyData" ? synced : existing));
+            editor
+                .executeCommands(
+                    [
+                        new UpdateEntityFrontCommand(
+                            wamFile,
+                            entity.entityId,
+                            { properties },
+                            undefined,
+                            undefined,
+                            entitiesManager,
+                            this.scene,
+                        ),
+                    ],
+                    false,
+                )
+                .catch((error) => console.warn("Could not store what a sensor of the map watches", error));
         }
     }
 
@@ -297,7 +327,7 @@ export class GameSwitches {
         if (this.lastReconcileAt === undefined || now - this.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
             this.lastReconcileAt = now;
             this.reconcile();
-            this.syncSensors();
+            this.syncSensors(now);
             this.reportAnimals(now);
         }
         let changed = false;
@@ -363,6 +393,7 @@ export class GameSwitches {
         this.readCandidates();
         this.switches = [...this.entities().values()].filter((entity) => switchPropertyOf(entity) !== undefined);
         const ids = new Set(this.switches.map((entity) => entity.entityId));
+        this.syncGate.keep(ids);
         let removed = false;
         for (const [id, indicator] of this.indicators) {
             if (!ids.has(id)) {
