@@ -2210,8 +2210,12 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   s'aligne sur la grille de ses dalles.
 - **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
   d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; une zone de départ en
-  hauteur fait apparaître au sol ; déplacer ou redimensionner une zone d'étage à la souris suit la grille du sol ;
-  images définitives.
+  hauteur fait apparaître au sol ; les portes d'étage sont lues fermées par les lumières ; images définitives.
+- **Lumières par palier** (`LightObstaclesByLevel`) : une lampe RGB et une torche sont arrêtées par les murs et
+  les objets hauts du palier où elles se trouvent, pas par ceux du sol ni par les cases de la carte ; sur un
+  escalier, ou sur un palier sans rien de posé, rien ne les arrête. Une piste de danse posée sur un palier est
+  dessinée par-dessus ses dalles. Une zone d'étage se déplace et se redimensionne à la souris sur la grille de son
+  palier.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
 
