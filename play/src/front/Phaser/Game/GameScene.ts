@@ -1,3 +1,5 @@
+import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
+import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import * as Sentry from "@sentry/svelte";
 import * as Phaser from "phaser";
 import type { Subscription } from "rxjs";
@@ -3143,6 +3145,7 @@ export class GameScene extends DirtyScene {
                                 scope: "room",
                             }),
                         (levels) => mapLayerBuiltLevelsStore.set(levels),
+                        () => this.MapPlayersByKey.values(),
                     );
                 }
                 this.treeSeasonEffects?.destroy();
@@ -4964,6 +4967,15 @@ ${escapedMessage}
         speed: number | undefined = undefined,
         stopDistance: number | undefined = undefined,
     ): Promise<{ x: number; y: number; cancelled: boolean }> {
+        // Through the raised floors and their stairs, when the walk starts from one or ends on one.
+        const floorWalk = this.floorWalkTo(position);
+        if (floorWalk) {
+            const result = await this.CurrentPlayer.setPathToFollow(
+                floorWalk,
+                speed ?? this.CurrentPlayer.walkingSpeed,
+            );
+            return { x: result.x, y: result.y, cancelled: result.cancelled };
+        }
         const pathfindingManager = this.getPathfindingManager();
 
         // The collision grid can change while the path is followed (an area gets locked or full...): the
@@ -5009,6 +5021,34 @@ ${escapedMessage}
         // stands right before the blocking tile: warn about the area blocking the destination.
         this.displayPathBlockedWarning(position);
         return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: true };
+    }
+
+    /** Whether a raised floor is drawn at a point of the screen: what is on the ground under it is out of reach. */
+    public isRaisedFloorAt(point: { x: number; y: number }): boolean {
+        const floors = this.floorSpike?.walkContext();
+        return floors !== undefined && levelUnderPoint(floors.model, point.x, point.y) > 0;
+    }
+
+    /**
+     * The walk to a point through the raised floors (see `floorPath`); undefined for a walk that stays on the ground,
+     * from a stair, or when no stair leads there: the ordinary walk of the ground then applies.
+     */
+    private floorWalkTo(position: { x: number; y: number }): { x: number; y: number }[] | undefined {
+        const floors = this.floorSpike?.walkContext();
+        if (!floors || floors.state.stair !== undefined) return undefined;
+        if (floors.state.elevation < 2 && levelUnderPoint(floors.model, position.x, position.y) === 0) {
+            return undefined;
+        }
+        const grid = this.gameMapFrontWrapper.getSharedCollisionGrid();
+        return floorPath({
+            model: floors.model,
+            groundWalkable: (x, y) => {
+                const cell = grid[y]?.[x];
+                return cell !== undefined && cell !== PathTileType.Collider;
+            },
+            from: { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, elevation: floors.state.elevation },
+            to: position,
+        });
     }
 
     /** The live collisions of the map for a computed walk of the player: tiles, walls, and object hitboxes. */

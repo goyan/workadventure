@@ -125,11 +125,18 @@ export function stairSideClosed(placed: PlacedStair, side: StairSide, barriers: 
     return stairCells(placed).some((cell) => barriers.blocksMove(cell, { x: cell.x + step.x, y: cell.y + step.y }));
 }
 
+/** Somebody else on the map, as the floors fade it. */
+export interface FloorOccupant {
+    isOnFloor(elevation: number): boolean;
+    setAlpha(alpha: number): unknown;
+}
+
 export class FloorSpike {
     private model: FloorModel | undefined;
     private state: FloorWalkState = { elevation: 0 };
     private prev: { x: number; y: number } | undefined;
     private readonly levels: LevelDrawing[] = [];
+    private readonly fadedOccupants = new Set<FloorOccupant>();
     private readonly drawings: Phaser.GameObjects.Graphics[] = [];
     private readonly label: Phaser.GameObjects.Text;
     private barriers: TileBarriers | undefined;
@@ -154,10 +161,17 @@ export class FloorSpike {
         private readonly share: (z: number) => void,
         /** Tells the floors that have slabs on the map, lowest first, each time they change. */
         private readonly onLevels: (levels: number[]) => void,
+        /** The other players: each one lets the avatar show through with the floor it stands on. */
+        private readonly others: () => Iterable<FloorOccupant> = () => [],
     ) {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
+    }
+
+    /** The floors of the map and where the avatar is on them, for a computed walk; undefined without floors. */
+    public walkContext(): { model: FloorModel; state: FloorWalkState } | undefined {
+        return this.model && this.model.getSlabs().length > 0 ? { model: this.model, state: this.state } : undefined;
     }
 
     public destroy(): void {
@@ -252,6 +266,16 @@ export class FloorSpike {
                 target > level.alpha ? Math.min(target, level.alpha + change) : Math.max(target, level.alpha - change);
             level.show(level.alpha);
             this.scene.markDirty();
+        }
+        // Somebody standing on a floor fades with it, instead of floating over what shows through.
+        for (const other of this.others()) {
+            const alpha = this.levels.find((level) => other.isOnFloor(level.elevation))?.alpha ?? 1;
+            if (alpha < 1) {
+                other.setAlpha(alpha);
+                this.fadedOccupants.add(other);
+            } else if (this.fadedOccupants.delete(other)) {
+                other.setAlpha(1);
+            }
         }
     }
 
