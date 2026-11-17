@@ -115,6 +115,8 @@ type PeerSession = {
     // Outgoing transfers fully sent to this peer but not acknowledged yet: they fail if the session closes.
     awaitingReceipt: Set<string>;
     signalTransferId: string;
+    /** Whether the data channel ever opened: a session that closes before has delivered nothing. */
+    opened: boolean;
     canEmitCandidates: boolean;
     pendingCandidates: RTCIceCandidateInit[];
 };
@@ -246,9 +248,16 @@ export class ProximityFileTransferService {
         }
 
         this.transferUpdateSubject.next({ transferId, state: "connecting", progress: 0 });
-        const session = await this.ensureInitiatorPeerSession(offer.senderSpaceUserId, transferId);
-        const dataChannel = await session.openPromise;
-        this.sendControlMessage(dataChannel, { type: "proximity_file_request", transferId });
+        try {
+            const session = await this.ensureInitiatorPeerSession(offer.senderSpaceUserId, transferId);
+            const dataChannel = await session.openPromise;
+            this.sendControlMessage(dataChannel, { type: "proximity_file_request", transferId });
+        } catch (error) {
+            // The peer could not be reached (no direct path and no usable relay): say so instead of
+            // leaving the card at 0% forever.
+            console.warn("Unable to reach the sender of a proximity file transfer", error);
+            this.failReceivingTransfer(transferId, "connection-failed");
+        }
     }
 
     /** Tells the sender this offer is declined, so they do not wait for it. */
@@ -324,6 +333,7 @@ export class ProximityFileTransferService {
             outboundQueue: Promise.resolve(),
             awaitingReceipt: new Set(),
             signalTransferId: "",
+            opened: false,
             canEmitCandidates: false,
             pendingCandidates: [],
             negotiationTimeout: setTimeout(() => {
@@ -331,6 +341,8 @@ export class ProximityFileTransferService {
                 this.closePeerSession(remoteSpaceUserId);
             }, PROXIMITY_FILE_TRANSFER_NEGOTIATION_TIMEOUT),
         };
+        // The side that answers never awaits the opening: its failure is handled in closePeerSession.
+        openPromise.catch(() => {});
 
         peerConnection.onicecandidate = (event) => {
             if (!event.candidate) {
@@ -362,6 +374,7 @@ export class ProximityFileTransferService {
         dataChannel.bufferedAmountLowThreshold = PROXIMITY_FILE_TRANSFER_BUFFERED_AMOUNT_LOW_THRESHOLD;
         session.dataChannel = dataChannel;
         dataChannel.onopen = () => {
+            session.opened = true;
             clearTimeout(session.negotiationTimeout);
             session.resolveOpen(dataChannel);
         };
@@ -686,10 +699,22 @@ export class ProximityFileTransferService {
         }
         this.peerSessions.delete(remoteSpaceUserId);
         clearTimeout(session.negotiationTimeout);
+        // A download still waiting for the connection stops waiting.
+        session.rejectOpen(new Error("Proximity file transfer connection closed"));
         session.dataChannel?.close();
         session.peerConnection.close();
         for (const transferId of session.awaitingReceipt) {
             this.emitOutgoingUpdate(transferId, remoteSpaceUserId, "failed", 0);
+        }
+        // Never connected: the file the recipient asked for (when we are its sender) never left.
+        if (!session.opened && session.signalTransferId) {
+            this.emitOutgoingUpdate(session.signalTransferId, remoteSpaceUserId, "failed", 0);
+        }
+        // Files being received from this peer will not be completed.
+        for (const [transferId, receiving] of this.receivingTransfers) {
+            if (receiving.offer.senderSpaceUserId === remoteSpaceUserId) {
+                this.failReceivingTransfer(transferId, "connection-failed");
+            }
         }
     }
 
