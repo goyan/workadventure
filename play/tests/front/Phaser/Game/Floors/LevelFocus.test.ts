@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
     LEVEL_FADE_MS,
+    VEIL_ALPHA,
+    aboveLevelShows,
     currentLevels,
+    stairCoversAvatar,
+    stairDepth,
+    veilAlphaToward,
     fadeToward,
     levelLook,
     veilDepth,
@@ -58,5 +63,56 @@ describe("the veil over the floors under the avatar", () => {
         expect(fadeToward(0.45, 0, 150, 0.45, false)).toBeCloseTo(0.225);
         expect(fadeToward(0.4, 0.45, 300, 0.45, false)).toBe(0.45);
         expect(fadeToward(0, 0.45, 16, 0.45, true)).toBe(0.45);
+    });
+});
+
+describe("a floor above the avatar", () => {
+    it("is hidden whole, what stands on it included, once the avatar is indoors or up a floor", () => {
+        expect(aboveLevelShows({ indoors: true, raised: false, hidesAvatar: false })).toEqual({ alpha: 0 });
+        expect(aboveLevelShows({ indoors: false, raised: true, hidesAvatar: false })).toEqual({ alpha: 0 });
+    });
+
+    it("outdoors on the ground keeps the building whole, with a window around the avatar it hides", () => {
+        expect(aboveLevelShows({ indoors: false, raised: false, hidesAvatar: false })).toEqual({ alpha: 1 });
+        expect(aboveLevelShows({ indoors: false, raised: false, hidesAvatar: true })).toEqual({
+            alpha: 1,
+            window: true,
+        });
+    });
+
+    it("leaves the floors under the avatar clearly darker", () => {
+        expect(VEIL_ALPHA).toBe(0.7);
+    });
+});
+
+describe("the depth of a stair", () => {
+    it("is its own one, but over the veil while it comes from under the avatar", () => {
+        expect(stairDepth(1234, undefined, "below")).toBe(1234);
+        expect(stairDepth(1234, 5000, "current")).toBe(1234);
+        expect(stairDepth(1234, 5000, "below")).toBe(5001);
+    });
+});
+
+describe("the veil when the avatar leaves its floor going down", () => {
+    it("fades in, but goes at once, so that nothing goes back under a veil still there", () => {
+        expect(veilAlphaToward(0, 0.7, 150, false)).toBeCloseTo(0.35);
+        expect(veilAlphaToward(0.7, 0, 16, false)).toBe(0);
+        expect(veilAlphaToward(0, 0.7, 16, true)).toBe(0.7);
+    });
+});
+
+describe("a stair over the avatar", () => {
+    // A stair going east from the ground to 52, drawn at (100, 48) over 96 × 84, its foot row ending at y = 132.
+    const stair = { image: { x: 100, y: 48, width: 96, height: 84 }, groundBottom: 132, top: 52 };
+
+    it("lets the avatar show through when the avatar walks behind it", () => {
+        expect(stairCoversAvatar(stair, { x: 140, y: 100, elevation: 0, onStair: false })).toBe(true);
+    });
+
+    it("does not when the avatar is in front of it, on it, or above where it arrives", () => {
+        expect(stairCoversAvatar(stair, { x: 140, y: 140, elevation: 0, onStair: false })).toBe(false);
+        expect(stairCoversAvatar(stair, { x: 140, y: 100, elevation: 20, onStair: true })).toBe(false);
+        expect(stairCoversAvatar(stair, { x: 140, y: 60, elevation: 52, onStair: false })).toBe(false);
+        expect(stairCoversAvatar(stair, { x: 40, y: 100, elevation: 0, onStair: false })).toBe(false);
     });
 });

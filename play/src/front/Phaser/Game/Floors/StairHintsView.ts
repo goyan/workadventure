@@ -38,14 +38,18 @@ export class StairHintsView {
         lowestCurrent: number,
         hidden: boolean,
         delta: number,
+        /** Whether a stair shows: one standing on a floor hidden above the avatar has no chevron. */
+        shown: (stair: PlacedStair) => boolean = () => true,
     ): void {
         this.elapsed = (this.elapsed + delta) % CHEVRON_CYCLE_MS;
         const step = this.reducedMotion ? 0 : Math.floor((this.elapsed / CHEVRON_CYCLE_MS) * CHEVRON_STEPS);
-        const signature = `${hidden}|${veil}|${stairs.length}|${stairs.map((s) => `${s.foot.x},${s.foot.y},${s.base}`).join(";")}`;
-        if (step !== this.shownStep || signature !== this.signature) {
+        const visible = hidden ? [] : stairs.filter(shown);
+        const signature = `${veil}|${lowestCurrent}|${visible.map((s) => `${s.foot.x},${s.foot.y},${s.base}`).join(";")}`;
+        // Without a chevron to move, nothing is redrawn at each step.
+        if ((step !== this.shownStep && visible.length > 0) || signature !== this.signature) {
             this.shownStep = step;
             this.signature = signature;
-            this.drawChevrons(hidden ? [] : stairs, veil, lowestCurrent, step / CHEVRON_STEPS);
+            this.drawChevrons(visible, veil, lowestCurrent, step / CHEVRON_STEPS);
         }
         this.drawLabels(hidden ? [] : labels, stairs);
     }

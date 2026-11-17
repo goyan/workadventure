@@ -25,6 +25,11 @@ function endTiles(stair: PlacedStair, end: TilePoint): TilePoint[] {
     );
 }
 
+/** The tile of the ground the avatar stands on: its feet on the screen, moved south by its altitude. */
+export function avatarGroundTile(feet: { x: number; y: number }, elevation: number): TilePoint {
+    return { x: Math.floor(feet.x / MAP_LAYER_TILE_SIZE), y: Math.floor((feet.y + elevation) / MAP_LAYER_TILE_SIZE) };
+}
+
 function near(tile: TilePoint, tiles: readonly TilePoint[]): boolean {
     return tiles.some((end) => Math.max(Math.abs(end.x - tile.x), Math.abs(end.y - tile.y)) <= STAIR_LABEL_REACH);
 }

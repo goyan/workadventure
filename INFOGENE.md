@@ -2142,15 +2142,19 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   réagissent plus à l'avatar.
 - **Rendu** (`FloorDepth.ts`) : une bande de profondeurs par altitude, tout ce qui est en hauteur passe au-dessus de
   ce qui est plus bas. Dans l'éditeur, les niveaux au-dessus du niveau édité sont à 30 %.
-- **Étages lisibles** (`Floors/LevelFocus.ts`, `StairHints.ts`, `StairHintsView.ts`, `FloorLevelStack.svelte`) :
-  l'étage de l'avatar est net (sur un escalier, ses deux étages) ; les étages en dessous passent sous **un seul voile
-  gris foncé** (`0x2b2f38`, 0,45) posé juste sous la bande de l'étage courant (rien n'est filtré objet par objet) ; un
-  étage au-dessus devient un voile gris (30 %, teinte `0x9aa0aa`) ; fondu de 300 ms, immédiat si mouvement réduit.
-  Les escaliers ne s'estompent jamais : ceux qui viennent d'en dessous passent au-dessus du voile, trois chevrons
-  blancs y avancent dans le sens de la montée (14 pas par cycle de 1,4 s, fixes si mouvement réduit), et à 2 cases ou
-  moins d'un bout une étiquette nomme l'étage de l'autre bout (« Niveau 2 ↑ », « Sol ↓ »). Sous l'horloge, la pile des
-  étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte sans
-  palier : rien de tout cela.
+- **Étages lisibles** (`Floors/LevelFocus.ts`, `StairHints.ts`, `StairHintsView.ts`, `FloorLevelStack.svelte`), sur le
+  modèle des jeux en vue de dessus à étages (Project Zomboid) : l'étage de l'avatar est net (sur un escalier, ses deux
+  étages). **Au-dessus** : dans une pièce ou en hauteur, tout étage au-dessus est caché entier avec ce qui y est posé
+  (objets, murs, garde-corps, avatars, escaliers qui en partent) ; dehors au sol, un bâtiment reste entier et seules
+  les dalles autour de l'avatar s'estompent (`aboveLevelShows`). **En dessous** : un seul voile gris foncé (`0x2b2f38`,
+  0,7) posé juste sous la bande de l'étage courant (rien n'est filtré objet par objet), en fondu de 300 ms à l'arrivée,
+  retiré d'un coup dès qu'on redescend (`veilAlphaToward`). Les escaliers qui viennent d'en dessous passent au-dessus
+  du voile (`stairDepth`, profondeur recalculée par `floorPieceDepth`) ; un escalier dessiné par-dessus l'avatar passe
+  à 50 % (`stairCoversAvatar`). Trois chevrons blancs avancent sur chaque escalier visible dans le sens de la montée
+  (14 pas par cycle de 1,4 s, fixes si mouvement réduit) ; à 2 cases ou moins d'un bout (case lue au sol,
+  `avatarGroundTile`) une étiquette nomme l'étage de l'autre bout (« Niveau 2 ↑ », « Sol ↓ »). Sous l'horloge, la
+  pile des étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte
+  sans palier : rien de tout cela.
 - **Escaliers courts** (`-v2`) : nouveaux escaliers posés par le mode Escalier quand le catalogue de la salle les a
   (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord, l'est et l'ouest
   (`stairRun(…, short)`), la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur

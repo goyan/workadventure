@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stairLabels } from "../../../../../src/front/Phaser/Game/Floors/StairHints";
+import { avatarGroundTile, stairLabels } from "../../../../../src/front/Phaser/Game/Floors/StairHints";
 import { FloorModel } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
 
 const name = (level: number): string => (level === 0 ? "Sol" : `Niveau ${level}`);
@@ -32,5 +32,13 @@ describe("the label at the other end of a stair", () => {
     it("is not there on the stair, nor from another floor", () => {
         expect(stairLabels(model().getStairs(), { x: 5, y: 6 }, { elevation: 26, stair: 0 }, name)).toEqual([]);
         expect(stairLabels(model().getStairs(), { x: 5, y: 9 }, { elevation: 84 }, name)).toEqual([]);
+    });
+});
+
+describe("the tile of the avatar", () => {
+    it("is read on the ground: its feet on the screen moved south by its altitude", () => {
+        // On the floor at 52, standing on the ground tile (5, 3): its feet are drawn 52 px further north.
+        expect(avatarGroundTile({ x: 5 * 32 + 16, y: 3 * 32 + 16 - 52 }, 52)).toEqual({ x: 5, y: 3 });
+        expect(avatarGroundTile({ x: 5 * 32 + 16, y: 9 * 32 + 16 }, 0)).toEqual({ x: 5, y: 9 });
     });
 });
