@@ -42,7 +42,10 @@ export class SwitchTriggerEvaluator {
     /** What the triggers asked of each object, as last written. */
     private readonly asked = new Map<string, { key: EntityStateKey; on: boolean }>();
     /** The sensors each browser last said one of its wandering animals stands in, and when it said so. */
-    private readonly animalReports = new Map<string, { ids: Set<string>; at: number }>();
+    private readonly animalReports = new Map<
+        string,
+        { ids: Set<string>; at: number; from: { x: number; y: number } | undefined }
+    >();
     private switches: AutomaticSwitch[] = [];
     private readFor: string | undefined | null = null;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -122,7 +125,10 @@ export class SwitchTriggerEvaluator {
         if (trigger.type === "hours") {
             return isWithinHours(trigger.from, trigger.to, parisMinutesOfDay(new Date(time)));
         }
-        if (users.some((user) => this.senses(entity, trigger, user)) || this.animalIn(id, time)) {
+        if (
+            users.some((user) => this.senses(entity, trigger, user)) ||
+            this.animalIn(id, time, trigger.scope === "building")
+        ) {
             this.lastSeen.set(id, time);
             return true;
         }
@@ -147,6 +153,10 @@ export class SwitchTriggerEvaluator {
      * empty list when none any more). Only the browsers know where the animals are: each works them out from the
      * clock, the server has neither them nor the collisions of the map. A report holds for a few seconds, so a browser
      * that left stops counting. Anything that is not a presence sensor of the map is ignored.
+     *
+     * The sensors of a building are reported the same way, for the avatar of the user too. A browser stops reporting
+     * while its tab is in the background, with the avatar still in the building: for those sensors the last report
+     * holds for as long as that user is in the room and stands where they stood when it was made.
      */
     public reportAnimals(reporter: string, switchIds: readonly string[]): void {
         const sensors = new Set(
@@ -158,19 +168,32 @@ export class SwitchTriggerEvaluator {
         if (ids.length === 0) {
             this.animalReports.delete(reporter);
         } else {
-            this.animalReports.set(reporter, { ids: new Set(ids), at: this.now() });
+            this.animalReports.set(reporter, { ids: new Set(ids), at: this.now(), from: this.positionOf(reporter) });
         }
     }
 
-    private animalIn(switchId: string, time: number): boolean {
+    private animalIn(switchId: string, time: number, heldWhileStill: boolean): boolean {
         for (const [reporter, report] of this.animalReports) {
-            if (time - report.at >= ANIMAL_REPORT_TTL_MS) {
+            const fresh = time - report.at < ANIMAL_REPORT_TTL_MS;
+            const still = !fresh && this.standsWhereReported(reporter, report.from);
+            if (!fresh && !still) {
                 this.animalReports.delete(reporter);
-            } else if (report.ids.has(switchId)) {
+            } else if (report.ids.has(switchId) && (fresh || heldWhileStill)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Where the user who reports stands now; the reporter is the id of a user of the room. */
+    private positionOf(reporter: string): { x: number; y: number } | undefined {
+        const position = this.room.getUsers().get(Number(reporter))?.getPosition();
+        return position ? { x: position.x, y: position.y } : undefined;
+    }
+
+    private standsWhereReported(reporter: string, from: { x: number; y: number } | undefined): boolean {
+        const position = this.positionOf(reporter);
+        return from !== undefined && position !== undefined && position.x === from.x && position.y === from.y;
     }
 
     /** The switches of the map that have a trigger, read again only when the map changed. */

@@ -381,3 +381,55 @@ describe("SwitchTriggerEvaluator, a map edited with a switch that is not well fo
         expect(logged).toHaveBeenCalledTimes(1);
     });
 });
+
+describe("SwitchTriggerEvaluator, somebody in the building whose browser stopped reporting (tab in the background)", () => {
+    const inBuilding = { type: "presence", scope: "building", tiles: 3, offDelay: 30 };
+    const lit = () => {
+        const h = createHarness({ ...sensor("s", inBuilding, ["l1"]), ...lamps("l1") });
+        h.enter(1, 100, 100);
+        h.evaluator.reportAnimals("1", ["s"]);
+        expect(h.tick()).toEqual([["l1", "true"]]);
+        return h;
+    };
+
+    it("keeps the sensor of the building lit while that player is still there and has not moved", () => {
+        const h = lit();
+
+        h.advance(600);
+
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("lets go, after the delay, once that player moved without a new report", () => {
+        const h = lit();
+        h.advance(600);
+        h.tick();
+
+        h.enter(1, 500, 500);
+        h.advance(31);
+
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+
+    it("lets go, after the delay, once that player left the room", () => {
+        const h = lit();
+        h.advance(600);
+        h.tick();
+
+        h.leave(1);
+        h.advance(31);
+
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+
+    it("does not hold a sensor of another kind that way: an animal moves on its own", () => {
+        const h = createHarness({ ...sensor("s", inRoom, ["l1"]), ...lamps("l1") });
+        h.enter(1, 2000, 2000);
+        h.evaluator.reportAnimals("1", ["s"]);
+        expect(h.tick()).toEqual([["l1", "true"]]);
+
+        h.advance(600);
+
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+});
