@@ -64,7 +64,7 @@ function setup(light: () => SkyLight | undefined, entities: ShadowSourceEntity[]
 }
 
 beforeEach(() => {
-    draw.mockClear();
+    draw.mockReset();
     hide.mockClear();
     skyWindowLightsStore.set([]);
 });
@@ -91,5 +91,16 @@ describe("SkyWindowLightManager", () => {
         expect(get(skyWindowLightsStore)).toEqual([]);
         manager.destroy();
         expect(get(skyWindowLightsStore)).toEqual([]);
+    });
+    it("stops drawing, without stopping the game, when drawing fails", () => {
+        const manager = setup(() => moon, windowed());
+        draw.mockImplementationOnce(() => {
+            throw new Error("no canvas");
+        });
+        expect(() => manager.update(0)).not.toThrow();
+        expect(get(skyWindowLightsStore)).toEqual([]);
+        manager.update(1000);
+        expect(draw).toHaveBeenCalledTimes(1);
+        manager.destroy();
     });
 });

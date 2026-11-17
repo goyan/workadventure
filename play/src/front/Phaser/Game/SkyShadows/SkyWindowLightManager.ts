@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/svelte";
 import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { MAP_LAYER_WALL_LIKE_COLLECTIONS } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
@@ -34,6 +35,7 @@ export class SkyWindowLightManager {
     private openingsKey = "";
     private readAt: number | undefined;
     private drawn: DrawnShadows | undefined;
+    private broken = false;
     private published = false;
 
     constructor(
@@ -43,7 +45,25 @@ export class SkyWindowLightManager {
         this.layer = new SkyWindowLightLayer(scene);
     }
 
+    /**
+     * At every image. A failure while drawing (a canvas refused by the browser…) must never escape: it would stop the
+     * loop of the game (a blue page, as with PR #257). It is reported once, and the layer stays off for the scene.
+     */
     public update(now: number): void {
+        if (this.broken) return;
+        try {
+            this.refresh(now);
+        } catch (error) {
+            this.broken = true;
+            Sentry.captureException(error);
+            this.layer.hide();
+            this.drawn = undefined;
+            this.unpublish();
+            this.scene.markDirty();
+        }
+    }
+
+    private refresh(now: number): void {
         const light = this.options.light();
         const grid = this.options.outdoorGrid();
         if (!this.options.enabled() || !light || light.intensity < NO_LIGHT || !grid) {
