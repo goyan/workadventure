@@ -18,6 +18,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     shadowMin: label("Shadow min"),
                     shadowMax: label("Shadow max"),
                     tiles: label("tiles"),
+                    advanced: label("Advanced settings"),
                 },
             },
         },
@@ -56,6 +57,18 @@ describe("SkyLightSettings", () => {
         expect(target.querySelector('[data-testid="sky-moon-limits"]')).not.toBeNull();
         expect(target.querySelector('[data-testid="sky-moon-phase-curve"]')).not.toBeNull();
         expect(target.querySelectorAll('[data-testid="sky-sun-limits"] input[type="range"]')).toHaveLength(6);
+    });
+
+    it("folds the limits of each body behind its own closed « advanced settings »", () => {
+        render();
+        for (const body of ["sun", "moon"]) {
+            const details = target.querySelector(`[data-testid="sky-${body}-limits"]`)?.closest("details");
+            expect(details).not.toBeNull();
+            expect(details?.open).toBe(false);
+            expect(details?.querySelector("summary")?.textContent?.trim()).toBe("Advanced settings");
+        }
+        // The choice of the phase curve stays in sight.
+        expect(target.querySelector('[data-testid="sky-moon-phase-curve"]')?.closest("details")).toBeNull();
     });
 
     it("hides the settings of a body turned off, and keeps the other's", () => {

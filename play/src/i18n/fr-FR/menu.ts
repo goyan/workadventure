@@ -68,6 +68,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             shadowMin: "Longueur minimale des ombres",
             shadowMax: "Longueur maximale des ombres",
             tiles: "cases",
+            advanced: "Réglages avancés",
         },
         lampDemo: "Afficher les lampes de démonstration près de mon avatar",
         jungle: "Afficher les animaux de la jungle",

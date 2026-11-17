@@ -67,6 +67,7 @@ const menu: BaseTranslation = {
             shadowMin: "Minimum shadow length",
             shadowMax: "Maximum shadow length",
             tiles: "tiles",
+            advanced: "Advanced settings",
         },
         lampDemo: "Show the demo lamps next to my avatar",
         jungle: "Show the jungle animals",
