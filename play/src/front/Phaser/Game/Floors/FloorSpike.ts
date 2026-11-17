@@ -63,8 +63,13 @@ export interface FloorEntity {
 /** A stair of the map as it shows through: its image, the altitude it goes up to, and how opaque it is now. */
 interface StairDrawing {
     entity: FloorEntity;
+    /** Altitude of the floor it stands on (0: the ground) and of the one it goes up to. */
+    base: number;
     top: number;
+    /** How opaque it is by itself: less when it is drawn over the avatar. */
     alpha: number;
+    /** How opaque it is drawn: no more than the floor it stands on, which it shows through with. */
+    shown: number;
 }
 
 /** Opacity of the floors above the one being edited, in the map editor. */
@@ -321,12 +326,21 @@ export class FloorSpike {
                 p.y > entity.y &&
                 p.y - 30 < entity.y + (entity.displayHeight ?? 0);
             const target = hides ? HIDDEN_ALPHA : 1;
-            if (stair.alpha === target) continue;
-            const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
-            stair.alpha =
-                target > stair.alpha ? Math.min(target, stair.alpha + change) : Math.max(target, stair.alpha - change);
-            entity.setAlpha(stair.alpha);
-            this.scene.markDirty();
+            if (stair.alpha !== target) {
+                const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
+                stair.alpha =
+                    target > stair.alpha
+                        ? Math.min(target, stair.alpha + change)
+                        : Math.max(target, stair.alpha - change);
+            }
+            // A stair standing on a raised floor is part of that floor: it shows through with it.
+            const floor = this.levels.find((level) => level.elevation === stair.base);
+            const shown = Math.min(stair.alpha, floor?.alpha ?? 1);
+            if (shown !== stair.shown) {
+                stair.shown = shown;
+                entity.setAlpha(shown);
+                this.scene.markDirty();
+            }
         }
         // Somebody standing on a floor fades with it, instead of floating over what shows through.
         for (const other of this.others()) {
@@ -395,7 +409,7 @@ export class FloorSpike {
             // Other tools set the opacity of the entities (the dimming of the map editor): set it again.
             for (const level of this.levels) level.show(level.alpha);
             for (const stair of this.stairDrawings) {
-                if (stair.alpha !== 1) stair.entity.setAlpha(stair.alpha);
+                if (stair.shown !== 1) stair.entity.setAlpha(stair.shown);
             }
             return;
         }
@@ -461,8 +475,10 @@ export class FloorSpike {
             .filter(({ piece }) => piece.kind === "stair")
             .map(({ entity, piece, elevation }) => ({
                 entity,
+                base: elevation,
                 top: elevation + (piece.kind === "stair" ? piece.rise : 0),
                 alpha: stairAlphas.get(entity) ?? 1,
+                shown: 1,
             }));
         // The railings: along every side of a floor that gives on the void, but where a stair or a wall is.
         const walls: RailingWall[] = [];
