@@ -723,6 +723,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Image{{s}}",
         noImage: "Aucune image",
+        placeUnderFloors: "Poser au sol, sous les paliers",
         snapToGrid: "Magnétisme",
         specialTags: {
             uncategorizedLabel: "À classer",

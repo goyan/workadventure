@@ -711,6 +711,7 @@ const mapEditor: BaseTranslation = {
         },
         images: "Image{{s}}",
         noImage: "No image",
+        placeUnderFloors: "Place on the ground, under the raised floors",
         snapToGrid: "Snap to grid",
         specialTags: {
             uncategorizedLabel: "To sort",

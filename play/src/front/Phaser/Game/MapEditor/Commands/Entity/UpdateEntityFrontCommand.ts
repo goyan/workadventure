@@ -72,13 +72,14 @@ export class UpdateEntityFrontCommand extends UpdateEntityCommand implements Fro
             return;
         }
         const { x: oldX, y: oldY } = entity.getOldPosition();
+        const oldElevation = entity.getElevation();
         entity?.updateEntity(config);
         // If the entity is activable, and not in the activatable entities array of the entity manager,
         // we add it to the array
         if (entity.isActivatable() && !this.entitiesManager.getActivatableEntities().includes(entity)) {
             this.entitiesManager.getActivatableEntities().push(entity);
         }
-        this.updateCollisionGrid(entity, oldX, oldY);
+        this.updateCollisionGrid(entity, oldX, oldY, oldElevation);
         this.scene.markDirty();
     }
 
@@ -86,11 +87,13 @@ export class UpdateEntityFrontCommand extends UpdateEntityCommand implements Fro
      * The grid is written to the tiles only where the object sits on the grid of the map (EntityHitbox): a move on or
      * off the grid moves its collision between the tile layer and the rectangles.
      */
-    private updateCollisionGrid(entity: Entity, oldX: number, oldY: number): void {
+    private updateCollisionGrid(entity: Entity, oldX: number, oldY: number, oldElevation: number): void {
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
         const cellSize = gameMapFrontWrapper.getTileDimensions().width;
-        const oldGrid = getTileCollisionGrid({ x: oldX, y: oldY }, entity.getPrefab(), cellSize);
-        const grid = getTileCollisionGrid(entity, entity.getPrefab(), cellSize);
+        // On a raised floor the object writes nothing to the tiles (the ground's): only rectangles, for its floor.
+        const oldGrid =
+            oldElevation > 0 ? undefined : getTileCollisionGrid({ x: oldX, y: oldY }, entity.getPrefab(), cellSize);
+        const grid = entity.getElevation() > 0 ? undefined : getTileCollisionGrid(entity, entity.getPrefab(), cellSize);
         if (oldGrid) {
             gameMapFrontWrapper.modifyToCollisionsLayer(oldX, oldY, "0", reverseCollisionGrid(oldGrid));
         }

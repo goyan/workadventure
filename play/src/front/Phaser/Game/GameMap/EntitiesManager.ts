@@ -17,6 +17,8 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
+import { mapEditorPlaceUnderFloorsStore } from "../../../Stores/MapEditorStore";
+import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
 import { shownWeatherSettings } from "../Weather/RealWeatherClient";
 import { snowCoverage } from "../Weather/SnowCover";
@@ -33,7 +35,7 @@ import {
     mapEditorSelectedToolStore,
     mapEditorSnapEnabledStore,
 } from "../../../Stores/MapEditorStore";
-import { isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_FLOOR_SLAB_COLLECTION, isMapLayerPrefab } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { isPlacementFree, shouldSnapToGrid } from "../MapEditor/EntityPlacementSnapping";
 import { Entity, EntityEvent } from "../../ECS/Entity";
 import { TexturesHelper } from "../../Helpers/TexturesHelper";
@@ -286,6 +288,10 @@ export class EntitiesManager extends EventEmitter {
     /** The grid written to the tile collision layer for the entity (EntityHitbox); none without a blocking cell. */
     private getTileCollisionGrid(entity: Entity): number[][] | undefined {
         const prefab = entity.getPrefab();
+        // The tile layer is the ground's: an object on a raised floor blocks with rectangles, for its floor only.
+        if (entity.getElevation() > 0) {
+            return undefined;
+        }
         if (!prefab.collisionGrid?.some((row) => row.includes(1))) {
             return undefined;
         }
@@ -533,6 +539,13 @@ export class EntitiesManager extends EventEmitter {
                             id: entity.entityId,
                             x: entity.x,
                             y: entity.y,
+                            // Dropped on a raised floor, the object stands on it; elsewhere on the ground.
+                            elevation: this.placementElevation({
+                                x: entity.x,
+                                y: entity.y,
+                                width: entity.displayWidth,
+                                height: entity.displayHeight,
+                            }),
                         };
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
@@ -627,6 +640,26 @@ export class EntitiesManager extends EventEmitter {
                 }
             }
         });
+    }
+
+    /**
+     * Altitude an object gets where its image is placed: the one of the raised floor drawn under its foot, the ground
+     * otherwise, or when the editor is set to place under the floors.
+     */
+    public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
+        const placed = [];
+        for (const entity of this.entities.values()) {
+            const prefab = entity.getPrefab();
+            if (prefab.collectionName !== MAP_LAYER_FLOOR_SLAB_COLLECTION) continue;
+            placed.push({
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getEntityData().elevation,
+            });
+        }
+        return placementElevation(placed, image, get(mapEditorPlaceUnderFloorsStore));
     }
 
     private copyEntity(entity: Entity): void {

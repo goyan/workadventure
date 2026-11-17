@@ -91,6 +91,16 @@ describe("Native entity clicks while selecting a group", () => {
         entity.getPrefab.mockReturnValue(prefab);
         entity.getCollisionGrid.mockReturnValue([[0]]);
         entity.getOverlappingEntities.mockReturnValue([]);
+        // On the ground: the collisions of an entity depend on the floor it stands on.
+        entity.getEntityData.mockReturnValue({
+            x: 32,
+            y: 32,
+            name: "",
+            properties: [],
+            depthStep: 0,
+            elevation: 0,
+            prefabRef: { id: prefab.id, collectionName: prefab.collectionName },
+        });
         entity.showPrefabTexture.mockReturnValue(entity);
         entityFactory.mockReturnValue(entity);
         entitiesManager = new EntitiesManager(scene, wrapper);

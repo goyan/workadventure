@@ -380,6 +380,13 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             properties: properties ?? [],
             name: properties?.find((p) => p.type === "openFile")?.name ?? undefined,
         };
+        // Placed on a raised floor, the object stands on it.
+        entityData.elevation = this.entitiesManager.placementElevation({
+            x: entityData.x,
+            y: entityData.y,
+            width: this.entityPrefabPreview.displayWidth,
+            height: this.entityPrefabPreview.displayHeight,
+        });
 
         this.mapEditorModeManager
             .executeCommand(
@@ -499,6 +506,7 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             y: data.position.y,
             prefabRef: data.prefabRef,
             properties: data.properties ?? [],
+            elevation: this.entitiesManager.placementElevation({ ...data.position, ...data.entityDimensions }),
         };
         this.mapEditorModeManager
             .executeCommand(

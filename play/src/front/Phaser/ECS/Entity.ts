@@ -13,7 +13,7 @@ import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
-import { floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
+import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import type { ActionsMenuAction } from "../../Stores/ActionsMenuStore";
 import { actionsMenuStore } from "../../Stores/ActionsMenuStore";
 import { mapEditorModeStore } from "../../Stores/MapEditorStore";
@@ -193,6 +193,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     /**
      * This method is being used after command execution from outside and it will not trigger any emits
      */
+    /** Altitude of the floor the entity stands on, in pixels above the ground: 0 on the ground. */
+    public getElevation(): number {
+        return this.entityData.elevation;
+    }
+
     public updateEntity(dataToModify: Partial<WAMEntityData>): void {
         deepmergeInto(this.entityData, dataToModify);
         // TODO: Find a way to update it without need of using conditions
@@ -391,6 +396,16 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             this.setDepth(floorPieceDepth(floorPiece, this.x, this.y, this.entityData.elevation));
             return;
         }
+        this.updateGroundDepth(depthOffset);
+        // Standing on a raised floor: the same order among the things of its floor, in the band of its altitude.
+        // (What is always over everything, like a ceiling lamp, stays where it is.)
+        if (this.entityData.elevation > 0 && this.depth < FLOOR_LEVEL_DEPTH) {
+            this.setDepth(floorDepth(this.entityData.elevation, this.depth));
+        }
+    }
+
+    /** The depth the entity has standing on the ground, sorted by its foot. */
+    private updateGroundDepth(depthOffset: number): void {
         if (parseMapLayerPrefab(this.prefab.collectionName, this.prefab.id)?.kind === "floor") {
             this.setDepth(MAP_LAYER_FLOOR_DEPTH);
             return;

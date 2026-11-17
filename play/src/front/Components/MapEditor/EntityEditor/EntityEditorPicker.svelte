@@ -6,7 +6,11 @@
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
-    import { mapEditorEntityEraserStore, mapEditorSnapEnabledStore } from "../../../Stores/MapEditorStore";
+    import {
+        mapEditorEntityEraserStore,
+        mapEditorPlaceUnderFloorsStore,
+        mapEditorSnapEnabledStore,
+    } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
     import {
         mapEditorDeleteCustomEntityEventStore,
@@ -296,6 +300,14 @@
             <InputSwitch
                 label={$LL.mapEditor.entityEditor.snapToGrid()}
                 bind:value={$mapEditorSnapEnabledStore}
+                margin="mt-1"
+                spacing="ml-2"
+                alignLabel="center"
+            />
+            <InputSwitch
+                id="entity-editor-place-under-floors"
+                label={$LL.mapEditor.entityEditor.placeUnderFloors()}
+                bind:value={$mapEditorPlaceUnderFloorsStore}
                 margin="mt-1"
                 spacing="ml-2"
                 alignLabel="center"

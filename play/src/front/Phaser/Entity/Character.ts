@@ -463,6 +463,11 @@ export abstract class Character extends Container implements OutlineableInterfac
         return this.floorZ < 2;
     }
 
+    /** Whether the character stands on the floor of this altitude (0: the ground), stairs apart. */
+    public isOnFloor(elevation: number): boolean {
+        return Math.abs(this.floorZ - elevation) < 2;
+    }
+
     public setFloorZ(z: number): void {
         if (this.floorZ === z) return;
         this.floorZ = z;
