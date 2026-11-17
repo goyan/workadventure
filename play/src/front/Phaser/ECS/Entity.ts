@@ -778,6 +778,12 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
                     });
                     break;
                 }
+                case "switchPropertyData": {
+                    // A switch: sets the state of the objects it commands (see GameSwitches).
+                    const action = (this.scene as GameScene).getSwitches()?.actionOf(this, property);
+                    if (action) actions.push(action);
+                    break;
+                }
                 case "openFile": {
                     if (!property.link) break;
                     const newTab = property.newTab;

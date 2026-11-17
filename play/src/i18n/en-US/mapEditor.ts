@@ -331,6 +331,13 @@ const mapEditor: BaseTranslation = {
             infinityDuration: "Infinite duration ⏱️",
             actionButtonLabel: "See info bubble",
         },
+        switchPropertyData: {
+            label: "Switch",
+            description: "Using this object turns its lamps on or off, for everybody.",
+            actionButtonLabel: "Use the switch",
+            turnOn: "Turn on",
+            turnOff: "Turn off",
+        },
         lamp: {
             label: "Light zone",
             description:

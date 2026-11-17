@@ -343,6 +343,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             infinityDuration: "Infini ⏱️",
             actionButtonLabel: "Voir l'info bulle",
         },
+        switchPropertyData: {
+            label: "Interrupteur",
+            description: "Actionner cet objet allume ou éteint ses lampes, pour tout le monde.",
+            actionButtonLabel: "Actionner l'interrupteur",
+            turnOn: "Allumer",
+            turnOff: "Éteindre",
+        },
         lamp: {
             label: "Zone de lumière",
             description:

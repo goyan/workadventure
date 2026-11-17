@@ -19,7 +19,6 @@ import { lampDemoEnabledStore } from "../../../Stores/LampDemoStore";
 import { lampEffectsEnabledStore, partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { LampMusicSource, lampMusicSourceStore } from "../../../Stores/LampMusicSourceStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { lightableAreas } from "../Night/NightLights";
 import type { Entity } from "../../ECS/Entity";
 import { DEPTH_LAMP_LIGHT_INDEX } from "../DepthIndexes";
 import { FLOOR_OBJECT_DEPTH } from "../../ECS/EntityLayerDepth";
@@ -48,6 +47,7 @@ import { nextBrightness } from "./LampStyle";
 import type { LampFrame, LampSignalSource } from "./LampSignal";
 import { isSilentFrame, SpectrumSignalSource } from "./LampSignal";
 import { ensureLampTextures } from "./LampTextures";
+import { mapRoomAreas, raisedFloorZone } from "./RoomZones";
 import { StreamSpectrum } from "./StreamSpectrum";
 import { LampZoneLights, type RoomAmbience } from "./LampZoneLights";
 import { RgbLamps } from "./RgbLamps";
@@ -280,12 +280,7 @@ export class LampManager {
 
     /** The listening zones of the map, with their rectangle: a lamp inside one belongs to it. */
     private areas(): AreaData[] {
-        const areas = this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().values() ?? [];
-        const map = this.scene.getGameMapFrontWrapper().getMap();
-        const mapWidth = (map.width ?? 0) * (map.tilewidth ?? 32);
-        const mapHeight = (map.height ?? 0) * (map.tileheight ?? 32);
-        // As for the night lights: an area that covers most of the map is not a room.
-        return lightableAreas(areas, mapWidth, mapHeight);
+        return mapRoomAreas(this.scene);
     }
 
     /** The listening zones of the map: the Jam a lamp follows comes from the one it stands in. */
@@ -357,13 +352,7 @@ export class LampManager {
 
     /** The raised floor a lamp stands on, as a zone its light stays in; undefined on the ground. */
     private raisedFloorZoneOf(entity: Entity): LampZone | undefined {
-        const elevation = entity.getElevation();
-        if (!(elevation > 0)) return undefined;
-        const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
-        const floor = this.scene.raisedFloorZoneAt(elevation, source.x, source.y);
-        return floor
-            ? { areaId: `floor:${floor.key}`, x: floor.x, y: floor.y, width: floor.width, height: floor.height }
-            : undefined;
+        return raisedFloorZone(this.scene, entity.getElevation(), lampSource(entity, entity.getPrefab().lamp?.anchor));
     }
 
     private buildVisual(kind: LampKind, entity: Entity, zone: LampZone): LampVisual {
