@@ -38,7 +38,7 @@
         mapLayerStairOpenStore,
         mapLayerStairWidthStore,
     } from "../../Stores/MapLayerStore";
-    import { STAIR_DIRECTIONS, floorElevation } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
+    import { STAIR_DIRECTIONS, floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { reachableLevels, stairTarget } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import {
@@ -86,12 +86,21 @@
      * among the floors (the lowest one is the floor 1).
      */
     function levelLabel(level: number, built: readonly number[]): string {
-        const tiles = (level - floorElevation(2)) / 32 + 2;
-        const height = Number.isInteger(tiles) ? String(tiles) : tiles.toFixed(1);
-        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height });
+        const name = $LL.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(level) });
         const rank = built.indexOf(level) + 1;
         return rank > 0 ? `${name} · ${$LL.mapEditor.mapLayer.floorLevel.built({ rank })}` : name;
     }
+
+    const stairArrows = { n: "↑", e: "→", s: "↓", o: "←" } as const;
+    // What the stair preview draws on the map, with its colors (see MapLayerFloorEditing).
+    const stairLegend = [
+        { key: "firstStep", color: "#ffffff" },
+        { key: "arrival", color: "#3b82f6" },
+        { key: "missing", color: "#f97316" },
+        { key: "well", color: "#ef4444" },
+        { key: "refused", color: "#ef4444" },
+        { key: "deadEnd", color: "#f97316" },
+    ] as const;
 
     // The floors a stair can reach from the level being edited, and the one it goes up to.
     let stairTargets = $derived(reachableLevels($mapLayerLevelStore, $mapLayerLevelsStore));
@@ -231,13 +240,29 @@
             </div>
             {#if !$mapLayerFloorsAvailableStore}
                 <p class="m-0 text-xs opacity-70">{$LL.mapEditor.mapLayer.floorLevel.unavailable()}</p>
+            {:else}
+                <details class="text-xs" data-testid="mapLayerFloorGuide">
+                    <summary class="cursor-pointer opacity-80 hover:opacity-100">
+                        {$LL.mapEditor.mapLayer.floorGuide.title()}
+                    </summary>
+                    <ol class="m-0 mt-1 flex list-decimal flex-col gap-1 ps-5 opacity-80">
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step1()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step2()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step3()}</li>
+                        <li>{$LL.mapEditor.mapLayer.floorGuide.step4()}</li>
+                    </ol>
+                </details>
             {/if}
         </section>
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
 
         {#if isFloorMode($mapLayerModeStore)}
             <section class="flex flex-col gap-2" data-testid="mapLayerLevel">
-                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.floorLevel.title()}</h3>
+                <h3 class="m-0 text-sm font-bold">
+                    {$mapLayerModeStore === "stair"
+                        ? $LL.mapEditor.mapLayer.floorLevel.from()
+                        : $LL.mapEditor.mapLayer.floorLevel.title()}
+                </h3>
                 <div class="flex flex-wrap gap-2">
                     {#each [0, ...$mapLayerLevelsStore] as level (level)}
                         <button
@@ -246,6 +271,9 @@
                                 ? 'bg-secondary'
                                 : 'bg-white/10 hover:bg-white/20'}"
                             aria-pressed={$mapLayerLevelStore === level}
+                            title={level === 0
+                                ? $LL.mapEditor.mapLayer.floorLevel.groundHint()
+                                : $LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
                             data-testid="mapLayerLevel-{level}"
                             onclick={() => mapLayerLevelStore.set(level)}
                         >
@@ -261,6 +289,7 @@
                         ? 'bg-secondary'
                         : 'bg-white/10 hover:bg-white/20'}"
                     aria-pressed={$mapLayerPickLevelStore}
+                    title={$LL.mapEditor.mapLayer.floorLevel.pickHint()}
                     data-testid="mapLayerPickLevel"
                     onclick={() => mapLayerPickLevelStore.update((armed) => !armed)}
                 >
@@ -287,6 +316,7 @@
                             data-testid="mapLayerStairDirection-{direction}"
                             onclick={() => mapLayerStairDirectionStore.set(direction)}
                         >
+                            <span aria-hidden="true">{stairArrows[direction]}</span>
                             {$LL.mapEditor.mapLayer.stair.directions[direction]()}
                         </button>
                     {/each}
@@ -318,6 +348,7 @@
                                     ? 'bg-secondary'
                                     : 'bg-white/10 hover:bg-white/20'}"
                                 aria-pressed={chosenStairTarget === level}
+                                title={$LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
                                 data-testid="mapLayerStairTarget-{level}"
                                 onclick={() => mapLayerStairTargetStore.set(level)}
                             >
@@ -332,6 +363,18 @@
                     bind:value={$mapLayerStairOpenStore}
                     margin="mt-0"
                 />
+                <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.stairLegend.title()}</h3>
+                <ul class="m-0 flex list-none flex-col gap-1 p-0 text-xs opacity-90" data-testid="mapLayerStairLegend">
+                    {#each stairLegend as { key, color } (key)}
+                        <li class="flex items-center gap-2">
+                            <span
+                                class="inline-block h-3 w-3 shrink-0 rounded-sm border border-white/40"
+                                style="background-color: {color}"
+                            ></span>
+                            {$LL.mapEditor.mapLayer.stairLegend[key]()}
+                        </li>
+                    {/each}
+                </ul>
             </section>
         {/if}
 

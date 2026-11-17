@@ -324,8 +324,21 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
     return undefined;
 }
 
+/**
+ * Collection of the raised floors (slabs and stairs, see MapLayerFloors): drawn by the "Map" tool like the floors and
+ * the walls.
+ */
+export const MAP_LAYER_FLOOR_SLAB_COLLECTION = "Carte Paliers";
+
+/**
+ * Whether a placed prefab belongs to the "Map" tool: a floor, a wall, a door, a window, or a piece of the raised
+ * floors. The other tools leave those alone.
+ */
 export function isMapLayerPrefab(collectionName: string, prefabId: string): boolean {
-    return parseMapLayerPrefab(collectionName, prefabId) !== undefined;
+    return (
+        collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION ||
+        parseMapLayerPrefab(collectionName, prefabId) !== undefined
+    );
 }
 
 /**

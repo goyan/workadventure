@@ -255,7 +255,11 @@ export class FloorSpike {
             pieces.push({ entity, piece, elevation });
             signature += `${prefab.id}@${entity.x},${entity.y},${elevation};`;
         }
-        if (this.model && signature === this.mapSignature) return;
+        if (this.model && signature === this.mapSignature) {
+            // Other tools set the opacity of the entities (the dimming of the map editor): set it again.
+            for (const level of this.levels) level.show(level.alpha);
+            return;
+        }
         this.mapSignature = signature;
         const model = FloorModel.fromPlaced(
             pieces.map(({ entity, elevation }) => {

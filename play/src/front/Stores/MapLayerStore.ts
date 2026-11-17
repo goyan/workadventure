@@ -79,6 +79,7 @@ export type MapLayerStatus =
     | "windowsUnavailable"
     | "slabOnGround"
     | "stairInvalid"
+    | "stairNoArrival"
     | "failed";
 export const mapLayerStatusStore = writable<MapLayerStatus | undefined>(undefined);
 

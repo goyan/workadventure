@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
     floorElevation,
+    floorLevelTiles,
     parseFloorPiece,
     slabPrefabName,
     stairElevationAt,
@@ -17,6 +18,14 @@ describe("raised floors of the map layer", () => {
         expect(floorElevation(2)).toBe(52);
         expect(floorElevation(3)).toBe(84);
         expect(floorElevation(4)).toBe(116);
+    });
+
+    it("tells a floor as the height in tiles of the walls that carry it", () => {
+        expect(floorLevelTiles(52)).toBe("2");
+        expect(floorLevelTiles(84)).toBe("3");
+        expect(floorLevelTiles(116)).toBe("4");
+        expect(floorLevelTiles(148)).toBe("5");
+        expect(floorLevelTiles(104)).toBe("3.6");
     });
 
     it("names the slabs and the stairs", () => {

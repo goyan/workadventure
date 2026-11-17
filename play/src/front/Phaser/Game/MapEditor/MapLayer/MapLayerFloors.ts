@@ -1,4 +1,10 @@
-import { FACADE_FACE_HEIGHT, MAP_LAYER_FLOOR_FAMILIES, MAP_LAYER_TILE_SIZE, wallRise } from "./MapLayerCatalog";
+import {
+    FACADE_FACE_HEIGHT,
+    MAP_LAYER_FLOOR_FAMILIES,
+    MAP_LAYER_FLOOR_SLAB_COLLECTION,
+    MAP_LAYER_TILE_SIZE,
+    wallRise,
+} from "./MapLayerCatalog";
 import type { FloorFamily, WallHeight } from "./MapLayerCatalog";
 
 /**
@@ -11,7 +17,7 @@ import type { FloorFamily, WallHeight } from "./MapLayerCatalog";
  * Like the other pieces of the map layer, the names are a contract with the private catalogs: never rename one once a
  * catalog has been published.
  */
-export const MAP_LAYER_FLOOR_SLAB_COLLECTION = "Carte Paliers";
+export { MAP_LAYER_FLOOR_SLAB_COLLECTION };
 
 /** Heights of the walls that can carry a floor: under a wall of height 1 nobody could walk. */
 export const FLOOR_WALL_HEIGHTS = [2, 3, 4] as const;
@@ -158,4 +164,13 @@ export function floorPieceSize(piece: FloorPiece): { width: number; height: numb
     if (piece.kind === "slab") return { width: MAP_LAYER_TILE_SIZE, height: MAP_LAYER_TILE_SIZE + SLAB_THICKNESS };
     const box = stairScreenBox(piece, { x: 0, y: 0 });
     return { width: box.width, height: box.height };
+}
+
+/**
+ * A floor told as the height, in tiles, of walls standing on the ground that would carry it: 2 for 52 px, 3 for 84 px,
+ * 4 for 116 px, and on by 32 px per tile; "2.5" between two.
+ */
+export function floorLevelTiles(elevation: number): string {
+    const tiles = (elevation - floorElevation(2)) / MAP_LAYER_TILE_SIZE + 2;
+    return Number.isInteger(tiles) ? String(tiles) : tiles.toFixed(1);
 }

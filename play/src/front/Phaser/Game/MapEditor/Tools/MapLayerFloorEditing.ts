@@ -5,6 +5,7 @@ import { get } from "svelte/store";
 import { v4 as uuidv4 } from "uuid";
 import type { WAMEntityData } from "@workadventure/map-editor";
 import {
+    isFloorMode,
     mapLayerFloorFamilyStore,
     mapLayerLevelStore,
     mapLayerBuiltLevelsStore,
@@ -16,6 +17,7 @@ import {
     mapLayerStairWidthStore,
     mapLayerStatusStore,
 } from "../../../../Stores/MapLayerStore";
+import { LL } from "../../../../../i18n/i18n-svelte";
 import type { GameScene } from "../../GameScene";
 import { CreateEntityFrontCommand } from "../Commands/Entity/CreateEntityFrontCommand";
 import { DeleteEntityFrontCommand } from "../Commands/Entity/DeleteEntityFrontCommand";
@@ -36,11 +38,19 @@ import {
     placeStair,
     reachableLevels,
     removeStairAt,
+    stairArrivalCells,
+    stairHasArrival,
     stairRiseBetween,
     stairTarget,
 } from "../MapLayer/FloorOperations";
 import type { PlacedFloorEntity } from "../MapLayer/FloorOperations";
-import { floorPieceSize, parseFloorPiece, stairGroundBox, stairScreenBox } from "../MapLayer/MapLayerFloors";
+import {
+    floorLevelTiles,
+    floorPieceSize,
+    parseFloorPiece,
+    stairGroundBox,
+    stairScreenBox,
+} from "../MapLayer/MapLayerFloors";
 import type { StairShape } from "../MapLayer/MapLayerFloors";
 import type { MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAX_ENTITIES_PER_OPERATION } from "../MapLayer/MapLayerSync";
@@ -52,6 +62,7 @@ const REFUSED_COLOR = 0xef4444;
 const ERASE_COLOR = 0xf97316;
 /** The tiles one steps onto at the top of a stair: with a slab, and without one. */
 const ARRIVAL_COLOR = 0x3b82f6;
+const PREVIEW_MODEL_MS = 300;
 const MISSING_COLOR = 0xf97316;
 
 /** An edit of the floors, applied to their model; false when it changes nothing or is refused. */
@@ -63,6 +74,11 @@ type FloorOperation = (model: FloorModel, bounds: MapBounds) => boolean;
  */
 export class MapLayerFloorEditing {
     private graphics: Phaser.GameObjects.Graphics | undefined;
+    /** The name of the level being edited, next to the pointer: the same point of the screen is a tile of each level. */
+    private label: Phaser.GameObjects.Text | undefined;
+    /** The floors read from the map for the previews, kept a short while: the pointer moves often. */
+    private cached: { model: FloorModel; at: number } | undefined;
+    private unsubscribeMode: (() => void) | undefined;
 
     constructor(
         private readonly scene: GameScene,
@@ -72,12 +88,36 @@ export class MapLayerFloorEditing {
 
     public activate(): void {
         this.graphics = this.scene.add.graphics().setDepth(FLOOR_PREVIEW_DEPTH);
+        this.label = this.scene.add
+            .text(0, 0, "", { fontSize: "11px", color: "#ffffff", backgroundColor: "#1b2a41", padding: { x: 3, y: 1 } })
+            .setDepth(FLOOR_PREVIEW_DEPTH + 1)
+            .setVisible(false);
+        // Slabs are laid above the ground: choosing that mode on the ground goes to a floor, a built one if any.
+        this.unsubscribeMode = mapLayerModeStore.subscribe((mode) => {
+            if (mode !== "slab" || get(mapLayerLevelStore) !== 0) return;
+            const level = get(mapLayerBuiltLevelsStore)[0] ?? get(mapLayerLevelsStore)[0];
+            if (level !== undefined) mapLayerLevelStore.set(level);
+        });
         this.refreshLevels();
     }
 
     public clear(): void {
         this.graphics?.destroy();
         this.graphics = undefined;
+        this.label?.destroy();
+        this.label = undefined;
+        this.unsubscribeMode?.();
+        this.unsubscribeMode = undefined;
+        this.cached = undefined;
+    }
+
+    /** The floors of the map for the previews: read again at most a few times per second, and after an edit. */
+    private previewModel(): FloorModel {
+        const now = performance.now();
+        if (!this.cached || now - this.cached.at > PREVIEW_MODEL_MS) {
+            this.cached = { model: this.readModel(), at: now };
+        }
+        return this.cached.model;
     }
 
     public readModel(): FloorModel {
@@ -170,15 +210,43 @@ export class MapLayerFloorEditing {
         if (!graphics) return;
         graphics.clear();
         this.scene.markDirty();
-        if (!current) return;
         const size = MAP_LAYER_TILE_SIZE;
         const mode = get(mapLayerModeStore);
         const level = get(mapLayerLevelStore);
+        if (!isFloorMode(mode)) {
+            this.label?.setVisible(false);
+            return;
+        }
+        // The stairs already placed that lead nowhere: the tiles of their top without a slab.
+        const placedModel = this.previewModel();
+        for (const stair of placedModel.getStairs()) {
+            if (stairHasArrival(placedModel, stair)) continue;
+            graphics.lineStyle(2, MISSING_COLOR, 1);
+            for (const cell of stairArrivalCells(stair)) {
+                const x = cell.x * size;
+                const y = cell.y * size - stair.top;
+                graphics.strokeRect(x + 1, y + 1, size - 2, size - 2);
+                graphics.lineBetween(x + 1, y + 1, x + size - 1, y + size - 1);
+                graphics.lineBetween(x + size - 1, y + 1, x + 1, y + size - 1);
+            }
+        }
+        if (!current) {
+            this.label?.setVisible(false);
+            return;
+        }
+        const levelName =
+            level === 0
+                ? get(LL).mapEditor.mapLayer.floorLevel.ground()
+                : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(level) });
+        this.label
+            ?.setText(levelName)
+            .setPosition(current.x + 14, current.y + 14)
+            .setVisible(true);
         const to = floorCellAt(current.x, current.y, level);
         if (mode === "stair") {
             const shape = this.stairShape();
             if (!shape) return;
-            const model = this.readModel();
+            const model = placedModel;
             const fits = canPlaceStair(model, shape, to, level, this.getBounds());
             const color = fits ? OK_COLOR : REFUSED_COLOR;
             const top = level + shape.rise;
@@ -282,6 +350,8 @@ export class MapLayerFloorEditing {
         if (!operation || !wamFile) return;
         const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
         const stairMode = get(mapLayerModeStore) === "stair";
+        /** Whether the stair just placed leads nowhere yet. */
+        let stairLeadsNowhere = false;
 
         // The factory runs inside the command queue, right before execution: it reads the current state of the map.
         const factory = (): readonly FrontCommand[] => {
@@ -290,6 +360,8 @@ export class MapLayerFloorEditing {
                 if (stairMode) mapLayerStatusStore.set("stairInvalid");
                 return [];
             }
+            const placedStair = stairMode ? model.getStairs().at(-1) : undefined;
+            stairLeadsNowhere = placedStair !== undefined && !stairHasArrival(model, placedStair);
             const diff = diffFloorPlacements(this.readPlaced(), computeFloorPlacements(model));
             if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) {
                 mapLayerStatusStore.set("tooLarge");
@@ -324,7 +396,11 @@ export class MapLayerFloorEditing {
 
         this.mapEditorModeManager
             .executeCommands(factory)
-            .then(() => this.refreshLevels())
+            .then(() => {
+                this.cached = undefined;
+                this.refreshLevels();
+                if (stairLeadsNowhere) mapLayerStatusStore.set("stairNoArrival");
+            })
             .catch((error: unknown) => {
                 const cause = asError(error);
                 console.error("Failed to edit the floors", cause);
