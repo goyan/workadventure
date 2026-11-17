@@ -231,3 +231,27 @@ export function stairTarget(
     if (asked !== undefined && reachable.includes(asked)) return asked;
     return reachable.find((level) => built.includes(level)) ?? reachable[0];
 }
+
+/**
+ * The tiles one steps onto at the top of a stair, on the floor it reaches: the ones just beyond its top end, across
+ * its width.
+ */
+export function stairArrivalCells(stair: PlacedStair): TilePoint[] {
+    const size = MAP_LAYER_TILE_SIZE;
+    const g = stair.ground;
+    const direction = stair.shape.direction;
+    const cells: TilePoint[] = [];
+    if (direction === "n" || direction === "s") {
+        const y = direction === "n" ? g.y / size - 1 : (g.y + g.height) / size;
+        for (let x = g.x / size; x < (g.x + g.width) / size; x++) cells.push({ x, y });
+    } else {
+        const x = direction === "e" ? (g.x + g.width) / size : g.x / size - 1;
+        for (let y = g.y / size; y < (g.y + g.height) / size; y++) cells.push({ x, y });
+    }
+    return cells;
+}
+
+/** Whether a stair leads somewhere: the floor it reaches has a slab on one of the tiles of its top. */
+export function stairHasArrival(model: FloorModel, stair: PlacedStair): boolean {
+    return stairArrivalCells(stair).some((cell) => model.hasSlab(stair.top, cell.x, cell.y));
+}

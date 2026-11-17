@@ -12,6 +12,8 @@ import {
     placeStair,
     reachableLevels,
     removeStairAt,
+    stairArrivalCells,
+    stairHasArrival,
     stairTarget,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
@@ -148,6 +150,30 @@ describe("floor operations", () => {
         expect(stairTarget([84, 116], [52, 116], 52)).toBe(116);
         expect(stairTarget([84, 116], [52], undefined)).toBe(84);
         expect(stairTarget([], [52], undefined)).toBeUndefined();
+    });
+
+    it("tells the tiles one steps onto at the top of a stair, and whether a slab is there", () => {
+        const model = new FloorModel();
+        // Going north from the tile (5, 6), 2 tiles of run: the top is the tile (5, 4).
+        const up = model.addStair(north, { x: 5, y: 6 }, 0);
+        expect(stairArrivalCells(up)).toEqual([{ x: 5, y: 4 }]);
+        expect(stairHasArrival(model, up)).toBe(false);
+        model.setSlab(52, 5, 4, "parquet-clair");
+        expect(stairHasArrival(model, up)).toBe(true);
+        // Going south (3 tiles of run from the tile (9, 3)), 2 tiles wide: the two tiles south of its last ones.
+        const south = model.addStair({ direction: "s", width: 2, rise: 52, open: false }, { x: 9, y: 3 }, 0);
+        expect(stairArrivalCells(south)).toEqual([
+            { x: 9, y: 6 },
+            { x: 10, y: 6 },
+        ]);
+        // East and west: the tiles beyond its top end, on its rows.
+        const east = model.addStair({ direction: "e", width: 1, rise: 52, open: false }, { x: 20, y: 3 }, 0);
+        expect(stairArrivalCells(east)).toEqual([{ x: 22, y: 3 }]);
+        const west = model.addStair({ direction: "o", width: 1, rise: 52, open: false }, { x: 30, y: 3 }, 0);
+        expect(stairArrivalCells(west)).toEqual([{ x: 28, y: 3 }]);
+        // One slab among the tiles of the top is enough to step off.
+        model.setSlab(52, 10, 6, "parquet-clair");
+        expect(stairHasArrival(model, south)).toBe(true);
     });
 
     it("tells the floors a stair can reach from a floor", () => {

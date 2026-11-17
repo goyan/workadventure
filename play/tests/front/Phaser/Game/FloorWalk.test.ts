@@ -183,6 +183,14 @@ describe("floorStep", () => {
         expect(off.state).toEqual({ elevation: 0 });
     });
 
+    it("drops to the ground an avatar whose slab was removed under it", () => {
+        const model = northModel();
+        model.removeSlab(52, 5, 2);
+        // It stood over the tile (5, 2), which no longer has a slab: it is not kept there by the railing.
+        const result = floorStep(model, { elevation: 52 }, { x: 176, y: 30 }, { x: 178, y: 30 });
+        expect(result).toEqual({ state: { elevation: 0 }, p: { x: 178, y: 30 } });
+    });
+
     it("reads an avatar that jumped (a teleport) as standing on the ground", () => {
         const model = northModel();
         const result = floorStep(model, { elevation: 52 }, { x: 176, y: 90 }, { x: 600, y: 400 });

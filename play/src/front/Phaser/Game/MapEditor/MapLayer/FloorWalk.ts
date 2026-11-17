@@ -165,6 +165,10 @@ export function floorStep(
                 }
             }
         }
+        if (next.stair === undefined && !standsOnFloor(model, level, prev)) {
+            // The slab the avatar stood on is gone (the map editor removed it): it is on the ground.
+            return { state: { elevation: 0 }, p: point };
+        }
         if (next.stair === undefined && !standsOnFloor(model, level, point)) {
             // The railing: slide along the edge of the floor.
             if (standsOnFloor(model, level, { x: point.x, y: prev.y })) point = { x: point.x, y: prev.y };
