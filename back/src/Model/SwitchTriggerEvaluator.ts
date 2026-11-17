@@ -10,8 +10,11 @@ import { asError } from "catch-unknown";
 import type { EntityStateKey, EntityStateValue, SwitchPropertyData, WAMEntityData } from "@workadventure/map-editor";
 import type { GameRoom } from "./GameRoom";
 
-/** The triggers of a map are looked at this often. */
-export const SWITCH_TRIGGER_TICK_MS = 1000;
+/**
+ * The triggers of a map are looked at this often: 5 times a second, so that a lamp lights before a walking avatar has
+ * passed its sensor (at once a second it lit behind them).
+ */
+export const SWITCH_TRIGGER_TICK_MS = 200;
 /** A report of animals holds this long: a browser repeats it while an animal stays in a sensor. */
 export const ANIMAL_REPORT_TTL_MS = 5000;
 const MAX_REPORTED_SENSORS = 50;
@@ -25,7 +28,7 @@ interface AutomaticSwitch {
 type TriggerUser = { getPosition(): { x: number; y: number }; getFloorZ(): number };
 
 /**
- * Uses the switches that have a trigger (a presence sensor, a timer) for them: once a second it works out, for each
+ * Uses the switches that have a trigger (a presence sensor, a timer) for them: 5 times a second it works out, for each
  * object such a switch commands, whether one of its triggers holds, and sets the state of the object when that
  * changes. The server alone decides, so that every player sees the same lamps.
  *
@@ -125,8 +128,13 @@ export class SwitchTriggerEvaluator {
         if (trigger.type === "hours") {
             return isWithinHours(trigger.from, trigger.to, parisMinutesOfDay(new Date(time)));
         }
+        // The area a sensor watches is looked for once, not for each player.
+        const area =
+            trigger.scope === "room" || trigger.scope === "area"
+                ? this.room.getWam()?.areas.find((candidate) => candidate.id === trigger.areaId)
+                : undefined;
         if (
-            users.some((user) => this.senses(entity, trigger, user)) ||
+            users.some((user) => switchPresenceSenses(entity, trigger, area, user.getPosition(), user.getFloorZ())) ||
             this.animalIn(id, time, trigger.scope === "building")
         ) {
             this.lastSeen.set(id, time);
@@ -134,18 +142,6 @@ export class SwitchTriggerEvaluator {
         }
         const last = this.lastSeen.get(id);
         return last !== undefined && time - last < trigger.offDelay * 1000;
-    }
-
-    private senses(
-        entity: WAMEntityData,
-        trigger: Extract<SwitchPropertyData["trigger"], { type: "presence" }>,
-        user: TriggerUser,
-    ): boolean {
-        const area =
-            trigger.scope === "room" || trigger.scope === "area"
-                ? this.room.getWam()?.areas.find((candidate) => candidate.id === trigger.areaId)
-                : undefined;
-        return switchPresenceSenses(entity, trigger, area, user.getPosition(), user.getFloorZ());
     }
 
     /**

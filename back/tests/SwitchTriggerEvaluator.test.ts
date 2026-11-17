@@ -1,6 +1,6 @@
 import type { WAMFileFormat } from "@workadventure/map-editor";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SwitchTriggerEvaluator } from "../src/Model/SwitchTriggerEvaluator";
+import { SWITCH_TRIGGER_TICK_MS, SwitchTriggerEvaluator } from "../src/Model/SwitchTriggerEvaluator";
 
 const prefabRef = { collectionName: "lamps", id: "x" };
 const room = { id: "room", name: "Room", x: 0, y: 0, width: 320, height: 320, visible: true, properties: [] };
@@ -365,7 +365,20 @@ describe("SwitchTriggerEvaluator, a map edited with a switch that is not well fo
         expect(h.tick()).toEqual([["l1", "true"]]);
     });
 
-    it("keeps looking every second after a look that failed, without letting the error out of its timer", () => {
+    it("looks 5 times a second: a lamp lights before a walking avatar has passed it", () => {
+        vi.useFakeTimers();
+        const h = createHarness({ ...sensor("s", inRoom, ["l1"]), ...lamps("l1") });
+        const tick = vi.spyOn(h.evaluator, "tick");
+        h.evaluator.start();
+
+        vi.advanceTimersByTime(1000);
+
+        h.evaluator.stop();
+        expect(SWITCH_TRIGGER_TICK_MS).toBe(200);
+        expect(tick).toHaveBeenCalledTimes(5);
+    });
+
+    it("keeps looking after a look that failed, without letting the error out of its timer", () => {
         vi.useFakeTimers();
         const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
         const h = createHarness({ ...sensor("s", inRoom, ["l1"]), ...lamps("l1") });
@@ -374,7 +387,7 @@ describe("SwitchTriggerEvaluator, a map edited with a switch that is not well fo
         });
         h.evaluator.start();
 
-        expect(() => vi.advanceTimersByTime(2000)).not.toThrow();
+        expect(() => vi.advanceTimersByTime(2 * SWITCH_TRIGGER_TICK_MS)).not.toThrow();
 
         h.evaluator.stop();
         expect(tick).toHaveBeenCalledTimes(2);

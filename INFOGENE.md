@@ -372,7 +372,7 @@ n'a pas de position à lui (comme un va-et-vient).
     à la main, ça reste éteint tant que la pièce est occupée ; pièce vidée puis réoccupée, le capteur rallume.
   - Une lampe à déclencheur est **éteinte** quand personne n'est détecté et hors plage, y compris à l'ouverture de
     la salle : poser un capteur éteint la pièce vide.
-  - **Qui décide** : le serveur, une fois par seconde, pour les seuls objets à déclencheur (`SwitchTriggerEvaluator`) ;
+  - **Qui décide** : le serveur, 5 fois par seconde (une lampe s'allume avant qu'un avatar qui marche l'ait dépassée), pour les seuls objets à déclencheur (`SwitchTriggerEvaluator`) ;
     il écrit dans le même magasin d'état. Il ne sait pas ce qu'est une lampe ni la taille d'un objet : l'**éditeur
     ouvert** enregistre dans la carte la pièce du capteur (`trigger.areaId`) et ses lampes (`resolvedTargets`), et les
     remet à jour quand on déplace le capteur ou qu'on ajoute une lampe, quel que soit l'outil de l'éditeur en cours,
