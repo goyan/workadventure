@@ -71,6 +71,8 @@ export class AreaEditorTool extends MapEditorTool {
 
     private selectedAreaPreviewStoreSubscriber!: Unsubscriber;
     private levelUnsubscriber: Unsubscriber | undefined;
+    /** The floor of the map the area being drawn goes on (0: the ground). */
+    private drawingLevel = 0;
 
     private pointerMoveEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
     private pointerUpEventHandler!: (pointer: Pointer, gameObjects: GameObject[]) => void;
@@ -379,12 +381,14 @@ export class AreaEditorTool extends MapEditorTool {
             if (mode === "ADD") {
                 this.clearHoverMarker();
                 this.drawingNewArea = true;
+                this.drawingLevel = this.levelToDrawOn(pointer.worldX, pointer.worldY);
                 this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
             if (mode === "EDIT") {
                 this.changeAreaMode("ADD");
                 this.drawingNewArea = true;
+                this.drawingLevel = this.levelToDrawOn(pointer.worldX, pointer.worldY);
                 this.drawinNewAreaStartPos = this.snapToCorner(pointer.worldX, pointer.worldY);
                 return;
             }
@@ -508,15 +512,29 @@ export class AreaEditorTool extends MapEditorTool {
             return;
         }
         this.scene.input.setDefaultCursor("crosshair");
-        const corner = this.snapToCorner(pointer.worldX, pointer.worldY);
+        const corner = this.snapToCorner(
+            pointer.worldX,
+            pointer.worldY,
+            this.levelToDrawOn(pointer.worldX, pointer.worldY),
+        );
         this.hoverMarker.clear().fillStyle(0xffffff, 0.8).fillCircle(corner.x, corner.y, 4);
         this.scene.markDirty();
     }
 
     // The corners of the tiles are the only places where an area can start or end.
-    private snapToCorner(worldX: number, worldY: number): { x: number; y: number } {
+    /**
+     * The corner of a tile nearest to a point, on the grid of a floor of the map: the tiles of a raised floor are
+     * drawn its altitude further north.
+     */
+    private snapToCorner(worldX: number, worldY: number, level = this.drawingLevel): { x: number; y: number } {
         const size = MAP_LAYER_TILE_SIZE;
-        return { x: Math.round(worldX / size) * size, y: Math.round(worldY / size) * size };
+        return { x: Math.round(worldX / size) * size, y: Math.round((worldY + level) / size) * size - level };
+    }
+
+    /** The floor an area drawn from this point goes on: the level chosen in the panel, on "auto" the one drawn there. */
+    private levelToDrawOn(worldX: number, worldY: number): number {
+        const choice = get(mapEditorPlacementLevelStore);
+        return choice === "auto" ? this.scene.floorLevelAt({ x: worldX, y: worldY }) : choice;
     }
 
     private clearHoverMarker(): void {
@@ -553,6 +571,8 @@ export class AreaEditorTool extends MapEditorTool {
         const height = Math.abs(end.y - this.drawinNewAreaStartPos.y);
         const x = Math.min(this.drawinNewAreaStartPos.x, end.x);
         const y = Math.min(this.drawinNewAreaStartPos.y, end.y);
+        // On a raised floor, the grid of its slabs is enough.
+        if (this.drawingLevel > 0) return { x, y, width, height };
         // Areas always snap to the floors of the map layer (the size of a room), or to the grid without any floor.
         return this.snapToFloors({ x, y, width, height });
     }
@@ -715,10 +735,8 @@ export class AreaEditorTool extends MapEditorTool {
 
     private createNewArea(x: number, y: number, width: number, height: number): void {
         const id = uuid();
-        const elevation = this.scene
-            .getGameMapFrontWrapper()
-            .getEntitiesManager()
-            .placementElevation({ x, y, width, height });
+        // The floor the drawing started on (see `levelToDrawOn`).
+        const elevation = this.drawingLevel;
         this.mapEditorModeManager
             .executeCommand(
                 new CreateAreaFrontCommand(

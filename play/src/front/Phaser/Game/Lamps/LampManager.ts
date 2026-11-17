@@ -1,3 +1,4 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import { isHomeJam, type AreaData } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
@@ -383,13 +384,16 @@ export class LampManager {
         }
         // The light of a lamp stays in the smallest area of the map it stands in, of whatever kind: that is the room.
         const areas = this.areas();
-        const areaZones = areas.map(toLampZone);
+        // Among the areas of the floor of the map the lamp stands on.
+        const areasOf = (entity: Entity): AreaData[] =>
+            areas.filter((area) => isAtAreaLevel(area, entity.getElevation()));
+        const areaZonesOf = (entity: Entity): LampZone[] => areasOf(entity).map(toLampZone);
         for (const { id, kind } of plan.create) {
             const entity = entities.get(id);
             if (!entity) {
                 continue;
             }
-            const zone = this.clipZoneOf(id, entity, areaZones);
+            const zone = this.clipZoneOf(id, entity, areaZonesOf(entity));
             this.placed.set(id, {
                 kind,
                 visual: this.buildVisual(kind, entity, zone),
@@ -406,7 +410,7 @@ export class LampManager {
         // A lamp that was moved into another zone (in the editor) draws in the container of that zone.
         const usedZones = new Map<string, LampZone>();
         for (const [id, lamp] of this.placed) {
-            const zone = this.clipZoneOf(id, lamp.entity, areaZones);
+            const zone = this.clipZoneOf(id, lamp.entity, areaZonesOf(lamp.entity));
             if (zone.areaId !== lamp.zoneId) {
                 lamp.visual.destroy();
                 lamp.visual = this.buildVisual(lamp.kind, lamp.entity, zone);
@@ -417,16 +421,16 @@ export class LampManager {
         this.zoneLights.sync(usedZones);
 
         // Which Jam each lamp follows: worked out the same way by every client, from what everyone shares.
-        const listeningZones = this.listeningZones(areas);
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const lamp of this.placed.values()) {
             const source = lampSource(lamp.entity, lamp.entity.getPrefab().lamp?.anchor);
+            const listeningZones = this.listeningZones(areasOf(lamp.entity));
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });
             // The host turned the effects of their room off: off for everyone, the room keeps its own light.
             lamp.jam = jam;
             // The room put out while it plays: the smallest area it stands in, as for its light.
-            lamp.room = zoneOf(source, areaZones);
+            lamp.room = zoneOf(source, areaZonesOf(lamp.entity));
         }
     }
 
@@ -456,10 +460,14 @@ export class LampManager {
             return;
         }
         // The same rule as the lamps, from the middle of the floor: every client follows the same Jam.
-        const listeningZones = this.listeningZones(this.areas());
+        const areas = this.areas();
         const jams: LampJam[] = lampJamsOf(this.rooms, this.listeningByUuid, this.participants, this.liveSharesAudio);
         const listening = this.listenedJam();
         for (const floor of this.floors.values()) {
+            // Among the listening zones of the floor of the map it stands on.
+            const listeningZones = this.listeningZones(
+                areas.filter((area) => isAtAreaLevel(area, floor.entity.getElevation())),
+            );
             const bounds = this.floorBounds(floor.entity);
             const source = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
             const jam = resolveLampJam({ source, zones: listeningZones, jams, listening });

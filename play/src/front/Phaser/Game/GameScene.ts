@@ -1692,8 +1692,11 @@ export class GameScene extends DirtyScene {
                         };
                     }),
                 (x, y) =>
-                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({ x, y })
-                        .length ?? 0) > 0,
+                    (this.gameMapFrontWrapper
+                        .getGameMap()
+                        .getWamFile()
+                        ?.getGameMapAreas()
+                        .getAreasOnPosition({ x, y, z: this.CurrentPlayer.getFloorZ() }).length ?? 0) > 0,
             );
             this.footstepSounds = new FootstepSounds(
                 (key, { volume, detune, pan }) => {
@@ -1737,7 +1740,11 @@ export class GameScene extends DirtyScene {
                 riding: this.CurrentPlayer.isRidingVehicle() && localUserStore.getVehicle() === Vehicle.Skateboard,
                 moving: this.CurrentPlayer.isVehicleMoving(),
                 indoor:
-                    (this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition(listener)
+                    (this.gameMapFrontWrapper
+                        .getGameMap()
+                        .getWamFile()
+                        ?.getGameMapAreas()
+                        .getAreasOnPosition({ x: listener.x, y: listener.y, z: this.CurrentPlayer.getFloorZ() })
                         .length ?? 0) > 0,
             },
             this.mapEditorModeManager?.isActive() ?? false,
