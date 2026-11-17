@@ -494,28 +494,16 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             this.entityPrefabPreview.setPosition(Math.floor(pointer.worldX), Math.floor(pointer.worldY));
         }
 
-        // On "auto", an image wholly on the face of a wall hangs on it.
-        const preview = this.entityPrefabPreview;
-        const hang =
-            elevation > 0
-                ? undefined
-                : this.entitiesManager.hangAltitudeOf({
-                      x: preview.x - preview.displayWidth * preview.originX,
-                      y: preview.y - preview.displayHeight * preview.originY,
-                      width: preview.displayWidth,
-                      height: preview.displayHeight,
-                  });
-        this.previewElevation = hang ?? elevation;
         this.entityPrefabPreview.setDepth(
             floorDepth(
-                hang ?? elevation,
+                elevation,
                 this.entityPrefabPreview.y +
                     this.entityPrefabPreview.displayHeight * 0.5 +
                     (this.entityPrefab.depthOffset ?? 0),
             ),
         );
         // The name of the floor next to the object, so that one sees where it goes.
-        if (elevation > 0 || hang !== undefined) {
+        if (elevation > 0) {
             this.levelLabel ??= this.scene.add.text(0, 0, "", {
                 fontSize: "11px",
                 color: "#ffffff",
@@ -524,16 +512,14 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             });
             this.levelLabel.setDepth(FLOOR_PREVIEW_DEPTH);
             this.levelLabel.setText(
-                hang !== undefined
-                    ? get(LL).mapEditor.mapLayer.floorLevel.hung()
-                    : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(elevation) }),
+                get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(elevation) }),
             );
             this.levelLabel.setPosition(
                 this.entityPrefabPreview.x + this.entityPrefabPreview.displayWidth * 0.5 + 4,
                 this.entityPrefabPreview.y - this.entityPrefabPreview.displayHeight * 0.5,
             );
         }
-        this.levelLabel?.setVisible(elevation > 0 || hang !== undefined);
+        this.levelLabel?.setVisible(elevation > 0);
     }
 
     private updateEntity(entityData: EntityData) {

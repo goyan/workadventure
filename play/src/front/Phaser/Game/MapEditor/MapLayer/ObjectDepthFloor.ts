@@ -46,40 +46,14 @@ export interface WallFaceBox extends DepthBox {
     depth: number;
 }
 
-/** The south face of a wall as something hangs on it: where its foot is drawn, and the altitude of that foot. */
-export interface HangFace extends DepthBox {
-    footY: number;
-    elevation: number;
-}
-
-/**
- * Altitude at which an object whose whole image lies on the south faces of walls hangs (a painting up a high wall):
- * from its lower edge down to the foot of the wall under it, plus the altitude of that wall. Undefined when it shows
- * beside the faces, over a cap, or would stand at the foot of the wall: it then stands on the ground like anything.
- */
-export function hangAltitude(object: DepthBox, faces: readonly HangFace[]): number | undefined {
-    const bottom = object.y + object.height;
-    const corners = [
-        { x: object.x, y: object.y },
-        { x: object.x + object.width, y: object.y },
-        { x: object.x, y: bottom },
-        { x: object.x + object.width, y: bottom },
-    ];
-    if (!corners.every((corner) => faces.some((face) => contains(face, corner.x, corner.y)))) return undefined;
-    const under = faces.find((face) => contains(face, object.x, bottom));
-    if (!under) return undefined;
-    const altitude = Math.round(under.elevation + under.footY - bottom);
-    return altitude > 0 ? altitude : undefined;
-}
-
 function contains(box: DepthBox, x: number, y: number): boolean {
     return x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height;
 }
 
 /**
- * An object above the ground (its altitude says so, see `hangAltitude`) whose whole image lies on the south faces of
- * walls hangs on them (a painting, a clock, a shelf up a high wall): it is drawn over those walls. The caller only
- * asks for objects with an altitude: on the ground, the same image stands behind the wall, hidden by it. Sorted by its foot, north of the foot of the wall, it would be hidden behind
+ * An object above the ground whose whole image lies on the south faces of walls hangs on them (a painting, a clock, a
+ * shelf up a high wall): it is drawn over those walls. The caller only asks for objects given a level above the
+ * ground and without a slab under them: on the ground, the same image stands behind the wall, hidden by it. Sorted by its foot, north of the foot of the wall, it would be hidden behind
  * them, where nobody places anything on purpose. An object that shows over the cap of the wall, or beside it, stands
  * behind the wall and keeps its depth.
  */

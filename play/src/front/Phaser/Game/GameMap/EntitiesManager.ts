@@ -17,10 +17,6 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
-import { WALL_THICKNESS, mapLayerGroundBottom } from "../MapEditor/MapLayer/MapLayerCatalog";
-import { parseAnyLevelPrefab } from "../MapEditor/MapLayer/MapLayerLevels";
-import type { HangFace } from "../MapEditor/MapLayer/ObjectDepthFloor";
-import { hangAltitude } from "../MapEditor/MapLayer/ObjectDepthFloor";
 import { LL } from "../../../../i18n/i18n-svelte";
 import { floorLevelTiles } from "../MapEditor/MapLayer/MapLayerFloors";
 import { FLOOR_PREVIEW_DEPTH } from "../MapEditor/MapLayer/FloorDepth";
@@ -522,17 +518,7 @@ export class EntitiesManager extends EventEmitter {
                     ? Math.floor((dragY + level) / tileDim.height) * tileDim.height - level
                     : Math.floor(dragY);
                 entity.updateDepth(depthOffset);
-                const hang =
-                    level > 0
-                        ? undefined
-                        : this.hangAltitudeOf({
-                              x: entity.x,
-                              y: entity.y,
-                              width: entity.displayWidth,
-                              height: entity.displayHeight,
-                          });
-                this.dragElevation = hang ?? level;
-                if (this.dragFloorPieces.length > 0 || hang !== undefined) {
+                if (this.dragFloorPieces.length > 0) {
                     // On a map with raised floors: the object stays in sight over them while it is dragged, with
                     // the name of the level it would be dropped on next to the pointer.
                     entity.setDepth(FLOOR_PREVIEW_DEPTH - 1);
@@ -544,11 +530,9 @@ export class EntitiesManager extends EventEmitter {
                     });
                     this.dragLevelLabel.setDepth(FLOOR_PREVIEW_DEPTH);
                     this.dragLevelLabel.setText(
-                        hang !== undefined
-                            ? get(LL).mapEditor.mapLayer.floorLevel.hung()
-                            : level === 0
-                              ? get(LL).mapEditor.mapLayer.floorLevel.ground()
-                              : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(level) }),
+                        level === 0
+                            ? get(LL).mapEditor.mapLayer.floorLevel.ground()
+                            : get(LL).mapEditor.mapLayer.floorLevel.cursor({ height: floorLevelTiles(level) }),
                     );
                     this.dragLevelLabel.setPosition(pointer.worldX + 14, pointer.worldY + 14);
                     this.dragLevelLabel.setVisible(true);
@@ -561,8 +545,6 @@ export class EntitiesManager extends EventEmitter {
             entityPlacementBlockerStore.set(undefined);
             this.dragFloorPieces = undefined;
             this.dragLevelLabel?.setVisible(false);
-            const droppedAt = this.dragElevation;
-            this.dragElevation = undefined;
             if (
                 get(mapEditorModeStore) &&
                 this.isEntityEditorToolActive() &&
@@ -577,7 +559,7 @@ export class EntitiesManager extends EventEmitter {
                         entity.getCollisionGrid(),
                         entity.getOldPosition(),
                         // On a raised floor, what stands on the ground under it is not in the way.
-                        this.isFreePlacement() || (droppedAt ?? this.elevationAt(pointer.worldX, pointer.worldY)) > 0,
+                        this.isFreePlacement() || this.elevationAt(pointer.worldX, pointer.worldY) > 0,
                     )
                 ) {
                     const oldPos = entity.getOldPosition();
@@ -597,7 +579,7 @@ export class EntitiesManager extends EventEmitter {
                             x: entity.x,
                             y: entity.y,
                             // Dropped on a raised floor, the object stands on it; elsewhere on the ground.
-                            elevation: droppedAt ?? this.elevationAt(pointer.worldX, pointer.worldY),
+                            elevation: this.elevationAt(pointer.worldX, pointer.worldY),
                         };
                         this.emit(EntitiesManagerEvent.UpdateEntity, data);
                     }
@@ -704,15 +686,9 @@ export class EntitiesManager extends EventEmitter {
      */
     public elevationAt(worldX: number, worldY: number): number {
         // A point is the foot of an image one pixel high.
-        return placementElevation(
-            this.placedFloorPieces(),
-            { x: worldX, y: worldY, width: 0, height: 1 },
-            get(mapEditorPlacementLevelStore),
-        );
+        return this.placementElevation({ x: worldX, y: worldY, width: 0, height: 1 });
     }
 
-    /** Altitude the dragged object would be dropped at: its level, or where it hangs on a wall. */
-    private dragElevation: number | undefined;
     /** The slabs and stairs of the map, read once per drag of an object. */
     private dragFloorPieces: PlacedFloorPiece[] | undefined;
     /** The name of the level a dragged object would be dropped on, next to the pointer. */
@@ -724,39 +700,7 @@ export class EntitiesManager extends EventEmitter {
     }
 
     public placementElevation(image: { x: number; y: number; width: number; height: number }): number {
-        const level = placementElevation(this.placedFloorPieces(), image, get(mapEditorPlacementLevelStore));
-        return level > 0 ? level : (this.hangAltitudeOf(image) ?? 0);
-    }
-
-    /**
-     * With the level on "auto", an image wholly on the face of walls hangs on them: its altitude above the foot of
-     * the wall. Undefined elsewhere, and when a level is chosen (the ground then means the ground, behind the wall).
-     */
-    public hangAltitudeOf(image: { x: number; y: number; width: number; height: number }): number | undefined {
-        if (get(mapEditorPlacementLevelStore) !== "auto") return undefined;
-        const faces: HangFace[] = [];
-        for (const entity of this.entities.values()) {
-            if (
-                entity.x > image.x + image.width ||
-                entity.x + entity.displayWidth < image.x ||
-                entity.y > image.y + image.height ||
-                entity.y + entity.displayHeight < image.y
-            ) {
-                continue;
-            }
-            const prefab = entity.getPrefab();
-            const piece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
-            if (!piece || (piece.kind !== "facade" && piece.kind !== "lintel" && piece.kind !== "end")) continue;
-            faces.push({
-                x: entity.x,
-                y: entity.y + WALL_THICKNESS,
-                width: entity.displayWidth,
-                height: entity.displayHeight - WALL_THICKNESS,
-                footY: mapLayerGroundBottom(piece, entity.y),
-                elevation: entity.getElevation(),
-            });
-        }
-        return hangAltitude(image, faces);
+        return placementElevation(this.placedFloorPieces(), image, get(mapEditorPlacementLevelStore));
     }
 
     private placedFloorPieces(): PlacedFloorPiece[] {

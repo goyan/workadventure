@@ -531,7 +531,6 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             deadEnd: "Un escalier posé qui ne mène nulle part",
         },
         floorLevel: {
-            hung: "Accroché au mur",
             objectTitle: "Niveau de cet objet",
             auto: "Auto",
             autoHint: "Le palier sous le pointeur, le sol s’il n’y en a pas",
