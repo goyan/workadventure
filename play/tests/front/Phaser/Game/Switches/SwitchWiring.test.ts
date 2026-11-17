@@ -1,6 +1,7 @@
 import { SWITCH_MAX_TARGETS, type SwitchPropertyData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
+    chosenTargetsStart,
     newSwitchProperties,
     rewireSwitch,
     rewireSwitchProperties,
@@ -149,5 +150,22 @@ describe("selfSensorProperty", () => {
             targets: { mode: "ids", ids: ["l1"] },
             trigger: { type: "presence", scope: "proximity", tiles: 3, offDelay: 30, direction: 90, angle: 90 },
         });
+    });
+});
+
+describe("chosenTargetsStart", () => {
+    const rgbLamp = { entityId: "lamp", getPrefab: () => ({ lamp: { kind: "rgb" as const } }) };
+    const box = { entityId: "box", getPrefab: () => ({}) };
+
+    it("starts the chosen lamps of a lamp with the lamp itself: a lamp out of any room is its own sensor", () => {
+        expect(chosenTargetsStart(rgbLamp, [])).toEqual({ mode: "ids", ids: ["lamp"] });
+    });
+
+    it("starts from the lamps the switch commanded, when it commanded some", () => {
+        expect(chosenTargetsStart(rgbLamp, ["a", "b"])).toEqual({ mode: "ids", ids: ["a", "b"] });
+    });
+
+    it("starts empty for an object that is not a lamp", () => {
+        expect(chosenTargetsStart(box, [])).toEqual({ mode: "ids", ids: [] });
     });
 });

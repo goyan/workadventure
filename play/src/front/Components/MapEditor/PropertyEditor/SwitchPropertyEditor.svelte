@@ -8,6 +8,7 @@
         type SwitchPropertyData,
     } from "@workadventure/map-editor";
     import {
+        chosenTargetsStart,
         hoursTrigger,
         proximityPresenceTrigger,
         roomPresenceTrigger,
@@ -80,7 +81,8 @@
 
     function setMode(mode: "zone" | "ids"): void {
         if (property.targets.mode === mode) return;
-        property.targets = mode === "zone" ? { mode: "zone" } : { mode: "ids", ids: [] };
+        // On a lamp the chosen lamps start with the lamp itself.
+        property.targets = mode === "zone" ? { mode: "zone" } : chosenTargetsStart(entity, []);
         if (mode === "zone") mapEditorSwitchWiringStore.set(undefined);
         onchange?.();
     }
@@ -96,7 +98,7 @@
         }
         if (property.targets.mode !== "ids") {
             const ids = (scene.getSwitches()?.targetsOf(entity, property) ?? []).map((target) => target.id);
-            property.targets = { mode: "ids", ids };
+            property.targets = chosenTargetsStart(entity, ids);
             property.resolvedTargets = undefined;
             onchange?.();
         }
