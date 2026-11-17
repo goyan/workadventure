@@ -1,4 +1,10 @@
-import { automaticSwitchTargetIds, isAtAreaLevel, isWithinHours, parisMinutesOfDay } from "@workadventure/map-editor";
+import {
+    automaticSwitchTargetIds,
+    isAtAreaLevel,
+    isInCone,
+    isWithinHours,
+    parisMinutesOfDay,
+} from "@workadventure/map-editor";
 import type { EntityStateKey, EntityStateValue, SwitchPropertyData, WAMEntityData } from "@workadventure/map-editor";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { GameRoom } from "./GameRoom";
@@ -118,15 +124,19 @@ export class SwitchTriggerEvaluator {
         trigger: Extract<SwitchPropertyData["trigger"], { type: "presence" }>,
         user: TriggerUser,
     ): boolean {
-        if (trigger.scope === "proximity") {
+        if (trigger.scope === "proximity" || trigger.scope === "cone") {
             if (!isAtAreaLevel(entity, user.getFloorZ())) {
                 return false;
             }
-            const position = user.getPosition();
-            const reach = trigger.tiles * TILE_PX;
-            return (
-                Math.hypot(position.x - (entity.x + SENSOR_MIDDLE_PX), position.y - (entity.y + SENSOR_MIDDLE_PX)) <=
-                reach
+            // Proximity is a cone open all around.
+            return isInCone(
+                { x: entity.x + SENSOR_MIDDLE_PX, y: entity.y + SENSOR_MIDDLE_PX },
+                {
+                    direction: trigger.direction,
+                    angle: trigger.scope === "cone" ? trigger.angle : 360,
+                    reach: trigger.tiles * TILE_PX,
+                },
+                user.getPosition(),
             );
         }
         const area = this.room.getWam()?.areas.find((candidate) => candidate.id === trigger.areaId);

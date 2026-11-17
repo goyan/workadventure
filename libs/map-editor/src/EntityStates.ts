@@ -95,3 +95,26 @@ export function isWithinHours(from: string, to: string, minutes: number): boolea
     }
     return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
+
+/**
+ * Whether `point` is in a cone that starts at `origin`: within `reach` pixels, and within half of `angle` degrees on
+ * each side of `direction` (degrees clockwise on the screen from the east, like the light of an RGB lamp). A cone of
+ * 360 degrees is a disc; the origin itself is always in.
+ */
+export function isInCone(
+    origin: { x: number; y: number },
+    cone: { direction: number; angle: number; reach: number },
+    point: { x: number; y: number },
+): boolean {
+    const dx = point.x - origin.x;
+    const dy = point.y - origin.y;
+    if (Math.hypot(dx, dy) > cone.reach) {
+        return false;
+    }
+    if (cone.angle >= 360 || (dx === 0 && dy === 0)) {
+        return true;
+    }
+    const bearing = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const away = Math.abs(((((bearing - cone.direction) % 360) + 540) % 360) - 180);
+    return away <= cone.angle / 2;
+}

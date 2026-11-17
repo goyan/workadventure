@@ -304,23 +304,29 @@ export const SWITCH_OFF_DELAY_MAX_S = 600;
 /** How far a proximity trigger senses, in tiles, by default. */
 export const SWITCH_PROXIMITY_DEFAULT_TILES = 3;
 export const SWITCH_PROXIMITY_MAX_TILES = 20;
+/** How wide a cone trigger senses, in degrees, by default. */
+export const SWITCH_CONE_DEFAULT_ANGLE = 90;
 
 const SwitchHour = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 
 /**
  * What uses a switch without anybody touching it; the server decides (see SwitchTriggerEvaluator in the back).
  * - presence: somebody is in the room of the switch (`scope: "room"`, `areaId` found by the editor), in a chosen area
- *   (`scope: "area"`, `areaId`), or within `tiles` of it on its floor (`scope: "proximity"`). It lets go `offDelay`
- *   seconds after the last person left.
+ *   (`scope: "area"`, `areaId`), within `tiles` of it on its floor (`scope: "proximity"`), or in a cone in front of
+ *   it (`scope: "cone"`, like the beam of a lamp). It lets go `offDelay` seconds after the last person left.
  * - hours: the time in Paris is between `from` (included) and `to` (excluded); the range may pass midnight.
  */
 export const SwitchTrigger = z.discriminatedUnion("type", [
     z.object({
         type: z.literal("presence"),
-        scope: z.enum(["room", "area", "proximity"]),
+        scope: z.enum(["room", "area", "proximity", "cone"]),
         areaId: z.string().optional(),
         tiles: z.number().int().min(1).max(SWITCH_PROXIMITY_MAX_TILES).default(SWITCH_PROXIMITY_DEFAULT_TILES),
         offDelay: z.number().int().min(0).max(SWITCH_OFF_DELAY_MAX_S).default(SWITCH_OFF_DELAY_DEFAULT_S),
+        // The cone of `scope: "cone"`, like the light of an RGB lamp: degrees clockwise on the screen from the east
+        // (90 points downwards), `angle` degrees wide, `tiles` long.
+        direction: z.number().min(0).lt(360).default(RGB_LAMP_DEFAULT_DIRECTION),
+        angle: z.number().min(RGB_LAMP_MIN_ANGLE).max(RGB_LAMP_MAX_ANGLE).default(SWITCH_CONE_DEFAULT_ANGLE),
     }),
     z.object({ type: z.literal("hours"), from: SwitchHour, to: SwitchHour }),
 ]);

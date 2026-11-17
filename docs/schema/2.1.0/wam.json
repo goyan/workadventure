@@ -708,7 +708,8 @@
                                   "enum": [
                                     "room",
                                     "area",
-                                    "proximity"
+                                    "proximity",
+                                    "cone"
                                   ]
                                 },
                                 "areaId": {
@@ -725,6 +726,18 @@
                                   "minimum": 0,
                                   "maximum": 600,
                                   "default": 30
+                                },
+                                "direction": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "exclusiveMaximum": 360,
+                                  "default": 90
+                                },
+                                "angle": {
+                                  "type": "number",
+                                  "minimum": 10,
+                                  "maximum": 360,
+                                  "default": 90
                                 }
                               },
                               "required": [

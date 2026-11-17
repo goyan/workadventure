@@ -7,6 +7,7 @@ import {
     SwitchTrigger,
     automaticSwitchTargetIds,
     isAutomaticSwitch,
+    isInCone,
     isWithinHours,
     parisMinutesOfDay,
 } from "../src";
@@ -30,7 +31,7 @@ describe("the trigger of a switch", () => {
         expect(SWITCH_PROXIMITY_DEFAULT_TILES).toBe(3);
         expect(SWITCH_OFF_DELAY_DEFAULT_S).toBe(30);
         const trigger = SwitchTrigger.parse({ type: "presence", scope: "proximity" });
-        expect(trigger).toEqual({ type: "presence", scope: "proximity", tiles: 3, offDelay: 30 });
+        expect(trigger).toMatchObject({ type: "presence", scope: "proximity", tiles: 3, offDelay: 30 });
         expect(isAutomaticSwitch(SwitchPropertyData.parse({ ...base, trigger }))).toBe(true);
     });
 
@@ -116,5 +117,58 @@ describe("a catalog entry that is a sensor or a timer", () => {
 
     it("fails open on a trigger it does not know", () => {
         expect(EntityRawPrefab.parse({ ...prefab, switch: "bogus" }).switch).toBeUndefined();
+    });
+});
+
+describe("a presence trigger that senses in a cone", () => {
+    it("points downwards, 90 degrees wide, by default", () => {
+        expect(SwitchTrigger.parse({ type: "presence", scope: "cone" })).toEqual({
+            type: "presence",
+            scope: "cone",
+            tiles: 3,
+            offDelay: 30,
+            direction: 90,
+            angle: 90,
+        });
+    });
+
+    it("bounds its direction and its opening", () => {
+        expect(() => SwitchTrigger.parse({ type: "presence", scope: "cone", direction: 360 })).toThrow();
+        expect(() => SwitchTrigger.parse({ type: "presence", scope: "cone", angle: 9 })).toThrow();
+        expect(() => SwitchTrigger.parse({ type: "presence", scope: "cone", angle: 361 })).toThrow();
+    });
+});
+
+describe("isInCone", () => {
+    const origin = { x: 100, y: 100 };
+    // Degrees clockwise on the screen from the east, like the light of an RGB lamp: 90 points downwards.
+    const down = { direction: 90, angle: 90, reach: 96 };
+
+    it("holds a point in front, within reach", () => {
+        expect(isInCone(origin, down, { x: 100, y: 196 })).toBe(true);
+        expect(isInCone(origin, down, { x: 100, y: 197 })).toBe(false);
+    });
+
+    it("holds a point up to half the opening on each side, not beyond", () => {
+        expect(isInCone(origin, down, { x: 140, y: 141 })).toBe(true);
+        expect(isInCone(origin, down, { x: 141, y: 140 })).toBe(false);
+        expect(isInCone(origin, down, { x: 60, y: 141 })).toBe(true);
+    });
+
+    it("does not hold a point behind", () => {
+        expect(isInCone(origin, down, { x: 100, y: 60 })).toBe(false);
+    });
+
+    it("wraps around the east", () => {
+        const east = { direction: 0, angle: 90, reach: 96 };
+        expect(isInCone(origin, east, { x: 150, y: 80 })).toBe(true);
+        expect(isInCone(origin, east, { x: 150, y: 120 })).toBe(true);
+        expect(isInCone(origin, east, { x: 50, y: 100 })).toBe(false);
+    });
+
+    it("holds everything within reach when fully open, and its own origin", () => {
+        const all = { direction: 90, angle: 360, reach: 96 };
+        expect(isInCone(origin, all, { x: 100, y: 10 })).toBe(true);
+        expect(isInCone(origin, down, origin)).toBe(true);
     });
 });

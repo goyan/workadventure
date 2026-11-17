@@ -153,6 +153,33 @@ describe("SwitchTriggerEvaluator, proximity", () => {
     });
 });
 
+describe("SwitchTriggerEvaluator, cone", () => {
+    // Pointing downwards, 90 degrees wide, 3 tiles long, from the middle of the sensor at (176, 176).
+    const cone = { type: "presence", scope: "cone", tiles: 3, offDelay: 0, direction: 90, angle: 90 };
+
+    it("senses somebody in front of it, not behind nor too far", () => {
+        const h = createHarness({ ...sensor("s", cone, ["l1"]), ...lamps("l1") }, []);
+        h.tick();
+        h.enter(1, 176, 176 + 96);
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "true"]]);
+        h.enter(1, 176, 176 - 40);
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "false"]]);
+        h.enter(1, 176, 176 + 97);
+        h.advance(1);
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("only senses its own floor", () => {
+        const h = createHarness({ ...sensor("s", cone, ["l1"]), ...lamps("l1") }, []);
+        h.tick();
+        h.enter(1, 176, 200, 64);
+        h.advance(1);
+        expect(h.tick()).toEqual([]);
+    });
+});
+
 describe("SwitchTriggerEvaluator, hours", () => {
     it("lights during its hours, in the time of Paris", () => {
         const h = createHarness({
