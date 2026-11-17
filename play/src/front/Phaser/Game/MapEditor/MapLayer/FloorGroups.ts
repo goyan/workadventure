@@ -60,3 +60,27 @@ export function floorGroups(model: FloorModel): FloorGroup[] {
     }
     return groups;
 }
+
+/**
+ * The floor of an altitude the nearest to a tile of the ground: where an object of that altitude belongs when it
+ * stands over no slab (a shelf hung on the wall beside its floor). Undefined when the altitude has no floor.
+ */
+export function nearestFloorGroup(
+    groups: readonly FloorGroup[],
+    level: number,
+    cell: TilePoint,
+): FloorGroup | undefined {
+    let nearest: FloorGroup | undefined;
+    let best = Infinity;
+    for (const group of groups) {
+        if (group.level !== level) continue;
+        for (const other of group.cells) {
+            const distance = (other.x - cell.x) ** 2 + (other.y - cell.y) ** 2;
+            if (distance < best) {
+                best = distance;
+                nearest = group;
+            }
+        }
+    }
+    return nearest;
+}

@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { floorGroups } from "../MapEditor/MapLayer/FloorGroups";
+import { floorGroups, nearestFloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import type { FloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import { stairEnds } from "../MapEditor/MapLayer/FloorPath";
 import { floorRailings, railingClosers } from "../MapEditor/MapLayer/FloorRailings";
@@ -556,8 +556,14 @@ export class FloorSpike {
                         groupAt(elevation, entity.x + width / 2, entity.y + height - 1) ??
                         groupAt(elevation, entity.x + width / 2, entity.y + height / 2) ??
                         groupAt(elevation, entity.x, entity.y);
-                    // An object of that altitude over no floor at all goes with the first floor of the altitude.
-                    return found ? found === group : groups.find((other) => other.level === elevation) === group;
+                    if (found) return found === group;
+                    // Over no slab at all (a shelf hung on the wall beside its floor): with the nearest floor of its
+                    // altitude, not one of another building.
+                    const foot = {
+                        x: Math.floor((entity.x + width / 2) / TILE),
+                        y: Math.floor((entity.y + height - 1 + elevation) / TILE),
+                    };
+                    return nearestFloorGroup(groups, elevation, foot) === group;
                 })
                 .map((item) => item.entity);
             // The objects are only touched while their floor shows through, and once when it is opaque again: the map
