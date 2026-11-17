@@ -60,8 +60,9 @@ export class SwitchWiringView {
                 this.graphics.strokeCircle(watch.x, watch.y, watch.reach);
             } else {
                 // Degrees clockwise on the screen from the east, as Phaser draws its arcs.
-                const from = Phaser.Math.DegToRad(watch.direction - watch.angle / 2);
-                const to = Phaser.Math.DegToRad(watch.direction + watch.angle / 2);
+                // No Phaser global here: it is not defined in the page.
+                const from = ((watch.direction - watch.angle / 2) * Math.PI) / 180;
+                const to = ((watch.direction + watch.angle / 2) * Math.PI) / 180;
                 this.graphics.beginPath();
                 this.graphics.moveTo(watch.x, watch.y);
                 this.graphics.arc(watch.x, watch.y, watch.reach, from, to);
