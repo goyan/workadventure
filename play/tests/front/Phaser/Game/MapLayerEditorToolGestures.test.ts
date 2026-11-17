@@ -143,6 +143,13 @@ describe("MapLayerEditorTool gestures", () => {
         previewGraphics = graphics;
         const factory = mock<Phaser.GameObjects.GameObjectFactory>();
         factory.graphics.mockReturnValue(graphics);
+        // The label of the level being edited, next to the pointer (the raised floors).
+        const label = mock<Phaser.GameObjects.Text>();
+        label.setDepth.mockReturnValue(label);
+        label.setVisible.mockReturnValue(label);
+        label.setText.mockReturnValue(label);
+        label.setPosition.mockReturnValue(label);
+        factory.text.mockReturnValue(label);
         scene.add = factory;
         scene.markDirty.mockImplementation(() => undefined);
 
