@@ -104,6 +104,7 @@ function makeScene(
         active: true,
         texture: { key: "duck-entity.png" },
         getPrefab: () => ({ imagePath: "duck-entity.png", tags: [], wander: { sheetPath: SHEET } }),
+        getElevation: () => 0,
         getEntityData: () => ({ properties }),
         setVisible: (visible: boolean) => {
             entity.visible = visible;
