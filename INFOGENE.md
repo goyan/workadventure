@@ -2209,8 +2209,8 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   d'écoute de son palier ; les bruits de pas « dedans » suivent le palier du joueur. Une zone dessinée sur un palier
   s'aligne sur la grille de ses dalles.
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
-  la météo ne se dessine ni sur les dalles d'un palier situé dans une pièce ni sur le haut des murs de 2 cases et
-  plus (`Weather/RaisedCover.ts`).
+  la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
+  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
 - **Dalles en verre** : interrupteur « Dalles en verre » du mode Dalles ; pièce `dalle-verre` de `Carte Paliers`
   (`SLAB_GLASS_FAMILY`, une famille de dalle qui n'est pas un sol du rez-de-chaussée), translucide comme les
   vitres : on voit à travers ce qui est sous le palier. Grisé tant que le catalogue de la salle n'a pas la pièce.
