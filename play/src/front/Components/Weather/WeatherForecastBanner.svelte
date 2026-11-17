@@ -5,6 +5,8 @@
     import { shownMapPlace, shownWeatherForecast } from "../../Phaser/Game/Weather/RealWeatherClient";
     import { FORECAST_HOURS } from "../../Phaser/Game/Weather/WeatherForecast";
     import type { ForecastCell } from "../../Phaser/Game/Weather/WeatherForecast";
+    import { compassPointOf, windArrowOf } from "../../Phaser/Game/Weather/WindDirection";
+    import type { CompassPoint, WindArrow } from "../../Phaser/Game/Weather/WindDirection";
     import { nightDateStore } from "../../Stores/NightStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
@@ -34,13 +36,35 @@
         return index === 0 && cell.windSpeed !== undefined;
     }
 
+    /** Where the wind of now comes from, given with its speed only (see `ForecastCell.windFrom`). */
+    function windPoint(cell: ForecastCell, index: number): CompassPoint | undefined {
+        return showsWind(cell, index) && cell.windFrom !== undefined ? compassPointOf(cell.windFrom) : undefined;
+    }
+
+    /** "NW 22 km/h", or "22 km/h" without a direction. */
+    function windText(speed: number, point: CompassPoint | undefined): string {
+        const shown = $LL.actionbar.weatherBanner.windSpeed({ speed });
+        return point ? `${$LL.actionbar.weatherBanner.windPoint[point]()} ${shown}` : shown;
+    }
+
+    function windArrowStyle(arrow: WindArrow): string {
+        return `rotate(${arrow.quarterTurns * 90}deg)`;
+    }
+
     function label(cell: ForecastCell, index: number, look: { name: WeatherType } | undefined): string {
         const weather = look
             ? weatherName($LL.mapEditor.settings.weather, look.name)
             : $LL.actionbar.weatherBanner.unknown();
-        return showsWind(cell, index)
-            ? $LL.actionbar.weatherBanner.cellWithWind({ when: when(index), weather, speed: cell.windSpeed })
-            : $LL.actionbar.weatherBanner.cell({ when: when(index), weather });
+        if (!showsWind(cell, index)) return $LL.actionbar.weatherBanner.cell({ when: when(index), weather });
+        const point = windPoint(cell, index);
+        return point
+            ? $LL.actionbar.weatherBanner.cellWithWindFrom({
+                  when: when(index),
+                  weather,
+                  from: $LL.actionbar.weatherBanner.windFrom[point](),
+                  speed: cell.windSpeed,
+              })
+            : $LL.actionbar.weatherBanner.cellWithWind({ when: when(index), weather, speed: cell.windSpeed });
     }
 
     function when(index: number): string {
@@ -78,34 +102,69 @@
                     >
                 {/if}
                 {#if showsWind(cell, index)}
+                    {@const point = windPoint(cell, index)}
                     <!-- Wind for now only: three of them would not fit the banner on a narrow screen. -->
-                    <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        shape-rendering="crispEdges"
-                        aria-hidden="true"
-                        class="ms-1 shrink-0"
-                        data-testid="weather-banner-wind-icon"
-                    >
-                        <!-- three gusts with a curl at their end, in the 16x16 pixel art of the weather icons -->
-                        <g fill="#cfd8e3">
-                            <rect x="1" y="4" width="10" height="1" />
-                            <rect x="11" y="2" width="1" height="2" />
-                            <rect x="9" y="1" width="2" height="1" />
-                            <rect x="1" y="8" width="13" height="1" />
-                            <rect x="14" y="6" width="1" height="2" />
-                            <rect x="12" y="5" width="2" height="1" />
-                            <rect x="3" y="12" width="8" height="1" />
-                            <rect x="11" y="13" width="1" height="1" />
-                            <rect x="9" y="14" width="2" height="1" />
-                        </g>
-                    </svg>
+                    {#if point}
+                        {@const arrow = windArrowOf(point)}
+                        <!-- An arrow to where the wind goes, north up as on the map, in place of the gusts: it says
+                             there is wind as well, and both would crowd the banner. -->
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            shape-rendering="crispEdges"
+                            aria-hidden="true"
+                            class="ms-1 shrink-0"
+                            style:transform={windArrowStyle(arrow)}
+                            data-towards={arrow.towards}
+                            data-testid="weather-banner-wind-arrow"
+                        >
+                            <g fill="#cfd8e3">
+                                {#if arrow.diagonal}
+                                    <!-- pointing north-east: a two-pixel head in the corner and a stepped shaft -->
+                                    <rect x="7" y="2" width="7" height="2" />
+                                    <rect x="12" y="2" width="2" height="7" />
+                                    {#each [0, 1, 2, 3, 4, 5, 6, 7] as step (step)}
+                                        <rect x={3 + step} y={12 - step} width="2" height="1" />
+                                    {/each}
+                                {:else}
+                                    <!-- pointing north: a head of four rows and a shaft two pixels wide -->
+                                    <rect x="7" y="1" width="2" height="1" />
+                                    <rect x="6" y="2" width="4" height="1" />
+                                    <rect x="5" y="3" width="6" height="1" />
+                                    <rect x="4" y="4" width="8" height="1" />
+                                    <rect x="7" y="5" width="2" height="10" />
+                                {/if}
+                            </g>
+                        </svg>
+                    {:else}
+                        <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            shape-rendering="crispEdges"
+                            aria-hidden="true"
+                            class="ms-1 shrink-0"
+                            data-testid="weather-banner-wind-icon"
+                        >
+                            <!-- three gusts with a curl at their end, in the 16x16 pixel art of the weather icons -->
+                            <g fill="#cfd8e3">
+                                <rect x="1" y="4" width="10" height="1" />
+                                <rect x="11" y="2" width="1" height="2" />
+                                <rect x="9" y="1" width="2" height="1" />
+                                <rect x="1" y="8" width="13" height="1" />
+                                <rect x="14" y="6" width="1" height="2" />
+                                <rect x="12" y="5" width="2" height="1" />
+                                <rect x="3" y="12" width="8" height="1" />
+                                <rect x="11" y="13" width="1" height="1" />
+                                <rect x="9" y="14" width="2" height="1" />
+                            </g>
+                        </svg>
+                    {/if}
                     <span
                         class="tabular-nums"
                         style:font-family="var(--ui-font-system)"
-                        data-testid="weather-banner-wind"
-                        >{$LL.actionbar.weatherBanner.windSpeed({ speed: cell.windSpeed })}</span
+                        data-testid="weather-banner-wind">{windText(cell.windSpeed, point)}</span
                     >
                 {/if}
             </div>
