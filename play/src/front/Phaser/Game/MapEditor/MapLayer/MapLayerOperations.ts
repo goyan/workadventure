@@ -280,17 +280,24 @@ export function floodFillCells(
 }
 
 const VERTICAL_WALL_HIT_WIDTH = 8;
+/** The eraser hits a vertical wall a little wider: it is only 12 px thick, easy to miss. */
+export const ERASER_VERTICAL_HIT_WIDTH = 10;
 
 /**
  * Wall segment under a world position, for the eraser. A vertical wall is thin: it is hit within a few pixels
  * of its line. A facade is hit anywhere on its cap and face.
  */
-export function wallAtPoint(model: MapLayerModel, worldX: number, worldY: number): WallEdgeRef | undefined {
+export function wallAtPoint(
+    model: MapLayerModel,
+    worldX: number,
+    worldY: number,
+    verticalHitWidth = VERTICAL_WALL_HIT_WIDTH,
+): WallEdgeRef | undefined {
     const size = MAP_LAYER_TILE_SIZE;
     // The strip of the row y spans from the joint of its first vertex to the joint of the next one.
     const row = Math.floor((worldY - WALL_THICKNESS) / size);
     const nearestLine = Math.round(worldX / size);
-    if (Math.abs(worldX - nearestLine * size) <= VERTICAL_WALL_HIT_WIDTH && model.hasWall("v", nearestLine, row)) {
+    if (Math.abs(worldX - nearestLine * size) <= verticalHitWidth && model.hasWall("v", nearestLine, row)) {
         return { orientation: "v", x: nearestLine, y: row };
     }
     // The facade of the line y fills the tile row y.
@@ -372,8 +379,9 @@ export function eraseAt(
     worldX: number,
     worldY: number,
     keptEdges: Set<string> = new Set(),
+    verticalHitWidth = VERTICAL_WALL_HIT_WIDTH,
 ): boolean {
-    const wall = wallAtPoint(model, worldX, worldY);
+    const wall = wallAtPoint(model, worldX, worldY, verticalHitWidth);
     if (wall) {
         if (keptEdges.has(edgeKey(wall.orientation, wall.x, wall.y))) {
             return false;
@@ -405,8 +413,13 @@ export type EraseTarget =
     | { kind: "wall"; wall: WallEdgeRef }
     | { kind: "floor"; cell: Point };
 
-export function eraseTargetAt(model: MapLayerModel, worldX: number, worldY: number): EraseTarget | undefined {
-    const wall = wallAtPoint(model, worldX, worldY);
+export function eraseTargetAt(
+    model: MapLayerModel,
+    worldX: number,
+    worldY: number,
+    verticalHitWidth = VERTICAL_WALL_HIT_WIDTH,
+): EraseTarget | undefined {
+    const wall = wallAtPoint(model, worldX, worldY, verticalHitWidth);
     if (wall) {
         const door = model.getDoorOn(wall.orientation, wall.x, wall.y);
         if (door) return { kind: "door", door };
@@ -416,6 +429,46 @@ export function eraseTargetAt(model: MapLayerModel, worldX: number, worldY: numb
     }
     const cell = cellAt(worldX, worldY);
     return model.getFloor(cell.x, cell.y) ? { kind: "floor", cell } : undefined;
+}
+
+/**
+ * The wall segments an eraser drag removes: the line of the wall it starts on (the row of a horizontal wall, the column
+ * of a vertical one), from the start tile to the end tile, as the wall mode draws a line. Undefined when the drag
+ * starts on no wall: it erases floors.
+ */
+export function wallEdgesToErase(model: MapLayerModel, start: Point, end: Point): WallEdgeRef[] | undefined {
+    const first = wallAtPoint(model, start.x, start.y, ERASER_VERTICAL_HIT_WIDTH);
+    if (!first) return undefined;
+    const size = MAP_LAYER_TILE_SIZE;
+    const target = first.orientation === "h" ? Math.floor(end.x / size) : Math.floor((end.y - WALL_THICKNESS) / size);
+    const from = first.orientation === "h" ? first.x : first.y;
+    const edges: WallEdgeRef[] = [];
+    for (let at = Math.min(from, target); at <= Math.max(from, target); at++) {
+        const edge: WallEdgeRef =
+            first.orientation === "h"
+                ? { orientation: "h", x: at, y: first.y }
+                : { orientation: "v", x: first.x, y: at };
+        if (model.hasWall(edge.orientation, edge.x, edge.y)) edges.push(edge);
+    }
+    return edges;
+}
+
+/** Removes the walls of an eraser drag (wallEdgesToErase), with the doors and windows they carry; floors stay. */
+export function eraseWallsAlong(model: MapLayerModel, start: Point, end: Point): void {
+    for (const edge of wallEdgesToErase(model, start, end) ?? []) {
+        model.removeWall(edge.orientation, edge.x, edge.y);
+    }
+}
+
+/** Removes the floors an eraser drag started on a floor passes over: its straight line and the tiles visited; walls stay. */
+export function eraseFloorsAlong(model: MapLayerModel, start: Point, end: Point, path: readonly Point[]): void {
+    // Steps shorter than a tile, so no tile of the line is jumped over.
+    const steps = Math.max(1, Math.ceil(Math.hypot(end.x - start.x, end.y - start.y) / 8));
+    for (let step = 0; step <= steps; step++) {
+        const cell = cellAt(start.x + ((end.x - start.x) * step) / steps, start.y + ((end.y - start.y) * step) / steps);
+        model.removeFloor(cell.x, cell.y);
+    }
+    for (const cell of path) model.removeFloor(cell.x, cell.y);
 }
 
 /** Pixel rectangle of a door itself: its opening along the wall (the swinging leaves are not counted). */

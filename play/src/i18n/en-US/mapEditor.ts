@@ -492,7 +492,7 @@ const mapEditor: BaseTranslation = {
             door: "Click on a wall to turn two of its segments into a door. It opens when someone comes near.",
             window: "Click or drag along a horizontal wall to put windows in it. You can see through them. Drag a placed window to move it.",
             height: "Click a wall, a door or a window (or drag along a wall) to select it, then choose its height.",
-            erase: "Hold the button to erase walls and floors. Objects are kept.",
+            erase: "Start on a wall and drag along it to erase its segments (doors and windows included), or start on a floor to erase floors. A click erases what is under the cursor. Objects are kept.",
         },
         floors: "Floor",
         walls: "Wall style",

@@ -58,7 +58,6 @@ import { applyHeight, buildHeightPicker, selectionHeight } from "../MapLayer/Map
 import type { HeightPicker, HeightTarget } from "../MapLayer/MapLayerHeightEdit";
 import type { MapLayerPlacement, PlacedMapLayerEntity } from "../MapLayer/MapLayerAutotile";
 import type { MapLayerModel } from "../MapLayer/MapLayerModel";
-import { cellKey } from "../MapLayer/MapLayerModel";
 import {
     applyDoorPlan,
     applyFloor,
@@ -70,8 +69,12 @@ import {
     cellsBetween,
     doorPixelRect,
     doorUnderPoint,
+    ERASER_VERTICAL_HIT_WIDTH,
     eraseAt,
+    eraseFloorsAlong,
     eraseTargetAt,
+    eraseWallsAlong,
+    wallEdgesToErase,
     floodFillCells,
     lineWallEdges,
     modelFromPlacedPrefabs,
@@ -644,38 +647,21 @@ export class MapLayerEditorTool extends MapEditorTool {
             case "height":
                 // The height mode selects on pointer up; a height is applied from the panel.
                 return undefined;
-            case "erase":
-                return (model) => {
-                    const keptEdges = new Set<string>();
-                    // The tiles where a door has been erased: the floor of a tile is not erased with a door that stands on it.
-                    const doorTiles = new Set<string>();
-                    // Walk along the drag in steps shorter than a wall so no thin wall is jumped over.
-                    const steps = Math.max(
-                        1,
-                        Math.ceil(
-                            Math.hypot(worldPath.end.x - worldPath.start.x, worldPath.end.y - worldPath.start.y) / 4,
-                        ),
-                    );
-                    for (let step = 0; step <= steps; step++) {
-                        const ratio = step / steps;
-                        const x = worldPath.start.x + (worldPath.end.x - worldPath.start.x) * ratio;
-                        const y = worldPath.start.y + (worldPath.end.y - worldPath.start.y) * ratio;
-                        if (eraseAt(model, x, y, keptEdges)) {
-                            const tile = cellAt(x, y);
-                            doorTiles.add(cellKey(tile.x, tile.y));
-                        }
-                    }
-                    // A freehand erase passes through every tile of the path, not only the straight line.
-                    for (const cell of path) {
-                        if (doorTiles.has(cellKey(cell.x, cell.y))) continue;
-                        eraseAt(
-                            model,
-                            cell.x * MAP_LAYER_TILE_SIZE + MAP_LAYER_TILE_SIZE / 2,
-                            cell.y * MAP_LAYER_TILE_SIZE + MAP_LAYER_TILE_SIZE / 2,
-                            keptEdges,
-                        );
-                    }
-                };
+            case "erase": {
+                // What the press starts on decides what is erased: from a wall, the walls of its line (floors stay);
+                // from a floor, the floors passed over (walls stay).
+                const walls = wallEdgesToErase(gesture.baseModel, worldPath.start, worldPath.end);
+                if (walls === undefined) {
+                    return (model) => eraseFloorsAlong(model, worldPath.start, worldPath.end, path);
+                }
+                if (walls.length <= 1) {
+                    // A click: what is under the cursor, a door or a window before its wall.
+                    return (model) => {
+                        eraseAt(model, worldPath.start.x, worldPath.start.y, new Set(), ERASER_VERTICAL_HIT_WIDTH);
+                    };
+                }
+                return (model) => eraseWallsAlong(model, worldPath.start, worldPath.end);
+            }
         }
     }
 
@@ -894,7 +880,7 @@ export class MapLayerEditorTool extends MapEditorTool {
     /** The thing the eraser would remove under the cursor, in red; a white outline of the tile when there is nothing. */
     private drawEraseHover(graphics: Phaser.GameObjects.Graphics, model: MapLayerModel, world: Point): void {
         const size = MAP_LAYER_TILE_SIZE;
-        const target = eraseTargetAt(model, world.x, world.y);
+        const target = eraseTargetAt(model, world.x, world.y, ERASER_VERTICAL_HIT_WIDTH);
         if (!target) {
             const cell = cellAt(world.x, world.y);
             graphics.lineStyle(2, 0xffffff, 0.8).strokeRect(cell.x * size, cell.y * size, size, size);

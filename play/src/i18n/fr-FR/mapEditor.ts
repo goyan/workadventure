@@ -503,7 +503,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             door: "Cliquez sur un mur pour transformer deux de ses segments en porte. Elle s’ouvre quand quelqu’un s’approche.",
             window: "Cliquez ou glissez le long d’un mur horizontal pour y poser des fenêtres. On voit à travers. Glissez une fenêtre posée pour la déplacer.",
             height: "Cliquez sur un mur, une porte ou une fenêtre (ou glissez le long d’un mur) pour le sélectionner, puis choisissez sa hauteur.",
-            erase: "Maintenez le bouton pour effacer murs et sols. Les objets restent.",
+            erase: "Partez d’un mur et glissez le long pour effacer ses segments (portes et fenêtres comprises), ou partez d’un sol pour effacer des sols. Un clic efface ce qui est sous le curseur. Les objets restent.",
         },
         floors: "Sol",
         walls: "Style de mur",
