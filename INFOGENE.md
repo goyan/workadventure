@@ -2064,6 +2064,16 @@ masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
 voile de nuit d'un cinquième (30 % au plus avec une intensité réglée plus haut, `moonlitNightOpacity`), rien par
 nouvelle lune.
 
+**Ce qui bouge** (`SkyMovingShadows`) : chaque avatar dehors a sa vraie silhouette couchée au sol à l'opposé de
+l'astre (ses calques dessinés dans un petit canevas rempli de la couleur des ombres, refait seulement quand un calque
+change d'image ; image tournée et étirée depuis ses pieds, `fallenShadowPose`) ; chaque animal promeneur a un ovale
+(`ovalShadowPose`). Une petite image par personnage, qui le suit : rien de la carte n'est redessiné. Pas d'ombre pour
+un avatar invisible, à la nage, sur un palier ou dans une pièce ; ovale de repli si ses calques ne sont pas lisibles.
+Les petits éléments du catalogue nature (rochers, herbes, fleurs, souches) projettent une petite ombre ronde, avec
+les ombres fixes. **Par catégorie** (Paramètres → Ambiance → « Ce qui projette une ombre », personnel, gardé dans le
+navigateur) : murs, meubles et objets hauts, arbres, petits éléments, avatars, animaux, pour le soleil comme pour la
+lune. Limites : silhouette d'un avatar non coupée au bord d'une pièce, véhicule et compagnon sans ombre propre.
+
 **Ombres** (`SkyShadows/`) : les murs de l'outil Carte (pied du mur, hauteur = nombre de cases ; portes et fenêtres
 comptées comme mur), les objets `castsShadow` (rectangles de collision, 1,5 case de haut) et les arbres du catalogue nature (`Nature:tree-*`, et les `nature-`, `snow-tree-`, `seasonal-`, `winter-auto-` de deux cases de haut ou plus)
 (houppier rond sur un tronc) projettent sur le sol leur pied balayé à l'opposé de l'astre, longueur hauteur /
