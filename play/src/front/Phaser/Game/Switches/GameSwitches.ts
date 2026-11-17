@@ -7,7 +7,7 @@ import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
 import type { Entity } from "../../ECS/Entity";
 import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
 import type { GameScene } from "../GameScene";
-import { toLampZone, zoneOf } from "../Lamps/LampJam";
+import { toLampZone } from "../Lamps/LampJam";
 import { lampSource } from "../Lamps/LampReconcile";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
@@ -15,7 +15,13 @@ import { SwitchIndicator } from "./SwitchIndicator";
 import { SwitchAnimalReporter, sensorsWithAnimals, type AnimalSensor } from "./SwitchAnimalReports";
 import { syncedSensorProperty } from "./SwitchSensorSync";
 import { SwitchWiringView, wiringOf, type SwitchWatchShape } from "./SwitchWiringView";
-import { entityStateKeysOf, resolveSwitchTargets, switchPressValue, type SwitchableTarget } from "./SwitchTargets";
+import {
+    entityStateKeysOf,
+    resolveSwitchTargets,
+    roomIdAt,
+    switchPressValue,
+    type SwitchableTarget,
+} from "./SwitchTargets";
 
 /** The switches of the map are looked for this often: one appears or goes as the map is edited. */
 const RECONCILE_INTERVAL_MS = 250;
@@ -42,6 +48,7 @@ export class GameSwitches {
     private states: EntityStatesManager | undefined;
     private lastReconcileAt: number | undefined;
     private switches: Entity[] = [];
+    private candidates: SwitchableTarget[] | undefined;
     private readonly wiringView: SwitchWiringView;
     private readonly animalReporter = new SwitchAnimalReporter();
 
@@ -52,25 +59,48 @@ export class GameSwitches {
 
     /** The objects this switch commands now. */
     public targetsOf(entity: Entity, property: SwitchPropertyData): SwitchableTarget[] {
+        const roomId = property.targets.mode === "zone" ? this.roomIdOf(entity, true) : undefined;
+        return resolveSwitchTargets(property, roomId, entity.getElevation(), this.candidates ?? this.readCandidates());
+    }
+
+    /**
+     * The objects of the map that can be switched, each with its room. Read again a few times a second (see
+     * reconcile): the small lights of the switches are drawn at every image and must not read the whole map then.
+     */
+    private readCandidates(): SwitchableTarget[] {
+        const areas = mapRoomAreas(this.scene);
         const candidates: SwitchableTarget[] = [];
         for (const [id, candidate] of this.entities()) {
             const keys = entityStateKeysOf(candidate.getPrefab());
-            if (keys.length > 0) {
-                candidates.push({
-                    id,
-                    point: lampSource(candidate, candidate.getPrefab().lamp?.anchor),
-                    elevation: candidate.getElevation(),
-                    keys,
-                });
+            if (keys.length === 0) {
+                continue;
             }
+            const point = lampSource(candidate, candidate.getPrefab().lamp?.anchor);
+            const elevation = candidate.getElevation();
+            candidates.push({
+                id,
+                point,
+                elevation,
+                keys,
+                roomId: roomIdAt(point, roomZonesAt(this.scene, areas, elevation, point)),
+            });
         }
+        this.candidates = candidates;
+        return candidates;
+    }
+
+    /**
+     * The room a switch is in: an area of its floor, or (`withFloors`) the raised floor it stands on. A switch
+     * against a wall of a room is in that room (see roomIdAt).
+     */
+    private roomIdOf(entity: Entity, withFloors: boolean): string | undefined {
         const point = footOf(entity);
         const elevation = entity.getElevation();
-        const room =
-            property.targets.mode === "zone"
-                ? zoneOf(point, roomZonesAt(this.scene, mapRoomAreas(this.scene), elevation, point))
-                : undefined;
-        return resolveSwitchTargets(property, room, elevation, candidates);
+        const areas = mapRoomAreas(this.scene);
+        const rooms = withFloors
+            ? roomZonesAt(this.scene, areas, elevation, point)
+            : areas.filter((area) => isAtAreaLevel(area, elevation)).map(toLampZone);
+        return roomIdAt(point, rooms);
     }
 
     /** What activating the switch does, for the menu of the object; undefined when this player may not use it. */
@@ -112,12 +142,9 @@ export class GameSwitches {
         };
     }
 
-    /** The smallest area of its floor the switch stands in: the room a sensor of its room watches. */
+    /** The area of its floor the switch is in: the room a sensor of its room watches (an area the server knows). */
     public roomAreaIdOf(entity: Entity): string | undefined {
-        const point = footOf(entity);
-        const elevation = entity.getElevation();
-        const areas = mapRoomAreas(this.scene).filter((area) => isAtAreaLevel(area, elevation));
-        return zoneOf(point, areas.map(toLampZone))?.areaId;
+        return this.roomIdOf(entity, false);
     }
 
     /**
@@ -261,6 +288,7 @@ export class GameSwitches {
     }
 
     private reconcile(): void {
+        this.readCandidates();
         this.switches = [...this.entities().values()].filter((entity) => switchPropertyOf(entity) !== undefined);
         const ids = new Set(this.switches.map((entity) => entity.entityId));
         let removed = false;
