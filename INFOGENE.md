@@ -336,6 +336,34 @@ n'a pas de position à lui (comme un va-et-vient).
   s'éteint en fondu de 200 ms (aussitôt si le système demande moins d'animations). Une lampe éteinte ne donne plus
   aucune lumière et ne perce plus le voile de nuit ; une lampe en rotation ne tourne plus. Dans l'éditeur, toutes les
   lampes restent allumées pour pouvoir les régler.
+- **Déclencheurs automatiques** (menu **Déclencheur** du panneau ; objets **Capteur de présence** et **Minuterie** de
+  la section Lampes, prêts à l'emploi) :
+  - **Présence** : quelqu'un **dans cette pièce** (la plus petite zone du niveau du capteur), **dans la zone**
+    choisie dans la liste des zones nommées, **autour du capteur** (1 à 20 cases, 3 par défaut) ou **dans un cône
+    devant le capteur** (direction en degrés, 90 = vers le bas, ouverture 10° à 360°, portée en cases, comme le
+    faisceau d'une lampe). Les lampes s'éteignent après un délai sans personne (0 à 600 s, **30 s** par défaut). Les
+    avatars comptent, et les **animaux promeneurs** (posés sur la carte, de la jungle, apprivoisés) ; un capteur ne
+    sent que son niveau, les animaux sont au sol ; les murs ne comptent pas.
+  - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure de Paris**, peut passer minuit ; pas de jours de la semaine.
+  - Capteur sélectionné dans l'éditeur : la zone, le disque ou le cône qu'il surveille est dessiné en bleu.
+  - Un capteur ou une minuterie ne s'actionne pas à la main.
+  - **Lampe à capteur intégré** : sur une lampe RGB, bouton **Ajouter un capteur à cette lampe** (elle s'allume quand
+    quelqu'un est à moins de 3 cases, s'éteint 30 s après). Ajouter la propriété Interrupteur à une lampe la câble sur
+    elle-même ; on peut lui ajouter d'autres lampes.
+  - **Plusieurs déclencheurs sur une lampe** : elle est allumée tant qu'au moins un tient (quelqu'un détecté, ou dans
+    la plage). **Interrupteur manuel et capteur** : le geste tient tant que rien ne change côté déclencheurs — j'éteins
+    à la main, ça reste éteint tant que la pièce est occupée ; pièce vidée puis réoccupée, le capteur rallume.
+  - Une lampe à déclencheur est **éteinte** quand personne n'est détecté et hors plage, y compris à l'ouverture de
+    la salle : poser un capteur éteint la pièce vide.
+  - **Qui décide** : le serveur, une fois par seconde, pour les seuls objets à déclencheur (`SwitchTriggerEvaluator`) ;
+    il écrit dans le même magasin d'état. Il ne sait pas ce qu'est une lampe ni la taille d'un objet : l'**éditeur
+    ouvert** enregistre dans la carte la pièce du capteur (`trigger.areaId`) et ses lampes (`resolvedTargets`), et les
+    remet à jour quand on déplace le capteur ou qu'on ajoute une lampe (un pas d'annulation à part) ; le centre d'un
+    capteur est pris à une demi-case de son coin. Les animaux n'existent que dans les navigateurs : chacun signale au
+    serveur les capteurs où se trouve un de ses animaux (`ReportSwitchPresenceMessage`, répété toutes les 2 s, oublié
+    après 5 s) ; sans joueur connecté, aucun animal ne compte.
+  - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; pas de fuseau du lieu de la carte ; un
+    client modifié peut tenir un capteur allumé en signalant un animal.
 - **Par défaut tout est allumé** : une carte faite avant les interrupteurs ne change pas.
 - **Copier, coller** : un interrupteur collé avec ses lampes commande les copies ; les lampes choisies qui n'ont pas
   été copiées avec lui sont retirées de la copie. Un motif ne garde pas les lampes choisies (utiliser le mode pièce).
@@ -355,7 +383,7 @@ n'a pas de position à lui (comme un va-et-vient).
 - **Cadre pour la suite** : les états possibles sont une liste fermée (`ENTITY_STATE_KEYS`, aujourd'hui `on`) et le
   genre d'objet qui les porte se déclare à un seul endroit (`entityStateKeysOf`). Un volet (`open`) s'y ajoutera sans
   nouveau message. Les lampes de Jam et la piste de danse suivent la musique et ne sont pas commandées. Les règles
-  automatiques (présence, proximité, horaires) ne sont pas faites.
+  automatiques (présence, cône, horaires) sont décrites plus haut.
 
 ## Paroles de karaoké
 
