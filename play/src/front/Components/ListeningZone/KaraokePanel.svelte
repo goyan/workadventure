@@ -41,6 +41,7 @@
         onreplacelink,
         linkSave,
         audience,
+        stage,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
@@ -55,6 +56,7 @@
         /** Where the host's last new invite link stands (kept by the controller). */
         linkSave?: JamLinkSave;
         audience?: Snippet;
+        stage?: Snippet;
     } = $props();
 
     let loadState = $derived(loader.state);
@@ -304,8 +306,10 @@
                 <p class="m-0 truncate text-white/70">· {room.jam.title ?? room.jam.hostName}</p>
             </div>
             {#if track}
-                <p class="m-0 truncate text-base font-bold leading-tight" title={track.title}>{track.title}</p>
-                <p class="m-0 truncate text-sm text-white/70" title={track.artist}>{track.artist}</p>
+                <p dir="auto" class="m-0 truncate text-base font-bold leading-tight" title={track.title}>
+                    {track.title}
+                </p>
+                <p dir="auto" class="m-0 truncate text-sm text-white/70" title={track.artist}>{track.artist}</p>
             {/if}
         </div>
         <button
@@ -319,6 +323,9 @@
     </div>
     {#if audience}
         <div class="shrink-0 px-4 pt-3">{@render audience()}</div>
+    {/if}
+    {#if stage}
+        <div class="shrink-0 px-4 pt-3">{@render stage()}</div>
     {/if}
     {#if mine && linkSave}
         <p
@@ -406,6 +413,7 @@
                 {#if lines.length}
                     {#each lines as line, index (index)}
                         <p
+                            dir="auto"
                             data-line={index}
                             aria-current={index === active ? "true" : undefined}
                             class="karaoke-line m-0 min-h-7 py-2 text-center text-lg font-bold leading-snug {!following
@@ -426,9 +434,16 @@
                         </p>
                     {/each}
                 {:else}
-                    <p class="m-0 whitespace-pre-line py-3 text-base leading-relaxed text-white/90">
-                        {found.plainLyrics}
-                    </p>
+                    <div class="py-3">
+                        {#each found.plainLyrics.split(/\r?\n/) as line, index (index)}
+                            <p
+                                dir="auto"
+                                class="karaoke-plain-line m-0 min-h-6 text-base leading-relaxed text-white/90"
+                            >
+                                {line}
+                            </p>
+                        {/each}
+                    </div>
                 {/if}
             </div>
             {#if manualScroll && following}
@@ -586,6 +601,12 @@
         -webkit-background-clip: text;
         background-clip: text;
         transition: background-size 250ms linear;
+    }
+    .karaoke-line:dir(rtl) .karaoke-fill {
+        background-position: right top;
+    }
+    .karaoke-plain-line {
+        text-align: start;
     }
     .karaoke-track-progress {
         transition: width 250ms linear;

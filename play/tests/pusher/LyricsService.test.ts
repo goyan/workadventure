@@ -45,14 +45,136 @@ describe("LyricsService", () => {
         const fetchFn = vi
             .fn<typeof fetch>()
             .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])))
             .mockResolvedValueOnce(new Response(null, { status: 404 }));
         const service = new LyricsService(fetchFn);
         expect(await service.get(track)).toEqual({ status: "missing" });
         expect(await service.get(track)).toEqual({ status: "missing" });
+        expect(fetchFn).toHaveBeenCalledTimes(3);
+        const input = fetchFn.mock.calls[2][0];
+        const url = new URL(input instanceof Request ? input.url : input);
+        expect(url.origin).toBe("https://api.lyrics.ovh");
+    });
+
+    it("finds collaborations missing from the exact catalogue lookup", async () => {
+        const collaboration = {
+            title: "Bienvenue chez les bylkas",
+            artist: "Sinik, Big Ali, Cheb Bilal",
+            album: "Raï'n'B Fever 3",
+            durationMs: 244_000,
+        };
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify([
+                        {
+                            trackName: "bienvenue chez les bylkas",
+                            artistName: "sinik feat big ali  cheb bilal",
+                            albumName: "ranb fever 3",
+                            duration: 243,
+                            plainLyrics: "Plain line",
+                            syncedLyrics: null,
+                            instrumental: false,
+                        },
+                    ]),
+                ),
+            );
+        expect(await new LyricsService(fetchFn).get(collaboration)).toMatchObject({
+            status: "found",
+            source: "lrclib",
+            plainLyrics: "Plain line",
+            syncedLyrics: "",
+        });
         expect(fetchFn).toHaveBeenCalledTimes(2);
         const input = fetchFn.mock.calls[1][0];
         const url = new URL(input instanceof Request ? input.url : input);
-        expect(url.origin).toBe("https://api.lyrics.ovh");
+        expect(url.searchParams.get("artist_name")).toBe("Sinik");
+    });
+
+    it("prefers synced lyrics and tolerates accents, apostrophes and featured credits", async () => {
+        const candidate = {
+            ...lyrics,
+            trackName: "L’ete",
+            artistName: "Test artist",
+            albumName: track.album,
+            duration: 200,
+        };
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify([
+                        { ...candidate, syncedLyrics: null },
+                        { ...candidate, albumName: "Compilation" },
+                    ]),
+                ),
+            );
+        expect(await new LyricsService(fetchFn).get({ ...track, title: "L'été (feat. Guest)" })).toMatchObject({
+            status: "found",
+            syncedLyrics: lyrics.syncedLyrics,
+            source: "lrclib",
+        });
+    });
+
+    it("rejects other singers, live versions and incompatible or unknown durations before the plain fallback", async () => {
+        const candidate = {
+            ...lyrics,
+            trackName: track.title,
+            artistName: track.artist,
+            duration: 200,
+        };
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify([
+                        { ...candidate, artistName: "Cover artist" },
+                        { ...candidate, trackName: `${track.title} (Live)` },
+                        { ...candidate, duration: 204 },
+                        { ...candidate, duration: null },
+                    ]),
+                ),
+            )
+            .mockResolvedValueOnce(new Response(JSON.stringify({ lyrics: "Fallback line" })));
+        expect(await new LyricsService(fetchFn).get(track)).toMatchObject({
+            status: "found",
+            plainLyrics: "Fallback line",
+            syncedLyrics: "",
+            source: "lyrics.ovh",
+        });
+    });
+
+    it("uses the main artist and title without featured credits for the plain provider", async () => {
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify([])))
+            .mockResolvedValueOnce(new Response(JSON.stringify({ lyrics: "Fallback line" })));
+        await new LyricsService(fetchFn).get({
+            ...track,
+            title: "Test song (feat. Guest)",
+            artist: "Test artist, Guest",
+        });
+        const input = fetchFn.mock.calls[2][0];
+        const url = new URL(input instanceof Request ? input.url : input);
+        expect(decodeURIComponent(url.pathname)).toBe("/v1/Test artist/Test song");
+    });
+
+    it("does not cache a failed search as a missing song or bypass its quota", async () => {
+        const fetchFn = vi
+            .fn<typeof fetch>()
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(new Response(null, { status: 500 }))
+            .mockResolvedValueOnce(new Response(null, { status: 404 }))
+            .mockResolvedValueOnce(new Response(null, { status: 429, headers: { "Retry-After": "120" } }));
+        const service = new LyricsService(fetchFn);
+        expect(await service.get(track)).toEqual({ status: "unavailable" });
+        expect(await service.get(track)).toEqual({ status: "limited", retryAfterMs: 120_000 });
+        expect(fetchFn).toHaveBeenCalledTimes(4);
     });
 
     it("honors Retry-After instead of retrying or calling another provider during a quota", async () => {

@@ -6,10 +6,12 @@ import {
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
+    KARAOKE_STAGE_STATE_EVENT,
+    KaraokeStageStateSchema,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
-import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
+import type { WAMFileFormat, AreaData, AreaDataProperty, KaraokeStageState } from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import type {
@@ -111,6 +113,7 @@ export class GameRoom implements BrothersFinder {
     // Users, sorted by ID
     private readonly users: SpatialMap<number, User>;
     private readonly usersByUuid = new Map<string, Set<User>>();
+    private readonly karaokeStages = new Map<string, KaraokeStageState>();
     // Users indexed by composite key (userUuid + tabId), used to detect reconnections from the same tab
     // and immediately kill stale connections instead of waiting for ping timeout
     private readonly usersByTabKey = new Map<string, User>();
@@ -495,6 +498,7 @@ export class GameRoom implements BrothersFinder {
             set.delete(user);
             if (set.size === 0) {
                 this.usersByUuid.delete(user.uuid);
+                this.karaokeStages.delete(user.uuid);
             }
         }
 
@@ -1735,7 +1739,24 @@ export class GameRoom implements BrothersFinder {
         this.privateMessages.send(sender, data);
     }
 
+    public getKaraokeStage(hostUuid: string): KaraokeStageState | undefined {
+        const stage = this.karaokeStages.get(hostUuid);
+        return stage?.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0 ? undefined : stage;
+    }
+
     public dispatchEvent(name: string, data: unknown, senderId: number | "RoomApi", targetUserIds: number[]): void {
+        if (name === KARAOKE_STAGE_STATE_EVENT) {
+            const parsed = KaraokeStageStateSchema.safeParse(data);
+            const sender = senderId === "RoomApi" ? undefined : this.getUserById(senderId);
+            if (!parsed.success || !sender || sender.uuid !== parsed.data.hostUuid) return;
+            const stage = parsed.data;
+            const jams = parseListeningZoneJams(
+                this.getAreaPropertyVariable(stage.areaId, stage.propertyId, LISTENING_ZONE_JAM_VARIABLE),
+            );
+            if (!jams.some((jam) => jam.hostUuid === sender.uuid)) return;
+            if (stage.singerUuid && this.getUsersByUuid(stage.singerUuid).size === 0) return;
+            this.karaokeStages.set(sender.uuid, stage);
+        }
         if (name === privateMessageEventName)
             throw new PrivateMessageRefusedError("Private messages require a dedicated query");
         if (targetUserIds.length === 0) {

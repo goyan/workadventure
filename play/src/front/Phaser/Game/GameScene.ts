@@ -231,6 +231,7 @@ import { jamAudioSession } from "@wa/front/ListeningZone/GameJamAudioSession";
 import { startHomeJam } from "@wa/front/Spotify/HomeJam";
 import type { HomeJamContext } from "@wa/front/Spotify/HomeJam";
 import { startJamKaraoke } from "@wa/front/Karaoke/JamKaraoke";
+import { startKaraokeStage } from "@wa/front/Karaoke/KaraokeStage";
 import { startJamLinkRequests } from "@wa/front/ListeningZone/JamLinkRequest";
 import { notifySystem } from "@wa/front/Notification/SystemNotifier";
 import type { UserProviderInterface } from "@wa/front/Chat/UserProvider/UserProviderInterface";
@@ -2341,6 +2342,7 @@ export class GameScene extends DirtyScene {
             desktop: window.WAD,
         };
         const stopHomeJam = startHomeJam(context);
+        const stopStage = startKaraokeStage(context);
         const stopKaraoke = startJamKaraoke({
             ...context,
             account: spotifyAccount,
@@ -2368,6 +2370,7 @@ export class GameScene extends DirtyScene {
         return () => {
             stopHomeJam();
             stopKaraoke();
+            stopStage();
             stopJamLinkRequests();
         };
     }

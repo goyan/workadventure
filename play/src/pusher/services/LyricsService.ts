@@ -21,6 +21,19 @@ const LrclibSearchResults = z
 type LrclibSearchResult = z.infer<typeof LrclibSearchResults>[number];
 const OvhLyrics = z.object({ lyrics: z.string().min(1).max(100_000) });
 
+function normalizeName(name: string): string {
+    return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+}
+
+function primaryArtist(artist: string): string {
+    return artist.split(/,\s+|\s+(?:feat\.?|ft\.?|featuring)\s+/i)[0].trim();
+}
+
+function songTitle(title: string): string {
+    // Featured credits vary across catalogues; live/remix/version labels must stay distinct.
+    return title.replace(/\s*[([](?:feat\.?|ft\.?|featuring)\s+[^)\]]+[)\]]\s*$/i, "").trim();
+}
+
 export type LyricsServiceResult =
     | LyricsResult
     | { status: "limited"; retryAfterMs: number }
@@ -122,13 +135,18 @@ export class LyricsService {
                 // A version chosen by hand in the panel only has a title and an artist: show it as is.
                 const automatic = Boolean(track.album) || track.durationMs !== undefined;
                 if (exact.instrumental || exact.syncedLyrics.trim() || !automatic) return exact;
-                return (await this.syncedEquivalent(track)) ?? exact;
+                const equivalent = await this.searchEquivalent(track, true);
+                return equivalent?.status === "found" ? equivalent : exact;
             }
         } else if (response.status !== 404) {
             return { status: "unavailable" };
         }
+        const equivalent = await this.searchEquivalent(track, false);
+        if (equivalent) return equivalent;
         const fallback = await this.providerRequest(
-            new URL(`https://api.lyrics.ovh/v1/${encodeURIComponent(track.artist)}/${encodeURIComponent(track.title)}`),
+            new URL(
+                `https://api.lyrics.ovh/v1/${encodeURIComponent(primaryArtist(track.artist))}/${encodeURIComponent(songTitle(track.title))}`,
+            ),
         );
         if (!(fallback instanceof Response)) return fallback;
         if (fallback.status === 404) return { status: "missing" };
@@ -149,17 +167,18 @@ export class LyricsService {
      * LRCLIB stores one entry per edition: the exact album may only have plain lyrics while another edition of the
      * same recording is synced. Any failure keeps the plain lyrics already found.
      */
-    private async syncedEquivalent(track: LyricsTrack): Promise<LyricsResult | undefined> {
+    private async searchEquivalent(track: LyricsTrack, syncedOnly: boolean): Promise<LyricsServiceResult | undefined> {
         try {
             const url = new URL("https://lrclib.net/api/search");
-            url.searchParams.set("track_name", track.title);
-            url.searchParams.set("artist_name", track.artist);
+            url.searchParams.set("track_name", songTitle(track.title));
+            url.searchParams.set("artist_name", primaryArtist(track.artist));
             const response = await this.providerRequest(url);
-            if (!(response instanceof Response) || !response.ok) return undefined;
+            if (!(response instanceof Response)) return response;
+            if (!response.ok) return { status: "unavailable" };
             const parsed = LrclibSearchResults.safeParse(await response.json());
-            if (!parsed.success) return undefined;
+            if (!parsed.success) return { status: "unavailable" };
             const same = (a: string | null | undefined, b: string | undefined) =>
-                a !== null && a !== undefined && b !== undefined && a.trim().toLowerCase() === b.trim().toLowerCase();
+                a !== null && a !== undefined && b !== undefined && normalizeName(a) === normalizeName(b);
             const seconds = track.durationMs === undefined ? undefined : track.durationMs / 1000;
             const gap = (candidate: LrclibSearchResult) =>
                 seconds === undefined
@@ -170,15 +189,29 @@ export class LyricsService {
             const candidates = parsed.data.filter(
                 (candidate) =>
                     !candidate.instrumental &&
-                    Boolean(candidate.syncedLyrics?.trim()) &&
+                    (syncedOnly
+                        ? Boolean(candidate.syncedLyrics?.trim())
+                        : Boolean(candidate.syncedLyrics?.trim() || candidate.plainLyrics?.trim())) &&
                     // The search is fuzzy: never take another song, whatever its duration.
-                    same(candidate.trackName, track.title) &&
-                    same(candidate.artistName, track.artist) &&
+                    same(
+                        candidate.trackName ? songTitle(candidate.trackName) : candidate.trackName,
+                        songTitle(track.title),
+                    ) &&
+                    same(
+                        candidate.artistName ? primaryArtist(candidate.artistName) : candidate.artistName,
+                        primaryArtist(track.artist),
+                    ) &&
                     (seconds === undefined || gap(candidate) <= 3),
             );
             const sameAlbum = (candidate: LrclibSearchResult) => (same(candidate.albumName, track.album) ? 0 : 1);
-            // Stable sort: with an unknown duration, the provider's order decides among equals.
-            const best = candidates.sort((a, b) => sameAlbum(a) - sameAlbum(b) || gap(a) - gap(b))[0];
+            const rank = (a: LrclibSearchResult, b: LrclibSearchResult): number =>
+                Number(!a.syncedLyrics?.trim()) - Number(!b.syncedLyrics?.trim()) ||
+                sameAlbum(a) - sameAlbum(b) ||
+                gap(a) - gap(b);
+            const best = candidates.reduce<LrclibSearchResult | undefined>(
+                (best, candidate) => (!best || rank(candidate, best) < 0 ? candidate : best),
+                undefined,
+            );
             if (!best) return undefined;
             return {
                 status: "found",
@@ -188,7 +221,7 @@ export class LyricsService {
                 source: "lrclib",
             };
         } catch {
-            return undefined;
+            return { status: "unavailable" };
         }
     }
 }

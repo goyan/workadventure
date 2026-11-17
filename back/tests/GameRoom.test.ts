@@ -14,6 +14,7 @@ import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import { parseSessionReplacedDetails, privateMessageEventName } from "@workadventure/shared-utils";
 import { mock } from "vitest-mock-extended";
+import { KARAOKE_STAGE_STATE_EVENT, LISTENING_ZONE_JAM_VARIABLE } from "@workadventure/map-editor";
 import type { ConnectCallback, DisconnectCallback } from "../src/Model/GameRoom";
 import { GameRoom } from "../src/Model/GameRoom";
 import { Point } from "../src/Model/Websocket/MessageUserPosition";
@@ -120,6 +121,43 @@ function createWorld(): Promise<GameRoom> {
 }
 
 describe("GameRoom", () => {
+    it("accepts a stage only from its active Jam host and only with a connected singer", async () => {
+        const world = await createWorld();
+        const host = await world.join(createMockUserSocket().socket, createJoinRoomMessage("host", 100, 100));
+        const guest = await world.join(createMockUserSocket().socket, createJoinRoomMessage("guest", 300, 300));
+        const stage = {
+            areaId: "zone",
+            propertyId: "prop",
+            hostUuid: "host",
+            enabled: true,
+            singerUuid: "guest",
+            turnId: "00000000-0000-4000-8000-000000000001",
+            queue: [],
+            applause: 0,
+        };
+        try {
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, host.id, []);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.setAreaPropertyVariable(
+                "zone",
+                "prop",
+                LISTENING_ZONE_JAM_VARIABLE,
+                JSON.stringify([{ home: true, hostUuid: "host", hostName: "Host" }]),
+            );
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, guest.id, []);
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, "RoomApi", []);
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, { ...stage, singerUuid: "absent" }, host.id, []);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.dispatchEvent(KARAOKE_STAGE_STATE_EVENT, stage, host.id, []);
+            expect(world.getKaraokeStage("host")).toEqual(stage);
+            world.leave(guest);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+            world.leave(host);
+            expect(world.getKaraokeStage("host")).toBeUndefined();
+        } finally {
+            world.destroy();
+        }
+    });
     it("expires invitation histories of departed senders while retaining current anti-spam limits", async () => {
         const world = await createWorld();
         vi.useFakeTimers();

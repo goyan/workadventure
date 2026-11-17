@@ -1,6 +1,4 @@
 <script lang="ts">
-    import { silentStore } from "../../Stores/MediaStore";
-
     import { gameManager } from "../../Phaser/Game/GameManager";
     import { chatVisibilityStore } from "../../Stores/ChatStore";
     import {
@@ -27,7 +25,6 @@
     import VisibilityChecker from "./VisibilityChecker.svelte";
     import ContextualMenuItems from "./MenuIcons/ContextualMenuItems.svelte";
     import CloseChatMenuItem from "./MenuIcons/CloseChatMenuItem.svelte";
-    import SilentBlock from "./SilentBlock.svelte";
     import PictureInPictureMenuItem from "./MenuIcons/PictureInPictureMenuItem.svelte";
 
     let rightDiv: HTMLDivElement | undefined = $state();
@@ -171,9 +168,5 @@
                 </div>
             {/snippet}
         </ResponsiveActionBar>
-        <!-- NAV : SILENT BLOCK -->
-        {#if $silentStore}
-            <SilentBlock />
-        {/if}
     </div>
 {/if}

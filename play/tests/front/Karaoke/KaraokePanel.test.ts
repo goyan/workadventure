@@ -246,6 +246,29 @@ describe("KaraokePanel", () => {
         expect(fill()).toBe("");
     });
 
+    it("lets each synced line resolve its own direction without reordering mixed Arabic and Latin words", async () => {
+        await settle();
+        request.mockResolvedValueOnce({
+            ...found,
+            syncedLyrics: "[00:01.00]مرحبا Spotify بالعالم\n[00:02.00]Hello بالعالم again",
+        });
+        flushSync(() => playback.set({ ...initial, track: { title: "Mixed song", artist: "Test artist" } }));
+        await settle();
+        const lines = [...target.querySelectorAll("[data-line]")];
+        expect(lines.map((line) => line.getAttribute("dir"))).toEqual(["auto", "auto"]);
+        expect(lines.map((line) => line.textContent)).toEqual(["مرحبا Spotify بالعالم", "Hello بالعالم again"]);
+    });
+
+    it("resolves the direction separately for each unsynchronized paragraph", async () => {
+        await settle();
+        request.mockResolvedValueOnce({ ...found, syncedLyrics: "", plainLyrics: "مرحبا Spotify\nHello بالعالم" });
+        flushSync(() => playback.set({ ...initial, track: { title: "Mixed plain song", artist: "Test artist" } }));
+        await settle();
+        const lines = [...target.querySelectorAll(".karaoke-plain-line")];
+        expect(lines.map((line) => line.getAttribute("dir"))).toEqual(["auto", "auto"]);
+        expect(lines.map((line) => line.textContent)).toEqual(["مرحبا Spotify", "Hello بالعالم"]);
+    });
+
     it("shows how far the track is only when its duration is known", async () => {
         await settle();
         expect(target.querySelector('[role="progressbar"]')).toBeNull();
