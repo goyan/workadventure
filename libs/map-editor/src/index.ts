@@ -16,6 +16,7 @@ export * from "./GameMap/GameMapAreas";
 export * from "./GameMap/WamFile";
 export * from "./GameMap/LayersFlattener";
 export * from "./EntitySound";
+export * from "./EntityStates";
 export * from "./ListeningZone/ListeningZoneJam";
 export * from "./ListeningZone/JamSpaceName";
 export * from "./types";

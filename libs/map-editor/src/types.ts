@@ -290,6 +290,33 @@ export const RgbLampPropertyData = PropertyBase.extend({
     intensity: z.number().min(RGB_LAMP_MIN_INTENSITY).max(RGB_LAMP_MAX_INTENSITY).optional().catch(undefined),
 });
 
+/**
+ * The states an object of the map may have, kept by the server (never in the WAM): a lamp is `on` or not. A closed
+ * list: a new kind of object that can be switched (a shutter that is `open`) adds its key here.
+ */
+export const ENTITY_STATE_KEYS = ["on"] as const;
+/** A switch commands at most this many objects. */
+export const SWITCH_MAX_TARGETS = 200;
+
+/** The objects a switch commands: the ones listed, or the ones of the room it stands in. */
+export const SwitchTargets = z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("ids"), ids: z.array(z.string()).max(SWITCH_MAX_TARGETS) }),
+    z.object({ mode: z.literal("zone") }),
+]);
+
+/**
+ * A switch: activating the object sets the state `key` of its targets. The wiring is in the WAM; the state itself is
+ * kept by the server (see EntityStates.ts). Several switches may command the same object: none has a position of
+ * its own, the state belongs to the target.
+ */
+export const SwitchPropertyData = PropertyBase.extend({
+    type: z.literal("switchPropertyData"),
+    key: z.enum(ENTITY_STATE_KEYS).default("on"),
+    targets: SwitchTargets.default({ mode: "zone" }),
+    /** Only the users with one of these tags may use the switch; everybody when absent or empty. */
+    allowedTags: z.array(z.string()).optional(),
+});
+
 export const MatrixRoomPropertyData = PropertyBase.extend({
     type: z.literal("matrixRoomPropertyData"),
     shouldOpenAutomatically: z.boolean(),
@@ -399,6 +426,7 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     GobeurPropertyData,
     LampPropertyData,
     RgbLampPropertyData,
+    SwitchPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -797,7 +825,8 @@ export type EntityDataPropertiesKeys =
     | "openWebsite"
     | "openFile"
     | "livekitRoomProperty"
-    | "lampPropertyData";
+    | "lampPropertyData"
+    | "switchPropertyData";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;
@@ -832,6 +861,8 @@ export type GobeurLevel = z.infer<typeof GobeurLevel>;
 export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
 export type LampPropertyData = z.infer<typeof LampPropertyData>;
 export type RgbLampPropertyData = z.infer<typeof RgbLampPropertyData>;
+export type SwitchTargets = z.infer<typeof SwitchTargets>;
+export type SwitchPropertyData = z.infer<typeof SwitchPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;
