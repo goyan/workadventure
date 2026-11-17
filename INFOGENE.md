@@ -2203,11 +2203,15 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   Auto, sur le palier dessiné sous elle) ; avec un niveau choisi, les zones des autres niveaux sont estompées et ne
   se saisissent plus ; en Auto, là où des zones de plusieurs niveaux se recouvrent, celles du palier sous le
   pointeur ; « Niveau de cette zone » dans le panneau d'une zone la déplace de niveau au-dessus du même endroit.
+- **Aussi par niveau de zone** : le droit de poser, déplacer ou supprimer un objet dans une zone (bureau perso,
+  zone à droits) se lit sur les zones du palier de l'objet, côté front et côté `map-storage` ; une zone n'est
+  allumée la nuit que par les joueurs de son palier ; une lampe ou une piste de danse se rattache à la zone
+  d'écoute de son palier ; les bruits de pas « dedans » suivent le palier du joueur. Une zone dessinée sur un palier
+  s'aligne sur la grille de ses dalles.
 - **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
-  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; droit de poser un objet dans
-  un bureau perso en hauteur (les droits lisent encore le sol) ; nuit, lampes d'une zone d'écoute, bruits de pas et
-  zone de départ ignorent le niveau d'une zone ; alignement d'une zone sur les dalles d'un palier ; images
-  définitives.
+  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; une zone de départ en
+  hauteur fait apparaître au sol ; déplacer ou redimensionner une zone d'étage à la souris suit la grille du sol ;
+  images définitives.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
 
