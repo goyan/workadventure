@@ -2005,7 +2005,9 @@ avec « Heure de mon ordinateur » ou `?nightAt`, l'heure est lue comme celle de
 panneau ; sauvegarder les applique à tous.
 
 **Bandeau** (menu des applications → « Météo », choix gardé dans le navigateur) : maintenant, +1 h et +4 h sous
-l'horloge, températures en mode Réel, programme saisonnier en Automatique.
+l'horloge, températures en mode Réel, programme saisonnier en Automatique. Pour « Maintenant », la vitesse du vent
+réel du lieu (km/h arrondis, `wind_speed_10m` déjà lu, aucune requête de plus), avec une petite icône de rafales ; rien
+si le vent est inconnu ; pas pour +1 h et +4 h, pour que le bandeau tienne sur un écran étroit.
 
 **Pusher** : `/real-weather` et `/real-weather/places`, authentifiés, 30 requêtes par minute et par joueur
 (`PerUserRateLimiter`, partagé avec les paroles) ; 20 nouveaux lieux et 30 recherches par minute pour tout le pusher,
