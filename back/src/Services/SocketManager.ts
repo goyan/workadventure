@@ -48,6 +48,7 @@ import type {
     DeleteSpaceUserToNotifyMessage,
     AbortQueryMessage,
     SetAreaPropertyVariableMessage,
+    SetEntityStateMessage,
     EntityMessage,
     BackEventMessage,
     ConnectToRoomMessage,
@@ -245,6 +246,7 @@ export class SocketManager {
             applications: user.applications ?? [],
             playerVariable: playerVariablesMessage,
             areaPropertyVariable: areaPropertyVariables,
+            entityState: room.getEntityStates(),
         };
 
         user.write({
@@ -324,6 +326,12 @@ export class SocketManager {
             // Note: We don't send an error back to the client as this is a security check
             // The client should have already verified permissions before allowing the action
         }
+    }
+
+    handleSetEntityStateEvent(room: GameRoom, user: User, message: SetEntityStateMessage): void {
+        // A press that is not valid (unknown switch, missing tag, too many presses) is ignored without an answer: the
+        // front only offers the presses that are.
+        room.pressSwitch(user, message);
     }
 
     handleEntityMessage(room: GameRoom, message: EntityMessage): void {

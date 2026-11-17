@@ -658,6 +658,7 @@ message ClientToServerMessage {
     MeetingInvitationRequestMessage meetingInvitationRequestMessage = 48;
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 49;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
+    SetEntityStateMessage setEntityStateMessage = 55;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -713,6 +714,23 @@ message AreaPropertyVariableMessage {
   string propertyId = 2;
   string key = 3;
   string value = 4;
+}
+
+// A switch of the map was used: sets the state `key` of the entities it commands. The state of an entity (a lamp that
+// is on or off) is kept by the back, never in the WAM.
+message SetEntityStateMessage {
+  string switchId = 1;
+  repeated string entityIds = 2;
+  string key = 3;
+  string value = 4;
+}
+
+// The state of an entity changed (or its initial state, on joining the room). An entity without message has the
+// default state of the key.
+message EntityStateMessage {
+  string entityId = 1;
+  string key = 2;
+  string value = 3;
 }
 
 // A sound attached to an entity was activated and must be played by every player of the map.
@@ -1324,6 +1342,7 @@ message SubMessage {
     EntityMessage entityMessage = 31;
     SpaceStatePatchMessage spaceStatePatchMessage = 32;
     DuckRushEventMessage duckRushEventMessage = 33;
+    EntityStateMessage entityStateMessage = 34;
   }
 }
 
@@ -1421,6 +1440,7 @@ message RoomJoinedMessage {
   bool canEdit = 16;
   CompanionTextureMessage companionTexture = 18;
   repeated AreaPropertyVariableMessage areaPropertyVariable = 19;
+  repeated EntityStateMessage entityState = 20;
 }
 
 message WebRtcStartMessage {
@@ -1957,6 +1977,7 @@ message PusherToBackMessage {
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 34;
     EntityMessage entityMessage = 35;
     DuckRushPromptMessage duckRushPromptMessage = 36;
+    SetEntityStateMessage setEntityStateMessage = 37;
   }
 }
 
@@ -1976,6 +1997,7 @@ message SubToPusherRoomMessage {
     // Zone-specific messages (all grouped in ZoneMessage)
     ZoneMessage zoneMessage = 7;
     AreaPropertyVariableMessage areaPropertyVariableMessage = 8;
+    EntityStateMessage entityStateMessage = 10;
   }
 }
 
