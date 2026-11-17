@@ -31,13 +31,19 @@ describe("weatherForecast", () => {
         ]);
     });
 
-    it("follows the seasonal schedule, without temperature, in Automatic or when the real weather is unavailable", () => {
+    it("follows the seasonal schedule in Automatic or when the real weather is unavailable, with the real temperature when known", () => {
         const expected = [0, 1, 4].map((hours) => ({
             at: NOW + hours * HOUR,
             weather: autoWeatherAt(new Date(NOW + hours * HOUR), auto),
             temperature: undefined,
         }));
-        expect(weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, paris)).toEqual(expected);
+        const withTemperatures = expected.map((cell, index) => ({ ...cell, temperature: [8.2, 9.4, 10][index] }));
+        expect(weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, paris)).toEqual(
+            withTemperatures,
+        );
+        expect(
+            weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, { status: "unavailable" }),
+        ).toEqual(expected);
         expect(
             weatherForecast({ weather: WeatherType.Real, weatherAuto: auto }, NOW, { status: "unavailable" }),
         ).toEqual(expected);
@@ -47,6 +53,9 @@ describe("weatherForecast", () => {
     });
 
     it("keeps a fixed weather, clear for a map without weather", () => {
+        expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris).map((cell) => cell.temperature)).toEqual([
+            8.2, 9.4, 10,
+        ]);
         expect(weatherForecast({ weather: WeatherType.Snow }, NOW, paris).map((cell) => cell.weather)).toEqual([
             WeatherType.Snow,
             WeatherType.Snow,
@@ -93,9 +102,9 @@ describe("weatherForecast", () => {
             cloudiness: 0.9,
         });
         expect(weatherForecast({ weather: WeatherType.Cloudy }, NOW, paris).map((cell) => cell)).toEqual([
-            { at: NOW, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
-            { at: NOW + HOUR, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
-            { at: NOW + 4 * HOUR, weather: WeatherType.Clear, temperature: undefined, cloudiness: 0.5 },
+            { at: NOW, weather: WeatherType.Clear, temperature: 8.2, cloudiness: 0.5 },
+            { at: NOW + HOUR, weather: WeatherType.Clear, temperature: 9.4, cloudiness: 0.5 },
+            { at: NOW + 4 * HOUR, weather: WeatherType.Clear, temperature: 10, cloudiness: 0.5 },
         ]);
         expect(
             weatherForecast({ weather: WeatherType.Automatic, weatherAuto: auto }, NOW, paris)[1].cloudiness ?? 0,
