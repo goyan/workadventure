@@ -2154,9 +2154,13 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   affiche le nom du niveau ; un objet déplacé suit la même règle au lâcher. Tri dans la bande de son niveau, collisions en
   rectangles pour les avatars de son niveau seulement (rien dans la couche de cases, qui est celle du sol), même
   transparence que son palier.
-- **Tableau accroché** (`applyHungOnWallDepth`) : un objet dont toute l'image tient sur la face sud de murs (un
-  tableau en haut d'un mur haut) est dessiné par-dessus ces murs ; s'il dépasse du chapeau ou du côté, il reste
-  derrière.
+- **Tableau accroché** (`hangAltitude`, `applyHungOnWallDepth`) : c'est l'altitude de l'objet qui dit s'il est
+  accroché. Au sol (altitude 0), un objet dont l'image tombe sur la face d'un mur haut est **derrière** ce mur, caché
+  par lui. En hauteur, sans dalle de son altitude sous son pied et avec toute son image sur la face sud de murs, il
+  est dessiné juste par-dessus ces murs. À la pose et au glisser, niveau sur **Auto** : une image qui tient tout
+  entière sur la face d'un mur prend l'altitude de son bord bas au-dessus du pied du mur (étiquette « Accroché au
+  mur ») ; avec « Sol » choisi, elle reste au sol, derrière le mur. Limite : sur la face d'un mur d'étage, Auto voit
+  d'abord les dalles de la pièce derrière le mur, l'objet se pose donc sur ce palier.
 - **Murs, portes et fenêtres sur un palier** (`MapLayerLevels.ts`) : mêmes pièces dans des collections à part
   (`Carte Murs Paliers`, `Carte Portes Paliers`, `Carte Fenêtres Paliers`), avec l'altitude de leur palier. Tout ce
   qui lit les murs du sol (lumière, dehors, chemin, portes, transparence) ne les voit pas, sans rien savoir des
