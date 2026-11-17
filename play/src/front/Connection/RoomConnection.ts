@@ -1173,6 +1173,16 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
+    /** Tells the server which presence sensors one of the wandering animals of this browser stands in. */
+    emitReportSwitchPresence(switchIds: string[]): void {
+        this.send({
+            message: {
+                $case: "reportSwitchPresenceMessage",
+                reportSwitchPresenceMessage: { switchIds },
+            },
+        });
+    }
+
     emitSetAreaPropertyVariable(areaId: string, propertyId: string, key: string, value: unknown): void {
         this.send({
             message: {

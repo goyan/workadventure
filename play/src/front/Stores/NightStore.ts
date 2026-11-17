@@ -1,5 +1,6 @@
 import { get, writable, type Writable } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
+import { createPersistedSwitchStore } from "./PersistedSwitchStore";
 
 export enum NightMode {
     Server = "server",
@@ -31,6 +32,13 @@ function createNightModeStore(): Writable<NightMode> {
 }
 
 export const nightModeStore = createNightModeStore();
+
+/**
+ * Realistic lighting, for this player only, off by default: at night the rooms no longer light up on their own when
+ * somebody is in them. Only the lamps light them (see the switches and the presence sensors of the map); each player
+ * keeps their halo. Kept in the browser.
+ */
+export const realisticNightStore = createPersistedSwitchStore("nightRealisticLighting", false);
 
 /** Current clock shown by the map, updated by the existing night-mode tick. */
 export const nightDateStore = writable<Date | undefined>(undefined);

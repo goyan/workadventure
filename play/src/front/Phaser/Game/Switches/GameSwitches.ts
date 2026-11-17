@@ -1,3 +1,4 @@
+import { SWITCH_MAX_TARGETS, isAtAreaLevel, isAutomaticSwitch } from "@workadventure/map-editor";
 import type { SwitchPropertyData } from "@workadventure/map-editor";
 import { get, type Unsubscriber } from "svelte/store";
 import LL from "../../../../i18n/i18n-svelte";
@@ -6,15 +7,20 @@ import { entityStatesManagerStore } from "../../../Stores/EntityStatesStore";
 import type { Entity } from "../../ECS/Entity";
 import type { EntityStatesManager } from "../EntityStates/EntityStatesManager";
 import type { GameScene } from "../GameScene";
-import { zoneOf } from "../Lamps/LampJam";
+import { toLampZone } from "../Lamps/LampJam";
 import { lampSource } from "../Lamps/LampReconcile";
+import { UpdateEntityFrontCommand } from "../MapEditor/Commands/Entity/UpdateEntityFrontCommand";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
+import { buildingAt, buildingBounds, buildingSensorsWithSomebody, labelBuildings, type Buildings } from "./Buildings";
 import { SwitchIndicator } from "./SwitchIndicator";
-import { SwitchWiringView, wiringOf } from "./SwitchWiringView";
+import { SwitchAnimalReporter, sensorsWithAnimals, type AnimalSensor } from "./SwitchAnimalReports";
+import { SensorSyncGate, syncedSensorProperty } from "./SwitchSensorSync";
+import { SwitchWiringView, wiringOf, type SwitchWatchShape } from "./SwitchWiringView";
 import {
     entityStateKeysOf,
     resolveSwitchTargets,
+    roomIdAt,
     switchPressValue,
     switchPropertyOf,
     type SwitchableTarget,
@@ -22,6 +28,11 @@ import {
 
 /** The switches of the map are looked for this often: one appears or goes as the map is edited. */
 const RECONCILE_INTERVAL_MS = 250;
+
+/** A switch stands in the room its foot is in. */
+function footOf(entity: Entity): { x: number; y: number } {
+    return { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight - 1 };
+}
 
 /**
  * The switches of the map in the game: what a press does (asks the server to set the state of the objects the switch
@@ -34,7 +45,13 @@ export class GameSwitches {
     private states: EntityStatesManager | undefined;
     private lastReconcileAt: number | undefined;
     private switches: Entity[] = [];
+    private candidates: SwitchableTarget[] | undefined;
+    /** For each object, the switches that command it; read with the switches, a few times a second. */
+    private commandingIds = new Map<string, string[]>();
     private readonly wiringView: SwitchWiringView;
+    private readonly animalReporter = new SwitchAnimalReporter();
+    private readonly syncGate = new SensorSyncGate();
+    private buildingsRead: { version: number; buildings: Buildings } | undefined;
 
     constructor(private readonly scene: GameScene) {
         this.wiringView = new SwitchWiringView(scene);
@@ -43,30 +60,56 @@ export class GameSwitches {
 
     /** The objects this switch commands now. */
     public targetsOf(entity: Entity, property: SwitchPropertyData): SwitchableTarget[] {
+        const roomId = property.targets.mode === "zone" ? this.roomIdOf(entity, true) : undefined;
+        return resolveSwitchTargets(property, roomId, entity.getElevation(), this.candidates ?? this.readCandidates());
+    }
+
+    /**
+     * The objects of the map that can be switched, each with its room. Read again a few times a second (see
+     * reconcile): the small lights of the switches are drawn at every image and must not read the whole map then.
+     */
+    private readCandidates(): SwitchableTarget[] {
+        const areas = mapRoomAreas(this.scene);
         const candidates: SwitchableTarget[] = [];
         for (const [id, candidate] of this.entities()) {
             const keys = entityStateKeysOf(candidate.getPrefab());
-            if (keys.length > 0) {
-                candidates.push({
-                    id,
-                    point: lampSource(candidate, candidate.getPrefab().lamp?.anchor),
-                    elevation: candidate.getElevation(),
-                    keys,
-                });
+            if (keys.length === 0) {
+                continue;
             }
+            const point = lampSource(candidate, candidate.getPrefab().lamp?.anchor);
+            const elevation = candidate.getElevation();
+            candidates.push({
+                id,
+                point,
+                elevation,
+                keys,
+                roomId: roomIdAt(point, roomZonesAt(this.scene, areas, elevation, point)),
+            });
         }
-        // A switch stands in the room its foot is in.
-        const point = { x: entity.x + entity.displayWidth / 2, y: entity.y + entity.displayHeight - 1 };
+        this.candidates = candidates;
+        return candidates;
+    }
+
+    /**
+     * The room a switch is in: an area of its floor, or (`withFloors`) the raised floor it stands on. A switch
+     * against a wall of a room is in that room (see roomIdAt).
+     */
+    private roomIdOf(entity: Entity, withFloors: boolean): string | undefined {
+        const point = footOf(entity);
         const elevation = entity.getElevation();
-        const room =
-            property.targets.mode === "zone"
-                ? zoneOf(point, roomZonesAt(this.scene, mapRoomAreas(this.scene), elevation, point))
-                : undefined;
-        return resolveSwitchTargets(property, room, elevation, candidates);
+        const areas = mapRoomAreas(this.scene);
+        const rooms = withFloors
+            ? roomZonesAt(this.scene, areas, elevation, point)
+            : areas.filter((area) => isAtAreaLevel(area, elevation)).map(toLampZone);
+        return roomIdAt(point, rooms);
     }
 
     /** What activating the switch does, for the menu of the object; undefined when this player may not use it. */
     public actionOf(entity: Entity, property: SwitchPropertyData): ActionsMenuAction | undefined {
+        // A sensor or a timer is not used by hand: the server uses it.
+        if (isAutomaticSwitch(property)) {
+            return undefined;
+        }
         const allowedTags = property.allowedTags ?? [];
         const tags = this.scene.connection?.getAllTags() ?? [];
         if (allowedTags.length > 0 && !tags.some((tag) => allowedTags.includes(tag))) {
@@ -100,6 +143,173 @@ export class GameSwitches {
         };
     }
 
+    /** The area of its floor the switch is in: the room a sensor of its room watches (an area the server knows). */
+    public roomAreaIdOf(entity: Entity): string | undefined {
+        return this.roomIdOf(entity, false);
+    }
+
+    /**
+     * With the map editor open: stores in each switch that has a trigger what the server needs (the room of a sensor
+     * of its room, the lamps of a switch that commands its room), whenever it changed: a lamp added to the room, the
+     * sensor moved. Whatever the tool of the editor in use, and out of the history: an undo must bring back what the
+     * user did, not what is stored here, which is worked out again from the map anyway.
+     */
+    private syncSensors(now: number): void {
+        const editor = this.scene.getMapEditorModeManager();
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (!get(mapEditorModeStore) || !editor || !wamFile) {
+            return;
+        }
+        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
+        for (const entity of this.switches) {
+            const property = switchPropertyOf(entity);
+            if (!property || !isAutomaticSwitch(property) || !entity.canEdit) {
+                continue;
+            }
+            const { x, y } = entity.getEntityData();
+            if (entity.x !== x || entity.y !== y) {
+                // Being dragged: the update would put it back where the map has it. Looked at again once dropped.
+                continue;
+            }
+            const resolved = this.targetsOf(entity, property)
+                .map((target) => target.id)
+                .slice(0, SWITCH_MAX_TARGETS);
+            const synced = syncedSensorProperty(property, this.roomAreaIdOf(entity), resolved);
+            if (!synced || !this.syncGate.mayStore(entity.entityId, synced, now)) {
+                continue;
+            }
+            const properties = entity
+                .getProperties()
+                .map((existing) => (existing.type === "switchPropertyData" ? synced : existing));
+            editor
+                .executeCommands(
+                    [
+                        new UpdateEntityFrontCommand(
+                            wamFile,
+                            entity.entityId,
+                            { properties },
+                            undefined,
+                            undefined,
+                            entitiesManager,
+                            this.scene,
+                        ),
+                    ],
+                    false,
+                )
+                .catch((error) => console.warn("Could not store what a sensor of the map watches", error));
+        }
+    }
+
+    /**
+     * Tells the server which presence sensors a wandering animal stands in: only the browsers know where the animals
+     * are. Nothing is worked out on a map without presence sensor.
+     */
+    private reportAnimals(now: number): void {
+        const sensors: AnimalSensor[] = [];
+        for (const entity of this.switches) {
+            const trigger = switchPropertyOf(entity)?.trigger;
+            if (trigger?.type !== "presence") {
+                continue;
+            }
+            const area = trigger.areaId
+                ? this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().get(trigger.areaId)
+                : undefined;
+            sensors.push({
+                id: entity.entityId,
+                x: entity.x,
+                y: entity.y,
+                elevation: entity.getElevation(),
+                trigger,
+                area,
+            });
+        }
+        if (sensors.length === 0) {
+            return;
+        }
+        const animals: { x: number; y: number }[] = [];
+        this.scene.getWanderingCharactersManager()?.forEachWalker((position) => animals.push(position));
+        const sensed = sensorsWithAnimals(sensors, animals);
+        // The sensors of a building: the walls of the map are only known here too. My own avatar counts as well (each
+        // browser tells for its own), wherever it is in the building and on whatever floor.
+        const ofBuilding = sensors.filter((sensor) => sensor.trigger.scope === "building");
+        if (ofBuilding.length > 0) {
+            const buildings = this.buildings();
+            if (buildings) {
+                const player = this.scene.CurrentPlayer;
+                const occupied = [
+                    buildingAt(buildings, { x: player.x, y: player.y + player.getFloorZ() }),
+                    ...animals.map((animal) => buildingAt(buildings, animal)),
+                ];
+                sensed.push(
+                    ...buildingSensorsWithSomebody(
+                        ofBuilding.map((sensor) => ({
+                            id: sensor.id,
+                            building: buildingAt(buildings, { x: sensor.x + 16, y: sensor.y + 16 + sensor.elevation }),
+                        })),
+                        occupied,
+                    ),
+                );
+            }
+        }
+        const report = this.animalReporter.next(sensed, now);
+        if (report) {
+            this.scene.connection?.emitReportSwitchPresence(report);
+        }
+    }
+
+    /** The buildings of the map, worked out again only when its walls changed. */
+    private buildings(): Buildings | undefined {
+        const grid = this.scene.getOutdoorGrid();
+        if (!grid) {
+            return undefined;
+        }
+        const version = this.scene.getOutdoorVersion();
+        if (!this.buildingsRead || this.buildingsRead.version !== version) {
+            this.buildingsRead = { version, buildings: labelBuildings(grid) };
+        }
+        return this.buildingsRead.buildings;
+    }
+
+    /** The rectangle around the building the object stands in, if it stands in one. */
+    public buildingBoundsOf(entity: Entity): { x: number; y: number; width: number; height: number } | undefined {
+        const buildings = this.buildings();
+        if (!buildings) {
+            return undefined;
+        }
+        return buildingBounds(
+            buildings,
+            buildingAt(buildings, { x: entity.x + 16, y: entity.y + 16 + entity.getElevation() }),
+        );
+    }
+
+    /** What the selected sensor watches, to be drawn in the map editor. */
+    private watchedBy(entity: Entity, property: SwitchPropertyData): SwitchWatchShape | undefined {
+        const trigger = property.trigger;
+        if (trigger?.type !== "presence") {
+            return undefined;
+        }
+        if (trigger.scope === "proximity" || trigger.scope === "cone") {
+            // Where the server takes the middle of a sensor: half a tile from its corner.
+            return {
+                kind: "cone",
+                x: entity.x + 16,
+                y: entity.y + 16,
+                reach: trigger.tiles * 32,
+                direction: trigger.direction,
+                angle: trigger.scope === "cone" ? trigger.angle : 360,
+            };
+        }
+        if (trigger.scope === "building") {
+            const bounds = this.buildingBoundsOf(entity);
+            return bounds ? { kind: "rect", ...bounds } : undefined;
+        }
+        const areaId = trigger.scope === "room" ? this.roomAreaIdOf(entity) : trigger.areaId;
+        const area = areaId
+            ? this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().get(areaId)
+            : undefined;
+        return area ? { kind: "rect", x: area.x, y: area.y, width: area.width, height: area.height } : undefined;
+    }
+
     /** The switches that command this object now, by their ids. */
     public switchesCommanding(entityId: string): string[] {
         const commanding: string[] = [];
@@ -117,6 +327,8 @@ export class GameSwitches {
         if (this.lastReconcileAt === undefined || now - this.lastReconcileAt >= RECONCILE_INTERVAL_MS) {
             this.lastReconcileAt = now;
             this.reconcile();
+            this.syncSensors(now);
+            this.reportAnimals(now);
         }
         let changed = false;
         for (const entity of this.switches) {
@@ -141,9 +353,30 @@ export class GameSwitches {
      */
     private drawWiring(): boolean {
         const selected = get(mapEditorModeStore) ? get(mapEditorSelectedEntityStore) : undefined;
-        const property = selected ? switchPropertyOf(selected) : undefined;
-        const wiring = selected && property ? wiringOf(selected, this.targetsOf(selected, property)) : undefined;
-        return this.wiringView.draw(wiring);
+        if (!selected) {
+            return this.wiringView.draw(undefined);
+        }
+        const property = switchPropertyOf(selected);
+        if (property) {
+            return this.wiringView.draw(
+                wiringOf(selected, this.targetsOf(selected, property)),
+                this.watchedBy(selected, property),
+            );
+        }
+        // A lamp shows what commands it: a line to each of its switches, sensors and timers.
+        if (entityStateKeysOf(selected.getPrefab()).length === 0) {
+            return this.wiringView.draw(undefined);
+        }
+        const commanding = new Set(this.commandingIds.get(selected.entityId) ?? []);
+        return this.wiringView.draw({
+            from: lampSource(selected, selected.getPrefab().lamp?.anchor),
+            to: this.switches
+                .filter((entity) => commanding.has(entity.entityId))
+                .map((entity) => ({
+                    x: entity.x + entity.displayWidth / 2,
+                    y: entity.y + entity.displayHeight / 2,
+                })),
+        });
     }
 
     public destroy(): void {
@@ -157,8 +390,10 @@ export class GameSwitches {
     }
 
     private reconcile(): void {
+        this.readCandidates();
         this.switches = [...this.entities().values()].filter((entity) => switchPropertyOf(entity) !== undefined);
         const ids = new Set(this.switches.map((entity) => entity.entityId));
+        this.syncGate.keep(ids);
         let removed = false;
         for (const [id, indicator] of this.indicators) {
             if (!ids.has(id)) {
@@ -174,6 +409,13 @@ export class GameSwitches {
         }
         if (removed) {
             this.scene.markDirty();
+        }
+        this.commandingIds = new Map();
+        for (const entity of this.switches) {
+            const property = switchPropertyOf(entity);
+            for (const target of property ? this.targetsOf(entity, property) : []) {
+                this.commandingIds.set(target.id, [...(this.commandingIds.get(target.id) ?? []), entity.entityId]);
+            }
         }
     }
 

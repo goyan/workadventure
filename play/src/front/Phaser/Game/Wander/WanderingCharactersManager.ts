@@ -133,6 +133,15 @@ export class WanderingCharactersManager {
         }
     }
 
+    /** Calls the callback with the position of each visible character, free ones included: the presence sensors sense them. */
+    public forEachWalker(callback: (position: Point) => void): void {
+        for (const character of this.characters.values()) {
+            if (character.sprite?.visible) {
+                callback(character.opener);
+            }
+        }
+    }
+
     /** Calls the callback with each character shown now, by its id: its sprite stands on its feet. */
     public forEachShownCharacter(callback: (id: string, sprite: Phaser.GameObjects.Sprite) => void): void {
         for (const [id, character] of this.characters) {

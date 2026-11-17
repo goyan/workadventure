@@ -19,6 +19,7 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
+    import { realisticNightStore } from "../../Stores/NightStore";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
@@ -399,6 +400,13 @@
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.label()}</p>
             <NightSettings />
+            <InputSwitch
+                id="night-realistic-lighting"
+                bind:value={$realisticNightStore}
+                label={$LL.menu.settings.night.realistic()}
+                labelPosition="right"
+            />
+            <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.realisticHelp()}</p>
         </div>
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>

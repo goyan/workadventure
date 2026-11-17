@@ -324,10 +324,17 @@ n'a pas de position à lui (comme un va-et-vient).
   lampe peut l'être aussi, et se commander elle-même.
 - **Câbler** (panneau de l'interrupteur) :
   - **Les lampes de cette pièce** : les lampes RGB de la plus petite zone de la carte où se tient le pied de
-    l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ajoutée plus tard dans la
+    l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ou un interrupteur
+    juste hors d'une pièce lui appartient quand même : jusqu'à 4 cases au-dessus (lampe accrochée au mur du haut),
+    une case sur les autres côtés ; entre deux pièces, la plus proche (`roomIdAt`). Une lampe sur la case juste
+    au-dessus d'une pièce (la face de son mur) est à cette pièce, même si la zone de la pièce du dessus a été tracée
+    jusque-là. Pour un mur plus haut recouvert par une autre zone : bouton **Lier des lampes**.
+  - Dans l'éditeur, une **lampe sélectionnée** montre par des traits tout ce qui la commande. Une lampe ajoutée plus tard dans la
     pièce est commandée sans rien refaire. Hors de toute pièce, l'interrupteur ne commande rien et le panneau le dit.
-  - **Lampes choisies** : bouton **Choisir sur la carte**, puis un clic sur une lampe l'ajoute ou la retire (un pas
-    d'annulation par clic), **Terminer** pour finir. 200 lampes au plus.
+  - **Lampes choisies** : bouton **🔗 Lier des lampes** (toujours visible, sur l'interrupteur comme sur le capteur
+    et la minuterie), puis un clic sur une lampe, où qu'elle soit sur la carte, la lie ou la délie (un pas
+    d'annulation par clic), **Terminer** pour finir. Parti du mode pièce, le bouton garde les lampes de la pièce
+    comme point de départ. 200 lampes au plus.
   - L'interrupteur sélectionné montre ses cibles : un trait jaune et un cercle. Une lampe sélectionnée affiche
     « Commandée par n interrupteurs ».
   - **Réservé aux tags** : liste de tags séparés par des virgules ; vide, tout le monde peut l'actionner.
@@ -336,6 +343,56 @@ n'a pas de position à lui (comme un va-et-vient).
   s'éteint en fondu de 200 ms (aussitôt si le système demande moins d'animations). Une lampe éteinte ne donne plus
   aucune lumière et ne perce plus le voile de nuit ; une lampe en rotation ne tourne plus. Dans l'éditeur, toutes les
   lampes restent allumées pour pouvoir les régler.
+- **Déclencheurs automatiques** (menu **Déclencheur** du panneau ; objets **Capteur de présence** et **Minuterie** de
+  la section Lampes, prêts à l'emploi) :
+  - **Présence** : quelqu'un **dans cette pièce** (la plus petite zone du niveau du capteur), **dans la zone**
+    choisie dans la liste des zones nommées, **autour du capteur** (1 à 20 cases, 3 par défaut) ou **dans un cône
+    devant le capteur** (direction en degrés, 90 = vers le bas, ouverture 10° à 360°, portée en cases, comme le
+    faisceau d'une lampe). Les lampes s'éteignent après un délai sans personne (0 à 600 s, **30 s** par défaut). Les
+    avatars comptent, et les **animaux promeneurs** (posés sur la carte, de la jungle, apprivoisés) ; un capteur ne
+    sent que son niveau, les animaux sont au sol ; les murs ne comptent pas.
+  - **Présence dans le bâtiment** : quelqu'un n'importe où dans le bâtiment du capteur, à n'importe quel étage —
+    pour les déclenchements globaux (toutes les lampes d'un bâtiment, plus tard ses volets). Un **bâtiment** est le
+    bloc d'un seul tenant de cases qui ne sont pas dehors, murs compris (`labelBuildings`, à partir de la grille
+    dedans/dehors des murs de l'outil Carte) ; deux bâtiments qui ne se touchent que par un coin restent distincts.
+    Capteur sélectionné : le rectangle qui entoure son bâtiment est dessiné. Un capteur posé dehors ne se déclenche
+    jamais (le panneau le dit). Comme le serveur n'a pas les murs de la carte, c'est chaque navigateur qui signale
+    que **son** avatar (ou un de ses animaux) est dans le bâtiment d'un capteur, par le même message que pour les
+    animaux ; le serveur réunit les signalements et applique le délai d'extinction. Un onglet en arrière-plan ne
+    signale plus rien : pour ces capteurs, le serveur garde le dernier signalement d'un joueur tant qu'il est dans la
+    salle et n'a pas bougé depuis.
+  - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure de Paris**, peut passer minuit ; pas de jours de la semaine.
+  - Capteur sélectionné dans l'éditeur : la zone, le disque ou le cône qu'il surveille est dessiné en bleu.
+  - Un capteur ou une minuterie ne s'actionne pas à la main (le serveur refuse aussi l'appui).
+  - **Lampe à capteur intégré** : sur une lampe RGB, bouton **Ajouter un capteur à cette lampe** (elle s'allume quand
+    quelqu'un est à moins de 3 cases, s'éteint 30 s après). Ajouter la propriété Interrupteur à une lampe la câble sur
+    elle-même ; on peut lui ajouter d'autres lampes.
+  - **Plusieurs déclencheurs sur une lampe** : elle est allumée tant qu'au moins un tient (quelqu'un détecté, ou dans
+    la plage). **Interrupteur manuel et capteur** : le geste tient tant que rien ne change côté déclencheurs — j'éteins
+    à la main, ça reste éteint tant que la pièce est occupée ; pièce vidée puis réoccupée, le capteur rallume.
+  - Une lampe à déclencheur est **éteinte** quand personne n'est détecté et hors plage, y compris à l'ouverture de
+    la salle : poser un capteur éteint la pièce vide.
+  - **Qui décide** : le serveur, une fois par seconde, pour les seuls objets à déclencheur (`SwitchTriggerEvaluator`) ;
+    il écrit dans le même magasin d'état. Il ne sait pas ce qu'est une lampe ni la taille d'un objet : l'**éditeur
+    ouvert** enregistre dans la carte la pièce du capteur (`trigger.areaId`) et ses lampes (`resolvedTargets`), et les
+    remet à jour quand on déplace le capteur ou qu'on ajoute une lampe, quel que soit l'outil de l'éditeur en cours,
+    **hors de l'historique** d'annulation (jamais deux fois la même mise à jour en moins de 5 s) ; un capteur collé
+    oublie la pièce et les lampes de son original ; le centre d'un
+    capteur est pris à une demi-case de son coin. Les animaux n'existent que dans les navigateurs : chacun signale au
+    serveur les capteurs où se trouve un de ses animaux (`ReportSwitchPresenceMessage`, répété toutes les 2 s, oublié
+    après 5 s) ; sans joueur connecté, aucun animal ne compte.
+  - **Propriété mal formée** : la carte en cours d'édition garde ce que la dernière commande portait, sans validation.
+    Le jeu et le serveur lisent donc un interrupteur par un lecteur validé (`switchPropertyIn`) : incomplet, il prend
+    ses valeurs par défaut ; mal formé, il est ignoré ; un déclencheur mal formé en fait un interrupteur manuel.
+  - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; pas de fuseau du lieu de la carte ; un
+    client modifié peut tenir un capteur allumé en signalant un animal ; un joueur immobile dont le navigateur avait
+    signalé un animal dans un bâtiment y tient les lampes allumées tant qu'il ne bouge pas ; la lampe dupliquée (⧉)
+    d'une lampe à capteur intégré commande encore l'originale (à recâbler).
+- **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
+  réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
+  (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et
+  les torches) percent le voile ; chaque avatar garde son halo. Sert à essayer interrupteurs et capteurs avant le
+  voile de nuit réaliste. Les autres joueurs ne sont pas concernés.
 - **Par défaut tout est allumé** : une carte faite avant les interrupteurs ne change pas.
 - **Copier, coller** : un interrupteur collé avec ses lampes commande les copies ; les lampes choisies qui n'ont pas
   été copiées avec lui sont retirées de la copie. Un motif ne garde pas les lampes choisies (utiliser le mode pièce).
@@ -355,7 +412,7 @@ n'a pas de position à lui (comme un va-et-vient).
 - **Cadre pour la suite** : les états possibles sont une liste fermée (`ENTITY_STATE_KEYS`, aujourd'hui `on`) et le
   genre d'objet qui les porte se déclare à un seul endroit (`entityStateKeysOf`). Un volet (`open`) s'y ajoutera sans
   nouveau message. Les lampes de Jam et la piste de danse suivent la musique et ne sont pas commandées. Les règles
-  automatiques (présence, proximité, horaires) ne sont pas faites.
+  automatiques (présence, cône, horaires) sont décrites plus haut.
 
 ## Paroles de karaoké
 

@@ -70,6 +70,16 @@ function createHarness({
 }
 
 describe("EntityStateManager", () => {
+    it("ignores a press on a switch that has a trigger: a sensor or a timer is not used by hand", () => {
+        const wam = wamWith();
+        const raw = wam.entities.switch.properties?.[0] as unknown as Record<string, unknown>;
+        raw.trigger = { type: "hours", from: "08:00", to: "18:00" };
+        const { manager, press } = createHarness({ wam });
+
+        expect(press(["l1"])).toEqual([]);
+        expect(manager.getAll()).toEqual([]);
+    });
+
     it("reads a switch the map holds without targets as a room switch, instead of failing", () => {
         const wam = wamWith();
         // What a live edit command leaves in the map: nothing fills the defaults of the schema in.
@@ -208,6 +218,32 @@ describe("EntityStateManager", () => {
 
         advance(1);
         expect(press(["l1"], "true")).toEqual(["l1"]);
+    });
+
+    it("lets a trigger set a state: told to the room, saved, without the limit of presses of a user", () => {
+        const { manager, sent, repository } = createHarness();
+
+        expect(manager.setAutomatic("l1", "on", "false")).toBe("set");
+        expect(manager.setAutomatic("l1", "on", "false")).toBe("same");
+
+        expect(manager.getAll()).toEqual([{ entityId: "l1", key: "on", value: "false" }]);
+        expect(sent).toHaveLength(1);
+        expect(repository.saveVariable).toHaveBeenCalledWith("entity-states:room", "l1::on", "false");
+    });
+
+    it("refuses a trigger that would change an object more than 3 times a second", () => {
+        const { manager, advance } = createHarness();
+        manager.setAutomatic("l1", "on", "false");
+        advance(333);
+        expect(manager.setAutomatic("l1", "on", "true")).toBe("refused");
+        advance(1);
+        expect(manager.setAutomatic("l1", "on", "true")).toBe("set");
+    });
+
+    it("has nothing to set on an object the map no longer has", () => {
+        const { manager, sent } = createHarness();
+        expect(manager.setAutomatic("deleted", "on", "false")).toBe("same");
+        expect(sent).toEqual([]);
     });
 
     it("brings back the states saved before a restart", async () => {

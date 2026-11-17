@@ -69,6 +69,23 @@ describe("SwitchPropertyEditor", () => {
         }).not.toThrow();
     });
 
+    it("links lamps from one button: the lamps of the room stay as a start, then any lamp can be clicked", () => {
+        const props = render({ id: "p", type: "switchPropertyData", key: "on", targets: { mode: "zone" } });
+        const link = target.querySelector<HTMLButtonElement>("[data-testid=switchPickTargets]");
+        expect(link?.textContent).toContain("Lier des lampes");
+
+        link?.click();
+        flushSync();
+
+        expect(props.property.targets).toEqual({ mode: "ids", ids: ["l1"] });
+        expect(get(mapEditorSwitchWiringStore)).toBe("switch");
+        expect(target.querySelector("[data-testid=switchPickTargets]")?.textContent).toContain("Terminer");
+
+        target.querySelector<HTMLButtonElement>("[data-testid=switchPickTargets]")?.click();
+        flushSync();
+        expect(get(mapEditorSwitchWiringStore)).toBeUndefined();
+    });
+
     it("stops wiring when it is closed", async () => {
         render({ id: "p", type: "switchPropertyData", key: "on", targets: { mode: "ids", ids: [] } });
         mapEditorSwitchWiringStore.set("switch");

@@ -7,6 +7,7 @@ import {
     lightableAreas,
     NIGHT_FADE_MS,
     NightLights,
+    roomsThatLightUp,
 } from "../../../../../src/front/Phaser/Game/Night/NightLights";
 
 function area(id: string, x: number, y: number, width: number, height: number): AreaData {
@@ -125,5 +126,17 @@ describe("NightLights", () => {
         lights.update(0, [a, b], [inside, { x: 310, y: 310 }]);
         const lit = lights.update(500, [a, b], [inside, { x: 310, y: 310 }]);
         expect(lit.map((l) => l.id).sort()).toEqual(["a", "b"]);
+    });
+});
+
+describe("roomsThatLightUp", () => {
+    const rooms = [{ id: "a", x: 0, y: 0, width: 100, height: 100 }];
+
+    it("is every room of the map by default: an occupied room lights up on its own", () => {
+        expect(roomsThatLightUp(rooms, false)).toEqual(rooms);
+    });
+
+    it("is no room at all with the realistic lighting: only the lamps light a room", () => {
+        expect(roomsThatLightUp(rooms, true)).toEqual([]);
     });
 });

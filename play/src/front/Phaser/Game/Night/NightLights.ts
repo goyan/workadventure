@@ -143,3 +143,12 @@ export class NightLights {
         return false;
     }
 }
+
+/**
+ * The rooms that light up on their own when somebody is in them. All of them by default; none with the realistic
+ * lighting a player may ask for (realisticNightStore): a room is then only lit by its lamps, which the switches and
+ * the presence sensors of the map turn on and off.
+ */
+export function roomsThatLightUp<Room>(rooms: readonly Room[], realistic: boolean): readonly Room[] {
+    return realistic ? [] : rooms;
+}

@@ -111,6 +111,8 @@ const menu: BaseTranslation = {
             computer: "My computer time",
             disabled: "Off",
             disable: "Turn off night mode",
+            realistic: "Realistic lighting: rooms no longer light up on their own",
+            realisticHelp: "At night a room is only lit by its lamps (switches, sensors). Personal setting.",
         },
         theme: {
             label: "Theme",

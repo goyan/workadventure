@@ -2,7 +2,7 @@ import type { Unsubscriber } from "svelte/store";
 import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { NightMode, nightModeStore, nightDateStore } from "../../../Stores/NightStore";
+import { NightMode, nightModeStore, nightDateStore, realisticNightStore } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
@@ -22,7 +22,7 @@ import {
 import type { SunPosition } from "./NightClock";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
-import { coversMostly, isInLightableArea, lightableAreas, NightLights } from "./NightLights";
+import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
@@ -67,6 +67,8 @@ export class NightManager {
     private editorOpen = false;
     private mode = NightMode.Server;
     private disabled = false;
+    private realistic = false;
+    private readonly unsubscribeRealistic: Unsubscriber;
     private opacity = 0;
     private lastClockAt: number | undefined;
     private sun: SunPosition | undefined;
@@ -114,6 +116,12 @@ export class NightManager {
             this.skyLightSettings = settings;
             // A setting changed: the light is computed again at the next image, not at the next second.
             this.lastClockAt = undefined;
+            this.scene.markDirty();
+        });
+        this.unsubscribeRealistic = realisticNightStore.subscribe((realistic) => {
+            this.realistic = realistic;
+            // The rooms fade in or out at the next image.
+            this.previous = undefined;
             this.scene.markDirty();
         });
         this.unsubscribeMode = nightModeStore.subscribe((mode) => {
@@ -169,10 +177,12 @@ export class NightManager {
 
         const players = this.players();
         const putOut = (area: NightRect): boolean => this.partyRooms.some((room) => coversMostly(area, room));
-        const lit = this.lights.update(now, this.areas, players, putOut);
+        // With the realistic lighting no room lights up on its own: only the lamps pierce the veil.
+        const rooms = roomsThatLightUp(this.areas, this.realistic);
+        const lit = this.lights.update(now, rooms, players, putOut);
         // No halo in a lit area: the area already lights the player. In a room put out for a party, the player
         // keeps their halo: they stay visible under the effects.
-        const lightingAreas = this.areas.filter((area) => !putOut(area));
+        const lightingAreas = rooms.filter((area) => !putOut(area));
         const halos = this.halos.update(
             now,
             players.map((player) => ({ ...player, sheltered: isInLightableArea(player, lightingAreas) })),
@@ -230,6 +240,7 @@ export class NightManager {
         nightDateStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
+        this.unsubscribeRealistic();
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();

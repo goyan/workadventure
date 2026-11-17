@@ -4,6 +4,7 @@ import {
     newSwitchProperties,
     rewireSwitch,
     rewireSwitchProperties,
+    selfSensorProperty,
     toggleSwitchTarget,
 } from "../../../../../src/front/Phaser/Game/Switches/SwitchWiring";
 
@@ -61,6 +62,37 @@ describe("rewireSwitch", () => {
         const original = property({ mode: "zone" });
         expect(rewireSwitch(original, new Map([["a", "a2"]]))).toEqual(original);
     });
+
+    it("forgets what the editor stored for the original of a copied sensor: its room and the lamps of that room", () => {
+        const inRoom = { type: "presence" as const, scope: "room" as const, tiles: 3, offDelay: 30, direction: 90 };
+        const original: SwitchPropertyData = {
+            ...property({ mode: "zone" }),
+            trigger: { ...inRoom, angle: 90, areaId: "office" },
+            resolvedTargets: ["l1", "l2"],
+        };
+
+        const copy = rewireSwitch(original, new Map());
+
+        expect(copy.resolvedTargets).toBeUndefined();
+        expect(copy.trigger).toEqual({ ...inRoom, angle: 90 });
+    });
+
+    it("keeps the area somebody chose for a copied sensor", () => {
+        const original: SwitchPropertyData = {
+            ...property({ mode: "ids", ids: ["a"] }),
+            trigger: {
+                type: "presence",
+                scope: "area",
+                areaId: "hall",
+                tiles: 3,
+                offDelay: 30,
+                direction: 90,
+                angle: 90,
+            },
+        };
+
+        expect(rewireSwitch(original, new Map([["a", "a2"]])).trigger).toEqual(original.trigger);
+    });
 });
 
 describe("rewireSwitchProperties", () => {
@@ -85,5 +117,37 @@ describe("newSwitchProperties", () => {
     it("gives nothing to a plain object", () => {
         expect(newSwitchProperties({}, () => "new-id")).toEqual([]);
         expect(newSwitchProperties({ switch: false }, () => "new-id")).toEqual([]);
+    });
+});
+
+describe("newSwitchProperties of a sensor or a timer of the catalog", () => {
+    it("starts a presence sensor on its room, 30 s", () => {
+        expect(newSwitchProperties({ switch: "presence" }, () => "new-id")).toEqual([
+            {
+                id: "new-id",
+                type: "switchPropertyData",
+                key: "on",
+                targets: { mode: "zone" },
+                trigger: { type: "presence", scope: "room", tiles: 3, offDelay: 30, direction: 90, angle: 90 },
+            },
+        ]);
+    });
+
+    it("starts a timer from 18:00 to 08:00", () => {
+        expect(newSwitchProperties({ switch: "hours" }, () => "new-id")[0]).toMatchObject({
+            trigger: { type: "hours", from: "18:00", to: "08:00" },
+        });
+    });
+});
+
+describe("selfSensorProperty", () => {
+    it("makes a lamp light itself when somebody is within 3 tiles, and go out 30 s after", () => {
+        expect(selfSensorProperty("l1", () => "new-id")).toEqual({
+            id: "new-id",
+            type: "switchPropertyData",
+            key: "on",
+            targets: { mode: "ids", ids: ["l1"] },
+            trigger: { type: "presence", scope: "proximity", tiles: 3, offDelay: 30, direction: 90, angle: 90 },
+        });
     });
 });
