@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { LyricsService } from "../../src/pusher/services/LyricsService";
+import { agreedTiming, LyricsService } from "../../src/pusher/services/LyricsService";
 
 const track = { title: "Test song", artist: "Test artist", album: "Test album", durationMs: 200_000 };
 const lyrics = { plainLyrics: "First\nSecond", syncedLyrics: "[00:01.00]First\n[00:02.00]Second", instrumental: false };
@@ -17,7 +17,8 @@ describe("LyricsService", () => {
         expect(first).toEqual({ status: "found", ...lyrics, source: "lrclib" });
         expect(second).toEqual(first);
         expect(await service.get(track)).toEqual(first);
-        expect(fetchFn).toHaveBeenCalledOnce();
+        // The exact lookup, then its comparison with the other synced versions; the cache answers the third request.
+        expect(fetchFn).toHaveBeenCalledTimes(2);
         const input = fetchFn.mock.calls[0][0];
         const url = new URL(input instanceof Request ? input.url : input);
         expect(url.origin).toBe("https://lrclib.net");
@@ -310,10 +311,12 @@ describe("LyricsService", () => {
             expect(result).toMatchObject({ status: "found", syncedLyrics: "[00:01.00]Synced line" });
         });
 
-        it("does not search when the exact lookup is already synced", async () => {
+        it("keeps an exact synced version when no other version disagrees with it", async () => {
             const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify(lyrics)));
-            await new LyricsService(fetchFn).get(bonamassa);
-            expect(fetchFn).toHaveBeenCalledOnce();
+            expect(await new LyricsService(fetchFn).get(bonamassa)).toMatchObject({
+                syncedLyrics: lyrics.syncedLyrics,
+            });
+            expect(fetchFn).toHaveBeenCalledTimes(2);
         });
 
         it("does not search for a version chosen by hand (title and artist only)", async () => {
@@ -329,5 +332,46 @@ describe("LyricsService", () => {
         const fetchFn = vi.fn<typeof fetch>().mockRejectedValue(new Error("offline"));
         const service = new LyricsService(fetchFn);
         expect(await service.get(track)).toEqual({ status: "unavailable" });
+    });
+
+    describe("timing agreed between versions", () => {
+        const lrc = (start: number, text = ["أنت نور الله فجرا", "جئت بعد العسر يسرا", "ربنا أعلاك قدرا"]) =>
+            text.map((line, index) => `[00:${String(start + index * 4).padStart(2, "0")}.00] ${line}`).join("\n");
+        it("replaces a mistimed exact match by the timing the other versions agree on", () => {
+            expect(agreedTiming(lrc(18), [lrc(33), lrc(33), lrc(34)])).toBe(lrc(33));
+        });
+        it("keeps the exact match when it agrees, or when too few versions can be compared", () => {
+            expect(agreedTiming(lrc(33), [lrc(34), lrc(18), lrc(33)])).toBe(lrc(33));
+            expect(agreedTiming(lrc(18), [lrc(33)])).toBe(lrc(18));
+        });
+        it("never takes the timing of other lyrics, such as a translated version", () => {
+            const translated = lrc(33, ["Gönüllerde hasretin var", "Ikinci satir", "Ucuncu satir"]);
+            expect(agreedTiming(lrc(18), [translated, translated, lrc(33)])).toBe(lrc(18));
+        });
+        it("asks LRCLIB for every edition of the recording and keeps the agreed timing", async () => {
+            const versions = [lrc(33), lrc(33), lrc(18)].map((syncedLyrics, index) => ({
+                id: index,
+                trackName: index === 2 ? "Ya Nabi Salam Alayka (Arabic Version - Bonus Track)" : "Ya Nabi Salam Alayka",
+                artistName: "Maher Zain",
+                albumName: "Thank You Allah",
+                duration: 297 + index,
+                instrumental: false,
+                plainLyrics: "",
+                syncedLyrics,
+            }));
+            const fetchFn = vi.fn<typeof fetch>().mockImplementation((input) => {
+                const url = new URL(input instanceof Request ? input.url : input);
+                if (url.pathname === "/api/get")
+                    return Promise.resolve(new Response(JSON.stringify({ ...lyrics, syncedLyrics: lrc(18) })));
+                expect(url.searchParams.get("track_name")).toBe("Ya Nabi Salam Alayka");
+                return Promise.resolve(new Response(JSON.stringify(versions)));
+            });
+            const result = await new LyricsService(fetchFn).get({
+                title: "Ya Nabi Salam Alayka - Arabic Version - Bonus Track",
+                artist: "Maher Zain",
+                durationMs: 298_947,
+            });
+            expect(result).toMatchObject({ status: "found", syncedLyrics: lrc(33) });
+        });
     });
 });
