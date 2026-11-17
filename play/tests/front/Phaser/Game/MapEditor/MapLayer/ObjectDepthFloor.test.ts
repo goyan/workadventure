@@ -3,6 +3,7 @@ import {
     applyDepthStep,
     applySupportDepthFloor,
     applyHungOnWallDepth,
+    hangAltitude,
     applyWallDepthFloor,
     getDepthStepRange,
 } from "../../../../../../src/front/Phaser/Game/MapEditor/MapLayer/ObjectDepthFloor";
@@ -146,5 +147,27 @@ describe("applyHungOnWallDepth", () => {
         const painting = { x: 68, y: 120, width: 24, height: 20 };
         expect(applyHungOnWallDepth(400, painting, faces)).toBe(400);
         expect(applyHungOnWallDepth(140, painting, [])).toBe(140);
+    });
+});
+
+describe("hangAltitude", () => {
+    // The face of a wall two tiles high: 52 px under its cap, its foot at y = 64.
+    const face = { x: 0, y: 12, width: 64, height: 52, footY: 64, elevation: 0 };
+
+    it("is the height of the lower edge of the image above the foot of the wall", () => {
+        expect(hangAltitude({ x: 4, y: 20, width: 20, height: 16 }, [face])).toBe(28);
+    });
+
+    it("adds the altitude of a wall of a raised floor", () => {
+        expect(hangAltitude({ x: 4, y: 20, width: 20, height: 16 }, [{ ...face, elevation: 52 }])).toBe(80);
+    });
+
+    it("is undefined for an image that shows beside the face or over the cap", () => {
+        expect(hangAltitude({ x: 50, y: 20, width: 20, height: 16 }, [face])).toBeUndefined();
+        expect(hangAltitude({ x: 4, y: 4, width: 20, height: 16 }, [face])).toBeUndefined();
+    });
+
+    it("is undefined at the foot of the wall: the object stands on the ground", () => {
+        expect(hangAltitude({ x: 4, y: 48, width: 20, height: 16 }, [face])).toBeUndefined();
     });
 });

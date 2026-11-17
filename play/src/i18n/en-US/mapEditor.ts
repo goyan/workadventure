@@ -519,6 +519,7 @@ const mapEditor: BaseTranslation = {
             deadEnd: "A placed stair that leads nowhere",
         },
         floorLevel: {
+            hung: "Hung on the wall",
             objectTitle: "Level of this object",
             auto: "Auto",
             autoHint: "The raised floor under the pointer, the ground where there is none",
