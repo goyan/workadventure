@@ -267,7 +267,7 @@ import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
-import { mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { TreadmillBelts } from "./Treadmill/TreadmillBelts";
 import { effectiveWeather, weatherAtTime } from "./Weather/WeatherFrame";
 import { shownWeatherSettings } from "./Weather/RealWeatherClient";
@@ -3126,6 +3126,7 @@ export class GameScene extends DirtyScene {
                                 persist: false,
                                 scope: "room",
                             }),
+                        (levels) => mapLayerBuiltLevelsStore.set(levels),
                     );
                 }
                 this.treeSeasonEffects?.destroy();

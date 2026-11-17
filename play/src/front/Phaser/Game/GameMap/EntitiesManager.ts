@@ -17,7 +17,7 @@ import { get } from "svelte/store";
 import { z } from "zod";
 import * as Sentry from "@sentry/svelte";
 import { treeSeasonAt } from "@wa/front/Phaser/Game/Nature/SeasonClock";
-import { mapEditorPlaceUnderFloorsStore } from "../../../Stores/MapEditorStore";
+import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
 import { shownWeatherSettings } from "../Weather/RealWeatherClient";
@@ -663,7 +663,7 @@ export class EntitiesManager extends EventEmitter {
                 elevation: entity.getEntityData().elevation,
             });
         }
-        return placementElevation(placed, image, get(mapEditorPlaceUnderFloorsStore));
+        return placementElevation(placed, image, get(mapEditorPlacementLevelStore));
     }
 
     private copyEntity(entity: Entity): void {

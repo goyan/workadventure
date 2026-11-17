@@ -723,7 +723,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         },
         images: "Image{{s}}",
         noImage: "Aucune image",
-        placeUnderFloors: "Poser au sol, sous les paliers",
+        placeOn: "Poser sur",
+        placeAuto: "Auto",
+        placeAutoHint: "Le palier sous le pointeur, le sol s’il n’y en a pas",
         snapToGrid: "Magnétisme",
         specialTags: {
             uncategorizedLabel: "À classer",

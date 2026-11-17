@@ -68,10 +68,10 @@ export const mapEditorEntityModeStore = writable<MapEditorEntityToolMode>("ADD")
 /** Eraser of the entity tool: a click on an object, or a drag over objects, deletes them. */
 export const mapEditorEntityEraserStore = writable<boolean>(false);
 /**
- * Where an object is placed or dropped over a raised floor: on that floor (the default), or on the ground under it when
- * this is on (to furnish the room under a mezzanine).
+ * The level an object is placed or dropped on: `auto` (the default) is the raised floor drawn under the pointer, the
+ * ground where there is none; a number is that level, 0 being the ground (to furnish the room under a mezzanine).
  */
-export const mapEditorPlaceUnderFloorsStore = writable<boolean>(false);
+export const mapEditorPlacementLevelStore = writable<"auto" | number>("auto");
 
 /** Eraser of the area tool: a click on an area deletes it. */
 export const mapEditorAreaEraserStore = writable<boolean>(false);

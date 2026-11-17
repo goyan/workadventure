@@ -711,7 +711,9 @@ const mapEditor: BaseTranslation = {
         },
         images: "Image{{s}}",
         noImage: "No image",
-        placeUnderFloors: "Place on the ground, under the raised floors",
+        placeOn: "Place on",
+        placeAuto: "Auto",
+        placeAutoHint: "The raised floor under the pointer, the ground where there is none",
         snapToGrid: "Snap to grid",
         specialTags: {
             uncategorizedLabel: "To sort",

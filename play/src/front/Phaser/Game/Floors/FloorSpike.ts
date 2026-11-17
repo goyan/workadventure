@@ -152,6 +152,8 @@ export class FloorSpike {
         private readonly editor: () => { open: boolean; level: number },
         /** Tells the other players the altitude of the avatar. */
         private readonly share: (z: number) => void,
+        /** Tells the floors that have slabs on the map, lowest first, each time they change. */
+        private readonly onLevels: (levels: number[]) => void,
     ) {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_LEVEL_DEPTH * 2.5);
@@ -295,6 +297,7 @@ export class FloorSpike {
             }),
         );
         this.model = model;
+        this.onLevels(model.getLevels());
         const stairBoxes = model.getStairs().map((placed) => this.stairScreenBox(placed));
         const alphas = new Map(this.levels.map((level) => [level.elevation, level.alpha]));
         this.levels.length = 0;

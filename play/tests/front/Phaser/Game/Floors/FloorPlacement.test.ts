@@ -15,22 +15,25 @@ describe("altitude of an object placed on the map", () => {
 
     it("puts an object on the floor drawn under its foot", () => {
         // A plant 32 x 48 whose foot (the middle of its bottom) is at (160, 119): over the slab of the tile (5, 5).
-        expect(placementElevation(placed, { x: 144, y: 72, width: 32, height: 48 }, false)).toBe(52);
+        expect(placementElevation(placed, { x: 144, y: 72, width: 32, height: 48 }, "auto")).toBe(52);
     });
 
     it("leaves it on the ground where no floor is drawn", () => {
-        expect(placementElevation(placed, { x: 16, y: 72, width: 32, height: 48 }, false)).toBe(0);
+        expect(placementElevation(placed, { x: 16, y: 72, width: 32, height: 48 }, "auto")).toBe(0);
         // Its image overlaps the floor, but its foot stands south of it.
-        expect(placementElevation(placed, { x: 144, y: 110, width: 32, height: 48 }, false)).toBe(0);
+        expect(placementElevation(placed, { x: 144, y: 110, width: 32, height: 48 }, "auto")).toBe(0);
     });
 
-    it("leaves it on the ground under a floor when asked to", () => {
-        expect(placementElevation(placed, { x: 144, y: 72, width: 32, height: 48 }, true)).toBe(0);
+    it("puts it on the level asked, whatever is drawn there", () => {
+        // On the ground under the floor (to furnish the room under a mezzanine).
+        expect(placementElevation(placed, { x: 144, y: 72, width: 32, height: 48 }, 0)).toBe(0);
+        // On a floor that another one hides, or where its slabs are not laid yet.
+        expect(placementElevation(placed, { x: 16, y: 72, width: 32, height: 48 }, 84)).toBe(84);
     });
 
     it("takes the highest of two floors drawn there", () => {
         // A slab at 116 px over the tile (5, 7) is drawn from y = 108 to y = 140, over the first floor.
-        expect(placementElevation([...placed, slab(5, 7, 116)], { x: 144, y: 72, width: 32, height: 48 }, false)).toBe(
+        expect(placementElevation([...placed, slab(5, 7, 116)], { x: 144, y: 72, width: 32, height: 48 }, "auto")).toBe(
             116,
         );
     });

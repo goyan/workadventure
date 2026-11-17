@@ -3,12 +3,14 @@
     import { onDestroy } from "svelte";
     import { derived, get } from "svelte/store";
     import { LL } from "../../../../i18n/i18n-svelte";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
+    import { floorLevelTiles } from "../../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { localUserStore } from "../../../Connection/LocalUserStore";
     import { gameManager } from "../../../Phaser/Game/GameManager";
     import type { EntityVariant } from "../../../Phaser/Game/MapEditor/Entities/EntityVariant";
     import {
         mapEditorEntityEraserStore,
-        mapEditorPlaceUnderFloorsStore,
+        mapEditorPlacementLevelStore,
         mapEditorSnapEnabledStore,
     } from "../../../Stores/MapEditorStore";
     import type { CategoryTag, SelectableTag } from "../../../Stores/MapEditorStore";
@@ -304,15 +306,31 @@
                 spacing="ml-2"
                 alignLabel="center"
             />
-            <InputSwitch
-                id="entity-editor-place-under-floors"
-                label={$LL.mapEditor.entityEditor.placeUnderFloors()}
-                bind:value={$mapEditorPlaceUnderFloorsStore}
-                margin="mt-1"
-                spacing="ml-2"
-                alignLabel="center"
-            />
         </div>
+        {#if $mapLayerBuiltLevelsStore.length > 0}
+            <!-- The level the objects are placed on: only on a map that has raised floors. -->
+            <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="entityPlacementLevel">
+                <span class="font-bold">{$LL.mapEditor.entityEditor.placeOn()}</span>
+                {#each ["auto", 0, ...$mapLayerBuiltLevelsStore] as const as level (level)}
+                    <button
+                        type="button"
+                        class="px-2 py-1 rounded {$mapEditorPlacementLevelStore === level
+                            ? 'bg-secondary'
+                            : 'bg-white/10 hover:bg-white/20'}"
+                        aria-pressed={$mapEditorPlacementLevelStore === level}
+                        title={level === "auto" ? $LL.mapEditor.entityEditor.placeAutoHint() : undefined}
+                        data-testid="entityPlacementLevel-{level}"
+                        onclick={() => mapEditorPlacementLevelStore.set(level)}
+                    >
+                        {level === "auto"
+                            ? $LL.mapEditor.entityEditor.placeAuto()
+                            : level === 0
+                              ? $LL.mapEditor.mapLayer.floorLevel.ground()
+                              : $LL.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(level) })}
+                    </button>
+                {/each}
+            </div>
+        {/if}
         <p class="retro-hint m-0" data-testid="entityEditorShortcuts">
             {$LL.mapEditor.entityEditor.header.shortcuts()}
         </p>
