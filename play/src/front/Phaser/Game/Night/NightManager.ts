@@ -8,7 +8,9 @@ import {
     nightModeStore,
     nightDateStore,
     realisticNightStore,
-    indirectLightStore,
+    ambienceFullShareStore,
+    ambienceStrengthStore,
+    lightSoftEdgeStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
@@ -30,7 +32,7 @@ import {
     sunPositionAt,
 } from "./NightClock";
 import type { SunPosition } from "./NightClock";
-import { lightSoftEdgePx, roomAmbience } from "./AmbientLight";
+import { roomAmbience, type AmbienceSettings } from "./AmbientLight";
 import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
@@ -82,10 +84,15 @@ export class NightManager {
     private readonly unsubscribeRealistic: Unsubscriber;
     private readonly unsubscribeDarkness: Unsubscriber;
     private readonly unsubscribeIndirect: Unsubscriber;
-    private indirect = 0;
+    private ambienceSettings: AmbienceSettings = { strength: 0, fullShare: 1 };
     // The light bounced around the rooms, worked out again only when the lights, the rooms or the setting changed.
     private ambience:
-        | { lamps: readonly RgbLampLight[]; areas: readonly AreaData[]; indirect: number; lit: readonly LitArea[] }
+        | {
+              lamps: readonly RgbLampLight[];
+              areas: readonly AreaData[];
+              settings: AmbienceSettings;
+              lit: readonly LitArea[];
+          }
         | undefined;
     private darkness = NIGHT_MAX_OPACITY;
     private opacity = 0;
@@ -137,12 +144,25 @@ export class NightManager {
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
-        this.unsubscribeIndirect = indirectLightStore.subscribe((indirect) => {
-            this.indirect = indirect;
-            // The lights are drawn again with their new edge, and the veil with the new bounced light.
-            setLightSoftEdgePx(lightSoftEdgePx(indirect));
+        const unsubscribeStrength = ambienceStrengthStore.subscribe((strength) => {
+            // A new object: the bounced light is worked out again, and the veil drawn again.
+            this.ambienceSettings = { ...this.ambienceSettings, strength };
             this.scene.markDirty();
         });
+        const unsubscribeFullShare = ambienceFullShareStore.subscribe((fullShare) => {
+            this.ambienceSettings = { ...this.ambienceSettings, fullShare };
+            this.scene.markDirty();
+        });
+        const unsubscribeSoftEdge = lightSoftEdgeStore.subscribe((px) => {
+            // The lights are drawn again with their new edge.
+            setLightSoftEdgePx(px);
+            this.scene.markDirty();
+        });
+        this.unsubscribeIndirect = () => {
+            unsubscribeStrength();
+            unsubscribeFullShare();
+            unsubscribeSoftEdge();
+        };
         this.unsubscribeDarkness = nightDarknessStore.subscribe((darkness) => {
             this.darkness = darkness;
             // The veil is worked out again at the next image, not at the next second.
@@ -265,7 +285,7 @@ export class NightManager {
             ambience !== undefined &&
             ambience.lamps === this.lamps &&
             ambience.areas === this.areas &&
-            ambience.indirect === this.indirect
+            ambience.settings === this.ambienceSettings
         ) {
             return ambience.lit;
         }
@@ -276,9 +296,9 @@ export class NightManager {
                 intensity: lamp.ambient ?? lamp.intensity,
                 elevation: lamp.elevation,
             })),
-            this.indirect,
+            this.ambienceSettings,
         );
-        this.ambience = { lamps: this.lamps, areas: this.areas, indirect: this.indirect, lit };
+        this.ambience = { lamps: this.lamps, areas: this.areas, settings: this.ambienceSettings, lit };
         return lit;
     }
 

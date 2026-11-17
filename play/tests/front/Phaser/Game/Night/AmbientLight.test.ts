@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-    AMBIENT_FULL_SHARE,
-    AMBIENT_MAX,
-    LIGHT_SOFT_EDGE_MAX_PX,
-    clippedArea,
-    lightSoftEdgePx,
-    roomAmbience,
-} from "../../../../../src/front/Phaser/Game/Night/AmbientLight";
+import { clippedArea, roomAmbience } from "../../../../../src/front/Phaser/Game/Night/AmbientLight";
 
 const square = (x: number, y: number, side: number) => [
     { x, y },
@@ -51,50 +44,53 @@ describe("clippedArea", () => {
 
 describe("roomAmbience", () => {
     const beam = { polygon: square(0, 0, 20) }; // 4 % of the room
+    // Up to half of the veil, reached when 40 % of the room is lit directly.
+    const settings = { strength: 0.5, fullShare: 0.4 };
 
     it("lights faintly, all over, a room a light comes into", () => {
-        const share = 0.04 / AMBIENT_FULL_SHARE;
-        expect(roomAmbience([room], [beam], 1)).toEqual([
-            { ...room, id: "ambient:room", intensity: expect.closeTo(AMBIENT_MAX * share, 5) },
+        expect(roomAmbience([room], [beam], settings)).toEqual([
+            { ...room, id: "ambient:room", intensity: expect.closeTo(0.5 * (0.04 / 0.4), 5) },
         ]);
     });
 
-    it("follows the setting, and does nothing when it is at zero", () => {
-        const [full] = roomAmbience([room], [beam], 1);
-        const [half] = roomAmbience([room], [beam], 0.5);
-        expect(half.intensity).toBeCloseTo(full.intensity / 2);
-        expect(roomAmbience([room], [beam], 0)).toEqual([]);
+    it("follows the strength set, and does nothing when it is at zero", () => {
+        const [strong] = roomAmbience([room], [beam], { ...settings, strength: 1 });
+        const [weak] = roomAmbience([room], [beam], settings);
+        expect(weak.intensity).toBeCloseTo(strong.intensity / 2);
+        expect(roomAmbience([room], [beam], { ...settings, strength: 0 })).toEqual([]);
     });
 
-    it("never takes more of the veil away than its maximum, however much light comes in", () => {
+    it("is at its strongest sooner when a smaller share of the room is asked for", () => {
+        const [slow] = roomAmbience([room], [beam], settings);
+        const [quick] = roomAmbience([room], [beam], { ...settings, fullShare: 0.04 });
+        expect(quick.intensity).toBeCloseTo(0.5);
+        expect(slow.intensity).toBeLessThan(quick.intensity);
+    });
+
+    it("never takes more of the veil away than the strength set, however much light comes in", () => {
         const flood = { polygon: square(0, 0, 100) };
-        expect(roomAmbience([room], [flood, flood], 1)[0].intensity).toBeCloseTo(AMBIENT_MAX);
+        expect(roomAmbience([room], [flood, flood], settings)[0].intensity).toBeCloseTo(0.5);
     });
 
     it("adds the lights that come into the same room, each by its strength", () => {
-        const [one] = roomAmbience([room], [beam], 1);
-        const [two] = roomAmbience([room], [beam, { polygon: square(50, 50, 20), intensity: 0.5 }], 1);
+        const [one] = roomAmbience([room], [beam], settings);
+        const [two] = roomAmbience([room], [beam, { polygon: square(50, 50, 20), intensity: 0.5 }], settings);
         expect(two.intensity).toBeCloseTo(one.intensity * 1.5);
     });
 
     it("leaves dark a room no light comes into, and a light without shape", () => {
         const elsewhere = { polygon: square(500, 500, 20) };
-        expect(roomAmbience([room], [elsewhere, { polygon: undefined }], 1)).toEqual([]);
+        expect(roomAmbience([room], [elsewhere, { polygon: undefined }], settings)).toEqual([]);
     });
 
     it("keeps a light on its own floor of the map", () => {
         const upstairs = { ...room, id: "up", elevation: 64 };
-        const lit = roomAmbience([room, upstairs], [{ ...beam, elevation: 64 }], 1);
+        const lit = roomAmbience([room, upstairs], [{ ...beam, elevation: 64 }], settings);
         expect(lit.map((area) => area.id)).toEqual(["ambient:up"]);
     });
-});
 
-describe("lightSoftEdgePx", () => {
-    it("softens the edge of the lights with the setting, up to half a tile", () => {
-        expect(lightSoftEdgePx(0)).toBe(0);
-        expect(lightSoftEdgePx(0.5)).toBeCloseTo(LIGHT_SOFT_EDGE_MAX_PX / 2);
-        expect(lightSoftEdgePx(1)).toBe(LIGHT_SOFT_EDGE_MAX_PX);
-        expect(lightSoftEdgePx(3)).toBe(LIGHT_SOFT_EDGE_MAX_PX);
-        expect(lightSoftEdgePx(Number.NaN)).toBe(0);
+    it("reads a setting it cannot use as no bounced light", () => {
+        expect(roomAmbience([room], [beam], { strength: Number.NaN, fullShare: 0.4 })).toEqual([]);
+        expect(roomAmbience([room], [beam], { strength: 0.5, fullShare: 0 })[0].intensity).toBeCloseTo(0.5);
     });
 });

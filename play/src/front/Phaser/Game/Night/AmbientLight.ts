@@ -6,14 +6,16 @@ interface Point {
     y: number;
 }
 
-/** The most of the night veil the light bounced around a room takes away, with the setting at its highest. */
-export const AMBIENT_MAX = 0.5;
-/** The share of the surface of a room that must be lit directly for the bounced light to be at its highest. */
-export const AMBIENT_FULL_SHARE = 0.3;
 /** Below this, the bounced light of a room is not drawn at all. */
 const AMBIENT_MIN = 0.01;
-/** How far the edge of a light is softened with the setting at its highest, in map pixels: half a tile. */
-export const LIGHT_SOFT_EDGE_MAX_PX = 16;
+
+/** The settings of the bounced light, each player's own. */
+export interface AmbienceSettings {
+    /** The most of the night veil the bounced light takes away, from 0 (none) to 1. */
+    strength: number;
+    /** The share of the surface of a room that must be lit directly for the bounced light to be at its strongest. */
+    fullShare: number;
+}
 
 /** A light as the bounced light reads it: the shape it reaches on the map, how strong it is, and its floor. */
 export interface AmbientSource {
@@ -77,17 +79,19 @@ export function clippedArea(polygon: readonly Point[], rect: Pick<NightRect, "x"
 /**
  * The light bounced around the rooms: a room a light comes into (through a door, from a lamp in a corner) is lit
  * faintly all over, as the floor and the walls it falls on send some of it back. Each room is lit by the share of its
- * surface the lights reach directly, each by its strength, up to AMBIENT_MAX of the veil; `strength` is the setting of
- * the player (0: no bounced light). Returns the areas to cut out of the night veil.
+ * surface the lights reach directly, each by its strength: at its strongest (`strength` of the veil) once `fullShare`
+ * of the room is lit. Returns the areas to cut out of the night veil.
  */
 export function roomAmbience(
     rooms: readonly (NightRect & { id: string })[],
     lights: readonly AmbientSource[],
-    strength: number,
+    settings: AmbienceSettings,
 ): LitArea[] {
+    const strength = Math.min(1, settings.strength);
     if (!(strength > 0)) {
         return [];
     }
+    const fullShare = Math.max(0.001, settings.fullShare);
     const lit: LitArea[] = [];
     for (const room of rooms) {
         const surface = room.width * room.height;
@@ -100,15 +104,10 @@ export function roomAmbience(
                 reached += clippedArea(light.polygon, room) * Math.min(1, Math.max(0, light.intensity ?? 1));
             }
         }
-        const intensity = Math.min(1, strength) * AMBIENT_MAX * Math.min(1, reached / surface / AMBIENT_FULL_SHARE);
+        const intensity = strength * Math.min(1, reached / surface / fullShare);
         if (intensity >= AMBIENT_MIN) {
             lit.push({ ...room, id: `ambient:${room.id}`, intensity });
         }
     }
     return lit;
-}
-
-/** How far the edge of the lights is softened for this setting (0 to 1), in map pixels. */
-export function lightSoftEdgePx(strength: number): number {
-    return Number.isFinite(strength) ? Math.min(1, Math.max(0, strength)) * LIGHT_SOFT_EDGE_MAX_PX : 0;
 }

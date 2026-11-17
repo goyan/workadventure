@@ -117,11 +117,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             darknessLight: "Claire",
             darknessDark: "Très sombre",
             darknessReset: "Revenir à 60 %",
-            indirect: "Lumière indirecte : {percent} %",
-            indirectNone: "Aucune",
-            indirectFull: "Forte",
+            indirect: "Lumière indirecte",
             indirectHelp:
-                "Une pièce où entre de la lumière est faiblement éclairée partout, et le bord des lumières est adouci. Réglage personnel.",
+                "La nuit, une pièce où entre de la lumière est faiblement éclairée partout, et le bord des lumières est adouci. Réglages personnels.",
+            ambienceStrength: "Ambiance des pièces : jusqu'à {percent} % du voile (0 : aucune)",
+            ambienceFullShare: "Ambiance maximale quand {percent} % de la pièce est éclairée",
+            softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:
                 "La nuit, une pièce n'est éclairée que par ses lampes (interrupteurs, capteurs). Réglage personnel.",
