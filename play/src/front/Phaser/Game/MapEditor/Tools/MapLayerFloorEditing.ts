@@ -20,6 +20,7 @@ import {
     mapLayerStairTargetStore,
     mapLayerStairOpenStore,
     mapLayerStairWidthStore,
+    mapLayerShortStairsAvailableStore,
     mapLayerStatusStore,
 } from "../../../../Stores/MapLayerStore";
 import { LL } from "../../../../../i18n/i18n-svelte";
@@ -199,6 +200,8 @@ export class MapLayerFloorEditing {
             width: get(mapLayerStairWidthStore),
             rise,
             open: get(mapLayerStairOpenStore),
+            // New stairs are short, when the catalog of the room has them.
+            ...(get(mapLayerShortStairsAvailableStore) ? { short: true } : {}),
         };
     }
 

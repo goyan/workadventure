@@ -65,6 +65,8 @@ export const mapLayerDoorsAvailableStore = writable<boolean>(false);
 export const mapLayerSlabGlassStore = writable<boolean>(false);
 /** Whether the catalog of the raised floors has the glass slab: the "Glass" switch is disabled without it. */
 export const mapLayerGlassSlabsAvailableStore = writable<boolean>(false);
+/** Whether the catalog of the room has the new short stairs (-v2): the stair mode places them, else the old ones. */
+export const mapLayerShortStairsAvailableStore = writable<boolean>(false);
 
 /** Whether the door catalog of the current room has the glazed doors: the "Glazed" switch is disabled without them. */
 export const mapLayerGlazedDoorsAvailableStore = writable<boolean>(false);

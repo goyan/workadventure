@@ -28,6 +28,7 @@ import {
     isFloorMode,
     mapLayerFloorsAvailableStore,
     mapLayerGlassSlabsAvailableStore,
+    mapLayerShortStairsAvailableStore,
     mapLayerPickLevelStore,
     mapLayerLevelStore,
     mapLayerLevelsStore,
@@ -93,7 +94,12 @@ import {
     windowEdgesBetween,
 } from "../MapLayer/MapLayerOperations";
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
-import { MAP_LAYER_FLOOR_SLAB_COLLECTION, SLAB_GLASS_FAMILY, slabPrefabName } from "../MapLayer/MapLayerFloors";
+import {
+    MAP_LAYER_FLOOR_SLAB_COLLECTION,
+    SLAB_GLASS_FAMILY,
+    slabPrefabName,
+    stairPrefabName,
+} from "../MapLayer/MapLayerFloors";
 import { stepLevel, steppableLevels } from "../MapLayer/FloorOperations";
 import { FLOOR_PREVIEW_DEPTH } from "../MapLayer/FloorDepth";
 import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
@@ -348,6 +354,15 @@ export class MapLayerEditorTool extends MapEditorTool {
             mapLayerPrefabId(MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName(SLAB_GLASS_FAMILY)),
         );
         mapLayerGlassSlabsAvailableStore.set(glassSlab !== undefined);
+        // The new short stairs (-v2) came later too.
+        const shortStair = await manager.getEntityPrefab(
+            MAP_LAYER_FLOOR_SLAB_COLLECTION,
+            mapLayerPrefabId(
+                MAP_LAYER_FLOOR_SLAB_COLLECTION,
+                stairPrefabName({ direction: "n", width: 1, rise: 52, open: false, short: true }),
+            ),
+        );
+        mapLayerShortStairsAvailableStore.set(shortStair !== undefined);
         if (slab === undefined && isFloorMode(get(mapLayerModeStore))) mapLayerModeStore.set("wall");
         // The doors are optional: a room whose catalogs do not have them keeps the floors and the walls.
         const door = await manager.getEntityPrefab(

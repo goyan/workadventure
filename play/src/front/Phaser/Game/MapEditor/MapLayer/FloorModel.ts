@@ -84,7 +84,13 @@ export class FloorModel {
                 if (Number.isInteger(x) && Number.isInteger(y)) model.setSlab(elevation, x, y, piece.family);
                 continue;
             }
-            const shape = { direction: piece.direction, width: piece.width, rise: piece.rise, open: piece.open };
+            const shape = {
+                direction: piece.direction,
+                width: piece.width,
+                rise: piece.rise,
+                open: piece.open,
+                ...(piece.short ? { short: true } : {}),
+            };
             const foot = stairFootFromImage(shape, item.x, item.y, elevation);
             if (foot) model.addStair(shape, foot, elevation);
         }
