@@ -130,6 +130,20 @@ describe("roomIdAt", () => {
         expect(roomIdAt({ x: 4300, y: 2200 }, rooms)).toBe("office");
     });
 
+    it("gives a lamp on the wall of a room to that room, even where the area above reaches down over that wall", () => {
+        // The map of the user: the lounge above is drawn down to the top edge of the office, over the wall between them.
+        const lounge = { areaId: "lounge", x: 4032, y: 1984, width: 384, height: 256 };
+        const neighbour = { areaId: "neighbour", x: 4032, y: 2240, width: 192, height: 224 };
+        const all = [office, lounge, neighbour];
+        expect(roomIdAt({ x: 4240, y: 2227 }, all)).toBe("office");
+        // A full tile above the office: still its wall.
+        expect(roomIdAt({ x: 4240, y: 2240 - 32 }, all)).toBe("office");
+        // Higher up, the lamp stands in the lounge.
+        expect(roomIdAt({ x: 4240, y: 2240 - 33 }, all)).toBe("lounge");
+        // Above the neighbour, not above the office.
+        expect(roomIdAt({ x: 4100, y: 2227 }, all)).toBe("neighbour");
+    });
+
     it("is no room far from any", () => {
         expect(roomIdAt({ x: 100, y: 100 }, rooms)).toBeUndefined();
         expect(roomIdAt({ x: 4300, y: 2300 }, [])).toBeUndefined();

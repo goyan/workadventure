@@ -24,19 +24,28 @@ export interface SwitchRoom {
 const ROOM_MARGIN_ABOVE_PX = 128;
 /** On the other sides an object against a wall of its room is at most a tile out of it. */
 const ROOM_MARGIN_PX = 32;
+/**
+ * The face of the wall of a room is drawn on the tile above the room. An object there hangs on that wall and belongs
+ * to that room, even where the area of the room above was drawn down over the wall.
+ */
+const ROOM_WALL_FACE_PX = 32;
 
 /**
- * The room an object is in, among the rooms of its floor: the smallest that holds its point; failing that the
- * nearest one it is just out of — a lamp hung on the wall above a room, a switch against one of its walls — so that
+ * The room an object is in, among the rooms of its floor: the one whose wall it hangs on (the tile above the room);
+ * else the smallest that holds its point; failing that the nearest one it is just out of — a lamp hung on the wall above a room, a switch against one of its walls — so that
  * "the lamps of this room" means what one sees. Undefined far from any room.
  */
 export function roomIdAt(point: { x: number; y: number }, rooms: readonly SwitchRoom[]): string | undefined {
     let inside: SwitchRoom | undefined;
     let near: { room: SwitchRoom; distance: number } | undefined;
+    let onWall: { room: SwitchRoom; above: number } | undefined;
     for (const room of rooms) {
         const dx = Math.max(room.x - point.x, 0, point.x - (room.x + room.width));
         const above = room.y - point.y;
         const below = point.y - (room.y + room.height);
+        if (dx === 0 && above > 0 && above <= ROOM_WALL_FACE_PX && (!onWall || above < onWall.above)) {
+            onWall = { room, above };
+        }
         if (dx === 0 && above <= 0 && below <= 0) {
             if (!inside || room.width * room.height < inside.width * inside.height) {
                 inside = room;
@@ -51,7 +60,7 @@ export function roomIdAt(point: { x: number; y: number }, rooms: readonly Switch
             near = { room, distance };
         }
     }
-    return (inside ?? near?.room)?.areaId;
+    return (onWall?.room ?? inside ?? near?.room)?.areaId;
 }
 
 const NO_KEYS: readonly EntityStateKey[] = [];
