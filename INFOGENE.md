@@ -392,6 +392,26 @@ n'a pas de position à lui (comme un va-et-vient).
   95 % (très sombre), 60 % par défaut comme avant ; c'est l'opacité du voile en pleine nuit (`nightDarknessStore`,
   gardé dans le navigateur, `nightOpacityWith`) : crépuscule et aube en gardent leur part, la lune l'éclaircit comme
   avant, lampes, torches et halos le percent comme avant. « Revenir à 60 % » sous le curseur.
+- **Lumière indirecte (réglages personnels)** : Paramètres → Ambiance → Cycle jour/nuit, trois curseurs gardés dans le
+  navigateur. (1) **Ambiance des pièces** (`Night/AmbientLight.ts`, `roomAmbience`) : une pièce (zone de la carte) où
+  entre la lumière d'une lampe RGB ou d'une torche, par sa porte ou depuis un coin, est éclaircie partout ; curseur
+  « jusqu'à x % du voile » (`ambienceStrengthStore`, 25 % par défaut, 0 : aucune) et curseur « ambiance maximale quand
+  x % de la pièce est éclairée » (`ambienceFullShareStore`, 30 % par défaut) ; chaque lumière compte pour sa force ;
+  recalculé seulement quand les lumières, les zones ou un réglage changent. (2) **Bords adoucis**
+  (`lightSoftEdgeStore`, 8 px par défaut, 0 à 32 px) : le bord de la lumière d'une lampe ou d'une torche est flouté
+  dans sa texture (`LightSoftEdge`, flou du canevas ; bord net sur un navigateur sans filtre de canevas). Ambiance et
+  bords à 0 : lumière directe seule, bords nets, comme avant. Limites : l'ambiance éclaircit le voile sans le
+  teinter de la couleur de la lampe, ne vaut que dans une zone (rien dehors ni dans une pièce sans zone), ne compte
+  pas la lumière de lune entrée par les fenêtres, et le flou déborde d'autant derrière un mur ; pas de vrai rebond
+  (une lumière ne tourne pas au coin d'une porte).
+- **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 31 réglages personnels de lumière (obscurité de la nuit,
+  éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
+  forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
+  lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu
+  (code d'une version plus récente) est ignoré. Les noms des réglages (`Stores/LightSettings.ts`) font partie du
+  code : ne jamais en réutiliser un pour autre chose. Hors du code : mode du cycle jour/nuit, nuages, effets des
+  lampes de Jam.
 - **Éclairage réaliste (réglage personnel)** : Paramètres → Ambiance → Cycle jour/nuit, interrupteur « Éclairage
   réaliste : les pièces ne s'allument plus toutes seules », désactivé par défaut, gardé dans le navigateur
   (`realisticNightStore`). Activé, la nuit, une pièce occupée ne s'éclaire plus d'elle-même : seules ses lampes (et

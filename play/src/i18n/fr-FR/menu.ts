@@ -107,6 +107,18 @@ const menu: DeepPartial<Translation["menu"]> = {
             hintChristmas: "Noël : la neige remplace le sol extérieur et la météo de la carte.",
             hintNone: "Aucun décor saisonnier.",
         },
+        lightShare: {
+            title: "Partager mes réglages de lumière",
+            help: "Un code qui porte tous les réglages de lumière (nuit, lumière indirecte, soleil, lune, ombres) : à envoyer à quelqu'un, qui le colle ici.",
+            copy: "Copier le code de mes réglages",
+            copied: "Code copié.",
+            copyByHand: "Copie refusée par le navigateur : sélectionnez le code et copiez-le.",
+            code: "Code de mes réglages de lumière",
+            paste: "Coller un code reçu",
+            apply: "Appliquer",
+            applied: "{count} réglages appliqués.",
+            unknown: "Ce n'est pas un code de réglages de lumière.",
+        },
         night: {
             label: "Cycle jour/nuit",
             server: "Heure du serveur",
@@ -117,6 +129,12 @@ const menu: DeepPartial<Translation["menu"]> = {
             darknessLight: "Claire",
             darknessDark: "Très sombre",
             darknessReset: "Revenir à 60 %",
+            indirect: "Lumière indirecte",
+            indirectHelp:
+                "La nuit, une pièce où entre de la lumière est faiblement éclairée partout, et le bord des lumières est adouci. Réglages personnels.",
+            ambienceStrength: "Ambiance des pièces : jusqu'à {percent} % du voile (0 : aucune)",
+            ambienceFullShare: "Ambiance maximale quand {percent} % de la pièce est éclairée",
+            softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:
                 "La nuit, une pièce n'est éclairée que par ses lampes (interrupteurs, capteurs). Réglage personnel.",

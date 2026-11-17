@@ -51,3 +51,10 @@ export const nightDarknessStore = createPersistedNumberStore(
 
 /** Current clock shown by the map, updated by the existing night-mode tick. */
 export const nightDateStore = writable<Date | undefined>(undefined);
+
+/** The most of the night veil the light bounced around a room takes away, for this player (0: none). */
+export const ambienceStrengthStore = createPersistedNumberStore("nightAmbienceStrength", 0.25, 0, 1);
+/** The share of a room that must be lit directly for its bounced light to be at its strongest. */
+export const ambienceFullShareStore = createPersistedNumberStore("nightAmbienceFullShare", 0.3, 0.05, 1);
+/** How far the edge of the lights is softened, in map pixels (0: sharp), up to a tile. */
+export const lightSoftEdgeStore = createPersistedNumberStore("nightLightSoftEdge", 8, 0, 32);

@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { lightSoftEdgePxNow } from "./LightSoftEdge";
 import { lightFalloff, type LightCone, type Point } from "./RgbLampGeometry";
 
 /**
@@ -23,6 +24,9 @@ export class RgbLampVisual {
     private texels = 0;
     /** The texture the light is drawn in now: the night veil is pierced with it. */
     public textureKey = "";
+    /** The shape last drawn, on the map, and its strength: the light bounced around the rooms is worked out of them. */
+    public polygon: readonly Point[] = [];
+    public strength = 1;
 
     constructor(
         private readonly scene: Phaser.Scene,
@@ -46,6 +50,8 @@ export class RgbLampVisual {
      */
     public draw(light: LightCone, polygon: readonly Point[], colour: number, intensity = 1): void {
         const strength = Math.min(1, Math.max(0, intensity));
+        this.polygon = polygon;
+        this.strength = strength;
         const size = light.radius * 2;
         const texels = Math.max(2, Math.ceil(size * TEXELS_PER_PIXEL));
         if (texels !== this.texels || !this.texture) {
@@ -76,7 +82,16 @@ export class RgbLampVisual {
                 });
                 context.closePath();
                 context.fillStyle = gradient;
-                context.fill();
+                // The edge of the light is softened (a penumbra) by blurring the drawing; a browser whose canvas has
+                // no filter draws the sharp edge.
+                const softEdge = lightSoftEdgePxNow() * scale;
+                if (softEdge > 0 && "filter" in context) {
+                    context.filter = `blur(${softEdge}px)`;
+                    context.fill();
+                    context.filter = "none";
+                } else {
+                    context.fill();
+                }
             }
             this.texture.refresh();
         }

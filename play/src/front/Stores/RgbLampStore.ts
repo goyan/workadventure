@@ -14,6 +14,11 @@ export interface RgbLampLight {
     revision: number;
     /** How much of the night veil the light takes away, from 0 to 1 (full when unset): a torch can be dimmed. */
     intensity?: number;
+    /** The shape the light reaches, in map pixels, and the floor of the map it is on: for the light bounced around the rooms. */
+    polygon?: readonly { x: number; y: number }[];
+    elevation?: number;
+    /** How strong the light is for the bounced light, when it is not `intensity` (an RGB lamp draws its own into its texture). */
+    ambient?: number;
 }
 
 /**

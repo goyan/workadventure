@@ -19,7 +19,13 @@
     import { localUserStore } from "../../Connection/LocalUserStore";
     import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
-    import { nightDarknessStore, realisticNightStore } from "../../Stores/NightStore";
+    import {
+        ambienceFullShareStore,
+        ambienceStrengthStore,
+        lightSoftEdgeStore,
+        nightDarknessStore,
+        realisticNightStore,
+    } from "../../Stores/NightStore";
     import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
@@ -55,6 +61,7 @@
     import SettingsSection from "./SettingsSection.svelte";
     import ThemeSettings from "./ThemeSettings.svelte";
     import FontSettings from "./FontSettings.svelte";
+    import LightSettingsShare from "./LightSettingsShare.svelte";
     import NightSettings from "./NightSettings.svelte";
     import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
@@ -430,6 +437,38 @@
                     </button>
                 {/if}
             </div>
+            <div class="flex flex-col gap-1" data-testid="night-indirect-light">
+                <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.indirect()}</p>
+                <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.indirectHelp()}</p>
+                <span class="text-sm text-white"
+                    >{$LL.menu.settings.night.ambienceStrength({
+                        percent: Math.round($ambienceStrengthStore * 100),
+                    })}</span
+                >
+                <RangeSlider
+                    id="night-ambience-strength"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    bind:value={$ambienceStrengthStore}
+                />
+                <span class="text-sm text-white"
+                    >{$LL.menu.settings.night.ambienceFullShare({
+                        percent: Math.round($ambienceFullShareStore * 100),
+                    })}</span
+                >
+                <RangeSlider
+                    id="night-ambience-full-share"
+                    min={0.05}
+                    max={1}
+                    step={0.05}
+                    bind:value={$ambienceFullShareStore}
+                />
+                <span class="text-sm text-white"
+                    >{$LL.menu.settings.night.softEdge({ pixels: Math.round($lightSoftEdgeStore) })}</span
+                >
+                <RangeSlider id="night-light-soft-edge" min={0} max={32} step={2} bind:value={$lightSoftEdgeStore} />
+            </div>
             <InputSwitch
                 id="night-realistic-lighting"
                 bind:value={$realisticNightStore}
@@ -438,6 +477,7 @@
             />
             <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.realisticHelp()}</p>
         </div>
+        <LightSettingsShare />
         <div class="flex flex-col gap-2">
             <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.seasonal.label()}</p>
             <SeasonalThemeSettings />
