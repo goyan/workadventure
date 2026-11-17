@@ -2213,6 +2213,10 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
   la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
   (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
+- **Lumière sur un mur haut** (`Lamps/RgbLampObstacles.ts`, `wallSegments`) : un mur horizontal de 2 cases et plus
+  arrête la lumière au niveau de son dessus (dessiné au-dessus de son pied), pas à son pied : une lampe ou une
+  torche au sud éclaire toute la façade, une lampe dans la pièce derrière n'en éclaire rien. Les côtés de la façade
+  sont fermés à ses bouts et là où un mur part vers le sud.
 - **Sol sous un mur estompé** (`FadedWallFloor.ts`, `FadedWallFloorView.ts`) : une pièce a son sol sous le haut de
   son mur de devant, pas sous son pied ; estompé (55 %), ce mur laissait voir le sol en haut et le terrain de dehors
   en bas, en deux tons. Le jeu dessine, pour soi seulement et sans rien poser sur la carte, le sol de la pièce sous
