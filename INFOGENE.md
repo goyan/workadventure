@@ -2217,10 +2217,13 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   qui monte plus haut que le palier (mezzanine contre le mur haut de sa pièce) ; un mur dont le dessus est au niveau
   du palier garde son garde-corps, comme une terrasse. Vitrage sous une main courante sombre, 12 px de haut ; celui
   du bord nord passe derrière qui se tient sur la dalle, les autres devant.
-- **Ce qui s'estompe** : un palier situé au-dessus de l'avatar s'estompe quand l'avatar est dessous, monte vers lui,
-  ou se trouve dans une pièce au-dessus de laquelle ce palier a des dalles (on voit toute la pièce) ; un escalier
-  s'estompe quand il recouvre l'avatar situé plus bas que son arrivée ; les dalles qui recouvrent un escalier ne le
-  laissent voir que d'en dessous, pas pour qui se tient sur ce palier ou au-dessus.
+- **Ce qui s'estompe** (`Floors/FloorSpike.ts`, par étage et non par altitude : `FloorGroups.ts` sépare les
+  étages de deux bâtiments, même à la même altitude). Pour un étage situé au-dessus de l'avatar :
+  dans une pièce, l'étage qui a des dalles au-dessus de cette pièce s'estompe (35 %) avec ses objets, ses
+  garde-corps et les escaliers posés dessus, et l'étage d'un autre bâtiment dessiné par-dessus la pièce n'est pas
+  dessiné du tout ; dehors, un bâtiment reste plein et seules les dalles à deux cases autour de l'avatar s'estompent
+  quand l'étage le recouvre ; l'étage vers lequel on monte s'estompe. Un escalier s'estompe quand il recouvre
+  l'avatar situé plus bas que son arrivée. Les dalles qui recouvrent un escalier ne le laissent voir que d'en dessous.
 - **Pas encore** : zones verrouillées pour les portes d'étage ; transparence des murs
   d'étage devant l'avatar ; compagnons et animaux restent au sol ; une zone de départ en
   hauteur fait apparaître au sol ; les portes d'étage sont lues fermées par les lumières ; images définitives.

@@ -12,20 +12,24 @@ const RAIL = { color: 0x2f3a48, alpha: 0.95 };
  * and behind whoever stands in front.
  */
 export class FloorRailingsView {
-    private drawings: { level: number; graphics: Phaser.GameObjects.Graphics }[] = [];
+    private drawings: { floor: string; graphics: Phaser.GameObjects.Graphics }[] = [];
 
     constructor(private readonly scene: Phaser.Scene) {}
 
-    /** Draws the railings again, in place of the ones drawn before. */
-    public draw(edges: readonly RailingEdge[]): void {
+    /**
+     * Draws the railings again, in place of the ones drawn before. `floorOf` names the floor each one belongs to
+     * (the storey of one building): they show through with it.
+     */
+    public draw(edges: readonly RailingEdge[], floorOf: (edge: RailingEdge) => string): void {
         this.clear();
-        const groups = new Map<string, { level: number; depthY: number; edges: RailingEdge[] }>();
+        const groups = new Map<string, { floor: string; level: number; depthY: number; edges: RailingEdge[] }>();
         for (const edge of edges) {
             const depthY = railingDepthY(edge);
-            const key = `${edge.level}:${depthY}`;
+            const floor = floorOf(edge);
+            const key = `${floor}|${depthY}`;
             let group = groups.get(key);
             if (!group) {
-                group = { level: edge.level, depthY, edges: [] };
+                group = { floor, level: edge.level, depthY, edges: [] };
                 groups.set(key, group);
             }
             group.edges.push(edge);
@@ -39,14 +43,14 @@ export class FloorRailingsView {
                     graphics.fillRect(shape.x, shape.y, shape.width, shape.height);
                 }
             }
-            this.drawings.push({ level: group.level, graphics });
+            this.drawings.push({ floor: group.floor, graphics });
         }
     }
 
     /** The railings of a floor show through with it. */
-    public setAlpha(level: number, alpha: number): void {
+    public setAlpha(floor: string, alpha: number): void {
         for (const drawing of this.drawings) {
-            if (drawing.level === level) drawing.graphics.setAlpha(alpha);
+            if (drawing.floor === floor) drawing.graphics.setAlpha(alpha);
         }
     }
 

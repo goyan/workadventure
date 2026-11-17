@@ -105,7 +105,7 @@ export const mapLayerStairWidthStore = writable<StairWidth>(1);
 /** The floor the stair goes up to; undefined (or a floor out of reach): the first one a stair can reach. */
 export const mapLayerStairTargetStore = writable<number | undefined>(undefined);
 /** Whether its side is open (its stringer only) instead of full. */
-export const mapLayerStairOpenStore = writable<boolean>(false);
+export const mapLayerStairOpenStore = writable<boolean>(true);
 
 /**
  * The modes that draw walls, doors and windows: they edit the level chosen in the panel, the ground or a raised floor.
