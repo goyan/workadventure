@@ -140,8 +140,12 @@ const mapStorageServer: MapStorageServer = {
                 // Rights on an entity are checked at its top-left corner: it is the only point of the entity
                 // map-storage knows. The WAM does not store entity sizes and the size sent by the client cannot
                 // be trusted (a fake size would move the "center" into the user's zone).
-                const assertCanEditEntityAt = (position: EntityCoordinates, action: string) => {
-                    if (!entityPermissions.canEdit(position)) {
+                // With the floor the entity stands on: only the areas of that floor give rights on it.
+                const assertCanEditEntityAt = (
+                    position: EntityCoordinates & { elevation?: number },
+                    action: string,
+                ) => {
+                    if (!entityPermissions.canEdit({ x: position.x, y: position.y, z: position.elevation ?? 0 })) {
                         throw new Error(
                             `User ${userUUID} is not allowed to ${action} at (${position.x}, ${position.y}) on map ${mapUrl}`,
                         );
@@ -295,7 +299,10 @@ const mapStorageServer: MapStorageServer = {
                         const entity = wamFile.getGameMapEntities().getEntity(message.id);
                         if (entity) {
                             assertCanEditEntityAt(entity, `modify the entity ${message.id}`);
-                            assertCanEditEntityAt(message, `move the entity ${message.id}`);
+                            assertCanEditEntityAt(
+                                { x: message.x, y: message.y, elevation: message.elevation ?? entity.elevation },
+                                `move the entity ${message.id}`,
+                            );
                             await mapsManager.executeCommand(
                                 mapKey,
                                 mapUrl.host,

@@ -456,7 +456,15 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
     ): boolean {
         const blocker = this.scene
             .getGameMapFrontWrapper()
-            .getPlacementBlocker(topLeftPos, width, height, prefab.collisionGrid, undefined, ignoreCollisionGrid);
+            .getPlacementBlocker(
+                topLeftPos,
+                width,
+                height,
+                prefab.collisionGrid,
+                undefined,
+                ignoreCollisionGrid,
+                this.previewElevation,
+            );
         entityPlacementBlockerStore.set(blocker);
         return blocker === undefined;
     }

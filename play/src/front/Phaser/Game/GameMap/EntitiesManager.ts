@@ -561,6 +561,7 @@ export class EntitiesManager extends EventEmitter {
                         entity.getOldPosition(),
                         // On a raised floor, what stands on the ground under it is not in the way.
                         this.isFreePlacement() || this.elevationAt(pointer.worldX, pointer.worldY) > 0,
+                        this.elevationAt(pointer.worldX, pointer.worldY),
                     )
                 ) {
                     const oldPos = entity.getOldPosition();

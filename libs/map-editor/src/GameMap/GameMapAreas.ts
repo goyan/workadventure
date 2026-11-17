@@ -116,7 +116,8 @@ export class GameMapAreas {
     }
 
     public isUserHasWriteAccessOnAreaForEntityCoordinates(
-        entityCenterCoordinates: EntityCoordinates,
+        // With the altitude of the floor the entity stands on (`z`): only the areas of that floor give rights on it.
+        entityCenterCoordinates: EntityCoordinates & { z?: number },
         userConnectedTags: string[],
         userUUID = "",
         width: number,
@@ -153,7 +154,8 @@ export class GameMapAreas {
     }
 
     public isUserHasReadAccessOnAreaForEntityCoordinates(
-        entityCenterCoordinates: EntityCoordinates,
+        // With the altitude of the floor the entity stands on (`z`): only the areas of that floor give rights on it.
+        entityCenterCoordinates: EntityCoordinates & { z?: number },
         userConnectedTags: string[],
     ): boolean {
         const areas = this.getAreasOnPosition(entityCenterCoordinates);

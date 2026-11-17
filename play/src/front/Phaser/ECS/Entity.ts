@@ -191,11 +191,15 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     public get canEdit(): boolean {
         // Checked at the top-left corner (the entity position), like map-storage does: it is the only point
         // of the entity the server knows, so any other point would let the UI offer edits the server refuses.
-        return (this.scene as GameScene).getEntityPermissions().canEdit({ x: this.x, y: this.y });
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canEdit({ x: this.x, y: this.y, z: this.entityData.elevation });
     }
 
     public get canRead(): boolean {
-        return (this.scene as GameScene).getEntityPermissions().canRead(this.getCenter());
+        return (this.scene as GameScene)
+            .getEntityPermissions()
+            .canRead({ ...this.getCenter(), z: this.entityData.elevation });
     }
 
     /**

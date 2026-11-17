@@ -1025,10 +1025,18 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        elevation = 0,
     ): boolean {
         return (
-            this.getPlacementBlocker(topLeftPos, width, height, collisionGrid, oldTopLeftPos, ignoreCollisionGrid) ===
-            undefined
+            this.getPlacementBlocker(
+                topLeftPos,
+                width,
+                height,
+                collisionGrid,
+                oldTopLeftPos,
+                ignoreCollisionGrid,
+                elevation,
+            ) === undefined
         );
     }
 
@@ -1040,6 +1048,8 @@ export class GameMapFrontWrapper {
         collisionGrid?: number[][],
         oldTopLeftPos?: { x: number; y: number },
         ignoreCollisionGrid?: boolean,
+        /** Altitude of the floor the object goes on: the areas of that floor give the right to place it. */
+        elevation = 0,
     ): PlacementBlocker | undefined {
         this.lastPlacementBlocker = undefined;
         const canEntityBePlaced = this.canEntityBePlaced(
@@ -1056,6 +1066,7 @@ export class GameMapFrontWrapper {
         const entityCenterCoordinates = {
             x: Math.ceil(topLeftPos.x + width / 2),
             y: Math.ceil(topLeftPos.y + height / 2),
+            z: elevation,
         };
         if (!this.scene.getEntityPermissions().canEdit(entityCenterCoordinates, width, height, !collisionGrid)) {
             return "permission";
