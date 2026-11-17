@@ -15,6 +15,7 @@ import {
     stairArrivalCells,
     stairHasArrival,
     stairTarget,
+    stepLevel,
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorOperations";
 import type { StairShape } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
 
@@ -174,6 +175,17 @@ describe("floor operations", () => {
         // One slab among the tiles of the top is enough to step off.
         model.setSlab(52, 10, 6, "parquet-clair");
         expect(stairHasArrival(model, south)).toBe(true);
+    });
+
+    it("steps from a level to the next one up or down, the ground first, without going round", () => {
+        const levels = [52, 84, 116];
+        expect(stepLevel(levels, 0, 1)).toBe(52);
+        expect(stepLevel(levels, 52, 1)).toBe(84);
+        expect(stepLevel(levels, 116, 1)).toBe(116);
+        expect(stepLevel(levels, 52, -1)).toBe(0);
+        expect(stepLevel(levels, 0, -1)).toBe(0);
+        // A level that is no longer offered: from the ground.
+        expect(stepLevel(levels, 104, 1)).toBe(52);
     });
 
     it("tells the floors a stair can reach from a floor", () => {

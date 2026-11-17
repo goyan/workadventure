@@ -541,7 +541,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             built: "palier {rank}",
             pick: "Prendre le niveau sous le pointeur",
             pickArmed: "Cliquez sur la carte…",
-            pickHint: "Ou Alt + clic (Cmd + clic sur Mac) sur la carte.",
+            pickHint:
+                "Ou Alt + clic (Cmd + clic sur Mac) sur la carte. Page précédente et Page suivante montent ou descendent d’un niveau.",
             unavailable: "Cette salle n’a pas de catalogue de paliers.",
         },
         stair: {

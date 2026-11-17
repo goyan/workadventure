@@ -255,3 +255,13 @@ export function stairArrivalCells(stair: PlacedStair): TilePoint[] {
 export function stairHasArrival(model: FloorModel, stair: PlacedStair): boolean {
     return stairArrivalCells(stair).some((cell) => model.hasSlab(stair.top, cell.x, cell.y));
 }
+
+/**
+ * The level one step above (`delta` 1) or below (-1) a level, among the ground and the floors offered, lowest first;
+ * it stops at the ends.
+ */
+export function stepLevel(levels: readonly number[], current: number, delta: 1 | -1): number {
+    const all = [0, ...levels];
+    const index = Math.max(0, all.indexOf(current));
+    return all[Math.min(all.length - 1, Math.max(0, index + delta))];
+}

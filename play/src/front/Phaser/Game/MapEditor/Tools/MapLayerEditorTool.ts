@@ -28,6 +28,8 @@ import {
     isFloorMode,
     mapLayerFloorsAvailableStore,
     mapLayerPickLevelStore,
+    mapLayerLevelStore,
+    mapLayerLevelsStore,
 } from "../../../../Stores/MapLayerStore";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
@@ -85,6 +87,7 @@ import {
 } from "../MapLayer/MapLayerOperations";
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
+import { stepLevel } from "../MapLayer/FloorOperations";
 import { MapEditorTool } from "./MapEditorTool";
 import { MapLayerFloorEditing } from "./MapLayerFloorEditing";
 
@@ -255,6 +258,15 @@ export class MapLayerEditorTool extends MapEditorTool {
                 this.redraw();
             }
             this.cancelGesture();
+            mapLayerPickLevelStore.set(false);
+        }
+        // Page Up and Page Down change the floor being edited, in the modes of the raised floors.
+        if ((event.key === "PageUp" || event.key === "PageDown") && isFloorMode(get(mapLayerModeStore))) {
+            event.preventDefault();
+            mapLayerLevelStore.set(
+                stepLevel(get(mapLayerLevelsStore), get(mapLayerLevelStore), event.key === "PageUp" ? 1 : -1),
+            );
+            this.redraw();
         }
     }
 

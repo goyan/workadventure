@@ -529,7 +529,8 @@ const mapEditor: BaseTranslation = {
             built: "floor {rank}",
             pick: "Pick the level under the pointer",
             pickArmed: "Click on the map…",
-            pickHint: "Or Alt + click (Cmd + click on a Mac) on the map.",
+            pickHint:
+                "Or Alt + click (Cmd + click on a Mac) on the map. Page Up and Page Down go one level up or down.",
             unavailable: "This room has no catalog of raised floors.",
         },
         stair: {
