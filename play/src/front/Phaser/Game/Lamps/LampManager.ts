@@ -2,6 +2,7 @@ import { isAtAreaLevel } from "@workadventure/map-editor";
 import { isHomeJam, type AreaData } from "@workadventure/map-editor";
 import type { SpotifyListening } from "@workadventure/messages";
 import type { Unsubscriber } from "svelte/store";
+import { floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { joinedJamStore, type JoinedJam } from "../../../ListeningZone/ListeningZoneStore";
 import { spotifyTrackUri } from "../../../../common/SpotifyListening";
 import { jamAudioSession } from "../../../ListeningZone/GameJamAudioSession";
@@ -448,7 +449,8 @@ export class LampManager {
             if (isDanceFloor(entity) && !this.floors.has(id)) {
                 this.floors.set(id, {
                     entity,
-                    visual: new DanceFloorVisual(this.scene, id, DANCE_FLOOR_DEPTH),
+                    // On a raised floor: over its slabs, under what stands on it.
+                    visual: new DanceFloorVisual(this.scene, id, floorDepth(entity.getElevation(), DANCE_FLOOR_DEPTH)),
                     engine: undefined,
                     grid: { cols: 0, rows: 0 },
                     jam: undefined,

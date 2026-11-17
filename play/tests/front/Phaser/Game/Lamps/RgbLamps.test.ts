@@ -78,6 +78,7 @@ function entity(id: string, x: number, y: number, model: EntityPrefab): { fake: 
     };
     const object = Object.assign(fake, {
         getPrefab: () => model,
+        getElevation: () => 0,
         getProperties: () => fake.properties,
     });
     return { fake, entity: object as unknown as Entity };

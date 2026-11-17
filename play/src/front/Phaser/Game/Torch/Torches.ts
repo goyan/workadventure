@@ -2,7 +2,7 @@ import type { PositionMessage_Direction } from "@workadventure/messages";
 import type { RgbLampLight } from "../../../Stores/RgbLampStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
-import { LightObstacleReader } from "../Lamps/LightObstacleReader";
+import { LightObstaclesByLevel } from "../Lamps/LightObstacleReader";
 import type { LightCone } from "../Lamps/RgbLampGeometry";
 import { RgbLampVisual } from "../Lamps/RgbLampVisual";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
@@ -30,6 +30,8 @@ export interface TorchBearer {
     colour: number;
     /** The local player: their light is always drawn first. */
     local: boolean;
+    /** Altitude of the floor of the map the bearer is on (the ground when absent): its walls stop the light. */
+    floorZ?: number;
 }
 
 interface LitTorch {
@@ -58,7 +60,7 @@ interface LitTorch {
  */
 export class Torches {
     private readonly torches = new Map<string, LitTorch>();
-    private readonly obstacles: LightObstacleReader;
+    private readonly obstacles: LightObstaclesByLevel;
     private lastObstaclesAt: number | undefined;
     private frame = 0;
     private revisions = 0;
@@ -68,7 +70,7 @@ export class Torches {
         private readonly scene: GameScene,
         private readonly depth: number,
     ) {
-        this.obstacles = new LightObstacleReader(scene, () => this.tileSize());
+        this.obstacles = new LightObstaclesByLevel(scene, () => this.tileSize());
     }
 
     private tileSize(): number {
@@ -136,14 +138,15 @@ export class Torches {
                 };
                 this.torches.set(bearer.id, torch);
             }
-            const key = `${Math.round(bearer.x)},${Math.round(bearer.y)},${bearer.direction},${bearer.seated}`;
-            if (key !== torch.key || torch.obstaclesVersion !== this.obstacles.version) {
+            const key = `${Math.round(bearer.x)},${Math.round(bearer.y)},${bearer.direction},${bearer.seated},${Math.round(bearer.floorZ ?? 0)}`;
+            if (key !== torch.key || torch.obstaclesVersion !== this.obstacles.at(bearer.floorZ ?? 0).version) {
                 waiting.push({ bearer, torch, key });
             }
         }
         waiting.sort((a, b) => Number(b.bearer.local) - Number(a.bearer.local) || a.torch.drawnAt - b.torch.drawnAt);
         let drawn = false;
         for (const { bearer, torch, key } of waiting.slice(0, MAX_REDRAWS_PER_FRAME)) {
+            const obstacles = this.obstacles.at(bearer.floorZ ?? 0);
             const { light, polygon, segments } = torchLightShape(
                 {
                     x: Math.round(bearer.x),
@@ -152,16 +155,16 @@ export class Torches {
                     seated: bearer.seated,
                 },
                 {
-                    grid: this.obstacles.grid,
+                    grid: obstacles.grid,
                     tileSize,
-                    walls: this.obstacles.walls,
-                    rectangles: this.obstacles.casters.map((caster) => caster.rectangle),
+                    walls: obstacles.walls,
+                    rectangles: obstacles.casters.map((caster) => caster.rectangle),
                 },
             );
             const segmentsKey = segments
                 .map((segment) => `${segment.ax},${segment.ay},${segment.bx},${segment.by}`)
                 .join(";");
-            torch.obstaclesVersion = this.obstacles.version;
+            torch.obstaclesVersion = obstacles.version;
             torch.drawnAt = this.frame;
             // An obstacle changed elsewhere on the map: this light stays as it is.
             if (key === torch.key && segmentsKey === torch.segmentsKey) {
