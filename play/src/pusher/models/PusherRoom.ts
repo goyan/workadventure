@@ -207,6 +207,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "entityStateMessage": {
+                            // The state of an object (a lamp on or off) is the same for every player of the room
+                            const entityStateMessage = message.message.entityStateMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "entityStateMessage",
+                                        entityStateMessage: entityStateMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

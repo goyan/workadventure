@@ -85,6 +85,8 @@ export interface RoomJoinedMessageInterface {
     variables: Map<string, unknown>;
     playerVariables: Map<string, unknown>;
     areaPropertyVariables: AreaPropertyVariable[];
+    /** The states of the objects of the map that differ from their default (a lamp that is off). */
+    entityStates: { entityId: string; key: string; value: string }[];
     characterTextures: WokaTextureDescriptionInterface[];
     companionTexture?: CompanionTextureDescriptionInterface;
     commandsToApply?: EditMapCommandMessage[];

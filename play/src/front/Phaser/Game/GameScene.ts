@@ -258,6 +258,7 @@ import { type Avatar, ConversationBubble } from "@wa/front/Phaser/Entity/Convers
 import { DarkenOutsideAreaEffect } from "@wa/front/Phaser/Components/DarkenOutsideArea/DarkenOutsideAreaEffect";
 import { isInsidePersonalAreaStore, personalAreaDataStore } from "@wa/front/Stores/PersonalDeskStore";
 import { areaPropertyVariablesManagerStore } from "@wa/front/Stores/AreaPropertyVariablesStore";
+import { entityStatesManagerStore } from "@wa/front/Stores/EntityStatesStore";
 import { ApplicationManager } from "@wa/front/Chat/Applications/ApplicationManager";
 import { audioPlaybackStore, handleSuspendedAudioContext } from "@wa/front/Stores/AudioPlaybackStore";
 import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
@@ -309,6 +310,7 @@ import { WEATHER_SOUNDS } from "./Weather/WeatherSounds";
 import { FootstepSurfaces } from "./FootstepSurfaces";
 import { SharedVariablesManager } from "./SharedVariablesManager";
 import { AreaPropertyVariablesManager } from "./AreaPropertyVariablesManager";
+import { EntityStatesManager } from "./EntityStates/EntityStatesManager";
 import { EmbeddedWebsiteManager } from "./EmbeddedWebsiteManager";
 import { DynamicAreaManager } from "./DynamicAreaManager";
 import { PlayerMovement } from "./PlayerMovement";
@@ -501,6 +503,7 @@ export class GameScene extends DirtyScene {
     private preloading = true;
     private sharedVariablesManager!: SharedVariablesManager;
     private areaPropertyVariablesManager!: AreaPropertyVariablesManager;
+    private entityStatesManager: EntityStatesManager | undefined;
     private playerVariablesManager!: PlayerVariablesManager;
     private scriptingEventsManager!: ScriptingEventsManager;
     private followManager!: FollowManager;
@@ -1507,6 +1510,9 @@ export class GameScene extends DirtyScene {
         this.playerVariablesManager?.close();
         this.areaPropertyVariablesManager?.destroy();
         areaPropertyVariablesManagerStore.set(undefined);
+        this.entityStatesManager?.destroy();
+        this.entityStatesManager = undefined;
+        entityStatesManagerStore.set(undefined);
         this.scriptingEventsManager?.close();
         this.embeddedWebsiteManager?.close();
         this.scriptingVideoManager?.close();
@@ -3455,6 +3461,9 @@ export class GameScene extends DirtyScene {
             room.areaPropertyVariables,
         );
         areaPropertyVariablesManagerStore.set(this.areaPropertyVariablesManager);
+        this.entityStatesManager?.destroy();
+        this.entityStatesManager = new EntityStatesManager(this.connection, room.entityStates);
+        entityStatesManagerStore.set(this.entityStatesManager);
         listeningZoneNamesStore.set(
             new Map(
                 [...(this.getGameMap().getWamFile()?.getGameMapAreas().getAreas().values() ?? [])]
