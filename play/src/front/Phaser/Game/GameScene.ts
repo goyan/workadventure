@@ -1339,7 +1339,11 @@ export class GameScene extends DirtyScene {
             this.CurrentPlayer.finishFollowingPath(true);
             // clear properties in case we are moved on the same layer / area in order to trigger them
             this.gameMapFrontWrapper.clearCurrentProperties();
-            this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y);
+            this.gameMapFrontWrapper.setPosition(
+                this.CurrentPlayer.x,
+                this.CurrentPlayer.y,
+                this.CurrentPlayer.getFloorZ(),
+            );
 
             // TODO: we should have a "teleport" parameter to explicitly say the user teleports and should not be moved in 200ms to the new place.
             this.handleCurrentPlayerHasMovedEvent({
@@ -1587,11 +1591,11 @@ export class GameScene extends DirtyScene {
     /** The areas the local player stands in, and their personal desk: doors and footsteps are only heard there. */
     private getHearingZones(): HearingZone[] {
         const zones: HearingZone[] =
-            this.gameMapFrontWrapper
-                .getGameMap()
-                .getWamFile()
-                ?.getGameMapAreas()
-                .getAreasOnPosition({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y }) ?? [];
+            this.gameMapFrontWrapper.getGameMap().getWamFile()?.getGameMapAreas().getAreasOnPosition({
+                x: this.CurrentPlayer.x,
+                y: this.CurrentPlayer.y,
+                z: this.CurrentPlayer.getFloorZ(),
+            }) ?? [];
         const personalArea = get(personalAreaDataStore);
         return personalArea ? [...zones, personalArea] : zones;
     }
@@ -3058,7 +3062,11 @@ export class GameScene extends DirtyScene {
                         y: this.CurrentPlayer.y,
                     }) || [];
 
-                this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y);
+                this.gameMapFrontWrapper.setPosition(
+                    this.CurrentPlayer.x,
+                    this.CurrentPlayer.y,
+                    this.CurrentPlayer.getFloorZ(),
+                );
 
                 this.emoteManager = new EmoteManager(this, this.connection);
                 this.duckRushManager = new DuckRushManager(this);
@@ -3140,12 +3148,15 @@ export class GameScene extends DirtyScene {
                                       : choice;
                             return { open: get(mapEditorModeStore), level };
                         },
-                        (z) =>
-                            this.playerVariablesManager?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
+                        (z) => {
+                            // The areas only apply to their floor: a change of floor is a move for them.
+                            this.gameMapFrontWrapper.setPosition(this.CurrentPlayer.x, this.CurrentPlayer.y, z);
+                            return this.playerVariablesManager?.setVariableFromApp(FLOOR_Z_VARIABLE, z, {
                                 public: true,
                                 persist: false,
                                 scope: "room",
-                            }),
+                            });
+                        },
                         (levels) => mapLayerBuiltLevelsStore.set(levels),
                         () => this.MapPlayersByKey.values(),
                     );
@@ -5298,7 +5309,7 @@ ${escapedMessage}
     private handleCurrentPlayerHasMovedEvent(event: HasPlayerMovedInterface): void {
         //listen event to share position of user
         this.pushPlayerPosition(event);
-        this.gameMapFrontWrapper.setPosition(event.x, event.y);
+        this.gameMapFrontWrapper.setPosition(event.x, event.y, this.CurrentPlayer.getFloorZ());
         this.activatablesManager.updateActivatableObjectsDistances([
             ...Array.from(this.MapPlayersByKey.values()),
             ...this.actionableItems.values(),

@@ -381,6 +381,12 @@ export const AreaData = AreaCoordinates.extend({
     visible: z.boolean(),
     name: z.string(),
     properties: AreaDataProperties,
+    /**
+     * Altitude of the raised floor the area belongs to, in pixels above the ground; the ground when absent. Like an
+     * entity (see EntityData.elevation), its rectangle is where it is drawn: over the ground `elevation` further
+     * south. It only applies to the players of that floor.
+     */
+    elevation: z.number().int().min(0).optional(),
 });
 
 export const EntityDataProperty = z.discriminatedUnion("type", [

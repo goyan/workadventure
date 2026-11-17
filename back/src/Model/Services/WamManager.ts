@@ -101,7 +101,8 @@ export class WamManager {
                         previousArea.x !== updatedArea.x ||
                         previousArea.y !== updatedArea.y ||
                         previousArea.width !== updatedArea.width ||
-                        previousArea.height !== updatedArea.height,
+                        previousArea.height !== updatedArea.height ||
+                        (previousArea.elevation ?? 0) !== (updatedArea.elevation ?? 0),
                     propertiesChanged:
                         JSON.stringify(previousArea.properties) !== JSON.stringify(updatedArea.properties),
                 });
@@ -112,6 +113,7 @@ export class WamManager {
                 const { id, x, y, width, height, name } = message;
                 const properties = message.properties as AreaData["properties"];
                 const areaObjectConfig: AreaData = { id, x, y, width, height, name, properties, visible: true };
+                if (message.elevation) areaObjectConfig.elevation = message.elevation;
                 await new CreateAreaCommand(wamFile, areaObjectConfig, editMapCommandMessage.id).execute();
                 break;
             }

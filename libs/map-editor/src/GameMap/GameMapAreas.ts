@@ -18,6 +18,29 @@ export type AreaUpdateCallback = (
 /** A player is in an area by its feet: this many pixels below its position. */
 export const AREA_POSITION_OFFSET_Y = 16;
 
+/** Two floors of a map are at least 12 px apart: within half of it, an altitude is the one of a floor. */
+const SAME_FLOOR_PX = 6;
+
+/** A point of the map, and the altitude of the floor it is on (the ground when absent). */
+export interface AreaPosition {
+    x: number;
+    y: number;
+    z?: number;
+}
+
+/** Altitude of the floor an area belongs to (0: the ground). */
+export function areaElevation(area: { elevation?: number }): number {
+    return area.elevation ?? 0;
+}
+
+/**
+ * Whether somebody at the altitude `floorZ` is on the floor of the area: an area only applies to its floor. Halfway
+ * up a stair, one is on no floor, in no area.
+ */
+export function isAtAreaLevel(area: { elevation?: number }, floorZ: number): boolean {
+    return Math.abs(areaElevation(area) - floorZ) < SAME_FLOOR_PX;
+}
+
 export class GameMapAreas {
     private wam: WAMFileFormat;
     private enterAreaCallbacks = Array<AreaChangeCallback>();
@@ -41,10 +64,7 @@ export class GameMapAreas {
     /**
      * @returns If there were any areas changes
      */
-    public triggerAreasChange(
-        oldPosition: { x: number; y: number } | undefined,
-        position: { x: number; y: number } | undefined,
-    ): boolean {
+    public triggerAreasChange(oldPosition: AreaPosition | undefined, position: AreaPosition | undefined): boolean {
         const areasByOldPosition = oldPosition ? this.getAreasOnPosition(oldPosition, this.areasPositionOffsetY) : [];
         const areasByNewPosition = position ? this.getAreasOnPosition(position, this.areasPositionOffsetY) : [];
 
@@ -172,7 +192,7 @@ export class GameMapAreas {
      * connected tags. An empty array means the user may stand there. The Woka Y offset is applied, so "inside"
      * means the same thing as for the area enter/leave events (the Woka feet).
      */
-    public getForbiddenAreasOnPosition(position: { x: number; y: number }, userConnectedTags: string[]): AreaData[] {
+    public getForbiddenAreasOnPosition(position: AreaPosition, userConnectedTags: string[]): AreaData[] {
         return this.getAreasOnPosition(position, this.areasPositionOffsetY).filter(
             (area) => !this.hasAreaAccess(area, userConnectedTags),
         );
@@ -209,14 +229,14 @@ export class GameMapAreas {
         return hasSpecificAreas;
     }
 
-    public isPlayerInsideArea(id: string, playerPosition: { x: number; y: number }): boolean {
+    public isPlayerInsideArea(id: string, playerPosition: AreaPosition): boolean {
         return (
             this.getAreasOnPosition(playerPosition, this.areasPositionOffsetY).findIndex((area) => area.id === id) !==
             -1
         );
     }
 
-    public isPlayerInsideAreaByName(name: string, position: { x: number; y: number }): boolean {
+    public isPlayerInsideAreaByName(name: string, position: AreaPosition): boolean {
         return (
             this.getAreasOnPosition(position, this.areasPositionOffsetY).findIndex((area) => area.name === name) !== -1
         );
@@ -356,12 +376,16 @@ export class GameMapAreas {
         }
     }
 
-    public getAreasOnPosition(position: { x: number; y: number }, offsetY = 0): AreaData[] {
+    /** The areas of the floor of the position (the ground without `z`) that contain it. */
+    public getAreasOnPosition(position: AreaPosition, offsetY = 0): AreaData[] {
         const areasOfInterest = [...this.areas.values()];
 
         const overlappedAreas: AreaData[] = [];
         for (const area of areasOfInterest) {
-            if (MathUtils.isOverlappingWithRectangle({ x: position.x, y: position.y + offsetY }, area)) {
+            if (
+                isAtAreaLevel(area, position.z ?? 0) &&
+                MathUtils.isOverlappingWithRectangle({ x: position.x, y: position.y + offsetY }, area)
+            ) {
                 overlappedAreas.push(area);
             }
         }

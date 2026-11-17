@@ -1436,7 +1436,12 @@ export class AreasPropertiesListener {
             return false;
         }
         return Array.from(this.scene.getRemotePlayersRepository().getPlayers().values()).some(
-            (player) => !isNpcUserUuid(player.userUuid) && gameMapAreas.isPlayerInsideArea(areaId, player.position),
+            (player) =>
+                !isNpcUserUuid(player.userUuid) &&
+                gameMapAreas.isPlayerInsideArea(areaId, {
+                    ...player.position,
+                    z: this.scene.MapPlayersByKey.get(player.userId)?.getFloorZ() ?? 0,
+                }),
         );
     }
 

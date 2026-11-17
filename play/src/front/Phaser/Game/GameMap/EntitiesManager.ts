@@ -1,3 +1,4 @@
+import { isAtAreaLevel } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { EntityData, WAMEntityData } from "@workadventure/map-editor";
 import {
@@ -804,7 +805,9 @@ export class EntitiesManager extends EventEmitter {
         }
 
         this.entities.forEach((entity, entityId) => {
+            // Only what stands on the floor of the area: the objects of another floor are drawn there, not in it.
             if (
+                isAtAreaLevel(area, entity.getElevation()) &&
                 gameMapFrontWrapper.isInsideAreaByCoordinates(
                     { x: area.x, y: area.y, width: area.width, height: area.height },
                     {

@@ -1,14 +1,14 @@
 import path from "path";
-import * as Sentry from "@sentry/node";
-import { Metadata } from "@grpc/grpc-js";
-import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
-import {
+import { isAtAreaLevel ,
     canUpdateListeningZoneJams,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
     parseListeningZoneJamsUpdate,
 } from "@workadventure/map-editor";
+import * as Sentry from "@sentry/node";
+import { Metadata } from "@grpc/grpc-js";
+import type { WAMFileFormat, AreaData, AreaDataProperty } from "@workadventure/map-editor";
 import { LocalUrlError } from "@workadventure/map-editor/src/LocalUrlError";
 import { mapFetcher } from "@workadventure/map-editor/src/MapFetcher";
 import type {
@@ -139,7 +139,8 @@ export class GameRoom implements BrothersFinder {
     private readonly _userLeaveStream = new Subject<User>();
     public readonly userLeaveStream = this._userLeaveStream.asObservable();
 
-    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface }>();
+    /** `oldFloorZ`: set when the user changed of floor of the map (see FloorLevel), its position unchanged. */
+    private readonly _userMoveStream = new Subject<{ user: User; oldPosition: PointInterface; oldFloorZ?: number }>();
     public readonly userMoveStream = this._userMoveStream.asObservable();
 
     private readonly _destroyRoomStream = new Subject<void>();
@@ -544,6 +545,8 @@ export class GameRoom implements BrothersFinder {
         } else if (!sameFloor(floorBefore, user.getFloorZ())) {
             // On another floor now: out of the bubble of the floor left, in with whoever stands next on this one.
             this.updateUserGroup(user);
+            // And out of the areas of the floor left, into the ones of this one.
+            this._userMoveStream.next({ user, oldPosition: user.getPosition(), oldFloorZ: floorBefore });
         } else if (wasSilent && !user.silent) {
             // Back from a silent status (DND, sound blocked...): join whoever is next to us, without waiting for a move.
             this.updateUserGroup(user);
@@ -1111,7 +1114,7 @@ export class GameRoom implements BrothersFinder {
      */
     public hasUsersInArea(area: AreaData): boolean {
         for (const user of this.users.values()) {
-            if (GameRoom.isPositionInArea(user.getPosition(), area)) {
+            if (isAtAreaLevel(area, user.getFloorZ()) && GameRoom.isPositionInArea(user.getPosition(), area)) {
                 return true;
             }
         }

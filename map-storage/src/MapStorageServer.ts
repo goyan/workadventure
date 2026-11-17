@@ -249,6 +249,7 @@ const mapStorageServer: MapStorageServer = {
                         const { id, x, y, width, height, name } = message;
                         const properties = message.properties as AreaDataProperties;
                         const areaObjectConfig: AreaData = { id, x, y, width, height, name, properties, visible: true };
+                        if (message.elevation) areaObjectConfig.elevation = message.elevation;
                         const command = new CreateAreaMapStorageCommand(
                             wamFile,
                             areaObjectConfig,
