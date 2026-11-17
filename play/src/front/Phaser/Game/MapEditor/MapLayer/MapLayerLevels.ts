@@ -7,7 +7,9 @@ import {
 import type { MapLayerPiece } from "./MapLayerCatalog";
 import { placementKey } from "./MapLayerAutotile";
 import type { MapLayerPlacement } from "./MapLayerAutotile";
+import { wallAtPoint } from "./MapLayerOperations";
 import type { PlacedPrefabLike } from "./MapLayerOperations";
+import type { MapLayerModel } from "./MapLayerModel";
 
 /**
  * Walls, doors and windows standing on a raised floor. They are the pieces of the ground in collections of their own
@@ -93,4 +95,22 @@ export function levelPlacedKey(entity: LevelPlaced, level: number): string | und
     const [item] = levelItems([entity], level);
     if (!item || parseMapLayerPrefab(item.collectionName, item.prefabId) === undefined) return undefined;
     return placementKey(item.collectionName, item.prefabId, item.x, item.y);
+}
+
+/**
+ * The level to edit for a click on a wall: the level being edited when it has a wall under the pointer, otherwise the
+ * highest level that has one there (it is drawn over the others), otherwise the level being edited. `models` gives
+ * the model of a level; a point of the screen is over the ground the altitude of the level further south.
+ */
+export function levelOfWallAt(
+    models: (level: number) => MapLayerModel,
+    levels: readonly number[],
+    current: number,
+    worldX: number,
+    worldY: number,
+): number {
+    const hasWall = (level: number): boolean => wallAtPoint(models(level), worldX, worldY + level) !== undefined;
+    if (hasWall(current)) return current;
+    const others = [...new Set([0, ...levels])].filter((level) => level !== current).sort((a, b) => b - a);
+    return others.find(hasWall) ?? current;
 }

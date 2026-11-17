@@ -8,6 +8,7 @@ import {
 } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerCatalog";
 import {
     groundPrefabOfUpper,
+    levelOfWallAt,
     levelItems,
     levelPlacedKey,
     levelPlacements,
@@ -76,6 +77,23 @@ describe("walls of the raised floors", () => {
         const placed = levelPlacements(computePlacements(model), 52);
         expect(placed.some((item) => item.prefabId.includes("sol-"))).toBe(false);
         expect(placed.length).toBeGreaterThan(0);
+    });
+
+    it("finds the level of the wall under the pointer, to edit it without choosing its level first", () => {
+        const ground = new MapLayerModel();
+        const top = new MapLayerModel();
+        // A vertical wall of the floor at 116 px, on the line x = 5, the row 4: drawn 116 px higher on the screen.
+        top.setWall("v", 5, 4, "blanc", 1);
+        const models = (level: number) => (level === 116 ? top : ground);
+        const pointer = { x: 160, y: 4 * 32 + 20 - 116 };
+        expect(levelOfWallAt(models, [52, 116], 0, pointer.x, pointer.y)).toBe(116);
+        expect(levelOfWallAt(models, [52, 116], 52, pointer.x, pointer.y)).toBe(116);
+        // The level being edited is kept when it has a wall there, or when no level has one.
+        expect(levelOfWallAt(models, [52, 116], 116, pointer.x, pointer.y)).toBe(116);
+        expect(levelOfWallAt(models, [52, 116], 52, 600, 600)).toBe(52);
+        // A wall of the ground drawn at the same point of the screen (y = 32: the row 0).
+        ground.setWall("v", 5, 0, "blanc", 1);
+        expect(levelOfWallAt(models, [52, 116], 0, pointer.x, pointer.y)).toBe(0);
     });
 
     it("gives a placed piece the key of the placement it stands for", () => {

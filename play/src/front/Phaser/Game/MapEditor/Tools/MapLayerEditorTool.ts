@@ -91,7 +91,7 @@ import {
 import type { DoorHeightSetting, DoorPlanOptions, MapBounds, Point } from "../MapLayer/MapLayerOperations";
 import { MAP_LAYER_FLOOR_SLAB_COLLECTION, slabPrefabName } from "../MapLayer/MapLayerFloors";
 import { stepLevel } from "../MapLayer/FloorOperations";
-import { levelItems, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
+import { levelItems, levelOfWallAt, levelPlacedKey, levelPlacements, upperPrefabOf } from "../MapLayer/MapLayerLevels";
 import type { LevelPlaced } from "../MapLayer/MapLayerLevels";
 import { MapEditorTool } from "./MapEditorTool";
 import { MapLayerFloorEditing } from "./MapLayerFloorEditing";
@@ -445,6 +445,29 @@ export class MapLayerEditorTool extends MapEditorTool {
             : 0;
     }
 
+    /**
+     * A door, a window or a height is set on a wall already there: a click on a wall of another level than the one
+     * being edited goes to the level of that wall, instead of doing nothing.
+     */
+    private retargetLevel(pointer: Phaser.Input.Pointer): void {
+        const mode = get(mapLayerModeStore);
+        if ((mode !== "door" && mode !== "window" && mode !== "height") || !get(mapLayerUpperWallsAvailableStore)) {
+            return;
+        }
+        const current = get(mapLayerLevelStore);
+        const level = levelOfWallAt(
+            (at) => this.readModel(at),
+            get(mapLayerLevelsStore),
+            current,
+            pointer.worldX,
+            pointer.worldY,
+        );
+        if (level !== current) {
+            mapLayerLevelStore.set(level);
+            this.forgetHoverModel();
+        }
+    }
+
     /** A point of the screen as the level being edited reads it: over the ground further south. */
     private worldOf(pointer: Phaser.Input.Pointer): Point {
         return { x: pointer.worldX, y: pointer.worldY + this.editedLevel() };
@@ -523,6 +546,7 @@ export class MapLayerEditorTool extends MapEditorTool {
             this.redraw();
             return;
         }
+        this.retargetLevel(pointer);
         const world = this.worldOf(pointer);
         const baseModel = this.readModel();
         const startCell = cellAt(world.x, world.y);
