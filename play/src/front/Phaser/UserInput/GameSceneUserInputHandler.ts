@@ -213,10 +213,14 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         }
         // A double-click on a free seat (anywhere on the image of its object) runs there and sits: the only seat a
         // run sits on, since running does not pull the player onto the seats on its way.
-        const seat =
-            isDoubleClick && !this.gameScene.isRaisedFloorAt(worldPoint)
-                ? findSeatAtPoint(this.gameScene, worldPoint, (candidate) => !isSeatTaken(this.gameScene, candidate))
-                : undefined;
+        const seat = isDoubleClick
+            ? findSeatAtPoint(
+                  this.gameScene,
+                  worldPoint,
+                  (candidate) => !isSeatTaken(this.gameScene, candidate),
+                  this.gameScene.floorLevelAt(worldPoint),
+              )
+            : undefined;
         // Otherwise a double-click ends at the center of the targeted tile, like the avatar does when it stops.
         const target =
             seat?.feet ??

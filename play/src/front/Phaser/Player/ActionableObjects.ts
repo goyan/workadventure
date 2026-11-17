@@ -14,12 +14,18 @@ export interface ActionableObject {
 }
 
 /** Use the nearest object's boundary, so its collision box need not be crossed to interact. */
-export function findActionableObject(scene: GameScene, feet: { x: number; y: number }): ActionableObject | undefined {
+export function findActionableObject(
+    scene: GameScene,
+    feet: { x: number; y: number },
+    elevation = 0,
+): ActionableObject | undefined {
     let nearest: ActionableObject | undefined;
     let distance = 28;
     const entities = scene.getGameMapFrontWrapper()?.getEntitiesManager()?.getEntities();
     if (!entities) return undefined;
     for (const [entityId, entity] of entities) {
+        // Only the objects of the floor the avatar stands on: the others are drawn over a place they are not at.
+        if (Math.abs(entity.getElevation() - elevation) >= 2) continue;
         const { interaction, trigger } = getObjectInteraction(entity.getPrefab(), scene.wamFile?.settings?.categories);
         const action = readAvatarAction(interaction);
         if (action === AvatarAction.Idle) continue;

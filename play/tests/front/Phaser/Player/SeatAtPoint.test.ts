@@ -12,6 +12,8 @@ interface PlacedObject {
     width: number;
     height: number;
     prefab: Record<string, unknown>;
+    /** Altitude of the raised floor it stands on; the ground when absent. */
+    elevation?: number;
 }
 
 let frame = 0;
@@ -28,7 +30,7 @@ function sceneWith(...objects: PlacedObject[]): GameScene {
                 displayWidth: object.width,
                 displayHeight: object.height,
                 getPrefab: () => object.prefab as unknown as EntityPrefab,
-                getElevation: () => 0,
+                getElevation: () => object.elevation ?? 0,
             },
         ]),
     );
@@ -88,6 +90,15 @@ describe("findSeatAtPoint", () => {
         // What the arrival of a run looks for: neither point is close enough to the seat.
         expect(findSeatUnderFeet(scene, { x: 208, y: 176 })).toBeUndefined();
         expect(findSeatUnderFeet(scene, { x: 208, y: 222 })).toBeUndefined();
+    });
+
+    it("only finds a seat from the floor it stands on", () => {
+        const scene = sceneWith({ ...officeChair, elevation: 116 });
+
+        // From the ground, the chair of the raised floor is only drawn there.
+        expect(findSeatAtPoint(scene, { x: 208, y: 176 })).toBeUndefined();
+        expect(findSeatAtPoint(scene, { x: 208, y: 176 }, undefined, 52)).toBeUndefined();
+        expect(findSeatAtPoint(scene, { x: 208, y: 176 }, undefined, 116)?.id).toBe("c:0");
     });
 
     it("picks the place of a couch nearest to the click", () => {

@@ -12,7 +12,7 @@ export const FLOOR_LEVEL_DEPTH = 965_000;
 /** Depth between two altitudes one pixel apart: more than the span of a band. */
 const DEPTH_PER_PIXEL = 80;
 /** The depths of the ground (up to about 960 000) are brought within a band. */
-const GROUND_DEPTH_SCALE = 20_000;
+export const GROUND_DEPTH_SCALE = 20_000;
 /** Depths of the previews of the map editor: over the highest floor, under the overlay layers. */
 export const FLOOR_PREVIEW_DEPTH = 999_000;
 

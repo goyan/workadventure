@@ -304,11 +304,12 @@ export class Player extends Character {
 
     private updateObjectAction(): void {
         const body = this.getBody();
-        // SPIKE (floors study): the objects of the ground are out of reach from a raised floor.
-        const object =
-            this.getFloorZ() > 0
-                ? undefined
-                : findActionableObject(this.scene, { x: this.x, y: this.y + body.offset.y + body.height / 2 });
+        // The objects of the floor the avatar stands on.
+        const object = findActionableObject(
+            this.scene,
+            { x: this.x, y: this.y + body.offset.y + body.height / 2 },
+            this.getFloorZ(),
+        );
         if (object?.entityId !== this.ignoredActionObjectId) this.ignoredActionObjectId = undefined;
         if (object?.entityId !== this.actionObject?.entityId || object?.action !== this.actionObject?.action)
             this.actionPrompt.hide();
@@ -359,8 +360,8 @@ export class Player extends Character {
      */
     private trySitDown(allowAutomaticSitting: boolean): void {
         this.releaseSeatObjectWhenOut();
-        const seat =
-            this.getFloorZ() > 0 ? undefined : findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
+        // The seats of the floor the avatar stands on (none on a stair: no floor is at its altitude).
+        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox(), this.getFloorZ());
         // The seat just left, and the other places of its couch, stay ignored until the player is off it.
         if (seat?.id !== this.ignoredSeatId) {
             this.ignoredSeatId = undefined;
@@ -400,7 +401,7 @@ export class Player extends Character {
      * its tile: the seat must be within reach.
      */
     public sitOnSeat(seatId: string): boolean {
-        const seat = getSeats(this.scene).find((candidate) => candidate.id === seatId);
+        const seat = getSeats(this.scene, this.getFloorZ()).find((candidate) => candidate.id === seatId);
         if (!seat) return false;
         if (this.isSeated() && findSeatOfCharacter(this.scene, this)?.id === seat.id) return true;
         if (
@@ -428,7 +429,7 @@ export class Player extends Character {
      * seat, until it walks away from it (walking or running past a seat never pulls the player onto it).
      */
     public stayStandingHere(): void {
-        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox());
+        const seat = findSeatUnderFeet(this.scene, this.getFeet(), this.getBodyBox(), this.getFloorZ());
         if (!seat) return;
         this.ignoredSeatId = seat.id;
         this.ignoredSeatEntityId = seat.entityId;

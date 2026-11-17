@@ -1,5 +1,6 @@
 import { MathUtils } from "@workadventure/math-utils";
 import { get } from "svelte/store";
+import { Character } from "../Entity/Character";
 import { isOutlineable } from "../../Utils/CustomTypeGuards";
 import type { Player } from "../Player/Player";
 import LL from "../../../i18n/i18n-svelte";
@@ -152,8 +153,7 @@ export class ActivatablesManager {
     }
 
     private findNearestActivatableObject(): ActivatableInterface | undefined {
-        // SPIKE (floors study): the objects of the ground are out of reach from a raised floor.
-        if (this.currentPlayer.getFloorZ() > 0) return undefined;
+        const floorZ = this.currentPlayer.getFloorZ();
         const playerCenter = this.currentPlayer.getDirectionalActivationPosition(
             this.directionalActivationPositionShift,
         );
@@ -171,9 +171,11 @@ export class ActivatablesManager {
             if (!object.isActivatable() || !isInRange) {
                 continue;
             }
-            // An object on a raised floor, or hung up a wall, is drawn over the ground it does not stand on: out of
-            // reach from there.
-            if (object instanceof Entity && object.getElevation() > 0) {
+            // Only what stands on the floor of the player: an object or somebody of another floor is drawn over a
+            // place it is not at.
+            const objectZ =
+                object instanceof Entity ? object.getElevation() : object instanceof Character ? object.getFloorZ() : 0;
+            if (Math.abs(objectZ - floorZ) >= 2) {
                 continue;
             }
 

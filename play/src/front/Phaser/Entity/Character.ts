@@ -692,7 +692,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private computeDepth(): number {
         if (this.depthCache?.x !== this.x || this.depthCache.y !== this.y) {
             const feetY = this.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y;
-            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY });
+            const seat = findSeatUnderFeet(this.scene, { x: this.x, y: feetY }, undefined, this.floorZ);
             const actionObject = takesObjectPlace(this.avatarAction)
                 ? findActionableObject(this.scene, { x: this.x, y: feetY })
                 : undefined;

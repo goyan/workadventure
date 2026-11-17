@@ -5025,10 +5025,10 @@ ${escapedMessage}
         return { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y, cancelled: true };
     }
 
-    /** Whether a raised floor is drawn at a point of the screen: what is on the ground under it is out of reach. */
-    public isRaisedFloorAt(point: { x: number; y: number }): boolean {
+    /** The floor drawn at a point of the screen (0: the ground): what stands on another one is out of reach there. */
+    public floorLevelAt(point: { x: number; y: number }): number {
         const floors = this.floorSpike?.walkContext();
-        return floors !== undefined && levelUnderPoint(floors.model, point.x, point.y) > 0;
+        return floors ? levelUnderPoint(floors.model, point.x, point.y) : 0;
     }
 
     /**
