@@ -84,8 +84,9 @@ describe("floorStep", () => {
         // On the screen the floor spans x 128..256 and y 12..108.
         const west = walk(model, { x: 176, y: 90 }, [{ x: 90, y: 90 }], { elevation: 52 });
         expect(west.state).toEqual({ elevation: 52 });
-        expect(west.p.x).toBeGreaterThanOrEqual(128);
-        expect(west.p.x).toBeLessThan(134);
+        // Half its body (7 px) stays over the slabs: it does not hang over the edge.
+        expect(west.p.x).toBeGreaterThanOrEqual(135);
+        expect(west.p.x).toBeLessThan(141);
         // South of the floor, beside the stair: no way down.
         const south = walk(model, { x: 220, y: 90 }, [{ x: 220, y: 140 }], { elevation: 52 });
         expect(south.state).toEqual({ elevation: 52 });

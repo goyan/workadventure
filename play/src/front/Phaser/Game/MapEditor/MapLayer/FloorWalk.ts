@@ -20,8 +20,10 @@ interface Pt {
     y: number;
 }
 
-/** Margin kept from the long sides of a stair, above its first steps. */
-const SIDE = 6;
+/** Half the width of the body of an avatar: it stays that far inside the edges of a floor and the sides of a stair. */
+const BODY_HALF = 7;
+/** Margin kept from the long sides of a stair, above its first steps: the body stays between them. */
+const SIDE = BODY_HALF + 1;
 /** Part of a stair, from its foot, where one can step on and off it by its sides. */
 const LOW_END = 0.5;
 /** How far from a wall closing a side of a stair the avatar stays: the reach of the wall and half its body. */
@@ -105,9 +107,8 @@ function obstacleBox(stair: PlacedStair): PixelBox {
     return g;
 }
 
-/** Whether an avatar at this point of the screen, at this altitude, stands over a slab (the ground carries anyone). */
-function standsOnFloor(model: FloorModel, elevation: number, screen: Pt): boolean {
-    if (elevation === 0) return true;
+/** Whether a point of the screen, at this altitude, is over a slab; a point on an edge counts for both sides. */
+function overSlab(model: FloorModel, elevation: number, screen: Pt): boolean {
     const size = MAP_LAYER_TILE_SIZE;
     const groundY = screen.y + elevation;
     for (const dx of [-EDGE, EDGE]) {
@@ -118,6 +119,30 @@ function standsOnFloor(model: FloorModel, elevation: number, screen: Pt): boolea
         }
     }
     return false;
+}
+
+/** Whether a point of the screen, at this altitude, is over a stair that starts from this floor or arrives on it. */
+function overAdjoiningStair(model: FloorModel, elevation: number, screen: Pt): boolean {
+    const groundY = screen.y + elevation;
+    return model.getStairs().some((stair) => {
+        if (stair.base !== elevation && stair.top !== elevation) return false;
+        const g = stair.ground;
+        return screen.x >= g.x && screen.x <= g.x + g.width && groundY >= g.y && groundY <= g.y + g.height;
+    });
+}
+
+/**
+ * Whether an avatar at this point of the screen, at this altitude, stands on its floor: over a slab, and with the
+ * whole width of its body over the slabs or a stair of the floor. It does not hang over the edge of a floor, nor over
+ * the walls that carry it (the ground carries anyone).
+ */
+function standsOnFloor(model: FloorModel, elevation: number, screen: Pt): boolean {
+    if (elevation === 0) return true;
+    if (!overSlab(model, elevation, screen)) return false;
+    return [-BODY_HALF, BODY_HALF].every((dx) => {
+        const side = { x: screen.x + dx, y: screen.y };
+        return overSlab(model, elevation, side) || overAdjoiningStair(model, elevation, side);
+    });
 }
 
 /**
