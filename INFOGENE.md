@@ -2189,9 +2189,25 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
   (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un
   escalier, ou pour un trajet qui reste au sol : trajet ordinaire. Les meubles des paliers ne sont pas contournés.
+- **Bulles par niveau** (`back/src/Model/FloorLevel.ts`) : le `back` lit l'altitude que le navigateur publie dans
+  la variable de joueur `_floorZ` ; deux joueurs ne forment une bulle, et n'en écoutent une, que sur le même palier
+  (moins de 6 px d'écart : deux niveaux peuvent n'être qu'à 12 px). Monter ou descendre fait quitter la bulle ; à
+  mi-escalier, aucune bulle. Aucun changement de protocole.
+- **Zones par niveau** : champ facultatif `AreaData.elevation` (absent = sol, aucune migration ; protobuf
+  `CreateAreaMessage.elevation = 9`, `ModifyAreaMessage.elevation = 10`). Le rectangle d'une zone est là où on la
+  voit, comme un objet. Une zone ne vaut que pour les joueurs de son palier (`isAtAreaLevel`, `GameMapAreas` reçoit
+  la position avec son altitude) : entrée et sortie, verrou et toquer, collision d'une zone fermée, compte des
+  occupants, objets d'un bureau perso, suivi des zones côté `back` (`AreaZoneTracker`). Une réservation de bureau ne
+  peut pas changer le niveau d'une zone. `play`, `back` et `map-storage` ensemble.
+- **Éditeur de zones** : le sélecteur de niveau commun en haut du panneau ; une zone est créée au niveau choisi (en
+  Auto, sur le palier dessiné sous elle) ; avec un niveau choisi, les zones des autres niveaux sont estompées et ne
+  se saisissent plus ; en Auto, là où des zones de plusieurs niveaux se recouvrent, celles du palier sous le
+  pointeur ; « Niveau de cette zone » dans le panneau d'une zone la déplace de niveau au-dessus du même endroit.
 - **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
-  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; zones et bulles ignorent le
-  niveau (étude en cours) ; images définitives.
+  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; droit de poser un objet dans
+  un bureau perso en hauteur (les droits lisent encore le sol) ; nuit, lampes d'une zone d'écoute, bruits de pas et
+  zone de départ ignorent le niveau d'une zone ; alignement d'une zone sur les dalles d'un palier ; images
+  définitives.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
 
