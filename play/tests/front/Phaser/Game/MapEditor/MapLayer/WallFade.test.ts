@@ -128,7 +128,7 @@ function setup(height: WallHeight) {
     const { walls, grid: firstGrid } = room(height);
     let grid = firstGrid;
     const listed: FakeWall[] = [...walls];
-    let player = { ...INSIDE };
+    let player: { x: number; y: number } | undefined = { ...INSIDE };
     let editorOpen = false;
     const redraws = { count: 0 };
     const fade = new WallFade(
@@ -146,6 +146,8 @@ function setup(height: WallHeight) {
         /** The outdoor tracker computed the grid again, with the same walls. */
         recomputeGrid: () => (grid = room(height).grid),
         setPlayer: (point: { x: number; y: number }) => (player = { ...point }),
+        /** The player went up a stair: on a raised floor, it is in no room of the ground. */
+        setPlayerUpstairs: () => (player = undefined),
         setEditor: (open: boolean) => (editorOpen = open),
         /** A facade of the south wall of the room: the wall in front of the player, which hides the room. */
         facade: () => {
@@ -169,6 +171,17 @@ describe("WallFade", () => {
         expect(facade().alpha).toBeCloseTo(0.775, 3);
         fade.update(WALL_FADE_MS / 2);
         expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+    });
+
+    it("brings the walls of the room back once the player is upstairs: it is in no room of the ground", () => {
+        const { fade, facade, setPlayerUpstairs } = setup(2);
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBeCloseTo(WALL_ROOM_ALPHA, 6);
+
+        setPlayerUpstairs();
+        fade.update(WALL_FADE_MS);
+        fade.update(WALL_FADE_MS);
+        expect(facade().alpha).toBe(1);
     });
 
     it("leaves the back wall and the side walls of the room opaque: they hide nothing of it", () => {
