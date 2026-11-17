@@ -2128,7 +2128,7 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   ne montre jamais de pixels : « Niveau 2 », « Niveau 3 », « Niveau 4 » (hauteur des murs en cases,
   `floorLevelTiles`), suivi de « palier N » quand le niveau a des dalles (rang parmi les niveaux posés).
 - **Pièces** (collection `Carte Paliers`, contrat avec le catalogue privé, `MapLayerFloors.ts`) : `dalle-<famille>` ;
-  `escalier-<n|e|s|o>-l<1|2>-<montée>[-vide]`, montée `h2`/`h3`/`h4` (du sol au dessus d'un mur : 52, 84, 116 px) ou
+  `escalier-<n|e|s|o>-l<1|2>-<montée>[-v2][-vide]`, montée `h2`/`h3`/`h4` (du sol au dessus d'un mur : 52, 84, 116 px) ou
   `m1`/`m2` (entre deux dessus de murs : 32, 64 px), `-vide` = flanc ouvert. Un escalier est un seul objet. Sa longueur
   au sol est d'une case par case montée (arrondi au-dessus), une de plus vers le sud (sinon il ne descendrait pas
   l'écran). Les pièces n'ont pas de collision : le jeu garde l'avatar sur les dalles et les escaliers.
@@ -2141,8 +2141,21 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   disparaît est remis au sol. En hauteur, le sol ne bloque plus et ses objets, sièges, piscines et portes ne
   réagissent plus à l'avatar.
 - **Rendu** (`FloorDepth.ts`) : une bande de profondeurs par altitude, tout ce qui est en hauteur passe au-dessus de
-  ce qui est plus bas. Un palier au-dessus de l'avatar, ou vers lequel il monte, s'estompe à 35 % ; les dalles qui
-  couvrent un escalier restent à 55 %. Dans l'éditeur, les niveaux au-dessus du niveau édité sont à 30 %.
+  ce qui est plus bas. Dans l'éditeur, les niveaux au-dessus du niveau édité sont à 30 %.
+- **Étages lisibles** (`Floors/LevelFocus.ts`, `StairHints.ts`, `StairHintsView.ts`, `FloorLevelStack.svelte`) :
+  l'étage de l'avatar est net (sur un escalier, ses deux étages) ; les étages en dessous passent sous **un seul voile
+  gris foncé** (`0x2b2f38`, 0,45) posé juste sous la bande de l'étage courant (rien n'est filtré objet par objet) ; un
+  étage au-dessus devient un voile gris (30 %, teinte `0x9aa0aa`) ; fondu de 300 ms, immédiat si mouvement réduit.
+  Les escaliers ne s'estompent jamais : ceux qui viennent d'en dessous passent au-dessus du voile, trois chevrons
+  blancs y avancent dans le sens de la montée (14 pas par cycle de 1,4 s, fixes si mouvement réduit), et à 2 cases ou
+  moins d'un bout une étiquette nomme l'étage de l'autre bout (« Niveau 2 ↑ », « Sol ↓ »). Sous l'horloge, la pile des
+  étages de la carte, l'étage courant en blanc après « ▶ » (`FloorLevelsStore.ts`). Éditeur ouvert ou carte sans
+  palier : rien de tout cela.
+- **Escaliers courts** (`-v2`) : nouveaux escaliers posés par le mode Escalier quand le catalogue de la salle les a
+  (`mapLayerShortStairsAvailableStore`, les anciens sinon) : **une case au sol** vers le nord, l'est et l'ouest
+  (`stairRun(…, short)`), la longueur habituelle vers le sud (l'avatar y descend l'écran : il faut une longueur
+  supérieure à la hauteur). Dessin éclairé d'en haut, nez de marche, rampes sur un flanc vide (profils est et ouest).
+  Les escaliers déjà posés gardent nom, longueur et dessin.
 - **Éditeur** (`MapLayerFloorEditing.ts`, `FloorOperations.ts`) :
   - « Niveau » : choisi à la main ; pipette par Alt+clic, Cmd+clic ou le bouton « Prendre le niveau sous le
     pointeur » ; le nom du niveau suit le pointeur (un même point de l'écran est une case de chaque niveau).
