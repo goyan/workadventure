@@ -17,6 +17,21 @@ export const OBJECT_SHADOW_RISE = 1.5 * MAP_LAYER_TILE_SIZE;
 /** The crown of a tree: its radius against the width of its image, its trunk against that radius. */
 const CROWN_RADIUS_SHARE = 0.38;
 const TRUNK_WIDTH_SHARE = 0.25;
+/**
+ * The other trees of the nature catalogue, which do not sway (isJungleTree): the bare and the big ones, the snowy
+ * ones, the seasonal ones. The same families hold a few low things (a stump, a bush): only what is two tiles high or
+ * more is a tree.
+ */
+const STILL_TREE_PREFIXES = ["Nature:nature-", "Nature:snow-tree-", "Nature:seasonal-", "Nature:winter-auto-"];
+const TREE_MIN_HEIGHT = 2 * MAP_LAYER_TILE_SIZE;
+
+/** Whether an object of the map is a tree, for its shadow. */
+function isShadowTree(entity: ShadowSourceEntity): boolean {
+    const { id } = entity.prefab;
+    if (isJungleTree(id)) return true;
+    return entity.displayHeight >= TREE_MIN_HEIGHT && STILL_TREE_PREFIXES.some((prefix) => id.startsWith(prefix));
+}
+
 /** An object on a raised floor stands at least this high (the ground: 0): it casts no shadow on the ground. */
 const RAISED = 2;
 
@@ -101,7 +116,7 @@ export function readShadowCasters(
         if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName)) {
             pieces.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
             signature += `w${prefab.id}@${entity.x},${entity.y};`;
-        } else if (isJungleTree(prefab.id)) {
+        } else if (isShadowTree(entity)) {
             const tree = treeOf(entity);
             trees.push(tree);
             signature += `t${tree.x},${tree.y},${tree.crownRadius},${tree.crownHeight};`;

@@ -107,17 +107,18 @@ describe("skyLightAt", () => {
 });
 
 describe("skyWeatherFactor", () => {
-    it("leaves a clear sky alone and takes the shadows almost all away under an overcast one", () => {
+    it("leaves a clear sky alone and dims the shadows under an overcast one, which still shows them", () => {
         expect(skyWeatherFactor(WeatherType.Clear, 0)).toBe(1);
         expect(skyWeatherFactor(WeatherType.Clear, 0.5)).toBeLessThan(1);
         expect(skyWeatherFactor(WeatherType.Clear, 0.5)).toBeGreaterThan(skyWeatherFactor(WeatherType.Clear, 1));
-        expect(skyWeatherFactor(WeatherType.Clear, 1)).toBeLessThanOrEqual(0.2);
+        expect(skyWeatherFactor(WeatherType.Clear, 1)).toBeCloseTo(0.35, 5);
     });
 
-    it("takes the shadows almost all away in the rain, the snow, the storm and the fog", () => {
-        for (const weather of [WeatherType.Rain, WeatherType.Snow, WeatherType.Storm, WeatherType.Fog]) {
-            expect(skyWeatherFactor(weather, 0)).toBeLessThanOrEqual(0.2);
-        }
+    it("dims the shadows in the rain, the snow, the storm and the fog, without hiding them", () => {
+        expect(skyWeatherFactor(WeatherType.Snow, 0)).toBe(0.5);
+        expect(skyWeatherFactor(WeatherType.Rain, 0)).toBe(0.3);
+        expect(skyWeatherFactor(WeatherType.Fog, 0)).toBe(0.3);
+        expect(skyWeatherFactor(WeatherType.Storm, 0)).toBe(0.15);
     });
 });
 

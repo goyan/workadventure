@@ -52,6 +52,35 @@ describe("readShadowCasters", () => {
         expect(casters?.trees).toEqual([]);
     });
 
+    it("reads every tree of the nature catalogue, not only the ones that sway: bare, snowy and seasonal ones too", () => {
+        // The ids placed on the team map (read in the game on 2026-11-17).
+        const ids = [
+            "Nature:nature-5:Default:Down",
+            "Nature:snow-tree-4:Default:Down",
+            "Nature:seasonal-1:Default:Down",
+            "Nature:winter-auto-3:Default:Down",
+        ];
+        const { casters } = readShadowCasters(ids.map((id) => entity({ prefab: { collectionName: "Nature", id } })));
+        expect(casters?.trees).toHaveLength(4);
+    });
+
+    it("gives no tree shadow to the small things of the nature catalogue (rocks, grass, flowers)", () => {
+        const { casters } = readShadowCasters([
+            entity({
+                displayWidth: 46,
+                displayHeight: 33,
+                prefab: { collectionName: "Nature", id: "Nature:detail-rocks-2:Default:Down" },
+            }),
+            // Of a tree family, yet lower than two tiles: a stump, a bush.
+            entity({
+                displayWidth: 48,
+                displayHeight: 40,
+                prefab: { collectionName: "Nature", id: "Nature:nature-9:Default:Down" },
+            }),
+        ]);
+        expect(casters?.trees).toEqual([]);
+    });
+
     it("reads the trees of the nature catalogue as a crown on a trunk, the foot at the bottom middle of the image", () => {
         const { casters } = readShadowCasters([
             entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),

@@ -176,19 +176,19 @@ export function skyLightAt(
     };
 }
 
-/** What the weather leaves of the direct light of the sky: a covered sky casts almost no shadow. */
-const OVERCAST_DIMMING = 0.85;
+/** What the weather leaves of the direct light of the sky: dimmed, the shadows still show. */
+const OVERCAST_DIMMING = 0.65;
 const BAD_WEATHER_LIGHT: Partial<Record<WeatherType, number>> = {
-    [WeatherType.Rain]: 0.08,
-    [WeatherType.Snow]: 0.1,
-    [WeatherType.Storm]: 0.05,
-    [WeatherType.Fog]: 0.12,
+    [WeatherType.Rain]: 0.3,
+    [WeatherType.Snow]: 0.5,
+    [WeatherType.Storm]: 0.15,
+    [WeatherType.Fog]: 0.3,
 };
 
 /**
  * The share of the direct light of the sky that reaches the ground, for the weather shown (effective, after the
  * automatic and real weathers are resolved) and the cloudiness of a clear sky (0 to 1): all of it under a clear sky,
- * 15 % under an overcast one, almost nothing in the rain, the snow, the storm or the fog.
+ * 35 % under an overcast one, half in the snow, 30 % in the rain or the fog, 15 % in a storm.
  */
 export function skyWeatherFactor(weather: WeatherType, cloudiness: number): number {
     return BAD_WEATHER_LIGHT[weather] ?? 1 - OVERCAST_DIMMING * clamp01(cloudiness);

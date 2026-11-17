@@ -2058,13 +2058,14 @@ près de l'horizon, blanc haut ; puis la lune quand la nuit tombe (de rien à un
 civil, et seulement levée de 2° au moins), bleu froid, 0,3 au plus × lumière de sa phase : au changement les deux sont
 éteints, jamais deux jeux d'ombres nets. Lumière de la phase (`moonPhaseLight`) : « Réaliste » (défaut), loi de
 Krisciunas & Schaefer 1991 (PASP 103, éq. 8-9, d'après Allen 1976), un quartier ≈ 9 % de la pleine lune ; « Linéaire »,
-la fraction éclairée. La météo affichée l'atténue (`skyWeatherFactor` : ciel couvert 15 %, pluie,
-neige, orage, brouillard ≈ 5 à 12 %) ; météo masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
+la fraction éclairée. La météo de la carte l'atténue sans cacher les ombres (`skyWeatherFactor` : ciel couvert 35 %,
+neige 50 %, pluie et brouillard 30 %, orage 15 %) ; la neige du thème de Noël, décor personnel, n'atténue rien ; météo
+masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
 voile de nuit d'un cinquième (30 % au plus avec une intensité réglée plus haut, `moonlitNightOpacity`), rien par
 nouvelle lune.
 
 **Ombres** (`SkyShadows/`) : les murs de l'outil Carte (pied du mur, hauteur = nombre de cases ; portes et fenêtres
-comptées comme mur), les objets `castsShadow` (rectangles de collision, 1,5 case de haut) et les arbres `Nature:tree-*`
+comptées comme mur), les objets `castsShadow` (rectangles de collision, 1,5 case de haut) et les arbres du catalogue nature (`Nature:tree-*`, et les `nature-`, `snow-tree-`, `seasonal-`, `winter-auto-` de deux cases de haut ou plus)
 (houppier rond sur un tronc) projettent sur le sol leur pied balayé à l'opposé de l'astre, longueur hauteur /
 tan(élévation), **4 cases au plus** par défaut (réglable, plafond dur 8 cases), même sens que les ombres des nuages. Une texture bleu-noir, opacité 0,4 ×
 intensité, **dehors seulement** (`OutdoorGrid`), posée sur le sol (profondeur 0,7 : au-dessus des sols, sous tout ce

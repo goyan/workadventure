@@ -1717,7 +1717,8 @@ export class GameScene extends DirtyScene {
         const theme = this.getSeasonalTheme();
         const cloudiness =
             theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
-        return skyWeatherFactor(this.getDesktopWeather(), cloudiness);
+        // The weather of the map, not the snow of the Christmas theme: a personal decor dims no light.
+        return skyWeatherFactor(this.getMapWeather(), cloudiness);
     }
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
