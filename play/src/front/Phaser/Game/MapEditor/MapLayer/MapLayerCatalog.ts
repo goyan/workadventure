@@ -31,12 +31,22 @@ export const MAP_LAYER_WALL_LIKE_COLLECTIONS: readonly string[] = [
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
 ];
+/**
+ * The walls, doors and windows standing on a raised floor are the same pieces in collections of their own, named with
+ * this suffix (`Carte Murs Paliers`...): everything that reads the walls of the ground (the light, the outdoors, the
+ * paths, the doors) does not see them, without having to know about the floors. See MapLayerLevels.
+ */
+export const MAP_LAYER_UPPER_SUFFIX = " Paliers";
+export const MAP_LAYER_UPPER_COLLECTIONS: readonly string[] = MAP_LAYER_WALL_LIKE_COLLECTIONS.map(
+    (name) => name + MAP_LAYER_UPPER_SUFFIX,
+);
 export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_FLOOR_COLLECTION,
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
     MAP_LAYER_FLOOR_SLAB_COLLECTION,
+    ...MAP_LAYER_UPPER_COLLECTIONS,
 ];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
@@ -338,6 +348,7 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
 export function isMapLayerPrefab(collectionName: string, prefabId: string): boolean {
     return (
         collectionName === MAP_LAYER_FLOOR_SLAB_COLLECTION ||
+        MAP_LAYER_UPPER_COLLECTIONS.includes(collectionName) ||
         parseMapLayerPrefab(collectionName, prefabId) !== undefined
     );
 }
