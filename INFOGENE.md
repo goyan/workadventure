@@ -2209,8 +2209,8 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
   d'écoute de son palier ; les bruits de pas « dedans » suivent le palier du joueur. Une zone dessinée sur un palier
   s'aligne sur la grille de ses dalles.
 - **Eau et météo** : on nage dans une piscine du palier où l'on se trouve (`getWaterRectangles(scene, altitude)`) ;
-  la météo ne se dessine ni sur les dalles d'un palier situé dans une pièce ni sur le haut des murs de 2 cases et
-  plus (`Weather/RaisedCover.ts`).
+  la météo ne se dessine sur aucune dalle ni aucun escalier de palier, ni sur le haut des murs de 2 cases et plus
+  (`Weather/RaisedCover.ts`) : un étage est un morceau de bâtiment, où qu'il se tienne.
 - **Garde-corps** (`FloorRailings.ts`, `Floors/FloorRailingsView.ts`) : dessinés par le jeu le long de chaque bord
   d'un palier qui donne sur le vide, sans rien poser sur la carte (les paliers déjà construits les reçoivent). Pas
   de garde-corps là où un escalier arrive ou repart, ni le long d'un mur d'étage, ni le long d'un mur d'en dessous

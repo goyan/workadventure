@@ -1656,9 +1656,9 @@ export class GameScene extends DirtyScene {
     private weatherCover: { at: number; cover: RaisedCover } | undefined;
 
     /**
-     * What the weather must not be drawn on although it is over outdoor tiles: the slabs of a raised floor that
-     * stands in a room, and the walls two tiles high or more (and the ones of the raised floors), whose images
-     * reach north of the tiles they stand on. Read again from the map twice a second at most.
+     * What the weather must not be drawn on although it is over outdoor tiles: the slabs and the stairs of the
+     * raised floors, and the walls two tiles high or more (and the ones of the raised floors), whose images reach
+     * north of the tiles they stand on. Read again from the map twice a second at most.
      */
     private raisedWeatherCover(): RaisedCover | undefined {
         const now = this.time.now;
@@ -1668,11 +1668,11 @@ export class GameScene extends DirtyScene {
         if (grid) {
             for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
                 const prefab = entity.getPrefab();
-                const elevation = entity.getElevation();
                 const image = { x: entity.x, y: entity.y, width: entity.displayWidth, height: entity.displayHeight };
-                if (parseFloorPiece(prefab.collectionName, prefab.id)?.kind === "slab") {
-                    // A slab is where it is drawn; the tile it covers is its altitude further south.
-                    if (elevation > 0 && !grid.isOutdoorAt(entity.x + 16, entity.y + elevation + 16)) cover.add(image);
+                if (parseFloorPiece(prefab.collectionName, prefab.id) !== undefined) {
+                    // A slab or a stair of a raised floor is part of a building, wherever it stands: over a room,
+                    // or over the outdoors (a storey that reaches out, a house without a floor on the ground).
+                    cover.add(image);
                 } else if (
                     groundPrefabOfUpper(prefab.collectionName, prefab.id) !== undefined ||
                     (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName) && TALL_WALL.test(prefab.id))
@@ -3152,7 +3152,7 @@ export class GameScene extends DirtyScene {
                     // the ground and behind none of its walls: they all stay opaque under it.
                     () =>
                         this.CurrentPlayer.getFloorZ() > 0
-                            ? { x: -1_000_000, y: -1_000_000 }
+                            ? undefined
                             : { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y },
                     () => this.mapEditorModeManager?.isActive() ?? false,
                     () => this.markDirty(),
