@@ -184,6 +184,29 @@ describe("WallFade", () => {
         expect(facade().alpha).toBe(1);
     });
 
+    it("tells the see-through walls in front of the room, and none in the editor or once they are opaque again", () => {
+        const { fade, walls, facade, setPlayer, setEditor } = setup(2);
+        const first = fade.version;
+        fade.update(WALL_FADE_MS);
+        expect(fade.version).toBeGreaterThan(first);
+        const faded = fade.fadedFrontWalls();
+        expect(faded).toContainEqual(expect.objectContaining({ x: facade().x, y: facade().y, height: 64 }));
+        // Each one is a see-through piece of the map.
+        for (const rect of faded) {
+            expect(walls.some((wall) => wall.x === rect.x && wall.y === rect.y && wall.alpha < 1)).toBe(true);
+        }
+
+        setEditor(true);
+        fade.update(WALL_FADE_MS);
+        expect(fade.fadedFrontWalls()).toEqual([]);
+
+        setEditor(false);
+        setPlayer(OUTSIDE);
+        fade.update(WALL_FADE_MS);
+        fade.update(WALL_FADE_MS);
+        expect(fade.fadedFrontWalls()).toEqual([]);
+    });
+
     it("leaves the back wall and the side walls of the room opaque: they hide nothing of it", () => {
         const { fade, walls, facade, backFacade } = setup(3);
         fade.update(WALL_FADE_MS);

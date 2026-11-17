@@ -1,3 +1,4 @@
+import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import * as Sentry from "@sentry/svelte";
 import * as Phaser from "phaser";
 import type { Subscription } from "rxjs";
@@ -300,7 +301,7 @@ import { soundManager } from "./SoundManager";
 import { DOOR_SOUND_KEYS, DOOR_SOUND_URLS, DoorAnimator } from "./MapEditor/MapLayer/DoorAnimator";
 import type { DoorCharacter, HearingZone } from "./MapEditor/MapLayer/DoorAnimator";
 import { DoorLockIcons } from "./MapEditor/MapLayer/DoorLockIcons";
-import { MAP_LAYER_WALL_LIKE_COLLECTIONS } from "./MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_FLOOR_COLLECTION, MAP_LAYER_WALL_LIKE_COLLECTIONS } from "./MapEditor/MapLayer/MapLayerCatalog";
 import { WallFade } from "./MapEditor/MapLayer/WallFade";
 import { FOOTSTEP_SOUNDS, FootstepSounds } from "./FootstepSounds";
 import { takesSteps } from "./Ice/Steps";
@@ -523,6 +524,7 @@ export class GameScene extends DirtyScene {
     private outdoorTracker: OutdoorTracker | undefined;
     /** See-through walls, for the local player only: in the map editor, and the high walls of their room. */
     private wallFade: WallFade | undefined;
+    private fadedWallFloor: FadedWallFloorView | undefined;
     private seasonalThemeManager: SeasonalThemeManager | undefined;
     private _knockManager: KnockManager | undefined;
     private _waveManager: WaveManager | undefined;
@@ -1550,6 +1552,8 @@ export class GameScene extends DirtyScene {
         this.nightManager?.destroy();
         this.wallFade?.destroy();
         this.wallFade = undefined;
+        this.fadedWallFloor?.destroy();
+        this.fadedWallFloor = undefined;
         this.lampManager?.destroy();
         this.lampManager = undefined;
         this.weatherManager?.destroy();
@@ -1638,6 +1642,15 @@ export class GameScene extends DirtyScene {
     private *mapLayerWallEntities(): Generator<Entity> {
         for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
             if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(entity.getPrefab().collectionName)) yield entity;
+        }
+    }
+
+    /** The floor tiles of the map layer laid on the ground. */
+    private *mapLayerGroundFloors(): Generator<Entity> {
+        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+            if (entity.getPrefab().collectionName === MAP_LAYER_FLOOR_COLLECTION && entity.getElevation() === 0) {
+                yield entity;
+            }
         }
     }
 
@@ -1917,6 +1930,10 @@ export class GameScene extends DirtyScene {
             const serverDate = this.nightManager?.serverDate();
             this.outdoorTracker?.update();
             this.wallFade?.update(delta);
+            if (this.wallFade) {
+                const wallFade = this.wallFade;
+                this.fadedWallFloor?.update(wallFade.version, () => wallFade.fadedFrontWalls());
+            }
             this.seasonalThemeManager?.update(time, () => this.seasonalWalkers());
             this.gameMapFrontWrapper
                 .getEntitiesManager()
@@ -3155,6 +3172,12 @@ export class GameScene extends DirtyScene {
                             ? undefined
                             : { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y },
                     () => this.mapEditorModeManager?.isActive() ?? false,
+                    () => this.markDirty(),
+                );
+                this.fadedWallFloor?.destroy();
+                this.fadedWallFloor = new FadedWallFloorView(
+                    this,
+                    () => this.mapLayerGroundFloors(),
                     () => this.markDirty(),
                 );
                 this.weatherManager = new WeatherManager(this, {
