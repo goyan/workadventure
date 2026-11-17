@@ -13,6 +13,7 @@ import type { EndTimedAnalyticsEvent } from "../Administration/TimedAnalyticsEve
 import { createHeldIntervalTracker } from "../Administration/HeldIntervalTracker";
 import { isIOS } from "../WebRtc/DeviceUtils";
 import { SoundMeter } from "../Phaser/Components/SoundMeter";
+import { karaokeGameActiveStore } from "../Karaoke/KaraokeGameStore";
 import type { RequestedStatus } from "../Rules/StatusRules/statusRules";
 import { statusChanger } from "../Components/ActionBar/AvailabilityStatus/statusChanger";
 import {
@@ -1353,11 +1354,16 @@ export const localStreamStore = derived<
  * so that LiveKit/WebRTC do not publish camera; preview in BackgroundSettingsPanel still uses localStreamStore.
  */
 export const localStreamStoreForPublishing = derived<
-    [typeof localStreamStore, typeof availabilityStatusStore, typeof inBackgroundSettingsStore],
+    [
+        typeof localStreamStore,
+        typeof availabilityStatusStore,
+        typeof inBackgroundSettingsStore,
+        typeof karaokeGameActiveStore,
+    ],
     LocalStreamStoreValue
 >(
-    [localStreamStore, availabilityStatusStore, inBackgroundSettingsStore],
-    ([$localStreamStore, $availabilityStatusStore, $inBackgroundSettingsStore], set) => {
+    [localStreamStore, availabilityStatusStore, inBackgroundSettingsStore, karaokeGameActiveStore],
+    ([$localStreamStore, $availabilityStatusStore, $inBackgroundSettingsStore, $karaokeGameActiveStore], set) => {
         const isUnavailableStatus =
             $availabilityStatusStore === AvailabilityStatus.DENY_PROXIMITY_MEETING ||
             $availabilityStatusStore === AvailabilityStatus.SILENT ||
@@ -1368,13 +1374,15 @@ export const localStreamStoreForPublishing = derived<
         const shouldMaskVideoForPublishing = isUnavailableStatus && $inBackgroundSettingsStore;
 
         if (
-            shouldMaskVideoForPublishing &&
+            (shouldMaskVideoForPublishing || $karaokeGameActiveStore) &&
             $localStreamStore.type === "success" &&
-            $localStreamStore.stream &&
-            $localStreamStore.stream.getVideoTracks().length > 0
+            $localStreamStore.stream
         ) {
-            const audioOnlyStream = new MediaStream($localStreamStore.stream.getAudioTracks());
-            set({ type: "success", stream: audioOnlyStream });
+            const filteredStream = new MediaStream([
+                ...($karaokeGameActiveStore ? [] : $localStreamStore.stream.getAudioTracks()),
+                ...(shouldMaskVideoForPublishing ? [] : $localStreamStore.stream.getVideoTracks()),
+            ]);
+            set({ type: "success", stream: filteredStream });
             return;
         }
         set($localStreamStore);

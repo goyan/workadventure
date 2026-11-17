@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ListeningZoneJam } from "@workadventure/map-editor";
-import { buildJamSpaceName } from "@workadventure/map-editor";
+import { buildJamSpaceName, buildKaraokeStageSpaceName } from "@workadventure/map-editor";
 import type { JamRoomDirectory } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
 import { createJamRoomDirectory, resolveJamSpaceAccess } from "../src/Model/AreaPropertyEvents/JamSpaceAccess";
 
@@ -25,6 +25,52 @@ function directory(
 const spaceName = buildJamSpaceName({ roomUrl: ROOM, areaId: "area-1", propertyId: "prop-1", hostUuid: HOST });
 
 describe("resolveJamSpaceAccess", () => {
+    const stage = {
+        areaId: "area-1",
+        propertyId: "prop-1",
+        hostUuid: HOST,
+        enabled: true,
+        turnId: "00000000-0000-4000-8000-000000000001",
+        singerUuid: GUEST,
+        queue: [],
+        applause: 0,
+    };
+    const stageName = buildKaraokeStageSpaceName({ ...stage, roomUrl: ROOM });
+    const stageDirectory: JamRoomDirectory = { ...directory(), getKaraokeStage: () => Promise.resolve(stage) };
+    it("gives the chosen singer the mic and the host only listening rights", async () => {
+        expect(await resolveJamSpaceAccess(stageName, { uuid: GUEST, playUri: ROOM }, stageDirectory)).toEqual({
+            kind: "karaoke",
+            canSing: true,
+        });
+        expect(await resolveJamSpaceAccess(stageName, { uuid: HOST, playUri: ROOM }, stageDirectory)).toEqual({
+            kind: "karaoke",
+            canSing: false,
+        });
+    });
+    it("rejects a previous turn, a forged singer, a closed stage and an absent guest", async () => {
+        const forgedNames = [
+            buildKaraokeStageSpaceName({ ...stage, roomUrl: ROOM, turnId: "00000000-0000-4000-8000-000000000002" }),
+            buildKaraokeStageSpaceName({ ...stage, roomUrl: ROOM, singerUuid: HOST }),
+        ];
+        const results = await Promise.all(
+            forgedNames.map((forged) => resolveJamSpaceAccess(forged, { uuid: GUEST, playUri: ROOM }, stageDirectory)),
+        );
+        expect(results).toEqual([{ kind: "refused" }, { kind: "refused" }]);
+        expect(
+            await resolveJamSpaceAccess(
+                stageName,
+                { uuid: GUEST, playUri: ROOM },
+                { ...stageDirectory, getKaraokeStage: () => Promise.resolve({ ...stage, enabled: false }) },
+            ),
+        ).toEqual({ kind: "refused" });
+        expect(
+            await resolveJamSpaceAccess(
+                stageName,
+                { uuid: GUEST, playUri: ROOM },
+                { ...stageDirectory, isUserInRoom: () => Promise.resolve(false) },
+            ),
+        ).toEqual({ kind: "refused" });
+    });
     it("leaves an ordinary space alone", async () => {
         expect(await resolveJamSpaceAccess("world.some-bubble", { uuid: GUEST, playUri: ROOM }, directory())).toEqual({
             kind: "not-a-jam",

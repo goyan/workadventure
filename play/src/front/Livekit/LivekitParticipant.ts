@@ -9,6 +9,7 @@ import * as Sentry from "@sentry/svelte";
 import { Track, ParticipantEvent, VideoQuality } from "livekit-client";
 import type { Readable, Unsubscriber, Writable } from "svelte/store";
 import { derived, get, writable } from "svelte/store";
+import { parseKaraokeStageSpaceName } from "@workadventure/map-editor";
 import type { SpaceInterface, SpaceUserExtended } from "../Space/SpaceInterface";
 import type { StreamableSubjects } from "../Space/SpacePeerManager/SpacePeerManager";
 import { decrementLivekitConnectionsCount, incrementLivekitConnectionsCount } from "../Utils/E2EHooks";
@@ -116,7 +117,9 @@ export class LiveKitParticipant {
 
         // The music is only downloaded while the local user chose to hear it.
         this.unsubscribeJamMusicListening = jamMusicListeningStore.subscribe((listening) => {
-            this._jamMusicPublication?.setSubscribed(listening);
+            this._jamMusicPublication?.setSubscribed(
+                listening || parseKaraokeStageSpaceName(this.space.getName()) !== undefined,
+            );
         });
 
         this._spaceUser = spaceUser;
@@ -341,7 +344,9 @@ export class LiveKitParticipant {
                 this._jamMusicPublication.setSubscribed(false);
             }
             this._jamMusicPublication = publication;
-            publication.setSubscribed(get(jamMusicListeningStore));
+            publication.setSubscribed(
+                get(jamMusicListeningStore) || parseKaraokeStageSpaceName(this.space.getName()) !== undefined,
+            );
         } else if (this.isScriptingAudioPublication(publication)) {
             if (this._scriptingAudioPublication && this._scriptingAudioPublication !== publication) {
                 console.warn(

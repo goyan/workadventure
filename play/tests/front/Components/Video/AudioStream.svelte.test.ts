@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, unmount } from "svelte";
-import { readable } from "svelte/store";
+import { get, readable, writable } from "svelte/store";
+import { enterKaraokeGame } from "../../../../src/front/Karaoke/KaraokeGameStore";
 import AudioStream from "../../../../src/front/Components/Video/PictureInPicture/AudioStream.svelte";
 
 function deferred() {
@@ -53,6 +54,48 @@ describe("AudioStream", () => {
         flushSync();
         return target.querySelector("audio") as HTMLAudioElement;
     }
+
+    it("silences conversations during Game and restores the latest volume afterward", () => {
+        const volume = writable(0.7);
+        component = mount(AudioStream, {
+            target,
+            props: { streamStore: readable<MediaStream | undefined>(stream), isBlocked: readable(false), volume },
+        });
+        flushSync();
+        const audio = target.querySelector("audio");
+        const leave = enterKaraokeGame();
+        try {
+            flushSync();
+            expect(audio?.volume).toBe(0);
+            volume.set(0.4);
+            flushSync();
+            expect(audio?.volume).toBe(0);
+            expect(get(volume)).toBe(0.4);
+        } finally {
+            leave();
+        }
+        flushSync();
+        expect(audio?.volume).toBe(0.4);
+    });
+
+    it("keeps the singer and backing music audible during Game", () => {
+        const leave = enterKaraokeGame();
+        try {
+            component = mount(AudioStream, {
+                target,
+                props: {
+                    conversation: false,
+                    streamStore: readable<MediaStream | undefined>(stream),
+                    isBlocked: readable(false),
+                    volume: readable(0.6),
+                },
+            });
+            flushSync();
+            expect(target.querySelector("audio")?.volume).toBe(0.6);
+        } finally {
+            leave();
+        }
+    });
 
     // Chrome keeps playing on the default output when srcObject is assigned before setSinkId() resolves.
     it("attaches the stream only once the output device is applied", async () => {

@@ -1,5 +1,10 @@
-import type { ListeningZoneJam } from "@workadventure/map-editor";
-import { LISTENING_ZONE_JAM_VARIABLE, parseJamSpaceName, parseListeningZoneJams } from "@workadventure/map-editor";
+import type { ListeningZoneJam, KaraokeStageState } from "@workadventure/map-editor";
+import {
+    LISTENING_ZONE_JAM_VARIABLE,
+    parseJamSpaceName,
+    parseListeningZoneJams,
+    parseKaraokeStageSpaceName,
+} from "@workadventure/map-editor";
 import type { GameRoom } from "../GameRoom";
 
 /** What the back knows of the rooms it hosts, seen from a Jam space. */
@@ -7,11 +12,15 @@ export interface JamRoomDirectory {
     /** The Jam rooms of a listening zone, or undefined when the back does not host that room or that zone. */
     getJams(roomUrl: string, areaId: string, propertyId: string): Promise<readonly ListeningZoneJam[] | undefined>;
     isUserInRoom(roomUrl: string, userUuid: string): Promise<boolean>;
+    getKaraokeStage?(roomUrl: string, hostUuid: string): Promise<KaraokeStageState | undefined>;
 }
 
 export type JamSpaceAccess =
     /** An ordinary space: its rights do not change. */
-    { kind: "not-a-jam" } | { kind: "jam"; canPublishMusic: boolean } | { kind: "refused" };
+    | { kind: "not-a-jam" }
+    | { kind: "jam"; canPublishMusic: boolean }
+    | { kind: "karaoke"; canSing: boolean }
+    | { kind: "refused" };
 
 /**
  * Who may enter the space of a Jam, and who may publish its music. The user must stand in the room of the Jam (the
@@ -23,7 +32,8 @@ export async function resolveJamSpaceAccess(
     user: { uuid: string; playUri: string },
     directory: JamRoomDirectory,
 ): Promise<JamSpaceAccess> {
-    const parts = parseJamSpaceName(spaceName);
+    const stageParts = parseKaraokeStageSpaceName(spaceName);
+    const parts = stageParts ?? parseJamSpaceName(spaceName);
     if (!parts) {
         return { kind: "not-a-jam" };
     }
@@ -34,12 +44,28 @@ export async function resolveJamSpaceAccess(
     if (!jams?.some((jam) => jam.hostUuid === parts.hostUuid)) {
         return { kind: "refused" };
     }
+    if (stageParts) {
+        const stage = await directory.getKaraokeStage?.(parts.roomUrl, parts.hostUuid);
+        if (
+            !stage?.enabled ||
+            stage.turnId !== stageParts.turnId ||
+            stage.singerUuid !== stageParts.singerUuid ||
+            stage.areaId !== parts.areaId ||
+            stage.propertyId !== parts.propertyId
+        )
+            return { kind: "refused" };
+        return { kind: "karaoke", canSing: user.uuid === stage.singerUuid };
+    }
     return { kind: "jam", canPublishMusic: user.uuid === parts.hostUuid };
 }
 
 /** The directory over the rooms the back hosts: a room is known by the URL its users connect with. */
 export function createJamRoomDirectory(getRooms: () => ReadonlyMap<string, PromiseLike<GameRoom>>): JamRoomDirectory {
     return {
+        async getKaraokeStage(roomUrl, hostUuid) {
+            const room = await getRooms().get(roomUrl);
+            return room?.getKaraokeStage(hostUuid);
+        },
         async getJams(roomUrl, areaId, propertyId) {
             const room = await getRooms().get(roomUrl);
             if (!room) {

@@ -134,7 +134,7 @@ export class LiveKitService {
     async generateToken(
         roomName: string,
         user: SpaceUser,
-        options: { jamRole?: "host" | "guest" } = {},
+        options: { jamRole?: "host" | "guest" | "singer" | "audience" } = {},
     ): Promise<string> {
         const livekitRoomName = getLivekitRoomName(roomName);
 
@@ -151,7 +151,7 @@ export class LiveKitService {
             room: livekitRoomName,
             // Note: everyone can publish in Livekit, moderation is handled at application level. If a user should
             // not have published, its VideoBox will never be visible by anyone anyway.
-            canPublish: true,
+            canPublish: options.jamRole !== "audience",
             canSubscribe: true,
             roomJoin: true,
             canPublishSources: this.publishSources(options.jamRole),
@@ -159,8 +159,12 @@ export class LiveKitService {
         return token.toJwt();
     }
 
-    private publishSources(jamRole: "host" | "guest" | undefined): TrackSource[] {
+    private publishSources(jamRole: "host" | "guest" | "singer" | "audience" | undefined): TrackSource[] {
         switch (jamRole) {
+            case "singer":
+                return [TrackSource.MICROPHONE];
+            case "audience":
+                return [];
             case "host":
                 return [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
             case "guest":

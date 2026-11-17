@@ -246,7 +246,11 @@ export class LivekitCommunicationStrategy implements IRecordableStrategy {
                 ? await this.livekitService.generateToken(spaceName, user, {
                       jamRole: jamAccess.canPublishMusic ? "host" : "guest",
                   })
-                : await this.livekitService.generateToken(spaceName, user);
+                : jamAccess.kind === "karaoke"
+                  ? await this.livekitService.generateToken(spaceName, user, {
+                        jamRole: jamAccess.canSing ? "singer" : "audience",
+                    })
+                  : await this.livekitService.generateToken(spaceName, user);
 
         this.space.dispatchPrivateEvent({
             spaceName: this.space.getSpaceName(),

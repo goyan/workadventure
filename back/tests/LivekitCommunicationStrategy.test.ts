@@ -176,6 +176,16 @@ describe("LivekitCommunicationStrategy invitations", () => {
         );
     });
 
+    it.each([true, false])("signs a karaoke participant using their stage right (canSing=%s)", async (canSing) => {
+        const { strategy, user, livekitService } = createInvitationStrategy({ kind: "karaoke", canSing });
+        await invite(strategy, user);
+        await vi.waitFor(() =>
+            expect(livekitService.generateToken).toHaveBeenCalledWith("world.jam-space", user, {
+                jamRole: canSing ? "singer" : "audience",
+            }),
+        );
+    });
+
     it("sends no token to a user the Jam refuses", async () => {
         const { strategy, user, dispatchPrivateEvent, livekitService, resolveJamAccess } = createInvitationStrategy({
             kind: "refused",

@@ -1,4 +1,5 @@
 import { derived, get, writable, type Writable } from "svelte/store";
+import { karaokeSingerActiveStore } from "../Karaoke/KaraokeGameStore";
 
 const DEFAULT_VOLUME = 0.15;
 // Apply the quieter baseline once, including browsers that saved the previous volume.
@@ -35,9 +36,10 @@ function createVolumeStore(key: string, defaultVolume: number, formerKey?: strin
         store.set(volume);
     };
     const update = (updater: (value: number) => number): void => set(updater(get(store)));
-    const heard = silenceable
-        ? derived([store, soundEffectsSilencedStore], ([$volume, $silenced]) => ($silenced ? 0 : $volume))
-        : store;
+    const heard = derived(
+        [store, soundEffectsSilencedStore, karaokeSingerActiveStore],
+        ([$volume, $silenced, $singing]) => ($singing || (silenceable && $silenced) ? 0 : $volume),
+    );
     return { subscribe: heard.subscribe, set, update, setting: { subscribe: store.subscribe, set, update } };
 }
 
