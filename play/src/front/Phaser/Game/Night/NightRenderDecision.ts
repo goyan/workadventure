@@ -102,3 +102,11 @@ export function nightRenderAction(frame: NightFrame, previous: NightFrame | unde
     }
     return "keep";
 }
+
+/**
+ * Whether the night is hidden because the map editor is open: it is, so that what is edited is seen, unless the
+ * player asked to keep it there, to set the lamps as they will look at night.
+ */
+export function nightHiddenInEditor(editorOpen: boolean, keptInEditor: boolean): boolean {
+    return editorOpen && !keptInEditor;
+}

@@ -423,6 +423,11 @@ n'a pas de position à lui (comme un va-et-vient).
   pour un lieu choisi avant ce changement (pas de fuseau enregistré : rechoisir la ville), ou si le fuseau n'en est
   pas un : heure de Paris. Restent à l'heure de Paris pour toutes les cartes : saisons, thème de Noël, programme de la
   météo automatique. `play`, `back` et `map-storage` à déployer ensemble.
+- **Éclairage du jeu dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
+  édite ; le **bouton soleil-lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Même éclairage dans l'éditeur de carte qu'en jeu », Paramètres → Ambiance → Cycle jour/nuit,
+  `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle
+  couleur, portée et intensité d'une lampe comme elle sera la nuit. Les zones ajoutées ou déplacées ne comptent pour
+  la nuit qu'à la fermeture de l'éditeur ; les torches n'y éclairent pas.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
   (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 32 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle

@@ -62,3 +62,5 @@ export const lightSoftEdgeStore = createPersistedNumberStore("nightLightSoftEdge
 export const lightBounceStore = createPersistedNumberStore("nightLightBounce", 0.4, 0, 1);
 /** The time zone of the place of the map shown now (undefined: none, the time of Paris), for the clock. */
 export const mapTimeZoneStore = writable<string | undefined>(undefined);
+/** Whether this player keeps the night in the map editor, to set the lamps as they will look (hidden there by default). */
+export const nightInEditorStore = createPersistedSwitchStore("nightKeptInEditor", false);

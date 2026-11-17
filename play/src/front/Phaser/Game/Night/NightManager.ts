@@ -10,6 +10,7 @@ import {
     lightSoftEdgeStore,
     mapTimeZoneStore,
     nightDarknessStore,
+    nightInEditorStore,
     nightDateStore,
     nightModeStore,
     realisticNightStore,
@@ -40,7 +41,7 @@ import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { LitArea, NightRect } from "./NightLights";
 import { NightOverlay } from "./NightOverlay";
-import { nightRenderAction } from "./NightRenderDecision";
+import { nightHiddenInEditor, nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
 import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
@@ -80,6 +81,8 @@ export class NightManager {
     private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
+    private keptInEditor = false;
+    private readonly unsubscribeKeptInEditor: Unsubscriber;
     private mode = NightMode.Server;
     private disabled = false;
     private realistic = false;
@@ -120,6 +123,10 @@ export class NightManager {
                 this.readAreas();
             }
             this.editorOpen = open;
+        });
+        this.unsubscribeKeptInEditor = nightInEditorStore.subscribe((kept) => {
+            this.keptInEditor = kept;
+            this.scene.markDirty();
         });
         this.unsubscribeParty = partyRoomsStore.subscribe((rooms) => {
             this.partyRooms = rooms;
@@ -224,7 +231,8 @@ export class NightManager {
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
-        if (this.opacity === 0 || this.editorOpen || this.disabled) {
+        const hiddenInEditor = nightHiddenInEditor(this.editorOpen, this.keptInEditor);
+        if (this.opacity === 0 || hiddenInEditor || this.disabled) {
             if (this.previous !== undefined) {
                 this.overlay.hide();
                 this.previous = undefined;
@@ -252,7 +260,7 @@ export class NightManager {
         const camera = this.scene.cameras.main;
         const frame: NightFrame = {
             opacity: this.opacity,
-            editorOpen: this.editorOpen,
+            editorOpen: hiddenInEditor,
             disabled: this.disabled,
             view: {
                 x: camera.worldView.x,
@@ -330,6 +338,7 @@ export class NightManager {
         this.unsubscribeMode();
         this.unsubscribeRealistic();
         this.unsubscribeDarkness();
+        this.unsubscribeKeptInEditor();
         this.unsubscribeIndirect();
         this.unsubscribeParty();
         this.unsubscribeLamps();

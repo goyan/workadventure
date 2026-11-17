@@ -12,7 +12,17 @@
     import { isMediaBreakpointUp } from "../../Utils/BreakpointsUtils";
     import ArrowBarRight from "../Icons/ArrowBarRight.svelte";
     import type { WorkAdventureComponent } from "../../../types/component";
-    import { IconDeselect, IconX, IconTexture, IconLamp, IconMapSearch, IconSettings, IconWall } from "@wa-icons";
+    import { nightInEditorStore } from "../../Stores/NightStore";
+    import {
+        IconDeselect,
+        IconX,
+        IconTexture,
+        IconLamp,
+        IconMapSearch,
+        IconSunMoon,
+        IconSettings,
+        IconWall,
+    } from "@wa-icons";
 
     type SideBarTool = {
         toolName: EditorToolName;
@@ -173,6 +183,34 @@
                     </div>
                 </div>
             {/each}
+        </div>
+        <!-- Not a tool: shows in the editor the lighting of the game (night veil, bounced light), to set the lamps as
+             they will look, or the plain daylight of the editor again. -->
+        <div class="p-2 retro-theme rounded-2xl">
+            <div class="tool-button relative">
+                <button
+                    class="peer p-3 aspect-square w-12 rounded {$nightInEditorStore
+                        ? 'bg-secondary'
+                        : 'hover:bg-white/10'}"
+                    data-testid="mapEditorNightToggle"
+                    aria-pressed={$nightInEditorStore}
+                    aria-label={$LL.mapEditor.sideBar.nightInEditor()}
+                    onclick={(event) => {
+                        event.preventDefault();
+                        nightInEditorStore.set(!$nightInEditorStore);
+                    }}
+                    type="button"
+                >
+                    <IconSunMoon font-size="22" />
+                </button>
+                <div
+                    class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
+                >
+                    {$nightInEditorStore
+                        ? $LL.mapEditor.sideBar.nightInEditorOn()
+                        : $LL.mapEditor.sideBar.nightInEditorOff()}
+                </div>
+            </div>
         </div>
     </div>
 </section>
