@@ -659,6 +659,7 @@ message ClientToServerMessage {
     MeetingInvitationResponseMessage meetingInvitationResponseMessage = 49;
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
     SetEntityStateMessage setEntityStateMessage = 55;
+    ReportSwitchPresenceMessage reportSwitchPresenceMessage = 56;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -723,6 +724,12 @@ message SetEntityStateMessage {
   repeated string entityIds = 2;
   string key = 3;
   string value = 4;
+}
+
+// A browser tells which presence sensors of the map one of its wandering animals stands in: all of them at each
+// report, none once the last animal left. Only the browsers know where the animals are.
+message ReportSwitchPresenceMessage {
+  repeated string switchIds = 1;
 }
 
 // The state of an entity changed (or its initial state, on joining the room). An entity without message has the
@@ -1978,6 +1985,7 @@ message PusherToBackMessage {
     EntityMessage entityMessage = 35;
     DuckRushPromptMessage duckRushPromptMessage = 36;
     SetEntityStateMessage setEntityStateMessage = 37;
+    ReportSwitchPresenceMessage reportSwitchPresenceMessage = 38;
   }
 }
 

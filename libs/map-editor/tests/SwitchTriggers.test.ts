@@ -10,6 +10,7 @@ import {
     isInCone,
     isWithinHours,
     parisMinutesOfDay,
+    switchPresenceSenses,
 } from "../src";
 
 const base = { id: "p", type: "switchPropertyData" as const };
@@ -170,5 +171,48 @@ describe("isInCone", () => {
         const all = { direction: 90, angle: 360, reach: 96 };
         expect(isInCone(origin, all, { x: 100, y: 10 })).toBe(true);
         expect(isInCone(origin, down, origin)).toBe(true);
+    });
+});
+
+describe("switchPresenceSenses", () => {
+    const sensorAt = { x: 160, y: 160 };
+    const area = { x: 0, y: 0, width: 320, height: 320 };
+    const presence = (scope: "room" | "area" | "proximity" | "cone", overrides = {}) =>
+        SwitchTrigger.parse({ type: "presence", scope, ...overrides }) as Extract<SwitchTrigger, { type: "presence" }>;
+
+    it("senses somebody in its area, on the floor of the area", () => {
+        expect(switchPresenceSenses(sensorAt, presence("room"), area, { x: 320, y: 320 }, 0)).toBe(true);
+        expect(switchPresenceSenses(sensorAt, presence("room"), area, { x: 321, y: 100 }, 0)).toBe(false);
+        expect(switchPresenceSenses(sensorAt, presence("area"), area, { x: 100, y: 100 }, 64)).toBe(false);
+        expect(
+            switchPresenceSenses(sensorAt, presence("area"), { ...area, elevation: 64 }, { x: 100, y: 100 }, 64),
+        ).toBe(true);
+    });
+
+    it("senses nothing without its area", () => {
+        expect(switchPresenceSenses(sensorAt, presence("room"), undefined, { x: 100, y: 100 }, 0)).toBe(false);
+    });
+
+    it("senses around the middle of its first tile, on its own floor", () => {
+        expect(switchPresenceSenses(sensorAt, presence("proximity"), undefined, { x: 176 + 96, y: 176 }, 0)).toBe(true);
+        expect(switchPresenceSenses(sensorAt, presence("proximity"), undefined, { x: 176 + 97, y: 176 }, 0)).toBe(
+            false,
+        );
+        expect(switchPresenceSenses(sensorAt, presence("proximity"), undefined, { x: 176, y: 176 }, 64)).toBe(false);
+        expect(
+            switchPresenceSenses(
+                { ...sensorAt, elevation: 64 },
+                presence("proximity"),
+                undefined,
+                { x: 176, y: 176 },
+                64,
+            ),
+        ).toBe(true);
+    });
+
+    it("senses in its cone only", () => {
+        const cone = presence("cone", { direction: 90, angle: 90 });
+        expect(switchPresenceSenses(sensorAt, cone, undefined, { x: 176, y: 176 + 90 }, 0)).toBe(true);
+        expect(switchPresenceSenses(sensorAt, cone, undefined, { x: 176, y: 176 - 40 }, 0)).toBe(false);
     });
 });

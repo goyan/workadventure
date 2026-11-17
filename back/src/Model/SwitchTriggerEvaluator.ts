@@ -1,19 +1,17 @@
 import {
     automaticSwitchTargetIds,
-    isAtAreaLevel,
-    isInCone,
     isWithinHours,
     parisMinutesOfDay,
+    switchPresenceSenses,
 } from "@workadventure/map-editor";
 import type { EntityStateKey, EntityStateValue, SwitchPropertyData, WAMEntityData } from "@workadventure/map-editor";
-import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { GameRoom } from "./GameRoom";
 
 /** The triggers of a map are looked at this often. */
 export const SWITCH_TRIGGER_TICK_MS = 1000;
-/** The server does not know the size of an object: the middle of a sensor is taken half a tile from its corner. */
-const SENSOR_MIDDLE_PX = 16;
-const TILE_PX = 32;
+/** A report of animals holds this long: a browser repeats it while an animal stays in a sensor. */
+export const ANIMAL_REPORT_TTL_MS = 5000;
+const MAX_REPORTED_SENSORS = 50;
 
 interface AutomaticSwitch {
     id: string;
@@ -40,6 +38,8 @@ export class SwitchTriggerEvaluator {
     private readonly lastSeen = new Map<string, number>();
     /** What the triggers asked of each object, as last written. */
     private readonly asked = new Map<string, { key: EntityStateKey; on: boolean }>();
+    /** The sensors each browser last said one of its wandering animals stands in, and when it said so. */
+    private readonly animalReports = new Map<string, { ids: Set<string>; at: number }>();
     private switches: AutomaticSwitch[] = [];
     private readFor: string | undefined | null = null;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -111,7 +111,7 @@ export class SwitchTriggerEvaluator {
         if (trigger.type === "hours") {
             return isWithinHours(trigger.from, trigger.to, parisMinutesOfDay(new Date(time)));
         }
-        if (users.some((user) => this.senses(entity, trigger, user))) {
+        if (users.some((user) => this.senses(entity, trigger, user)) || this.animalIn(id, time)) {
             this.lastSeen.set(id, time);
             return true;
         }
@@ -124,28 +124,42 @@ export class SwitchTriggerEvaluator {
         trigger: Extract<SwitchPropertyData["trigger"], { type: "presence" }>,
         user: TriggerUser,
     ): boolean {
-        if (trigger.scope === "proximity" || trigger.scope === "cone") {
-            if (!isAtAreaLevel(entity, user.getFloorZ())) {
-                return false;
-            }
-            // Proximity is a cone open all around.
-            return isInCone(
-                { x: entity.x + SENSOR_MIDDLE_PX, y: entity.y + SENSOR_MIDDLE_PX },
-                {
-                    direction: trigger.direction,
-                    angle: trigger.scope === "cone" ? trigger.angle : 360,
-                    reach: trigger.tiles * TILE_PX,
-                },
-                user.getPosition(),
-            );
-        }
-        const area = this.room.getWam()?.areas.find((candidate) => candidate.id === trigger.areaId);
-        // An area only applies to the players of its floor, as in AreaZoneTracker.
-        return (
-            area !== undefined &&
-            isAtAreaLevel(area, user.getFloorZ()) &&
-            AreaZoneTracker.isPositionInArea(user.getPosition(), area)
+        const area =
+            trigger.scope === "room" || trigger.scope === "area"
+                ? this.room.getWam()?.areas.find((candidate) => candidate.id === trigger.areaId)
+                : undefined;
+        return switchPresenceSenses(entity, trigger, area, user.getPosition(), user.getFloorZ());
+    }
+
+    /**
+     * A browser tells which presence sensors one of its wandering animals stands in (all of them, at each report; an
+     * empty list when none any more). Only the browsers know where the animals are: each works them out from the
+     * clock, the server has neither them nor the collisions of the map. A report holds for a few seconds, so a browser
+     * that left stops counting. Anything that is not a presence sensor of the map is ignored.
+     */
+    public reportAnimals(reporter: string, switchIds: readonly string[]): void {
+        const sensors = new Set(
+            this.automaticSwitches()
+                .filter((automatic) => automatic.property.trigger?.type === "presence")
+                .map((automatic) => automatic.id),
         );
+        const ids = switchIds.slice(0, MAX_REPORTED_SENSORS).filter((id) => sensors.has(id));
+        if (ids.length === 0) {
+            this.animalReports.delete(reporter);
+        } else {
+            this.animalReports.set(reporter, { ids: new Set(ids), at: this.now() });
+        }
+    }
+
+    private animalIn(switchId: string, time: number): boolean {
+        for (const [reporter, report] of this.animalReports) {
+            if (time - report.at >= ANIMAL_REPORT_TTL_MS) {
+                this.animalReports.delete(reporter);
+            } else if (report.ids.has(switchId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** The switches of the map that have a trigger, read again only when the map changed. */

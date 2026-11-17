@@ -130,6 +130,7 @@ export class GameRoom implements BrothersFinder {
     private readonly areaPropertyVariablesManager = new AreaPropertyVariablesManager();
     private listeningZoneManager: ListeningZoneManager | undefined;
     private entityStateManager: EntityStateManager | undefined;
+    private switchTriggers: SwitchTriggerEvaluator | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
     private nextUserId = 1;
@@ -287,6 +288,7 @@ export class GameRoom implements BrothersFinder {
         await gameRoom.entityStateManager.restore();
         // Uses the switches that have a trigger (presence sensors, timers) once a second.
         const switchTriggers = new SwitchTriggerEvaluator(gameRoom, gameRoom.entityStateManager);
+        gameRoom.switchTriggers = switchTriggers;
         switchTriggers.start();
         // No need to unsubscribe since GameRoom.destroy completes this stream.
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
@@ -1068,6 +1070,11 @@ export class GameRoom implements BrothersFinder {
     /** The use of a switch of the map by a user: sets the state of the objects it commands. */
     public pressSwitch(user: Pick<User, "uuid" | "tags">, message: SetEntityStateMessage): string[] {
         return this.entityStateManager?.press(user, message) ?? [];
+    }
+
+    /** The presence sensors a wandering animal stands in, as the browser of a user sees them. */
+    public reportSwitchAnimals(user: Pick<User, "id">, switchIds: readonly string[]): void {
+        this.switchTriggers?.reportAnimals(String(user.id), switchIds);
     }
 
     /** The states of the objects of the map that differ from their default, sent to a user who joins the room. */

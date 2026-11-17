@@ -268,3 +268,63 @@ describe("SwitchTriggerEvaluator, several triggers and manual presses", () => {
         expect(h.getUsers).not.toHaveBeenCalled();
     });
 });
+
+describe("SwitchTriggerEvaluator, wandering animals the browsers report", () => {
+    const quick = { ...inRoom, offDelay: 0 };
+
+    it("lights for an animal a browser reports in the sensor, as for a player", () => {
+        const h = createHarness({ ...sensor("s", quick, ["l1"]), ...lamps("l1") });
+        h.tick();
+        h.evaluator.reportAnimals("alice", ["s"]);
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "true"]]);
+    });
+
+    it("lets go once no browser has reported the animal for 5 s", () => {
+        const h = createHarness({ ...sensor("s", quick, ["l1"]), ...lamps("l1") });
+        h.evaluator.reportAnimals("alice", ["s"]);
+        h.tick();
+        h.advance(4);
+        expect(h.tick()).toEqual([]);
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+
+    it("lets go at once when the browser reports that the animal left", () => {
+        const h = createHarness({ ...sensor("s", quick, ["l1"]), ...lamps("l1") });
+        h.evaluator.reportAnimals("alice", ["s"]);
+        h.tick();
+        h.evaluator.reportAnimals("alice", []);
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+
+    it("keeps the sensor lit while another browser still reports an animal", () => {
+        const h = createHarness({ ...sensor("s", quick, ["l1"]), ...lamps("l1") });
+        h.evaluator.reportAnimals("alice", ["s"]);
+        h.evaluator.reportAnimals("bob", ["s"]);
+        h.tick();
+        h.evaluator.reportAnimals("alice", []);
+        h.advance(1);
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("ignores a report about a timer, a manual switch or an unknown object", () => {
+        const h = createHarness({
+            ...sensor("t", { type: "hours", from: "20:00", to: "21:00" }, ["l1"]),
+            ...lamps("l1"),
+        });
+        h.tick();
+        h.evaluator.reportAnimals("alice", ["t", "l1", "nope"]);
+        h.advance(1);
+        expect(h.tick()).toEqual([]);
+    });
+
+    it("reads at most 50 sensors of a report", () => {
+        const h = createHarness({ ...sensor("s", quick, ["l1"]), ...lamps("l1") });
+        h.tick();
+        h.evaluator.reportAnimals("alice", [...Array.from({ length: 50 }, (_, index) => `x${index}`), "s"]);
+        h.advance(1);
+        expect(h.tick()).toEqual([]);
+    });
+});

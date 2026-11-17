@@ -12,6 +12,7 @@ import { lampSource } from "../Lamps/LampReconcile";
 import { mapRoomAreas, roomZonesAt } from "../Lamps/RoomZones";
 import { mapEditorModeStore, mapEditorSelectedEntityStore } from "../../../Stores/MapEditorStore";
 import { SwitchIndicator } from "./SwitchIndicator";
+import { SwitchAnimalReporter, sensorsWithAnimals, type AnimalSensor } from "./SwitchAnimalReports";
 import { syncedSensorProperty } from "./SwitchSensorSync";
 import { SwitchWiringView, wiringOf, type SwitchWatchShape } from "./SwitchWiringView";
 import { entityStateKeysOf, resolveSwitchTargets, switchPressValue, type SwitchableTarget } from "./SwitchTargets";
@@ -42,6 +43,7 @@ export class GameSwitches {
     private lastReconcileAt: number | undefined;
     private switches: Entity[] = [];
     private readonly wiringView: SwitchWiringView;
+    private readonly animalReporter = new SwitchAnimalReporter();
 
     constructor(private readonly scene: GameScene) {
         this.wiringView = new SwitchWiringView(scene);
@@ -142,6 +144,40 @@ export class GameSwitches {
         }
     }
 
+    /**
+     * Tells the server which presence sensors a wandering animal stands in: only the browsers know where the animals
+     * are. Nothing is worked out on a map without presence sensor.
+     */
+    private reportAnimals(now: number): void {
+        const sensors: AnimalSensor[] = [];
+        for (const entity of this.switches) {
+            const trigger = switchPropertyOf(entity)?.trigger;
+            if (trigger?.type !== "presence") {
+                continue;
+            }
+            const area = trigger.areaId
+                ? this.scene.getGameMap().getWamFile()?.getGameMapAreas()?.getAreas().get(trigger.areaId)
+                : undefined;
+            sensors.push({
+                id: entity.entityId,
+                x: entity.x,
+                y: entity.y,
+                elevation: entity.getElevation(),
+                trigger,
+                area,
+            });
+        }
+        if (sensors.length === 0) {
+            return;
+        }
+        const animals: { x: number; y: number }[] = [];
+        this.scene.getWanderingCharactersManager()?.forEachWalker((position) => animals.push(position));
+        const report = this.animalReporter.next(sensorsWithAnimals(sensors, animals), now);
+        if (report) {
+            this.scene.connection?.emitReportSwitchPresence(report);
+        }
+    }
+
     /** What the selected sensor watches, to be drawn in the map editor. */
     private watchedBy(entity: Entity, property: SwitchPropertyData): SwitchWatchShape | undefined {
         const trigger = property.trigger;
@@ -184,6 +220,7 @@ export class GameSwitches {
             this.lastReconcileAt = now;
             this.reconcile();
             this.syncSensors();
+            this.reportAnimals(now);
         }
         let changed = false;
         for (const entity of this.switches) {

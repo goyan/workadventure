@@ -133,6 +133,15 @@ export class WanderingCharactersManager {
         }
     }
 
+    /** Calls the callback with the position of each visible character, free ones included: the presence sensors sense them. */
+    public forEachWalker(callback: (position: Point) => void): void {
+        for (const character of this.characters.values()) {
+            if (character.sprite?.visible) {
+                callback(character.opener);
+            }
+        }
+    }
+
     /** The map the placed characters walk on, with the current collisions (read now if they never were). */
     public getWanderMap(): WanderMap {
         this.mapWanted = true;
