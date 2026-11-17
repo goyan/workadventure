@@ -12,6 +12,7 @@ import {
     sunElevationInParis,
     sunPlaceOf,
     sunPositionAt,
+    worldClockTimeZone,
 } from "../../../../../src/front/Phaser/Game/Night/NightClock";
 
 const MINUTE = 60_000;
@@ -222,5 +223,19 @@ describe("nightOpacityWith", () => {
         expect(nightOpacityWith(NIGHT_MAX_OPACITY, 2)).toBeCloseTo(NIGHT_DARKNESS_MAX);
         expect(nightOpacityWith(NIGHT_MAX_OPACITY, -1)).toBeCloseTo(NIGHT_DARKNESS_MIN);
         expect(nightOpacityWith(NIGHT_MAX_OPACITY, Number.NaN)).toBeCloseTo(NIGHT_MAX_OPACITY);
+    });
+});
+
+describe("worldClockTimeZone", () => {
+    it("shows the time of the place of the map on the server clock", () => {
+        expect(worldClockTimeZone(false, "Australia/Sydney")).toBe("Australia/Sydney");
+    });
+
+    it("shows the time of Paris on a map without a place, or whose place has no time zone", () => {
+        expect(worldClockTimeZone(false, undefined)).toBe("Europe/Paris");
+    });
+
+    it("shows the time of the computer, whatever the map, for a player who follows their own clock", () => {
+        expect(worldClockTimeZone(true, "Australia/Sydney")).toBeUndefined();
     });
 });

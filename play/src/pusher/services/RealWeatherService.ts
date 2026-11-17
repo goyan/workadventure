@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { asError } from "catch-unknown";
 import { z } from "zod";
+import { isTimeZone } from "@workadventure/map-editor";
 import type { WeatherLocation } from "@workadventure/map-editor";
 import {
     PARIS_LATITUDE,
@@ -43,6 +44,7 @@ const OpenMeteoPlaces = z.object({
                 longitude: z.number().min(-180).max(180),
                 admin1: z.string().max(200).optional(),
                 country: z.string().max(200).optional(),
+                timezone: z.string().max(64).optional(),
             }),
         )
         .max(20)
@@ -202,6 +204,8 @@ export class PlaceSearchService {
                 name: [result.name, result.admin1, result.country].filter(Boolean).join(", ").slice(0, 200),
                 latitude: result.latitude,
                 longitude: result.longitude,
+                // The time zone of the town, for the clock and the timers of the map.
+                ...(result.timezone && isTimeZone(result.timezone) ? { timezone: result.timezone } : {}),
             }));
             if (this.cache.size >= MAX_SEARCHES) {
                 const oldest = this.cache.keys().next().value;

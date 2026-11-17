@@ -367,7 +367,7 @@ const mapEditor: BaseTranslation = {
             offDelay: "Turn off after (s) with nobody",
             hoursFrom: "from",
             hoursTo: "to",
-            hoursParis: "Time in Paris.",
+            hoursParis: "Time at the place of the map (Paris when none is chosen).",
             addSensorToLamp: "Add a sensor to this lamp",
         },
         lamp: {

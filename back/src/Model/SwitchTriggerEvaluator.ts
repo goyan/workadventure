@@ -1,7 +1,7 @@
 import {
     automaticSwitchTargetIds,
     isWithinHours,
-    parisMinutesOfDay,
+    minutesOfDayIn,
     switchPresenceSenses,
     switchPropertyIn,
 } from "@workadventure/map-editor";
@@ -126,7 +126,9 @@ export class SwitchTriggerEvaluator {
             return false;
         }
         if (trigger.type === "hours") {
-            return isWithinHours(trigger.from, trigger.to, parisMinutesOfDay(new Date(time)));
+            // In the time of the place of the map (Paris without one).
+            const timeZone = this.room.getWam()?.settings?.weatherLocation?.timezone;
+            return isWithinHours(trigger.from, trigger.to, minutesOfDayIn(new Date(time), timeZone));
         }
         // The area a sensor watches is looked for once, not for each player.
         const area =

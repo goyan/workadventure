@@ -379,7 +379,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             offDelay: "Éteindre après (s) sans personne",
             hoursFrom: "de",
             hoursTo: "à",
-            hoursParis: "Heure de Paris.",
+            hoursParis: "Heure du lieu de la carte (Paris sans lieu choisi).",
             addSensorToLamp: "Ajouter un capteur à cette lampe",
         },
         lamp: {

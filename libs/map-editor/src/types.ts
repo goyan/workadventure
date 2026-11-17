@@ -812,10 +812,28 @@ export const DEFAULT_AUTO_WEATHER: AutoWeatherSettings = {
 };
 
 /** Where the map is: its real weather and its day/night follow this place (Paris when absent). */
+/** Whether this is a time zone the clock knows (an IANA name, like "Europe/Paris"). */
+export function isTimeZone(timeZone: string): boolean {
+    if (timeZone === "") {
+        return false;
+    }
+    try {
+        new Intl.DateTimeFormat("en-GB", { timeZone });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export const WeatherLocation = z.object({
     name: z.string().trim().min(1).max(200),
     latitude: z.number().finite().min(-90).max(90),
     longitude: z.number().finite().min(-180).max(180),
+    /**
+     * The time zone of the place (IANA name): the clock shown and the timers of the map follow it. Absent for a
+     * place chosen before it was kept, or when it is not a time zone: the time of Paris then (fail open).
+     */
+    timezone: z.string().max(64).refine(isTimeZone).optional().catch(undefined),
 });
 export type WeatherLocation = z.infer<typeof WeatherLocation>;
 

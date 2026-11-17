@@ -1,13 +1,15 @@
 <script lang="ts">
     import { LL, locale } from "../../../i18n/i18n-svelte";
-    import { NightMode, nightModeStore, nightDateStore } from "../../Stores/NightStore";
+    import { worldClockTimeZone } from "../../Phaser/Game/Night/NightClock";
+    import { NightMode, mapTimeZoneStore, nightModeStore, nightDateStore } from "../../Stores/NightStore";
 
     let formatter = $derived(
         new Intl.DateTimeFormat($locale, {
             hour: "2-digit",
             minute: "2-digit",
             hourCycle: "h23",
-            ...($nightModeStore === NightMode.Computer ? {} : { timeZone: "Europe/Paris" }),
+            // The time of the place of the map (Paris without one); the computer's own for who follows it.
+            timeZone: worldClockTimeZone($nightModeStore === NightMode.Computer, $mapTimeZoneStore),
         }),
     );
 </script>

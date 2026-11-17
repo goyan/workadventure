@@ -17,10 +17,10 @@ const sensor = (id: string, trigger: Trigger, ids: string[], at = { x: 160, y: 1
 const lamps = (...ids: string[]) => Object.fromEntries(ids.map((id) => [id, { x: 100, y: 100, prefabRef }]));
 const inRoom = { type: "presence", scope: "room", areaId: "room", tiles: 3, offDelay: 30 };
 
-function createHarness(entities: Record<string, unknown>, areas: unknown[] = [room]) {
+function createHarness(entities: Record<string, unknown>, areas: unknown[] = [room], settings?: unknown) {
     // Thursday 2026-01-15, 12:00 in Paris.
     let time = new Date("2026-01-15T11:00:00Z").getTime();
-    const wam = { lastCommandId: "1", entities, areas } as unknown as WAMFileFormat;
+    const wam = { lastCommandId: "1", entities, areas, settings } as unknown as WAMFileFormat;
     const users = new Map<number, { getPosition: () => { x: number; y: number }; getFloorZ: () => number }>();
     const written: [string, string][] = [];
     let refuse = false;
@@ -444,5 +444,29 @@ describe("SwitchTriggerEvaluator, somebody in the building whose browser stopped
         h.advance(600);
 
         expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+});
+
+describe("SwitchTriggerEvaluator, hours on a map that has a place", () => {
+    const sydney = {
+        weatherLocation: { name: "Sydney", latitude: -33.87, longitude: 151.21, timezone: "Australia/Sydney" },
+    };
+    const evening = { type: "hours", from: "20:00", to: "23:00" };
+
+    it("reads its hours in the time of the place: it is 22:00 in Sydney when it is noon in Paris", () => {
+        const h = createHarness({ ...sensor("t", evening, ["l1"]), ...lamps("l1") }, [room], sydney);
+
+        expect(h.tick()).toEqual([["l1", "true"]]);
+    });
+
+    it("reads them in the time of Paris on a map without a place, or whose place has no time zone", () => {
+        const none = createHarness({ ...sensor("t", evening, ["l1"]), ...lamps("l1") });
+        const { timezone: _timezone, ...before } = sydney.weatherLocation;
+        const chosenBefore = createHarness({ ...sensor("t", evening, ["l1"]), ...lamps("l1") }, [room], {
+            weatherLocation: before,
+        });
+
+        expect(none.tick()).toEqual([["l1", "false"]]);
+        expect(chosenBefore.tick()).toEqual([["l1", "false"]]);
     });
 });
