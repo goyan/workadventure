@@ -141,6 +141,8 @@ describe("floor operations", () => {
         expect(availableLevels(model)).toEqual([52, 84, 116]);
         model.setSlab(104, 1, 1, "parquet-clair");
         expect(availableLevels(model)).toEqual([52, 84, 104, 116]);
+        // The tops of walls standing on a floor are offered too: a floor over the floor.
+        expect(availableLevels(new FloorModel(), [136, 52])).toEqual([52, 84, 116, 136]);
     });
 
     it("sends a stair to the floor asked, else to one that has slabs, else to the first in reach", () => {

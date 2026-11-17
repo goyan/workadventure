@@ -24,8 +24,14 @@ describe("raised floors of the map layer", () => {
         expect(floorLevelTiles(52)).toBe("2");
         expect(floorLevelTiles(84)).toBe("3");
         expect(floorLevelTiles(116)).toBe("4");
+        // A floor on walls standing on another floor: the heights of the walls, one over the other.
+        expect(floorLevelTiles(104)).toBe("2+2");
+        expect(floorLevelTiles(136)).toBe("2+3");
+        expect(floorLevelTiles(168)).toBe("2+4");
+        expect(floorLevelTiles(156)).toBe("2+2+2");
+        // Anything else: its altitude in tiles.
         expect(floorLevelTiles(148)).toBe("5");
-        expect(floorLevelTiles(104)).toBe("3.6");
+        expect(floorLevelTiles(100)).toBe("3.5");
     });
 
     it("names the slabs and the stairs", () => {

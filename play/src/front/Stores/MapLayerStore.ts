@@ -106,3 +106,26 @@ export const mapLayerStairWidthStore = writable<StairWidth>(1);
 export const mapLayerStairTargetStore = writable<number | undefined>(undefined);
 /** Whether its side is open (its stringer only) instead of full. */
 export const mapLayerStairOpenStore = writable<boolean>(false);
+
+/**
+ * The modes that draw walls, doors and windows: they edit the level chosen in the panel, the ground or a raised floor.
+ * (The floor modes of the ground always edit the ground: the floor of a raised floor is its slabs.)
+ */
+export function isWallLevelMode(mode: MapLayerMode): boolean {
+    return (
+        mode === "wall" ||
+        mode === "room" ||
+        mode === "door" ||
+        mode === "window" ||
+        mode === "height" ||
+        mode === "erase"
+    );
+}
+
+/** Whether the catalogs of the walls of the raised floors are loaded in the current room. */
+export const mapLayerUpperWallsAvailableStore = writable<boolean>(false);
+
+/** Whether a mode shows the choice of the level: the modes of the raised floors, and the wall modes once they can. */
+export function usesLevel(mode: MapLayerMode, upperWallsAvailable: boolean): boolean {
+    return isFloorMode(mode) || (upperWallsAvailable && isWallLevelMode(mode));
+}

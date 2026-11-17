@@ -28,6 +28,8 @@
         mapLayerWindowHeightsAvailableStore,
         mapLayerWindowsAvailableStore,
         isFloorMode,
+        mapLayerUpperWallsAvailableStore,
+        usesLevel,
         mapLayerFloorsAvailableStore,
         mapLayerLevelStore,
         mapLayerLevelsStore,
@@ -256,7 +258,7 @@
         </section>
         <p class="m-0 text-sm opacity-80">{$LL.mapEditor.mapLayer.hints[$mapLayerModeStore]()}</p>
 
-        {#if isFloorMode($mapLayerModeStore)}
+        {#if usesLevel($mapLayerModeStore, $mapLayerUpperWallsAvailableStore)}
             <section class="flex flex-col gap-2" data-testid="mapLayerLevel">
                 <h3 class="m-0 text-sm font-bold">
                     {$mapLayerModeStore === "stair"

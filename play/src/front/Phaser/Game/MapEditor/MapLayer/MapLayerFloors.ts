@@ -166,11 +166,30 @@ export function floorPieceSize(piece: FloorPiece): { width: number; height: numb
     return { width: box.width, height: box.height };
 }
 
+/** The heights of walls, one over the other, whose tops add up to an altitude; undefined when none do (3 at most). */
+function wallHeightsReaching(elevation: number, terms: number, from = 0): FloorWallHeight[] | undefined {
+    for (let i = from; i < FLOOR_WALL_HEIGHTS.length; i++) {
+        const height = FLOOR_WALL_HEIGHTS[i];
+        const rest = elevation - floorElevation(height);
+        if (rest === 0 && terms === 1) return [height];
+        if (rest > 0 && terms > 1) {
+            const above = wallHeightsReaching(rest, terms - 1, i);
+            if (above) return [height, ...above];
+        }
+    }
+    return undefined;
+}
+
 /**
- * A floor told as the height, in tiles, of walls standing on the ground that would carry it: 2 for 52 px, 3 for 84 px,
- * 4 for 116 px, and on by 32 px per tile; "2.5" between two.
+ * A floor told by the height, in tiles, of the walls that carry it: "2", "3" or "4" on walls standing on the ground
+ * (52, 84, 116 px), "2+3" on walls of 3 tiles standing on a floor of walls of 2, and so on. Any other altitude is told
+ * in tiles ("5", "3.5").
  */
 export function floorLevelTiles(elevation: number): string {
+    for (const terms of [1, 2, 3]) {
+        const heights = wallHeightsReaching(elevation, terms);
+        if (heights) return heights.join("+");
+    }
     const tiles = (elevation - floorElevation(2)) / MAP_LAYER_TILE_SIZE + 2;
     return Number.isInteger(tiles) ? String(tiles) : tiles.toFixed(1);
 }

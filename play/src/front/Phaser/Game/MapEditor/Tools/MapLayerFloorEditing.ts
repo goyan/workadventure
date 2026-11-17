@@ -44,7 +44,10 @@ import {
     stairTarget,
 } from "../MapLayer/FloorOperations";
 import type { PlacedFloorEntity } from "../MapLayer/FloorOperations";
+import { parseAnyLevelPrefab } from "../MapLayer/MapLayerLevels";
 import {
+    FLOOR_WALL_HEIGHTS,
+    floorElevation,
     floorLevelTiles,
     floorPieceSize,
     parseFloorPiece,
@@ -151,7 +154,19 @@ export class MapLayerFloorEditing {
     /** The floors the panel offers; the one being edited goes back to the ground when it is no longer offered. */
     public refreshLevels(): void {
         const model = this.readModel();
-        const levels = availableLevels(model);
+        // The walls standing on a floor carry the next one: their tops are levels too.
+        const wallTops: number[] = [];
+        for (const entity of this.scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values()) {
+            const elevation = entity.getElevation();
+            if (!(elevation > 0)) continue;
+            const prefab = entity.getPrefab();
+            const piece = parseAnyLevelPrefab(prefab.collectionName, prefab.id);
+            if (piece && piece.kind !== "floor" && piece.height >= 2) {
+                const height = FLOOR_WALL_HEIGHTS.find((candidate) => candidate === piece.height);
+                if (height) wallTops.push(elevation + floorElevation(height));
+            }
+        }
+        const levels = availableLevels(model, wallTops);
         mapLayerLevelsStore.set(levels);
         mapLayerBuiltLevelsStore.set(model.getLevels());
         if (get(mapLayerLevelStore) !== 0 && !levels.includes(get(mapLayerLevelStore))) mapLayerLevelStore.set(0);
@@ -338,6 +353,46 @@ export class MapLayerFloorEditing {
         graphics.strokeRect(x, y, width, height);
     }
 
+    /**
+     * The commands that make the entities of the map match the floors once `change` has been applied to their model:
+     * the slabs and stairs it no longer has are deleted, the missing ones created. Undefined when that would touch too
+     * many entities.
+     */
+    public commandsFor(change: (model: FloorModel) => void): FrontCommand[] | undefined {
+        const wamFile = this.scene.getGameMap().getWamFile();
+        if (!wamFile) return [];
+        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
+        const model = this.readModel();
+        change(model);
+        const diff = diffFloorPlacements(this.readPlaced(), computeFloorPlacements(model));
+        if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) return undefined;
+        const commands: FrontCommand[] = diff.toDelete.map(
+            (entityId) => new DeleteEntityFrontCommand(wamFile, entityId, undefined, entitiesManager),
+        );
+        for (const item of diff.toCreate) {
+            const piece = parseFloorPiece(item.collectionName, item.prefabId);
+            if (!piece) continue;
+            const entityData: WAMEntityData = {
+                x: item.x,
+                y: item.y,
+                prefabRef: { collectionName: item.collectionName, id: item.prefabId },
+                properties: [],
+                elevation: item.elevation,
+            };
+            commands.push(
+                new CreateEntityFrontCommand(
+                    wamFile,
+                    uuidv4(),
+                    entityData,
+                    undefined,
+                    entitiesManager,
+                    floorPieceSize(piece),
+                ),
+            );
+        }
+        return commands;
+    }
+
     /** Applies the gesture as one undo step. */
     public commit(start: Point, end: Point): void {
         this.graphics?.clear();
@@ -348,48 +403,26 @@ export class MapLayerFloorEditing {
         const operation = this.operation(start, end);
         const wamFile = this.scene.getGameMap().getWamFile();
         if (!operation || !wamFile) return;
-        const entitiesManager = this.scene.getGameMapFrontWrapper().getEntitiesManager();
         const stairMode = get(mapLayerModeStore) === "stair";
         /** Whether the stair just placed leads nowhere yet. */
         let stairLeadsNowhere = false;
 
         // The factory runs inside the command queue, right before execution: it reads the current state of the map.
         const factory = (): readonly FrontCommand[] => {
-            const model = this.readModel();
-            if (!operation(model, this.getBounds())) {
+            let refused = false;
+            const commands = this.commandsFor((model) => {
+                refused = !operation(model, this.getBounds());
+                if (refused) return;
+                const placedStair = stairMode ? model.getStairs().at(-1) : undefined;
+                stairLeadsNowhere = placedStair !== undefined && !stairHasArrival(model, placedStair);
+            });
+            if (refused) {
                 if (stairMode) mapLayerStatusStore.set("stairInvalid");
                 return [];
             }
-            const placedStair = stairMode ? model.getStairs().at(-1) : undefined;
-            stairLeadsNowhere = placedStair !== undefined && !stairHasArrival(model, placedStair);
-            const diff = diffFloorPlacements(this.readPlaced(), computeFloorPlacements(model));
-            if (diff.toCreate.length + diff.toDelete.length > MAX_ENTITIES_PER_OPERATION) {
+            if (commands === undefined) {
                 mapLayerStatusStore.set("tooLarge");
                 return [];
-            }
-            const commands: FrontCommand[] = diff.toDelete.map(
-                (entityId) => new DeleteEntityFrontCommand(wamFile, entityId, undefined, entitiesManager),
-            );
-            for (const item of diff.toCreate) {
-                const piece = parseFloorPiece(item.collectionName, item.prefabId);
-                if (!piece) continue;
-                const entityData: WAMEntityData = {
-                    x: item.x,
-                    y: item.y,
-                    prefabRef: { collectionName: item.collectionName, id: item.prefabId },
-                    properties: [],
-                    elevation: item.elevation,
-                };
-                commands.push(
-                    new CreateEntityFrontCommand(
-                        wamFile,
-                        uuidv4(),
-                        entityData,
-                        undefined,
-                        entitiesManager,
-                        floorPieceSize(piece),
-                    ),
-                );
             }
             return commands;
         };
