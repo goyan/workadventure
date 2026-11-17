@@ -37,6 +37,7 @@ import { EntityRelatedEditorTool } from "./EntityRelatedEditorTool";
 import Key = Phaser.Input.Keyboard.Key;
 import Pointer = Phaser.Input.Pointer;
 import GameObject = Phaser.GameObjects.GameObject;
+import { newSwitchProperties } from "../../Switches/SwitchWiring";
 
 export class EntityEditorTool extends EntityRelatedEditorTool {
     /** Altitude of the floor the object being placed would stand on: the one drawn under the pointer. */
@@ -393,7 +394,8 @@ export class EntityEditorTool extends EntityRelatedEditorTool {
             x: Math.floor(x - this.entityPrefabPreview.displayWidth * 0.5),
             y: Math.floor(y - this.entityPrefabPreview.displayHeight * 0.5),
             prefabRef: this.entityPrefab,
-            properties: properties ?? [],
+            // A switch of the catalog is ready to use: it commands the lamps of its room.
+            properties: properties ?? newSwitchProperties(this.entityPrefab, uuidv4),
             name: properties?.find((p) => p.type === "openFile")?.name ?? undefined,
         };
         // Placed on a raised floor, the object stands on it: the floor shown next to the preview.

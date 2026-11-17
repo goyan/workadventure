@@ -555,6 +555,11 @@ export const EntityRawPrefab = z.object({
      * pass. Fail open like `collisionRectangles`.
      */
     castsShadow: z.boolean().optional().catch(undefined),
+    /**
+     * A switch ready to use: placed from the catalog, the object is given a `switchPropertyData` that commands the
+     * lamps of its room (any other object can be made a switch in the editor). Fail open like `castsShadow`.
+     */
+    switch: z.boolean().optional().catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be

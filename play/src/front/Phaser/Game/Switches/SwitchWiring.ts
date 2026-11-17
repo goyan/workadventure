@@ -1,5 +1,5 @@
 import { SWITCH_MAX_TARGETS } from "@workadventure/map-editor";
-import type { EntityDataProperties, SwitchPropertyData } from "@workadventure/map-editor";
+import type { EntityDataProperties, EntityPrefab, SwitchPropertyData } from "@workadventure/map-editor";
 
 /**
  * A click on an object while a switch is being wired in the map editor: the switch commands it from now on, or no
@@ -40,4 +40,14 @@ export function rewireSwitchProperties(
     return properties?.map((property) =>
         property.type === "switchPropertyData" ? rewireSwitch(property, copiedIds) : property,
     );
+}
+
+/**
+ * The properties an object placed from the catalog starts with: one whose catalog entry says `switch` commands the
+ * lamps of its room at once, without anything to set.
+ */
+export function newSwitchProperties(prefab: Pick<EntityPrefab, "switch">, newId: () => string): EntityDataProperties {
+    return prefab.switch === true
+        ? [{ id: newId(), type: "switchPropertyData", key: "on", targets: { mode: "zone" } }]
+        : [];
 }

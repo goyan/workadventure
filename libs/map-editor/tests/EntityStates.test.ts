@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     ENTITY_STATE_DEFAULT,
     SWITCH_MAX_REACH_PX,
+    EntityRawPrefab,
     SWITCH_MAX_TARGETS,
     SwitchPropertyData,
     alignedSwitchValue,
@@ -80,5 +81,25 @@ describe("SwitchPropertyData", () => {
         expect(() =>
             SwitchPropertyData.parse({ id: "a", type: "switchPropertyData", targets: { mode: "ids", ids } }),
         ).toThrow();
+    });
+});
+
+describe("a catalog entry that is a switch", () => {
+    const prefab = {
+        id: "Lampes:interrupteur:Default:Down",
+        name: "Interrupteur",
+        tags: ["Lampes"],
+        imagePath: "interrupteur.png",
+        direction: "Down",
+        color: "Default",
+    };
+
+    it("says so with `switch`, and a plain object does not", () => {
+        expect(EntityRawPrefab.parse({ ...prefab, switch: true }).switch).toBe(true);
+        expect(EntityRawPrefab.parse(prefab).switch).toBeUndefined();
+    });
+
+    it("fails open: an invalid `switch` leaves the object as a plain one", () => {
+        expect(EntityRawPrefab.parse({ ...prefab, switch: "yes" }).switch).toBeUndefined();
     });
 });

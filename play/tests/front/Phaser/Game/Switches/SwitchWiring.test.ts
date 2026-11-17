@@ -1,6 +1,7 @@
 import { SWITCH_MAX_TARGETS, type SwitchPropertyData } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
+    newSwitchProperties,
     rewireSwitch,
     rewireSwitchProperties,
     toggleSwitchTarget,
@@ -71,5 +72,18 @@ describe("rewireSwitchProperties", () => {
 
     it("gives back nothing for an object without properties", () => {
         expect(rewireSwitchProperties(undefined, new Map())).toBeUndefined();
+    });
+});
+
+describe("newSwitchProperties", () => {
+    it("makes an object whose catalog entry is a switch command the lamps of its room as soon as it is placed", () => {
+        expect(newSwitchProperties({ switch: true }, () => "new-id")).toEqual([
+            { id: "new-id", type: "switchPropertyData", key: "on", targets: { mode: "zone" } },
+        ]);
+    });
+
+    it("gives nothing to a plain object", () => {
+        expect(newSwitchProperties({}, () => "new-id")).toEqual([]);
+        expect(newSwitchProperties({ switch: false }, () => "new-id")).toEqual([]);
     });
 });
