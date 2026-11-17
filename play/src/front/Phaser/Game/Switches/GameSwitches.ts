@@ -49,6 +49,8 @@ export class GameSwitches {
     private lastReconcileAt: number | undefined;
     private switches: Entity[] = [];
     private candidates: SwitchableTarget[] | undefined;
+    /** For each object, the switches that command it; read with the switches, a few times a second. */
+    private commandingIds = new Map<string, string[]>();
     private readonly wiringView: SwitchWiringView;
     private readonly animalReporter = new SwitchAnimalReporter();
 
@@ -272,9 +274,30 @@ export class GameSwitches {
      */
     private drawWiring(): boolean {
         const selected = get(mapEditorModeStore) ? get(mapEditorSelectedEntityStore) : undefined;
-        const property = selected ? switchPropertyOf(selected) : undefined;
-        const wiring = selected && property ? wiringOf(selected, this.targetsOf(selected, property)) : undefined;
-        return this.wiringView.draw(wiring, selected && property ? this.watchedBy(selected, property) : undefined);
+        if (!selected) {
+            return this.wiringView.draw(undefined);
+        }
+        const property = switchPropertyOf(selected);
+        if (property) {
+            return this.wiringView.draw(
+                wiringOf(selected, this.targetsOf(selected, property)),
+                this.watchedBy(selected, property),
+            );
+        }
+        // A lamp shows what commands it: a line to each of its switches, sensors and timers.
+        if (entityStateKeysOf(selected.getPrefab()).length === 0) {
+            return this.wiringView.draw(undefined);
+        }
+        const commanding = new Set(this.commandingIds.get(selected.entityId) ?? []);
+        return this.wiringView.draw({
+            from: lampSource(selected, selected.getPrefab().lamp?.anchor),
+            to: this.switches
+                .filter((entity) => commanding.has(entity.entityId))
+                .map((entity) => ({
+                    x: entity.x + entity.displayWidth / 2,
+                    y: entity.y + entity.displayHeight / 2,
+                })),
+        });
     }
 
     public destroy(): void {
@@ -306,6 +329,13 @@ export class GameSwitches {
         }
         if (removed) {
             this.scene.markDirty();
+        }
+        this.commandingIds = new Map();
+        for (const entity of this.switches) {
+            const property = switchPropertyOf(entity);
+            for (const target of property ? this.targetsOf(entity, property) : []) {
+                this.commandingIds.set(target.id, [...(this.commandingIds.get(target.id) ?? []), entity.entityId]);
+            }
         }
     }
 
