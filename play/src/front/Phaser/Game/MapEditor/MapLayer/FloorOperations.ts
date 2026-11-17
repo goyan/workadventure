@@ -216,6 +216,15 @@ export function reachableLevels(from: number, levels: readonly number[]): number
 }
 
 /** How much a stair goes up from a floor to another; undefined when no stair does. */
+/**
+ * The floors the editor offers a stair to go up to from a floor: the ones in reach among the floors known (the
+ * tops of walls, the floors already laid), and the levels one or two tiles up, so that a stair can be placed before
+ * the floor it leads to (from the top of walls of 4 tiles too, where no wall top is higher).
+ */
+export function stairTargets(from: number, levels: readonly number[]): number[] {
+    return reachableLevels(from, steppableLevels(levels));
+}
+
 export function stairRiseBetween(from: number, to: number): StairRise | undefined {
     return STAIR_RISES.find((rise) => from + rise === to);
 }

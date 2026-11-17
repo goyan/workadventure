@@ -38,7 +38,10 @@
         mapLayerStairWidthStore,
     } from "../../Stores/MapLayerStore";
     import { STAIR_DIRECTIONS, floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
-    import { reachableLevels, stairTarget } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
+    import {
+        stairTarget,
+        stairTargets as stairTargetsFrom,
+    } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import type { MapLayerMode } from "../../Stores/MapLayerStore";
     import FloorLevelPicker from "./FloorLevelPicker.svelte";
     import {
@@ -102,7 +105,7 @@
     ] as const;
 
     // The floors a stair can reach from the level being edited, and the one it goes up to.
-    let stairTargets = $derived(reachableLevels($mapLayerLevelStore, $mapLayerLevelsStore));
+    let stairTargets = $derived(stairTargetsFrom($mapLayerLevelStore, $mapLayerLevelsStore));
     let chosenStairTarget = $derived(stairTarget(stairTargets, $mapLayerBuiltLevelsStore, $mapLayerStairTargetStore));
 
     let usesFloor = $derived(
