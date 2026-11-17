@@ -1,8 +1,10 @@
 <script lang="ts">
+    import "../../style/jam-theme.css";
     import { onDestroy, onMount, untrack } from "svelte";
-    import type { Component } from "svelte";
+    import type { Component, Snippet } from "svelte";
     import * as Sentry from "@sentry/svelte";
     import { isHomeJam } from "@workadventure/map-editor";
+    import { jamStyleStore, jamThemeStore } from "../../ListeningZone/JamThemeStore";
     import { LL } from "../../../i18n/i18n-svelte";
     import { LyricsTrackSchema, lyricsRecordingKey } from "../../../common/Lyrics";
     import type { LyricsTrack } from "../../../common/Lyrics";
@@ -38,6 +40,7 @@
         onopensettings,
         onreplacelink,
         linkSave,
+        audience,
     }: {
         room: JamRoom;
         playback: KaraokePlayback;
@@ -51,6 +54,7 @@
         onreplacelink?: (url: string) => void;
         /** Where the host's last new invite link stands (kept by the controller). */
         linkSave?: JamLinkSave;
+        audience?: Snippet;
     } = $props();
 
     let loadState = $derived(loader.state);
@@ -269,7 +273,9 @@
 {/snippet}
 
 <div
-    class="karaoke-panel pointer-events-auto absolute left-4 top-4 z-[310] flex max-h-[calc(100%-6rem)] w-[min(26rem,calc(100%-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
+    data-jam-theme={$jamThemeStore}
+    data-jam-style={$jamStyleStore}
+    class="jam-surface karaoke-panel pointer-events-auto absolute left-4 top-4 z-[310] flex max-h-[calc(100%-6rem)] w-[min(22rem,calc(100%-2rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-contrast/80 text-white shadow-2xl backdrop-blur-md"
     aria-label={$LL.spotify.karaoke.title()}
     role="dialog"
     tabindex="-1"
@@ -287,18 +293,18 @@
 >
     <div class="flex items-start gap-3 px-4 pt-4">
         <span
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#1ed760]/15 text-[#1ed760]"
+            class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--jam-accent,#1ed760)]/15 text-[var(--jam-accent,#1ed760)]"
             aria-hidden="true"><IconMicrophone font-size="24" /></span
         >
         <div class="min-w-0 flex-1">
             <div class="flex items-baseline gap-1.5 text-xs">
-                <h2 class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-[#1ed760]">
+                <h2 class="m-0 shrink-0 text-xs font-bold uppercase tracking-wider text-[var(--jam-accent,#1ed760)]">
                     {$LL.spotify.karaoke.title()}
                 </h2>
                 <p class="m-0 truncate text-white/70">· {room.jam.title ?? room.jam.hostName}</p>
             </div>
             {#if track}
-                <p class="m-0 truncate text-lg font-bold leading-tight" title={track.title}>{track.title}</p>
+                <p class="m-0 truncate text-base font-bold leading-tight" title={track.title}>{track.title}</p>
                 <p class="m-0 truncate text-sm text-white/70" title={track.artist}>{track.artist}</p>
             {/if}
         </div>
@@ -311,12 +317,15 @@
             data-testid="karaoke-close"><IconX font-size="18" /></button
         >
     </div>
+    {#if audience}
+        <div class="shrink-0 px-4 pt-3">{@render audience()}</div>
+    {/if}
     {#if mine && linkSave}
         <p
             class="m-0 px-4 pt-2 text-xs {linkSave.status === 'failed'
                 ? 'text-red-400'
                 : linkSave.status === 'saved'
-                  ? 'text-[#1ed760]'
+                  ? 'text-[var(--jam-accent,#1ed760)]'
                   : 'text-white/70'}"
             role={linkSave.status === "failed" ? "alert" : "status"}
             data-testid="karaoke-link-save"
@@ -338,7 +347,7 @@
             aria-valuenow={Math.round(trackProgress * 100)}
         >
             <div
-                class="karaoke-track-progress h-full rounded-full bg-[#1ed760]"
+                class="karaoke-track-progress h-full rounded-full bg-[var(--jam-accent,#1ed760)]"
                 style:width={`${trackProgress * 100}%`}
             ></div>
         </div>
@@ -399,10 +408,10 @@
                         <p
                             data-line={index}
                             aria-current={index === active ? "true" : undefined}
-                            class="karaoke-line m-0 min-h-7 py-2 text-center text-xl font-bold leading-snug {!following
+                            class="karaoke-line m-0 min-h-7 py-2 text-center text-lg font-bold leading-snug {!following
                                 ? 'text-white/90'
                                 : index === active
-                                  ? 'scale-105 text-[#1ed760]'
+                                  ? 'scale-105 text-[var(--jam-accent,#1ed760)]'
                                   : index < active
                                     ? 'text-white/55'
                                     : 'text-white/80'}"
@@ -426,7 +435,7 @@
                 <div class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
                     <button
                         type="button"
-                        class="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[#1ed760] px-3 py-1.5 text-sm font-bold text-contrast shadow-lg hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                        class="pointer-events-auto inline-flex items-center gap-1.5 rounded-full bg-[var(--jam-accent,#1ed760)] px-3 py-1.5 text-sm font-bold text-contrast shadow-lg hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                         onclick={() => {
                             manualScroll = false;
                         }}
@@ -455,7 +464,7 @@
             <button
                 type="button"
                 class="karaoke-chip"
-                class:text-[#1ed760]={offsetMs !== 0}
+                class:text-[var(--jam-accent,#1ed760)]={offsetMs !== 0}
                 aria-expanded={offsetOpen}
                 aria-label={`${$LL.spotify.karaoke.offset()} (${offsetLabel})`}
                 title={$LL.spotify.karaoke.offset()}
@@ -533,22 +542,22 @@
         gap: 0.375rem;
         border-radius: 9999px;
         padding: 0.25rem 0.625rem;
-        background: rgb(255 255 255 / 0.1);
+        background: color-mix(in srgb, var(--ui-foreground, #fff) 10%, transparent);
     }
     .karaoke-chip:hover:not(:disabled) {
-        background: rgb(255 255 255 / 0.2);
+        background: color-mix(in srgb, var(--ui-foreground, #fff) 20%, transparent);
     }
     .karaoke-chip:disabled {
         opacity: 0.4;
     }
     .karaoke-chip:focus-visible {
-        outline: 2px solid #fff;
+        outline: 2px solid var(--ui-foreground, #fff);
         outline-offset: 2px;
     }
 
     .karaoke-lyrics {
         scrollbar-width: thin;
-        scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+        scrollbar-color: color-mix(in srgb, var(--ui-foreground, #fff) 25%, transparent) transparent;
     }
     /* Room above the first line and below the last one to bring them to the middle, where the edges fade out. */
     .karaoke-stage {
@@ -567,7 +576,9 @@
     /* The current line turns green from its start, across its wrapped rows, as playback goes through it. */
     .karaoke-fill {
         color: transparent;
-        background-image: linear-gradient(#1ed760, #1ed760), linear-gradient(#fff, #fff);
+        background-image:
+            linear-gradient(var(--jam-accent, #1ed760), var(--jam-accent, #1ed760)),
+            linear-gradient(var(--ui-foreground, #fff), var(--ui-foreground, #fff));
         background-repeat: no-repeat;
         background-size:
             var(--karaoke-fill, 100%) 100%,

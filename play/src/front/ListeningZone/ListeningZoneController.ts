@@ -74,24 +74,33 @@ export const canOpenJamStore: Readable<boolean> = derived(
         roomsInZone(rooms, zone).filter((room) => !isLocalUser(room.jam.hostUuid)).length < MAX_LISTENING_ZONE_JAMS,
 );
 
-/** How many people take part in each room, its host included, by host uuid (one room per host). */
-export const jamParticipantsCountStore: Readable<Map<string, number>> = derived(
+/** People known by WA in each room, including its host and confirmed extension followers, once per UUID. */
+export const jamParticipantsStore: Readable<ReadonlyMap<string, readonly string[]>> = derived(
     [allJamRoomsStore, listeningByUserUuidStore],
     ([rooms, listeningByUuid]) => {
         const zoneOfHost = new Map(rooms.map((room) => [room.jam.hostUuid, room.zone.areaId]));
         // An open room always includes its host, even if they listen to another room or their presence has not arrived.
-        const counts = new Map(rooms.map((room) => [room.jam.hostUuid, 1]));
+        const participants = new Map(rooms.map((room) => [room.jam.hostUuid, [room.jam.hostUuid]]));
         for (const [uuid, listening] of listeningByUuid) {
-            if (
-                listening.jamHostUuid !== "" &&
-                uuid !== listening.jamHostUuid &&
-                zoneOfHost.get(listening.jamHostUuid) === listening.jamAreaId
-            ) {
-                counts.set(listening.jamHostUuid, (counts.get(listening.jamHostUuid) ?? 0) + 1);
+            const hosts = new Set([
+                ...(listening.jamHostUuid && zoneOfHost.get(listening.jamHostUuid) === listening.jamAreaId
+                    ? [listening.jamHostUuid]
+                    : []),
+                ...(listening.listeningAlongUuid ? [listening.listeningAlongUuid] : []),
+            ]);
+            for (const host of hosts) {
+                const members = participants.get(host);
+                if (members && uuid !== host) participants.set(host, [...members, uuid]);
             }
         }
-        return counts;
+        return participants;
     },
+);
+
+/** How many people take part in each room, its host included, by host uuid (one room per host). */
+export const jamParticipantsCountStore: Readable<Map<string, number>> = derived(
+    jamParticipantsStore,
+    (participants) => new Map([...participants].map(([host, members]) => [host, members.length])),
 );
 
 const relinkedJamHost = writable<string | undefined>(undefined);
