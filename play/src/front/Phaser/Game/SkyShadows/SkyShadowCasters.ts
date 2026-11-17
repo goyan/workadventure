@@ -1,5 +1,5 @@
 import type { EntityPrefab } from "@workadventure/map-editor";
-import { JUNGLE_TREE_PREFIX } from "../Jungle/JunglePlan";
+import { isJungleTree } from "../Jungle/JunglePlan";
 import { shadowRectangles } from "../Lamps/RgbLampObstacles";
 import {
     MAP_LAYER_TILE_SIZE,
@@ -101,7 +101,7 @@ export function readShadowCasters(
         if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName)) {
             pieces.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
             signature += `w${prefab.id}@${entity.x},${entity.y};`;
-        } else if (prefab.id.startsWith(JUNGLE_TREE_PREFIX)) {
+        } else if (isJungleTree(prefab.id)) {
             const tree = treeOf(entity);
             trees.push(tree);
             signature += `t${tree.x},${tree.y},${tree.crownRadius},${tree.crownHeight};`;

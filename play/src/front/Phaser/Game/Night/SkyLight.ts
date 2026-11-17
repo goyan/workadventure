@@ -1,4 +1,5 @@
 import { WeatherType } from "@workadventure/map-editor";
+import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { cloudSunlight } from "../Weather/Clouds";
 import type { SunPosition } from "./NightClock";
 
@@ -47,7 +48,6 @@ export interface SkyLightSettings {
 export const MAX_SHADOW_TILES = 8;
 /** The longest shadow by default, in tiles. */
 export const DEFAULT_SHADOW_TILES = 4;
-const TILE = 32;
 
 const DEFAULT_BODY: BodyLightSettings = {
     enabled: true,
@@ -115,7 +115,10 @@ function tinted(tint: number, strength: number): number {
 /** The shadow length limits of a body, in map pixels, the maximum never above MAX_SHADOW_TILES. */
 function shadowLengthOf(settings: BodyLightSettings): Range {
     const max = Math.min(MAX_SHADOW_TILES, settings.shadowLength.max);
-    return { min: boundedTo(settings.shadowLength.min, { min: 0, max }) * TILE, max: max * TILE };
+    return {
+        min: boundedTo(settings.shadowLength.min, { min: 0, max }) * MAP_LAYER_TILE_SIZE,
+        max: max * MAP_LAYER_TILE_SIZE,
+    };
 }
 
 /**
