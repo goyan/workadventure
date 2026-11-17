@@ -200,6 +200,16 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     /**
      * This method is being used after command execution from outside and it will not trigger any emits
      */
+    /**
+     * Moves the entity to another level (0: the ground), over the same place of the ground: its image is drawn the
+     * difference of altitude higher or lower. Saved like any other edit of the entity.
+     */
+    public setElevation(elevation: number): void {
+        if (elevation === this.entityData.elevation) return;
+        const y = this.y + this.entityData.elevation - elevation;
+        this.emit(EntityEvent.Updated, this.appendId({ y, elevation }));
+    }
+
     /** Altitude of the floor the entity stands on, in pixels above the ground: 0 on the ground. */
     public getElevation(): number {
         return this.entityData.elevation;

@@ -11,9 +11,20 @@
     import { stepLevel, steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
     import { IconColorPicker } from "@wa-icons";
 
+    interface Props {
+        /**
+         * For an object selected in the editor: its level, and what moves it to another one. The picker then shows the
+         * level of that object instead of the one new things are placed on, without "auto" nor the pipette.
+         */
+        objectLevel?: number;
+        onObjectLevel?: (level: number) => void;
+    }
+    let { objectLevel, onObjectLevel }: Props = $props();
+    let forObject = $derived(objectLevel !== undefined && onObjectLevel !== undefined);
+
     // The level the map editor works on, the same for the map tool and the objects: "auto" follows the floor drawn
     // under the pointer, a number is that level (0: the ground), whatever is drawn there.
-    let choice = $derived($mapEditorPlacementLevelStore);
+    let choice = $derived<"auto" | number>(objectLevel ?? $mapEditorPlacementLevelStore);
     // In "auto", the level last found under the pointer: where the stepping buttons start from.
     let current = $derived(choice === "auto" ? $mapLayerLevelStore : choice);
     // The ground, the floors that have slabs, and the level chosen when it is none of them.
@@ -29,6 +40,10 @@
     }
 
     function choose(level: "auto" | number): void {
+        if (forObject) {
+            if (level !== "auto") onObjectLevel?.(level);
+            return;
+        }
         mapLayerPickLevelStore.set(false);
         mapEditorPlacementLevelStore.set(level);
     }
@@ -53,29 +68,33 @@
 </script>
 
 <section class="flex flex-col gap-2 text-white" data-testid="floorLevelPicker">
-    <h3 class="m-0 text-sm font-bold">{$LL.mapEditor.mapLayer.floorLevel.title()}</h3>
+    <h3 class="m-0 text-sm font-bold">
+        {forObject ? $LL.mapEditor.mapLayer.floorLevel.objectTitle() : $LL.mapEditor.mapLayer.floorLevel.title()}
+    </h3>
     <div class="flex flex-wrap items-center gap-2">
-        <button
-            type="button"
-            class={chipClass(choice === "auto")}
-            aria-pressed={choice === "auto"}
-            title={$LL.mapEditor.mapLayer.floorLevel.autoHint()}
-            data-testid="floorLevel-auto"
-            onclick={() => choose("auto")}
-        >
-            {$LL.mapEditor.mapLayer.floorLevel.auto()}
-        </button>
-        <button
-            type="button"
-            class={chipClass($mapLayerPickLevelStore)}
-            aria-pressed={$mapLayerPickLevelStore}
-            aria-label={$LL.mapEditor.mapLayer.floorLevel.pick()}
-            title={`${$LL.mapEditor.mapLayer.floorLevel.pick()}. ${$LL.mapEditor.mapLayer.floorLevel.pickHint()}`}
-            data-testid="floorLevelPick"
-            onclick={() => mapLayerPickLevelStore.update((armed) => !armed)}
-        >
-            <IconColorPicker font-size="16" />
-        </button>
+        {#if !forObject}
+            <button
+                type="button"
+                class={chipClass(choice === "auto")}
+                aria-pressed={choice === "auto"}
+                title={$LL.mapEditor.mapLayer.floorLevel.autoHint()}
+                data-testid="floorLevel-auto"
+                onclick={() => choose("auto")}
+            >
+                {$LL.mapEditor.mapLayer.floorLevel.auto()}
+            </button>
+            <button
+                type="button"
+                class={chipClass($mapLayerPickLevelStore)}
+                aria-pressed={$mapLayerPickLevelStore}
+                aria-label={$LL.mapEditor.mapLayer.floorLevel.pick()}
+                title={`${$LL.mapEditor.mapLayer.floorLevel.pick()}. ${$LL.mapEditor.mapLayer.floorLevel.pickHint()}`}
+                data-testid="floorLevelPick"
+                onclick={() => mapLayerPickLevelStore.update((armed) => !armed)}
+            >
+                <IconColorPicker font-size="16" />
+            </button>
+        {/if}
         {#each chips as level (level)}
             <button
                 type="button"
@@ -132,7 +151,7 @@
             <span class="text-xs opacity-70" data-testid="floorLevelCurrent">{label(current)}</span>
         {/if}
     </div>
-    {#if $mapLayerPickLevelStore}
+    {#if $mapLayerPickLevelStore && !forObject}
         <p class="m-0 text-xs opacity-80">{$LL.mapEditor.mapLayer.floorLevel.pickArmed()}</p>
     {/if}
 </section>
