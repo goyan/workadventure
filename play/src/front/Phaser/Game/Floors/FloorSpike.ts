@@ -1,6 +1,12 @@
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import { LL } from "../../../../i18n/i18n-svelte";
+import {
+    floorLevelCurrentStore,
+    floorLevelName,
+    floorLevelsBuiltStore,
+    floorLevelsHiddenStore,
+} from "../../../Stores/FloorLevelsStore";
 import { floorGroups, floorGroupBounds } from "../MapEditor/MapLayer/FloorGroups";
 import type { FloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import { stairEnds } from "../MapEditor/MapLayer/FloorPath";
@@ -16,7 +22,7 @@ import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
 import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { floorStep, restoredFloorState } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
-import { floorLevelTiles, parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
 import { FloorRailingsView } from "./FloorRailingsView";
 import { floorZToShare } from "./FloorProtocol";
@@ -332,6 +338,8 @@ export class FloorSpike {
         this.label.destroy();
         this.veil.destroy();
         this.hints.destroy();
+        floorLevelsBuiltStore.set([]);
+        floorLevelCurrentStore.set(0);
     }
 
     /** For the tests in the browser. */
@@ -414,9 +422,14 @@ export class FloorSpike {
         const stairs = model.getStairs();
         const current = currentLevels(this.state, stairs);
         const tile = { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) };
-        const labels = editorOpen ? [] : stairLabels(stairs, tile, this.state, levelName);
+        const labels = editorOpen
+            ? []
+            : stairLabels(stairs, tile, this.state, (elevation) => floorLevelName(get(LL), elevation));
         const veil = editorOpen ? undefined : veilDepth(current);
         this.hints.update(stairs, labels, veil, Math.min(...current), editorOpen, delta);
+        // The stack of the floors under the clock: the floor stood on, the last one while on a stair.
+        floorLevelsHiddenStore.set(editorOpen);
+        if (this.state.stair === undefined) floorLevelCurrentStore.set(this.state.elevation);
     }
 
     /** The dark veil over the floors under the avatar: over the whole view, just under the floor the avatar is on. */
@@ -874,12 +887,4 @@ export class FloorSpike {
         drawing.lineStyle(2, 0x5b4c33, 1);
         drawing.strokeRect(box.x, box.y, box.width, box.height);
     }
-}
-
-/** A floor named as in the map editor: "Sol", "Niveau 2", "Niveau 2+3". */
-export function levelName(elevation: number): string {
-    const ll = get(LL);
-    return elevation > 0
-        ? ll.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(elevation) })
-        : ll.mapEditor.mapLayer.floorLevel.ground();
 }

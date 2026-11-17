@@ -270,6 +270,7 @@ import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
+import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
 import { parseFloorPiece } from "./MapEditor/MapLayer/MapLayerFloors";
@@ -3256,7 +3257,10 @@ export class GameScene extends DirtyScene {
                                 scope: "room",
                             });
                         },
-                        (levels) => mapLayerBuiltLevelsStore.set(levels),
+                        (levels) => {
+                            mapLayerBuiltLevelsStore.set(levels);
+                            floorLevelsBuiltStore.set(levels);
+                        },
                         () => this.MapPlayersByKey.values(),
                         (x, y) => this.getOutdoorGrid()?.roomAt(x, y),
                     );

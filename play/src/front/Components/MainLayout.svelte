@@ -52,6 +52,7 @@
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
     import { requestedMicrophoneDeviceIdStore } from "../Stores/MediaStore";
+    import { floorLevelsStore } from "../Stores/FloorLevelsStore";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
@@ -92,6 +93,7 @@
     import AudioStreamWrapper from "./Video/PictureInPicture/AudioStreamWrapper.svelte";
     import RaisedHandsDock from "./Video/RaisedHandsDock.svelte";
     import WorldClock from "./ActionsMenu/WorldClock.svelte";
+    import FloorLevelStack from "./Floors/FloorLevelStack.svelte";
     import JamDrawer from "./ListeningZone/JamDrawer.svelte";
     import JamAudioPlayback from "./ListeningZone/JamAudioPlayback.svelte";
     import Karaoke from "./ListeningZone/Karaoke.svelte";
@@ -500,6 +502,8 @@
                 bind:offsetHeight={jamDockHeight}
             >
                 <div class="pointer-events-auto"><WorldClock /></div>
+                <!-- The floors of the map, the one of the avatar marked (maps with raised floors only). -->
+                <FloorLevelStack stack={$floorLevelsStore} />
                 <!-- The weather now, in one hour and in four hours, under the clock (apps menu, "Weather"). -->
                 <WeatherForecastBanner />
                 <JamDrawer listening={$listeningSpaceName !== undefined || $joinedJamStore !== undefined} />
