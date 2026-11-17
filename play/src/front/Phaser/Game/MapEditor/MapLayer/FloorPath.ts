@@ -30,7 +30,7 @@ export interface FloorPathInput {
 }
 
 /** The tile before the first step of a stair, on the floor it starts from, and the one after its last step. */
-function stairEnds(stair: PlacedStair): { bottom: TilePoint; top: TilePoint } {
+export function stairEnds(stair: PlacedStair): { bottom: TilePoint; top: TilePoint } {
     const run = stairRun(stair.shape.direction, stair.shape.rise);
     const { x, y } = stair.foot;
     switch (stair.shape.direction) {

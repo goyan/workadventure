@@ -1,4 +1,9 @@
 import * as Phaser from "phaser";
+import { floorRailings, railingClosers } from "../MapEditor/MapLayer/FloorRailings";
+import type { RailingWall } from "../MapEditor/MapLayer/FloorRailings";
+import { levelItems, parseAnyLevelPrefab } from "../MapEditor/MapLayer/MapLayerLevels";
+import type { LevelPlaced } from "../MapEditor/MapLayer/MapLayerLevels";
+import { modelFromPlacedPrefabs } from "../MapEditor/MapLayer/MapLayerOperations";
 import type { TileBarriers } from "../../../Utils/TileBarriers";
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { FloorModel } from "../MapEditor/MapLayer/FloorModel";
@@ -8,6 +13,7 @@ import { floorStep } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
 import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
+import { FloorRailingsView } from "./FloorRailingsView";
 import { floorZToShare } from "./FloorProtocol";
 
 /**
@@ -33,7 +39,12 @@ const TILE = MAP_LAYER_TILE_SIZE;
 interface LevelDrawing {
     elevation: number;
     alpha: number;
-    /** Shows the slabs of the level at this opacity; the ones drawn over a stair let it show through. */
+    /**
+     * Whether the slabs drawn over a stair let it show through: for whoever is under the floor (and in the map
+     * editor), not for somebody standing on it or above it.
+     */
+    seeThrough: boolean;
+    /** Shows the slabs of the level at this opacity; the ones drawn over a stair let it show through (`seeThrough`). */
     show(alpha: number): void;
 }
 
@@ -44,6 +55,16 @@ export interface FloorEntity {
     setAlpha(alpha: number): unknown;
     getPrefab(): { collectionName: string; id: string };
     getEntityData(): { elevation?: number };
+    /** The size of its image, for a stair: what it hides on the screen. */
+    displayWidth?: number;
+    displayHeight?: number;
+}
+
+/** A stair of the map as it shows through: its image, the altitude it goes up to, and how opaque it is now. */
+interface StairDrawing {
+    entity: FloorEntity;
+    top: number;
+    alpha: number;
 }
 
 /** Opacity of the floors above the one being edited, in the map editor. */
@@ -136,6 +157,9 @@ export class FloorSpike {
     private state: FloorWalkState = { elevation: 0 };
     private prev: { x: number; y: number } | undefined;
     private readonly levels: LevelDrawing[] = [];
+    private readonly railings: FloorRailingsView;
+    private readonly levelRooms = new Map<number, Set<number>>();
+    private stairDrawings: StairDrawing[] = [];
     private readonly fadedOccupants = new Set<FloorOccupant>();
     private readonly drawings: Phaser.GameObjects.Graphics[] = [];
     private readonly label: Phaser.GameObjects.Text;
@@ -163,7 +187,10 @@ export class FloorSpike {
         private readonly onLevels: (levels: number[]) => void,
         /** The other players: each one lets the avatar show through with the floor it stands on. */
         private readonly others: () => Iterable<FloorOccupant> = () => [],
+        /** The room of the map a point of the ground is in, if any (see OutdoorGrid.roomAt). */
+        private readonly roomAt: (x: number, y: number) => number | undefined = () => undefined,
     ) {
+        this.railings = new FloorRailingsView(scene);
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
@@ -177,6 +204,7 @@ export class FloorSpike {
     public destroy(): void {
         this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.step);
         for (const drawing of this.drawings) drawing.destroy();
+        this.railings.destroy();
         this.label.destroy();
     }
 
@@ -244,6 +272,8 @@ export class FloorSpike {
     private fade(model: FloorModel, p: { x: number; y: number }, delta: number): void {
         const climbingTo = this.state.stair === undefined ? undefined : model.getStairs()[this.state.stair]?.top;
         const editor = this.editor();
+        // Where the avatar is on the ground: its altitude further south than where it is drawn.
+        const room = this.roomAt(p.x, p.y + this.state.elevation);
         for (const level of this.levels) {
             let target = 1;
             if (editor.open) {
@@ -258,13 +288,44 @@ export class FloorSpike {
                         p.x + 12 > slab.x * TILE && p.x - 12 < (slab.x + 1) * TILE && p.y > top && p.y - 36 < top + TILE
                     );
                 });
-                if (hides || climbingTo === level.elevation) target = HIDDEN_ALPHA;
+                // In the room a floor stands over, one sees the room through it: the whole floor, not only the
+                // slabs right over the avatar.
+                const overRoom = room !== undefined && this.levelRooms.get(level.elevation)?.has(room) === true;
+                if (hides || overRoom || climbingTo === level.elevation) target = HIDDEN_ALPHA;
+            }
+            // The slabs over a stair only let it show through from under their floor: standing on that floor, or
+            // above it, one sees a plain floor.
+            const seeThrough = editor.open || level.elevation > this.state.elevation + 1;
+            if (seeThrough !== level.seeThrough) {
+                level.seeThrough = seeThrough;
+                level.show(level.alpha);
+                this.scene.markDirty();
             }
             if (level.alpha === target) continue;
             const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
             level.alpha =
                 target > level.alpha ? Math.min(target, level.alpha + change) : Math.max(target, level.alpha - change);
             level.show(level.alpha);
+            this.scene.markDirty();
+        }
+        // A stair drawn over the avatar lets it show through: the avatar is under it, or behind it, lower than where
+        // the stair arrives. Not the stair the avatar is on.
+        for (const stair of this.stairDrawings) {
+            const { entity } = stair;
+            const hides =
+                !editor.open &&
+                this.state.stair === undefined &&
+                this.state.elevation < stair.top - 1 &&
+                p.x + 10 > entity.x &&
+                p.x - 10 < entity.x + (entity.displayWidth ?? 0) &&
+                p.y > entity.y &&
+                p.y - 30 < entity.y + (entity.displayHeight ?? 0);
+            const target = hides ? HIDDEN_ALPHA : 1;
+            if (stair.alpha === target) continue;
+            const change = ((1 - HIDDEN_ALPHA) * delta) / FADE_MS;
+            stair.alpha =
+                target > stair.alpha ? Math.min(target, stair.alpha + change) : Math.max(target, stair.alpha - change);
+            entity.setAlpha(stair.alpha);
             this.scene.markDirty();
         }
         // Somebody standing on a floor fades with it, instead of floating over what shows through.
@@ -283,14 +344,41 @@ export class FloorSpike {
      * Reads the slabs and the stairs placed on the map; rebuilds the floors when they changed. The opacity of a level
      * is then set on its entities.
      */
+    /** The rooms of the ground each floor has slabs over: read again with the map (the walls change the rooms). */
+    private readLevelRooms(model: FloorModel): void {
+        this.levelRooms.clear();
+        for (const slab of model.getSlabs()) {
+            const room = this.roomAt(slab.x * TILE + TILE / 2, slab.y * TILE + TILE / 2);
+            if (room === undefined) continue;
+            let rooms = this.levelRooms.get(slab.elevation);
+            if (!rooms) {
+                rooms = new Set();
+                this.levelRooms.set(slab.elevation, rooms);
+            }
+            rooms.add(room);
+        }
+    }
+
     private readMap(): void {
         const pieces: { entity: FloorEntity; piece: FloorPiece; elevation: number }[] = [];
         const standing: { entity: FloorEntity; elevation: number }[] = [];
+        const placedWalls: LevelPlaced[] = [];
         let signature = "";
         for (const entity of this.readEntities()) {
             const prefab = entity.getPrefab();
             const piece = parseFloorPiece(prefab.collectionName, prefab.id);
             const elevation = entity.getEntityData().elevation ?? 0;
+            if (!piece && parseAnyLevelPrefab(prefab.collectionName, prefab.id)) {
+                // The walls decide where the floors have a railing (see railingClosers): of the ground too.
+                placedWalls.push({
+                    x: entity.x,
+                    y: entity.y,
+                    collectionName: prefab.collectionName,
+                    prefabId: prefab.id,
+                    elevation,
+                });
+                if (elevation === 0) signature += `#${prefab.id}@${entity.x},${entity.y};`;
+            }
             if (!piece) {
                 // What stands on a raised floor (furniture, walls) shows through with its floor.
                 if (elevation > 0) {
@@ -303,8 +391,12 @@ export class FloorSpike {
             signature += `${prefab.id}@${entity.x},${entity.y},${elevation};`;
         }
         if (this.model && signature === this.mapSignature) {
+            this.readLevelRooms(this.model);
             // Other tools set the opacity of the entities (the dimming of the map editor): set it again.
             for (const level of this.levels) level.show(level.alpha);
+            for (const stair of this.stairDrawings) {
+                if (stair.alpha !== 1) stair.entity.setAlpha(stair.alpha);
+            }
             return;
         }
         this.mapSignature = signature;
@@ -321,9 +413,11 @@ export class FloorSpike {
             }),
         );
         this.model = model;
+        this.readLevelRooms(model);
         this.onLevels(model.getLevels());
         const stairBoxes = model.getStairs().map((placed) => this.stairScreenBox(placed));
         const alphas = new Map(this.levels.map((level) => [level.elevation, level.alpha]));
+        const seeThroughBefore = new Map(this.levels.map((level) => [level.elevation, level.seeThrough]));
         this.levels.length = 0;
         for (const elevation of model.getLevels()) {
             const normal: FloorEntity[] = [];
@@ -343,21 +437,42 @@ export class FloorSpike {
             // The objects are only touched while their floor shows through, and once when it is opaque again: the map
             // editor dims them by itself.
             let objectsShown = 1;
-            const level = {
+            const level: LevelDrawing = {
                 elevation,
                 alpha: alphas.get(elevation) ?? 1,
+                seeThrough: seeThroughBefore.get(elevation) ?? true,
                 show: (alpha: number) => {
                     for (const entity of normal) entity.setAlpha(alpha);
-                    for (const entity of overStairs) entity.setAlpha(alpha * OVER_STAIR_ALPHA);
+                    for (const entity of overStairs) {
+                        entity.setAlpha(level.seeThrough ? alpha * OVER_STAIR_ALPHA : alpha);
+                    }
+                    this.railings.setAlpha(elevation, alpha);
                     if (alpha !== 1 || objectsShown !== 1) {
                         for (const entity of objects) entity.setAlpha(alpha);
                         objectsShown = alpha;
                     }
                 },
             };
-            level.show(level.alpha);
             this.levels.push(level);
         }
+        // The stairs let the avatar show through when it walks under or behind them.
+        const stairAlphas = new Map(this.stairDrawings.map((stair) => [stair.entity, stair.alpha]));
+        this.stairDrawings = pieces
+            .filter(({ piece }) => piece.kind === "stair")
+            .map(({ entity, piece, elevation }) => ({
+                entity,
+                top: elevation + (piece.kind === "stair" ? piece.rise : 0),
+                alpha: stairAlphas.get(entity) ?? 1,
+            }));
+        // The railings: along every side of a floor that gives on the void, but where a stair or a wall is.
+        const walls: RailingWall[] = [];
+        for (const base of new Set(placedWalls.map((wall) => wall.elevation ?? 0))) {
+            for (const wall of modelFromPlacedPrefabs(levelItems(placedWalls, base)).getWalls()) {
+                walls.push({ orientation: wall.orientation, x: wall.x, y: wall.y, height: wall.height, base });
+            }
+        }
+        this.railings.draw(floorRailings(model, railingClosers(walls)));
+        for (const level of this.levels) level.show(level.alpha);
         this.scene.markDirty();
     }
 
@@ -396,6 +511,7 @@ export class FloorSpike {
             const level = {
                 elevation,
                 alpha: 1,
+                seeThrough: true,
                 slabs: normal,
                 overStairs,
                 show: (alpha: number) => {
