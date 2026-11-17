@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { floorGroups } from "../MapEditor/MapLayer/FloorGroups";
+import { floorGroups, floorGroupBounds } from "../MapEditor/MapLayer/FloorGroups";
 import type { FloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import { stairEnds } from "../MapEditor/MapLayer/FloorPath";
 import { floorRailings, railingClosers } from "../MapEditor/MapLayer/FloorRailings";
@@ -248,6 +248,25 @@ export class FloorSpike {
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
+    }
+
+    /**
+     * The raised floor a point of the screen stands on at this altitude: its key and the rectangle it covers on the
+     * screen. Undefined over no slab of that altitude.
+     */
+    public floorZoneAt(
+        elevation: number,
+        x: number,
+        y: number,
+    ): { key: string; x: number; y: number; width: number; height: number } | undefined {
+        const cell = `${Math.floor(x / TILE)}:${Math.floor((y + elevation) / TILE)}`;
+        const level = this.levels.find((candidate) => candidate.elevation === elevation && candidate.cells.has(cell));
+        if (!level) return undefined;
+        const cells = [...level.cells].map((key) => {
+            const [column, row] = key.split(":").map(Number);
+            return { x: column, y: row };
+        });
+        return { key: level.key, ...floorGroupBounds({ level: elevation, cells, key: level.key }) };
     }
 
     /**

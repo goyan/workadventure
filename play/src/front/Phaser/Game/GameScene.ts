@@ -1658,6 +1658,15 @@ export class GameScene extends DirtyScene {
         }
     }
 
+    /** The raised floor a point of the screen stands on at this altitude, for what must stay within it (lights). */
+    public raisedFloorZoneAt(
+        elevation: number,
+        x: number,
+        y: number,
+    ): { key: string; x: number; y: number; width: number; height: number } | undefined {
+        return this.floorSpike?.floorZoneAt(elevation, x, y);
+    }
+
     /** The floor tiles of the map layer laid on the ground. */
     private *mapLayerGroundFloors(): Generator<Entity> {
         for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {

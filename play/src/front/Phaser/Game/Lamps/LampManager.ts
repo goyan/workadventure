@@ -347,6 +347,17 @@ export class LampManager {
         });
     }
 
+    /** The raised floor a lamp stands on, as a zone its light stays in; undefined on the ground. */
+    private raisedFloorZoneOf(entity: Entity): LampZone | undefined {
+        const elevation = entity.getElevation();
+        if (!(elevation > 0)) return undefined;
+        const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
+        const floor = this.scene.raisedFloorZoneAt(elevation, source.x, source.y);
+        return floor
+            ? { areaId: `floor:${floor.key}`, x: floor.x, y: floor.y, width: floor.width, height: floor.height }
+            : undefined;
+    }
+
     private buildVisual(kind: LampKind, entity: Entity, zone: LampZone): LampVisual {
         const source = lampSource(entity, entity.getPrefab().lamp?.anchor);
         return createLamp(kind, {
@@ -388,7 +399,13 @@ export class LampManager {
         // Among the areas of the floor of the map the lamp stands on.
         const areasOf = (entity: Entity): AreaData[] =>
             areas.filter((area) => isAtAreaLevel(area, entity.getElevation()));
-        const areaZonesOf = (entity: Entity): LampZone[] => areasOf(entity).map(toLampZone);
+        const areaZonesOf = (entity: Entity): LampZone[] => {
+            const zones = areasOf(entity).map(toLampZone);
+            // On a raised floor the room is the floor itself: without it, a lamp upstairs standing in no area would
+            // light a square around it, over the walls and the outdoors.
+            const floor = this.raisedFloorZoneOf(entity);
+            return floor ? [...zones, floor] : zones;
+        };
         for (const { id, kind } of plan.create) {
             const entity = entities.get(id);
             if (!entity) {
