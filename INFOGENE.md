@@ -2181,9 +2181,17 @@ Correctifs tirés d'un audit de l'ergonomie de l'éditeur, faits d'après la lec
 - **Cas pris en charge** : mezzanine sur murs de 2, 3 ou 4 ; escalier du sol à chaque niveau ; escaliers courts entre
   niveaux (2→3, 3→4, 2→4) ; escalier arrivant au bord d'un palier ou dans une trémie ; largeur 1 ou 2 ; pièce,
   murs et meubles sur un palier ; étage sur étage.
-- **Pas encore** : sièges, objets à interaction et piscines sur un palier (coupés en hauteur) ; zones verrouillées
-  pour les portes d'étage ; transparence des murs d'étage devant l'avatar ; chemin par double-clic entre niveaux ; garde-corps
-  dessiné ; compagnons, animaux, zones et bulles ignorent le niveau ; images définitives.
+- **Par niveau** : sièges (`getSeats(scene, altitude)`), objets à action et objets à interaction ne valent que
+  pour le palier où ils sont posés ; une fléchette de Nerf vole à la hauteur du tireur (elle ne touche que les
+  joueurs de ce palier, et les murs du sol seulement tirée du sol) ; on n'apprivoise un animal que depuis le sol ; les
+  autres joueurs s'estompent avec leur palier.
+- **Trajet par double-clic et « Y aller »** (`FloorPath.ts`, `GameScene.floorWalkTo`) : dès que le départ ou
+  l'arrivée est sur un palier, le trajet passe par les dalles et les escaliers, contourne les murs de chaque étage
+  (les portes sont franchissables) et évite les cases d'escalier au sol. Sans escalier menant à l'arrivée, depuis un
+  escalier, ou pour un trajet qui reste au sol : trajet ordinaire. Les meubles des paliers ne sont pas contournés.
+- **Pas encore** : piscines sur un palier ; zones verrouillées pour les portes d'étage ; transparence des murs
+  d'étage devant l'avatar ; garde-corps dessiné ; compagnons et animaux restent au sol ; zones et bulles ignorent le
+  niveau (étude en cours) ; images définitives.
 - **Essai sans carte** : `?palier=piece`, `?palier=1` ou `?palier=<colonne>,<rangée>` dessine en code une disposition
   d'essai en mémoire (`Floors/FloorSpike.ts`).
 
