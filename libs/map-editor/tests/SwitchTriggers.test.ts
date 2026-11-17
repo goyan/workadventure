@@ -9,7 +9,10 @@ import {
     isAutomaticSwitch,
     isInCone,
     isWithinHours,
+    isTimeZone,
+    minutesOfDayIn,
     parisMinutesOfDay,
+    WeatherLocation,
     switchPresenceSenses,
 } from "../src";
 
@@ -223,5 +226,42 @@ describe("switchPresenceSenses", () => {
         const cone = presence("cone", { direction: 90, angle: 90 });
         expect(switchPresenceSenses(sensorAt, cone, undefined, { x: 176, y: 176 + 90 }, 0)).toBe(true);
         expect(switchPresenceSenses(sensorAt, cone, undefined, { x: 176, y: 176 - 40 }, 0)).toBe(false);
+    });
+});
+
+describe("minutesOfDayIn", () => {
+    const noonInParis = new Date("2026-01-15T11:00:00Z");
+
+    it("reads the time of the place of the map: the timers follow it", () => {
+        expect(minutesOfDayIn(noonInParis, "Australia/Sydney")).toBe(22 * 60);
+        expect(minutesOfDayIn(noonInParis, "America/New_York")).toBe(6 * 60);
+        expect(minutesOfDayIn(noonInParis, "Europe/Paris")).toBe(12 * 60);
+    });
+
+    it("reads the time of Paris for a map without a place, or whose time zone is not one", () => {
+        expect(minutesOfDayIn(noonInParis, undefined)).toBe(12 * 60);
+        expect(minutesOfDayIn(noonInParis, "Mars/Phobos")).toBe(12 * 60);
+        expect(minutesOfDayIn(noonInParis, "")).toBe(12 * 60);
+    });
+});
+
+describe("the time zone of the place of a map", () => {
+    const lille = { name: "Lille", latitude: 50.63, longitude: 3.06 };
+
+    it("knows a time zone from what is not one", () => {
+        expect(isTimeZone("Europe/Paris")).toBe(true);
+        expect(isTimeZone("Australia/Sydney")).toBe(true);
+        expect(isTimeZone("Mars/Phobos")).toBe(false);
+        expect(isTimeZone("")).toBe(false);
+    });
+
+    it("is kept with the place", () => {
+        expect(WeatherLocation.parse({ ...lille, timezone: "Europe/Paris" }).timezone).toBe("Europe/Paris");
+    });
+
+    it("is left out, the place kept, when it is missing (a place chosen before) or not a time zone", () => {
+        expect(WeatherLocation.parse(lille)).toEqual(lille);
+        expect(WeatherLocation.parse({ ...lille, timezone: "Mars/Phobos" })).toEqual(lille);
+        expect(WeatherLocation.parse({ ...lille, timezone: 42 })).toEqual(lille);
     });
 });

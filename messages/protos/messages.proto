@@ -397,6 +397,9 @@ message MapLocationMessage {
   string name = 1;
   double latitude = 2;
   double longitude = 3;
+  // Time zone of the place (IANA name), for the clock and the timers of the map. Absent from older clients and for
+  // a place chosen before it was kept: the time of Paris.
+  optional string timezone = 4;
 }
 
 // Sets the interaction and default level of a category of objects on this map (CategorySettings in

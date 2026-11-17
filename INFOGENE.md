@@ -361,7 +361,8 @@ n'a pas de position à lui (comme un va-et-vient).
     animaux ; le serveur réunit les signalements et applique le délai d'extinction. Un onglet en arrière-plan ne
     signale plus rien : pour ces capteurs, le serveur garde le dernier signalement d'un joueur tant qu'il est dans la
     salle et n'a pas bougé depuis.
-  - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure de Paris**, peut passer minuit ; pas de jours de la semaine.
+  - **Plage horaire** : de `HH:MM` à `HH:MM`, **heure du lieu de la carte** (Paris sans lieu choisi), peut passer
+    minuit ; pas de jours de la semaine.
   - Capteur sélectionné dans l'éditeur : la zone, le disque ou le cône qu'il surveille est dessiné en bleu.
   - Un capteur ou une minuterie ne s'actionne pas à la main (le serveur refuse aussi l'appui).
   - **Lampe à capteur intégré** : sur une lampe RGB, bouton **Ajouter un capteur à cette lampe** (elle s'allume quand
@@ -384,7 +385,7 @@ n'a pas de position à lui (comme un va-et-vient).
   - **Propriété mal formée** : la carte en cours d'édition garde ce que la dernière commande portait, sans validation.
     Le jeu et le serveur lisent donc un interrupteur par un lecteur validé (`switchPropertyIn`) : incomplet, il prend
     ses valeurs par défaut ; mal formé, il est ignoré ; un déclencheur mal formé en fait un interrupteur manuel.
-  - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; pas de fuseau du lieu de la carte ; un
+  - Limites : un capteur supprimé laisse ses lampes dans leur dernier état ; un
     client modifié peut tenir un capteur allumé en signalant un animal ; un joueur immobile dont le navigateur avait
     signalé un animal dans un bâtiment y tient les lampes allumées tant qu'il ne bouge pas ; la lampe dupliquée (⧉)
     d'une lampe à capteur intégré commande encore l'originale (à recâbler).
@@ -414,6 +415,14 @@ n'a pas de position à lui (comme un va-et-vient).
   lampe est redessinée. Limites : un seul rebond ; pas pour une lampe tournante (gyrophare) ni pour les torches ni la
   lumière de lune ; les objets hauts renvoient comme des murs ; coût : jusqu'à 6 lancers de rayons et 6 petites
   textures de plus par lampe.
+- **Fuseau horaire de la carte** : le lieu de la carte (`weatherLocation`, choisi dans « Météo de la carte ») porte
+  son fuseau (`timezone`, nom IANA rendu par la recherche de ville d'Open-Meteo, champ facultatif du WAM et du
+  protobuf `MapLocationMessage.timezone`). L'**horloge** sous la barre d'actions affiche l'heure de ce lieu
+  (`worldClockTimeZone`, `mapTimeZoneStore` ; l'heure de l'ordinateur en mode « Heure de mon ordinateur ») et les
+  **minuteries** des lampes lisent leurs heures dans ce fuseau (`minutesOfDayIn`, évalué par `back`). Sans lieu, ou
+  pour un lieu choisi avant ce changement (pas de fuseau enregistré : rechoisir la ville), ou si le fuseau n'en est
+  pas un : heure de Paris. Restent à l'heure de Paris pour toutes les cartes : saisons, thème de Noël, programme de la
+  météo automatique. `play`, `back` et `map-storage` à déployer ensemble.
 - **Éclairage du jeu dans l'éditeur (réglage personnel)** : l'éditeur de carte masque le voile de nuit, pour voir ce qu'on
   édite ; le **bouton soleil-lune sous la barre d'outils de l'éditeur** (ou l'interrupteur « Même éclairage dans l'éditeur de carte qu'en jeu », Paramètres → Ambiance → Cycle jour/nuit,
   `nightInEditorStore`, désactivé par défaut) le laisse, avec l'obscurité, l'ambiance et les rebonds réglés : on règle

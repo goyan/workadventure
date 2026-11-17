@@ -1620,6 +1620,10 @@
                   "type": "number",
                   "minimum": -180,
                   "maximum": 180
+                },
+                "timezone": {
+                  "type": "string",
+                  "maxLength": 64
                 }
               },
               "required": [

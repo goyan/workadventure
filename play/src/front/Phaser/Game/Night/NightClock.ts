@@ -201,3 +201,11 @@ export function parseNightAt(search: string, isDev: boolean): number | undefined
     }
     return hours * 60 + minutes;
 }
+
+/**
+ * The time zone of the clock shown under the action bar: the one of the place of the map on the server clock (Paris
+ * without one), the computer's own (undefined) for a player who follows their computer.
+ */
+export function worldClockTimeZone(computerClock: boolean, mapTimeZone: string | undefined): string | undefined {
+    return computerClock ? undefined : (mapTimeZone ?? "Europe/Paris");
+}

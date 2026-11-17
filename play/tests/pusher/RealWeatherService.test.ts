@@ -220,7 +220,13 @@ describe("PlaceSearchService", () => {
         );
         const service = new PlaceSearchService(fetchFn);
         expect(await service.search("  Lyon ")).toEqual([
-            { name: "Lyon, Auvergne-Rhône-Alpes, France", latitude: 45.74906, longitude: 4.84789 },
+            // Its time zone comes with the town: the clock and the timers of the map follow it.
+            {
+                name: "Lyon, Auvergne-Rhône-Alpes, France",
+                latitude: 45.74906,
+                longitude: 4.84789,
+                timezone: "Europe/Paris",
+            },
             { name: "Lyon Station, États-Unis", latitude: 40.3, longitude: -76.4 },
         ]);
         const url = urlOf(fetchFn.mock.calls[0][0]);

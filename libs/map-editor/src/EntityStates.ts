@@ -64,18 +64,41 @@ export function automaticSwitchTargetIds(property: SwitchPropertyData): string[]
     return property.targets.mode === "ids" ? property.targets.ids : (property.resolvedTargets ?? []);
 }
 
-const parisClock = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/Paris",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-});
+const DEFAULT_TIME_ZONE = "Europe/Paris";
+const clocks = new Map<string, Intl.DateTimeFormat>();
 
-/** Minutes since midnight in Paris: the timers of a map follow the time there, like its night. */
-export function parisMinutesOfDay(date: Date): number {
-    const parts = parisClock.formatToParts(date);
+function clockOf(timeZone: string): Intl.DateTimeFormat | undefined {
+    let clock = clocks.get(timeZone);
+    if (!clock) {
+        try {
+            clock = new Intl.DateTimeFormat("en-GB", {
+                timeZone,
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23",
+            });
+        } catch {
+            return undefined;
+        }
+        clocks.set(timeZone, clock);
+    }
+    return clock;
+}
+
+/**
+ * Minutes since midnight in a time zone: the timers of a map follow the time of its place (see
+ * WeatherLocation.timezone). The time of Paris without one, or when it is not a time zone.
+ */
+export function minutesOfDayIn(date: Date, timeZone: string | undefined): number {
+    const clock = (timeZone ? clockOf(timeZone) : undefined) ?? clockOf(DEFAULT_TIME_ZONE);
+    const parts = clock?.formatToParts(date) ?? [];
     const read = (type: "hour" | "minute"): number => Number(parts.find((part) => part.type === type)?.value ?? 0);
     return read("hour") * 60 + read("minute");
+}
+
+/** Minutes since midnight in Paris: the time of a map without a place. */
+export function parisMinutesOfDay(date: Date): number {
+    return minutesOfDayIn(date, DEFAULT_TIME_ZONE);
 }
 
 function minutesOf(hour: string): number {

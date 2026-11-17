@@ -4,15 +4,16 @@ import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
     NightMode,
-    nightDarknessStore,
-    nightInEditorStore,
-    nightModeStore,
-    nightDateStore,
-    realisticNightStore,
     ambienceFullShareStore,
     ambienceStrengthStore,
     lightBounceStore,
     lightSoftEdgeStore,
+    mapTimeZoneStore,
+    nightDarknessStore,
+    nightInEditorStore,
+    nightDateStore,
+    nightModeStore,
+    realisticNightStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
@@ -204,10 +205,10 @@ export class NightManager {
             nightDateStore.set(date);
             const sunAt = this.sunInstant(date);
             // The sun of the place of the map (Paris when it has none), shared with its real weather.
-            const place = sunPlaceOf(
-                this.mode === NightMode.Computer || this.forcedMinutes !== undefined,
-                shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
-            );
+            const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
+            // The clock shown follows the time of the place of the map.
+            mapTimeZoneStore.set(mapPlace?.timezone);
+            const place = sunPlaceOf(this.mode === NightMode.Computer || this.forcedMinutes !== undefined, mapPlace);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
             // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
@@ -332,6 +333,7 @@ export class NightManager {
     public destroy(): void {
         this.clock.destroy();
         nightDateStore.set(undefined);
+        mapTimeZoneStore.set(undefined);
         this.unsubscribeEditor();
         this.unsubscribeMode();
         this.unsubscribeRealistic();
