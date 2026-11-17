@@ -326,7 +326,10 @@ n'a pas de position à lui (comme un va-et-vient).
   - **Les lampes de cette pièce** : les lampes RGB de la plus petite zone de la carte où se tient le pied de
     l'interrupteur, au même niveau que lui ; à l'étage, sans zone, l'étage lui-même. Une lampe ou un interrupteur
     juste hors d'une pièce lui appartient quand même : jusqu'à 4 cases au-dessus (lampe accrochée au mur du haut),
-    une case sur les autres côtés ; entre deux pièces, la plus proche (`roomIdAt`). Une lampe ajoutée plus tard dans la
+    une case sur les autres côtés ; entre deux pièces, la plus proche (`roomIdAt`). Une lampe sur la case juste
+    au-dessus d'une pièce (la face de son mur) est à cette pièce, même si la zone de la pièce du dessus a été tracée
+    jusque-là. Pour un mur plus haut recouvert par une autre zone : bouton **Lier des lampes**.
+  - Dans l'éditeur, une **lampe sélectionnée** montre par des traits tout ce qui la commande. Une lampe ajoutée plus tard dans la
     pièce est commandée sans rien refaire. Hors de toute pièce, l'interrupteur ne commande rien et le panneau le dit.
   - **Lampes choisies** : bouton **🔗 Lier des lampes** (toujours visible, sur l'interrupteur comme sur le capteur
     et la minuterie), puis un clic sur une lampe, où qu'elle soit sur la carte, la lie ou la délie (un pas
