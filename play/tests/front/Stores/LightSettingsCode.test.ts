@@ -55,10 +55,13 @@ describe("acceptedLightSettings", () => {
 
     it("leaves out a value of the wrong kind, or a choice that does not exist", () => {
         expect(
-            acceptedLightSettings({ darkness: "dark", realistic: 1, curve: "cubic", other: Number.NaN }, {
-                ...kinds,
-                other: { kind: "number" },
-            }),
+            acceptedLightSettings(
+                { darkness: "dark", realistic: 1, curve: "cubic", other: Number.NaN },
+                {
+                    ...kinds,
+                    other: { kind: "number" },
+                },
+            ),
         ).toEqual({});
     });
 });
