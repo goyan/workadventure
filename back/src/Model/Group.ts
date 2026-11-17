@@ -1,6 +1,7 @@
 import { Subject } from "rxjs";
 import type { Movable } from "@workadventure/shared-utils";
 import { MAX_PER_GROUP } from "../Enum/EnvironmentVariable";
+import { sameFloor } from "./FloorLevel";
 import type { PositionInterface } from "./PositionInterface";
 import type { PositionNotifier } from "./PositionNotifier";
 import type { Zone } from "./Zone";
@@ -140,6 +141,12 @@ export class Group implements Movable, CustomJsonReplacerInterface {
         this.currentZone = this.positionNotifier.updatePosition(this, { x, y }, { x: oldX, y: oldY });
     }
 
+    /** Altitude of the floor its members stand on (0: the ground): they are all on the same one. */
+    getFloorZ(): number {
+        const [first] = this.users;
+        return first?.getFloorZ() ?? 0;
+    }
+
     searchForNearbyUsers(): void {
         // A locked group lets nobody in, not even the users its members walk up to.
         if (!this.currentZone || this.isLocked()) return;
@@ -150,6 +157,7 @@ export class Group implements Movable, CustomJsonReplacerInterface {
             // We ignore users that are already in a group or silent, and users still walking: like in
             // GameRoom.updateUserGroup, a user joins a group when they stop.
             if (user.silent || user.group || user.getPosition().moving) continue;
+            if (!sameFloor(user.getFloorZ(), this.getFloorZ())) continue;
             const distance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), this.getPosition());
             if (distance < this.groupRadius) {
                 this.join(user);

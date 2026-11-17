@@ -81,6 +81,7 @@ import { VariablesManager } from "../Services/VariablesManager";
 import type { AreaPropertyVariable } from "../Services/AreaPropertyVariablesManager";
 import { AreaPropertyVariablesManager } from "../Services/AreaPropertyVariablesManager";
 import { getVariablesRepository } from "../Services/Repository/VariablesRepository";
+import { sameFloor } from "./FloorLevel";
 import { PrivateMessages, PrivateMessageRefusedError } from "./PrivateMessages";
 import { AreaZoneTracker } from "./AreaZoneTracker";
 import type { BrothersFinder } from "./BrothersFinder";
@@ -536,9 +537,13 @@ export class GameRoom implements BrothersFinder {
 
     updatePlayerDetails(user: User, playerDetailsMessage: SetPlayerDetailsMessage) {
         const wasSilent = user.silent;
+        const floorBefore = user.getFloorZ();
         user.updateDetails(playerDetailsMessage);
         if (user.group !== undefined && user.silent) {
             this.leaveGroup(user);
+        } else if (!sameFloor(floorBefore, user.getFloorZ())) {
+            // On another floor now: out of the bubble of the floor left, in with whoever stands next on this one.
+            this.updateUserGroup(user);
         } else if (wasSilent && !user.silent) {
             // Back from a silent status (DND, sound blocked...): join whoever is next to us, without waiting for a move.
             this.updateUserGroup(user);
@@ -582,6 +587,12 @@ export class GameRoom implements BrothersFinder {
                 }
             }
         } else {
+            // Gone to another floor than the others of its bubble (up a stair): it leaves them.
+            const other = group.getUsers().find((member) => member !== user);
+            if (other && !sameFloor(user.getFloorZ(), other.getFloorZ())) {
+                this.leaveGroup(user);
+                return;
+            }
             let hasKickOutSomeone = false;
             let followingMembers: User[] = [];
 
@@ -732,6 +743,10 @@ export class GameRoom implements BrothersFinder {
             if (currentUser.silent) {
                 continue;
             }
+            // Drawn at the same place on another floor of the map: not next to each other.
+            if (!sameFloor(user.getFloorZ(), currentUser.getFloorZ())) {
+                continue;
+            }
 
             const distance = GameRoom.computeDistance(user, currentUser); // compute distance between peers.
 
@@ -743,6 +758,9 @@ export class GameRoom implements BrothersFinder {
 
         for (const group of this.groups.queryCircle(userPosition.x, userPosition.y, this.groupRadius)) {
             if (group.isFull() || group.isLocked()) {
+                continue;
+            }
+            if (!sameFloor(user.getFloorZ(), group.getFloorZ())) {
                 continue;
             }
             const distance = GameRoom.computeDistanceBetweenPositions(user.getPosition(), group.getPosition());
