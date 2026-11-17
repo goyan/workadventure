@@ -72,6 +72,30 @@ describe("floorPath", () => {
         expect(path?.some((p) => p.x === 112 && (p.y === 7 * 32 + 16 || p.y === 8 * 32 + 16))).toBe(false);
     });
 
+    it("goes around a wall of the floor, and finds nothing when the wall closes the way", () => {
+        // A wall on the floor between the columns 3 and 4, on the rows 5 and 6: the row 4 stays open.
+        const wall = (level: number, from: { x: number; y: number }, to: { x: number; y: number }): boolean =>
+            level === 52 &&
+            from.y === to.y &&
+            from.y >= 5 &&
+            Math.min(from.x, to.x) === 3 &&
+            Math.max(from.x, to.x) === 4;
+        const input = {
+            model: layout(),
+            groundWalkable: everywhere,
+            from: { ...middle(3, 10), elevation: 0 },
+            to: middle(4, 6, 52),
+        };
+        const around = floorPath({ ...input, blocked: wall });
+        expect(around?.at(-1)).toEqual(middle(4, 6, 52));
+        expect(around).toContainEqual(middle(3, 4, 52));
+        const closed = floorPath({
+            ...input,
+            blocked: (level, from, to) => level === 52 && Math.min(from.x, to.x) === 3 && Math.max(from.x, to.x) === 4,
+        });
+        expect(closed).toBeUndefined();
+    });
+
     it("finds nothing from a stair, nor to a tile one cannot stand on", () => {
         const model = layout();
         expect(

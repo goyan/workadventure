@@ -18,6 +18,11 @@ export interface FloorPathInput {
     model: FloorModel;
     /** Whether a tile of the ground can be walked on (false outside the map). */
     groundWalkable: (x: number, y: number) => boolean;
+    /**
+     * Whether something stands between two neighbouring tiles of a floor (0: the ground): a wall of that floor. A
+     * door does not count, it opens when the avatar comes near.
+     */
+    blocked?: (level: number, from: TilePoint, to: TilePoint) => boolean;
     /** Where the avatar is on the screen, and the floor it stands on (0: the ground). */
     from: { x: number; y: number; elevation: number };
     /** The point of the screen to walk to: on the highest floor drawn there, the ground elsewhere. */
@@ -63,7 +68,7 @@ const keyOf = (node: PathNode): string => `${node.level}:${node.x}:${node.y}`;
  * The walk from the avatar to a point of the screen through the floors and their stairs: the points of the screen to
  * go through, the first one being where the avatar is. Undefined when there is none (no stair leads there, the point
  * is not on a tile one can stand on, the avatar is on a stair): the caller then walks as on a map without floors.
- * The walls and the furniture of the raised floors are not looked at: the avatar stops against them.
+ * The furniture is not looked at: the avatar stops against it.
  */
 export function floorPath(input: FloorPathInput): { x: number; y: number }[] | undefined {
     const { model, groundWalkable, from, to } = input;
@@ -115,6 +120,7 @@ export function floorPath(input: FloorPathInput): { x: number; y: number }[] | u
         for (const step of next) {
             const key = keyOf(step.node);
             if (visited.has(key) || !walkable(step.node)) continue;
+            if (!step.stair && input.blocked?.(node.level, node, step.node)) continue;
             visited.add(key);
             cameFrom.set(key, { node, stair: step.stair });
             if (key === endKey) {

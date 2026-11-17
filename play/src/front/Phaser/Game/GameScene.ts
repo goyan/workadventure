@@ -1,3 +1,5 @@
+import type { TileBarriers } from "../../Utils/TileBarriers";
+import { levelItems } from "./MapEditor/MapLayer/MapLayerLevels";
 import { levelUnderPoint } from "./MapEditor/MapLayer/FloorOperations";
 import { floorPath } from "./MapEditor/MapLayer/FloorPath";
 import * as Sentry from "@sentry/svelte";
@@ -5040,8 +5042,29 @@ ${escapedMessage}
             return undefined;
         }
         const grid = this.gameMapFrontWrapper.getSharedCollisionGrid();
+        // The walls of each floor, read once per walk (a door is passable: it opens when the avatar comes near).
+        const placed = Array.from(this.gameMapFrontWrapper.getEntitiesManager().getEntities().values(), (entity) => {
+            const prefab = entity.getPrefab();
+            return {
+                x: entity.x,
+                y: entity.y,
+                collectionName: prefab.collectionName,
+                prefabId: prefab.id,
+                elevation: entity.getElevation(),
+            };
+        });
+        const barriers = new Map<number, TileBarriers>();
+        const barriersOf = (level: number): TileBarriers => {
+            let found = barriers.get(level);
+            if (!found) {
+                found = wallBarriers(levelItems(placed, level));
+                barriers.set(level, found);
+            }
+            return found;
+        };
         return floorPath({
             model: floors.model,
+            blocked: (level, from, to) => barriersOf(level).blocksMove(from, to),
             groundWalkable: (x, y) => {
                 const cell = grid[y]?.[x];
                 return cell !== undefined && cell !== PathTileType.Collider;
