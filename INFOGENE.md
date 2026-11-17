@@ -2145,6 +2145,82 @@ brouillard **fixés à la carte** (motif répété, `repeatedOverView`) : le zoo
 comme le voile de nuit), sans ombre ni voile couvert, sous les lumières des lampes ; immobiles en mouvement réduit. Interrupteur personnel « Afficher les nuages et leurs ombres »
 (Paramètres → Ambiance). Bandeau : soleil et nuage, ou nuage seul au-dessus de 0,8.
 
+### Ombres du soleil et de la lune
+
+**Lune** (`Night/MoonClock.ts`) : hauteur et azimut (même convention que `sunPositionAt`, parallaxe comprise, sans
+réfraction) et fraction éclairée, par les termes principaux de Meeus (chap. 47, termes de 0,001° et plus ; chap. 48,
+formule approchée). Testée sur l'exemple 47.a (valeurs reprises de PyMeeus) et sur les levers, couchers, passages au
+méridien et illuminations publiés par timeanddate.com pour Paris et Sydney (novembre 2026). Même instant et même lieu
+que le soleil : `?nightAt=HH:MM` (dev) montre aussi la lune à cette heure.
+
+**Lumière du ciel** (`Night/SkyLight.ts`, calculée une fois par seconde par `NightManager.skyLight()`) : un seul astre
+à la fois. Le soleil tant qu'il projette des ombres (fondu de 6° à 2° d'élévation, comme les ombres des nuages), doré
+près de l'horizon, blanc haut ; puis la lune quand la nuit tombe (de rien à un soleil de 2° jusqu'à la fin du crépuscule
+civil, et seulement levée de 2° au moins), bleu froid, 0,3 au plus × lumière de sa phase : au changement les deux sont
+éteints, jamais deux jeux d'ombres nets. Lumière de la phase (`moonPhaseLight`) : « Réaliste » (défaut), loi de
+Krisciunas & Schaefer 1991 (PASP 103, éq. 8-9, d'après Allen 1976), un quartier ≈ 9 % de la pleine lune ; « Linéaire »,
+la fraction éclairée. La météo de la carte l'atténue sans cacher les ombres (`skyWeatherFactor` : ciel couvert 35 %,
+neige 50 %, pluie et brouillard 30 %, orage 15 %) ; la neige du thème de Noël, décor personnel, n'atténue rien ; météo
+masquée ou nuages coupés : ciel clair. Une lune brillante éclaircit le
+voile de nuit d'un cinquième (30 % au plus avec une intensité réglée plus haut, `moonlitNightOpacity`), rien par
+nouvelle lune.
+
+**Ce qui bouge** (`SkyMovingShadows`) : chaque avatar dehors a sa vraie silhouette couchée au sol à l'opposé de
+l'astre (ses calques dessinés dans un petit canevas rempli de la couleur des ombres, refait seulement quand un calque
+change d'image ; image tournée et étirée depuis ses pieds, `fallenShadowPose`) ; chaque animal promeneur a un ovale
+(`ovalShadowPose`). Une petite image par personnage, qui le suit : rien de la carte n'est redessiné. Pas d'ombre pour
+un avatar invisible, à la nage, sur un palier ou dans une pièce ; ovale de repli si ses calques ne sont pas lisibles.
+Les petits éléments du catalogue nature (rochers, herbes, fleurs, souches) projettent une petite ombre ronde, avec
+les ombres fixes. **Par catégorie** (Paramètres → Ambiance → « Ce qui projette une ombre », personnel, gardé dans le
+navigateur) : murs, meubles et objets hauts, arbres, petits éléments, avatars, animaux, pour le soleil comme pour la
+lune. **Forme au choix** pour les arbres, les avatars et les animaux, « Ovale » ou « Réaliste » (défauts : arbres et
+animaux en ovale, avatars en réaliste), pour comparer le rendu et le coût : un arbre réaliste est sa propre image
+couchée au sol, dessinée dans la texture des ombres fixes puis remplie de leur couleur ; un animal réaliste a sa
+silhouette comme un avatar. Mesuré une fois en local (carte d'équipe, 169 arbres, 34 personnages) : redessin des ombres
+fixes 0,35 ms en réaliste contre 0,24 ms en ovale, mise à jour des ombres mobiles 0,016 ms par image.
+Les petits éléments ont aussi le choix Ovale / Réaliste. **Ombres des arbres au vent** (interrupteur, activé par
+défaut) : la cime de l'ombre se déplace avec la cime de l'arbre (`TreeSway.poseOf`, `TreeSway.version`), en ovale
+comme en réaliste ; les ombres fixes sont alors redessinées à chaque changement de pose, 14 fois par seconde. Mesuré
+une fois en local (carte d'équipe, vent de 20 km/h, écran non plafonné) : 142 → 134 images/s en ovale, 135 → 126 en
+réaliste, soit 5 à 7 % ; sans l'interrupteur, un redessin par seconde au plus.
+Limites : silhouette d'un avatar non coupée au bord d'une pièce, véhicule et compagnon sans ombre propre.
+
+**Ombres** (`SkyShadows/`) : les murs de l'outil Carte (pied du mur, hauteur = nombre de cases ; portes et fenêtres
+comptées comme mur), les objets `castsShadow` (rectangles de collision, 1,5 case de haut) et les arbres du catalogue nature (`Nature:tree-*`, et les `nature-`, `snow-tree-`, `seasonal-`, `winter-auto-` de deux cases de haut ou plus)
+(houppier rond sur un tronc) projettent sur le sol leur pied balayé à l'opposé de l'astre, longueur hauteur /
+tan(élévation), **4 cases au plus** par défaut (réglable, plafond dur 8 cases), même sens que les ombres des nuages. Une texture bleu-noir, opacité 0,4 ×
+intensité, **dehors seulement** (`OutdoorGrid`), posée sur le sol (profondeur 0,7 : au-dessus des sols, sous tout ce
+qui est trié par y). Redessinée seulement quand l'astre a bougé d'un demi-degré, quand ce qui projette ou le dehors
+change, à chaque division par deux de la résolution au zoom, à un changement de réglage, ou avant qu'un défilement
+n'atteigne le bord ; un fondu ne change que l'opacité. Coupées dans l'éditeur. « Désactiver la nuit » : soleil seul tant
+qu'il est levé, pas de lune.
+
+**Réglages personnels** (Paramètres → Ambiance, `Stores/SkyLightStore.ts`, gardés dans le navigateur, rien ne change
+pour les autres) : un interrupteur par astre, « Ombres et lumière du soleil » et « Ombres et lumière de la lune »
+(activés par défaut) ; chacun coupe pour son astre les ombres, la teinte et l'éclaircissement du voile et les taches par
+les fenêtres, l'autre continue. Avec la lune : « Intensité de la lune selon sa phase », Linéaire ou Réaliste (défaut).
+Sous chaque astre activé, des **limites** (curseurs) :
+- intensité minimale (0 à 100 %, défaut 0) et maximale (0 à 200 %, défaut 100 %) : en part de l'astre à son plus fort
+  (soleil haut par ciel clair, pleine lune haute) ; la lumière calculée (météo, phase) est mise à l'échelle du maximum
+  puis ramenée dans la plage. Le fondu à l'horizon et au crépuscule s'applique après : astre couché = 0 malgré un
+  minimum ; pour la lune levée, le minimum vaut **quelle que soit la phase** (un peu de lune même en fin croissant).
+  Résultat borné à 1 (opacité d'ombre 0,4 au plus) ;
+- couleur minimale (0 à 100 %) et maximale (0 à 200 %, défaut 100 %) : force de la teinte de l'astre (soleil doré près
+  de l'horizon, presque blanc haut ; bleu froid de la lune), 0 % = neutre, au-delà de 100 % teinte accentuée ;
+- longueur minimale des ombres (0 à 2 cases, pas de 0,25) et maximale (1 à 8 cases, pas de 0,5, défaut 4) : la longueur
+  hauteur / tan(élévation) est ramenée dans la plage ; avec un minimum, même à midi un obstacle garde cette ombre.
+Un minimum au-dessus du maximum est ramené au maximum (`boundedTo`).
+
+**Par les fenêtres** (`SkyShadows/SkyWindowLight*`) : par chaque fenêtre et porte vitrée de l'outil Carte entre le
+dehors et une pièce, dont la face reçoit l'astre, une tache de lumière sur le sol de la pièce (entre les rayons qui
+passent par le bas et le haut de la vitre, inclinée avec l'astre, 4 cases au plus), de la teinte de l'astre, ajoutée,
+gardée dans les cases de la pièce (`OutdoorGrid.roomAt`). La nuit, la lune y perce un peu le voile. Interrupteur et
+limites d'intensité et de couleur de son astre ; la longueur maximale des ombres borne la tache, pas la minimale. Hauteur de vitre approchée (8 px au-dessus du sol jusqu'à 6 px sous le haut de l'ouverture).
+
+**Limites** : sol seulement (rien à l'étage, objets des paliers ignorés) ; une ombre tombe sous les murs et objets
+voisins au lieu de monter sur leur façade ; un soleil haut au sud cache presque toute l'ombre derrière le mur qui la
+projette (vue 3/4) ; tuiles de collision Tiled sans hauteur, donc sans ombre ; état des portes ignoré.
+
 ## Arrière-plan de caméra gardé
 
 Le choix d'arrière-plan (flou ou image) est gardé dans le navigateur par le code amont. Il était effacé pour de bon

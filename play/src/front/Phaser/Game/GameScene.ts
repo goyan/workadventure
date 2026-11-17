@@ -271,7 +271,9 @@ import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
-import { weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
+import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
@@ -350,6 +352,14 @@ import { SeasonalThemeManager } from "./Seasonal/SeasonalThemeManager";
 import { forcedTreeSeason, SeasonalTheme } from "./Seasonal/SeasonalTheme";
 import type { WalkerSample } from "./Christmas/FootprintTrail";
 import { NightManager } from "./Night/NightManager";
+import { skyWeatherFactor } from "./Night/SkyLight";
+import { SkyShadowManager } from "./SkyShadows/SkyShadowManager";
+import { SkyWindowLightManager } from "./SkyShadows/SkyWindowLightManager";
+import { SkyMovingShadows } from "./SkyShadows/SkyMovingShadows";
+import type { MovingShadowSource } from "./SkyShadows/SkyMovingShadows";
+import { drawableSource } from "./SkyShadows/SkyShadowPicture";
+import { NATURE_PREFIX } from "./SkyShadows/SkyShadowCasters";
+import type { ShadowSourceEntity } from "./SkyShadows/SkyShadowCasters";
 import { LampManager } from "./Lamps/LampManager";
 import { parseLampDemo } from "./Lamps/LampDemo";
 import { KNOCK_SOUND_KEY, KNOCK_SOUND_URL, KnockManager } from "./Knock/KnockManager";
@@ -521,6 +531,12 @@ export class GameScene extends DirtyScene {
     private lampManager: LampManager | undefined;
     private gameSwitches: GameSwitches | undefined;
     private weatherManager: WeatherManager | undefined;
+    private skyShadowManager: SkyShadowManager | undefined;
+    private skyWindowLightManager: SkyWindowLightManager | undefined;
+    private skyMovingShadows: SkyMovingShadows | undefined;
+    /** What throws a shadow of the sky for this person (skyShadowCategoriesStore). */
+    private skyShadowCategories: SkyShadowCategories | undefined;
+    private unsubscribeSkyShadowCategories: Unsubscriber | undefined;
     /** Trees of the nature catalogue swaying with the wind of the map weather. */
     private treeSway: TreeSway | undefined;
     /** The bent images the swaying trees are drawn with. */
@@ -1584,6 +1600,14 @@ export class GameScene extends DirtyScene {
         this.gameSwitches?.destroy();
         this.gameSwitches = undefined;
         this.weatherManager?.destroy();
+        this.skyShadowManager?.destroy();
+        this.skyShadowManager = undefined;
+        this.skyWindowLightManager?.destroy();
+        this.skyWindowLightManager = undefined;
+        this.skyMovingShadows?.destroy();
+        this.skyMovingShadows = undefined;
+        this.unsubscribeSkyShadowCategories?.();
+        this.unsubscribeSkyShadowCategories = undefined;
         this.treeSway?.destroy();
         this.treePoses?.destroy();
         this.treePoses = undefined;
@@ -1703,6 +1727,80 @@ export class GameScene extends DirtyScene {
         for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
             if (isSwayingTree(entity.getPrefab().id)) yield { id, object: entity };
         }
+    }
+
+    /** The objects of the map as their shadows of the sky need them. */
+    private *shadowSourceEntities(): Generator<ShadowSourceEntity> {
+        // The pictures are only read for the realistic shadows of the trees and of the details.
+        const pictures =
+            this.skyShadowCategories?.treeShape === "realistic" ||
+            this.skyShadowCategories?.detailShape === "realistic";
+        for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
+            const frame = pictures && entity.getPrefab().id.startsWith(NATURE_PREFIX) ? entity.frame : undefined;
+            yield {
+                id,
+                picture:
+                    frame && drawableSource(frame.source.image)
+                        ? {
+                              key: `${entity.texture.key}:${frame.name}`,
+                              source: frame.source.image,
+                              cutX: frame.cutX,
+                              cutY: frame.cutY,
+                              cutWidth: frame.cutWidth,
+                              cutHeight: frame.cutHeight,
+                          }
+                        : undefined,
+                x: entity.x,
+                y: entity.y,
+                displayWidth: entity.displayWidth,
+                displayHeight: entity.displayHeight,
+                elevation: entity.getElevation(),
+                prefab: entity.getPrefab(),
+            };
+        }
+    }
+
+    /** The avatars that throw a shadow of the sky now: this person and the others. */
+    private *shadowAvatars(): Generator<MovingShadowSource> {
+        // The body of an avatar, for its oval shadow: narrower than its frame.
+        const body = { width: 24, height: 30 };
+        const own = this.CurrentPlayer?.skyShadowSource();
+        if (own) yield { id: "me", ...body, ...own };
+        for (const [userId, player] of this.MapPlayersByKey) {
+            const source = player.skyShadowSource();
+            if (source) yield { id: userId, ...body, ...source };
+        }
+    }
+
+    /** The animals that walk around, as their oval shadows need them. */
+    private shadowAnimals(): MovingShadowSource[] {
+        const animals: MovingShadowSource[] = [];
+        this.wanderingCharactersManager?.forEachShownCharacter((id, sprite) => {
+            // The body of an animal fills about two thirds of its frame, in width as in height.
+            animals.push({
+                id,
+                x: sprite.x,
+                y: sprite.y,
+                width: sprite.displayWidth * 0.7,
+                height: sprite.displayHeight * 0.6,
+                sprites: [sprite],
+                scale: sprite.scaleX,
+            });
+        });
+        return animals;
+    }
+
+    /**
+     * The share of the direct light of the sky the weather shown to this person lets through (skyWeatherFactor): all
+     * of it with the weather effects hidden or the clouds turned off, as the sky then looks clear.
+     */
+    private skyWeatherFactor(): number {
+        if (!get(weatherEffectsEnabledStore)) return 1;
+        const theme = this.getSeasonalTheme();
+        const cloudiness =
+            theme === SeasonalTheme.Christmas || !get(cloudsShownStore) ? 0 : (this.shownWeather()?.cloudiness ?? 0);
+        // The weather of the map, not the snow of the Christmas theme: a personal decor dims no light.
+        return skyWeatherFactor(this.getMapWeather(), cloudiness);
     }
 
     public getOutdoorGrid(): OutdoorGrid | undefined {
@@ -1989,6 +2087,9 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            this.skyShadowManager?.update(time);
+            this.skyWindowLightManager?.update(time);
+            this.skyMovingShadows?.update();
             this.treeSway?.update(time, serverDate?.getTime() ?? time);
             // After the swaying: the bare image over a snowy tree bends as its tree does.
             this.treeSeasonEffects?.update(time, serverDate?.getTime() ?? time);
@@ -3194,7 +3295,7 @@ export class GameScene extends DirtyScene {
                 this.gameJungle = new GameJungle(this, this.wanderingCharactersManager);
                 // One veil at a time.
                 this.nightManager?.destroy();
-                this.nightManager = new NightManager(this);
+                this.nightManager = new NightManager(this, () => this.skyWeatherFactor());
                 // The objects of the map that are lamps; `?lampDemo` lights them with a made-up beat. One set at a time.
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);
@@ -3242,6 +3343,51 @@ export class GameScene extends DirtyScene {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     raisedCover: () => this.raisedWeatherCover(),
                     seasonalTheme: () => this.getSeasonalTheme(),
+                });
+                // The shadows of the sun and of the moon, outdoors. One set at a time.
+                this.skyShadowManager?.destroy();
+                this.skyShadowManager = new SkyShadowManager(this, {
+                    light: () => this.nightManager?.skyLight(),
+                    entities: () => this.shadowSourceEntities(),
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
+                    // Each body has its own switch, read with the light (NightManager.skyLight).
+                    enabled: () => !get(mapEditorModeStore),
+                    categories: () => this.skyShadowCategories,
+                    // The shadows of the trees sway with them, unless turned off by this person.
+                    swayVersion: () => (this.skyShadowCategories?.treeSway ? this.treeSway?.version : undefined),
+                    treeBend: (id) =>
+                        (this.treeSway?.poseOf(id) ?? 0) *
+                        (this.gameMapFrontWrapper.getEntitiesManager().getEntities().get(id)?.scaleX ?? 1),
+                });
+                // And under what walks: the silhouette of the avatars, an oval under the animals.
+                this.unsubscribeSkyShadowCategories?.();
+                this.unsubscribeSkyShadowCategories = skyShadowCategoriesStore.subscribe((categories) => {
+                    this.skyShadowCategories = categories;
+                });
+                this.skyMovingShadows?.destroy();
+                this.skyMovingShadows = new SkyMovingShadows(this, {
+                    light: () => this.nightManager?.skyLight(),
+                    avatars: () => this.shadowAvatars(),
+                    animals: () => this.shadowAnimals(),
+                    isOutdoorAt: (x, y) => this.getOutdoorGrid()?.isOutdoorAt(x, y) ?? true,
+                    categories: () =>
+                        this.skyShadowCategories ?? {
+                            avatars: true,
+                            animals: true,
+                            avatarShape: "realistic",
+                            animalShape: "oval",
+                        },
+                    enabled: () => !get(mapEditorModeStore),
+                });
+                // And the sun and the moon through the windows, with the switches of each body.
+                this.skyWindowLightManager?.destroy();
+                this.skyWindowLightManager = new SkyWindowLightManager(this, {
+                    light: () => this.nightManager?.skyLight(),
+                    entities: () => this.shadowSourceEntities(),
+                    outdoorGrid: () => this.getOutdoorGrid(),
+                    outdoorVersion: () => this.getOutdoorVersion(),
+                    enabled: () => !get(mapEditorModeStore),
                 });
                 this.treeSway?.destroy();
                 this.treePoses?.destroy();

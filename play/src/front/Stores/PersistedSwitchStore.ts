@@ -55,3 +55,34 @@ export function createPersistedSwitchStore(key: string, defaultOn: boolean): Wri
         update: (updater): void => set(updater(get(store))),
     };
 }
+
+/**
+ * A personal choice among `choices`, kept in the browser under `key` (`fallback` until chosen, or when what is kept is
+ * not one of them). When the browser refuses the storage, the choice lasts until the page is closed.
+ */
+export function createPersistedChoiceStore<T extends string>(
+    key: string,
+    choices: readonly T[],
+    fallback: T,
+): Writable<T> {
+    let stored: string | null = null;
+    try {
+        stored = localStorage.getItem(key);
+    } catch {
+        // Storage refused: the fallback is used.
+    }
+    const store = writable(choices.find((choice) => choice === stored) ?? fallback);
+    const set = (choice: T): void => {
+        try {
+            localStorage.setItem(key, choice);
+        } catch {
+            // Storage refused: kept in memory only.
+        }
+        store.set(choice);
+    };
+    return {
+        subscribe: store.subscribe,
+        set,
+        update: (updater): void => set(updater(get(store))),
+    };
+}

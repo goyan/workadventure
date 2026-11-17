@@ -3,8 +3,10 @@ import type { AreaData } from "@workadventure/map-editor";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { NightMode, nightModeStore, nightDateStore, realisticNightStore } from "../../../Stores/NightStore";
+import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
 import { rgbLampLightsStore, type RgbLampLight } from "../../../Stores/RgbLampStore";
+import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
@@ -18,6 +20,7 @@ import {
     sunPositionAt,
 } from "./NightClock";
 import type { SunPosition } from "./NightClock";
+import { moonPhaseAt, moonPositionAt } from "./MoonClock";
 import { NightHalos } from "./NightHalos";
 import { coversMostly, isInLightableArea, lightableAreas, NightLights, roomsThatLightUp } from "./NightLights";
 import type { NightRect } from "./NightLights";
@@ -25,6 +28,8 @@ import { NightOverlay } from "./NightOverlay";
 import { nightRenderAction } from "./NightRenderDecision";
 import type { NightFrame } from "./NightRenderDecision";
 import { ServerNightClock } from "./ServerNightClock";
+import { moonlitNightOpacity, skyLightAt } from "./SkyLight";
+import type { SkyLight, SkyLightSettings } from "./SkyLight";
 
 /** The sun only moves the veil during dusk and dawn, over half an hour or more: once a second is plenty. */
 const CLOCK_INTERVAL_MS = 1000;
@@ -48,10 +53,15 @@ export class NightManager {
     private readonly unsubscribeParty: Unsubscriber;
     private readonly unsubscribeLamps: Unsubscriber;
     private readonly unsubscribeTorches: Unsubscriber;
+    private readonly unsubscribeSkyLight: Unsubscriber;
+    private skyLightSettings: SkyLightSettings | undefined;
+    private readonly unsubscribeWindows: Unsubscriber;
     private partyRooms: readonly NightRect[] = [];
     // The lights of the RGB lamps and of the torches, each written by its own owner, and both together.
     private rgbLamps: readonly RgbLampLight[] = [];
     private torches: readonly RgbLampLight[] = [];
+    // The moonlight that comes in through the windows (SkyWindowLightManager).
+    private windows: readonly RgbLampLight[] = [];
     private lamps: readonly RgbLampLight[] = [];
     private areas: AreaData[] = [];
     private editorOpen = false;
@@ -62,9 +72,17 @@ export class NightManager {
     private opacity = 0;
     private lastClockAt: number | undefined;
     private sun: SunPosition | undefined;
+    private light: SkyLight | undefined;
     private previous: NightFrame | undefined;
 
-    constructor(private readonly scene: GameScene) {
+    /**
+     * `skyWeather`: the share of the direct light of the sky the weather lets through (skyWeatherFactor), 1 by
+     * default.
+     */
+    constructor(
+        private readonly scene: GameScene,
+        private readonly skyWeather: () => number = () => 1,
+    ) {
         this.overlay = new NightOverlay(scene);
         this.forcedMinutes = parseNightAt(window.location.search, import.meta.env.DEV);
         this.readAreas();
@@ -81,12 +99,23 @@ export class NightManager {
         });
         this.unsubscribeLamps = rgbLampLightsStore.subscribe((lamps) => {
             this.rgbLamps = lamps;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
             this.scene.markDirty();
         });
         this.unsubscribeTorches = torchLightsStore.subscribe((torches) => {
             this.torches = torches;
-            this.lamps = [...this.rgbLamps, ...this.torches];
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
+            this.scene.markDirty();
+        });
+        this.unsubscribeWindows = skyWindowLightsStore.subscribe((windows) => {
+            this.windows = windows;
+            this.lamps = [...this.rgbLamps, ...this.torches, ...this.windows];
+            this.scene.markDirty();
+        });
+        this.unsubscribeSkyLight = skyLightSettingsStore.subscribe((settings) => {
+            this.skyLightSettings = settings;
+            // A setting changed: the light is computed again at the next image, not at the next second.
+            this.lastClockAt = undefined;
             this.scene.markDirty();
         });
         this.unsubscribeRealistic = realisticNightStore.subscribe((realistic) => {
@@ -114,9 +143,22 @@ export class NightManager {
                 this.mode === NightMode.Computer || this.forcedMinutes !== undefined,
                 shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings),
             );
-            this.opacity = sunAt === undefined ? 0 : nightOpacityAt(sunAt, place);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
+            // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
+            // turned off the map stays in daylight: the sun alone, while it is up, as for the clouds.
+            this.light =
+                sunAt === undefined
+                    ? undefined
+                    : skyLightAt(
+                          sunForClouds(this.sun, this.disabled),
+                          this.disabled ? undefined : moonPositionAt(sunAt, place),
+                          moonPhaseAt(sunAt).illuminated,
+                          this.skyWeather(),
+                          this.skyLightSettings,
+                      );
+            // A bright moon takes a little of the veil away.
+            this.opacity = sunAt === undefined ? 0 : moonlitNightOpacity(nightOpacityAt(sunAt, place), this.light);
         }
 
         // By day, in the editor or when turned off, nothing else is computed.
@@ -181,6 +223,14 @@ export class NightManager {
         return sunForClouds(this.sun, this.disabled);
     }
 
+    /**
+     * The light of the sky that casts the shadows (SkyLight), at the instant and place of the night (updated once a
+     * second); undefined without one.
+     */
+    public skyLight(): SkyLight | undefined {
+        return this.light;
+    }
+
     public serverDate(): Date | undefined {
         return this.clock.now();
     }
@@ -194,6 +244,8 @@ export class NightManager {
         this.unsubscribeParty();
         this.unsubscribeLamps();
         this.unsubscribeTorches();
+        this.unsubscribeSkyLight();
+        this.unsubscribeWindows();
         this.overlay.destroy();
     }
 

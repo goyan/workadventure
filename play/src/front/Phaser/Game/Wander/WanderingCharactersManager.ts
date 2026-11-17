@@ -142,6 +142,13 @@ export class WanderingCharactersManager {
         }
     }
 
+    /** Calls the callback with each character shown now, by its id: its sprite stands on its feet. */
+    public forEachShownCharacter(callback: (id: string, sprite: Phaser.GameObjects.Sprite) => void): void {
+        for (const [id, character] of this.characters) {
+            if (character.sprite?.visible) callback(id, character.sprite);
+        }
+    }
+
     /** The map the placed characters walk on, with the current collisions (read now if they never were). */
     public getWanderMap(): WanderMap {
         this.mapWanted = true;
