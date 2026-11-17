@@ -2077,6 +2077,11 @@ animaux en ovale, avatars en réaliste), pour comparer le rendu et le coût : un
 couchée au sol, dessinée dans la texture des ombres fixes puis remplie de leur couleur ; un animal réaliste a sa
 silhouette comme un avatar. Mesuré une fois en local (carte d'équipe, 169 arbres, 34 personnages) : redessin des ombres
 fixes 0,35 ms en réaliste contre 0,24 ms en ovale, mise à jour des ombres mobiles 0,016 ms par image.
+Les petits éléments ont aussi le choix Ovale / Réaliste. **Ombres des arbres au vent** (interrupteur, activé par
+défaut) : la cime de l'ombre se déplace avec la cime de l'arbre (`TreeSway.poseOf`, `TreeSway.version`), en ovale
+comme en réaliste ; les ombres fixes sont alors redessinées à chaque changement de pose, 14 fois par seconde. Mesuré
+une fois en local (carte d'équipe, vent de 20 km/h, écran non plafonné) : 142 → 134 images/s en ovale, 135 → 126 en
+réaliste, soit 5 à 7 % ; sans l'interrupteur, un redessin par seconde au plus.
 Limites : silhouette d'un avatar non coupée au bord d'une pièce, véhicule et compagnon sans ombre propre.
 
 **Ombres** (`SkyShadows/`) : les murs de l'outil Carte (pied du mur, hauteur = nombre de cases ; portes et fenêtres
