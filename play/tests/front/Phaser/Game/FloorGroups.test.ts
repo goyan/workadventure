@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { floorGroups } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorGroups";
+import { floorGroupBounds, floorGroups } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorGroups";
 import { FloorModel } from "../../../../src/front/Phaser/Game/MapEditor/MapLayer/FloorModel";
 
 function slabs(model: FloorModel, elevation: number, x0: number, y0: number, x1: number, y1: number): void {
@@ -34,5 +34,15 @@ describe("floorGroups", () => {
         model.setSlab(52, 2, 2, "parquet-clair");
         model.setSlab(52, 3, 3, "parquet-clair");
         expect(floorGroups(model)).toHaveLength(2);
+    });
+});
+
+describe("floorGroupBounds", () => {
+    it("gives the rectangle a floor covers on the screen: its tiles, drawn its altitude further north", () => {
+        const model = new FloorModel();
+        slabs(model, 52, 2, 5, 4, 6);
+        model.setSlab(52, 5, 6, "parquet-clair");
+        const [group] = floorGroups(model);
+        expect(floorGroupBounds(group)).toEqual({ x: 64, y: 5 * 32 - 52, width: 4 * 32, height: 2 * 32 });
     });
 });

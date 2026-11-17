@@ -1,3 +1,4 @@
+import { MAP_LAYER_TILE_SIZE } from "./MapLayerCatalog";
 import type { FloorModel } from "./FloorModel";
 import type { TilePoint } from "./MapLayerFloors";
 
@@ -59,4 +60,18 @@ export function floorGroups(model: FloorModel): FloorGroup[] {
         }
     }
     return groups;
+}
+
+/** The rectangle a floor covers on the screen: around its tiles, drawn its altitude further north. */
+export function floorGroupBounds(group: FloorGroup): { x: number; y: number; width: number; height: number } {
+    const xs = group.cells.map((cell) => cell.x);
+    const ys = group.cells.map((cell) => cell.y);
+    const left = Math.min(...xs);
+    const top = Math.min(...ys);
+    return {
+        x: left * MAP_LAYER_TILE_SIZE,
+        y: top * MAP_LAYER_TILE_SIZE - group.level,
+        width: (Math.max(...xs) - left + 1) * MAP_LAYER_TILE_SIZE,
+        height: (Math.max(...ys) - top + 1) * MAP_LAYER_TILE_SIZE,
+    };
 }
