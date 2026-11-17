@@ -2,9 +2,17 @@
     import { LL } from "../../../../i18n/i18n-svelte";
     import { mapEditorAreaEraserStore } from "../../../Stores/MapEditorStore";
     import { IconEraser } from "../../Icons";
+    import FloorLevelPicker from "../FloorLevelPicker.svelte";
+    import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
 </script>
 
 <div class="area-name-container">
+    {#if $mapLayerBuiltLevelsStore.length > 0}
+        <!-- The floor the areas are drawn and edited on, shared with the map tool and the objects. -->
+        <div class="mb-3">
+            <FloorLevelPicker />
+        </div>
+    {/if}
     <button
         type="button"
         class="flex flex-row items-center gap-2 p-2 mb-2 rounded text-sm {$mapEditorAreaEraserStore

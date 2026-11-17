@@ -18,8 +18,10 @@
          */
         objectLevel?: number;
         onObjectLevel?: (level: number) => void;
+        /** The thing selected is an area, not an object: only the title changes. */
+        forArea?: boolean;
     }
-    let { objectLevel, onObjectLevel }: Props = $props();
+    let { objectLevel, onObjectLevel, forArea = false }: Props = $props();
     let forObject = $derived(objectLevel !== undefined && onObjectLevel !== undefined);
 
     // The level the map editor works on, the same for the map tool and the objects: "auto" follows the floor drawn
@@ -69,7 +71,11 @@
 
 <section class="flex flex-col gap-2 text-white" data-testid="floorLevelPicker">
     <h3 class="m-0 text-sm font-bold">
-        {forObject ? $LL.mapEditor.mapLayer.floorLevel.objectTitle() : $LL.mapEditor.mapLayer.floorLevel.title()}
+        {forObject
+            ? forArea
+                ? $LL.mapEditor.mapLayer.floorLevel.areaTitle()
+                : $LL.mapEditor.mapLayer.floorLevel.objectTitle()
+            : $LL.mapEditor.mapLayer.floorLevel.title()}
     </h3>
     <div class="flex flex-wrap items-center gap-2">
         {#if !forObject}

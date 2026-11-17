@@ -224,6 +224,19 @@ export class AreaPreview extends Rectangle {
         this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
     }
 
+    /**
+     * Moves the area to another floor of the map (0: the ground), over the same place of the ground: its rectangle
+     * is drawn the difference of altitude higher or lower. Saved like any other edit of the area.
+     */
+    public setElevation(elevation: number): void {
+        const current = this.areaData.elevation ?? 0;
+        if (elevation === current) return;
+        // The altitude is written in the former data too, so that undoing sends the area back to its floor.
+        const oldAreaData = { ...structuredClone(this.areaData), elevation: current };
+        const data = { id: this.areaData.id, y: this.areaData.y + current - elevation, elevation };
+        this.emit(AreaPreviewEvent.Updated, data, oldAreaData);
+    }
+
     public getId(): string {
         return this.areaData.id;
     }
