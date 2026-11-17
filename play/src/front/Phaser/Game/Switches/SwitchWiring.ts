@@ -102,3 +102,17 @@ export function selfSensorProperty(lampId: string, newId: () => string): SwitchP
         trigger: proximityPresenceTrigger(),
     };
 }
+
+/**
+ * The chosen lamps a switch starts with when it stops commanding its room: the ones it commanded, or, on a lamp that
+ * commanded none (a lamp along a path, out of any room), the lamp itself, which is then its own sensor.
+ */
+export function chosenTargetsStart(
+    entity: { entityId: string; getPrefab(): Pick<EntityPrefab, "lamp"> },
+    commandedIds: readonly string[],
+): Extract<SwitchPropertyData["targets"], { mode: "ids" }> {
+    if (commandedIds.length > 0) {
+        return { mode: "ids", ids: commandedIds.slice(0, SWITCH_MAX_TARGETS) };
+    }
+    return { mode: "ids", ids: entity.getPrefab().lamp?.kind === "rgb" ? [entity.entityId] : [] };
+}
