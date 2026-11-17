@@ -1,6 +1,6 @@
 import { isAtAreaLevel } from "./GameMap/GameMapAreas";
 import { ENTITY_STATE_KEYS } from "./types";
-import type { SwitchTargets } from "./types";
+import type { SwitchPropertyData, SwitchTargets } from "./types";
 
 export type EntityStateKey = (typeof ENTITY_STATE_KEYS)[number];
 export type EntityStateValue = "true" | "false";
@@ -49,4 +49,49 @@ export function switchMayReach(
         Math.abs(target.x - switchEntity.x) <= SWITCH_MAX_REACH_PX &&
         Math.abs(target.y - switchEntity.y) <= SWITCH_MAX_REACH_PX
     );
+}
+
+/** Whether the switch is used without anybody touching it (a presence sensor, a timer). */
+export function isAutomaticSwitch(property: SwitchPropertyData): boolean {
+    return property.trigger !== undefined;
+}
+
+/**
+ * The objects the server acts on for a switch with a trigger: the listed ones, or those the map editor resolved for a
+ * switch that commands its room.
+ */
+export function automaticSwitchTargetIds(property: SwitchPropertyData): string[] {
+    return property.targets.mode === "ids" ? property.targets.ids : (property.resolvedTargets ?? []);
+}
+
+const parisClock = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Paris",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+});
+
+/** Minutes since midnight in Paris: the timers of a map follow the time there, like its night. */
+export function parisMinutesOfDay(date: Date): number {
+    const parts = parisClock.formatToParts(date);
+    const read = (type: "hour" | "minute"): number => Number(parts.find((part) => part.type === type)?.value ?? 0);
+    return read("hour") * 60 + read("minute");
+}
+
+function minutesOf(hour: string): number {
+    const [hours, minutes] = hour.split(":");
+    return Number(hours) * 60 + Number(minutes);
+}
+
+/**
+ * Whether `minutes` (since midnight) is between `from`, included, and `to`, excluded, both as HH:MM. A range whose end
+ * comes before its start passes midnight; an empty range (the same hour twice) never holds.
+ */
+export function isWithinHours(from: string, to: string, minutes: number): boolean {
+    const start = minutesOf(from);
+    const end = minutesOf(to);
+    if (start === end) {
+        return false;
+    }
+    return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }

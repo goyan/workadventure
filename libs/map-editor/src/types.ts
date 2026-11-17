@@ -298,6 +298,33 @@ export const ENTITY_STATE_KEYS = ["on"] as const;
 /** A switch commands at most this many objects. */
 export const SWITCH_MAX_TARGETS = 200;
 
+/** Seconds after the last person left before a presence trigger lets go, by default. */
+export const SWITCH_OFF_DELAY_DEFAULT_S = 30;
+export const SWITCH_OFF_DELAY_MAX_S = 600;
+/** How far a proximity trigger senses, in tiles, by default. */
+export const SWITCH_PROXIMITY_DEFAULT_TILES = 3;
+export const SWITCH_PROXIMITY_MAX_TILES = 20;
+
+const SwitchHour = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/**
+ * What uses a switch without anybody touching it; the server decides (see SwitchTriggerEvaluator in the back).
+ * - presence: somebody is in the room of the switch (`scope: "room"`, `areaId` found by the editor), in a chosen area
+ *   (`scope: "area"`, `areaId`), or within `tiles` of it on its floor (`scope: "proximity"`). It lets go `offDelay`
+ *   seconds after the last person left.
+ * - hours: the time in Paris is between `from` (included) and `to` (excluded); the range may pass midnight.
+ */
+export const SwitchTrigger = z.discriminatedUnion("type", [
+    z.object({
+        type: z.literal("presence"),
+        scope: z.enum(["room", "area", "proximity"]),
+        areaId: z.string().optional(),
+        tiles: z.number().int().min(1).max(SWITCH_PROXIMITY_MAX_TILES).default(SWITCH_PROXIMITY_DEFAULT_TILES),
+        offDelay: z.number().int().min(0).max(SWITCH_OFF_DELAY_MAX_S).default(SWITCH_OFF_DELAY_DEFAULT_S),
+    }),
+    z.object({ type: z.literal("hours"), from: SwitchHour, to: SwitchHour }),
+]);
+
 /** The objects a switch commands: the ones listed, or the ones of the room it stands in. */
 export const SwitchTargets = z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("ids"), ids: z.array(z.string()).max(SWITCH_MAX_TARGETS) }),
@@ -315,6 +342,13 @@ export const SwitchPropertyData = PropertyBase.extend({
     targets: SwitchTargets.default({ mode: "zone" }),
     /** Only the users with one of these tags may use the switch; everybody when absent or empty. */
     allowedTags: z.array(z.string()).optional(),
+    /** Used by hand when absent. Fail open: a trigger that is not valid leaves a manual switch. */
+    trigger: SwitchTrigger.optional().catch(undefined),
+    /**
+     * The objects of its room, for a switch with a trigger that commands its room: the server, which does not know
+     * what a lamp is, acts on these. Written and kept up to date by the map editor.
+     */
+    resolvedTargets: z.array(z.string()).max(SWITCH_MAX_TARGETS).optional().catch(undefined),
 });
 
 export const MatrixRoomPropertyData = PropertyBase.extend({
@@ -557,9 +591,13 @@ export const EntityRawPrefab = z.object({
     castsShadow: z.boolean().optional().catch(undefined),
     /**
      * A switch ready to use: placed from the catalog, the object is given a `switchPropertyData` that commands the
-     * lamps of its room (any other object can be made a switch in the editor). Fail open like `castsShadow`.
+     * lamps of its room (any other object can be made a switch in the editor): used by hand (`true`), a presence
+     * sensor (`"presence"`) or a timer (`"hours"`). Fail open like `castsShadow`.
      */
-    switch: z.boolean().optional().catch(undefined),
+    switch: z
+        .union([z.boolean(), z.enum(["presence", "hours"])])
+        .optional()
+        .catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
     // authenticated user UUID, never from the client. Undefined on the built-in ("Default")
     // collections and on custom entities uploaded before this field existed: those can only be
@@ -867,6 +905,7 @@ export type GobeurPropertyData = z.infer<typeof GobeurPropertyData>;
 export type LampPropertyData = z.infer<typeof LampPropertyData>;
 export type RgbLampPropertyData = z.infer<typeof RgbLampPropertyData>;
 export type SwitchTargets = z.infer<typeof SwitchTargets>;
+export type SwitchTrigger = z.infer<typeof SwitchTrigger>;
 export type SwitchPropertyData = z.infer<typeof SwitchPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
