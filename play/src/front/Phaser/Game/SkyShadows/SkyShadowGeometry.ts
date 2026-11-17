@@ -46,6 +46,8 @@ export interface ShadowTree {
 export interface ShadowCasters {
     boxes: readonly ShadowBox[];
     trees: readonly ShadowTree[];
+    /** The low things of the nature catalogue (rocks, grass, flowers, stumps): a small crown without a trunk. */
+    details?: readonly ShadowTree[];
 }
 
 /**
@@ -127,7 +129,8 @@ function treeShadow(tree: ShadowTree, light: ShadowLight): Point[][] {
         { x: centre.x - across.x * half, y: centre.y - across.y * half },
         { x: tree.x - across.x * half, y: tree.y - across.y * half },
     ];
-    return [trunk, crown];
+    // Without a trunk (a rock, a tuft of grass): the crown alone.
+    return tree.trunkWidth > 0 ? [trunk, crown] : [crown];
 }
 
 /**
@@ -142,6 +145,7 @@ export function shadowPolygons(casters: ShadowCasters, light: ShadowLight): Poin
         if (offset) polygons.push(boxShadow(box, offset));
     }
     for (const tree of casters.trees) polygons.push(...treeShadow(tree, light));
+    for (const detail of casters.details ?? []) polygons.push(...treeShadow(detail, light));
     return polygons;
 }
 

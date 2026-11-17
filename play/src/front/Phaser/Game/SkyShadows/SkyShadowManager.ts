@@ -3,9 +3,9 @@ import type { SkyLight } from "../Night/SkyLight";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 import type { WeatherView } from "../Weather/WeatherFrame";
 import { readShadowCasters } from "./SkyShadowCasters";
-import type { ShadowSourceEntity } from "./SkyShadowCasters";
+import type { ShadowCategories, ShadowSourceEntity } from "./SkyShadowCasters";
 import { shadowPolygons } from "./SkyShadowGeometry";
-import type { Point, ShadowCasters } from "./SkyShadowGeometry";
+import type { Point, ShadowCasters, ShadowTree } from "./SkyShadowGeometry";
 import { indoorRuns, SHADOW_COLOR, shadowAlpha, shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
 import { SkyShadowLayer } from "./SkyShadowLayer";
@@ -24,6 +24,8 @@ export interface SkyShadowManagerOptions {
     outdoorGrid: () => OutdoorGrid | undefined;
     /** Changes each time the outdoor grid is computed again. */
     outdoorVersion: () => number;
+    /** The kinds of things that throw a shadow, for this person; all of them without. */
+    categories?: () => ShadowCategories | undefined;
     /** False in the map editor, or with the shadows turned off by this person. */
     enabled: () => boolean;
 }
@@ -42,7 +44,7 @@ export interface SkyShadowScene {
  */
 export class SkyShadowManager {
     private readonly layer: SkyShadowLayer;
-    private casters: ShadowCasters = { boxes: [], trees: [] };
+    private casters: ShadowCasters = { boxes: [], trees: [], details: [] };
     private castersSignature = "";
     private castersReadAt: number | undefined;
     private drawn: DrawnShadows | undefined;
@@ -87,7 +89,11 @@ export class SkyShadowManager {
         }
         if (this.castersReadAt === undefined || now - this.castersReadAt >= CASTERS_INTERVAL_MS) {
             this.castersReadAt = now;
-            const { casters, signature } = readShadowCasters(this.options.entities(), this.castersSignature);
+            const { casters, signature } = readShadowCasters(
+                this.options.entities(),
+                this.castersSignature,
+                this.options.categories?.(),
+            );
             if (casters) {
                 this.casters = casters;
                 this.castersSignature = signature;
@@ -131,12 +137,13 @@ export class SkyShadowManager {
             y + height >= area.y - reach &&
             x <= area.x + area.width + reach &&
             y <= area.y + area.height + reach;
+        const nearTree = (tree: ShadowTree): boolean =>
+            near(tree.x - tree.crownRadius, tree.y - tree.crownRadius, 2 * tree.crownRadius, 0);
         return shadowPolygons(
             {
                 boxes: this.casters.boxes.filter((box) => near(box.x, box.y, box.width, box.height)),
-                trees: this.casters.trees.filter((tree) =>
-                    near(tree.x - tree.crownRadius, tree.y - tree.crownRadius, 2 * tree.crownRadius, 0),
-                ),
+                trees: this.casters.trees.filter(nearTree),
+                details: (this.casters.details ?? []).filter(nearTree),
             },
             light,
         );

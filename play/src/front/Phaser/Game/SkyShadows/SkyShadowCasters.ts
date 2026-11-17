@@ -32,6 +32,20 @@ function isShadowTree(entity: ShadowSourceEntity): boolean {
     return entity.displayHeight >= TREE_MIN_HEIGHT && STILL_TREE_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
 
+/** The nature catalogue: what is not a tree in it is a low detail (a rock, a tuft of grass, flowers, a stump). */
+const NATURE_PREFIX = "Nature:";
+/** A detail throws the shadow of a low mound: this share of the width of its image round, half its image high. */
+const DETAIL_RADIUS_SHARE = 0.35;
+
+/** What throws a shadow of the sky on the ground, by kind: each can be turned off by this person. */
+export interface ShadowCategories {
+    walls: boolean;
+    objects: boolean;
+    trees: boolean;
+    details: boolean;
+}
+const ALL_CATEGORIES: ShadowCategories = { walls: true, objects: true, trees: true, details: true };
+
 /** An object on a raised floor stands at least this high (the ground: 0): it casts no shadow on the ground. */
 const RAISED = 2;
 
@@ -93,14 +107,27 @@ function treeOf(entity: ShadowSourceEntity): ShadowTree {
     };
 }
 
+/** A low thing of the nature catalogue: a mound at the bottom middle of its image, never higher than its image. */
+function detailOf(entity: ShadowSourceEntity): ShadowTree {
+    const crownHeight = entity.displayHeight / 2;
+    return {
+        x: entity.x + entity.displayWidth / 2,
+        y: entity.y + entity.displayHeight,
+        crownRadius: Math.min(entity.displayWidth * DETAIL_RADIUS_SHARE, crownHeight),
+        crownHeight,
+        trunkWidth: 0,
+    };
+}
+
 /**
  * What throws a shadow of the sky on the ground: the walls of the map layer, the tall objects (`castsShadow`, by their
- * collision) and the trees of the nature catalogue. What stands on a raised floor is left out: the shadows are cast on
+ * collision), the trees of the nature catalogue and its low details, each kind unless turned off (`categories`). What stands on a raised floor is left out: the shadows are cast on
  * the ground only. `signature` changes only when one of them changes.
  */
 export function readShadowCasters(
     entities: Iterable<ShadowSourceEntity>,
     unchangedSince?: string,
+    categories: ShadowCategories = ALL_CATEGORIES,
 ): {
     /** Undefined when the signature is still `unchangedSince`: the walls are not read again for nothing. */
     casters: ShadowCasters | undefined;
@@ -109,18 +136,27 @@ export function readShadowCasters(
     const pieces: PlacedPrefabLike[] = [];
     const objects: ShadowBox[] = [];
     const trees: ShadowTree[] = [];
-    let signature = "";
+    const details: ShadowTree[] = [];
+    const on = (shown: boolean): string => (shown ? "1" : "0");
+    let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)};`;
     for (const entity of entities) {
         const { prefab } = entity;
         if (entity.elevation >= RAISED) continue;
         if (MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName)) {
+            if (!categories.walls) continue;
             pieces.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
             signature += `w${prefab.id}@${entity.x},${entity.y};`;
         } else if (isShadowTree(entity)) {
+            if (!categories.trees) continue;
             const tree = treeOf(entity);
             trees.push(tree);
             signature += `t${tree.x},${tree.y},${tree.crownRadius},${tree.crownHeight};`;
-        } else {
+        } else if (prefab.id.startsWith(NATURE_PREFIX) && !prefab.wander) {
+            if (!categories.details) continue;
+            const detail = detailOf(entity);
+            details.push(detail);
+            signature += `d${detail.x},${detail.y},${detail.crownRadius},${detail.crownHeight};`;
+        } else if (categories.objects) {
             for (const rectangle of shadowRectangles(prefab, entity, MAP_LAYER_TILE_SIZE)) {
                 objects.push({ ...rectangle, rise: OBJECT_SHADOW_RISE });
                 signature += `o${rectangle.x},${rectangle.y},${rectangle.width},${rectangle.height};`;
@@ -129,5 +165,5 @@ export function readShadowCasters(
     }
     if (signature === unchangedSince) return { casters: undefined, signature };
     const boxes = pieces.length > 0 ? [...wallShadowBoxes(modelFromPlacedPrefabs(pieces)), ...objects] : objects;
-    return { casters: { boxes, trees }, signature };
+    return { casters: { boxes, trees, details }, signature };
 }

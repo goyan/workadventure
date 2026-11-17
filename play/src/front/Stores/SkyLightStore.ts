@@ -68,3 +68,36 @@ export const skyLightSettingsStore: Readable<SkyLightSettings> = derived(
     ],
     ([sun, moon, phaseCurve]) => ({ sun, moon: { ...moon, phaseCurve } }),
 );
+
+/**
+ * What throws a shadow of the sky, by kind, each turned off by this person at will (for the sun and for the moon).
+ */
+export const skyShadowCategoryStores = {
+    walls: createPersistedSwitchStore("skyShadowWalls", true),
+    objects: createPersistedSwitchStore("skyShadowObjects", true),
+    trees: createPersistedSwitchStore("skyShadowTrees", true),
+    details: createPersistedSwitchStore("skyShadowDetails", true),
+    avatars: createPersistedSwitchStore("skyShadowAvatars", true),
+    animals: createPersistedSwitchStore("skyShadowAnimals", true),
+};
+
+export interface SkyShadowCategories {
+    walls: boolean;
+    objects: boolean;
+    trees: boolean;
+    details: boolean;
+    avatars: boolean;
+    animals: boolean;
+}
+
+export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
+    [
+        skyShadowCategoryStores.walls,
+        skyShadowCategoryStores.objects,
+        skyShadowCategoryStores.trees,
+        skyShadowCategoryStores.details,
+        skyShadowCategoryStores.avatars,
+        skyShadowCategoryStores.animals,
+    ],
+    ([walls, objects, trees, details, avatars, animals]) => ({ walls, objects, trees, details, avatars, animals }),
+);

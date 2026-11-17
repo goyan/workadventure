@@ -64,7 +64,7 @@ describe("readShadowCasters", () => {
         expect(casters?.trees).toHaveLength(4);
     });
 
-    it("gives no tree shadow to the small things of the nature catalogue (rocks, grass, flowers)", () => {
+    it("reads the small things of the nature catalogue (rocks, grass, flowers, stumps) as low details, not as trees", () => {
         const { casters } = readShadowCasters([
             entity({
                 displayWidth: 46,
@@ -79,6 +79,40 @@ describe("readShadowCasters", () => {
             }),
         ]);
         expect(casters?.trees).toEqual([]);
+        expect(casters?.details).toHaveLength(2);
+        const [rock] = casters?.details ?? [];
+        // Its foot at the bottom middle of its image, never higher than its image.
+        expect(rock.x).toBe(123);
+        expect(rock.y).toBe(233);
+        expect(rock.crownHeight + rock.crownRadius).toBeLessThanOrEqual(33);
+        expect(rock.trunkWidth).toBe(0);
+    });
+
+    it("leaves out the categories turned off, and reads the map again when one is turned back on", () => {
+        const entities = [
+            entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),
+            entity({
+                displayWidth: 46,
+                displayHeight: 33,
+                prefab: { collectionName: "Nature", id: "Nature:detail-rocks-2:Default:Down" },
+            }),
+            entity({
+                prefab: { collectionName: "Furniture", id: "cupboard", castsShadow: true, collisionGrid: [[1]] },
+            }),
+        ];
+        const all = readShadowCasters(entities);
+        expect(all.casters?.trees).toHaveLength(1);
+        expect(all.casters?.details).toHaveLength(1);
+        expect(all.casters?.boxes.length).toBeGreaterThan(0);
+        const none = readShadowCasters(entities, all.signature, {
+            walls: false,
+            objects: false,
+            trees: false,
+            details: false,
+        });
+        expect(none.signature).not.toBe(all.signature);
+        expect(none.casters).toEqual({ boxes: [], trees: [], details: [] });
+        expect(readShadowCasters(entities, none.signature).casters?.trees).toHaveLength(1);
     });
 
     it("reads the trees of the nature catalogue as a crown on a trunk, the foot at the bottom middle of the image", () => {
@@ -109,7 +143,7 @@ describe("readShadowCasters", () => {
                 },
             }),
         ]);
-        expect(casters).toEqual({ boxes: [], trees: [] });
+        expect(casters).toEqual({ boxes: [], trees: [], details: [] });
     });
 
     it("does not read the walls again when nothing changed since a signature", () => {

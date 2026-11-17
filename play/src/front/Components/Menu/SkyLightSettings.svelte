@@ -10,6 +10,7 @@
     import InputSwitch from "../Input/InputSwitch.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
     import SkyLightLimits from "./SkyLightLimits.svelte";
+    import SkyShadowCategories from "./SkyShadowCategories.svelte";
 </script>
 
 <InputSwitch
@@ -41,4 +42,7 @@
         />
     </div>
     <SkyLightLimits limits={moonLightLimits} dataTestId="sky-moon-limits" />
+{/if}
+{#if $sunLightShownStore || $moonLightShownStore}
+    <SkyShadowCategories />
 {/if}
