@@ -19,6 +19,16 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                     shadowMax: label("Shadow max"),
                     tiles: label("tiles"),
                     advanced: label("Advanced settings"),
+                    casters: {
+                        title: label("What casts a shadow"),
+                        walls: label("Walls"),
+                        objects: label("Objects"),
+                        trees: label("Trees"),
+                        details: label("Details"),
+                        avatars: label("Avatars"),
+                        animals: label("Animals"),
+                        shape: { label: label("Shape"), oval: label("Oval"), realistic: label("True shape") },
+                    },
                 },
             },
         },
@@ -26,8 +36,14 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
     return { LL, default: LL };
 });
 
-const { moonLightShownStore, moonPhaseCurveStore, sunLightShownStore } =
-    await import("../../../../src/front/Stores/SkyLightStore");
+const {
+    moonLightShownStore,
+    moonPhaseCurveStore,
+    skyShadowCategoriesStore,
+    skyShadowCategoryStores,
+    skyShadowShapeStores,
+    sunLightShownStore,
+} = await import("../../../../src/front/Stores/SkyLightStore");
 const { default: SkyLightSettings } = await import("../../../../src/front/Components/Menu/SkyLightSettings.svelte");
 
 let component: ReturnType<typeof mount> | undefined;
@@ -48,6 +64,10 @@ afterEach(async () => {
     sunLightShownStore.set(true);
     moonLightShownStore.set(true);
     moonPhaseCurveStore.set("realistic");
+    for (const store of Object.values(skyShadowCategoryStores)) store.set(true);
+    skyShadowShapeStores.trees.set("oval");
+    skyShadowShapeStores.avatars.set("realistic");
+    skyShadowShapeStores.animals.set("oval");
 });
 
 describe("SkyLightSettings", () => {
@@ -87,5 +107,50 @@ describe("SkyLightSettings", () => {
         linear?.click();
         flushSync();
         expect(get(moonPhaseCurveStore)).toBe("linear");
+    });
+
+    it("lists what casts a shadow, each kind with its switch, folded and closed", () => {
+        render();
+        const categories = target.querySelector<HTMLDetailsElement>('[data-testid="sky-shadow-categories"]');
+        expect(categories?.open).toBe(false);
+        expect(categories?.querySelectorAll('input[type="checkbox"]')).toHaveLength(6);
+        expect(get(skyShadowCategoriesStore)).toMatchObject({
+            walls: true,
+            objects: true,
+            trees: true,
+            details: true,
+            avatars: true,
+            animals: true,
+        });
+    });
+
+    it("offers an oval or the true shape for the trees, the avatars and the animals: ovals but for the avatars", () => {
+        render();
+        for (const kind of ["trees", "avatars", "animals"]) {
+            expect(target.querySelector(`[data-testid="sky-shadow-${kind}-shape"]`)).not.toBeNull();
+        }
+        expect(get(skyShadowCategoriesStore)).toMatchObject({
+            treeShape: "oval",
+            avatarShape: "realistic",
+            animalShape: "oval",
+        });
+        const trees = target.querySelector('[data-testid="sky-shadow-trees-shape"]');
+        const trueShape = Array.from(trees?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []).find(
+            (button) => button.textContent?.trim() === "True shape",
+        );
+        trueShape?.click();
+        flushSync();
+        expect(get(skyShadowCategoriesStore).treeShape).toBe("realistic");
+    });
+
+    it("hides the shape of a kind turned off, and the whole list with both bodies off", () => {
+        skyShadowCategoryStores.trees.set(false);
+        render();
+        expect(target.querySelector('[data-testid="sky-shadow-trees-shape"]')).toBeNull();
+        expect(target.querySelector('[data-testid="sky-shadow-avatars-shape"]')).not.toBeNull();
+        sunLightShownStore.set(false);
+        moonLightShownStore.set(false);
+        flushSync();
+        expect(target.querySelector('[data-testid="sky-shadow-categories"]')).toBeNull();
     });
 });
