@@ -20,6 +20,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Night/NightOverlay", () => ({
 vi.mock("../../../../../src/front/Phaser/Game/Night/NightLights", () => ({
     lightableAreas: () => [],
     isInLightableArea: () => false,
+    roomsThatLightUp: <Room>(rooms: readonly Room[]) => rooms,
     NightLights: class {
         update(): never[] {
             return [];
