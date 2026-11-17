@@ -19,6 +19,12 @@ export const MAP_LAYER_WALL_COLLECTION = "Carte Murs";
 export const MAP_LAYER_DOOR_COLLECTION = "Carte Portes";
 /** Windows: a facade whose face has a see-through glass, on one segment of a horizontal wall. */
 export const MAP_LAYER_WINDOW_COLLECTION = "Carte Fenêtres";
+/**
+ * Collection of the raised floors (slabs and stairs, see MapLayerFloors): drawn by the "Map" tool like the floors and
+ * the walls.
+ */
+export const MAP_LAYER_FLOOR_SLAB_COLLECTION = "Carte Paliers";
+
 /** Collections whose pieces are walls for the light, the outdoors and the pathfinder: a window is a wall with a glass. */
 export const MAP_LAYER_WALL_LIKE_COLLECTIONS: readonly string[] = [
     MAP_LAYER_WALL_COLLECTION,
@@ -30,6 +36,7 @@ export const MAP_LAYER_COLLECTIONS: readonly string[] = [
     MAP_LAYER_WALL_COLLECTION,
     MAP_LAYER_DOOR_COLLECTION,
     MAP_LAYER_WINDOW_COLLECTION,
+    MAP_LAYER_FLOOR_SLAB_COLLECTION,
 ];
 
 export const MAP_LAYER_FLOOR_FAMILIES = [
@@ -323,12 +330,6 @@ export function parseMapLayerPrefab(collectionName: string, prefabId: string): M
     }
     return undefined;
 }
-
-/**
- * Collection of the raised floors (slabs and stairs, see MapLayerFloors): drawn by the "Map" tool like the floors and
- * the walls.
- */
-export const MAP_LAYER_FLOOR_SLAB_COLLECTION = "Carte Paliers";
 
 /**
  * Whether a placed prefab belongs to the "Map" tool: a floor, a wall, a door, a window, or a piece of the raised
