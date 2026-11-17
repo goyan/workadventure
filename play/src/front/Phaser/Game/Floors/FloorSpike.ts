@@ -1,4 +1,6 @@
 import * as Phaser from "phaser";
+import { get } from "svelte/store";
+import { LL } from "../../../../i18n/i18n-svelte";
 import { floorGroups, floorGroupBounds } from "../MapEditor/MapLayer/FloorGroups";
 import type { FloorGroup } from "../MapEditor/MapLayer/FloorGroups";
 import { stairEnds } from "../MapEditor/MapLayer/FloorPath";
@@ -14,7 +16,7 @@ import type { PlacedStair } from "../MapEditor/MapLayer/FloorModel";
 import { FLOOR_PREVIEW_DEPTH, floorDepth } from "../MapEditor/MapLayer/FloorDepth";
 import { floorStep, restoredFloorState } from "../MapEditor/MapLayer/FloorWalk";
 import type { FloorWalkState, StairSide } from "../MapEditor/MapLayer/FloorWalk";
-import { parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
+import { floorLevelTiles, parseFloorPiece } from "../MapEditor/MapLayer/MapLayerFloors";
 import type { FloorPiece, StairShape } from "../MapEditor/MapLayer/MapLayerFloors";
 import { FloorRailingsView } from "./FloorRailingsView";
 import { floorZToShare } from "./FloorProtocol";
@@ -28,6 +30,8 @@ import {
     levelLook,
     veilDepth,
 } from "./LevelFocus";
+import { stairLabels } from "./StairHints";
+import { StairHintsView } from "./StairHintsView";
 
 /**
  * TRIAL of the raised floors, enabled by `?palier=piece`, `?palier=1` or `?palier=<cellX>,<cellY>`: the floors are
@@ -241,6 +245,8 @@ export class FloorSpike {
     private readonly veil: Phaser.GameObjects.Rectangle;
     private veilAlpha = 0;
     private readonly reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    /** The chevrons over the stairs and the label of the floor a stair leads to. */
+    private readonly hints: StairHintsView;
     private barriers: TileBarriers | undefined;
     private barriersAge = 0;
     private mapAge = 0;
@@ -271,6 +277,7 @@ export class FloorSpike {
         this.railings = new FloorRailingsView(scene);
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
+        this.hints = new StairHintsView(scene, this.reducedMotion);
         this.veil = scene.add.rectangle(0, 0, 1, 1, VEIL_COLOR).setOrigin(0, 0).setAlpha(0).setVisible(false);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
     }
@@ -324,6 +331,7 @@ export class FloorSpike {
         this.railings.destroy();
         this.label.destroy();
         this.veil.destroy();
+        this.hints.destroy();
     }
 
     /** For the tests in the browser. */
@@ -393,11 +401,23 @@ export class FloorSpike {
             this.share(toShare);
         }
         this.fade(this.model, result.p, delta);
+        this.updateHints(this.model, result.p, delta);
 
         this.label.setVisible(this.origin !== undefined);
         this.label.setPosition(result.p.x + 14, result.p.y - 44);
         this.label.setText(`z=${Math.round(this.state.elevation)}${this.state.stair === undefined ? "" : " escalier"}`);
     };
+
+    /** Chevrons over the stairs, and near the end of a stair the name of the floor at its other end. */
+    private updateHints(model: FloorModel, p: { x: number; y: number }, delta: number): void {
+        const editorOpen = this.editor().open;
+        const stairs = model.getStairs();
+        const current = currentLevels(this.state, stairs);
+        const tile = { x: Math.floor(p.x / TILE), y: Math.floor(p.y / TILE) };
+        const labels = editorOpen ? [] : stairLabels(stairs, tile, this.state, levelName);
+        const veil = editorOpen ? undefined : veilDepth(current);
+        this.hints.update(stairs, labels, veil, Math.min(...current), editorOpen, delta);
+    }
 
     /** The dark veil over the floors under the avatar: over the whole view, just under the floor the avatar is on. */
     private updateVeil(depth: number | undefined, delta: number): void {
@@ -854,4 +874,12 @@ export class FloorSpike {
         drawing.lineStyle(2, 0x5b4c33, 1);
         drawing.strokeRect(box.x, box.y, box.width, box.height);
     }
+}
+
+/** A floor named as in the map editor: "Sol", "Niveau 2", "Niveau 2+3". */
+export function levelName(elevation: number): string {
+    const ll = get(LL);
+    return elevation > 0
+        ? ll.mapEditor.mapLayer.floorLevel.level({ height: floorLevelTiles(elevation) })
+        : ll.mapEditor.mapLayer.floorLevel.ground();
 }
