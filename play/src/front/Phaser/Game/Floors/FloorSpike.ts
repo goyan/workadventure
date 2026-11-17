@@ -33,6 +33,7 @@ import {
     STAIR_OVER_AVATAR_ALPHA,
     stairCoversAvatar,
     stairDepth,
+    stairShows,
     veilAlphaToward,
     VEIL_ALPHA,
     VEIL_COLOR,
@@ -254,7 +255,7 @@ export class FloorSpike {
     private readonly veil: Phaser.GameObjects.Rectangle;
     private veilAlpha = 0;
     private readonly reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    /** The chevrons over the stairs and the label of the floor a stair leads to. */
+    /** The label of the floor a stair leads to. */
     private readonly hints: StairHintsView;
     private barriers: TileBarriers | undefined;
     private barriersAge = 0;
@@ -286,7 +287,7 @@ export class FloorSpike {
         this.railings = new FloorRailingsView(scene);
         this.label = scene.add.text(0, 0, "", { fontSize: "10px", color: "#ffffff", backgroundColor: "#000000" });
         this.label.setDepth(FLOOR_PREVIEW_DEPTH);
-        this.hints = new StairHintsView(scene, this.reducedMotion);
+        this.hints = new StairHintsView(scene);
         this.veil = scene.add.rectangle(0, 0, 1, 1, VEIL_COLOR).setOrigin(0, 0).setAlpha(0).setVisible(false);
         scene.events.on(Phaser.Scenes.Events.POST_UPDATE, this.step);
     }
@@ -412,27 +413,22 @@ export class FloorSpike {
             this.share(toShare);
         }
         this.fade(this.model, result.p, delta);
-        this.updateHints(this.model, result.p, delta);
+        this.updateHints(this.model, result.p);
 
         this.label.setVisible(this.origin !== undefined);
         this.label.setPosition(result.p.x + 14, result.p.y - 44);
         this.label.setText(`z=${Math.round(this.state.elevation)}${this.state.stair === undefined ? "" : " escalier"}`);
     };
 
-    /** Chevrons over the stairs, and near the end of a stair the name of the floor at its other end. */
-    private updateHints(model: FloorModel, p: { x: number; y: number }, delta: number): void {
+    /** Near the end of a stair, the name of the floor at its other end. */
+    private updateHints(model: FloorModel, p: { x: number; y: number }): void {
         const editorOpen = this.editor().open;
         const stairs = model.getStairs();
-        const current = currentLevels(this.state, stairs);
         const tile = avatarGroundTile(p, this.state.elevation);
-        // The stairs standing on a floor hidden above the avatar are hidden with it: no chevron over the room.
-        const aboveHidden = this.room(p) !== undefined || this.state.elevation > 0 || this.state.stair !== undefined;
-        const shown = (stair: PlacedStair): boolean => !(aboveHidden && levelLook(stair.base, current) === "above");
         const labels = editorOpen
             ? []
             : stairLabels(stairs, tile, this.state, (elevation) => floorLevelName(get(LL), elevation));
-        const veil = editorOpen ? undefined : veilDepth(current);
-        this.hints.update(stairs, labels, veil, Math.min(...current), editorOpen, delta, shown);
+        this.hints.update(stairs, labels);
         // The stack of the floors under the clock: the floor stood on, the last one while on a stair.
         floorLevelsHiddenStore.set(editorOpen);
         if (this.state.stair === undefined) floorLevelCurrentStore.set(this.state.elevation);
@@ -546,8 +542,8 @@ export class FloorSpike {
             this.scene.markDirty();
         }
         this.fadeWindow(windowed, p, delta);
-        // The stairs always show: they tell how to go up and down (LevelFocus). A stair standing on a floor above the
-        // avatar shows with that floor; one coming from under the avatar is lifted over the veil.
+        // The stairs of the floor of the avatar show: they tell how to go up and down (LevelFocus). A stair standing on
+        // a floor above the avatar shows with that floor; one coming from under the avatar is lifted over the veil.
         const veil = editor.open ? undefined : veilDepth(current);
         for (const stair of this.stairDrawings) {
             const { entity } = stair;
@@ -572,7 +568,13 @@ export class FloorSpike {
                 stair.alpha = fadeToward(stair.alpha, target, delta, 1 - STAIR_OVER_AVATAR_ALPHA, this.reducedMotion);
             }
             const above = levelLook(stair.base, current) === "above";
-            const shown = above ? Math.min(stair.alpha, stair.floor?.alpha ?? 1) : stair.alpha;
+            // Out of the editor, only the stairs leaving or reaching the floor of the avatar show.
+            const shown =
+                !editor.open && !stairShows(stair, current)
+                    ? 0
+                    : above
+                      ? Math.min(stair.alpha, stair.floor?.alpha ?? 1)
+                      : stair.alpha;
             if (shown !== stair.shown) {
                 stair.shown = shown;
                 entity.setAlpha(shown);

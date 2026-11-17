@@ -92,3 +92,11 @@ export function stairCoversAvatar(
         avatar.y - 30 < image.y + image.height
     );
 }
+
+/**
+ * Whether a stair shows: only the ones leaving or reaching the floor of the avatar. One between two other floors,
+ * under the veil or above, would seem to lead from where the avatar stands.
+ */
+export function stairShows(stair: { base: number; top: number }, current: ReadonlySet<number>): boolean {
+    return current.has(stair.base) || current.has(stair.top);
+}

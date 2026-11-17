@@ -6,6 +6,7 @@ import {
     currentLevels,
     stairCoversAvatar,
     stairDepth,
+    stairShows,
     veilAlphaToward,
     fadeToward,
     levelLook,
@@ -114,5 +115,18 @@ describe("a stair over the avatar", () => {
         expect(stairCoversAvatar(stair, { x: 140, y: 100, elevation: 20, onStair: true })).toBe(false);
         expect(stairCoversAvatar(stair, { x: 140, y: 60, elevation: 52, onStair: false })).toBe(false);
         expect(stairCoversAvatar(stair, { x: 40, y: 100, elevation: 0, onStair: false })).toBe(false);
+    });
+});
+
+describe("a stair seen from a floor", () => {
+    it("shows when it leaves or reaches the floor of the avatar", () => {
+        expect(stairShows({ base: 0, top: 52 }, new Set([0]))).toBe(true);
+        expect(stairShows({ base: 0, top: 52 }, new Set([52]))).toBe(true);
+        expect(stairShows({ base: 52, top: 104 }, new Set([0, 52]))).toBe(true);
+    });
+
+    it("is hidden on a floor under or above the avatar, which it would seem to lead to", () => {
+        expect(stairShows({ base: 0, top: 52 }, new Set([208]))).toBe(false);
+        expect(stairShows({ base: 104, top: 156 }, new Set([0]))).toBe(false);
     });
 });
