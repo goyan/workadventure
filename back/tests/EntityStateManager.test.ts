@@ -192,6 +192,32 @@ describe("EntityStateManager", () => {
         expect(press(["l1"], "true")).toEqual(["l1"]);
     });
 
+    it("lets a trigger set a state: told to the room, saved, without the limit of presses of a user", () => {
+        const { manager, sent, repository } = createHarness();
+
+        expect(manager.setAutomatic("l1", "on", "false")).toBe("set");
+        expect(manager.setAutomatic("l1", "on", "false")).toBe("same");
+
+        expect(manager.getAll()).toEqual([{ entityId: "l1", key: "on", value: "false" }]);
+        expect(sent).toHaveLength(1);
+        expect(repository.saveVariable).toHaveBeenCalledWith("entity-states:room", "l1::on", "false");
+    });
+
+    it("refuses a trigger that would change an object more than 3 times a second", () => {
+        const { manager, advance } = createHarness();
+        manager.setAutomatic("l1", "on", "false");
+        advance(333);
+        expect(manager.setAutomatic("l1", "on", "true")).toBe("refused");
+        advance(1);
+        expect(manager.setAutomatic("l1", "on", "true")).toBe("set");
+    });
+
+    it("has nothing to set on an object the map no longer has", () => {
+        const { manager, sent } = createHarness();
+        expect(manager.setAutomatic("deleted", "on", "false")).toBe("same");
+        expect(sent).toEqual([]);
+    });
+
     it("brings back the states saved before a restart", async () => {
         const { manager, sent } = createHarness({ saved: { "l1::on": "false", "l2::on": "" } });
 

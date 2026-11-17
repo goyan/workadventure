@@ -97,6 +97,7 @@ import type { PointInterface } from "./Websocket/PointInterface";
 import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { EntityStateManager } from "./EntityStateManager";
+import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
 import type { BubbleListeningCallbacks } from "./BubbleListeners";
@@ -284,6 +285,12 @@ export class GameRoom implements BrothersFinder {
             roomUrl,
         });
         await gameRoom.entityStateManager.restore();
+        // Uses the switches that have a trigger (presence sensors, timers) once a second.
+        const switchTriggers = new SwitchTriggerEvaluator(gameRoom, gameRoom.entityStateManager);
+        switchTriggers.start();
+        // No need to unsubscribe since GameRoom.destroy completes this stream.
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => switchTriggers.stop());
 
         return gameRoom;
     }

@@ -86,6 +86,28 @@ export class EntityStateManager {
         return changed;
     }
 
+    /**
+     * Sets a state for a trigger of the map (a presence sensor, a timer; see SwitchTriggerEvaluator): no user, so no
+     * limit of presses, but the same limit of changes of an object. "refused" asks to try again later.
+     */
+    public setAutomatic(entityId: string, key: EntityStateKey, value: EntityStateValue): "set" | "same" | "refused" {
+        if (!this.room.getWam()?.entities[entityId] || this.get(entityId, key) === value) {
+            return "same";
+        }
+        const time = this.now();
+        const last = this.lastChange.get(entityId);
+        if (last !== undefined && time - last < ENTITY_STATE_MIN_CHANGE_INTERVAL_MS) {
+            return "refused";
+        }
+        this.lastChange.set(entityId, time);
+        this.set(entityId, key, value);
+        this.save(entityId, key, value);
+        this.room.sendSubMessageToRoom({
+            message: { $case: "entityStateMessage", entityStateMessage: { entityId, key, value } },
+        });
+        return "set";
+    }
+
     /** The states that differ from the default, for a player who joins the room. */
     public getAll(): EntityStateMessage[] {
         const all: EntityStateMessage[] = [];
