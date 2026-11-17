@@ -259,12 +259,20 @@ export class FloorSpike {
      */
     private readMap(): void {
         const pieces: { entity: FloorEntity; piece: FloorPiece; elevation: number }[] = [];
+        const standing: { entity: FloorEntity; elevation: number }[] = [];
         let signature = "";
         for (const entity of this.readEntities()) {
             const prefab = entity.getPrefab();
             const piece = parseFloorPiece(prefab.collectionName, prefab.id);
-            if (!piece) continue;
             const elevation = entity.getEntityData().elevation ?? 0;
+            if (!piece) {
+                // What stands on a raised floor (furniture, walls) shows through with its floor.
+                if (elevation > 0) {
+                    standing.push({ entity, elevation });
+                    signature += `+${prefab.id}@${entity.x},${entity.y},${elevation};`;
+                }
+                continue;
+            }
             pieces.push({ entity, piece, elevation });
             signature += `${prefab.id}@${entity.x},${entity.y},${elevation};`;
         }
@@ -304,12 +312,20 @@ export class FloorSpike {
                 );
                 (covers ? overStairs : normal).push(entity);
             }
+            const objects = standing.filter((item) => item.elevation === elevation).map((item) => item.entity);
+            // The objects are only touched while their floor shows through, and once when it is opaque again: the map
+            // editor dims them by itself.
+            let objectsShown = 1;
             const level = {
                 elevation,
                 alpha: alphas.get(elevation) ?? 1,
                 show: (alpha: number) => {
                     for (const entity of normal) entity.setAlpha(alpha);
                     for (const entity of overStairs) entity.setAlpha(alpha * OVER_STAIR_ALPHA);
+                    if (alpha !== 1 || objectsShown !== 1) {
+                        for (const entity of objects) entity.setAlpha(alpha);
+                        objectsShown = alpha;
+                    }
                 },
             };
             level.show(level.alpha);
