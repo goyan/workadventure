@@ -51,7 +51,7 @@ export interface StairShape {
     open: boolean;
 }
 
-export type FloorPiece = { kind: "slab"; family: FloorFamily } | ({ kind: "stair" } & StairShape);
+export type FloorPiece = { kind: "slab"; family: SlabFamily } | ({ kind: "stair" } & StairShape);
 
 export interface TilePoint {
     x: number;
@@ -64,7 +64,13 @@ export interface PixelBox {
     height: number;
 }
 
-export function slabPrefabName(family: FloorFamily): string {
+/** A slab of glass: one sees through it what is under the floor. It is no floor of the ground. */
+export const SLAB_GLASS_FAMILY = "verre";
+/** What a slab can be made of: any floor of the ground, or glass. */
+export const SLAB_FAMILIES = [...MAP_LAYER_FLOOR_FAMILIES, SLAB_GLASS_FAMILY] as const;
+export type SlabFamily = FloorFamily | typeof SLAB_GLASS_FAMILY;
+
+export function slabPrefabName(family: SlabFamily): string {
     return `dalle-${family}`;
 }
 
@@ -72,7 +78,7 @@ export function stairPrefabName(stair: StairShape): string {
     return `escalier-${stair.direction}-l${stair.width}-${STAIR_RISE_NAMES[stair.rise]}${stair.open ? "-vide" : ""}`;
 }
 
-const SLAB_NAME = new RegExp(`^dalle-(${MAP_LAYER_FLOOR_FAMILIES.join("|")})$`);
+const SLAB_NAME = new RegExp(`^dalle-(${SLAB_FAMILIES.join("|")})$`);
 const STAIR_NAME = /^escalier-(n|e|s|o)-l([12])-(h[2-4]|m[12])(-vide)?$/;
 
 /** Reads the meaning of a placed prefab. Returns undefined for anything that is not a slab or a stair. */
@@ -87,7 +93,7 @@ export function parseFloorPiece(collectionName: string, prefabId: string): Floor
         return undefined;
     }
     const name = prefabId.slice(prefix.length, -suffix.length);
-    const family = MAP_LAYER_FLOOR_FAMILIES.find((candidate) => candidate === SLAB_NAME.exec(name)?.[1]);
+    const family = SLAB_FAMILIES.find((candidate) => candidate === SLAB_NAME.exec(name)?.[1]);
     if (family) return { kind: "slab", family };
     const stair = STAIR_NAME.exec(name);
     const direction = STAIR_DIRECTIONS.find((candidate) => candidate === stair?.[1]);

@@ -1,5 +1,5 @@
 import { MAP_LAYER_TILE_SIZE, mapLayerPrefabId } from "./MapLayerCatalog";
-import type { FloorFamily } from "./MapLayerCatalog";
+import type { SlabFamily } from "./MapLayerFloors";
 import { slabImagePosition, stairImagePosition } from "./FloorModel";
 import type { FloorModel, PlacedStair } from "./FloorModel";
 import {
@@ -132,7 +132,7 @@ export function applySlabs(
     level: number,
     a: TilePoint,
     b: TilePoint,
-    family: FloorFamily,
+    family: SlabFamily,
     bounds: MapBounds,
 ): void {
     if (level <= 0) return;
@@ -189,7 +189,7 @@ export function removeStairAt(model: FloorModel, level: number, cell: TilePoint)
         { x: 0, y: 1 },
         { x: -1, y: 0 },
     ];
-    let family: FloorFamily | undefined;
+    let family: SlabFamily | undefined;
     for (const covered of well) {
         for (const step of around) {
             family ??= model.slabAt(stair.top, covered.x + step.x, covered.y + step.y);
