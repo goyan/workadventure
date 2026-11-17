@@ -28,6 +28,10 @@ export interface SkyShadowManagerOptions {
     outdoorVersion: () => number;
     /** The kinds of things that throw a shadow, for this person; all of them without. */
     categories?: () => ShadowCategories | undefined;
+    /** How far the top of a tree stands to the right now, bent by the wind (map pixels); straight without. */
+    treeBend?: (id: string) => number;
+    /** Changes whenever a tree takes another pose (TreeSway.version); undefined when the shadows stand still. */
+    swayVersion?: () => number | undefined;
     /** False in the map editor, or with the shadows turned off by this person. */
     enabled: () => boolean;
 }
@@ -109,6 +113,7 @@ export class SkyShadowManager {
             outdoorVersion: this.options.outdoorVersion(),
             view: { x: view.x, y: view.y, width: view.width, height: view.height },
             zoom: shadowResolution(camera.zoom),
+            sway: this.options.swayVersion?.(),
         };
         const action = shadowRedraw(this.drawn, frame);
         if (action === "none") return;
@@ -139,6 +144,11 @@ export class SkyShadowManager {
         this.layer.destroy();
     }
 
+    /** How far the top of the tree `id` stands to the right now; 0 while the shadows stand still. */
+    private bendOf(id: string): number {
+        return this.options.swayVersion?.() === undefined ? 0 : (this.options.treeBend?.(id) ?? 0);
+    }
+
     /** The trees drawn as their own picture that may throw a shadow in the area, each laid away from the light. */
     private picturesOver(area: WeatherView, light: SkyLight): LaidPicture[] {
         const reach = light.shadowLength.max;
@@ -153,7 +163,7 @@ export class SkyShadowManager {
                 continue;
             }
             const pose = fallenShadowPose(caster.height, light);
-            if (pose) laid.push({ ...caster, ...pose });
+            if (pose) laid.push({ ...caster, ...pose, bend: caster.id === undefined ? 0 : this.bendOf(caster.id) });
         }
         return laid;
     }
@@ -171,7 +181,10 @@ export class SkyShadowManager {
         return shadowPolygons(
             {
                 boxes: this.casters.boxes.filter((box) => near(box.x, box.y, box.width, box.height)),
-                trees: this.casters.trees.filter(nearTree),
+                trees: this.casters.trees.filter(nearTree).map((tree) => {
+                    const bend = tree.id === undefined ? 0 : this.bendOf(tree.id);
+                    return bend === 0 ? tree : { ...tree, bend };
+                }),
                 details: (this.casters.details ?? []).filter(nearTree),
             },
             light,

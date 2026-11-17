@@ -13,6 +13,8 @@ export interface LaidPicture {
     rotation: number;
     stretch: number;
     picture: ShadowPicture;
+    /** How far its top stands to the right, bent by the wind (map pixels): its shadow bends as far. */
+    bend?: number;
 }
 
 /**
@@ -82,9 +84,18 @@ export class SkyShadowLayer {
                 const source = drawableSource(laid.picture.source);
                 if (!source || laid.picture.cutWidth <= 0 || laid.picture.cutHeight <= 0) continue;
                 context.save();
-                context.translate((laid.x - area.x) * scale, (laid.y - area.y) * scale);
-                context.rotate(laid.rotation);
-                context.scale(scale, scale * laid.stretch);
+                // The picture from its foot: its width across the light, its height along it, stretched to the length
+                // of its shadow; a top bent to the right by the wind ends as far to the right.
+                const cos = Math.cos(laid.rotation);
+                const sin = Math.sin(laid.rotation);
+                context.transform(
+                    cos * scale,
+                    sin * scale,
+                    (-sin * laid.stretch - (laid.bend ?? 0) / laid.height) * scale,
+                    cos * laid.stretch * scale,
+                    (laid.x - area.x) * scale,
+                    (laid.y - area.y) * scale,
+                );
                 context.drawImage(
                     source,
                     laid.picture.cutX,

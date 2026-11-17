@@ -109,6 +109,40 @@ describe("readShadowCasters", () => {
         expect(unread.casters?.trees).toHaveLength(1);
     });
 
+    it("reads the low details as their own picture too when they are set to realistic", () => {
+        const picture = { key: "stump:0", source: {}, cutX: 0, cutY: 0, cutWidth: 48, cutHeight: 40 };
+        const stump = entity({
+            displayWidth: 48,
+            displayHeight: 40,
+            prefab: { collectionName: "Nature", id: "Nature:nature-9:Default:Down" },
+            picture,
+        });
+        const realistic = readShadowCasters([stump], undefined, {
+            walls: true,
+            objects: true,
+            trees: true,
+            details: true,
+            detailShape: "realistic",
+        });
+        expect(realistic.casters?.details).toEqual([]);
+        expect(realistic.casters?.pictures).toEqual([{ x: 124, y: 240, width: 48, height: 40, picture }]);
+        expect(readShadowCasters([stump], realistic.signature).casters?.details).toHaveLength(1);
+    });
+
+    it("keeps the id of each tree, for its swaying", () => {
+        const picture = { key: "oak:0", source: {}, cutX: 0, cutY: 0, cutWidth: 64, cutHeight: 96 };
+        const tree = entity({ id: "tree-7", prefab: { collectionName: "Nature", id: "Nature:tree-oak" }, picture });
+        expect(readShadowCasters([tree]).casters?.trees[0].id).toBe("tree-7");
+        const realistic = readShadowCasters([tree], undefined, {
+            walls: true,
+            objects: true,
+            trees: true,
+            details: true,
+            treeShape: "realistic",
+        });
+        expect(realistic.casters?.pictures?.[0].id).toBe("tree-7");
+    });
+
     it("leaves out the categories turned off, and reads the map again when one is turned back on", () => {
         const entities = [
             entity({ prefab: { collectionName: "Nature", id: "Nature:tree-oak" } }),

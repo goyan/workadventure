@@ -26,6 +26,13 @@ const frame: ShadowFrame = {
 const drawn = { ...frame, area: { x: -200, y: -150, width: 1200, height: 900 } };
 
 describe("shadowRedraw", () => {
+    it("draws again when the trees swayed, and only then", () => {
+        expect(shadowRedraw({ ...drawn, sway: 3 }, { ...frame, sway: 3 })).toBe("none");
+        expect(shadowRedraw({ ...drawn, sway: 3 }, { ...frame, sway: 4 })).toBe("draw");
+        // Without swaying shadows nothing is drawn again.
+        expect(shadowRedraw(drawn, frame)).toBe("none");
+    });
+
     it("draws the first time, and not again while nothing moves", () => {
         expect(shadowRedraw(undefined, frame)).toBe("draw");
         expect(shadowRedraw(drawn, frame)).toBe("none");

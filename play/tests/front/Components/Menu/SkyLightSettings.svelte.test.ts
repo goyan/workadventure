@@ -27,6 +27,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                         details: label("Details"),
                         avatars: label("Avatars"),
                         animals: label("Animals"),
+                        treeSway: label("Sway"),
                         shape: { label: label("Shape"), oval: label("Oval"), realistic: label("True shape") },
                     },
                 },
@@ -68,6 +69,7 @@ afterEach(async () => {
     skyShadowShapeStores.trees.set("oval");
     skyShadowShapeStores.avatars.set("realistic");
     skyShadowShapeStores.animals.set("oval");
+    skyShadowShapeStores.details.set("oval");
 });
 
 describe("SkyLightSettings", () => {
@@ -113,7 +115,8 @@ describe("SkyLightSettings", () => {
         render();
         const categories = target.querySelector<HTMLDetailsElement>('[data-testid="sky-shadow-categories"]');
         expect(categories?.open).toBe(false);
-        expect(categories?.querySelectorAll('input[type="checkbox"]')).toHaveLength(6);
+        // Six kinds, and the swaying of the shadows of the trees.
+        expect(categories?.querySelectorAll('input[type="checkbox"]')).toHaveLength(7);
         expect(get(skyShadowCategoriesStore)).toMatchObject({
             walls: true,
             objects: true,
@@ -126,13 +129,15 @@ describe("SkyLightSettings", () => {
 
     it("offers an oval or the true shape for the trees, the avatars and the animals: ovals but for the avatars", () => {
         render();
-        for (const kind of ["trees", "avatars", "animals"]) {
+        for (const kind of ["trees", "avatars", "animals", "details"]) {
             expect(target.querySelector(`[data-testid="sky-shadow-${kind}-shape"]`)).not.toBeNull();
         }
         expect(get(skyShadowCategoriesStore)).toMatchObject({
             treeShape: "oval",
             avatarShape: "realistic",
             animalShape: "oval",
+            detailShape: "oval",
+            treeSway: true,
         });
         const trees = target.querySelector('[data-testid="sky-shadow-trees-shape"]');
         const trueShape = Array.from(trees?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? []).find(

@@ -1710,11 +1710,14 @@ export class GameScene extends DirtyScene {
 
     /** The objects of the map as their shadows of the sky need them. */
     private *shadowSourceEntities(): Generator<ShadowSourceEntity> {
-        // The pictures are only read for the realistic shadows of the trees.
-        const pictures = this.skyShadowCategories?.treeShape === "realistic";
-        for (const entity of this.gameMapFrontWrapper.getEntitiesManager().getEntities().values()) {
+        // The pictures are only read for the realistic shadows of the trees and of the details.
+        const pictures =
+            this.skyShadowCategories?.treeShape === "realistic" ||
+            this.skyShadowCategories?.detailShape === "realistic";
+        for (const [id, entity] of this.gameMapFrontWrapper.getEntitiesManager().getEntities()) {
             const frame = pictures && entity.getPrefab().id.startsWith(NATURE_PREFIX) ? entity.frame : undefined;
             yield {
+                id,
                 picture:
                     frame && drawableSource(frame.source.image)
                         ? {
@@ -3323,6 +3326,11 @@ export class GameScene extends DirtyScene {
                     // Each body has its own switch, read with the light (NightManager.skyLight).
                     enabled: () => !get(mapEditorModeStore),
                     categories: () => this.skyShadowCategories,
+                    // The shadows of the trees sway with them, unless turned off by this person.
+                    swayVersion: () => (this.skyShadowCategories?.treeSway ? this.treeSway?.version : undefined),
+                    treeBend: (id) =>
+                        (this.treeSway?.poseOf(id) ?? 0) *
+                        (this.gameMapFrontWrapper.getEntitiesManager().getEntities().get(id)?.scaleX ?? 1),
                 });
                 // And under what walks: the silhouette of the avatars, an oval under the animals.
                 this.unsubscribeSkyShadowCategories?.();

@@ -91,7 +91,10 @@ export const skyShadowShapeStores = {
     trees: createPersistedChoiceStore<ShadowShape>("skyShadowTreeShape", SHADOW_SHAPES, "oval"),
     avatars: createPersistedChoiceStore<ShadowShape>("skyShadowAvatarShape", SHADOW_SHAPES, "realistic"),
     animals: createPersistedChoiceStore<ShadowShape>("skyShadowAnimalShape", SHADOW_SHAPES, "oval"),
+    details: createPersistedChoiceStore<ShadowShape>("skyShadowDetailShape", SHADOW_SHAPES, "oval"),
 };
+/** Whether the shadows of the trees sway with them in the wind (drawn again at each of their poses). */
+export const skyShadowTreeSwayStore = createPersistedSwitchStore("skyShadowTreeSway", true);
 
 export interface SkyShadowCategories {
     walls: boolean;
@@ -103,6 +106,8 @@ export interface SkyShadowCategories {
     treeShape: ShadowShape;
     avatarShape: ShadowShape;
     animalShape: ShadowShape;
+    detailShape: ShadowShape;
+    treeSway: boolean;
 }
 
 export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
@@ -116,8 +121,10 @@ export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
         skyShadowShapeStores.trees,
         skyShadowShapeStores.avatars,
         skyShadowShapeStores.animals,
+        skyShadowShapeStores.details,
+        skyShadowTreeSwayStore,
     ],
-    ([walls, objects, trees, details, avatars, animals, treeShape, avatarShape, animalShape]) => ({
+    ([
         walls,
         objects,
         trees,
@@ -127,5 +134,19 @@ export const skyShadowCategoriesStore: Readable<SkyShadowCategories> = derived(
         treeShape,
         avatarShape,
         animalShape,
+        detailShape,
+        treeSway,
+    ]) => ({
+        walls,
+        objects,
+        trees,
+        details,
+        avatars,
+        animals,
+        treeShape,
+        avatarShape,
+        animalShape,
+        detailShape,
+        treeSway,
     }),
 );

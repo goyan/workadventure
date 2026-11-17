@@ -42,6 +42,10 @@ export interface ShadowTree {
     crownRadius: number;
     crownHeight: number;
     trunkWidth: number;
+    /** The id of the object of the map, for a tree that sways in the wind. */
+    id?: string;
+    /** How far its top stands to the right, bent by the wind (map pixels): its shadow bends with it. */
+    bend?: number;
 }
 
 /** Something whose shadow is its own picture laid on the ground: its foot (bottom middle) and its size as shown. */
@@ -51,6 +55,8 @@ export interface ShadowPictureCaster {
     width: number;
     height: number;
     picture: ShadowPicture;
+    /** The id of the object of the map, for a tree that sways in the wind. */
+    id?: string;
 }
 
 export interface ShadowCasters {
@@ -123,7 +129,8 @@ function treeShadow(tree: ShadowTree, light: ShadowLight): Point[][] {
     const direction = shadowDirection(light.azimuth);
     const across = { x: -direction.y, y: direction.x };
     const stretch = Math.min(CROWN_MAX_STRETCH, 1 / Math.sin(light.elevation * DEG));
-    const centre = { x: tree.x + offset.x, y: tree.y + offset.y };
+    // A top bent to the right by the wind throws its shadow as far to the right.
+    const centre = { x: tree.x + offset.x + (tree.bend ?? 0), y: tree.y + offset.y };
     const crown: Point[] = [];
     for (let step = 0; step < CROWN_POINTS; step++) {
         const angle = (step / CROWN_POINTS) * 2 * Math.PI;

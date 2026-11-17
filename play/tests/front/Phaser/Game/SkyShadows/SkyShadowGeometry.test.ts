@@ -131,6 +131,18 @@ describe("shadowPolygons", () => {
         expect(inAny(polygons, 200 + 30, 260)).toBe(false);
     });
 
+    it("moves the shadow of the crown with a tree bent by the wind, its foot staying where it is", () => {
+        const tree = { x: 200, y: 300, crownRadius: 20, crownHeight: 60, trunkWidth: 6 };
+        const light = { azimuth: 180, elevation: 45 };
+        const shadow = (bend: number) => shadowPolygons({ boxes: [], trees: [{ ...tree, bend }] }, light);
+        const xs = (bend: number): number[] => shadow(bend).flatMap((polygon) => polygon.map((point) => point.x));
+        // The top of the tree stands 10 px to the right: so does the shadow of its crown.
+        expect(Math.max(...xs(10))).toBeCloseTo(Math.max(...xs(0)) + 10, 5);
+        expect(Math.min(...xs(-10))).toBeCloseTo(Math.min(...xs(0)) - 10, 5);
+        // The trunk still starts at the foot of the tree.
+        expect(inAny(shadow(10), 200, 299)).toBe(true);
+    });
+
     it("casts nothing without a light high enough", () => {
         expect(shadowPolygons({ boxes: [wall], trees: [] }, { azimuth: 180, elevation: -1 })).toEqual([]);
     });

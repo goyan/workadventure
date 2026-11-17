@@ -1,11 +1,11 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
-    import { skyShadowCategoryStores, skyShadowShapeStores } from "../../Stores/SkyLightStore";
+    import { skyShadowCategoryStores, skyShadowShapeStores, skyShadowTreeSwayStore } from "../../Stores/SkyLightStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import SegmentedControl from "./SegmentedControl.svelte";
 
     const { walls, objects, trees, details, avatars, animals } = skyShadowCategoryStores;
-    const { trees: treeShape, avatars: avatarShape, animals: animalShape } = skyShadowShapeStores;
+    const { trees: treeShape, avatars: avatarShape, animals: animalShape, details: detailShape } = skyShadowShapeStores;
     const shapes = $derived([
         { value: "oval" as const, label: $LL.menu.settings.skyLight.casters.shape.oval() },
         { value: "realistic" as const, label: $LL.menu.settings.skyLight.casters.shape.realistic() },
@@ -46,6 +46,14 @@
                     options={shapes}
                 />
             </div>
+            <div class="ps-4">
+                <InputSwitch
+                    id="sky-shadow-tree-sway"
+                    bind:value={$skyShadowTreeSwayStore}
+                    label={$LL.menu.settings.skyLight.casters.treeSway()}
+                    labelPosition="right"
+                />
+            </div>
         {/if}
         <InputSwitch
             id="sky-shadow-details"
@@ -53,6 +61,16 @@
             label={$LL.menu.settings.skyLight.casters.details()}
             labelPosition="right"
         />
+        {#if $details}
+            <div class="ps-4">
+                <SegmentedControl
+                    ariaLabel="{$LL.menu.settings.skyLight.casters.details()} : {$LL.menu.settings.skyLight.casters.shape.label()}"
+                    bind:value={$detailShape}
+                    dataTestId="sky-shadow-details-shape"
+                    options={shapes}
+                />
+            </div>
+        {/if}
         <InputSwitch
             id="sky-shadow-avatars"
             bind:value={$avatars}

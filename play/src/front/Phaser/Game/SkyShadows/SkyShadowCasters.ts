@@ -46,6 +46,8 @@ export interface ShadowCategories {
     details: boolean;
     /** A crown on a trunk (oval, by default), or the picture of each tree laid on the ground (realistic). */
     treeShape?: ShadowShape;
+    /** A low mound (oval, by default), or the picture of each detail laid on the ground (realistic). */
+    detailShape?: ShadowShape;
 }
 const ALL_CATEGORIES: ShadowCategories = { walls: true, objects: true, trees: true, details: true };
 
@@ -87,6 +89,8 @@ export function wallShadowBoxes(model: MapLayerModel): ShadowBox[] {
 
 /** A placed object as the shadows need it (an `Entity` fits through its getters). */
 export interface ShadowSourceEntity {
+    /** Its id on the map: the trees that sway are found again by it. */
+    id?: string;
     /** Top-left corner of the image, in map pixels. */
     x: number;
     y: number;
@@ -144,8 +148,16 @@ export function readShadowCasters(
     const details: ShadowTree[] = [];
     const pictures: ShadowPictureCaster[] = [];
     const realisticTrees = categories.treeShape === "realistic";
+    const realisticDetails = categories.detailShape === "realistic";
+    const laidPicture = (entity: ShadowSourceEntity, picture: ShadowPicture): ShadowPictureCaster => ({
+        x: entity.x + entity.displayWidth / 2,
+        y: entity.y + entity.displayHeight,
+        width: entity.displayWidth,
+        height: entity.displayHeight,
+        picture,
+    });
     const on = (shown: boolean): string => (shown ? "1" : "0");
-    let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)}${on(realisticTrees)};`;
+    let signature = `c${on(categories.walls)}${on(categories.objects)}${on(categories.trees)}${on(categories.details)}${on(realisticTrees)}${on(realisticDetails)};`;
     for (const entity of entities) {
         const { prefab } = entity;
         if (entity.elevation >= RAISED) continue;
@@ -156,22 +168,22 @@ export function readShadowCasters(
         } else if (isShadowTree(entity)) {
             if (!categories.trees) continue;
             if (realisticTrees && entity.picture) {
-                const laid = {
-                    x: entity.x + entity.displayWidth / 2,
-                    y: entity.y + entity.displayHeight,
-                    width: entity.displayWidth,
-                    height: entity.displayHeight,
-                    picture: entity.picture,
-                };
-                pictures.push(laid);
+                const laid = laidPicture(entity, entity.picture);
+                pictures.push(entity.id === undefined ? laid : { ...laid, id: entity.id });
                 signature += `p${laid.x},${laid.y},${laid.width},${laid.height},${laid.picture.key};`;
                 continue;
             }
             const tree = treeOf(entity);
-            trees.push(tree);
+            trees.push(entity.id === undefined ? tree : { ...tree, id: entity.id });
             signature += `t${tree.x},${tree.y},${tree.crownRadius},${tree.crownHeight};`;
         } else if (prefab.id.startsWith(NATURE_PREFIX) && !prefab.wander) {
             if (!categories.details) continue;
+            if (realisticDetails && entity.picture) {
+                const laid = laidPicture(entity, entity.picture);
+                pictures.push(laid);
+                signature += `p${laid.x},${laid.y},${laid.width},${laid.height},${laid.picture.key};`;
+                continue;
+            }
             const detail = detailOf(entity);
             details.push(detail);
             signature += `d${detail.x},${detail.y},${detail.crownRadius},${detail.crownHeight};`;

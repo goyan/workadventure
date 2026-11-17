@@ -19,6 +19,8 @@ export interface ShadowFrame {
     outdoorVersion: number;
     view: WeatherView;
     zoom: number;
+    /** Changes whenever a tree takes another pose in the wind (TreeSway.version); absent when the shadows stand still. */
+    sway?: number;
 }
 
 /** What was drawn last, and over which part of the map. */
@@ -49,6 +51,7 @@ export function shadowRedraw(drawn: DrawnShadows | undefined, frame: ShadowFrame
         frame.casters !== drawn.casters ||
         frame.outdoorVersion !== drawn.outdoorVersion ||
         frame.zoom !== drawn.zoom ||
+        (frame.sway ?? 0) !== (drawn.sway ?? 0) ||
         !wellInside(drawn.area, frame.view, SHADOW_DRAW_MARGIN / 2)
     ) {
         return "draw";

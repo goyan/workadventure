@@ -76,6 +76,7 @@ const menu: DeepPartial<Translation["menu"]> = {
                 details: "Rochers, herbes, fleurs et souches",
                 avatars: "Avatars",
                 animals: "Animaux",
+                treeSway: "Les ombres des arbres suivent le vent",
                 shape: {
                     label: "Forme de l'ombre",
                     oval: "Ovale",

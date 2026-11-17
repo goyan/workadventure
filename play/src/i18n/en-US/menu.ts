@@ -75,6 +75,7 @@ const menu: BaseTranslation = {
                 details: "Rocks, grass, flowers and stumps",
                 avatars: "Avatars",
                 animals: "Animals",
+                treeSway: "The shadows of the trees sway in the wind",
                 shape: {
                     label: "Shape of the shadow",
                     oval: "Oval",
