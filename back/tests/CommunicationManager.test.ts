@@ -8,7 +8,7 @@ import {
     FilterType,
 } from "@workadventure/messages";
 import { emptySpaceState } from "@workadventure/shared-utils";
-import { buildJamSpaceName } from "@workadventure/map-editor";
+import { buildJamSpaceName, buildKaraokeStageSpaceName } from "@workadventure/map-editor";
 import type { InitialStateFactory } from "../src/Model/CommunicationManager";
 import { CommunicationManager, DefaultInitialStateFactory, findRecording } from "../src/Model/CommunicationManager";
 import { CommunicationType } from "../src/Model/Types/CommunicationTypes";
@@ -216,6 +216,14 @@ describe("CommunicationManager", () => {
             propertyId: "prop",
             hostUuid: "host",
         })}`;
+        const stageName = buildKaraokeStageSpaceName({
+            roomUrl: "http://room",
+            areaId: "a",
+            propertyId: "p",
+            hostUuid: "host",
+            singerUuid: "singer",
+            turnId: "00000000-0000-4000-8000-000000000001",
+        });
 
         it("carries media for a space that syncs a media property", () => {
             const state = factory.createInitialState(spaceNamed("bubble", ["cameraState"]), new Map(), new Map());
@@ -227,8 +235,8 @@ describe("CommunicationManager", () => {
             expect(state.communicationType).not.toBe(CommunicationType.WEBRTC);
         });
 
-        it("carries media for the space of a Jam, which syncs none: its music and screens travel through it", () => {
-            const state = factory.createInitialState(spaceNamed(jamSpaceName, []), new Map(), new Map());
+        it.each([jamSpaceName, stageName])("carries media with no synced properties (%s)", (name) => {
+            const state = factory.createInitialState(spaceNamed(name, []), new Map(), new Map());
             expect(state.communicationType).toBe(CommunicationType.WEBRTC);
         });
     });
@@ -366,11 +374,20 @@ describe("CommunicationManager", () => {
         });
     });
 
-    describe("the space of a Jam", () => {
+    describe.each([
+        buildJamSpaceName({ roomUrl: "http://room", areaId: "a", propertyId: "p", hostUuid: "host" }),
+        buildKaraokeStageSpaceName({
+            roomUrl: "http://room",
+            areaId: "a",
+            propertyId: "p",
+            hostUuid: "host",
+            singerUuid: "singer",
+            turnId: "00000000-0000-4000-8000-000000000001",
+        }),
+    ])("LiveKit-only space %s", (name) => {
         const jamSpace = (): ICommunicationSpace => ({
             ...createSpace(),
-            getSpaceName: () =>
-                `world.${buildJamSpaceName({ roomUrl: "http://room", areaId: "a", propertyId: "p", hostUuid: "host" })}`,
+            getSpaceName: () => `world.${name}`,
         });
 
         it("adds nobody to a peer-to-peer state while LiveKit has not taken the space", async () => {

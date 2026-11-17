@@ -1,5 +1,6 @@
 <script lang="ts">
     import { tick } from "svelte";
+    import { DESKTOP_APP_URL } from "../../Interfaces/DesktopAppInterfaces";
     import { LL } from "../../../i18n/i18n-svelte";
     import { settingsSubMenuTargetStore } from "../../Stores/MenuStore";
     import { getSpotifyRedirectUri, SpotifyLinkError, spotifyAccount } from "../../Spotify/SpotifyAccount";
@@ -21,7 +22,6 @@
     // The desktop app reads the Spotify app of this computer: no account, no developer app, no Premium. Linking an
     // account there is optional, for music played on another device (phone, web player, speaker).
     const readsLocalPlayer = desktopSpotifyPlayer() !== undefined;
-    const DESKTOP_APP_URL = "https://github.com/aminekun90/workadventure-desktop/releases/latest";
 
     let linking = $state(false);
     let errorMessage: string | undefined = $state(undefined);

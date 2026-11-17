@@ -135,4 +135,28 @@ describe("weatherForecast", () => {
             "windSpeed",
         );
     });
+    it("gives where the real wind comes from with its speed only, and never for a calm rounded to 0 km/h", () => {
+        const slot = (index: number, wind: { windSpeed?: number; windFrom?: number }) => ({
+            at: NOW + (index - 1) * 15 * 60 * 1000,
+            weather: WeatherType.Clear as const,
+            temperature: 5,
+            ...wind,
+        });
+        const windy = {
+            status: "known" as const,
+            slots: Array.from({ length: 24 }, (_, index) =>
+                index < 5
+                    ? slot(index, { windSpeed: 22, windFrom: 315 })
+                    : index < 8
+                      ? slot(index, { windFrom: 90 })
+                      : slot(index, { windSpeed: 0.4, windFrom: 180 }),
+            ),
+        };
+        const cells = weatherForecast({ weather: WeatherType.Real }, NOW, windy);
+        expect(cells.map((cell) => cell.windFrom)).toEqual([315, undefined, undefined]);
+        expect(cells[1]).not.toHaveProperty("windFrom");
+        expect(cells[2]).toHaveProperty("windSpeed", 0);
+        expect(cells[2]).not.toHaveProperty("windFrom");
+        expect(weatherForecast({ weather: WeatherType.Rain }, NOW, windy)[0].windFrom).toBe(315);
+    });
 });
