@@ -785,13 +785,13 @@ describe("puddles", () => {
         wam.settings = { weather: WeatherType.Storm };
         manager = new WeatherManager(scene);
         manager.update(0, new Date(0));
-        expect(graphics.strokeCircle).not.toHaveBeenCalled();
+        expect(graphics.strokeCircle.mock.calls).toHaveLength(0);
         manager.destroy();
         scene.getTerrainWater.mockReturnValue({ depthAt: () => 12 } as unknown as ReturnType<
             GameScene["getTerrainWater"]
         >);
         manager = new WeatherManager(scene);
         manager.update(0, new Date(0));
-        expect(graphics.strokeCircle).toHaveBeenCalled();
+        expect(graphics.strokeCircle.mock.calls.length).toBeGreaterThan(0);
     });
 });
