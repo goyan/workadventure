@@ -208,6 +208,21 @@ export class WaterGrid {
         return index === undefined ? 0 : this.depth[index];
     }
 
+    /**
+     * Whether what swims in a cell can go to its neighbour on that side: no wall between them, and the neighbour in
+     * the grid.
+     */
+    public canCross(cellX: number, cellY: number, side: "east" | "west" | "south" | "north"): boolean {
+        const index = this.indexOf(cellX, cellY);
+        if (index === undefined) return false;
+        const column = cellX - this.bounds.x;
+        const row = cellY - this.bounds.y;
+        if (side === "east") return column + 1 < this.bounds.width && (this.closed[index] & 1) === 0;
+        if (side === "west") return column > 0 && (this.closed[index] & 2) === 0;
+        if (side === "south") return row + 1 < this.bounds.height && (this.closed[index] & 4) === 0;
+        return row > 0 && (this.closed[index] & 8) === 0;
+    }
+
     /** All the water of the grid, in pixels of water over one cell. */
     public totalPx(): number {
         let total = 0;
