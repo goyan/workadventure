@@ -294,22 +294,85 @@ describe("WaterGrid", () => {
         expect(fast).toBeGreaterThan(slow * 3);
     });
 
-    it("moves the water again around the sinks only: far from them a step is one move", () => {
+    it("moves the water again around the sinks only: far from a sink, the water goes as it does without it", () => {
         const side = 121;
         const cells: [number, number, number][] = [];
         for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) cells.push([x, y, -16]);
         const lake = terrainOf(cells);
-        const farAfter = (flowSteps: number): number => {
+        const farAfter = (sink: boolean): number => {
             const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
             run(grid, 100, { ...nothing, rainPx: 0.1 });
-            // A mound of water in a corner, a sink in the opposite one.
+            // A mound of water in a corner, a sink (or none) in the opposite one.
             grid.step({ ...nothing, flows: [{ cellX: 10, cellY: 10, px: 4 }] });
-            for (let step = 0; step < 20; step++) {
-                grid.step({ ...nothing, flowSteps, flows: [{ cellX: 100, cellY: 100, px: -1e6 }] });
+            for (let step = 0; step < 5; step++) {
+                grid.step({ ...nothing, flowSteps: 16, flows: sink ? [{ cellX: 100, cellY: 100, px: -1e6 }] : [] });
             }
             return grid.depthAt(10, 10);
         };
-        expect(farAfter(16)).toBeCloseTo(farAfter(1), 4);
+        expect(farAfter(true)).toBeCloseTo(farAfter(false), 4);
+    });
+
+    describe("over long distances", () => {
+        // A canal 200 cells long and one wide, dug 16 px deep, holding 10 px of still water.
+        const canal = terrainOf(Array.from({ length: 200 }, (_, x) => [x, 0, -16] as [number, number, number]));
+        const filled = (walls?: { east: Set<string>; south: Set<string> }): WaterGrid => {
+            const grid = new WaterGrid(canal, gridBoundsOf(canal, []), undefined, walls);
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            return grid;
+        };
+        // Water poured at one end: how much higher the other end of the canal stands after 150 steps.
+        const riseAtFarEnd = (flowSteps: number, walls?: { east: Set<string>; south: Set<string> }): number => {
+            const grid = filled(walls);
+            const before = grid.depthAt(190, 0);
+            run(grid, 150, { ...nothing, flowSteps, flows: [{ cellX: 2, cellY: 0, px: 4 }] });
+            return grid.depthAt(190, 0) - before;
+        };
+
+        it("levels a long stretch of water much sooner on a map that goes faster than reality", () => {
+            expect(riseAtFarEnd(1)).toBeLessThan(0.05);
+            expect(riseAtFarEnd(15)).toBeGreaterThan(0.5);
+        });
+
+        it("still never crosses a wall", () => {
+            const wall = { east: new Set([cellKey(99, 0)]), south: new Set<string>() };
+            expect(riseAtFarEnd(15, wall)).toBe(0);
+        });
+
+        it("never carries water over dry ground, nor over a film of water: two ponds stay two ponds", () => {
+            // Two ponds 30 cells long, 20 cells of ground between them, 6 px lower than their rims.
+            const cells: [number, number, number][] = [];
+            for (let x = 0; x < 30; x++) cells.push([x, 0, -16], [x + 50, 0, -16]);
+            for (let x = 30; x < 50; x++) cells.push([x, 0, -6]);
+            const ponds = terrainOf(cells);
+            const grid = new WaterGrid(ponds, gridBoundsOf(ponds, []));
+            // 8 px of water in the first pond only: its surface is 2 px under the ground between the ponds.
+            for (let step = 0; step < 60; step++) {
+                grid.step({ ...nothing, flowSteps: 15, flows: [{ cellX: 5, cellY: 0, px: 4 }] });
+            }
+            let second = 0;
+            for (let x = 50; x < 80; x++) second += grid.depthAt(x, 0);
+            expect(grid.depthAt(20, 0)).toBeGreaterThan(5);
+            expect(second).toBe(0);
+        });
+
+        it("keeps every drop", () => {
+            const grid = filled();
+            const before = grid.totalPx();
+            let poured = 0;
+            let lost = 0;
+            for (let step = 0; step < 100; step++) {
+                const tally = grid.step({ ...nothing, flowSteps: 15, flows: [{ cellX: 2, cellY: 0, px: 4 }] });
+                poured += tally.sourcesPx;
+                lost += tally.lostPx;
+            }
+            expect(grid.totalPx()).toBeCloseTo(before + poured - lost, 1);
+        });
+
+        it("comes to rest: still water stays still", () => {
+            const grid = filled();
+            run(grid, 300, { ...nothing, flowSteps: 15 });
+            expect(grid.step({ ...nothing, flowSteps: 15 }).moved).toBe(false);
+        });
     });
 
     it("keeps every drop whatever the number of moves a step", () => {

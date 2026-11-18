@@ -52,6 +52,12 @@ export interface WaterWallSides {
 
 /** The most moves the water makes around a sink in one step. */
 export const MAX_FLOW_STEPS = 16;
+/** How far a cell exchanges water with another of its stretch, in cells, over long distances. */
+const FAR_STRIDES = [4, 16];
+/** A cell with less water than this breaks a stretch: a film over a sill does not join two lakes. */
+const FAR_MIN_DEPTH_PX = 2;
+/** The share of a difference of level two distant cells of a stretch exchange in a step. */
+const FAR_SHARE = 0.25;
 /** How far around the disc of a sink the water moves again during a step, in cells: eight tiles. */
 const SINK_RUSH_CELLS = 16;
 
@@ -169,6 +175,9 @@ export class WaterGrid {
     private readonly queue: Int32Array;
     private readonly seen: Uint32Array;
     private search = 0;
+    /** For the levelling over long distances: the stretch of water each cell belongs to along a line. */
+    private stretch = new Int32Array(0);
+    private farTurn = false;
     private depth: Float32Array;
     private next: Float32Array;
 
@@ -298,6 +307,11 @@ export class WaterGrid {
             }
         }
         if (this.flow(tally)) tally.moved = true;
+        // On a map that goes faster than reality the water also levels over long distances: a lake would otherwise
+        // take minutes to feel a sink or a source at its other end.
+        // Every other step: half the cost for the server, and still far ahead of the moves from cell to cell.
+        this.farTurn = !this.farTurn;
+        if (this.farTurn && flowStepsOf(input.flowSteps) > 1 && this.flowFar()) tally.moved = true;
         // Around a sink that still asks for water, the water moves again, as many times as the step asks: on a map
         // that goes faster than reality a strong sink would otherwise empty its disc and wait for water that creeps
         // in one cell a step. Only around the sinks: moving the whole grid that often would cost too much.
@@ -573,6 +587,67 @@ export class WaterGrid {
             }
             if (depth[index] < 0) depth[index] = 0;
         }
+    }
+
+    /**
+     * Levels the water over long distances: along each row, then each column, a cell exchanges water with the cells
+     * 4 and 16 cells further when an unbroken stretch of water joins them (no wall, no dry ground, not even a film
+     * of water between them), a quarter of their difference of level. Water never leaves its stretch: it does what a
+     * few moves from cell to cell would have done, sooner. Returns whether any moved.
+     */
+    private flowFar(): boolean {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        const ground = this.ground;
+        const closed = this.closed;
+        const size = width * height;
+        if (this.stretch.length !== size) this.stretch = new Int32Array(size);
+        const stretch = this.stretch;
+        let moved = false;
+        for (let axis = 0; axis < 2; axis++) {
+            // The stretches of this direction: the same number for the cells of an unbroken run of water.
+            const lines = axis === 0 ? height : width;
+            const length = axis === 0 ? width : height;
+            const along = axis === 0 ? 1 : width;
+            const across = axis === 0 ? width : 1;
+            const wall = axis === 0 ? 1 : 4;
+            let id = 0;
+            for (let line = 0; line < lines; line++) {
+                let open = false;
+                for (let place = 0; place < length; place++) {
+                    const index = line * across + place * along;
+                    if (depth[index] < FAR_MIN_DEPTH_PX) {
+                        stretch[index] = 0;
+                        open = false;
+                        continue;
+                    }
+                    // A new stretch at the start of the line, after a break, or behind a wall.
+                    if (!open || closed[index - along] & wall) id++;
+                    stretch[index] = id;
+                    open = true;
+                }
+            }
+            for (const stride of FAR_STRIDES) {
+                const jump = stride * along;
+                for (let line = 0; line < lines; line++) {
+                    for (let place = 0; place + stride < length; place++) {
+                        const index = line * across + place * along;
+                        const other = index + jump;
+                        if (stretch[index] === 0 || stretch[index] !== stretch[other]) continue;
+                        const drop = ground[index] + depth[index] - (ground[other] + depth[other]);
+                        if (drop > -LEVEL_PX && drop < LEVEL_PX) continue;
+                        // The giver keeps enough water to stay part of its stretch.
+                        const giver = drop > 0 ? index : other;
+                        const amount = Math.min(Math.abs(drop) * FAR_SHARE, depth[giver] - FAR_MIN_DEPTH_PX);
+                        if (amount <= DRY_PX) continue;
+                        depth[giver] -= amount;
+                        depth[drop > 0 ? other : index] += amount;
+                        moved = true;
+                    }
+                }
+            }
+        }
+        return moved;
     }
 
     /** Moves the water one step. Returns whether any moved. */
