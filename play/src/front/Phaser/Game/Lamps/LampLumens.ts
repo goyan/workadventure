@@ -62,7 +62,8 @@ export const LAMP_LUMENS_PRESETS: readonly { name: LampLumensPresetName; lumens:
     { name: "candle", lumens: 75 },
     { name: "accent", lumens: 200 },
     { name: "desk", lumens: 360 },
-    { name: "bulb", lumens: 600 },
+    // An ordinary bulb (a 40 W incandescent one): weaker than the lamp nothing was set on (about 600 lm).
+    { name: "bulb", lumens: 450 },
     { name: "ceiling", lumens: 1600 },
     { name: "floodlight", lumens: 3500 },
 ];

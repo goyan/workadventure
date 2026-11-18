@@ -149,8 +149,19 @@ describe("RgbLampEditor", () => {
             render();
             expect(Number(power()?.value)).toBeGreaterThan(580);
             expect(Number(power()?.value)).toBeLessThan(620);
-            expect(preset("Bulb")?.getAttribute("aria-pressed")).toBe("true");
+            // Stronger than an ordinary bulb (450 lm): none of the named lamps.
+            expect(preset("Bulb")?.getAttribute("aria-pressed")).toBe("false");
             expect(target.textContent).toContain("follows the power");
+        });
+
+        it("sets an ordinary bulb of 450 lm: 5 tiles, three quarters of the full strength", () => {
+            const { saved } = render();
+            preset("Bulb")?.click();
+            flushSync();
+
+            expect(saved[0]).toMatchObject({ type: "rgbLampPropertyData", radius: 5, intensity: 0.75 });
+            expect(preset("Bulb")?.getAttribute("aria-pressed")).toBe("true");
+            expect(preset("Bulb")?.getAttribute("title")).toBe("450 lm");
         });
 
         it("sets the reach and the strength together when a real lamp is chosen, as one step saved", () => {
