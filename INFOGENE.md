@@ -2319,6 +2319,29 @@ qui bute sur un obstacle en allant vers sa cible erre 3 s puis reprend. Les anim
 sans passer derrière les objets. `play`, `back` et `map-storage` se déploient ensemble.
 
 
+
+### Moteur par espèce et chiffres par espèce
+
+Suite : conception `docs/superpowers/specs/2026-11-18-chaine-alimentaire-design.md` du dépôt d'infra (mouettes,
+antilopes, lions et tigres viendront sur ce moteur).
+
+- **Table des espèces** : `libs/map-editor/src/Life/Species.ts` décrit chaque espèce (milieu, profondeur d'eau, proies,
+  vitesse, portée, repas avant un petit, faim, plafond par salle). `stepPopulation` la lit ; ajouter une espèce, c'est
+  ajouter une entrée (et ce qui lui est propre : où elle arrive, ce que les réglages de la carte disent d'elle).
+  Le comportement des poissons et des dauphins n'a pas changé : un test (`LifeGolden.test.ts`) compare la vie d'un lac
+  sur 2 000 pas à celle d'avant, pour trois graines.
+- **Sur le fil** : une espèce a un numéro (0 poisson, 1 dauphin ; 2 antilope, 3 lion, 4 tigre, 5 mouette réservés), et
+  le `kind` d'un animal vaut deux fois ce numéro, plus un pour une femelle. `AquaticLifeMessage.species` porte, pour
+  chaque espèce, mâles, femelles, plafond, et depuis le début : arrivées, naissances, morts de vieillesse, mangés,
+  morts de faim, morts à sec, repas par espèce de proie. Les échantillons de l'historique portent l'effectif de chaque
+  espèce. Les anciens champs restent remplis comme avant.
+- **Serveur** : `AquaticLifeManager` tient ces totaux et les sauvegarde ; un état sauvegardé avant ce lot repart des
+  anciens totaux (poisson : arrivées, naissances, vieillesse, mangés, à sec ; dauphin : naissances, morts).
+- **Outil Vie** : sous le tableau de bord, « Par espèce » (`LifeSpeciesDashboard.svelte`, chiffres de
+  `LifeSpeciesStats.ts`) : un tableau à une colonne par espèce, sur la dernière minute ou depuis le début ; « Qui mange
+  qui » ; une courbe par espèce, à la même échelle, chacune masquable ; un bandeau quand une espèce qui a vécu n'a plus
+  d'individu. Un vieux serveur qui ne dit rien des espèces : ce bloc ne s'affiche pas.
+
 ## Météo de la carte
 
 Dans « Outils → Météo », un éditeur de la carte choisit
