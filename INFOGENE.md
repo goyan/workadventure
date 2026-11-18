@@ -2155,7 +2155,7 @@ murs d'un palier ne comptent pas (l'eau reste au sol).
 repos (pente sous 0,1 px par cellule) ni sous un quart de case d'eau ; à moitié entre un quart et une demi-case,
 pleinement quand on nage. À une pente de 2 px par cellule la poussée est à son maximum : le quart de la vitesse de la marche,
 multiplié par la « force du courant » de la carte (`settings.water.current`, de 0 à 2, 1 par défaut ; 0 coupe le
-courant). Une berge sèche plus haute que l'eau ne repousse pas ; un creux sec plus bas attire (l'eau y tombe). Pas
+courant). Un sol sec, ou sous un film d'eau trop mince pour emporter, n'est pas une pente : une berge ne repousse pas, et le bord d'une inondation n'attire pas ; seul un creux nettement plus bas que le sol sous l'eau attire (l'eau y tombe). Pas
 de poussée assis, en suivi, sur un palier, ni pendant un trajet au double-clic. Les autres joueurs voient la dérive
 par la position, comme tout déplacement.
 
