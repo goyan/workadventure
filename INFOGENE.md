@@ -2231,6 +2231,10 @@ dauphins ; un dauphin en chasse ne courtise pas. Ils meurent de vieillesse (70 %
 et de faim après huit intervalles de chasse sans prise. Un lac dont les dauphins ont disparu en retrouve après environ
 un délai de reproduction des dauphins.
 
+**Peur des avatars.** Poissons et dauphins s'écartent d'un avatar qui approche à moins de trois cases (96 px), à leur
+vitesse la plus grande, sans quitter leur eau ; tant qu'ils ont peur ils ne se reproduisent pas et ne chassent pas.
+Seuls comptent les avatars au sol (`GameRoom.groundAvatarPositions`).
+
 **Plafonds.** Un poisson pour 8 cellules de son corps d'eau (2 au moins), un dauphin pour 150 cellules profondes,
 300 animaux et 12 dauphins par salle.
 

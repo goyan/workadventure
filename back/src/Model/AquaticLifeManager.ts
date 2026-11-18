@@ -83,6 +83,8 @@ export class AquaticLifeManager {
         private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
         private readonly now: () => number = Date.now,
         private readonly random: () => number = Math.random,
+        /** Where the avatars the animals fear stand, in map pixels (those on the ground). */
+        private readonly avatars: () => readonly { x: number; y: number }[] = () => [],
     ) {}
 
     /**
@@ -178,6 +180,7 @@ export class AquaticLifeManager {
             LIFE_STEP_MS,
             now,
             this.random,
+            this.avatars(),
         );
         this.totals.arrivals += tally.arrivals;
         this.totals.births += tally.births;

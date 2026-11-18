@@ -335,10 +335,15 @@ export class GameRoom implements BrothersFinder {
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
         // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
-        const aquaticLife = new AquaticLifeManager(gameRoom, terrainWater, {
-            repository: await getVariablesRepository(),
-            roomUrl,
-        });
+        const aquaticLife = new AquaticLifeManager(
+            gameRoom,
+            terrainWater,
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            undefined,
+            // The animals fear the avatars that are on the ground, where the water is.
+            () => gameRoom.groundAvatarPositions(),
+        );
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
@@ -1133,6 +1138,17 @@ export class GameRoom implements BrothersFinder {
     /** The water of the relief of the map (its whole state), sent to a user who joins the room. */
     public getTerrainWater(): TerrainWaterMessage | undefined {
         return this.terrainWater?.snapshot();
+    }
+
+    /** Where the avatars standing on the ground are, in map pixels (not those on a raised floor). */
+    public groundAvatarPositions(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const user of this.users.values()) {
+            if (!sameFloor(user.getFloorZ(), 0)) continue;
+            const { x, y } = user.getPosition();
+            positions.push({ x, y });
+        }
+        return positions;
     }
 
     /** The animals of the water of the relief, sent to a user who joins the room. */

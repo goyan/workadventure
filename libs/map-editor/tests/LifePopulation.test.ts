@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Animal } from "../src/Life/Animal";
 import {
     emptyPopulation,
+    FEAR_RADIUS_PX,
     lifeCensus,
     HUNT_GIVE_UP_MS,
     LIFE_STEP_MS,
@@ -353,6 +354,73 @@ describe("stepPopulation", () => {
             habitableBodies: 0,
             populatedBodies: 0,
             capacity: 0,
+        });
+    });
+
+    describe("fear of the avatars", () => {
+        const wide = (): WaterGrid => gridOf(rows("s".repeat(30), 12));
+        const away = (animal: Animal, threat: { x: number; y: number }): number =>
+            Math.hypot(animal.x - threat.x, animal.y - threat.y);
+
+        it("makes a fish swim away from an avatar that comes close, and leaves the others alone", () => {
+            const grid = wide();
+            const bodies = waterBodiesOf(grid);
+            const threat = { x: 10 * 16, y: 6 * 16 };
+            const near = fish(1, "male", 11, 6, 1e12);
+            const far = { ...fish(2, "male", 28, 2, 1e12), targetX: 28 * 16 + 8, targetY: 3 * 16 + 8, speed: 1 };
+            const population = seeded([near, far]);
+            const random = scripted();
+            const before = away(near, threat);
+            for (let step = 0; step < 6; step++) {
+                stepPopulation(population, grid, bodies, settings, LIFE_STEP_MS, step * 500, random, [threat]);
+            }
+            expect(away(near, threat)).toBeGreaterThan(before + 32);
+            expect(away(near, threat)).toBeGreaterThanOrEqual(FEAR_RADIUS_PX);
+            // The one far away kept its own slow way.
+            expect(far.targetX).toBe(28 * 16 + 8);
+            expect(Math.floor(far.x / 16)).toBe(28);
+        });
+
+        it("flees at its fastest, without ever leaving the water", () => {
+            // A corridor one cell high: the fish is cornered against its dry end.
+            const grid = gridOf(["ssssssssss", ".........."]);
+            const bodies = waterBodiesOf(grid);
+            const cornered = fish(1, "male", 1, 0, 1e12);
+            const population = seeded([cornered]);
+            const random = scripted();
+            for (let step = 0; step < 20; step++) {
+                stepPopulation(population, grid, bodies, settings, LIFE_STEP_MS, step * 500, random, [
+                    { x: 3 * 16, y: 8 },
+                ]);
+                expect(grid.depthAt(Math.floor(cornered.x / 16), Math.floor(cornered.y / 16))).toBeGreaterThanOrEqual(
+                    8,
+                );
+            }
+            expect(population.animals).toHaveLength(1);
+        });
+
+        it("keeps frightened fish from mating and a frightened dolphin from hunting", () => {
+            const pondGrid = pond();
+            const couple = seeded([fish(1, "male", 2, 2), fish(2, "female", 2, 2)]);
+            const frightened = stepPopulation(
+                couple,
+                pondGrid,
+                waterBodiesOf(pondGrid),
+                settings,
+                LIFE_STEP_MS,
+                0,
+                scripted(),
+                [{ x: 2 * 16 + 8, y: 2 * 16 + 8 }],
+            );
+            expect(frightened.births).toBe(0);
+
+            const deep = lake();
+            const hunter = dolphin(1, "male", 2, 2, { readyAt: 0 });
+            const hunted = seeded([hunter, fish(2, "male", 2, 2, 1e12)]);
+            const tally = stepPopulation(hunted, deep, waterBodiesOf(deep), settings, LIFE_STEP_MS, 0, scripted(), [
+                { x: 2 * 16 + 8, y: 2 * 16 + 8 },
+            ]);
+            expect(tally.eaten).toBe(0);
         });
     });
 });

@@ -2,7 +2,7 @@ import type { WaterGrid } from "../Terrain/WaterGrid";
 import { TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
-import { cellAt, swim } from "./Swim";
+import { cellAt, minDepthOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
 import type { WaterBodies } from "./WaterBodies";
 
@@ -23,6 +23,12 @@ export const DEEP_CELLS_PER_DOLPHIN = 150;
 export const STARVE_HUNTS = 8;
 /** A dolphin must have eaten this many fish since its last calf to have another. */
 export const MEALS_FOR_CALF = 1;
+/** An animal flees an avatar that comes this close (three tiles), in map pixels. */
+export const FEAR_RADIUS_PX = 96;
+/** It flees towards a point this far from where it is. */
+const FLEE_REACH_PX = 3 * TERRAIN_CELL;
+/** When it cannot swim straight away, it tries this many cells around and takes the one furthest from the avatar. */
+const FLEE_DRAWS = 6;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
 /** A hunting dolphin swims this many times faster than the fastest fish. */
@@ -116,6 +122,9 @@ function nearest(from: Animal, candidates: readonly Animal[]): Animal | undefine
  * One step of the life of the water of a room: the old die, dolphins hunt, fish mate, everyone swims (those left
  * without water die), and the bodies of water big enough get their first fish and their dolphin. The same inputs
  * (random included) give the same life: the server alone runs it.
+ *
+ * The animals fear the avatars: `threats` are where the avatars stand, in map pixels. An animal near one swims away
+ * at its fastest, and neither mates nor hunts meanwhile.
  */
 export function stepPopulation(
     population: Population,
@@ -125,6 +134,7 @@ export function stepPopulation(
     dtMs: number,
     now: number,
     random: () => number,
+    threats: readonly { x: number; y: number }[] = [],
 ): LifeTally {
     const tally = emptyLifeTally();
     const maxSpeed = settings.maxSpeed * TILE_PX;
@@ -144,6 +154,24 @@ export function stepPopulation(
         if (now - animal.bornAt >= animal.lifespanMs || now - (animal.ateAt ?? animal.bornAt) >= starveMs) {
             dead.add(animal);
             tally.predatorDeaths++;
+        }
+    }
+
+    // Who is frightened, and by which avatar (the nearest one).
+    const frightened = new Map<Animal, { x: number; y: number }>();
+    if (threats.length > 0) {
+        for (const animal of population.animals) {
+            if (dead.has(animal)) continue;
+            let nearestThreat: { x: number; y: number } | undefined;
+            let least = FEAR_RADIUS_PX;
+            for (const threat of threats) {
+                const far = Math.hypot(animal.x - threat.x, animal.y - threat.y);
+                if (far < least) {
+                    least = far;
+                    nearestThreat = threat;
+                }
+            }
+            if (nearestThreat) frightened.set(animal, nearestThreat);
         }
     }
 
@@ -167,6 +195,7 @@ export function stepPopulation(
 
     for (const dolphin of population.animals) {
         if (dolphin.kind !== "dolphin" || dead.has(dolphin) || now < dolphin.readyAt) continue;
+        if (frightened.has(dolphin)) continue;
         dolphin.huntSince ??= now;
         if (now - dolphin.huntSince >= HUNT_GIVE_UP_MS) {
             dolphin.huntSince = undefined;
@@ -223,11 +252,12 @@ export function stepPopulation(
         for (const male of list) {
             // A dolphin on a hunt does not court.
             if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
+            if (frightened.has(male)) continue;
             if (living >= cap || dolphins >= MAX_DOLPHINS) break;
             if (population.animals.length - dead.size + born.length >= MAX_ANIMALS) break;
             const female = nearest(
                 male,
-                list.filter((other) => other.sex === "female" && canBreed(other)),
+                list.filter((other) => other.sex === "female" && canBreed(other) && !frightened.has(other)),
             );
             if (!female) continue;
             if (distance(male, female) >= REACH_PX) {
@@ -261,9 +291,12 @@ export function stepPopulation(
         let living = list.filter((fish) => !dead.has(fish)).length;
         for (const male of list) {
             if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
+            if (frightened.has(male)) continue;
             const female = nearest(
                 male,
-                list.filter((fish) => fish.sex === "female" && !dead.has(fish) && now >= fish.readyAt),
+                list.filter(
+                    (fish) => fish.sex === "female" && !dead.has(fish) && now >= fish.readyAt && !frightened.has(fish),
+                ),
             );
             if (!female) continue;
             if (distance(male, female) >= REACH_PX) {
@@ -287,6 +320,9 @@ export function stepPopulation(
         }
     }
 
+    for (const [animal, threat] of frightened) {
+        flee(animal, threat, bodies, maxSpeed, random);
+    }
     for (const animal of population.animals) {
         if (dead.has(animal)) continue;
         if (!swim(animal, bodies, grid, maxSpeed, dtMs, now, random)) {
@@ -303,6 +339,60 @@ export function stepPopulation(
     spawn(population, bodies, settings, dtMs, now, random);
     tally.arrivals = population.animals.length - before;
     return tally;
+}
+
+/**
+ * Gives a frightened animal somewhere to swim to, away from the avatar: straight away when the water allows, else
+ * the cell of its water furthest from the avatar among a few around it.
+ */
+function flee(
+    animal: Animal,
+    threat: { x: number; y: number },
+    bodies: WaterBodies,
+    maxSpeed: number,
+    random: () => number,
+): void {
+    const minDepth = minDepthOf(animal);
+    const cellX = cellAt(animal.x);
+    const cellY = cellAt(animal.y);
+    const body = bodies.bodyAt(cellX, cellY);
+    animal.speed = animal.kind === "dolphin" ? maxSpeed * DOLPHIN_SPEED_FACTOR : maxSpeed;
+    let dx = animal.x - threat.x;
+    let dy = animal.y - threat.y;
+    const far = Math.hypot(dx, dy);
+    if (far < 1) {
+        // Right under the avatar: any way out.
+        const angle = random() * 2 * Math.PI;
+        dx = Math.cos(angle);
+        dy = Math.sin(angle);
+    } else {
+        dx /= far;
+        dy /= far;
+    }
+    const x = animal.x + dx * FLEE_REACH_PX;
+    const y = animal.y + dy * FLEE_REACH_PX;
+    if (
+        body !== 0 &&
+        bodies.bodyAt(cellAt(x), cellAt(y)) === body &&
+        bodies.swimmable(cellAt(x), cellAt(y), minDepth)
+    ) {
+        animal.targetX = x;
+        animal.targetY = y;
+        return;
+    }
+    let best: { x: number; y: number; far: number } | undefined;
+    for (let draw = 0; draw < FLEE_DRAWS; draw++) {
+        const cell = bodies.randomCell(body, { cellX, cellY }, WANDER_REACH_CELLS, minDepth, random);
+        if (!cell) break;
+        const middleX = cell.cellX * TERRAIN_CELL + TERRAIN_CELL / 2;
+        const middleY = cell.cellY * TERRAIN_CELL + TERRAIN_CELL / 2;
+        const distanceToThreat = Math.hypot(middleX - threat.x, middleY - threat.y);
+        if (!best || distanceToThreat > best.far) best = { x: middleX, y: middleY, far: distanceToThreat };
+    }
+    if (best) {
+        animal.targetX = best.x;
+        animal.targetY = best.y;
+    }
 }
 
 function newFish(

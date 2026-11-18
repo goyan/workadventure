@@ -67,7 +67,15 @@ function createHarness({
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         return seed / 0x80000000;
     };
-    const manager = new AquaticLifeManager(room, water, { repository, roomUrl: "room" }, () => clock.now, random);
+    const avatars: { x: number; y: number }[] = [];
+    const manager = new AquaticLifeManager(
+        room,
+        water,
+        { repository, roomUrl: "room" },
+        () => clock.now,
+        random,
+        () => avatars,
+    );
     /** Steps of half a second, the clock moving with them. */
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) {
@@ -75,7 +83,7 @@ function createHarness({
             clock.now += 500;
         }
     };
-    return { manager, wam, sent, repository, water, clock, steps, saved };
+    return { manager, wam, sent, repository, water, clock, steps, saved, avatars };
 }
 
 describe("AquaticLifeManager", () => {
@@ -239,6 +247,24 @@ describe("AquaticLifeManager", () => {
         steps(2);
         const kinds = sent[0].animals.map((animal) => animal.kind).sort();
         expect(kinds).toEqual([0, 1, 2, 3]);
+    });
+
+    it("makes the fish keep away from an avatar standing in the middle of their pond", () => {
+        const { manager, sent, steps, avatars } = createHarness();
+        manager.mapChanged();
+        steps(2);
+        // The pond is 160 px wide: an avatar in its middle frightens every fish that comes within 96 px.
+        avatars.push({ x: 80, y: 80 });
+        let closest = Infinity;
+        for (let second = 0; second < 30; second++) {
+            steps(2);
+            // The first seconds are for swimming away.
+            if (second < 6) continue;
+            for (const animal of sent.at(-1)?.animals ?? []) {
+                closest = Math.min(closest, Math.hypot(animal.x - 80, animal.y - 80));
+            }
+        }
+        expect(closest).toBeGreaterThan(48);
     });
 
     it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {
