@@ -397,7 +397,7 @@ const mapEditor: BaseTranslation = {
             unit: "Unit of the flow",
             radius: "Radius (tiles)",
             radiusHint:
-                "The sink takes the water of this disc; the water further away has to run to it. The wider, the more it drains.",
+                "The sink empties this disc first. When it asks for more, it lowers the whole body of water joined to it.",
         },
         lamp: {
             label: "Light zone",
