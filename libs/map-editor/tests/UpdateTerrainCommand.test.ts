@@ -69,21 +69,21 @@ describe("UpdateTerrainCommand", () => {
         await new UpdateWAMSettingCommand(wam, {
             message: {
                 $case: "updateWaterSettingMessage",
-                updateWaterSettingMessage: { runoff: 500, evaporation: -1, speed: 99999, absorption: 500 },
+                updateWaterSettingMessage: { runoff: 500, evaporation: -1, speed: 99999, absorption: 500, current: 9 },
             },
         }).execute();
-        expect(wam.settings?.water).toEqual({ runoff: 100, evaporation: 0, speed: 1000, absorption: 100 });
+        expect(wam.settings?.water).toEqual({ runoff: 100, evaporation: 0, speed: 1000, absorption: 100, current: 2 });
         await new UpdateWAMSettingCommand(wam, {
             message: {
                 $case: "updateWaterSettingMessage",
                 updateWaterSettingMessage: { runoff: 4, evaporation: 0.5, speed: 1, absorption: 2 },
             },
         }).execute();
-        expect(wam.settings?.water).toEqual({ runoff: 4, evaporation: 0.5, speed: 1, absorption: 2 });
+        expect(wam.settings?.water).toEqual({ runoff: 4, evaporation: 0.5, speed: 1, absorption: 2, current: 2 });
         // An older client sends no speed: the one of the map is kept.
         await new UpdateWAMSettingCommand(wam, {
             message: { $case: "updateWaterSettingMessage", updateWaterSettingMessage: { runoff: 4, evaporation: 0.5 } },
         }).execute();
-        expect(wam.settings?.water).toMatchObject({ speed: 1, absorption: 2 });
+        expect(wam.settings?.water).toMatchObject({ speed: 1, absorption: 2, current: 2 });
     });
 });

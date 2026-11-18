@@ -2144,6 +2144,15 @@ réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
 
 **Limite connue** : l'eau traverse les murs ; le passage par les portes seulement est prévu dans une PR suivante.
 
+**Courant.** L'eau emporte l'avatar : le navigateur lit la pente de la surface de l'eau (sol + eau) autour de lui
+(`Terrain/WaterCurrent.ts`, sur deux cellules de chaque côté) et l'ajoute à son déplacement. Rien dans une eau au
+repos (pente sous 0,1 px par cellule) ni sous un quart de case d'eau ; à moitié entre un quart et une demi-case,
+pleinement quand on nage. À une pente de 2 px par cellule la poussée est à son maximum : la vitesse de la marche,
+multipliée par la « force du courant » de la carte (`settings.water.current`, de 0 à 2, 1 par défaut ; 0 coupe le
+courant). Une berge sèche plus haute que l'eau ne repousse pas ; un creux sec plus bas attire (l'eau y tombe). Pas
+de poussée assis, en suivi, sur un palier, ni pendant un trajet au double-clic. Les autres joueurs voient la dérive
+par la position, comme tout déplacement.
+
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources
 et les puits (`WaterInputs.ts`). Une fois par seconde il annonce à la salle ce qui a changé (deux octets par cellule,

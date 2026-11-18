@@ -43,7 +43,7 @@ describe("WamManager relief", () => {
                 },
             },
         });
-        expect(manager.getWam().settings?.water).toEqual({ runoff: 3, evaporation: 1, speed: 60, absorption: 5 });
+        expect(manager.getWam().settings?.water).toEqual({ runoff: 3, evaporation: 1, speed: 60, absorption: 5, current: 1 });
     });
 
     // A broken command must not stop the room: the relief stays as it was and the next commands still apply.

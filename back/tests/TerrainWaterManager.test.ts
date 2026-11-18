@@ -27,7 +27,7 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0 } },
+        settings: { weather, water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1 } },
         terrain,
     };
 }

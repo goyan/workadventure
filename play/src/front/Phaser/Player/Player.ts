@@ -645,6 +645,15 @@ export class Player extends Character {
         const moveAmount = speed * 20;
         x = x * moveAmount;
         y = y * moveAmount;
+        // What the keys ask for, before the water has its say: the avatar keeps facing where it is steered.
+        const steeredX = x;
+        const steeredY = y;
+        if (!followMode && !this.isSeated()) {
+            // The current of the water of the relief carries the avatar, on top of what it does by itself.
+            const push = this.waterCurrentPush(WOKA_SPEED * 20);
+            x += push.x;
+            y += push.y;
+        }
 
         if (!followMode && this.vehicleMode === VehicleMode.Off && !this.isSeated() && this.isOnIceHere()) {
             this.glideOnIce({ x, y }, speedUp, delta);
@@ -656,16 +665,18 @@ export class Player extends Character {
 
         // Compute direction
         let direction = this._lastDirection;
-        if (moving) {
-            if (Math.abs(x) > Math.abs(y)) {
-                direction = x < 0 ? PositionMessage_Direction.LEFT : PositionMessage_Direction.RIGHT;
+        if (steeredX !== 0 || steeredY !== 0) {
+            if (Math.abs(steeredX) > Math.abs(steeredY)) {
+                direction = steeredX < 0 ? PositionMessage_Direction.LEFT : PositionMessage_Direction.RIGHT;
             } else {
-                direction = y < 0 ? PositionMessage_Direction.UP : PositionMessage_Direction.DOWN;
+                direction = steeredY < 0 ? PositionMessage_Direction.UP : PositionMessage_Direction.DOWN;
             }
         }
 
         // Send movement events
-        const running = moving && speedUp && !followMode && this.vehicleMode === VehicleMode.Off;
+        // Carried by the water without steering, the avatar drifts: it does not run.
+        const steered = steeredX !== 0 || steeredY !== 0;
+        const running = steered && speedUp && !followMode && this.vehicleMode === VehicleMode.Off;
         this.lastRunning = running;
         const emit = () => this.emit(hasMovedEventName, { moving, running, direction, x: this.x, y: this.y });
         if (moving) {

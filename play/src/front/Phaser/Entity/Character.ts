@@ -1,3 +1,4 @@
+import { DEFAULT_WATER_SETTINGS } from "@workadventure/map-editor";
 import * as Phaser from "phaser";
 import type { Unsubscriber, Readable } from "svelte/store";
 import { get, readable } from "svelte/store";
@@ -28,6 +29,8 @@ import {
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
 import { getIceRectangles, isOnIce } from "@wa/front/Phaser/Game/Ice/IceZones";
+import { currentPush } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
+import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
@@ -401,6 +404,19 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (isPointInWater(getWaterRectangles(this.scene, this.floorZ), body)) return true;
         // A lake of the relief, on the ground only: deep enough, one swims in it as in a pool.
         return this.floorZ < 2 && isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
+    }
+
+    /**
+     * The speed the current of the water of the relief gives the character, in pixels a second: nothing out of the
+     * water, in still or shallow water, on a raised floor, or on a map that set its current to nothing. At its
+     * hardest (and the usual strength) it carries as fast as one walks (`walkSpeed`).
+     */
+    protected waterCurrentPush(walkSpeed: number): CurrentVector {
+        const water = this.floorZ < 2 ? this.scene?.getTerrainWater?.() : undefined;
+        if (!water) return { x: 0, y: 0 };
+        const strength =
+            this.scene.getGameMap().getWamFile()?.getWam().settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current;
+        return currentPush(water, this.x, this.y + BODY_CENTER_OFFSET_Y, this.scene.time.now, strength, walkSpeed);
     }
 
     /**

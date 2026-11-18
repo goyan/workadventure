@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { defaultForcePx, MAX_DEPTH_TILES, MAX_WATER_SPEED } from "@workadventure/map-editor";
+    import { defaultForcePx, MAX_DEPTH_TILES, MAX_WATER_CURRENT, MAX_WATER_SPEED } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
@@ -19,6 +19,7 @@
     let evaporation = $state(saved.evaporation);
     let speed = $state(saved.speed);
     let absorption = $state(saved.absorption);
+    let current = $state(saved.current);
 
     let diameterTiles = $state($terrainBrushStore.diameterTiles);
     let forceAuto = $state($terrainBrushStore.forcePx === undefined);
@@ -33,7 +34,7 @@
     function saveWater(): void {
         executeUpdateWAMSettings({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff, evaporation, speed, absorption },
+            updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
     }
 
@@ -185,6 +186,20 @@
             buttonShape="square"
         />
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.speed()}</p>
+    </div>
+    <div data-testid="terrain-current">
+        <RangeSlider
+            id="terrain-current"
+            label={$LL.mapEditor.terrain.current()}
+            unit="×"
+            min={0}
+            max={MAX_WATER_CURRENT}
+            step={0.1}
+            bind:value={current}
+            onchange={saveWater}
+            buttonShape="square"
+        />
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.current()}</p>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
 </div>
