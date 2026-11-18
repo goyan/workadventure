@@ -23,6 +23,7 @@
         IconSettings,
         IconWall,
         IconShovel,
+        IconFish,
     } from "@wa-icons";
 
     type SideBarTool = {
@@ -81,6 +82,12 @@
                 toolName: EditorToolName.TerrainEditor,
                 iconComponent: IconShovel,
                 tooltiptext: $LL.mapEditor.sideBar.terrainEditor(),
+            });
+            // The life of that water: its figures and its settings.
+            tools.push({
+                toolName: EditorToolName.LifeEditor,
+                iconComponent: IconFish,
+                tooltiptext: $LL.mapEditor.sideBar.lifeEditor(),
             });
         }
 

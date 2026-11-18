@@ -2203,7 +2203,15 @@ retrouve après environ un délai de reproduction.
 
 **Plafonds.** Un poisson pour 8 cellules de son corps d'eau (2 au moins), 300 animaux et 12 dauphins par salle.
 
-**Réglages de la carte** (éditeur, panneau **Relief**, section « Simulation / Vie », éditeurs de la carte entière) :
+**Outil Vie de l'éditeur** (poisson dans la barre d'outils, chiffre 0, éditeurs de la carte entière). Il réunit le
+tableau de bord et les réglages. Tableau de bord, mis à jour chaque seconde : proies (poissons, mâles et femelles),
+prédateurs (dauphins), proies par prédateur, remplissage des eaux (poissons sur la capacité des plans d'eau),
+plans d'eau peuplés sur ceux qui peuvent l'être, courbe des proies et des prédateurs sur cinq minutes (depuis
+l'ouverture de la page, une échelle par courbe), et naissances, arrivées, morts de vieillesse, mangés et morts à sec
+sur la dernière minute et depuis le début. Les totaux viennent du serveur (`AquaticLifeStatsMessage`, gardés avec les
+animaux) ; couper la vie les remet à zéro.
+
+**Réglages de la carte** (même outil, « Réglages de la simulation ») :
 interrupteur (coupé par défaut ; couper vide l'eau), délai de reproduction (10 s à 1 h, 2 min par défaut), durée de
 vie maximale (30 s à 24 h, 15 min), vitesse maximale (0,2 à 6 cases/s, 1,5), intervalle de chasse (5 s à 1 h, 1 min).
 Les durées sont en temps réel : la vitesse de l'eau ne les accélère pas. Enregistrés dans `wam.settings.life`

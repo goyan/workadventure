@@ -6,7 +6,6 @@
     import { terrainBlockedStore, terrainBrushStore } from "../../Stores/TerrainEditorStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import RangeSlider from "../Input/RangeSlider.svelte";
-    import TerrainLifeSettings from "./TerrainLifeSettings.svelte";
     import TerrainWaterDashboard from "./TerrainWaterDashboard.svelte";
 
     /** The widest brush, in tiles, and the strongest stroke, in pixels of altitude. */
@@ -203,6 +202,4 @@
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.current()}</p>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
-
-    <TerrainLifeSettings initial={saved.life} />
 </div>

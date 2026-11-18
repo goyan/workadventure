@@ -16,17 +16,15 @@ vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
 const executeUpdateWAMSettings = vi.fn((_message: unknown) => Promise.resolve());
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({ executeUpdateWAMSettings }));
 
-const { default: TerrainLifeSettings } =
-    await import("../../../../src/front/Components/MapEditor/TerrainLifeSettings.svelte");
-const { aquaticLifeCountsStore } = await import("../../../../src/front/Stores/TerrainEditorStore");
+const { default: LifeSettings } = await import("../../../../src/front/Components/MapEditor/LifeSettings.svelte");
 
 const target = document.body.appendChild(document.createElement("div"));
 let component: ReturnType<typeof mount> | undefined;
-const render = (enabled: boolean): void => {
+const render = (enabled: boolean, maxLifespan = 900): void => {
     flushSync(() => {
-        component = mount(TerrainLifeSettings, {
+        component = mount(LifeSettings, {
             target,
-            props: { initial: { enabled, reproductionDelay: 120, maxLifespan: 900, maxSpeed: 1.5, huntInterval: 60 } },
+            props: { initial: { enabled, reproductionDelay: 120, maxLifespan, maxSpeed: 1.5, huntInterval: 60 } },
         });
     });
 };
@@ -38,22 +36,27 @@ afterEach(async () => {
     component = undefined;
     if (mounted) await unmount(mounted);
     executeUpdateWAMSettings.mockClear();
-    aquaticLifeCountsStore.set({ fish: 0, dolphins: 0 });
 });
 
-describe("TerrainLifeSettings", () => {
+describe("LifeSettings", () => {
     it("shows only the switch while the life of the map is off", () => {
         render(false);
         expect(find("life-enabled")).not.toBeNull();
         for (const slider of sliders) expect(find(slider)).toBeNull();
-        expect(find("life-counts")).toBeNull();
     });
 
-    it("shows its four settings and the animals of the room once it is on", () => {
-        aquaticLifeCountsStore.set({ fish: 12, dolphins: 1 });
+    it("shows its four settings once it is on, each with the value the map holds", () => {
         render(true);
         for (const slider of sliders) expect(find(slider)).not.toBeNull();
-        expect(find("life-counts")?.textContent).toContain('{"fish":12,"dolphins":1}');
+        expect(find("life-reproduction-delay")?.textContent).toContain("2 min");
+        expect(find("life-max-lifespan")?.textContent).toContain("15 min");
+        expect(find("life-hunt-interval")?.textContent).toContain("1 min");
+    });
+
+    it("shows the very duration the map holds, even between two steps of its slider", () => {
+        render(true, 120);
+        expect(find("life-max-lifespan")?.textContent).toContain("2 min");
+        expect(find("life-max-lifespan")?.textContent).not.toContain("1 min 55");
     });
 
     it("saves the five settings to the map when the switch is turned on", () => {

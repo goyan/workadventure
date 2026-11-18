@@ -17,6 +17,7 @@ const EDITOR_TOOL_SHORTCUTS: readonly EditorToolShortcut[] = [
     { digit: 7, tool: EditorToolName.SelectionEditor, needsEditRight: true },
     { digit: 8, tool: EditorToolName.MapLayerEditor, needsEditRight: true },
     { digit: 9, tool: EditorToolName.TerrainEditor, needsEditRight: true },
+    { digit: 0, tool: EditorToolName.LifeEditor, needsEditRight: true },
 ];
 
 /**

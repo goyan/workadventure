@@ -1,5 +1,6 @@
 import type { TerrainWaterStatsMessage } from "@workadventure/messages";
 import { writable } from "svelte/store";
+import type { LifeStatsView } from "../Phaser/Game/Life/LifeStats";
 import type { TerrainBrush } from "../Phaser/Game/Terrain/TerrainStroke";
 
 /** The brush of the relief tool of the map editor, kept while the editor stays open. */
@@ -12,5 +13,5 @@ export const terrainBlockedStore = writable(false);
 /** What comes into the water of the map and goes out of it, as the server last told (the dashboard of the relief tool). */
 export const terrainWaterStatsStore = writable<TerrainWaterStatsMessage | undefined>(undefined);
 
-/** How many fish and dolphins live in the water of the map, as the server last told. */
-export const aquaticLifeCountsStore = writable<{ fish: number; dolphins: number }>({ fish: 0, dolphins: 0 });
+/** The figures of the life of the water of the map (the dashboard of the life tool); undefined until told. */
+export const aquaticLifeStatsStore = writable<LifeStatsView | undefined>(undefined);

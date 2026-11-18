@@ -30,6 +30,7 @@ import { AreaEditorTool } from "./Tools/AreaEditorTool";
 import type { MapEditorTool } from "./Tools/MapEditorTool";
 import { MapLayerEditorTool } from "./Tools/MapLayerEditorTool";
 import { TerrainEditorTool } from "./Tools/TerrainEditorTool";
+import { LifeEditorTool } from "./Tools/LifeEditorTool";
 import { EntityEditorTool } from "./Tools/EntityEditorTool";
 import { WAMSettingsEditorTool } from "./Tools/WAMSettingsEditorTool";
 import type { FrontCommandInterface } from "./Commands/FrontCommandInterface";
@@ -133,6 +134,7 @@ export class MapEditorModeManager {
             [EditorToolName.EntityEditor]: new EntityEditorTool(this),
             [EditorToolName.MapLayerEditor]: new MapLayerEditorTool(this),
             [EditorToolName.TerrainEditor]: new TerrainEditorTool(this),
+            [EditorToolName.LifeEditor]: new LifeEditorTool(),
             [EditorToolName.WAMSettingsEditor]: new WAMSettingsEditorTool(this),
             [EditorToolName.SelectionEditor]: this.selectionEditorTool,
             [EditorToolName.ExploreTheRoom]: new ExplorerTool(this.scene),

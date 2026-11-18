@@ -278,7 +278,7 @@ import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
-import { aquaticLifeCountsStore, terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
+import { aquaticLifeStatsStore, terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -351,6 +351,7 @@ import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
@@ -548,6 +549,7 @@ export class GameScene extends DirtyScene {
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
     private aquaticLifeView: AquaticLifeView | undefined;
+    private readonly aquaticLifeStats = new LifeStats();
     private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
@@ -2703,7 +2705,11 @@ export class GameScene extends DirtyScene {
      */
     private receiveAquaticLife(message: AquaticLifeMessage): void {
         this.aquaticLife.receive(message.animals, this.time.now);
-        aquaticLifeCountsStore.set(this.aquaticLife.counts());
+        // The dashboard of the life tool: nothing to show on a map that never had any life.
+        this.aquaticLifeStats.receive(message.animals, message.stats, Date.now());
+        aquaticLifeStatsStore.set(
+            message.stats || message.animals.length > 0 ? this.aquaticLifeStats.view(Date.now()) : undefined,
+        );
     }
 
     private receiveTerrainWater(message: TerrainWaterMessage): void {
