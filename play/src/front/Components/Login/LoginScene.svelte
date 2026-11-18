@@ -151,10 +151,7 @@
                 </p>
             {/if}
         </section>
-        <section
-            class="action flex h-fit justify-center m-0"
-            class:opacity-50={errorName !== ""}
-        >
+        <section class="action flex h-fit justify-center m-0" class:opacity-50={errorName !== ""}>
             <Button
                 type="submit"
                 disabled={errorName !== ""}

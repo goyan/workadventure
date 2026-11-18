@@ -52,9 +52,9 @@
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
     import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
-    import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
+    import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";

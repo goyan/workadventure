@@ -20,7 +20,6 @@ import { getPlayerAnimations, PlayerAnimationTypes } from "@wa/front/Phaser/Play
 import { ProtobufClientUtils } from "@wa/front/Network/ProtobufClientUtils";
 import { WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
-import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
@@ -45,6 +44,7 @@ import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
