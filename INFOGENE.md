@@ -2597,3 +2597,14 @@ Recette : tracer une pièce à murs de 2 ; poser les dalles au niveau 2 ; poser 
 découpe) ; fermer l'éditeur, monter, marcher jusqu'aux bords, redescendre, passer dessous (le palier s'estompe) ;
 ajouter un palier niveau 4 et un escalier « part du niveau 2, monte jusqu'à niveau 4 » ; vérifier la pipette, la
 gomme, annuler et rétablir ; recharger la page (les altitudes sont conservées).
+
+## Zoom lors de l’ouverture des réglages desktop
+
+Ouvrir ou fermer un panneau latéral conserve le zoom choisi dans une zone de cadrage.
+Le redimensionnement recentre la zone sans réappliquer son zoom automatique ni perdre sa marge.
+Le moteur met à jour la caméra active même lorsque le redimensionnement vient du navigateur,
+y compris lors du passage entre zoom du canvas et zoom de la caméra sur écran Retina.
+Tests de régression avec une caméra Phaser aux densités 1 et 2.
+Recette : entrer dans une zone de cadrage, dézoomer, puis ouvrir et fermer Réglages ;
+vérifier la conservation du zoom, puis sortir de la zone et vérifier le suivi de l’avatar.
+Validation en beta à effectuer après fusion.
