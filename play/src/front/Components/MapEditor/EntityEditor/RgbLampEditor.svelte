@@ -88,15 +88,26 @@
 
     // The power of the lamp, in lumens: one figure sets its reach and its strength together, as for a real lamp. A
     // lamp set freely (a reach and a strength that no real lamp has) has none until a power is chosen.
-    const lumens = $derived(lumensOfLamp(radius, intensityPercent));
-    let lumensShown = $state(lumensOfLamp(saved().radius, percentOf(saved().intensity)) ?? LAMP_LUMENS_MIN);
+    const lumens = $derived(lumensOfLamp(radius, intensityPercent, angle));
+    let lumensShown = $state(
+        lumensOfLamp(saved().radius, percentOf(saved().intensity), saved().angle) ?? LAMP_LUMENS_MIN,
+    );
     $effect(() => {
         if (lumens !== undefined) lumensShown = lumens;
     });
 
     /** Shows the lamp of this power on the map (its reach and strength follow); saved when the slider is let go of. */
     function showLumens(value: number): void {
-        ({ radius, intensityPercent } = lampFromLumens(value));
+        ({ radius, intensityPercent } = lampFromLumens(value, angle));
+    }
+
+    /**
+     * The opening of the beam being dragged: a lamp of a given power keeps it, so a narrower beam gathers its light
+     * and reaches further. A lamp set freely keeps the reach it was given.
+     */
+    function narrowBeam(opening: number): void {
+        if (lumens === undefined) return;
+        ({ radius, intensityPercent } = lampFromLumens(lumensShown, opening));
     }
 
     function applyLumens(value: number): void {
@@ -308,7 +319,7 @@
         />
         <div class="flex flex-wrap gap-1">
             {#each LAMP_LUMENS_PRESETS as preset (preset.name)}
-                {@const presetLamp = lampFromLumens(preset.lumens)}
+                {@const presetLamp = lampFromLumens(preset.lumens, angle)}
                 {@const chosen = presetLamp.radius === radius && presetLamp.intensityPercent === intensityPercent}
                 <Button
                     variant={chosen ? "secondary" : "light"}
@@ -337,6 +348,7 @@
         max={RGB_LAMP_MAX_ANGLE}
         step={1}
         bind:value={angle}
+        onchange={(value) => narrowBeam(value)}
         buttonShape="square"
     />
     <RangeSlider

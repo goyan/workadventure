@@ -460,7 +460,11 @@ n'a pas de position à lui (comme un va-et-vient).
   `intensity`, les lumens n'en sont qu'une lecture (`lumensOfLamp`), et une lampe réglée librement n'en a pas tant
   qu'on ne choisit pas une puissance. Modèle : lampe à 2,20 m du sol éclairant vers le bas, case de 1,20 m² au sol,
   éclairement au sol = flux / (2π (d² + h²)), portée arrêtée à 2 lux, pied pleinement éclairé à partir du flux de la
-  lampe par défaut (6 cases, 100 % ≈ 600 lm) ; soit lumens ≈ 15 × cases² + 60. Ces constantes sont des choix, pas
+  lampe par défaut (6 cases, 100 % ≈ 600 lm) ; soit lumens ≈ 15 × cases² + 60. **Un faisceau étroit concentre** : les mêmes
+  lumens dans un cône de θ degrés valent 360/θ fois plus qu'en éclairant tout autour (réflecteur) ; une ampoule de
+  450 lm porte à 5 cases tout autour, à 10,5 cases dans un quart de cercle, jamais au-delà de 20 cases. Dans
+  l'éditeur, resserrer l'ouverture d'une lampe réglée en puissance garde ses lumens et allonge sa portée ; une lampe
+  en réglage libre garde sa portée ; la poignée d'ouverture sur la carte ne recale pas la portée. Ces constantes sont des choix, pas
   des mesures. **Décroissance réelle (réglage personnel, à l'essai)** : Paramètres → Lumière indirecte,
   « Décroissance réelle de la lumière » (`realFalloffStore`, coupé par défaut) dessine la lumière des lampes et des
   torches selon cette loi (`realLightFalloff` : plus forte au pied, longue traîne faible, environ 23 % à mi-portée

@@ -188,6 +188,36 @@ describe("RgbLampEditor", () => {
             expect(saved[0]).not.toHaveProperty("intensity");
         });
 
+        it("gathers the light of the lamp when its beam is narrowed: the same power reaches further", () => {
+            const { saved } = render();
+            preset("Bulb")?.click();
+            flushSync();
+            expect(sliders()[0].value).toBe("5");
+
+            slide(sliders()[1], "90");
+
+            expect(Number(sliders()[0].value)).toBeGreaterThan(5);
+            expect(saved[saved.length - 1]).toMatchObject({ type: "rgbLampPropertyData", angle: 90 });
+            expect(Number(power()?.value)).toBeGreaterThan(400);
+            expect(Number(power()?.value)).toBeLessThan(500);
+        });
+
+        it("leaves the reach of a lamp set freely alone when its beam is narrowed", () => {
+            render([
+                {
+                    id: "p",
+                    type: "rgbLampPropertyData",
+                    color: "#ffffff",
+                    radius: 10,
+                    direction: 90,
+                    angle: 360,
+                    intensity: 0.3,
+                },
+            ]);
+            slide(sliders()[1], "90");
+            expect(sliders()[0].value).toBe("10");
+        });
+
         it("says so for a lamp set freely, to a reach and a strength no real lamp has", () => {
             render([
                 {
@@ -249,14 +279,15 @@ describe("RgbLampEditor", () => {
         const { saved } = render([
             { id: "p", type: "rgbLampPropertyData", color: "#00ff00", radius: 10, direction: 180, angle: 45 },
         ]);
-        slide(sliders()[1], "90");
+        // The direction: the opening of the beam also moves the reach of a lamp of a given power.
+        slide(sliders()[2], "200");
         expect(saved[0]).toEqual({
             id: "p",
             type: "rgbLampPropertyData",
             color: "#00ff00",
             radius: 10,
-            direction: 180,
-            angle: 90,
+            direction: 200,
+            angle: 45,
         });
     });
 
