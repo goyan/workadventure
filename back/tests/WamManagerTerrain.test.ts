@@ -46,6 +46,37 @@ describe("WamManager relief", () => {
         expect(manager.getWam().settings?.water).toEqual({ runoff: 3, evaporation: 1, speed: 60, absorption: 5, current: 1 });
     });
 
+    it("keeps the life settings of the room up to date", async () => {
+        const manager = new WamManager(emptyWam());
+        await manager.applyCommand({
+            id: "life",
+            editMapMessage: {
+                message: {
+                    $case: "updateWAMSettingsMessage",
+                    updateWAMSettingsMessage: {
+                        message: {
+                            $case: "updateLifeSettingMessage",
+                            updateLifeSettingMessage: {
+                                enabled: true,
+                                reproductionDelay: 30,
+                                maxLifespan: 600,
+                                maxSpeed: 2,
+                                huntInterval: 20,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        expect(manager.getWam().settings?.life).toEqual({
+            enabled: true,
+            reproductionDelay: 30,
+            maxLifespan: 600,
+            maxSpeed: 2,
+            huntInterval: 20,
+        });
+    });
+
     // A broken command must not stop the room: the relief stays as it was and the next commands still apply.
     it("survives a broken relief command", async () => {
         const manager = new WamManager(emptyWam());

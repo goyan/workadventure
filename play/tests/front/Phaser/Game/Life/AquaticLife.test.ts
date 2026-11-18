@@ -72,4 +72,13 @@ describe("AquaticLife", () => {
         expect(life.counts()).toEqual({ fish: 2, dolphins: 1 });
         expect(life.shown(0, false)).toHaveLength(3);
     });
+
+    it("forgets the dead by itself, even when nothing is drawn", () => {
+        const life = new AquaticLife();
+        life.receive([fish(1, 0)], 0);
+        life.receive([], 1000);
+        expect(life.isEmpty()).toBe(false);
+        life.receive([], 2000);
+        expect(life.isEmpty()).toBe(true);
+    });
 });

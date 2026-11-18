@@ -37,7 +37,7 @@ const SPRITES: Record<AquaticKind, { rows: string[]; palette: Palette }> = {
 export const aquaticTextureKey = (kind: AquaticKind): string => `aquatic-life:${kind}`;
 
 /** Makes the texture of a kind of animal, once for a scene. */
-export function ensureAquaticTexture(scene: Phaser.Scene, kind: AquaticKind): string {
+export function ensureAquaticTexture(scene: Pick<Phaser.Scene, "textures">, kind: AquaticKind): string {
     const key = aquaticTextureKey(kind);
     if (scene.textures.exists(key)) return key;
     const { rows, palette } = SPRITES[kind];

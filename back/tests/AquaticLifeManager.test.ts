@@ -1,8 +1,9 @@
-import { WaterGrid } from "@workadventure/map-editor";
+import { cellKey, WaterGrid, withHeights } from "@workadventure/map-editor";
 import type { WAMFileFormat } from "@workadventure/map-editor";
 import type { AquaticLifeMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AquaticLifeManager } from "../src/Model/AquaticLifeManager";
+import { TerrainWaterManager } from "../src/Model/TerrainWaterManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
 /** A grid of that many cells, all under 20 px of water (deep enough for everything) or dry. */
@@ -205,5 +206,84 @@ describe("AquaticLifeManager", () => {
         expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
         expect(error).toHaveBeenCalled();
         expect(vi.getTimerCount()).toBe(0);
+    });
+});
+
+describe("AquaticLifeManager on the water of a room", () => {
+    /** A hollow of 10 × 8 cells, one tile deep, with a strong spring in its middle. */
+    function createRoom() {
+        const cells = new Map<string, number>();
+        for (let y = 0; y < 8; y++) for (let x = 0; x < 10; x++) cells.set(cellKey(x, y), -32);
+        const wam: WAMFileFormat = {
+            version: "2.1.0",
+            mapUrl: "map.tmj",
+            areas: [],
+            entityCollections: [],
+            entities: {
+                spring: {
+                    x: 5 * 16 + 8,
+                    y: 4 * 16 + 8,
+                    prefabRef: { collectionName: "eau", id: "x" },
+                    properties: [{ id: "s", type: "waterSourcePropertyData", flow: 600_000 }],
+                },
+            },
+            settings: {
+                water: { runoff: 0, evaporation: 0, speed: 1, absorption: 0, current: 1 },
+                life: { enabled: true, reproductionDelay: 60, maxLifespan: 600, maxSpeed: 1.5, huntInterval: 30 },
+            },
+            terrain: withHeights(undefined, cells),
+        };
+        const sent: AquaticLifeMessage[] = [];
+        const room = {
+            getWam: () => wam,
+            sendSubMessageToRoom: (message: SubToPusherRoomMessage): void => {
+                if (message.message?.$case === "aquaticLifeMessage") sent.push(message.message.aquaticLifeMessage);
+            },
+        };
+        const water = new TerrainWaterManager(room, { slotsFor: () => undefined });
+        const life = new AquaticLifeManager(room, water, undefined, () => 0);
+        return { wam, sent, water, life };
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("gets its first fish once the hollow holds enough water, and none while it is dry", () => {
+        vi.useFakeTimers();
+        const { sent, water, life, wam } = createRoom();
+        water.mapChanged();
+        life.mapChanged();
+        life.step();
+        life.step();
+        expect(sent).toEqual([]);
+        for (let step = 0; step < 600; step++) water.step();
+        life.step();
+        life.step();
+        expect(sent.at(-1)?.animals).toHaveLength(2);
+        const grid = water.getGrid();
+        for (const animal of sent.at(-1)?.animals ?? []) {
+            expect(grid?.depthAt(Math.floor(animal.x / 16), Math.floor(animal.y / 16))).toBeGreaterThanOrEqual(8);
+        }
+        expect(wam.settings?.life?.enabled).toBe(true);
+        water.stop();
+        life.stop();
+    });
+
+    it("is told when the water changes: its number moves while water pours, not once it rests", () => {
+        vi.useFakeTimers();
+        const { water, wam } = createRoom();
+        water.mapChanged();
+        const dry = water.waterVersion();
+        for (let step = 0; step < 20; step++) water.step();
+        expect(water.waterVersion()).toBeGreaterThan(dry);
+        // The spring is taken away: the water settles, then nothing changes any more.
+        wam.entities = {};
+        water.mapChanged();
+        for (let step = 0; step < 3000; step++) water.step();
+        const settled = water.waterVersion();
+        for (let step = 0; step < 50; step++) water.step();
+        expect(water.waterVersion()).toBe(settled);
+        water.stop();
     });
 });

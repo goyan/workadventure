@@ -4,6 +4,8 @@ import { ensureAquaticTexture } from "./AquaticSprites";
 
 /** Just above the relief and its water (TERRAIN_DEPTH in TerrainView), under the objects and the avatars. */
 const AQUATIC_DEPTH = 0.66;
+/** An animal this close to the screen counts as on it: its image is wider than its point. */
+const MARGIN_PX = 32;
 /** Seen through the water. */
 const AQUATIC_ALPHA = 0.7;
 
@@ -15,7 +17,7 @@ export class AquaticLifeView {
     private readonly images = new Map<number, Phaser.GameObjects.Image>();
 
     constructor(
-        private readonly scene: Phaser.Scene & { markDirty(): void },
+        private readonly scene: Pick<Phaser.Scene, "add" | "cameras" | "textures"> & { markDirty(): void },
         private readonly life: AquaticLife,
         private readonly isShown: () => boolean,
         private readonly reducedMotion: () => boolean,
@@ -31,25 +33,39 @@ export class AquaticLifeView {
         }
         if (this.life.isEmpty() && this.images.size === 0) return;
         const seen = new Set<number>();
+        const view = this.scene.cameras.main.worldView;
+        const onScreen = (x: number, y: number): boolean =>
+            x >= view.x - MARGIN_PX &&
+            x <= view.x + view.width + MARGIN_PX &&
+            y >= view.y - MARGIN_PX &&
+            y <= view.y + view.height + MARGIN_PX;
+        // The scene is drawn again only when something the player can see changed.
+        let changed = false;
         for (const animal of this.life.shown(now, this.reducedMotion())) {
             seen.add(animal.id);
+            const x = Math.round(animal.x);
+            const y = Math.round(animal.y);
+            const alpha = animal.alpha * AQUATIC_ALPHA;
             let image = this.images.get(animal.id);
             if (!image) {
-                image = this.scene.add.image(animal.x, animal.y, ensureAquaticTexture(this.scene, animal.kind));
+                image = this.scene.add.image(x, y, ensureAquaticTexture(this.scene, animal.kind));
                 image.setDepth(AQUATIC_DEPTH);
                 this.images.set(animal.id, image);
+                changed ||= onScreen(x, y);
+            } else if (image.x !== x || image.y !== y || image.alpha !== alpha || image.flipX !== animal.facingLeft) {
+                changed ||= onScreen(x, y) || onScreen(image.x, image.y);
             }
-            image.setPosition(Math.round(animal.x), Math.round(animal.y));
-            image.setAlpha(animal.alpha * AQUATIC_ALPHA);
+            image.setPosition(x, y);
+            image.setAlpha(alpha);
             image.setFlipX(animal.facingLeft);
         }
         for (const [id, image] of this.images) {
             if (seen.has(id)) continue;
+            changed ||= onScreen(image.x, image.y);
             image.destroy();
             this.images.delete(id);
         }
-        // They swim: the scene is drawn again while there are some.
-        this.scene.markDirty();
+        if (changed) this.scene.markDirty();
     }
 
     public destroy(): void {

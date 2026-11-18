@@ -75,7 +75,10 @@ export class AquaticLife {
             if (Math.abs(animal.x - at.x) >= 1) entry.facingLeft = animal.x < at.x;
         }
         for (const entry of this.entries.values()) {
-            if (!told.has(entry.id) && entry.goneAt === undefined) entry.goneAt = now;
+            if (told.has(entry.id)) continue;
+            if (entry.goneAt === undefined) entry.goneAt = now;
+            // Forgotten here too: nothing is drawn while the player hides the life.
+            else if (now - entry.goneAt >= FADE_MS) this.entries.delete(entry.id);
         }
         this.started = true;
     }
