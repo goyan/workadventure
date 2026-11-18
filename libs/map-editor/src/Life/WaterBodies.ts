@@ -30,6 +30,8 @@ export interface WaterBodies {
         minDepth: number,
         random: () => number,
     ): WaterCell | undefined;
+    /** A random cell of the whole body with at least this much water. Reads the whole grid: for rare uses. */
+    anyCell(body: number, minDepth: number, random: () => number): WaterCell | undefined;
 }
 
 const SIDES = [
@@ -86,6 +88,21 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
         sizes,
         bodyAt,
         swimmable: (cellX, cellY, minDepth) => grid.depthAt(cellX, cellY) >= minDepth,
+        anyCell: (body, minDepth, random) => {
+            if (body === 0) return undefined;
+            // One pass, each fitting cell kept with the same chance.
+            let chosen: WaterCell | undefined;
+            let seen = 0;
+            for (let index = 0; index < labels.length; index++) {
+                if (labels[index] !== body) continue;
+                const cellX = left + (index % width);
+                const cellY = top + Math.floor(index / width);
+                if (grid.depthAt(cellX, cellY) < minDepth) continue;
+                seen++;
+                if (random() * seen < 1) chosen = { cellX, cellY };
+            }
+            return chosen;
+        },
         randomCell: (body, near, reach, minDepth, random) => {
             if (body === 0) return undefined;
             const candidates: WaterCell[] = [];
