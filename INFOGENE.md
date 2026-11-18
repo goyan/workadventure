@@ -2159,6 +2159,14 @@ courant). Une berge sèche plus haute que l'eau ne repousse pas ; un creux sec p
 de poussée assis, en suivi, sur un palier, ni pendant un trajet au double-clic. Les autres joueurs voient la dérive
 par la position, comme tout déplacement.
 
+**Canoë.** Troisième véhicule au choix (Mon avatar → Véhicule), avec ses trois couleurs (coque, bord, pagaie). Ce
+n'est pas un véhicule du sol : il se met à l'eau tout seul. Là où l'on nagerait dans l'eau du relief (16 px et
+plus), l'avatar est dans son canoë au lieu de nager, pour tout le monde (`Player.updateCanoe` passe le véhicule en
+mode « toujours » sur l'eau et « coupé » ailleurs ; `isCanoeAfloat`). Vitesse de la marche (la nage est à 0,6), deux
+fois plus en pagayant fort (touche de course) ; le courant l'emporte moitié moins qu'un nageur. Pas de canoë à
+terre, dans une piscine (on y nage), sur un palier, en suivi, ni pour un costume qui n'est pas humain ; la roue
+d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`), comme les autres véhicules.
+
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources
 et les puits (`WaterInputs.ts`). Une fois par seconde il annonce à la salle ce qui a changé (deux octets par cellule,

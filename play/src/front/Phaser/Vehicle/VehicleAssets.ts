@@ -1,7 +1,8 @@
 import { SEATED_DIRECTIONS } from "@wa/front/Phaser/Entity/SeatedPose";
-import { ELECTRIC_UNICYCLE_TEXTURE, SKATEBOARD_TEXTURE, Vehicle, type VehicleColors } from "./Vehicle";
+import { CANOE_TEXTURE, ELECTRIC_UNICYCLE_TEXTURE, SKATEBOARD_TEXTURE, Vehicle, type VehicleColors } from "./Vehicle";
 import { createSkateboardSheet, SKATEBOARD_LAYERS } from "./SkateboardArtwork";
 import { createElectricUnicycleSheet } from "./ElectricUnicycleArtwork";
+import { createCanoeSheet } from "./CanoeArtwork";
 import { cardinalVehicleHeading, VEHICLE_FRAME_SIZE, VEHICLE_FEET_Y } from "./VehicleFrames";
 
 type VehicleLayer = (typeof SKATEBOARD_LAYERS)[number];
@@ -14,6 +15,9 @@ export interface VehicleArtwork {
 }
 
 export function vehicleArtwork(vehicle: Exclude<Vehicle, Vehicle.None>): VehicleArtwork {
+    if (vehicle === Vehicle.Canoe) {
+        return { texture: CANOE_TEXTURE, layers: SKATEBOARD_LAYERS, createSheet: createCanoeSheet };
+    }
     return vehicle === Vehicle.ElectricUnicycle
         ? { texture: ELECTRIC_UNICYCLE_TEXTURE, layers: SKATEBOARD_LAYERS, createSheet: createElectricUnicycleSheet }
         : { texture: SKATEBOARD_TEXTURE, layers: SKATEBOARD_LAYERS, createSheet: createSkateboardSheet };

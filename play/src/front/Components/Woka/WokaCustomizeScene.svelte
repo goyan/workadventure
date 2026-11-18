@@ -417,7 +417,11 @@
                     <div class="rounded-lg flex flex-col flex-1 min-h-0 min-w-0">
                         {#if showVehicle}
                             <h3 class="text-lg font-semibold">{$LL.woka.vehicle.title()}</h3>
-                            <p class="text-sm text-white/70">{$LL.woka.vehicle.hint()}</p>
+                            <p class="text-sm text-white/70">
+                                {selectedVehicle === Vehicle.Canoe
+                                    ? $LL.woka.vehicle.canoeHint()
+                                    : $LL.woka.vehicle.hint()}
+                            </p>
                             <div class="grid grid-cols-2 gap-3 py-4" role="group" aria-label={$LL.woka.vehicle.title()}>
                                 {#each Object.values(Vehicle) as vehicle (vehicle)}
                                     <button
@@ -454,7 +458,9 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.shellColor()
-                                                : $LL.woka.vehicle.centerColor()}</span
+                                                : selectedVehicle === Vehicle.Canoe
+                                                  ? $LL.woka.vehicle.hullColor()
+                                                  : $LL.woka.vehicle.centerColor()}</span
                                         >
                                         <input
                                             type="color"
@@ -466,7 +472,9 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.sideColor()
-                                                : $LL.woka.vehicle.edgeColor()}</span
+                                                : selectedVehicle === Vehicle.Canoe
+                                                  ? $LL.woka.vehicle.rimColor()
+                                                  : $LL.woka.vehicle.edgeColor()}</span
                                         >
                                         <input
                                             type="color"
@@ -478,7 +486,9 @@
                                         <span
                                             >{selectedVehicle === Vehicle.ElectricUnicycle
                                                 ? $LL.woka.vehicle.pedalsColor()
-                                                : $LL.woka.vehicle.wheelsColor()}</span
+                                                : selectedVehicle === Vehicle.Canoe
+                                                  ? $LL.woka.vehicle.paddleColor()
+                                                  : $LL.woka.vehicle.wheelsColor()}</span
                                         >
                                         <input
                                             type="color"
