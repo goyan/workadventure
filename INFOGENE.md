@@ -446,8 +446,15 @@ n'a pas de position à lui (comme un va-et-vient).
   (écoute les événements `preupdate`/`postupdate` de la scène et `prerender`/`postrender` du jeu, seulement quand le
   compteur est affiché). Le jeu ne redessine que quand quelque chose a changé : le temps de rendu d'une scène au repos
   est proche de zéro.
+- **Mise en évidence des zones sous l'éclairage réaliste** : la propriété de zone d'origine « Mise en évidence »
+  (`highlight`, `DarkenOutsideAreaEffect`) assombrit tout ce qui est hors de la zone quand on y entre ; l'éditeur
+  l'ajoute d'office à une zone silencieuse, donc aux salles de réunion. Sous « Éclairage réaliste », bloc « Réglages
+  avancés » : l'interrupteur « Ne plus assombrir le reste de la carte en entrant dans une zone »
+  (`noAreaHighlightStore`, **activé par défaut**) la coupe pour soi tant que l'éclairage réaliste est activé
+  (`areaHighlightHiddenStore`) ; coupée pendant qu'on est dans la zone, elle s'efface aussitôt. Sans éclairage
+  réaliste, rien ne change. Porté par le code de partage (37 réglages).
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
-  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 36 réglages personnels de lumière (obscurité de la nuit,
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 37 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
   forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
   lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu

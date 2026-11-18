@@ -140,6 +140,10 @@ const menu: BaseTranslation = {
             bounce: "Bounce off the walls: {percent:number}% of the light sent back (0: none)",
             softEdge: "Edge of the lights softened over {pixels:number} px (0: sharp)",
             keptInEditor: "Same lighting in the map editor as in the game, to set the lamps",
+            realisticAdvanced: "Advanced settings",
+            noAreaHighlight: "No longer darken the rest of the map when entering an area",
+            noAreaHighlightHelp:
+                "Turns off for you the highlight of the areas (meeting rooms, silent areas) while the realistic lighting is on.",
             realistic: "Realistic lighting: rooms no longer light up on their own",
             realisticHelp: "At night a room is only lit by its lamps (switches, sensors). Personal setting.",
         },

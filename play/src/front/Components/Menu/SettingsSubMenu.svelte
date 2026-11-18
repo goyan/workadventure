@@ -28,6 +28,7 @@
         lightSoftEdgeStore,
         nightDarknessStore,
         nightInEditorStore,
+        noAreaHighlightStore,
         realisticNightStore,
         secondBounceOnStore,
         softEdgeOnStore,
@@ -541,6 +542,22 @@
                 labelPosition="right"
             />
             <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.realisticHelp()}</p>
+            {#if $realisticNightStore}
+                <details class="ps-4" data-testid="night-realistic-advanced">
+                    <summary class="cursor-pointer text-sm text-white/80">
+                        {$LL.menu.settings.night.realisticAdvanced()}
+                    </summary>
+                    <div class="flex flex-col gap-1 pt-2">
+                        <InputSwitch
+                            id="night-no-area-highlight"
+                            bind:value={$noAreaHighlightStore}
+                            label={$LL.menu.settings.night.noAreaHighlight()}
+                            labelPosition="right"
+                        />
+                        <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.noAreaHighlightHelp()}</p>
+                    </div>
+                </details>
+            {/if}
         </div>
         <LightSettingsShare />
         <InputSwitch
