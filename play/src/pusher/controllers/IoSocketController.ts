@@ -1068,6 +1068,8 @@ export class IoSocketController {
                             case "setAreaPropertyVariableMessage":
                             case "setEntityStateMessage":
                             case "reportSwitchPresenceMessage":
+                            case "castFishingLineMessage":
+                            case "reelFishingLineMessage":
                             case "entityMessage":
                             case "emotePromptMessage":
                             case "duckRushPromptMessage":

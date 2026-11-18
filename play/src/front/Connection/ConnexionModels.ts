@@ -8,6 +8,7 @@ import type {
     SayMessage,
     TerrainWaterMessage,
     AquaticLifeMessage,
+    FishingMessage,
 } from "@workadventure/messages";
 import type { WokaTextureDescriptionInterface } from "../Phaser/Entity/PlayerTextures";
 import type { CompanionTextureDescriptionInterface } from "../Phaser/Companion/CompanionTextures";
@@ -92,6 +93,8 @@ export interface RoomJoinedMessageInterface {
     /** The water of the relief of the map (its whole state) as the server computes it; absent on a dry map. */
     terrainWater?: TerrainWaterMessage;
     aquaticLife?: AquaticLifeMessage;
+    /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */
+    fishing?: FishingMessage;
     characterTextures: WokaTextureDescriptionInterface[];
     companionTexture?: CompanionTextureDescriptionInterface;
     commandsToApply?: EditMapCommandMessage[];

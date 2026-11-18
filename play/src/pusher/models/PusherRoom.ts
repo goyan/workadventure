@@ -246,6 +246,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "fishingMessage": {
+                            // The fishing lines are the same for every player of the room
+                            const fishingMessage = message.message.fishingMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "fishingMessage",
+                                        fishingMessage: fishingMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

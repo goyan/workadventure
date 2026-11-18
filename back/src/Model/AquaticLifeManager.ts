@@ -102,6 +102,26 @@ export interface LifeWater {
     waterVersion(): number;
 }
 
+/** The life of a room as one of its steps is about to find it, for what acts on the animals before it (fishing). */
+export interface LifeAtStep {
+    /** The animals themselves: one told where to swim goes there during the step. */
+    animals: Animal[];
+    bodies: WaterBodies;
+    /** The fastest a fish swims, in map pixels a second. */
+    maxSpeedPxPerS: number;
+    now: number;
+}
+
+/** What follows the life of a room: none of it can stop the life. */
+export interface LifeHooks {
+    beforeStep?: (life: LifeAtStep) => void;
+    /** The life stopped: turned off (`emptied`, it will start over), or its map has no water any more. */
+    stopped?: (emptied: boolean) => void;
+}
+
+/** A tile is 32 map pixels: the speed of the map is set in tiles a second. */
+const TILE_PX = 32;
+
 /** 0 a male fish, 1 a female fish, 2 a male dolphin, 3 a female dolphin. */
 const kindOnWire = (animal: Animal): number => (animal.kind === "dolphin" ? 2 : 0) + (animal.sex === "female" ? 1 : 0);
 
@@ -145,6 +165,7 @@ export class AquaticLifeManager {
         private readonly random: () => number = Math.random,
         /** Where the avatars the animals fear stand, in map pixels (those on the ground). */
         private readonly avatars: () => readonly { x: number; y: number }[] = () => [],
+        private readonly hooks: LifeHooks = {},
     ) {}
 
     /**
@@ -211,6 +232,7 @@ export class AquaticLifeManager {
             this.history.clear();
             this.ranges.clear();
             this.clearTimer();
+            this.tellStopped(true);
             if (had || this.toldSome) {
                 this.tell();
                 this.save(true);
@@ -229,6 +251,7 @@ export class AquaticLifeManager {
             this.timer.unref?.();
         } else if (!grid) {
             this.clearTimer();
+            this.tellStopped(false);
         }
     }
 
@@ -257,11 +280,22 @@ export class AquaticLifeManager {
         }
         const now = this.now();
         this.since ??= now;
+        const lifeSettings = { ...DEFAULT_LIFE_SETTINGS, ...settings };
+        try {
+            this.hooks.beforeStep?.({
+                animals: this.population.animals,
+                bodies: this.bodies,
+                maxSpeedPxPerS: lifeSettings.maxSpeed * TILE_PX,
+                now,
+            });
+        } catch (error) {
+            console.error("What follows the life of the water of the map failed", error);
+        }
         const tally = stepPopulation(
             this.population,
             grid,
             this.bodies,
-            { ...DEFAULT_LIFE_SETTINGS, ...settings },
+            lifeSettings,
             LIFE_STEP_MS,
             now,
             this.random,
@@ -383,6 +417,14 @@ export class AquaticLifeManager {
         this.store.repository
             .saveVariable(this.hashKey(), "state", state)
             .catch((error) => console.error("Could not save the life of the water of the map", error));
+    }
+
+    private tellStopped(emptied: boolean): void {
+        try {
+            this.hooks.stopped?.(emptied);
+        } catch (error) {
+            console.error("What follows the life of the water of the map failed", error);
+        }
     }
 
     private clearTimer(): void {
