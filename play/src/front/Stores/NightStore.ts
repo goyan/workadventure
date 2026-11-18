@@ -99,3 +99,5 @@ export const areaHighlightHiddenStore = derived(
     [realisticNightStore, noAreaHighlightStore],
     ([realistic, dropped]) => realistic && dropped,
 );
+/** Whether the lights fade as a real lamp does, brighter at the foot with a long faint tail: off by default. */
+export const realFalloffStore = createPersistedSwitchStore("nightLightRealFalloff", false);

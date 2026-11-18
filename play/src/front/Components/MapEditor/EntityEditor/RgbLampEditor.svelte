@@ -23,6 +23,13 @@
         rgbLampSettingsOf,
         type RgbLampSettings,
     } from "../../../Phaser/Game/Lamps/RgbLampSettings";
+    import {
+        LAMP_LUMENS_MAX,
+        LAMP_LUMENS_MIN,
+        LAMP_LUMENS_PRESETS,
+        lampFromLumens,
+        lumensOfLamp,
+    } from "../../../Phaser/Game/Lamps/LampLumens";
     import { rgbLampPreviewStore } from "../../../Stores/RgbLampStore";
     import Input from "../../Input/Input.svelte";
     import InputRadio from "../../Input/InputRadio.svelte";
@@ -76,6 +83,24 @@
     /** A temperature preset is applied like a code that is entered: shown, then saved as one step to undo. */
     function applyPreset(presetColor: string): void {
         color = presetColor;
+        save();
+    }
+
+    // The power of the lamp, in lumens: one figure sets its reach and its strength together, as for a real lamp. A
+    // lamp set freely (a reach and a strength that no real lamp has) has none until a power is chosen.
+    const lumens = $derived(lumensOfLamp(radius, intensityPercent));
+    let lumensShown = $state(lumensOfLamp(saved().radius, percentOf(saved().intensity)) ?? LAMP_LUMENS_MIN);
+    $effect(() => {
+        if (lumens !== undefined) lumensShown = lumens;
+    });
+
+    /** Shows the lamp of this power on the map (its reach and strength follow); saved when the slider is let go of. */
+    function showLumens(value: number): void {
+        ({ radius, intensityPercent } = lampFromLumens(value));
+    }
+
+    function applyLumens(value: number): void {
+        showLumens(value);
         save();
     }
 
@@ -269,16 +294,41 @@
             {/each}
         </div>
     </div>
-    <RangeSlider
-        label={$LL.mapEditor.properties.rgbLamp.radius()}
-        unit=""
-        id="rgb-lamp-radius-{lamp.entityId}"
-        min={RGB_LAMP_MIN_RADIUS_TILES}
-        max={RGB_LAMP_MAX_RADIUS_TILES}
-        step={0.5}
-        bind:value={radius}
-        buttonShape="square"
-    />
+    <div class="flex flex-col gap-1" data-testid="rgb-lamp-power">
+        <RangeSlider
+            label={$LL.mapEditor.properties.rgbLamp.power()}
+            unit=" lm"
+            id="rgb-lamp-power-{lamp.entityId}"
+            min={LAMP_LUMENS_MIN}
+            max={LAMP_LUMENS_MAX}
+            step={25}
+            bind:value={lumensShown}
+            onchange={(value) => showLumens(value)}
+            buttonShape="square"
+        />
+        <div class="flex flex-wrap gap-1">
+            {#each LAMP_LUMENS_PRESETS as preset (preset.name)}
+                {@const presetLamp = lampFromLumens(preset.lumens)}
+                {@const chosen = presetLamp.radius === radius && presetLamp.intensityPercent === intensityPercent}
+                <Button
+                    variant={chosen ? "secondary" : "light"}
+                    appearance="border"
+                    size="xs"
+                    class="m-0"
+                    aria-pressed={chosen}
+                    title="{preset.lumens} lm"
+                    onclick={() => applyLumens(preset.lumens)}
+                >
+                    {$LL.mapEditor.properties.rgbLamp.powerPresets[preset.name]()}
+                </Button>
+            {/each}
+        </div>
+        <p class="m-0 text-sm text-white/70">
+            {lumens === undefined
+                ? $LL.mapEditor.properties.rgbLamp.powerFree()
+                : $LL.mapEditor.properties.rgbLamp.powerHint({ radius, intensity: intensityPercent })}
+        </p>
+    </div>
     <RangeSlider
         label={$LL.mapEditor.properties.rgbLamp.angle()}
         unit="°"
@@ -299,16 +349,31 @@
         bind:value={direction}
         buttonShape="square"
     />
-    <RangeSlider
-        label={$LL.mapEditor.properties.rgbLamp.intensity()}
-        unit="%"
-        id="rgb-lamp-intensity-{lamp.entityId}"
-        min={Math.round(RGB_LAMP_MIN_INTENSITY * 100)}
-        max={Math.round(RGB_LAMP_MAX_INTENSITY * 100)}
-        step={5}
-        bind:value={intensityPercent}
-        buttonShape="square"
-    />
+    <details data-testid="rgb-lamp-free">
+        <summary class="cursor-pointer text-sm text-white/80">{$LL.mapEditor.properties.rgbLamp.freeSetting()}</summary>
+        <div class="flex flex-col gap-2 pt-2">
+            <RangeSlider
+                label={$LL.mapEditor.properties.rgbLamp.radius()}
+                unit=""
+                id="rgb-lamp-radius-{lamp.entityId}"
+                min={RGB_LAMP_MIN_RADIUS_TILES}
+                max={RGB_LAMP_MAX_RADIUS_TILES}
+                step={0.5}
+                bind:value={radius}
+                buttonShape="square"
+            />
+            <RangeSlider
+                label={$LL.mapEditor.properties.rgbLamp.intensity()}
+                unit="%"
+                id="rgb-lamp-intensity-{lamp.entityId}"
+                min={Math.round(RGB_LAMP_MIN_INTENSITY * 100)}
+                max={Math.round(RGB_LAMP_MAX_INTENSITY * 100)}
+                step={5}
+                bind:value={intensityPercent}
+                buttonShape="square"
+            />
+        </div>
+    </details>
     <!-- A disabled fieldset disables the native inputs inside: a greyed control sends no change, and saves nothing. -->
     <fieldset class="flex flex-col gap-2" class:opacity-50={fullCircle} disabled={fullCircle}>
         <InputSwitch

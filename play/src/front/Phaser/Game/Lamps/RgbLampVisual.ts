@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
-import { lightSoftEdgePxNow } from "./LightSoftEdge";
+import { realLightFalloff } from "./LampLumens";
+import { lightRealFalloffNow, lightSoftEdgePxNow } from "./LightSoftEdge";
 import { lightFalloff, type LightCone, type Point } from "./RgbLampGeometry";
 
 /**
@@ -11,6 +12,8 @@ const TEXELS_PER_PIXEL = 0.25;
 const LIGHT_ALPHA = 0.55;
 /** The fading of the light is drawn as a gradient of this many steps. */
 const GRADIENT_STOPS = 12;
+/** A tile of the map, in map pixels: the reach of a light in tiles sets how a real lamp fades. */
+const TILE_PX = 32;
 
 /**
  * The light of one RGB lamp on the map: a texture of its own, a gradient that is full at the lamp and gone at the end
@@ -66,9 +69,14 @@ export class RgbLampVisual {
                 const scale = texels / size;
                 const centre = texels / 2;
                 const gradient = context.createRadialGradient(centre, centre, 0, centre, centre, centre);
+                // As a real lamp fades (brighter at its foot, a long faint tail) for a player who asked for it.
+                const radiusTiles = light.radius / TILE_PX;
+                const falloff = lightRealFalloffNow()
+                    ? (distance: number): number => realLightFalloff(distance, radiusTiles)
+                    : lightFalloff;
                 for (let stop = 0; stop <= GRADIENT_STOPS; stop++) {
                     const distance = stop / GRADIENT_STOPS;
-                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${lightFalloff(distance) * strength})`);
+                    gradient.addColorStop(distance, `rgba(255, 255, 255, ${falloff(distance) * strength})`);
                 }
                 context.beginPath();
                 polygon.forEach((point, index) => {
