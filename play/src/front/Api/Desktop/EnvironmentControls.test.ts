@@ -22,6 +22,8 @@ import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
 import { LampMusicSource, lampMusicSourceStore } from "../../Stores/LampMusicSourceStore";
 import { retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
 import { weatherVolumeStore } from "../../Stores/SoundEffectsStore";
+import { GraphicsQuality, graphicsQualityStore } from "../../Stores/GraphicsSettingsStore";
+import { desktopGraphicsMetricsRequestedStore, graphicsMetricsRequestedStore } from "../../Stores/PerfStore";
 
 const preview = vi.hoisted(() => vi.fn());
 vi.mock("../../Components/Menu/SoundPreview", () => ({ createSoundPreview: () => ({ play: preview }) }));
@@ -50,11 +52,32 @@ beforeEach(() => {
         getDesktopWeather: () => settings.weather,
         getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
         getMapEditorModeManager: () => ({}),
+        setTileAnimationsPaused: vi.fn(),
     } as unknown as GameScene);
     mapEditorActivated.set(false);
 });
 
 describe("desktop environment settings", () => {
+    it("applies graphical quality without editing shared weather or changing the night clock", async () => {
+        nightModeStore.set(NightMode.Always);
+        const season = get(seasonalThemeModeStore);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.Low });
+        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Low);
+        expect(readDesktopEnvironment()).toMatchObject({ graphicsQuality: GraphicsQuality.Low, animations: false });
+        expect(settings.weather).toBe(WeatherType.Rain);
+        expect(get(nightModeStore)).toBe(NightMode.Always);
+        expect(get(seasonalThemeModeStore)).toBe(season);
+        expect(save).not.toHaveBeenCalled();
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.High });
+    });
+    it("keeps desktop measurements separate from the web panel request", async () => {
+        graphicsMetricsRequestedStore.set(true);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Metrics, value: true });
+        graphicsMetricsRequestedStore.set(false);
+        expect(get(desktopGraphicsMetricsRequestedStore)).toBe(true);
+        expect(readDesktopEnvironment()?.graphicsMonitoring).toBe(true);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Metrics, value: false });
+    });
     it("previews the selected family at its current volume and keeps animals personal", async () => {
         weatherVolumeStore.set(0.35);
         await applyDesktopEnvironment({ setting: DesktopSoundsSetting.Preview, value: DesktopSoundSetting.Weather });

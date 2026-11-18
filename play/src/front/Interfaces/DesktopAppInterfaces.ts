@@ -1,4 +1,6 @@
 import type { AutoWeatherSettings, WeatherType } from "@workadventure/map-editor";
+import type { GraphicsPreset, GraphicsQuality } from "../Stores/GraphicsSettingsStore";
+import type { PerfStats } from "../Phaser/Game/Perf/PerfMeter";
 import type { RetroPalette, UiFont } from "../Stores/RetroThemeStore";
 import type { LampMusicSource } from "../Stores/LampMusicSourceStore";
 import type { NightMode } from "../Stores/NightStore";
@@ -34,6 +36,9 @@ export enum DesktopWeatherSetting {
 
 export enum DesktopVisualSetting {
     Jungle = "jungle",
+    Quality = "graphicsQuality",
+    Metrics = "graphicsMonitoring",
+    Animations = "animations",
 }
 
 export enum DesktopSoundsSetting {
@@ -46,7 +51,11 @@ export enum DesktopAppearanceSetting {
 }
 
 export type DesktopEnvironmentRequest =
-    | { setting: DesktopVisualSetting.Jungle; value: boolean }
+    | {
+          setting: DesktopVisualSetting.Jungle | DesktopVisualSetting.Metrics | DesktopVisualSetting.Animations;
+          value: boolean;
+      }
+    | { setting: DesktopVisualSetting.Quality; value: GraphicsPreset }
     | { setting: DesktopSoundsSetting.Preview; value: DesktopSoundSetting }
     | { setting: DesktopAppearanceSetting.Appearance; value: DesktopAppearance }
     | { setting: "weather"; value: WeatherType }
@@ -83,6 +92,10 @@ export interface DesktopLightControl {
 }
 
 export interface DesktopEnvironmentState {
+    graphicsQuality: GraphicsQuality;
+    graphicsMonitoring: boolean;
+    graphicsStats?: PerfStats;
+    animations: boolean;
     appearance: DesktopAppearance;
     weather: WeatherType;
     displayWeather: WeatherType;

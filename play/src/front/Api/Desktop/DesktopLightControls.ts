@@ -84,6 +84,7 @@ const CONTROLS: Readonly<Record<string, ControlMeta>> = {
         label: (labels) => labels.night.secondBounceOn(),
         dependsOn: "lightBounceOn",
     },
+    lightRealFalloff: { group: "night", label: (labels) => labels.night.realFalloff() },
     nightRealistic: { group: "night", label: (labels) => labels.night.realistic() },
     nightKeptInEditor: { group: "night", label: (labels) => labels.night.keptInEditor() },
     sunShown: { group: "sky", label: (labels) => labels.skyLight.sun() },

@@ -178,6 +178,27 @@ describe("MapStorageServer entity edit permissions", () => {
         expect(addCommandToQueue).toHaveBeenCalledWith("map.wam", response);
     });
 
+    it("keeps the start of a snow chosen again, so that its ground keeps the snow it holds", async () => {
+        wamFile.getWam().settings = { weather: WeatherType.Snow, weatherStartedAt: 600_000 };
+        vi.spyOn(Date, "now").mockReturnValue(1_800_000);
+        const response = await send(MAP_EDITOR, {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateWeatherSettingMessage",
+                    updateWeatherSettingMessage: { weather: WeatherType.Snow, startedAt: 999, autoInclude: [] },
+                },
+            },
+        });
+        expect(wamFile.getWam().settings?.weatherStartedAt).toBe(600_000);
+        const message = response.editMapMessage?.message;
+        expect(
+            message?.$case === "updateWAMSettingsMessage" &&
+                message.updateWAMSettingsMessage.message?.$case === "updateWeatherSettingMessage" &&
+                message.updateWAMSettingsMessage.message.updateWeatherSettingMessage.startedAt,
+        ).toBe(600_000);
+    });
+
     describe("delete", () => {
         it("refuses a visitor deleting an entity", async () => {
             await expectRefused(VISITOR, deleteEntity("inside"));

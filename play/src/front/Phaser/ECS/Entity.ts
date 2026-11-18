@@ -152,15 +152,24 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         const animationKey = animation
             ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
             : undefined;
-        const seasonalPath = this.prefab.seasonal?.[this.season];
-        // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture).
+        const scene = this.scene as GameScene;
+        // The depth offset locates the ground contact above an image's transparent bottom margin.
+        const sheltered =
+            scene
+                .getOutdoorGrid?.()
+                ?.isOutdoorAt(
+                    this.x + this.displayWidth / 2,
+                    this.y + this.displayHeight + (this.prefab.depthOffset ?? 0) - 1,
+                ) === false;
+        const season = this.season === Season.Winter && sheltered ? Season.Summer : this.season;
+        const seasonalPath = this.prefab.seasonal?.[season];
+        // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture). Anything
+        // else with a drawn winter image (a pine, a rock, a stump) shows its summer image covering as the snow settles,
+        // and its winter image once the ground is white: no object is whiter than the ground around it.
+        const step = this.snowCover >= 1 ? SNOW_STEPS : treeSnowStep(this.snowCover, seedOf(this.entityId));
         const snowyTree =
-            this.season === Season.Winter && isSwayingTree(this.prefab.id)
-                ? snowyTreeTexture(
-                      this.scene,
-                      this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath,
-                      this.snowCover >= 1 ? SNOW_STEPS : treeSnowStep(this.snowCover, seedOf(this.entityId)),
-                  )
+            this.prefab.seasonal && season === Season.Winter && (isSwayingTree(this.prefab.id) || step < SNOW_STEPS)
+                ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath, step)
                 : undefined;
         this.setTexture(
             snowyTree ??
@@ -169,7 +178,6 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         if (animationKey) {
             this.play(animationKey);
         }
-        const scene = this.scene as GameScene;
         this.treadmillBelt =
             animationKey !== undefined && isTreadmillBelt(this.prefab, scene.wamFile?.settings?.categories);
         if (this.treadmillBelt) this.setBeltMoving(scene.treadmillBelts.isMoving(this.entityId));

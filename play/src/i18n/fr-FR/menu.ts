@@ -102,7 +102,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         mapWeather: {
             title: "Météo de la carte",
             description:
-                "Ce que tout le monde voit sur cette carte. Chacun peut la masquer avec « Afficher la météo » ci-dessus.",
+                "Ce que tout le monde voit sur cette carte. Chacun peut la masquer avec « Afficher la météo » dans l’onglet Graphismes.",
         },
         seasonal: {
             label: "Thème saisonnier",
@@ -133,6 +133,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             server: "Heure du serveur",
             computer: "Heure de mon ordinateur",
             disabled: "Désactivé",
+            always: "Toujours nuit",
             disable: "Désactiver la nuit",
             darkness: "Obscurité de la nuit : {percent} %",
             darknessLight: "Claire",
@@ -244,6 +245,41 @@ const menu: DeepPartial<Translation["menu"]> = {
         disableAnimations: "Désactiver les animations de la carte",
         bubbleSound: "Son des bulles",
         otherSettings: "Autres paramètres",
+        tabs: {
+            label: "Catégorie de paramètres",
+            general: "Général",
+            ambiance: "Ambiance",
+            graphics: "Graphismes",
+            audio: "Audio",
+            video: "Vidéo",
+        },
+        graphicsQuality: {
+            title: "Qualité graphique",
+            low: "Bas",
+            medium: "Moyen",
+            high: "Haut",
+            ultra: "Ultra",
+            custom: "Personnalisé",
+            current: "Préréglage actuel : {quality}",
+            cost: { low: "GPU : faible", medium: "GPU : modéré", high: "GPU : élevé", ultra: "GPU : très élevé" },
+            description: {
+                low: "Effets optionnels coupés : météo, nuages, ombres du ciel, éclairage indirect et animations de tuiles.",
+                medium: "Météo légère et ombres simples ; nuages, silhouettes détaillées et rebonds coupés.",
+                high: "Nuages, silhouettes réalistes, bords de lumière adoucis et un rebond.",
+                ultra: "Tous les effets de rendu, atténuation réaliste et maximum de pluie, longueur d’ombres, bords adoucis et deux rebonds.",
+                custom: "Un détail diffère des préréglages. Tes réglages individuels sont conservés.",
+            },
+            metrics: "{fps} FPS · Image CPU : {cpu} ms · {budget}% du budget à 60 FPS",
+            waiting: "Mesure de cette scène…",
+            help: "Le coût GPU est une estimation relative. Les FPS et le temps CPU sont mesurés sur cet appareil et varient selon la carte, le zoom et les effets visibles. Le navigateur ne fournit pas la charge globale du GPU.",
+        },
+        graphics: {
+            renderQuality: "Qualité d’affichage",
+            sky: "Ciel et météo",
+            nature: "Nature et saisons",
+            lighting: "Nuit et lumières",
+            performance: "Performances",
+        },
         bubbleSoundOptions: {
             ding: "Ding",
             wobble: "Wobble",

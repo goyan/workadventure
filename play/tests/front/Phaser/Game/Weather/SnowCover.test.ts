@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { WeatherType } from "@workadventure/map-editor";
 import {
+    lastSnowLeft,
     mapSnowCoverage,
     snowCoverage,
     SNOW_ACCUMULATION_MS,
@@ -93,5 +94,39 @@ describe("map snow shown to this person", () => {
             0,
         );
         expect(mapSnowCoverage(true, undefined, new Date(snowing))).toBe(0);
+    });
+});
+
+describe("the last snow of a fixed weather", () => {
+    const stop = Date.parse("2026-01-10T12:00:00Z");
+    const fullSnow = { startedAt: stop - SNOW_ACCUMULATION_MS, endedAt: stop };
+
+    it("melts once another weather takes its place, instead of vanishing", () => {
+        expect(snowCoverage(WeatherType.Clear, stop, stop, undefined, undefined, fullSnow)).toBe(1);
+        expect(snowCoverage(WeatherType.Clear, stop + SNOW_MELT_MS / 2, stop, undefined, undefined, fullSnow)).toBe(
+            0.5,
+        );
+        expect(snowCoverage(WeatherType.Rain, stop + SNOW_MELT_MS, stop, undefined, undefined, fullSnow)).toBe(0);
+    });
+
+    it("melts only what had settled: a snow stopped half way starts its thaw from half", () => {
+        const halfSnow = { startedAt: stop - SNOW_ACCUMULATION_MS / 2, endedAt: stop };
+        expect(lastSnowLeft(halfSnow, stop)).toBe(0.5);
+        expect(lastSnowLeft(halfSnow, stop + SNOW_MELT_MS / 4)).toBe(0.25);
+        expect(lastSnowLeft({ endedAt: stop }, stop)).toBe(1);
+    });
+
+    it("lets a snow that comes back build up on what is left, with no jump", () => {
+        const back = stop + SNOW_MELT_MS / 2;
+        expect(snowCoverage(WeatherType.Snow, back, back, undefined, undefined, fullSnow)).toBe(0.5);
+        expect(
+            snowCoverage(WeatherType.Snow, back + SNOW_ACCUMULATION_MS / 4, back, undefined, undefined, fullSnow),
+        ).toBe(0.75);
+    });
+
+    it("reaches the ground through the map settings", () => {
+        const settings = { weather: WeatherType.Clear, weatherStartedAt: stop, lastSnow: fullSnow };
+        expect(mapSnowCoverage(true, settings, new Date(stop + SNOW_MELT_MS / 2))).toBe(0.5);
+        expect(mapSnowCoverage(false, settings, new Date(stop))).toBe(0);
     });
 });

@@ -1,4 +1,4 @@
-import { get, type Writable } from "svelte/store";
+import { derived, get, type Readable, type Writable } from "svelte/store";
 import {
     acceptedLightSettings,
     decodeLightSettings,
@@ -33,19 +33,26 @@ import {
     sunLightShownStore,
 } from "./SkyLightStore";
 
-type Setting = LightSettingKind & { set(value: LightSettingValue): void; read(): LightSettingValue };
+type Setting = LightSettingKind & {
+    store: Readable<LightSettingValue>;
+    set(value: LightSettingValue): void;
+    read(): LightSettingValue;
+};
 
 const number = (store: Writable<number>): Setting => ({
+    store,
     kind: "number",
     read: () => get(store),
     set: (value) => typeof value === "number" && store.set(value),
 });
 const onOff = (store: Writable<boolean>): Setting => ({
+    store,
     kind: "switch",
     read: () => get(store),
     set: (value) => typeof value === "boolean" && store.set(value),
 });
 const choice = <T extends string>(store: Writable<T>, choices: readonly T[]): Setting => ({
+    store,
     kind: "choice",
     choices,
     read: () => get(store),
@@ -139,3 +146,9 @@ export function applyLightSettingsCode(code: string): number | undefined {
     }
     return accepted.length;
 }
+
+/** Changes made by any light control, including a shared settings code. */
+export const lightSettingsValuesStore = derived(
+    Object.values(LIGHT_SETTINGS).map((setting) => setting.store),
+    () => readLightSettings(),
+);

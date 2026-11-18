@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/svelte";
 import { PropertyUtils } from "@wa/front/Phaser/Map/PropertyUtils";
+import { DEPTH_SEASONAL_GROUND_INDEX } from "../DepthIndexes";
 import { FootstepSurfaces } from "../FootstepSurfaces";
 import type { GameScene } from "../GameScene";
 
@@ -24,7 +25,11 @@ export class SnowGround {
     constructor(private readonly scene: GameScene) {
         const exterior = PropertyUtils.findStringProperty("exteriorTexture", scene.getGameMap().getMap().properties);
         this.exteriorIsGrass = /(?:^|[/_.-])(grass|herbe)(?:[/_.-]|$)/i.test(exterior ?? "");
-        this.canvas = scene.add.renderTexture(0, 0, 1, 1).setOrigin(0).setDepth(0.6).setVisible(false);
+        this.canvas = scene.add
+            .renderTexture(0, 0, 1, 1)
+            .setOrigin(0)
+            .setDepth(DEPTH_SEASONAL_GROUND_INDEX)
+            .setVisible(false);
         this.surfaces = new FootstepSurfaces(
             () =>
                 Array.from(scene.getGameMapFrontWrapper().getEntitiesManager().getEntities().values(), (entity) => ({

@@ -48,8 +48,10 @@ describe("shared seasonal nature", () => {
             season: Season.Summer,
             snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty,
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
@@ -81,8 +83,10 @@ describe("shared seasonal nature", () => {
             season: Season.Summer,
             snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
@@ -96,6 +100,30 @@ describe("shared seasonal nature", () => {
         expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
     });
 
+    it("refreshes sheltered seasonal objects as soon as the outdoor grid changes", () => {
+        const setSeason = vi.fn();
+        let version = 1;
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", { setSeason } as unknown as Entity]]),
+            season: Season.Winter,
+            snowCover: 1,
+            nextSeasonCheck: 0,
+            lastOutdoorVersion: 1,
+            scene: {
+                markDirty: vi.fn(),
+                getOutdoorVersion: () => version,
+                getGameMap: () => ({
+                    getWamFile: () => ({ getWam: () => ({ settings: { weather: WeatherType.Snow } }) }),
+                }),
+            },
+        }) as unknown as EntitiesManager;
+        const date = new Date("2026-12-08T12:00:00Z");
+        manager.updateSeason(0, date);
+        expect(setSeason).not.toHaveBeenCalled();
+        version = 2;
+        manager.updateSeason(1, date);
+        expect(setSeason).toHaveBeenCalledExactlyOnceWith(Season.Winter, 1);
+    });
     it("forces autumn trees for the autumn theme, then the map season again", () => {
         const setSeason = vi.fn();
         const entity = { setSeason } as unknown as Entity;
@@ -105,8 +133,10 @@ describe("shared seasonal nature", () => {
             season: Season.Summer,
             snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
@@ -125,8 +155,10 @@ describe("shared seasonal nature", () => {
             season: Season.Summer,
             snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
@@ -152,8 +184,10 @@ describe("shared seasonal nature", () => {
             season: Season.Autumn,
             snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({
                     getWamFile: () => ({ getWam: () => ({ settings: { weather: WeatherType.Automatic } }) }),
                 }),

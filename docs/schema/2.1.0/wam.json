@@ -1576,6 +1576,23 @@
               "type": "number",
               "minimum": 0
             },
+            "lastSnow": {
+              "type": "object",
+              "properties": {
+                "startedAt": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "endedAt": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "endedAt"
+              ],
+              "additionalProperties": false
+            },
             "weatherAuto": {
               "type": "object",
               "properties": {

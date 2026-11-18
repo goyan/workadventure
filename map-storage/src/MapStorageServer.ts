@@ -13,6 +13,7 @@ import {
     EntityPermissions,
     UpdateWAMMetadataCommand,
     UpdateWAMSettingCommand,
+    WeatherType,
 } from "@workadventure/map-editor";
 import type {
     EditMapCommandMessage,
@@ -427,10 +428,15 @@ const mapStorageServer: MapStorageServer = {
                     }
                     case "updateWAMSettingsMessage": {
                         const message = editMapMessage.updateWAMSettingsMessage;
-                        if (message.message?.$case === "updateWeatherSettingMessage") {
-                            message.message.updateWeatherSettingMessage.startedAt = Date.now();
-                        }
                         const wam = wamFile.getWam();
+                        if (message.message?.$case === "updateWeatherSettingMessage") {
+                            const weatherMessage = message.message.updateWeatherSettingMessage;
+                            // A snow chosen again goes on from its own start: the ground keeps its snow.
+                            const snowGoesOn =
+                                wam.settings?.weather === WeatherType.Snow &&
+                                weatherMessage.weather === WeatherType.Snow;
+                            weatherMessage.startedAt = snowGoesOn ? wam.settings?.weatherStartedAt : Date.now();
+                        }
                         await mapsManager.executeCommand(
                             mapKey,
                             mapUrl.host,

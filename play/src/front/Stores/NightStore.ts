@@ -7,6 +7,8 @@ export enum NightMode {
     Server = "server",
     Computer = "computer",
     Disabled = "disabled",
+    /** Night all day long: the sky of a Paris night, whatever the time. */
+    Always = "always",
 }
 
 const NIGHT_MODE_KEY = "nightMode";

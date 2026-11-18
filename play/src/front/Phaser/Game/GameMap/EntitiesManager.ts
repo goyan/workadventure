@@ -26,7 +26,7 @@ import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
 import { shownWeatherSettings } from "../Weather/RealWeatherClient";
-import { snowCoverage } from "../Weather/SnowCover";
+import { mapSnowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
@@ -106,9 +106,10 @@ const DIMMED_MAP_LAYER_TINT = 0x808080;
 export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
-    private lastConfiguredWeather: WeatherType | undefined;
+    private lastSnowKey: string | undefined;
     private lastForcedSeason: Season | undefined;
     private lastMapSnow = true;
+    private lastOutdoorVersion = -1;
     /** How much the map snow covers the ground, which the trees under snow follow (Entity.setSeason). */
     private snowCover = 1;
     private readonly erasingEntityIds = new Set<string>();
@@ -265,25 +266,23 @@ export class EntitiesManager extends EventEmitter {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
         const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
+        const outdoorVersion = this.scene.getOutdoorVersion();
+        const outdoorsChanged = outdoorVersion !== this.lastOutdoorVersion;
+        // A snow chosen again, or one that stops, changes the ground without changing the weather's name.
+        const snowKey = `${configured}:${settings?.weatherStartedAt}:${settings?.lastSnow?.endedAt}`;
         if (
             time < this.nextSeasonCheck &&
-            configured === this.lastConfiguredWeather &&
+            snowKey === this.lastSnowKey &&
             forcedSeason === this.lastForcedSeason &&
-            mapSnow === this.lastMapSnow
+            mapSnow === this.lastMapSnow &&
+            !outdoorsChanged
         )
             return;
-        this.lastConfiguredWeather = configured;
+        this.lastSnowKey = snowKey;
         this.lastForcedSeason = forcedSeason;
         this.lastMapSnow = mapSnow;
-        const coverage = mapSnow
-            ? snowCoverage(
-                  configured,
-                  serverDate.getTime(),
-                  settings?.weatherStartedAt,
-                  settings?.weatherAuto,
-                  settings?.snowMeltFrom,
-              )
-            : 0;
+        this.lastOutdoorVersion = outdoorVersion;
+        const coverage = mapSnowCoverage(mapSnow, settings, serverDate);
         // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
         this.nextSeasonCheck =
             coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);
@@ -296,7 +295,7 @@ export class EntitiesManager extends EventEmitter {
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
         // The trees whiten with the ground (a snow just begun leaves them green); a chosen winter theme, at once.
         const snowCover = season === Season.Winter && weatherSeason === Season.Winter ? coverage : 1;
-        if (season === this.season && snowCover === this.snowCover) return;
+        if (season === this.season && snowCover === this.snowCover && !outdoorsChanged) return;
         this.season = season;
         this.snowCover = snowCover;
         for (const entity of this.entities.values()) entity.setSeason(season, snowCover);

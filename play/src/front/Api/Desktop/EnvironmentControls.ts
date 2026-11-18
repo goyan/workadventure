@@ -1,6 +1,14 @@
 import { get } from "svelte/store";
 import { z } from "zod";
 import { AutoWeather, DEFAULT_AUTO_WEATHER, Weather, WeatherType } from "@workadventure/map-editor";
+import { desktopGraphicsMetricsRequestedStore, perfStatsStore } from "../../Stores/PerfStore";
+import {
+    applyGraphicsQuality,
+    GraphicsQuality,
+    graphicsQualityStore,
+    setTileAnimationsDisabled,
+    tileAnimationsDisabledStore,
+} from "../../Stores/GraphicsSettingsStore";
 import type {
     DesktopEnvironmentRequest,
     DesktopEnvironmentState,
@@ -63,6 +71,12 @@ const soundStores = {
 };
 
 export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
+    z.object({
+        setting: z.literal(DesktopVisualSetting.Quality),
+        value: z.enum([GraphicsQuality.Low, GraphicsQuality.Medium, GraphicsQuality.High, GraphicsQuality.Ultra]),
+    }),
+    z.object({ setting: z.literal(DesktopVisualSetting.Metrics), value: z.boolean() }),
+    z.object({ setting: z.literal(DesktopVisualSetting.Animations), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopVisualSetting.Jungle), value: z.boolean() }),
     z.object({ setting: z.literal(DesktopSoundsSetting.Preview), value: z.nativeEnum(DesktopSoundSetting) }),
     z.object({
@@ -114,6 +128,10 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
     const scene = get(gameSceneStore);
     if (!scene) return null;
     return {
+        graphicsQuality: get(graphicsQualityStore),
+        graphicsMonitoring: get(desktopGraphicsMetricsRequestedStore),
+        graphicsStats: get(perfStatsStore),
+        animations: !get(tileAnimationsDisabledStore),
         appearance: { palette: get(retroPaletteStore), font: get(uiFontStore) },
         // Keep the legacy values for older desktop clients; modern clients use the raw map fields below.
         weather: desktopWeatherMode(scene.getGameMap().getWamFile()?.getWam().settings?.weather),
@@ -161,6 +179,15 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
     const state = readDesktopEnvironment();
     if (!state) throw new Error("No room is loaded");
     switch (request.setting) {
+        case DesktopVisualSetting.Quality:
+            applyGraphicsQuality(request.value);
+            return;
+        case DesktopVisualSetting.Metrics:
+            desktopGraphicsMetricsRequestedStore.set(request.value);
+            return;
+        case DesktopVisualSetting.Animations:
+            setTileAnimationsDisabled(!request.value);
+            return;
         case DesktopVisualSetting.Jungle:
             jungleEnabledStore.set(request.value);
             return;
