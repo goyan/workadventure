@@ -14,6 +14,7 @@ import {
     shownAmbienceStrengthStore,
     shownLightBounceStore,
     shownLightSoftEdgeStore,
+    shownSecondBounceStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
@@ -22,7 +23,7 @@ import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { setLightBounceStrength, setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
+import { setLightBounceStrength, setLightSecondBounce, setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
 import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
@@ -172,7 +173,12 @@ export class NightManager {
             setLightBounceStrength(strength);
             this.scene.markDirty();
         });
+        const unsubscribeSecondBounce = shownSecondBounceStore.subscribe((on) => {
+            setLightSecondBounce(on);
+            this.scene.markDirty();
+        });
         this.unsubscribeIndirect = () => {
+            unsubscribeSecondBounce();
             unsubscribeBounce();
             unsubscribeStrength();
             unsubscribeFullShare();

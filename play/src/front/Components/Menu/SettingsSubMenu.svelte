@@ -29,6 +29,7 @@
         nightDarknessStore,
         nightInEditorStore,
         realisticNightStore,
+        secondBounceOnStore,
         softEdgeOnStore,
     } from "../../Stores/NightStore";
     import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
@@ -517,6 +518,12 @@
                             max={1}
                             step={0.05}
                             bind:value={$lightBounceStore}
+                        />
+                        <InputSwitch
+                            id="night-second-bounce-on"
+                            bind:value={$secondBounceOnStore}
+                            label={$LL.menu.settings.night.secondBounceOn()}
+                            labelPosition="right"
                         />
                     </div>
                 {/if}

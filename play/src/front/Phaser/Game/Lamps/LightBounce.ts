@@ -7,6 +7,8 @@ export interface BounceSource extends LightCone {
 
 /** Each light sends back at most this many lights, from the walls it lights most. */
 export const MAX_BOUNCES_PER_LIGHT = 6;
+/** And, when asked, at most this many more from the walls those first ones light (a second bounce). */
+export const MAX_SECOND_BOUNCES_PER_LIGHT = 4;
 /** A lit stretch of wall longer than this sends back several lights, one per such length. */
 const BOUNCE_STRETCH_PX = 128;
 /** A stretch of wall shorter than this sends nothing back. */
@@ -120,4 +122,28 @@ export function bounceSources(light: LightCone, polygon: readonly Point[], stren
         }
     }
     return bounces.sort((a, b) => b.intensity - a.intensity).slice(0, MAX_BOUNCES_PER_LIGHT);
+}
+
+/**
+ * The lights sent back a second time: from the walls the first bounces of a lamp light (each given with what it
+ * reaches). Each is as strong as the bounce it comes from, times what a wall sends back: a share of a share. The
+ * strongest few of the whole lamp are kept, strongest first.
+ */
+export function secondBounceSources(
+    first: readonly { source: BounceSource; polygon: readonly Point[] }[],
+    strength: number,
+): BounceSource[] {
+    if (!(strength > 0)) {
+        return [];
+    }
+    const second: BounceSource[] = [];
+    for (const { source, polygon } of first) {
+        for (const bounce of bounceSources(source, polygon, strength)) {
+            const intensity = bounce.intensity * source.intensity;
+            if (intensity > 0.01) {
+                second.push({ ...bounce, intensity });
+            }
+        }
+    }
+    return second.sort((a, b) => b.intensity - a.intensity).slice(0, MAX_SECOND_BOUNCES_PER_LIGHT);
 }

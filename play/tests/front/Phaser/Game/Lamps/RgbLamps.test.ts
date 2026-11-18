@@ -40,7 +40,8 @@ vi.mock("../../../../../src/front/Phaser/Game/Lamps/RgbLampVisual", () => ({
 
 const { RgbLamps } = await import("../../../../../src/front/Phaser/Game/Lamps/RgbLamps");
 const { rgbLampLightsStore, rgbLampPreviewStore } = await import("../../../../../src/front/Stores/RgbLampStore");
-const { setLightBounceStrength } = await import("../../../../../src/front/Phaser/Game/Lamps/LightSoftEdge");
+const { setLightBounceStrength, setLightSecondBounce } =
+    await import("../../../../../src/front/Phaser/Game/Lamps/LightSoftEdge");
 
 const prefab = (overrides: Partial<EntityPrefab>): EntityPrefab => ({
     id: "prefab",
@@ -128,6 +129,7 @@ afterEach(() => {
     reducedMotion = false;
     switchedOff.clear();
     setLightBounceStrength(0);
+    setLightSecondBounce(false);
 });
 
 function start(entities: Entity[], grid?: number[][]) {
@@ -267,6 +269,32 @@ describe("RgbLamps", () => {
         const published = get(rgbLampLightsStore).map((light) => light.id);
         expect(published).toContain("a");
         expect(published).toContain("a:bounce:0");
+    });
+
+    it("sends light back a second time only when asked: a few more lights, fainter than the first", () => {
+        setLightBounceStrength(1);
+        const grid = freeGrid();
+        // A corridor around the lamp: walls north and south of it, and one to the east.
+        for (let x = 14; x <= 23; x++) {
+            grid[17][x] = 1;
+            grid[22][x] = 1;
+        }
+        for (let y = 17; y <= 22; y++) grid[y][23] = 1;
+        start([lamp("a", 624, 624).entity], grid);
+        const once = visuals.filter((visual) => visual.id.startsWith("a:bounce:") && visual.visible).length;
+        expect(once).toBeGreaterThan(0);
+
+        current?.destroy();
+        visuals.length = 0;
+        setLightSecondBounce(true);
+        start([lamp("a", 624, 624).entity], grid);
+        const lit = visuals.filter((visual) => visual.id.startsWith("a:bounce:") && visual.visible);
+
+        expect(lit.length).toBeGreaterThan(once);
+        expect(lit.length).toBeLessThanOrEqual(once + 4);
+        const strengths = lit.map((visual) => visual.draws[visual.draws.length - 1].intensity ?? 0);
+        // A share of a share: no second bounce is stronger than the strongest first one.
+        expect(Math.max(...strengths.slice(once))).toBeLessThan(Math.max(...strengths.slice(0, once)));
     });
 
     it("sends nothing back without a wall, nor once a switch put the lamp out", () => {

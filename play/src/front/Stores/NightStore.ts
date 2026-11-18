@@ -68,6 +68,9 @@ export const ambienceOnStore = createPersistedSwitchStore("nightAmbienceOn", tru
 export const softEdgeOnStore = createPersistedSwitchStore("nightLightSoftEdgeOn", true);
 export const bounceOnStore = createPersistedSwitchStore("nightLightBounceOn", true);
 
+/** A second bounce off the walls, for who wants the light to go one corner further: costly, off by default. */
+export const secondBounceOnStore = createPersistedSwitchStore("nightLightSecondBounceOn", false);
+
 const whileOn = (on: Readable<boolean>, setting: Readable<number>): Readable<number> =>
     derived([on, setting], ([isOn, value]) => (isOn ? value : 0));
 
@@ -80,3 +83,8 @@ export const shownLightBounceStore = whileOn(bounceOnStore, lightBounceStore);
 export const mapTimeZoneStore = writable<string | undefined>(undefined);
 /** Whether this player keeps the night in the map editor, to set the lamps as they will look (hidden there by default). */
 export const nightInEditorStore = createPersistedSwitchStore("nightKeptInEditor", false);
+/** Whether the second bounce is drawn now: asked for, and the bounce itself on. */
+export const shownSecondBounceStore = derived(
+    [bounceOnStore, secondBounceOnStore],
+    ([bounceOn, secondOn]) => bounceOn && secondOn,
+);
