@@ -489,6 +489,10 @@ n'a pas de position à lui (comme un va-et-vient).
   vitres hautes laissent passer plus. Chaque vitre traversée garde 85 % de la lumière ; 3 vitres en enfilade au plus.
   Limites : rien n'est regardé entre les deux vitres (meuble, cloison), murs horizontaux seulement, une porte ouverte
   ne laisse pas passer cette lumière, et la tache reste bornée par la longueur maximale des ombres réglée.
+- **Nuages au-dessus des bâtiments, vu de haut** (`cloudsOverRoofs`, `Weather/Clouds.ts`) : les nuages ne sont dessinés
+  que dehors, découpés autour des bâtiments, tant qu'on joue de près ; dézoomé (un pixel de carte sur 0,7 pixel d'écran
+  ou moins), ils passent progressivement aussi par-dessus les pièces, et entièrement à partir de 0,45 : la caméra est
+  au-dessus d'eux. Leurs ombres restent au sol, dehors. Vaut pour les nuages de beau temps et ceux de pluie.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
   (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 38 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle

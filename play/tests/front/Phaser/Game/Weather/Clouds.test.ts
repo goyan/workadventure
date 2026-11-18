@@ -8,6 +8,7 @@ import {
     cloudPatches,
     cloudTones,
     cloudZoomFade,
+    cloudsOverRoofs,
     rainPalette,
     shownCloudiness,
     shownRainCover,
@@ -406,5 +407,28 @@ describe("rain and storm clouds", () => {
         expect(brightness(rain.lit)).toBeGreaterThan(brightness(rain.mid));
         expect(brightness(rain.mid)).toBeGreaterThan(brightness(rain.shade));
         expect(rainPalette(0x2b3240).mid).toBe(0x2b3240);
+    });
+});
+
+describe("cloudsOverRoofs", () => {
+    it("keeps the clouds off the buildings at the zoom a map opens at, and one notch out", () => {
+        expect(cloudsOverRoofs(1.5)).toBe(0);
+        expect(cloudsOverRoofs(0.8)).toBe(0);
+    });
+
+    it("lets the clouds pass over the buildings once the camera is high above them", () => {
+        expect(cloudsOverRoofs(0.45)).toBe(1);
+        expect(cloudsOverRoofs(0.2)).toBe(1);
+    });
+
+    it("brings them over the buildings little by little on the way up", () => {
+        const half = cloudsOverRoofs(0.575);
+        expect(half).toBeGreaterThan(0.4);
+        expect(half).toBeLessThan(0.6);
+        expect(cloudsOverRoofs(0.65)).toBeLessThan(half);
+    });
+
+    it("keeps them off the buildings when the zoom is not known", () => {
+        expect(cloudsOverRoofs(Number.NaN)).toBe(0);
     });
 });
