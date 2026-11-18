@@ -271,6 +271,7 @@ import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
+import { rodEquippedStore } from "../../Stores/FishingStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
 import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
@@ -383,6 +384,8 @@ import { WaveManager } from "./Wave/WaveManager";
 import { NerfManager } from "./Nerf/NerfManager";
 import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
+import { FishingManager } from "./Fishing/FishingManager";
+import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
 import { KonamiCodeDetector } from "./KonamiCodeDetector";
@@ -586,6 +589,7 @@ export class GameScene extends DirtyScene {
     private _waveManager: WaveManager | undefined;
     private _nerfManager: NerfManager | undefined;
     private _torchManager: TorchManager | undefined;
+    private _fishingManager: FishingManager | undefined;
     private karaokeSpotlight: KaraokeSpotlight | undefined;
     private _coffeeManager: CoffeeManager | undefined;
     /** Animated treadmills move their belt only while someone runs on them. */
@@ -1675,6 +1679,9 @@ export class GameScene extends DirtyScene {
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = undefined;
         torchEquippedStore.set(false);
+        this._fishingManager?.destroy();
+        this._fishingManager = undefined;
+        rodEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
         // Before the wandering characters it gives its animals to.
@@ -2109,6 +2116,7 @@ export class GameScene extends DirtyScene {
             this._nerfManager?.update(time);
             // Before the night veil: it is pierced with the lights the torches have just drawn.
             this._torchManager?.update(time);
+            this._fishingManager?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             this.gameSwitches?.update(time);
@@ -2398,6 +2406,7 @@ export class GameScene extends DirtyScene {
         character.setNerfEquipped(update.player.variables.get(NERF_EQUIPPED_VARIABLE));
         character.setNerfHearts(update.player.variables.get(NERF_HEARTS_VARIABLE));
         character.setTorchEquipped(update.player.variables.get(TORCH_EQUIPPED_VARIABLE));
+        character.setRodEquipped(update.player.variables.get(ROD_EQUIPPED_VARIABLE));
         character.setFloorZ(decodeFloorZ(update.player.variables.get(FLOOR_Z_VARIABLE)));
         character.setTorchIntensity(update.player.variables.get(TORCH_INTENSITY_VARIABLE));
         character.setAvatarAction(update.player.variables.get(AVATAR_ACTION_VARIABLE));
@@ -2801,6 +2810,10 @@ export class GameScene extends DirtyScene {
 
     public get torchManager(): TorchManager | undefined {
         return this._torchManager;
+    }
+
+    public get fishingManager(): FishingManager | undefined {
+        return this._fishingManager;
     }
 
     public get nerfManager(): NerfManager | undefined {
@@ -3814,6 +3827,8 @@ export class GameScene extends DirtyScene {
         this._nerfManager = new NerfManager(this);
         this._torchManager?.destroy();
         this._torchManager = new TorchManager(this);
+        this._fishingManager?.destroy();
+        this._fishingManager = new FishingManager(this, room.fishing);
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = new KaraokeSpotlight(this);
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));
@@ -5979,6 +5994,9 @@ ${escapedMessage}
         );
         player.setTorchIntensity(
             this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(TORCH_INTENSITY_VARIABLE),
+        );
+        player.setRodEquipped(
+            this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(ROD_EQUIPPED_VARIABLE),
         );
         player.setFloorZ(
             decodeFloorZ(this.remotePlayersRepository.getPlayers().get(player.userId)?.variables.get(FLOOR_Z_VARIABLE)),

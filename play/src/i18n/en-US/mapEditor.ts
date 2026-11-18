@@ -612,6 +612,7 @@ const mapEditor: BaseTranslation = {
             diedDry: "Died without water",
             predatorBirths: "Dolphin calves",
             predatorDeaths: "Dolphins dead (age, hunger)",
+            fished: "Fished (let go)",
             history: "Prey and predators over time",
             ago: "{duration} ago",
             now: "now",

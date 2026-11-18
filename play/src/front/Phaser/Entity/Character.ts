@@ -39,6 +39,7 @@ import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
 import { decodeTorchEquipped, decodeTorchIntensity } from "@wa/front/Phaser/Game/Torch/TorchProtocol";
+import { decodeRodEquipped } from "@wa/front/Phaser/Game/Fishing/FishingProtocol";
 import type { TorchFlameShape } from "@wa/front/Phaser/Game/Torch/TorchFlameShape";
 import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
@@ -113,6 +114,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
     private torchEquipped = false;
+    private rodEquipped = false;
     /** How bright the bearer set their torch, in percent (see decodeTorchIntensity). */
     private torchIntensity = decodeTorchIntensity(undefined);
     private torchFlameEffect: TorchFlameEffect | undefined;
@@ -832,6 +834,17 @@ export abstract class Character extends Container implements OutlineableInterfac
         if (this.torchEquipped) this.torchFlameEffect ??= new TorchFlameEffect(this.scene, this);
         this.torchFlameEffect?.update(this.isTorchLit(), this._lastDirection, this.seated, this.torchFlame);
         this.scene.markDirty();
+    }
+
+    /** From the player variable: the fishing rod itself is drawn with the lines (see FishingView). */
+    public setRodEquipped(value: unknown): void {
+        this.rodEquipped = decodeRodEquipped(value);
+        this.scene.markDirty();
+    }
+
+    /** Holds a fishing rod that can be seen. */
+    public isRodEquipped(): boolean {
+        return this.rodEquipped && !this.invisible;
     }
 
     /** From the player variable: an older client sets none, its torch is at the full intensity. */

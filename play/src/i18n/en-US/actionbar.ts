@@ -22,6 +22,18 @@ const actionbar = {
             jailed: "In prison — walk out to come back",
         },
     },
+    rod: {
+        equip: "Equip the fishing rod",
+        unequip: "Put away the fishing rod",
+        help: "Hold SPACE: cast in front of you. SPACE when the float plunges: hook the fish. SPACE otherwise: bring the line back.",
+        pinkFish: "Pink fish",
+        blueFish: "Blue fish",
+        caught: "{fish} · {weight} kg",
+        caughtBy: "{name}: {fish} · {weight} kg",
+        missed: "Too late: the fish got away.",
+        lost: "A dolphin ate your catch.",
+        refused: "Missed. Cast into water where fish live, eight tiles away at most.",
+    },
     torch: {
         equip: "Equip the torch",
         unequip: "Put away the torch",
