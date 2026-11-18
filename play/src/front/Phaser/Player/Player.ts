@@ -722,13 +722,14 @@ export class Player extends Character {
         const steered = steeredX !== 0 || steeredY !== 0;
         const running = steered && speedUp && !followMode && this.vehicleMode === VehicleMode.Off;
         this.lastRunning = running;
-        const emit = () => this.emit(hasMovedEventName, { moving, running, direction, x: this.x, y: this.y });
+        // The others are told it walks only when it is steered: carried by the water, it is seen drifting, still.
+        const emit = () => this.emit(hasMovedEventName, { moving: steered, running, direction, x: this.x, y: this.y });
         if (moving) {
             if (!this.isMoving) {
                 this.isMoving = true;
                 this.emit(startMovingEventName, { direction, x: this.x, y: this.y });
             }
-            this.moveBy(x, y, running);
+            this.moveBy(x, y, running, steered);
             // Dust behind a runner or a ride of the ground, none behind a canoe.
             if ((running || this.isRidingVehicle()) && !isCanoeAfloat(this.vehicleStateForTrail())) {
                 const body = this.getBody();
@@ -845,13 +846,23 @@ export class Player extends Character {
     }
 
     /**
-     * Moves the character by the given speed amount.
+     * Moves the avatar at this speed. `walking` is false when nothing steers it and the current of the water alone
+     * carries it: it then drifts as it stands, facing where it faced, without the animation of a walker.
      */
-    private moveBy(x: number, y: number, running = false) {
+    private moveBy(x: number, y: number, running = false, walking = true) {
         this.lastRunning = running;
         const body = this.getBody();
 
         body.setVelocity(x, y);
+
+        if (!walking) {
+            passStatusToOnline();
+            this.playAnimation(this._lastDirection, false, 1);
+            if (this.companion) {
+                this.companion.setTarget(this.x, this.y, this._lastDirection);
+            }
+            return;
+        }
 
         if (Math.abs(body.velocity.x) > Math.abs(body.velocity.y)) {
             if (body.velocity.x < 0) {
