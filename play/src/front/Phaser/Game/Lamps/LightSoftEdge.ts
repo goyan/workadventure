@@ -36,3 +36,17 @@ export function setLightBounceStrength(strength: number): void {
 export function lightBounceStrengthNow(): number {
     return bounceStrength;
 }
+
+/** Whether the lights sent back are sent back once more (see secondBounceSources): costly, off by default. */
+let secondBounce = false;
+
+export function setLightSecondBounce(on: boolean): void {
+    if (on !== secondBounce) {
+        secondBounce = on;
+        version++;
+    }
+}
+
+export function lightSecondBounceNow(): boolean {
+    return secondBounce;
+}

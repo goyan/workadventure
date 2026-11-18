@@ -138,6 +138,7 @@ const menu: DeepPartial<Translation["menu"]> = {
             ambienceOn: "1 · Ambiance des pièces (une pièce où entre de la lumière est éclaircie partout)",
             softEdgeOn: "2 · Bords des lumières adoucis",
             bounceOn: "3 · Rebond de la lumière sur les murs",
+            secondBounceOn: "Deuxième rebond : la lumière va un coin plus loin (plus coûteux)",
             bounce: "Rebond sur les murs : {percent} % de la lumière renvoyée (0 : aucun)",
             softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
             keptInEditor: "Même éclairage dans l'éditeur de carte qu'en jeu, pour régler les lampes",

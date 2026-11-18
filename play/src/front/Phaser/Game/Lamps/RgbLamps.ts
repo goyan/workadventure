@@ -6,8 +6,8 @@ import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
 import { ServerNightClock } from "../Night/ServerNightClock";
 import { lampSource } from "./LampReconcile";
 import { LightObstaclesByLevel } from "./LightObstacleReader";
-import { bounceSources } from "./LightBounce";
-import { lightBounceStrengthNow, lightSoftEdgeVersion } from "./LightSoftEdge";
+import { bounceSources, secondBounceSources } from "./LightBounce";
+import { lightBounceStrengthNow, lightSecondBounceNow, lightSoftEdgeVersion } from "./LightSoftEdge";
 import type { LightObstacleReader } from "./LightObstacleReader";
 import { coneOfLitPolygon, litPolygon, type LightCone, type Point } from "./RgbLampGeometry";
 import { obstacleSegments } from "./RgbLampObstacles";
@@ -298,19 +298,30 @@ export class RgbLamps {
         intensity: number,
         obstacles: LightObstacleReader,
     ): void {
-        const bounces = bounceSources(light, polygon, lightBounceStrengthNow());
-        bounces.forEach((bounce, index) => {
+        const strength = lightBounceStrengthNow();
+        const first = bounceSources(light, polygon, strength).map((source) => ({
+            source,
+            polygon: litPolygon(source, this.segmentsFor(id, source, obstacles).segments),
+        }));
+        // A second bounce, when asked: from the walls the first ones light.
+        const second = lightSecondBounceNow()
+            ? secondBounceSources(first, strength).map((source) => ({
+                  source,
+                  polygon: litPolygon(source, this.segmentsFor(id, source, obstacles).segments),
+              }))
+            : [];
+        const bounces = [...first, ...second];
+        bounces.forEach(({ source, polygon: reached }, index) => {
             const visual = (lamp.bounceVisuals[index] ??= new RgbLampVisual(
                 this.scene,
                 `${id}:bounce:${index}`,
                 this.depth,
             ));
-            const { segments } = this.segmentsFor(id, bounce, obstacles);
-            visual.draw(bounce, litPolygon(bounce, segments), colour, bounce.intensity * intensity);
+            visual.draw(source, reached, colour, source.intensity * intensity);
             visual.setVisible(lamp.visible);
         });
         lamp.bounceVisuals.slice(bounces.length).forEach((visual) => visual.setVisible(false));
-        lamp.bounces = bounces;
+        lamp.bounces = bounces.map(({ source }) => source);
     }
 
     private clearBounces(lamp: PlacedRgbLamp): void {

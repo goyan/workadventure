@@ -136,6 +136,7 @@ const menu: BaseTranslation = {
             ambienceOn: "1 · Room ambience (a room a light comes into is lit all over)",
             softEdgeOn: "2 · Soft edge of the lights",
             bounceOn: "3 · Light bouncing off the walls",
+            secondBounceOn: "Second bounce: the light goes one corner further (costs more)",
             bounce: "Bounce off the walls: {percent:number}% of the light sent back (0: none)",
             softEdge: "Edge of the lights softened over {pixels:number} px (0: sharp)",
             keptInEditor: "Same lighting in the map editor as in the game, to set the lamps",

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MAX_BOUNCES_PER_LIGHT, bounceSources } from "../../../../../src/front/Phaser/Game/Lamps/LightBounce";
+import {
+    MAX_BOUNCES_PER_LIGHT,
+    MAX_SECOND_BOUNCES_PER_LIGHT,
+    bounceSources,
+    secondBounceSources,
+} from "../../../../../src/front/Phaser/Game/Lamps/LightBounce";
 import {
     litPolygon,
     rectangleSegments,
@@ -65,5 +70,39 @@ describe("bounceSources", () => {
     it("does not take the sides of a beam for walls", () => {
         const beam: LightCone = { ...light, direction: 0, angle: 40 };
         expect(bouncesOff([], 1, beam)).toEqual([]);
+    });
+});
+
+describe("secondBounceSources", () => {
+    // A corridor: the lamp lights the east wall, whose bounce lights the north and south walls.
+    const corridor = [...wallAt(100), { ax: -200, ay: -60, bx: 100, by: -60 }, { ax: -200, ay: 60, bx: 100, by: 60 }];
+    const firstOf = (strength: number) =>
+        bouncesOff(corridor, strength).map((bounce) => ({ source: bounce, polygon: litPolygon(bounce, corridor) }));
+
+    it("sends light back a second time, from the walls the first bounces light, much fainter", () => {
+        const first = firstOf(0.5);
+        const second = secondBounceSources(first, 0.5);
+
+        expect(second.length).toBeGreaterThan(0);
+        const strongestFirst = Math.max(...first.map(({ source }) => source.intensity));
+        for (const bounce of second) {
+            expect(bounce.angle).toBe(180);
+            expect(bounce.intensity).toBeGreaterThan(0);
+            // A share of a share: never more than half of the bounce it comes from.
+            expect(bounce.intensity).toBeLessThanOrEqual(strongestFirst * 0.5);
+        }
+    });
+
+    it("keeps to a few second bounces per lamp, the strongest first", () => {
+        const second = secondBounceSources(firstOf(1), 1);
+
+        expect(second.length).toBeLessThanOrEqual(MAX_SECOND_BOUNCES_PER_LIGHT);
+        const intensities = second.map((bounce) => bounce.intensity);
+        expect(intensities).toEqual([...intensities].sort((a, b) => b - a));
+    });
+
+    it("sends nothing back a second time without a first bounce, or at zero", () => {
+        expect(secondBounceSources([], 0.5)).toEqual([]);
+        expect(secondBounceSources(firstOf(0.5), 0)).toEqual([]);
     });
 });

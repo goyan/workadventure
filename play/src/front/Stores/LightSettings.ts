@@ -15,6 +15,7 @@ import {
     lightSoftEdgeStore,
     nightDarknessStore,
     realisticNightStore,
+    secondBounceOnStore,
     softEdgeOnStore,
 } from "./NightStore";
 import {
@@ -75,6 +76,7 @@ const LIGHT_SETTINGS: Readonly<Record<string, Setting>> = {
     ambienceOn: onOff(ambienceOnStore),
     lightSoftEdgeOn: onOff(softEdgeOnStore),
     lightBounceOn: onOff(bounceOnStore),
+    lightSecondBounceOn: onOff(secondBounceOnStore),
     sunShown: onOff(sunLightShownStore),
     moonShown: onOff(moonLightShownStore),
     moonPhaseCurve: choice(moonPhaseCurveStore, MOON_PHASE_CURVES),
