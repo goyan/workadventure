@@ -34,7 +34,7 @@ import type { CurrentVector } from "@wa/front/Phaser/Game/Terrain/WaterCurrent";
 import { moveAnimationType, skateLean, stepLean } from "@wa/front/Phaser/Game/Ice/SkatePose";
 import { findActionableObject } from "@wa/front/Phaser/Player/ActionableObjects";
 import { VehicleEffect } from "@wa/front/Phaser/Vehicle/VehicleEffect";
-import { Vehicle, VehicleMode, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
+import { Vehicle, VehicleMode, isCanoeAfloat, readVehicleState } from "@wa/front/Phaser/Vehicle/Vehicle";
 import { NerfGunEffect } from "@wa/front/Phaser/Game/Nerf/NerfGunEffect";
 import { NerfHeartsEffect } from "@wa/front/Phaser/Game/Nerf/NerfHeartsEffect";
 import { TorchFlameEffect } from "@wa/front/Phaser/Game/Torch/TorchFlameEffect";
@@ -403,7 +403,15 @@ export abstract class Character extends Container implements OutlineableInterfac
         const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
         if (isPointInWater(getWaterRectangles(this.scene, this.floorZ), body)) return true;
         // A lake of the relief, on the ground only: deep enough, one swims in it as in a pool.
-        return this.floorZ < 2 && isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
+        // In its canoe, it is on the water, not in it.
+        return !isCanoeAfloat(this.vehicleState) && this.isOverDeepTerrainWater();
+    }
+
+    /** Whether the body of the character is over water of the relief deep enough to swim, on the ground. */
+    protected isOverDeepTerrainWater(): boolean {
+        if (this.floorZ >= 2) return false;
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        return isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
     }
 
     /**
@@ -660,6 +668,8 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.vehicleMode !== VehicleMode.Off &&
             (moving || this.vehicleMode === VehicleMode.Always) &&
             !this.isSwimmingHere() &&
+            // A canoe is never seen on the ground, whatever its player says for an instant.
+            (this.vehicleState.vehicle !== Vehicle.Canoe || this.isOverDeepTerrainWater()) &&
             isHumanAvatar(this.sprites.keys());
         if (this.invisible) return;
         this._lastDirection = direction;

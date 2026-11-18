@@ -3,6 +3,10 @@ import { get } from "svelte/store";
 import type { CancelablePromise } from "cancelable-promise";
 import { AskPositionMessage_AskType, PositionMessage_Direction } from "@workadventure/messages";
 import {
+    CANOE_CURRENT_SHARE,
+    CANOE_SPEED_FACTOR,
+    CANOE_SPRINT_FACTOR,
+    isCanoeAfloat,
     Vehicle,
     VehicleMode,
     VEHICLE_VARIABLE,
@@ -166,6 +170,7 @@ export class Player extends Character {
         if (this.knockBackStep()) return;
         this.updateSwimming();
         if (this.swimming || get(followStateStore) !== "off") this.equipVehicle(VehicleMode.Off);
+        this.updateCanoe();
         if (activeUserInputEvents.get(UserInputEvent.VehicleSprint) && this.vehicleMode !== VehicleMode.Always)
             this.equipVehicle(VehicleMode.Sprint);
         if (
@@ -253,6 +258,8 @@ export class Player extends Character {
 
     public equipVehicle(mode: VehicleMode): void {
         const vehicle = localUserStore.getVehicle();
+        // A canoe is not ridden on the ground: it is boarded by itself on the water (updateCanoe).
+        if (vehicle === Vehicle.Canoe && mode !== VehicleMode.Off) return;
         if (mode !== VehicleMode.Off) {
             if (
                 vehicle === Vehicle.None ||
@@ -267,6 +274,37 @@ export class Player extends Character {
             this.standUp();
         }
         this.setVehicle({ vehicle, mode, ...localUserStore.getVehicleColors() });
+    }
+
+    /**
+     * With a canoe chosen: the avatar is in it over the water of the relief deep enough to swim, and out of it
+     * everywhere else. Not in a pool (one swims there), on a raised floor, while following someone, nor for a costume
+     * that is not human.
+     */
+    protected updateCanoe(): void {
+        if (localUserStore.getVehicle() !== Vehicle.Canoe) return;
+        const afloat =
+            !this.swimming &&
+            !this.isSlidingToSeat &&
+            get(followStateStore) === "off" &&
+            isHumanAvatar(this.sprites.keys()) &&
+            this.isOverDeepTerrainWater();
+        const mode = afloat ? VehicleMode.Always : VehicleMode.Off;
+        if (mode === this.vehicleMode) return;
+        if (afloat) {
+            this.setAvatarAction(AvatarAction.Idle);
+            this.standUp();
+        }
+        this.setVehicle({ vehicle: Vehicle.Canoe, mode, ...localUserStore.getVehicleColors() });
+    }
+
+    private vehicleStateForTrail(): { vehicle: Vehicle; mode: VehicleMode } {
+        return { vehicle: localUserStore.getVehicle(), mode: this.vehicleMode };
+    }
+
+    /** The speed of the avatar in its canoe: the one of a walker, faster when paddling hard. */
+    protected canoeSpeed(speedUp: boolean): number {
+        return WOKA_SPEED * (speedUp ? CANOE_SPRINT_FACTOR : CANOE_SPEED_FACTOR);
     }
 
     public override setVehicle(value: unknown): void {
@@ -542,8 +580,10 @@ export class Player extends Character {
     }
 
     private deduceSpeed(speedUp: boolean, followMode: boolean): number {
-        if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming)
+        if (this.vehicleMode !== VehicleMode.Off && !followMode && !this.swimming) {
+            if (localUserStore.getVehicle() === Vehicle.Canoe) return this.canoeSpeed(speedUp);
             return WOKA_SPEED * vehicleSpeedFactor(localUserStore.getVehicle());
+        }
         const speed = this.pathWalkingSpeed
             ? this.pathWalkingSpeed
             : speedUp && !followMode
@@ -651,8 +691,12 @@ export class Player extends Character {
         if (!followMode && !this.isSeated()) {
             // The current of the water of the relief carries the avatar, on top of what it does by itself.
             const push = this.waterCurrentPush(WOKA_SPEED * 20);
-            x += push.x;
-            y += push.y;
+            // A canoe holds against the current better than a swimmer.
+            const carried = isCanoeAfloat({ vehicle: localUserStore.getVehicle(), mode: this.vehicleMode })
+                ? CANOE_CURRENT_SHARE
+                : 1;
+            x += push.x * carried;
+            y += push.y * carried;
         }
 
         if (!followMode && this.vehicleMode === VehicleMode.Off && !this.isSeated() && this.isOnIceHere()) {
@@ -685,7 +729,8 @@ export class Player extends Character {
                 this.emit(startMovingEventName, { direction, x: this.x, y: this.y });
             }
             this.moveBy(x, y, running);
-            if (running || this.isRidingVehicle()) {
+            // Dust behind a runner or a ride of the ground, none behind a canoe.
+            if ((running || this.isRidingVehicle()) && !isCanoeAfloat(this.vehicleStateForTrail())) {
                 const body = this.getBody();
                 this.runSmokeTrail.emit(this.x, this.y + body.offset.y + body.height / 2, x, y, this.depth - 1);
             }

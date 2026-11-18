@@ -17,6 +17,12 @@ const woka: DeepPartial<Translation["woka"]> = {
         sideColor: "Côtés",
         pedalsColor: "Pédales",
         dismount: "Descendre",
+        canoe: "Canoë",
+        hullColor: "Coque",
+        rimColor: "Bord",
+        paddleColor: "Pagaie",
+        canoeHint:
+            "Le canoë se met à l’eau tout seul : là où vous nageriez dans l’eau du relief, vous pagayez, à la vitesse de la marche, et le courant vous emporte moitié moins. À terre, vous marchez.",
     },
     customWoka: {
         color: "Couleur",

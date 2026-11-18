@@ -16,6 +16,12 @@ const woka: BaseTranslation = {
         sideColor: "Sides",
         pedalsColor: "Pedals",
         dismount: "Dismount",
+        canoe: "Canoe",
+        hullColor: "Hull",
+        rimColor: "Rim",
+        paddleColor: "Paddle",
+        canoeHint:
+            "The canoe takes to the water by itself: where you would swim in the water of the relief, you paddle, at walking speed, and the current carries you half as much. On the ground, you walk.",
     },
     customWoka: {
         color: "Color",

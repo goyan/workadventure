@@ -348,7 +348,8 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         // A costume such as the duck has no swimwear poses nor skateboard pose.
         const human = isHumanAvatar(player.sprites.keys());
         const vehicle = localUserStore.getVehicle();
-        if (vehicle !== Vehicle.None && human) {
+        // A canoe is boarded by itself on the water: nothing to mount from the wheel.
+        if (vehicle !== Vehicle.None && vehicle !== Vehicle.Canoe && human) {
             const equipped = player.vehicleMode === VehicleMode.Always;
             const unicycle = vehicle === Vehicle.ElectricUnicycle;
             wokaMenuStore.addAction({
