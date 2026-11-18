@@ -8,6 +8,7 @@ import {
     RecordingSettings,
     Weather,
     WeatherLocation,
+    WeatherType,
 } from "../../types";
 import { Command } from "../Command";
 
@@ -70,8 +71,22 @@ export class UpdateWAMSettingCommand extends Command {
                 break;
             }
             case "updateWeatherSettingMessage": {
-                this.wam.settings.weather = Weather.parse(message.updateWeatherSettingMessage.weather);
-                this.wam.settings.weatherStartedAt = message.updateWeatherSettingMessage.startedAt;
+                const weather = Weather.parse(message.updateWeatherSettingMessage.weather);
+                const previous = this.wam.settings.weather;
+                const previousStart = this.wam.settings.weatherStartedAt;
+                // The server stamps the change; a client applying its own change first uses its clock until then.
+                const changedAt = message.updateWeatherSettingMessage.startedAt ?? Date.now();
+                const snowGoesOn = previous === WeatherType.Snow && weather === WeatherType.Snow;
+                // A snow chosen again goes on: its ground keeps the snow it already holds.
+                this.wam.settings.weatherStartedAt = snowGoesOn ? previousStart : changedAt;
+                // A snow that stops leaves its ground to melt (see snowCoverage).
+                if (previous === WeatherType.Snow && !snowGoesOn) {
+                    this.wam.settings.lastSnow = {
+                        ...(previousStart !== undefined ? { startedAt: previousStart } : {}),
+                        endedAt: changedAt,
+                    };
+                }
+                this.wam.settings.weather = weather;
                 // Back to the default place on request. Otherwise older clients send no place: keep the existing one.
                 // A broken place is ignored.
                 const location = WeatherLocation.safeParse(message.updateWeatherSettingMessage.location);

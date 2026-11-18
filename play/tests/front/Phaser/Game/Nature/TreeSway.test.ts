@@ -35,6 +35,24 @@ describe("isSwayingTree", () => {
         expect(isSwayingTree("Nature:bush-small")).toBe(false);
         expect(isSwayingTree("Office:plant")).toBe(false);
     });
+    it("sways the snowy, seasonal and big trees too, but not stumps, rocks, bushes or grass", () => {
+        for (const id of [
+            "Nature:seasonal-1:Default:Down",
+            "Nature:snow-tree-3:Default:Down",
+            "Nature:snow-evergreen-10:Default:Down",
+            "Nature:winter-auto-2:Default:Down",
+            "Nature:nature-1:Default:Down",
+            "Nature:nature-6:Default:Down",
+        ])
+            expect(isSwayingTree(id)).toBe(true);
+        for (const id of [
+            "Nature:nature-7:Default:Down",
+            "Nature:nature-12:Default:Down",
+            "Nature:snow-detail-1:Default:Down",
+            "Nature:detail-rocks-2:Default:Down",
+        ])
+            expect(isSwayingTree(id)).toBe(false);
+    });
 });
 
 describe("TreeSway", () => {

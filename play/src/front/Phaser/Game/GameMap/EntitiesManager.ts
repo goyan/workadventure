@@ -26,7 +26,7 @@ import { mapEditorPlacementLevelStore } from "../../../Stores/MapEditorStore";
 import { placementElevation } from "../Floors/FloorPlacement";
 import { weatherAtTime } from "../Weather/WeatherFrame";
 import { shownWeatherSettings } from "../Weather/RealWeatherClient";
-import { snowCoverage } from "../Weather/SnowCover";
+import { mapSnowCoverage } from "../Weather/SnowCover";
 import { entityPlacementBlockerStore } from "../../../Stores/MapEditorStore";
 import { getTileCollisionGrid, reverseCollisionGrid } from "../../../Utils/EntityHitbox";
 import { actionsMenuStore } from "../../../Stores/ActionsMenuStore";
@@ -97,6 +97,8 @@ function isCopyModifier(event: MouseEvent | TouchEvent | WheelEvent | undefined)
 
 /** Opacity of the entities that are not the subject of the map editor tool in use. */
 const DIMMED_ENTITY_ALPHA = 0.4;
+/** How often the trees follow the ground while its snow settles or melts. */
+const SETTLING_CHECK_MS = 10_000;
 // Floors and walls are made of sprites that overlap: fading each of them with an alpha stacks the opacity where they
 // overlap and draws a grid. They are darkened with a tint instead, which stays uniform.
 const DIMMED_MAP_LAYER_TINT = 0x808080;
@@ -104,9 +106,12 @@ const DIMMED_MAP_LAYER_TINT = 0x808080;
 export class EntitiesManager extends EventEmitter {
     private season = Season.Summer;
     private nextSeasonCheck = 0;
-    private lastConfiguredWeather: WeatherType | undefined;
+    private lastSnowKey: string | undefined;
     private lastForcedSeason: Season | undefined;
     private lastMapSnow = true;
+    private lastOutdoorVersion = -1;
+    /** How much the map snow covers the ground, which the trees under snow follow (Entity.setSeason). */
+    private snowCover = 1;
     private readonly erasingEntityIds = new Set<string>();
     private shouldDimEntity: ((entity: Entity) => boolean) | undefined;
     private scene: GameScene;
@@ -175,7 +180,7 @@ export class EntitiesManager extends EventEmitter {
 
         const entity = new Entity(this.scene, entityId, data, prefab);
         entity.setVisible(false);
-        entity.setSeason(this.season);
+        entity.setSeason(this.season, this.snowCover);
 
         TexturesHelper.loadEntityImage(
             this.scene,
@@ -195,7 +200,7 @@ export class EntitiesManager extends EventEmitter {
                                 .then(() => {
                                     // A load may complete after deletion or replacement of this entity.
                                     if (entity.active && this.entities.get(entityId) === entity) {
-                                        entity.setSeason(this.season);
+                                        entity.setSeason(this.season, this.snowCover);
                                         this.scene.markDirty();
                                     }
                                 })
@@ -261,35 +266,39 @@ export class EntitiesManager extends EventEmitter {
         if (!serverDate || !Number.isFinite(serverDate.getTime())) return;
         const settings = shownWeatherSettings(this.scene.getGameMap().getWamFile()?.getWam().settings, serverDate);
         const configured = settings?.weather ?? WeatherType.Clear;
+        const outdoorVersion = this.scene.getOutdoorVersion();
+        const outdoorsChanged = outdoorVersion !== this.lastOutdoorVersion;
+        // A snow chosen again, or one that stops, changes the ground without changing the weather's name.
+        const snowKey = `${configured}:${settings?.weatherStartedAt}:${settings?.lastSnow?.endedAt}`;
         if (
             time < this.nextSeasonCheck &&
-            configured === this.lastConfiguredWeather &&
+            snowKey === this.lastSnowKey &&
             forcedSeason === this.lastForcedSeason &&
-            mapSnow === this.lastMapSnow
+            mapSnow === this.lastMapSnow &&
+            !outdoorsChanged
         )
             return;
-        this.lastConfiguredWeather = configured;
+        this.lastSnowKey = snowKey;
         this.lastForcedSeason = forcedSeason;
         this.lastMapSnow = mapSnow;
-        this.nextSeasonCheck = time + 60_000 - (serverDate.getTime() % 60_000);
-        const weatherSeason = mapSnow
-            ? treeSeasonAt(
-                  serverDate,
-                  weatherAtTime(configured, serverDate, settings?.weatherAuto),
-                  snowCoverage(
-                      configured,
-                      serverDate.getTime(),
-                      settings?.weatherStartedAt,
-                      settings?.weatherAuto,
-                      settings?.snowMeltFrom,
-                  ),
-              )
-            : treeSeasonAt(serverDate, WeatherType.Clear, 0);
+        this.lastOutdoorVersion = outdoorVersion;
+        const coverage = mapSnowCoverage(mapSnow, settings, serverDate);
+        // While the snow settles or melts, the trees follow the ground every few seconds rather than every minute.
+        this.nextSeasonCheck =
+            coverage > 0 && coverage < 1 ? time + SETTLING_CHECK_MS : time + 60_000 - (serverDate.getTime() % 60_000);
+        const weatherSeason = treeSeasonAt(
+            serverDate,
+            mapSnow ? weatherAtTime(configured, serverDate, settings?.weatherAuto) : WeatherType.Clear,
+            coverage,
+        );
         // Snow cover takes priority over autumn's personal colour palette, just as it does on the ground.
         const season = weatherSeason === Season.Winter ? Season.Winter : (forcedSeason ?? weatherSeason);
-        if (season === this.season) return;
+        // The trees whiten with the ground (a snow just begun leaves them green); a chosen winter theme, at once.
+        const snowCover = season === Season.Winter && weatherSeason === Season.Winter ? coverage : 1;
+        if (season === this.season && snowCover === this.snowCover && !outdoorsChanged) return;
         this.season = season;
-        for (const entity of this.entities.values()) entity.setSeason(season);
+        this.snowCover = snowCover;
+        for (const entity of this.entities.values()) entity.setSeason(season, snowCover);
         this.scene.markDirty();
     }
 

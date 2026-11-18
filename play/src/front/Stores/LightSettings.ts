@@ -1,4 +1,4 @@
-import { get, type Writable } from "svelte/store";
+import { derived, get, type Readable, type Writable } from "svelte/store";
 import {
     acceptedLightSettings,
     decodeLightSettings,
@@ -33,19 +33,26 @@ import {
     sunLightShownStore,
 } from "./SkyLightStore";
 
-type Setting = LightSettingKind & { set(value: LightSettingValue): void; read(): LightSettingValue };
+type Setting = LightSettingKind & {
+    store: Readable<LightSettingValue>;
+    set(value: LightSettingValue): void;
+    read(): LightSettingValue;
+};
 
 const number = (store: Writable<number>): Setting => ({
+    store,
     kind: "number",
     read: () => get(store),
     set: (value) => typeof value === "number" && store.set(value),
 });
 const onOff = (store: Writable<boolean>): Setting => ({
+    store,
     kind: "switch",
     read: () => get(store),
     set: (value) => typeof value === "boolean" && store.set(value),
 });
 const choice = <T extends string>(store: Writable<T>, choices: readonly T[]): Setting => ({
+    store,
     kind: "choice",
     choices,
     read: () => get(store),
@@ -99,6 +106,24 @@ const LIGHT_SETTINGS: Readonly<Record<string, Setting>> = {
     shadowTreeSway: onOff(skyShadowTreeSwayStore),
 };
 
+/** Every light setting of this player as it is now, by name: what the desktop app shows. */
+export function readLightSettings(): Record<string, LightSettingValue> {
+    return Object.fromEntries(Object.entries(LIGHT_SETTINGS).map(([name, setting]) => [name, setting.read()]));
+}
+
+/**
+ * Changes one light setting by its name, within its own limits (see the stores). False for an unknown name or a
+ * value of another kind, which changes nothing.
+ */
+export function setLightSetting(name: string, value: LightSettingValue): boolean {
+    const setting = LIGHT_SETTINGS[name];
+    if (!setting) return false;
+    const accepted = acceptedLightSettings({ [name]: value }, { [name]: setting });
+    if (!(name in accepted)) return false;
+    setting.set(accepted[name]);
+    return true;
+}
+
 /** The code of all the light settings of this player, as they are now. */
 export function currentLightSettingsCode(): string {
     return encodeLightSettings(
@@ -121,3 +146,9 @@ export function applyLightSettingsCode(code: string): number | undefined {
     }
     return accepted.length;
 }
+
+/** Changes made by any light control, including a shared settings code. */
+export const lightSettingsValuesStore = derived(
+    Object.values(LIGHT_SETTINGS).map((setting) => setting.store),
+    () => readLightSettings(),
+);

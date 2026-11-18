@@ -1,5 +1,10 @@
-import type { Unsubscriber } from "svelte/store";
-import { perfShownStore, perfStatsStore } from "../../../Stores/PerfStore";
+import { derived, type Unsubscriber } from "svelte/store";
+import {
+    desktopGraphicsMetricsRequestedStore,
+    graphicsMetricsRequestedStore,
+    perfShownStore,
+    perfStatsStore,
+} from "../../../Stores/PerfStore";
 import { PerfMeter } from "./PerfMeter";
 
 /** What the monitor listens to: the events of a scene, and those of the game around its drawing. */
@@ -26,7 +31,10 @@ export class PerfMonitor {
         private readonly gameEvents: Emitter,
         private readonly now: () => number = () => performance.now(),
     ) {
-        this.unsubscribe = perfShownStore.subscribe((shown) => (shown ? this.listen() : this.stop()));
+        this.unsubscribe = derived(
+            [perfShownStore, graphicsMetricsRequestedStore, desktopGraphicsMetricsRequestedStore],
+            ([counter, graphics, desktop]) => counter || graphics || desktop,
+        ).subscribe((shown) => (shown ? this.listen() : this.stop()));
     }
 
     private readonly onPreUpdate = (): void => {

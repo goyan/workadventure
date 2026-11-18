@@ -46,28 +46,31 @@ describe("shared seasonal nature", () => {
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map([["tree", entity]]),
             season: Season.Summer,
+            snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty,
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
         manager.updateSeason(0, undefined);
         expect(setSeason).not.toHaveBeenCalled();
         manager.updateSeason(0, new Date("2026-11-08T12:00:00Z"));
-        expect(setSeason).toHaveBeenCalledExactlyOnceWith(Season.Autumn);
+        expect(setSeason).toHaveBeenCalledExactlyOnceWith(Season.Autumn, 1);
         manager.updateSeason(100, new Date("2026-12-08T12:00:00Z"));
         manager.updateSeason(60_000, new Date("2026-11-08T12:00:00Z"));
         expect(setSeason).toHaveBeenCalledTimes(1);
         manager.updateSeason(120_000, new Date("2026-12-08T12:00:00Z"));
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
         expect(markDirty).toHaveBeenCalledTimes(2);
         settings.weather = WeatherType.Snow;
         manager.updateSeason(120_010, new Date("2026-12-08T12:00:00Z"));
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter, 1);
         settings.weather = WeatherType.Rain;
         manager.updateSeason(120_020, new Date("2026-12-08T12:00:00Z"));
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
         expect(markDirty).toHaveBeenCalledTimes(4);
     });
 
@@ -78,9 +81,12 @@ describe("shared seasonal nature", () => {
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map([["tree", entity]]),
             season: Season.Summer,
+            snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
@@ -89,11 +95,35 @@ describe("shared seasonal nature", () => {
         expect(setSeason).not.toHaveBeenCalled();
         // Within the same minute: the theme switch must not wait for the next check.
         manager.updateSeason(10, date, Season.Winter);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter, 1);
         manager.updateSeason(20, date);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
     });
 
+    it("refreshes sheltered seasonal objects as soon as the outdoor grid changes", () => {
+        const setSeason = vi.fn();
+        let version = 1;
+        const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
+            entities: new Map([["tree", { setSeason } as unknown as Entity]]),
+            season: Season.Winter,
+            snowCover: 1,
+            nextSeasonCheck: 0,
+            lastOutdoorVersion: 1,
+            scene: {
+                markDirty: vi.fn(),
+                getOutdoorVersion: () => version,
+                getGameMap: () => ({
+                    getWamFile: () => ({ getWam: () => ({ settings: { weather: WeatherType.Snow } }) }),
+                }),
+            },
+        }) as unknown as EntitiesManager;
+        const date = new Date("2026-12-08T12:00:00Z");
+        manager.updateSeason(0, date);
+        expect(setSeason).not.toHaveBeenCalled();
+        version = 2;
+        manager.updateSeason(1, date);
+        expect(setSeason).toHaveBeenCalledExactlyOnceWith(Season.Winter, 1);
+    });
     it("forces autumn trees for the autumn theme, then the map season again", () => {
         const setSeason = vi.fn();
         const entity = { setSeason } as unknown as Entity;
@@ -101,17 +131,20 @@ describe("shared seasonal nature", () => {
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map([["tree", entity]]),
             season: Season.Summer,
+            snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
         const july = new Date("2026-07-08T12:00:00Z");
         manager.updateSeason(0, july, Season.Autumn);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
         manager.updateSeason(10, july);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Summer, 1);
     });
 
     it("keeps the trees out of the map snow when it is not shown, and follows a switch at once", () => {
@@ -120,46 +153,53 @@ describe("shared seasonal nature", () => {
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map([["tree", { setSeason } as unknown as Entity]]),
             season: Season.Summer,
+            snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
             },
         }) as EntitiesManager;
         // One minute into a snowy slot of the schedule: the automatic weather has begun to cover the ground.
         const snowy = new Date(snowStart + 60_000);
         manager.updateSeason(0, snowy, Season.Autumn, false);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
-        // The same minute: showing the map snow again turns them white at once.
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
+        // The same minute: showing the map snow again puts them under the snow of the ground, a tenth settled.
         manager.updateSeason(10, snowy, Season.Autumn, true);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Winter, 0.1);
         // No theme and the snow hidden: the calendar season.
         manager.updateSeason(20, snowy, undefined, false);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
         settings.weather = WeatherType.Snow;
         manager.updateSeason(30, snowy, undefined, false);
-        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        expect(setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
     });
 
-    it("snow covers trees, plants, rocks and trunks even with the autumn theme, then melts", () => {
+    it("snow covers trees, plants, rocks and trunks even with the autumn theme, as it covers the ground, then melts", () => {
         const entities = ["tree", "plant", "rock", "trunk"].map((id) => ({ id, setSeason: vi.fn() }));
         const manager = Object.assign(Object.create(EntitiesManager.prototype) as EntitiesManager, {
             entities: new Map(entities.map((entity) => [entity.id, entity as unknown as Entity])),
             season: Season.Autumn,
+            snowCover: 1,
             nextSeasonCheck: 0,
+            lastOutdoorVersion: 0,
             scene: {
                 markDirty: vi.fn(),
+                getOutdoorVersion: () => 0,
                 getGameMap: () => ({
                     getWamFile: () => ({ getWam: () => ({ settings: { weather: WeatherType.Automatic } }) }),
                 }),
             },
         }) as EntitiesManager;
+        // The trees whiten with the ground: a tenth one minute in, then melting a tenth a minute once it stops.
         manager.updateSeason(0, new Date(snowStart + 60_000), Season.Autumn);
-        for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Winter);
+        for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Winter, 0.1);
         manager.updateSeason(60_000, new Date(snowStart + HALF_HOUR + 60_000), Season.Autumn);
-        for (const entity of entities) expect(entity.setSeason).toHaveBeenCalledTimes(1);
+        for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Winter, 0.9);
         manager.updateSeason(120_000, new Date(snowStart + HALF_HOUR + 11 * 60_000), Season.Autumn);
-        for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Autumn);
+        for (const entity of entities) expect(entity.setSeason).toHaveBeenLastCalledWith(Season.Autumn, 1);
     });
 
     it("keeps autumn orange in rain and uses white artwork only during snow or its melting phase", () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+    ALWAYS_NIGHT_MINUTES,
+    forcedSunMinutes,
     NIGHT_DARKNESS_MAX,
     NIGHT_DARKNESS_MIN,
     NIGHT_MAX_OPACITY,
@@ -237,5 +239,21 @@ describe("worldClockTimeZone", () => {
 
     it("shows the time of the computer, whatever the map, for a player who follows their own clock", () => {
         expect(worldClockTimeZone(true, "Australia/Sydney")).toBeUndefined();
+    });
+});
+
+describe("forcedSunMinutes", () => {
+    it("follows the clock unless the night is always on or a development time is given", () => {
+        expect(forcedSunMinutes(undefined, false)).toBeUndefined();
+        expect(forcedSunMinutes(undefined, true)).toBe(ALWAYS_NIGHT_MINUTES);
+        expect(forcedSunMinutes(12 * 60, true)).toBe(12 * 60);
+    });
+
+    it("keeps the night always shown fully dark, on the longest and on the shortest day", () => {
+        for (const day of ["2026-06-21", "2026-12-21"]) {
+            const [year, month, date] = day.split("-").map(Number);
+            const instant = parisWallClockToInstant(year, month, date, ALWAYS_NIGHT_MINUTES);
+            expect(nightOpacityAt(instant)).toBe(NIGHT_MAX_OPACITY);
+        }
     });
 });

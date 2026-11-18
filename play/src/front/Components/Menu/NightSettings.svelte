@@ -12,5 +12,6 @@
         { value: NightMode.Server, label: $LL.menu.settings.night.server() },
         { value: NightMode.Computer, label: $LL.menu.settings.night.computer() },
         { value: NightMode.Disabled, label: $LL.menu.settings.night.disabled() },
+        { value: NightMode.Always, label: $LL.menu.settings.night.always() },
     ]}
 />

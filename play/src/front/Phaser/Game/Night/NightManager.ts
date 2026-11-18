@@ -31,6 +31,7 @@ import {
     setLightSoftEdgePx,
 } from "../Lamps/LightSoftEdge";
 import {
+    forcedSunMinutes,
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
     nightOpacityWith,
@@ -225,7 +226,7 @@ export class NightManager {
             const mapPlace = shownMapPlace(this.scene.getGameMap().getWamFile()?.getWam().settings);
             // The clock shown follows the time of the place of the map.
             mapTimeZoneStore.set(mapPlace?.timezone);
-            const place = sunPlaceOf(this.mode === NightMode.Computer || this.forcedMinutes !== undefined, mapPlace);
+            const place = sunPlaceOf(this.mode === NightMode.Computer || this.sunMinutes() !== undefined, mapPlace);
             // The same sun lights the clouds and casts their shadows (WeatherManager).
             this.sun = sunAt === undefined ? undefined : sunPositionAt(sunAt, place);
             // The light of the sky, at the same instant and place: the sun, or the moon at night. With the night
@@ -372,15 +373,20 @@ export class NightManager {
      * `?nightAt=HH:MM` (development): that Paris time, on today's date in Paris, for the sun of Paris too.
      */
     private sunInstant(date: Date | undefined): Date | undefined {
-        if (this.forcedMinutes !== undefined) {
+        const forced = this.sunMinutes();
+        if (forced !== undefined) {
             const { year, month, day } = parisCalendarDay(date ?? new Date());
-            return parisWallClockToInstant(year, month, day, this.forcedMinutes);
+            return parisWallClockToInstant(year, month, day, forced);
         }
         if (date === undefined || this.mode !== NightMode.Computer) {
             return date;
         }
         const minutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
         return parisWallClockToInstant(date.getFullYear(), date.getMonth() + 1, date.getDate(), minutes);
+    }
+
+    private sunMinutes(): number | undefined {
+        return forcedSunMinutes(this.forcedMinutes, this.mode === NightMode.Always);
     }
 
     private readAreas(): void {

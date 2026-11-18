@@ -837,9 +837,20 @@ export const WeatherLocation = z.object({
 });
 export type WeatherLocation = z.infer<typeof WeatherLocation>;
 
+/**
+ * The last snow of the map once another weather took its place: its ground melts from `endedAt`. Without `startedAt`,
+ * a snow from before its start was kept: its ground was full.
+ */
+export const LastSnow = z.object({
+    startedAt: z.number().finite().nonnegative().optional(),
+    endedAt: z.number().finite().nonnegative(),
+});
+export type LastSnow = z.infer<typeof LastSnow>;
+
 export const WAMSettings = z.object({
     weather: Weather.optional().catch(undefined),
     weatherStartedAt: z.number().finite().nonnegative().optional().catch(undefined),
+    lastSnow: LastSnow.optional().catch(undefined),
     weatherAuto: AutoWeather.optional().catch(undefined),
     weatherLocation: WeatherLocation.optional().catch(undefined),
     megaphone: MegaphoneSettings.optional(),

@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { DEPTH_TILE_INDEX } from "../DepthIndexes";
+import { DEPTH_SNOW_GROUND_INDEX } from "../DepthIndexes";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
 
 /** The ground is drawn at 1/8 of the map size, then stretched: the smoothing softens the edges. */
@@ -56,8 +56,7 @@ export class SnowGround {
         this.image = this.scene.add.image(0, 0, key);
         this.image.setOrigin(0);
         this.image.setDisplaySize(mapView.width, mapView.height);
-        // Between the map tiles (below 0) and the floor tiles (MAP_LAYER_FLOOR_DEPTH = 0.5): paving stays on top.
-        this.image.setDepth(DEPTH_TILE_INDEX + 0.25);
+        this.image.setDepth(DEPTH_SNOW_GROUND_INDEX);
         this.image.setVisible(this.visible);
         this.image.setAlpha(this.alpha);
     }

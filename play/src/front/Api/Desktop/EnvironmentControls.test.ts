@@ -22,6 +22,8 @@ import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
 import { LampMusicSource, lampMusicSourceStore } from "../../Stores/LampMusicSourceStore";
 import { retroPaletteStore, uiFontStore } from "../../Stores/RetroThemeStore";
 import { weatherVolumeStore } from "../../Stores/SoundEffectsStore";
+import { GraphicsQuality, graphicsQualityStore } from "../../Stores/GraphicsSettingsStore";
+import { desktopGraphicsMetricsRequestedStore, graphicsMetricsRequestedStore } from "../../Stores/PerfStore";
 
 const preview = vi.hoisted(() => vi.fn());
 vi.mock("../../Components/Menu/SoundPreview", () => ({ createSoundPreview: () => ({ play: preview }) }));
@@ -50,11 +52,32 @@ beforeEach(() => {
         getDesktopWeather: () => settings.weather,
         getGameMap: () => ({ getWamFile: () => ({ getWam: () => ({ settings }) }) }),
         getMapEditorModeManager: () => ({}),
+        setTileAnimationsPaused: vi.fn(),
     } as unknown as GameScene);
     mapEditorActivated.set(false);
 });
 
 describe("desktop environment settings", () => {
+    it("applies graphical quality without editing shared weather or changing the night clock", async () => {
+        nightModeStore.set(NightMode.Always);
+        const season = get(seasonalThemeModeStore);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.Low });
+        expect(get(graphicsQualityStore)).toBe(GraphicsQuality.Low);
+        expect(readDesktopEnvironment()).toMatchObject({ graphicsQuality: GraphicsQuality.Low, animations: false });
+        expect(settings.weather).toBe(WeatherType.Rain);
+        expect(get(nightModeStore)).toBe(NightMode.Always);
+        expect(get(seasonalThemeModeStore)).toBe(season);
+        expect(save).not.toHaveBeenCalled();
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Quality, value: GraphicsQuality.High });
+    });
+    it("keeps desktop measurements separate from the web panel request", async () => {
+        graphicsMetricsRequestedStore.set(true);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Metrics, value: true });
+        graphicsMetricsRequestedStore.set(false);
+        expect(get(desktopGraphicsMetricsRequestedStore)).toBe(true);
+        expect(readDesktopEnvironment()?.graphicsMonitoring).toBe(true);
+        await applyDesktopEnvironment({ setting: DesktopVisualSetting.Metrics, value: false });
+    });
     it("previews the selected family at its current volume and keeps animals personal", async () => {
         weatherVolumeStore.set(0.35);
         await applyDesktopEnvironment({ setting: DesktopSoundsSetting.Preview, value: DesktopSoundSetting.Weather });
@@ -240,5 +263,34 @@ describe("desktop environment settings", () => {
             "offline",
         );
         expect(readDesktopEnvironment()?.weather).toBe(WeatherType.Rain);
+    });
+
+    it("reports every light setting with its words and bounds, details tied to their switch", () => {
+        const controls = readDesktopEnvironment()?.lightControls ?? [];
+        const byName = Object.fromEntries(controls.map((control) => [control.name, control]));
+        expect(byName.nightDarkness).toMatchObject({ group: "night", kind: "number", step: 0.05 });
+        expect(byName.lightBounce).toMatchObject({ kind: "number", min: 0, max: 1, dependsOn: "lightBounceOn" });
+        expect(byName.lightSecondBounceOn).toMatchObject({ kind: "switch", dependsOn: "lightBounceOn" });
+        expect(byName.moonPhaseCurve?.choices?.map((choice) => choice.value)).toEqual(["linear", "realistic"]);
+        expect(byName.shadowTreeShape).toMatchObject({ group: "shadows", kind: "choice", dependsOn: "shadowTrees" });
+        expect(byName.perfCounter).toMatchObject({ group: "other", kind: "switch" });
+        expect(controls.every((control) => typeof control.label === "string")).toBe(true);
+    });
+
+    it("changes a light setting by its name, within its limits, and refuses an unknown one", async () => {
+        await applyDesktopEnvironment({ setting: "light", value: { name: "lightBounceOn", value: false } });
+        await applyDesktopEnvironment({ setting: "light", value: { name: "nightDarkness", value: 0.8 } });
+        await applyDesktopEnvironment({ setting: "light", value: { name: "perfCounter", value: true } });
+        const byName = Object.fromEntries(
+            (readDesktopEnvironment()?.lightControls ?? []).map((control) => [control.name, control.value]),
+        );
+        expect(byName).toMatchObject({ lightBounceOn: false, nightDarkness: 0.8, perfCounter: true });
+        await expect(
+            applyDesktopEnvironment({ setting: "light", value: { name: "notASetting", value: true } }),
+        ).rejects.toThrow();
+        await expect(
+            applyDesktopEnvironment({ setting: "light", value: { name: "lightBounceOn", value: 3 } }),
+        ).rejects.toThrow();
+        expect(save).not.toHaveBeenCalled();
     });
 });

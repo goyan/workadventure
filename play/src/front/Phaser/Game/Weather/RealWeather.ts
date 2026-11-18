@@ -106,7 +106,7 @@ export function withRealWeather(
     real: RealWeatherState,
 ): MapSnowSettings | undefined {
     if (settings?.weather !== WeatherType.Real) return settings;
-    const { weatherAuto, weatherLocation } = settings;
+    const { weatherAuto, weatherLocation, lastSnow } = settings;
     switch (real.status) {
         case "known":
             return {
@@ -123,9 +123,10 @@ export function withRealWeather(
                 rainDryFrom: real.rainDryFrom,
                 weatherAuto,
                 weatherLocation,
+                lastSnow,
             };
         case "unavailable":
-            return { weather: WeatherType.Automatic, weatherAuto, weatherLocation };
+            return { weather: WeatherType.Automatic, weatherAuto, weatherLocation, lastSnow };
         default:
             return { weather: WeatherType.Clear, weatherAuto, weatherLocation };
     }

@@ -50,10 +50,10 @@ const { default: SkyLightSettings } = await import("../../../../src/front/Compon
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLElement;
 
-function render(): void {
+function render(section: "all" | "ambiance" | "graphics" = "all"): void {
     target = document.createElement("div");
     document.body.append(target);
-    component = mount(SkyLightSettings, { target });
+    component = mount(SkyLightSettings, { target, props: { section } });
     flushSync();
 }
 
@@ -73,6 +73,22 @@ afterEach(async () => {
 });
 
 describe("SkyLightSettings", () => {
+    it("keeps atmosphere controls separate from GPU switches without resetting either", () => {
+        render("ambiance");
+        expect(target.querySelector('[data-testid="sky-moon-phase-curve"]')).not.toBeNull();
+        expect(target.querySelector('[data-testid="sky-sun-limits"]')).not.toBeNull();
+        expect(target.querySelector("#sky-sun-light-shown")).toBeNull();
+        expect(get(sunLightShownStore)).toBe(true);
+    });
+
+    it("shows GPU switches without the atmosphere sliders in the graphics section", () => {
+        render("graphics");
+        expect(target.querySelector("#sky-sun-light-shown")).not.toBeNull();
+        expect(target.querySelector("#sky-moon-light-shown")).not.toBeNull();
+        expect(target.querySelector('[data-testid="sky-moon-phase-curve"]')).toBeNull();
+        expect(target.querySelector('[data-testid="sky-sun-limits"]')).toBeNull();
+    });
+
     it("shows the limits of each body that is on, and the phase curve with the moon", () => {
         render();
         expect(target.querySelector('[data-testid="sky-sun-limits"]')).not.toBeNull();

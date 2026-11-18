@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { AreaData, WAMFileFormat } from "../src/types";
+import type { WAMFileFormat } from "../src/types";
+import { AreaData } from "../src/types";
 import { GameMapAreas, isAtAreaLevel } from "../src/GameMap/GameMapAreas";
 
-const area = { id: "a", x: 0, y: 0, width: 64, height: 64, visible: true, name: "", properties: [] };
+const area: AreaData = { id: "a", x: 0, y: 0, width: 64, height: 64, visible: true, name: "", properties: [] };
 
 function areasOf(...areas: AreaData[]): GameMapAreas {
     return new GameMapAreas({ areas, entities: {}, entityCollections: [] } as unknown as WAMFileFormat);

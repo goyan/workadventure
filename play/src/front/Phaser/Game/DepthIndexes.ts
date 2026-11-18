@@ -1,6 +1,10 @@
 //this file contains all the depth indexes which will be used in our game
 
 export const DEPTH_TILE_INDEX = 0;
+/** The green or autumn grass of the outside: over the map tiles, under the snow and the floor tiles (0.5). */
+export const DEPTH_SEASONAL_GROUND_INDEX = DEPTH_TILE_INDEX + 0.2;
+/** The snow on the outside ground: over the grass, under the floor tiles, so that paving stays on top. */
+export const DEPTH_SNOW_GROUND_INDEX = DEPTH_TILE_INDEX + 0.25;
 //Note: Player characters use their y coordinate as their depth to simulate a perspective.
 //See the Character class.
 export const DEPTH_OVERLAY_INDEX = 1_000_000;

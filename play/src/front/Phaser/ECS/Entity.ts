@@ -12,6 +12,8 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
+import { SNOW_STEPS, seedOf, snowyTreeTexture, treeSnowStep } from "../Game/Nature/SnowyTreeTexture";
+import { isSwayingTree } from "../Game/Nature/TreeSway";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
 import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
 import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
@@ -83,6 +85,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     private automaticDepth = 0;
     private prefab: EntityPrefab;
     private season = Season.Summer;
+    /** How much snow covers the ground, 0 to 1: a tree under snow whitens with it, at its own pace. */
+    private snowCover = 1;
 
     private activatable!: boolean;
     private oldPosition: { x: number; y: number };
@@ -148,14 +152,32 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         const animationKey = animation
             ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
             : undefined;
-        const seasonalPath = this.prefab.seasonal?.[this.season];
+        const scene = this.scene as GameScene;
+        // The depth offset locates the ground contact above an image's transparent bottom margin.
+        const sheltered =
+            scene
+                .getOutdoorGrid?.()
+                ?.isOutdoorAt(
+                    this.x + this.displayWidth / 2,
+                    this.y + this.displayHeight + (this.prefab.depthOffset ?? 0) - 1,
+                ) === false;
+        const season = this.season === Season.Winter && sheltered ? Season.Summer : this.season;
+        const seasonalPath = this.prefab.seasonal?.[season];
+        // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture). Anything
+        // else with a drawn winter image (a pine, a rock, a stump) shows its summer image covering as the snow settles,
+        // and its winter image once the ground is white: no object is whiter than the ground around it.
+        const step = this.snowCover >= 1 ? SNOW_STEPS : treeSnowStep(this.snowCover, seedOf(this.entityId));
+        const snowyTree =
+            this.prefab.seasonal && season === Season.Winter && (isSwayingTree(this.prefab.id) || step < SNOW_STEPS)
+                ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath, step)
+                : undefined;
         this.setTexture(
-            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath,
+            snowyTree ??
+                (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath),
         );
         if (animationKey) {
             this.play(animationKey);
         }
-        const scene = this.scene as GameScene;
         this.treadmillBelt =
             animationKey !== undefined && isTreadmillBelt(this.prefab, scene.wamFile?.settings?.categories);
         if (this.treadmillBelt) this.setBeltMoving(scene.treadmillBelts.isMoving(this.entityId));
@@ -171,8 +193,9 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         (this.scene as GameScene).markDirty();
     }
 
-    public setSeason(season: Season): void {
+    public setSeason(season: Season, snowCover = 1): void {
         this.season = season;
+        this.snowCover = snowCover;
         if (this.prefab.seasonal) this.showPrefabTexture();
     }
 

@@ -181,6 +181,17 @@ export function nightOpacityAt(date: Date, place: MapPlace = PARIS): number {
     return ((SUNSET_ELEVATION - elevation) / (SUNSET_ELEVATION - CIVIL_TWILIGHT_ELEVATION)) * NIGHT_MAX_OPACITY;
 }
 
+/** Paris time of the night that is always shown: well after dusk, even on the longest day of the year. */
+export const ALWAYS_NIGHT_MINUTES = 60;
+
+/**
+ * The Paris time, in minutes, whose sun lights the map instead of the clock: the development override first, then
+ * the night shown all day long; undefined to follow the clock.
+ */
+export function forcedSunMinutes(devMinutes: number | undefined, alwaysNight: boolean): number | undefined {
+    return devMinutes ?? (alwaysNight ? ALWAYS_NIGHT_MINUTES : undefined);
+}
+
 /**
  * Development override: "HH:MM" from the `nightAt` URL parameter, as minutes since midnight,
  * or undefined (absent, invalid, or not in dev mode).
