@@ -2132,6 +2132,14 @@ garde les pieds au sec à l'étage. La grille couvre l'emprise du relief et des 
 (600 × 600 au plus) ; l'eau qui en sort est perdue. Un premier modèle « une cuvette, un niveau » a été essayé puis
 retiré : l'eau y apparaissait au point le plus bas de toute la région creusée, loin de la source.
 
+**L'eau vue en mouvement.** Le navigateur dessine ce qu'il sait déjà du courant (`Terrain/WaterFoam.ts`, logique
+pure ; `Terrain/WaterFlowView.ts`, dessin), sans rien demander au serveur : de l'écume portée par le courant (traits
+clairs qui naissent là où l'eau court, d'autant plus nombreux et plus longs que le courant est fort, 240 au plus à
+l'écran, rien en eau calme ; dès 2 px d'eau, alors qu'un avatar n'est emporté qu'à partir de 8, `waterCurrentAt` avec
+son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de son disque (il tourne de 0,2 à 1,5
+tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
+chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
+
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau

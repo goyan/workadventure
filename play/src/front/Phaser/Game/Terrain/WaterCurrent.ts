@@ -37,11 +37,20 @@ const NONE: CurrentVector = { x: 0, y: 0 };
  * Dry ground, or ground under a film too thin to carry anyone, is a bank or the edge of a flood, not a slope: one is
  * neither pushed away from a shore nor carried onto it. Where the ground itself drops (a hollow lower than the ground
  * under the water), the water falls, and carries towards it.
+ *
+ * `shallowest` is the least depth of water that counts: what carries someone by default; less to know which way a
+ * shallow stream runs (the foam drawn on it).
  */
-export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: number, now: number): CurrentVector {
+export function waterCurrentAt(
+    water: CurrentWater | undefined,
+    x: number,
+    y: number,
+    now: number,
+    shallowest: number = CURRENT_MIN_DEPTH_PX,
+): CurrentVector {
     if (!water) return NONE;
     const depth = water.depthAt(x, y, now);
-    if (depth < CURRENT_MIN_DEPTH_PX) return NONE;
+    if (depth < shallowest) return NONE;
     const terrain = water.relief();
     const cellX = Math.floor(x / TERRAIN_CELL);
     const cellY = Math.floor(y / TERRAIN_CELL);
@@ -51,7 +60,7 @@ export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: nu
         const ground = heightAt(terrain, cellX + awayX, cellY + awayY);
         const held = water.depthAt((cellX + awayX + 0.5) * TERRAIN_CELL, (cellY + awayY + 0.5) * TERRAIN_CELL, now);
         // Water deep enough to carry someone: its surface.
-        if (held >= CURRENT_MIN_DEPTH_PX) return ground + held;
+        if (held >= shallowest) return ground + held;
         // Dry ground, or a film too thin to carry anyone: a bank or the edge of a flood, not a slope, unless the
         // ground itself drops there (the water falls into a hollow).
         return ground < groundHere - CURRENT_DROP_PX ? ground + held : here;

@@ -349,6 +349,7 @@ import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager"
 import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
 import { TerrainView } from "./Terrain/TerrainView";
+import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import { GameJungle } from "./Jungle/GameJungle";
@@ -543,6 +544,7 @@ export class GameScene extends DirtyScene {
     private readonly terrainWater = new TerrainWater();
     private terrainWaterSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
+    private waterFlowView: WaterFlowView | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
     private skyWindowLightManager: SkyWindowLightManager | undefined;
@@ -1621,6 +1623,8 @@ export class GameScene extends DirtyScene {
         this.weatherManager?.destroy();
         this.terrainView?.destroy();
         this.terrainView = undefined;
+        this.waterFlowView?.destroy();
+        this.waterFlowView = undefined;
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
         this.skyWindowLightManager?.destroy();
@@ -2111,6 +2115,7 @@ export class GameScene extends DirtyScene {
             // The relief may have been edited: the water follows it (nothing is done while it stays the same).
             this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
             this.terrainView?.update(time);
+            this.waterFlowView?.update(time);
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
             this.skyMovingShadows?.update();
@@ -3402,6 +3407,13 @@ export class GameScene extends DirtyScene {
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
                 this.terrainView = new TerrainView(this, this.terrainWater);
+                // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
+                this.waterFlowView?.destroy();
+                this.waterFlowView = new WaterFlowView(this, {
+                    water: this.terrainWater,
+                    wam: () => this.getGameMap().getWamFile()?.getWam(),
+                    view: () => this.cameras.main.worldView,
+                });
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
                 this.skyShadowManager = new SkyShadowManager(this, {
