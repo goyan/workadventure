@@ -30,11 +30,27 @@ const FULL_LUMENS = lumensOfReach(6);
 export const LAMP_LUMENS_MIN = 75;
 export const LAMP_LUMENS_MAX = lumensOfReach(MAX_RADIUS_TILES);
 
-/** The reach (in tiles) and the strength (in percent) of a lamp of this flux, as the editor sets them. */
-export function lampFromLumens(lumens: number): { radius: number; intensityPercent: number } {
-    const flux = Number.isFinite(lumens)
+const MIN_ANGLE = 10;
+const FULL_TURN = 360;
+
+/**
+ * How much a beam of this opening (degrees) gathers the light of its lamp: a lamp that only shines in a quarter of the
+ * circle (a reflector behind it) throws the same flux four times as thick as one that shines all around.
+ */
+function gathering(angle: number): number {
+    return FULL_TURN / Math.min(FULL_TURN, Math.max(MIN_ANGLE, Number.isFinite(angle) ? angle : FULL_TURN));
+}
+
+/**
+ * The reach (in tiles) and the strength (in percent) of a lamp of this flux, as the editor sets them. A narrow beam
+ * (`angle`, in degrees; all around when absent) gathers the same flux: it reaches further and is stronger at its foot,
+ * never further than a lamp of the map can.
+ */
+export function lampFromLumens(lumens: number, angle = FULL_TURN): { radius: number; intensityPercent: number } {
+    const bulb = Number.isFinite(lumens)
         ? Math.min(LAMP_LUMENS_MAX, Math.max(LAMP_LUMENS_MIN, lumens))
         : LAMP_LUMENS_MIN;
+    const flux = Math.min(LAMP_LUMENS_MAX, bulb * gathering(angle));
     const tiles = Math.sqrt(Math.max(0, flux / LUX_TO_LUMENS - LAMP_HEIGHT_M * LAMP_HEIGHT_M) / TILE_AREA_M2);
     const radius = Math.min(
         MAX_RADIUS_TILES,
@@ -46,13 +62,15 @@ export function lampFromLumens(lumens: number): { radius: number; intensityPerce
 
 /**
  * The flux of a lamp set to this reach and this strength, when they go together as they do for a real lamp; undefined
- * for a lamp set freely (a long reach with little light, a short one at full strength).
+ * for a lamp set freely (a long reach with little light, a short one at full strength). The narrower its beam
+ * (`angle`, in degrees), the fewer lumens it takes to reach that far.
  */
-export function lumensOfLamp(radiusTiles: number, intensityPercent: number): number | undefined {
-    const lumens = lumensOfReach(radiusTiles);
-    return Math.abs(lampFromLumens(lumens).intensityPercent - intensityPercent) <= ON_CURVE_PERCENT
-        ? lumens
-        : undefined;
+export function lumensOfLamp(radiusTiles: number, intensityPercent: number, angle = FULL_TURN): number | undefined {
+    const gathered = lumensOfReach(radiusTiles);
+    if (Math.abs(lampFromLumens(gathered).intensityPercent - intensityPercent) > ON_CURVE_PERCENT) {
+        return undefined;
+    }
+    return Math.round(gathered / gathering(angle));
 }
 
 export type LampLumensPresetName = "candle" | "accent" | "desk" | "bulb" | "ceiling" | "floodlight";

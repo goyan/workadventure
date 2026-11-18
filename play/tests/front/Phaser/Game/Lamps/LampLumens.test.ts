@@ -76,3 +76,34 @@ describe("realLightFalloff", () => {
         expect(realLightFalloff(0.25, 6)).toBeGreaterThan(realLightFalloff(0.5, 6));
     });
 });
+
+describe("a narrow beam gathers the light of the lamp", () => {
+    it("reaches further and is stronger at its foot than the same lamp shining all around", () => {
+        const around = lampFromLumens(450);
+        const quarter = lampFromLumens(450, 90);
+        const narrow = lampFromLumens(450, 45);
+
+        expect(quarter.radius).toBeGreaterThan(around.radius);
+        expect(narrow.radius).toBeGreaterThan(quarter.radius);
+        expect(quarter.intensityPercent).toBe(100);
+        // The same flux in a quarter of the circle: as a lamp four times as strong all around.
+        expect(quarter).toEqual(lampFromLumens(4 * 450));
+    });
+
+    it("changes nothing for a lamp that shines all around", () => {
+        expect(lampFromLumens(450, 360)).toEqual(lampFromLumens(450));
+        expect(lumensOfLamp(6, 100, 360)).toBe(lumensOfLamp(6, 100));
+    });
+
+    it("never reaches further than a lamp of the map can, however narrow the beam", () => {
+        expect(lampFromLumens(6000, 10).radius).toBe(20);
+    });
+
+    it("reads the power of a lamp from its reach and its opening: the narrower, the fewer lumens for the same reach", () => {
+        expect(lumensOfLamp(10, 100, 90)).toBe(Math.round(lumensOfReach(10) / 4));
+        const lamp = lampFromLumens(450, 90);
+        const read = lumensOfLamp(lamp.radius, lamp.intensityPercent, 90);
+        expect(read).toBeGreaterThan(400);
+        expect(read).toBeLessThan(500);
+    });
+});
