@@ -2095,6 +2095,23 @@ de 0 à 100 %, avec sauvegarde personnelle. Les appels et les Jams conservent le
 « Outils → Cycle jour/nuit » ouvre directement le choix personnel serveur / ordinateur / désactivé.
 Cette première version couvre toute la carte, sans accumulation de neige ni distinction entre intérieur et extérieur.
 
+**Pluie selon son intensité.** La pluie et l’orage (météo fixe, automatique ou réelle) sont dessinés par
+`Weather/Rain.ts` : gouttes en trois plans (tête claire et traîne), d’autant plus nombreuses que la pluie est forte,
+autant à l’écran quel que soit le zoom ; elles penchent avec le vent de la carte (`rainLean`, vers l’est sans vent
+connu) ; il pleut davantage sous l’épaisseur d’un nuage de pluie que dans une trouée ; éclaboussures au sol (aucune
+en mouvement réduit) ; voile et volume de la pluie selon l’intensité. En météo **Réelle**, l’intensité vient des
+précipitations d’Open-Meteo (`precipitation` de `minutely_15`, champ facultatif `RealWeatherSlot.rainRate` en mm/h,
+changée en 10 min) : pluie faible jusqu’à 2,5 mm/h, modérée jusqu’à 7,6, forte au-delà (glossaire de l’AMS ; la
+courbe entre ces seuils est un choix, `rainIntensity`). Pluie fixe ou automatique : niveau moyen ; un orage tombe
+toujours fort. **Flaques** (`Weather/Puddles.ts`) : dehors, sous les objets et les avatars, toujours aux mêmes
+endroits de la carte ; elles se remplissent pendant les dix premières minutes d’une pluie et sèchent en vingt
+minutes, d’après les dates du serveur (les mêmes pour tous) ; pluie et orage qui se suivent comptent pour un seul
+épisode. Réglages personnels (Paramètres → Ambiance, bloc « Pluie », gardés dans le navigateur) : quantité de
+gouttes, inclinaison avec le vent, éclaboussures, flaques, effet des nuages. En développement seulement,
+`?rainLevel=0.8` force l’intensité et `?rainLevel=cycle` la fait varier de la bruine à l’averse en 40 s.
+Limites : les éclaboussures passent par-dessus les avatars et les arbres ; les flaques se posent sur tout sol
+extérieur ; après une éclaircie, elles repartent de zéro. `play` (front et pusher) seul.
+
 Recette : ouvrir la même carte WAM dans deux sessions, changer chaque météo depuis Outils,
 marcher et zoomer ; désactiver les effets dans une seule session et recharger pour vérifier la préférence.
 Vérifier la pluie, le tonnerre après la lueur et la neige silencieuse ; régler chaque volume, couper

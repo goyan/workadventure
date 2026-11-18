@@ -53,6 +53,14 @@ const menu: DeepPartial<Translation["menu"]> = {
             low: "Basse",
             always: "Toujours visibles",
         },
+        rain: {
+            title: "Pluie (réglages pour moi)",
+            amount: "Quantité de gouttes",
+            lean: "Inclinaison avec le vent",
+            splashes: "Éclaboussures au sol (0 % : aucune)",
+            puddles: "Flaques (0 % : aucune)",
+            clouds: "Plus de pluie sous les nuages (0 % : partout pareil)",
+        },
         skyLight: {
             sun: "Ombres et lumière du soleil",
             moon: "Ombres et lumière de la lune",

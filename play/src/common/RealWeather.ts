@@ -47,6 +47,8 @@ export const RealWeatherSlot = z.object({
     windFrom: z.number().min(0).max(360).optional(),
     /** Speed of the wind of the quarter hour, km/h at 10 m (absent: not given). */
     windSpeed: z.number().min(0).max(500).optional(),
+    /** How hard it rains over the quarter hour, mm an hour (a rain or a storm only; absent: not given). */
+    rainRate: z.number().min(0).max(2000).optional(),
 });
 export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
 
@@ -56,6 +58,8 @@ export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
  */
 export const RealWeatherForecast = z.object({ slots: z.array(RealWeatherSlot).max(96) });
 export type RealWeatherForecast = z.infer<typeof RealWeatherForecast>;
+
+const QUARTERS_AN_HOUR = 4;
 
 const OpenMeteoTimeline = z.object({
     minutely_15: z.object({
@@ -68,23 +72,26 @@ const OpenMeteoTimeline = z.object({
         wind_direction_10m: z.array(z.number().min(0).max(360).nullable()).max(96).optional(),
         /** Wind speed (km/h), asked since the clouds go as fast as the wind; absent from older answers. */
         wind_speed_10m: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
+        /** Rain, showers and snow of the quarter hour (mm), asked since the rain has levels; absent from older answers. */
+        precipitation: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
     }),
 });
 
 /**
- * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m and
- * timeformat=unixtime.
+ * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation
+ * and timeformat=unixtime.
  * Each value is taken for the quarter hour starting at its time. Undefined when the answer has no such timeline.
  */
 export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
     const parsed = OpenMeteoTimeline.safeParse(answer);
     if (!parsed.success) return undefined;
-    const { time, weather_code, temperature_2m, cloud_cover, wind_direction_10m, wind_speed_10m } =
+    const { time, weather_code, temperature_2m, cloud_cover, wind_direction_10m, wind_speed_10m, precipitation } =
         parsed.data.minutely_15;
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
     if (cloud_cover && cloud_cover.length !== time.length) return undefined;
     if (wind_direction_10m && wind_direction_10m.length !== time.length) return undefined;
     if (wind_speed_10m && wind_speed_10m.length !== time.length) return undefined;
+    if (precipitation && precipitation.length !== time.length) return undefined;
     return time.map((seconds, index) => {
         const code = weather_code[index];
         // The cloud cover itself when given (any weather: it sets the clouds over the rain too), else the WMO code.
@@ -95,13 +102,19 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
                 : code === null
                   ? undefined
                   : cloudinessFromWmoCode(code);
+        const weather = (code === null ? undefined : weatherFromWmoCode(code)) ?? null;
+        // The precipitation given with the code of a quarter hour, as seen in real answers (they change together):
+        // the sum over a quarter hour, four times that an hour.
+        const fallen = precipitation?.[index];
+        const raining = weather === WeatherType.Rain || weather === WeatherType.Storm;
         return {
             at: seconds * 1000,
-            weather: (code === null ? undefined : weatherFromWmoCode(code)) ?? null,
+            weather,
             temperature: temperature_2m[index],
             ...(cloudiness ? { cloudiness } : {}),
             ...(typeof wind_direction_10m?.[index] === "number" ? { windFrom: wind_direction_10m[index] } : {}),
             ...(typeof wind_speed_10m?.[index] === "number" ? { windSpeed: wind_speed_10m[index] } : {}),
+            ...(raining && typeof fallen === "number" ? { rainRate: fallen * QUARTERS_AN_HOUR } : {}),
         };
     });
 }
@@ -126,6 +139,15 @@ export interface RealWeatherAt {
     /** The wind speed (km/h) of the quarter hour under way and of the one before, when given. */
     windSpeed: number | undefined;
     windSpeedBefore: number | undefined;
+    /** How hard it rains (mm an hour) over the quarter hour under way and over the one before, when given. */
+    rainRate: number | undefined;
+    rainRateBefore: number | undefined;
+    /**
+     * The wet episode: rain and storm together, whichever follows the other. Since when it has been raining, while it
+     * rains; when it last stopped, when a rain ended within the last half hour of the timeline.
+     */
+    rainSince: number | undefined;
+    rainEndedAt: number | undefined;
 }
 
 /**
@@ -148,6 +170,23 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
     while (last < slots.length - 1 && slots[last + 1].weather === weather && follows(last + 1, last)) last++;
     const next = last < slots.length - 1 && follows(last + 1, last) ? slots[last + 1] : undefined;
     const previous = first > 0 && follows(first, first - 1) ? slots[first - 1] : undefined;
+    const wet = (slot: RealWeatherSlot): boolean =>
+        slot.weather === WeatherType.Rain || slot.weather === WeatherType.Storm;
+    let rainSince: number | undefined;
+    let rainEndedAt: number | undefined;
+    if (wet(current)) {
+        let start = index;
+        while (start > 0 && wet(slots[start - 1]) && follows(start, start - 1)) start--;
+        rainSince = slots[start].at;
+    } else {
+        // The last quarter hour of rain among the two before this one: the puddles take less than that to dry.
+        for (let back = index - 1; back >= Math.max(0, index - 2) && follows(back + 1, back); back--) {
+            if (wet(slots[back])) {
+                rainEndedAt = slots[back].at + REAL_WEATHER_SLOT_MS;
+                break;
+            }
+        }
+    }
     return {
         weather,
         since: slots[first].at,
@@ -161,6 +200,10 @@ export function realWeatherAt(slots: readonly RealWeatherSlot[], epoch: number):
         windFromBefore: index > 0 && follows(index, index - 1) ? slots[index - 1].windFrom : undefined,
         windSpeed: current.windSpeed,
         windSpeedBefore: index > 0 && follows(index, index - 1) ? slots[index - 1].windSpeed : undefined,
+        rainRate: current.rainRate,
+        rainRateBefore: index > 0 && follows(index, index - 1) ? slots[index - 1].rainRate : undefined,
+        rainSince,
+        rainEndedAt,
     };
 }
 

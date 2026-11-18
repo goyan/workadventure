@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
 import { WeatherType, type WAMFileFormat } from "@workadventure/map-editor";
@@ -79,7 +79,7 @@ vi.mock("../../../../../src/front/Phaser/Game/Weather/WeatherSounds", () => ({
     },
 }));
 const { mapEditorModeStore } = await import("../../../../../src/front/Stores/MapEditorStore");
-const { cloudsShownStore, cloudsHeightStore, weatherEffectsEnabledStore } =
+const { cloudsShownStore, cloudsHeightStore, rainPuddlesStore, weatherEffectsEnabledStore } =
     await import("../../../../../src/front/Stores/WeatherStore");
 const { lastStrike } = await import("../../../../../src/front/Phaser/Game/Weather/WeatherFrame");
 const { autoWeatherAt, cloudinessAt, slotStart } =
@@ -92,6 +92,9 @@ const { OutdoorGrid } = await import("../../../../../src/front/Phaser/Game/Outdo
 const { NIGHT_CLOUD_COLOR } = await import("../../../../../src/front/Phaser/Game/Weather/Clouds");
 
 let manager: InstanceType<typeof WeatherManager> | undefined;
+// The puddles are drawn on a graphics of their own, which the scene of these tests does not tell from the weather's:
+// off here, tried in their own tests below.
+beforeEach(() => rainPuddlesStore.set(0));
 afterEach(() => {
     sounds.update.mockClear();
     manager?.destroy();
@@ -156,7 +159,8 @@ describe("weather rendering lifecycle", () => {
         expect(graphics.setVisible.mock.lastCall).toEqual([false]);
         manager.destroy();
         manager = undefined;
-        expect(graphics.destroy.mock.calls).toHaveLength(1);
+        // The weather and the puddles each have their graphics.
+        expect(graphics.destroy.mock.calls).toHaveLength(2);
         expect(ground.destroy).toHaveBeenCalledOnce();
     });
 
@@ -671,9 +675,9 @@ describe("weather rendering lifecycle", () => {
                     scene.cameras.main.worldView.height = 2100;
                     manager = new WeatherManager(scene);
                     manager.update(0, at, false, sun);
-                    // The cloud tones only: neither the veil of the sky nor the flash of a strike.
+                    // The cloud tones only: neither the veil of the sky, the flash of a strike nor the splashes.
                     const calls = graphics.fillStyle.mock.calls.filter(
-                        ([color]) => color !== 0x27344b && color !== 0xe3eaff,
+                        ([color]) => color !== 0x27344b && color !== 0xe3eaff && color !== 0xcfe3f5,
                     );
                     manager.destroy();
                     manager = undefined;
@@ -735,5 +739,29 @@ describe("weather rendering lifecycle", () => {
             manager.update(2000, new Date(at.getTime() + 2000), false, { elevation: 20, azimuth: 200 });
             expect(graphics.clear.mock.calls).toHaveLength(2);
         });
+    });
+});
+
+describe("puddles", () => {
+    it("draws puddles on the ground under a rain, outdoors only, and none at 0 %", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        scene.cameras.main.worldView.width = 640;
+        scene.cameras.main.worldView.height = 640;
+        const indoors = { outdoorRunsInView: () => [], isOutdoorAt: () => false } as unknown as ReturnType<
+            typeof OutdoorGrid.fromWalls
+        >;
+        manager = new WeatherManager(scene, { outdoorGrid: () => indoors });
+        rainPuddlesStore.set(1);
+        manager.update(0, new Date(0));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(false);
+        manager.destroy();
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(true);
+        const drawn = graphics.fillStyle.mock.calls.length;
+        rainPuddlesStore.set(0);
+        manager.update(40, new Date(40));
+        expect(graphics.fillStyle.mock.calls.slice(drawn).some(([color]) => color === 0x4f7ba6)).toBe(false);
     });
 });
