@@ -35,6 +35,9 @@ const SavedLife = z.object({
             diedOfAge: z.number().int().min(0),
             eaten: z.number().int().min(0),
             diedDry: z.number().int().min(0),
+            // Absent from a state saved before the dolphins bred.
+            predatorBirths: z.number().int().min(0).default(0),
+            predatorDeaths: z.number().int().min(0).default(0),
         })
         .optional(),
 });
@@ -45,7 +48,8 @@ export interface LifeWater {
     waterVersion(): number;
 }
 
-const kindOnWire = (animal: Animal): number => (animal.kind === "dolphin" ? 2 : animal.sex === "female" ? 1 : 0);
+/** 0 a male fish, 1 a female fish, 2 a male dolphin, 3 a female dolphin. */
+const kindOnWire = (animal: Animal): number => (animal.kind === "dolphin" ? 2 : 0) + (animal.sex === "female" ? 1 : 0);
 
 /**
  * Keeps the life in the water of the relief of a room: fish that swim, breed and die, dolphins that hunt them
@@ -91,7 +95,7 @@ export class AquaticLifeManager {
             const fields = await this.store.repository.loadVariables(this.hashKey());
             if (!fields.state) return;
             const saved = SavedLife.parse(JSON.parse(fields.state));
-            this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true };
+            this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true, dolphinsSeeded: true };
             this.totals = saved.totals ?? emptyLifeTally();
             this.since = saved.since;
             this.history = LifeHistory.from(saved.history);
@@ -180,6 +184,8 @@ export class AquaticLifeManager {
         this.totals.diedOfAge += tally.diedOfAge;
         this.totals.eaten += tally.eaten;
         this.totals.diedDry += tally.diedDry;
+        this.totals.predatorBirths += tally.predatorBirths;
+        this.totals.predatorDeaths += tally.predatorDeaths;
         // The history keeps a sample every few seconds only.
         let predators = 0;
         for (const animal of this.population.animals) if (animal.kind === "dolphin") predators++;

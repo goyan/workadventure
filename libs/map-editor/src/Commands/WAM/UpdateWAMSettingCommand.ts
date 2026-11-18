@@ -133,11 +133,13 @@ export class UpdateWAMSettingCommand extends Command {
             }
             case "updateLifeSettingMessage": {
                 const sent = message.updateLifeSettingMessage;
+                const kept = this.wam.settings.life;
                 const within = (key: keyof typeof LIFE_BOUNDS): number => {
                     const [min, max] = LIFE_BOUNDS[key];
-                    return Number.isFinite(sent[key])
-                        ? Math.min(max, Math.max(min, sent[key]))
-                        : DEFAULT_LIFE_SETTINGS[key];
+                    const value = sent[key];
+                    // An older client sends no dolphin settings: those of the map are kept.
+                    if (value === undefined) return kept?.[key] ?? DEFAULT_LIFE_SETTINGS[key];
+                    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : DEFAULT_LIFE_SETTINGS[key];
                 };
                 this.wam.settings.life = {
                     enabled: sent.enabled === true,
@@ -145,6 +147,8 @@ export class UpdateWAMSettingCommand extends Command {
                     maxLifespan: within("maxLifespan"),
                     maxSpeed: within("maxSpeed"),
                     huntInterval: within("huntInterval"),
+                    dolphinReproductionDelay: within("dolphinReproductionDelay"),
+                    dolphinMaxLifespan: within("dolphinMaxLifespan"),
                 };
                 break;
             }

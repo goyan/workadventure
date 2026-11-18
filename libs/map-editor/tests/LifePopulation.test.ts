@@ -20,6 +20,8 @@ const settings: LifeSettings = {
     maxLifespan: 600,
     maxSpeed: 1.5,
     huntInterval: 30,
+    dolphinReproductionDelay: 120,
+    dolphinMaxLifespan: 3600,
 };
 const rows = (row: string, count: number): string[] => Array.from({ length: count }, () => row);
 /** A pond of 8 × 5 shallow cells: the smallest that gets fish. */
@@ -37,7 +39,19 @@ const fish = (id: number, sex: "male" | "female", cellX: number, cellY: number, 
     lifespanMs: 1e12,
     readyAt,
 });
-const seeded = (animals: Animal[]): Population => ({ animals, nextId: 100, seeded: true });
+const dolphin = (
+    id: number,
+    sex: "male" | "female",
+    cellX: number,
+    cellY: number,
+    more: Partial<Animal> = {},
+): Animal => ({
+    ...fish(id, sex, cellX, cellY, 1e12),
+    kind: "dolphin",
+    ateAt: 0,
+    ...more,
+});
+const seeded = (animals: Animal[]): Population => ({ animals, nextId: 100, seeded: true, dolphinsSeeded: true });
 const fishOf = (population: Population): Animal[] => population.animals.filter((animal) => animal.kind === "fish");
 const dolphinsOf = (population: Population): Animal[] =>
     population.animals.filter((animal) => animal.kind === "dolphin");
@@ -150,32 +164,111 @@ describe("stepPopulation", () => {
         }
     });
 
-    it("puts one dolphin, and only one, in a body with three hundred deep cells", () => {
+    it("puts a male and a female dolphin in a body with three hundred deep cells, and none in a smaller one", () => {
         const population = emptyPopulation();
         run(population, lake(), 5000);
-        expect(dolphinsOf(population)).toHaveLength(1);
+        expect(
+            dolphinsOf(population)
+                .map((animal) => animal.sex)
+                .sort(),
+        ).toEqual(["female", "male"]);
+        for (const animal of dolphinsOf(population)) {
+            expect(animal.lifespanMs).toBeGreaterThanOrEqual(0.7 * 3_600_000);
+            expect(animal.lifespanMs).toBeLessThanOrEqual(3_600_000);
+        }
         const none = emptyPopulation();
         run(none, gridOf(rows("d".repeat(20), 14)), 5000);
         expect(dolphinsOf(none)).toHaveLength(0);
     });
 
+    it("lets two fed dolphins have a calf, then wait their own breeding delay", () => {
+        // 30 × 15 deep cells: room for three dolphins.
+        const grid = gridOf(rows("d".repeat(30), 15));
+        const male = dolphin(1, "male", 2, 2, { meals: 1, mateAt: 0 });
+        const female = dolphin(2, "female", 20, 10, { meals: 1, mateAt: 0 });
+        const population = seeded([male, female, fish(3, "male", 0, 14, 1e12)]);
+        const bodies = waterBodiesOf(grid);
+        const random = scripted();
+        let births = 0;
+        let now = 0;
+        for (; now < 30_000 && births === 0; now += LIFE_STEP_MS) {
+            births += stepPopulation(population, grid, bodies, settings, LIFE_STEP_MS, now, random).predatorBirths;
+        }
+        expect(births).toBe(1);
+        const calf = dolphinsOf(population).find((animal) => animal.id >= 100);
+        expect(calf?.sex === "male" || calf?.sex === "female").toBe(true);
+        expect(male.mateAt).toBe(now - LIFE_STEP_MS + 120_000);
+        expect(female.mateAt).toBe(male.mateAt);
+        expect(calf?.mateAt).toBe(male.mateAt);
+        expect(male.meals).toBe(0);
+        // No second calf before the delay.
+        run(population, grid, 60_000, now, random);
+        expect(dolphinsOf(population)).toHaveLength(3);
+    });
+
+    it("gives no calf to dolphins that did not eat, nor to a water that already holds its dolphins", () => {
+        const hungry = seeded([
+            dolphin(1, "male", 2, 2, { mateAt: 0 }),
+            dolphin(2, "female", 3, 2, { mateAt: 0 }),
+            fish(3, "male", 0, 14, 1e12),
+        ]);
+        run(hungry, gridOf(rows("d".repeat(30), 15)), 10_000);
+        expect(dolphinsOf(hungry)).toHaveLength(2);
+        // 300 deep cells hold two dolphins.
+        const full = seeded([
+            dolphin(1, "male", 2, 2, { meals: 1, mateAt: 0 }),
+            dolphin(2, "female", 3, 2, { meals: 1, mateAt: 0 }),
+            fish(3, "male", 0, 14, 1e12),
+        ]);
+        run(full, lake(), 10_000);
+        expect(dolphinsOf(full)).toHaveLength(2);
+    });
+
+    it("lets a dolphin die of age, and of hunger after eight hunting intervals without a catch", () => {
+        const old = seeded([dolphin(1, "male", 5, 5, { lifespanMs: 5000, readyAt: 1e12 })]);
+        const grid = lake();
+        const bodies = waterBodiesOf(grid);
+        expect(stepPopulation(old, grid, bodies, settings, LIFE_STEP_MS, 4500, scripted()).predatorDeaths).toBe(0);
+        expect(stepPopulation(old, grid, bodies, settings, LIFE_STEP_MS, 5000, scripted()).predatorDeaths).toBe(1);
+        expect(dolphinsOf(old)).toHaveLength(0);
+
+        const starving = seeded([dolphin(1, "male", 5, 5, { ateAt: 1000, readyAt: 1e12 })]);
+        const before = 1000 + 8 * 30_000 - LIFE_STEP_MS;
+        expect(stepPopulation(starving, grid, bodies, settings, LIFE_STEP_MS, before, scripted()).predatorDeaths).toBe(
+            0,
+        );
+        expect(
+            stepPopulation(starving, grid, bodies, settings, LIFE_STEP_MS, before + LIFE_STEP_MS, scripted())
+                .predatorDeaths,
+        ).toBe(1);
+    });
+
+    it("counts a meal for the dolphin that eats, which keeps it from starving", () => {
+        const hunter = dolphin(1, "male", 2, 2, { readyAt: 0, ateAt: 0 });
+        const population = seeded([hunter, fish(2, "male", 2, 2, 1e12), fish(3, "male", 15, 10, 1e12)]);
+        const grid = lake();
+        stepPopulation(population, grid, waterBodiesOf(grid), settings, LIFE_STEP_MS, 7000, scripted());
+        expect(hunter.meals).toBe(1);
+        expect(hunter.ateAt).toBe(7000);
+    });
+
     it("lets the dolphin eat a fish, then wait a hunting interval", () => {
-        const dolphin: Animal = { ...fish(1, "male", 2, 2), kind: "dolphin", sex: undefined };
-        const population = seeded([dolphin, fish(2, "male", 15, 10, 1e12), fish(3, "male", 16, 10, 1e12)]);
+        const hunter = dolphin(1, "male", 2, 2, { readyAt: 0 });
+        const population = seeded([hunter, fish(2, "male", 15, 10, 1e12), fish(3, "male", 16, 10, 1e12)]);
         const grid = lake();
         const now = run(population, grid, 15_000);
         expect(fishOf(population)).toHaveLength(1);
-        expect(dolphin.readyAt).toBeGreaterThan(now);
+        expect(hunter.readyAt).toBeGreaterThan(now);
         run(population, grid, 30_000, now);
         expect(fishOf(population)).toHaveLength(0);
     });
 
     it("gives up a hunt after twenty seconds when the fish stay in water too shallow for it", () => {
-        const dolphin: Animal = { ...fish(1, "male", 5, 5), kind: "dolphin", sex: undefined };
+        const hunter = dolphin(1, "male", 5, 5, { readyAt: 0 });
         // A deep lake with a shallow bay on its east side.
         const grid = gridOf(rows("d".repeat(20) + "s", 15));
         const prey = fish(2, "male", 20, 7, 1e12);
-        const population = seeded([dolphin, prey]);
+        const population = seeded([hunter, prey]);
         // The fish stays in its bay: it is put back there after each step.
         const bodies = waterBodiesOf(grid);
         const random = scripted();
@@ -186,8 +279,8 @@ describe("stepPopulation", () => {
             prey.targetX = prey.targetY = undefined;
         }
         expect(fishOf(population)).toHaveLength(1);
-        expect(dolphin.readyAt).toBeGreaterThan(now);
-        expect(dolphin.huntSince).toBeUndefined();
+        expect(hunter.readyAt).toBeGreaterThan(now);
+        expect(hunter.huntSince).toBeUndefined();
     });
 
     it("adds no couple when two populated bodies merge, and caps the merged body", () => {
@@ -213,7 +306,15 @@ describe("stepPopulation", () => {
         const grid = pond();
         const bodies = waterBodiesOf(grid);
         const arrived = stepPopulation(emptyPopulation(), grid, bodies, settings, LIFE_STEP_MS, 0, scripted());
-        expect(arrived).toEqual({ arrivals: 2, births: 0, diedOfAge: 0, eaten: 0, diedDry: 0 });
+        expect(arrived).toEqual({
+            arrivals: 2,
+            births: 0,
+            diedOfAge: 0,
+            eaten: 0,
+            diedDry: 0,
+            predatorBirths: 0,
+            predatorDeaths: 0,
+        });
 
         const old = seeded([{ ...fish(1, "male", 0, 0, 1e12), lifespanMs: 1000 }, fish(2, "female", 5, 3, 1e12)]);
         expect(stepPopulation(old, grid, bodies, settings, LIFE_STEP_MS, 1000, scripted())).toMatchObject({
@@ -227,8 +328,8 @@ describe("stepPopulation", () => {
         expect(born.births).toBeGreaterThanOrEqual(2);
         expect(born.births).toBe(couple.animals.length - 2);
 
-        const dolphin: Animal = { ...fish(1, "male", 2, 2), kind: "dolphin", sex: undefined };
-        const hunted = seeded([dolphin, fish(2, "male", 2, 2, 1e12), fish(3, "male", 15, 10, 1e12)]);
+        const hunter = dolphin(1, "male", 2, 2, { readyAt: 0 });
+        const hunted = seeded([hunter, fish(2, "male", 2, 2, 1e12), fish(3, "male", 15, 10, 1e12)]);
         const deep = lake();
         expect(stepPopulation(hunted, deep, waterBodiesOf(deep), settings, LIFE_STEP_MS, 0, scripted()).eaten).toBe(1);
 

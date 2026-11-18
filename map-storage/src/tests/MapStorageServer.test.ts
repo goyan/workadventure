@@ -203,6 +203,8 @@ describe("MapStorageServer entity edit permissions", () => {
                 maxLifespan: 600,
                 maxSpeed: 6,
                 huntInterval: 20,
+                dolphinReproductionDelay: 300,
+                dolphinMaxLifespan: 3600,
             });
         });
 

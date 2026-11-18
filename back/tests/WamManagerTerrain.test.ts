@@ -74,6 +74,8 @@ describe("WamManager relief", () => {
             maxLifespan: 600,
             maxSpeed: 2,
             huntInterval: 20,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
         });
     });
 

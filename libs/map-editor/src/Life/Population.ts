@@ -17,6 +17,12 @@ export const MIN_BODY_CELLS = 40;
 export const MIN_DOLPHIN_DEEP_CELLS = 300;
 /** A body holds a fish for this many cells (two fish at least). */
 export const CELLS_PER_FISH = 8;
+/** A body holds a dolphin for this many cells deep enough for it (so the smallest one that gets dolphins holds two). */
+export const DEEP_CELLS_PER_DOLPHIN = 150;
+/** A dolphin dies of hunger after this many hunting intervals without a catch. */
+export const STARVE_HUNTS = 8;
+/** A dolphin must have eaten this many fish since its last calf to have another. */
+export const MEALS_FOR_CALF = 1;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
 /** A hunting dolphin swims this many times faster than the fastest fish. */
@@ -37,6 +43,8 @@ export interface Population {
     nextId: number;
     /** Whether the room ever got fish: the first ones come at once, later ones after about a breeding delay. */
     seeded: boolean;
+    /** The same for the dolphins. */
+    dolphinsSeeded?: boolean;
 }
 
 /** What happened to the animals of a room during a step (or summed over many). */
@@ -48,8 +56,19 @@ export interface LifeTally {
     eaten: number;
     /** Left without water. */
     diedDry: number;
+    /** The dolphins: calves born, and deaths of age or of hunger. */
+    predatorBirths: number;
+    predatorDeaths: number;
 }
-export const emptyLifeTally = (): LifeTally => ({ arrivals: 0, births: 0, diedOfAge: 0, eaten: 0, diedDry: 0 });
+export const emptyLifeTally = (): LifeTally => ({
+    arrivals: 0,
+    births: 0,
+    diedOfAge: 0,
+    eaten: 0,
+    diedDry: 0,
+    predatorBirths: 0,
+    predatorDeaths: 0,
+});
 
 /** The waters of a room as the life sees them. */
 export interface LifeCensus {
@@ -61,6 +80,7 @@ export interface LifeCensus {
     capacity: number;
 }
 
+const dolphinCapOf = (deepCells: number): number => Math.floor(deepCells / DEEP_CELLS_PER_DOLPHIN);
 const fishCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_FISH));
 
 export function lifeCensus(population: Population, bodies: WaterBodies): LifeCensus {
@@ -109,11 +129,21 @@ export function stepPopulation(
     const tally = emptyLifeTally();
     const maxSpeed = settings.maxSpeed * TILE_PX;
     const delayMs = settings.reproductionDelay * 1000;
+    const starveMs = STARVE_HUNTS * settings.huntInterval * 1000;
     const dead = new Set<Animal>();
     for (const animal of population.animals) {
-        if (animal.kind === "fish" && now - animal.bornAt >= animal.lifespanMs) {
+        if (animal.kind === "fish") {
+            if (now - animal.bornAt >= animal.lifespanMs) {
+                dead.add(animal);
+                tally.diedOfAge++;
+            }
+            continue;
+        }
+        // A dolphin kept from before dolphins had a sex.
+        animal.sex ??= random() < 0.5 ? "male" : "female";
+        if (now - animal.bornAt >= animal.lifespanMs || now - (animal.ateAt ?? animal.bornAt) >= starveMs) {
             dead.add(animal);
-            tally.diedOfAge++;
+            tally.predatorDeaths++;
         }
     }
 
@@ -136,7 +166,7 @@ export function stepPopulation(
     const detouring = (animal: Animal): boolean => (animal.wanderUntil ?? 0) > now;
 
     for (const dolphin of population.animals) {
-        if (dolphin.kind !== "dolphin" || now < dolphin.readyAt) continue;
+        if (dolphin.kind !== "dolphin" || dead.has(dolphin) || now < dolphin.readyAt) continue;
         dolphin.huntSince ??= now;
         if (now - dolphin.huntSince >= HUNT_GIVE_UP_MS) {
             dolphin.huntSince = undefined;
@@ -160,6 +190,8 @@ export function stepPopulation(
         if (distance(dolphin, prey) < REACH_PX) {
             dead.add(prey);
             tally.eaten++;
+            dolphin.ateAt = now;
+            dolphin.meals = (dolphin.meals ?? 0) + 1;
             dolphin.huntSince = undefined;
             dolphin.readyAt = now + settings.huntInterval * 1000;
             dolphin.targetX = dolphin.targetY = undefined;
@@ -169,6 +201,60 @@ export function stepPopulation(
     }
 
     const born: Animal[] = [];
+
+    // The dolphins breed too: a fed male goes to a fed female of its body, while their water has room for a calf.
+    const dolphinsByBody = new Map<number, Animal[]>();
+    let dolphins = 0;
+    for (const animal of population.animals) {
+        if (animal.kind !== "dolphin" || dead.has(animal)) continue;
+        dolphins++;
+        const body = bodyOf(animal, bodies);
+        const list = dolphinsByBody.get(body);
+        if (list) list.push(animal);
+        else dolphinsByBody.set(body, [animal]);
+    }
+    const canBreed = (dolphin: Animal): boolean =>
+        now >= (dolphin.mateAt ?? 0) && (dolphin.meals ?? 0) >= MEALS_FOR_CALF;
+    const calfDelayMs = settings.dolphinReproductionDelay * 1000;
+    for (const [body, list] of dolphinsByBody) {
+        if (body === 0) continue;
+        const cap = dolphinCapOf(bodies.sizes[body].deep);
+        let living = list.length;
+        for (const male of list) {
+            // A dolphin on a hunt does not court.
+            if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
+            if (living >= cap || dolphins >= MAX_DOLPHINS) break;
+            if (population.animals.length - dead.size + born.length >= MAX_ANIMALS) break;
+            const female = nearest(
+                male,
+                list.filter((other) => other.sex === "female" && canBreed(other)),
+            );
+            if (!female) continue;
+            if (distance(male, female) >= REACH_PX) {
+                pursue(male, female, maxSpeed);
+                continue;
+            }
+            born.push({
+                ...newDolphin(
+                    population,
+                    random() < 0.5 ? "male" : "female",
+                    female.x,
+                    female.y,
+                    now,
+                    settings,
+                    random,
+                ),
+                mateAt: now + calfDelayMs,
+            });
+            living++;
+            dolphins++;
+            tally.predatorBirths++;
+            male.mateAt = female.mateAt = now + calfDelayMs;
+            male.meals = female.meals = 0;
+            male.targetX = male.targetY = undefined;
+        }
+    }
+
     for (const [body, list] of fishByBody) {
         if (body === 0) continue;
         const cap = fishCapOf(bodies.sizes[body].cells);
@@ -240,7 +326,29 @@ function newFish(
     };
 }
 
-/** The first fish of the bodies big enough, and their dolphin. */
+function newDolphin(
+    population: Population,
+    sex: "male" | "female",
+    x: number,
+    y: number,
+    now: number,
+    settings: LifeSettings,
+    random: () => number,
+): Animal {
+    return {
+        id: population.nextId++,
+        kind: "dolphin",
+        sex,
+        x,
+        y,
+        bornAt: now,
+        lifespanMs: settings.dolphinMaxLifespan * 1000 * (SHORTEST_LIFE_SHARE + (1 - SHORTEST_LIFE_SHARE) * random()),
+        readyAt: now + settings.huntInterval * 1000,
+        ateAt: now,
+    };
+}
+
+/** The first fish of the bodies big enough, and their dolphins. */
 function spawn(
     population: Population,
     bodies: WaterBodies,
@@ -264,6 +372,8 @@ function spawn(
     // An empty body waits about a breeding delay for its fish; none remembers since when, as bodies merge and split.
     const chance = dtMs / (settings.reproductionDelay * 1000);
     const first = !population.seeded;
+    const dolphinChance = dtMs / (settings.dolphinReproductionDelay * 1000);
+    const firstDolphins = !population.dolphinsSeeded;
     for (let body = 1; body < bodies.sizes.length; body++) {
         const size = bodies.sizes[body];
         if (
@@ -281,24 +391,24 @@ function spawn(
                 population.seeded = true;
             }
         }
+        // Dolphins come as a couple into deep water that has none: at once the first time, later after about one of
+        // their breeding delays (a water whose dolphins starved is not refilled at once).
         if (
             size.deep >= MIN_DOLPHIN_DEEP_CELLS &&
             !dolphinIn.has(body) &&
-            dolphins < MAX_DOLPHINS &&
-            population.animals.length < MAX_ANIMALS
+            dolphins + 2 <= MAX_DOLPHINS &&
+            population.animals.length + 2 <= MAX_ANIMALS &&
+            (firstDolphins || random() < dolphinChance)
         ) {
-            const cell = bodies.anyCell(body, DOLPHIN_DEPTH_PX, random);
-            if (!cell) continue;
-            dolphins++;
-            population.animals.push({
-                id: population.nextId++,
-                kind: "dolphin",
-                x: middle(cell.cellX),
-                y: middle(cell.cellY),
-                bornAt: now,
-                lifespanMs: Number.MAX_SAFE_INTEGER,
-                readyAt: now + settings.huntInterval * 1000,
-            });
+            for (const sex of ["male", "female"] as const) {
+                const cell = bodies.anyCell(body, DOLPHIN_DEPTH_PX, random);
+                if (!cell) continue;
+                dolphins++;
+                population.animals.push(
+                    newDolphin(population, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
+                );
+                population.dolphinsSeeded = true;
+            }
         }
     }
 }

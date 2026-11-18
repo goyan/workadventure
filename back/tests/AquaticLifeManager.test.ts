@@ -23,7 +23,15 @@ function wamWith(enabled: boolean): WAMFileFormat {
         entityCollections: [],
         entities: {},
         settings: {
-            life: { enabled, reproductionDelay: 60, maxLifespan: 600, maxSpeed: 1.5, huntInterval: 30 },
+            life: {
+                enabled,
+                reproductionDelay: 60,
+                maxLifespan: 600,
+                maxSpeed: 1.5,
+                huntInterval: 30,
+                dolphinReproductionDelay: 120,
+                dolphinMaxLifespan: 3600,
+            },
         },
     };
 }
@@ -186,6 +194,8 @@ describe("AquaticLifeManager", () => {
             diedOfAge: 0,
             eaten: 0,
             diedDry: 0,
+            predatorBirths: 0,
+            predatorDeaths: 0,
             habitableBodies: 1,
             populatedBodies: 1,
             // A hundred cells: twelve fish.
@@ -219,6 +229,16 @@ describe("AquaticLifeManager", () => {
         second.manager.mapChanged();
         second.steps(2);
         expect(second.manager.snapshot()?.stats?.history).toHaveLength(1);
+    });
+
+    it("tells the dolphins of a deep lake with their sex: a male and a female", () => {
+        const { manager, sent, steps, water } = createHarness();
+        // 20 × 15 cells under 20 px of water: deep enough for a couple of dolphins.
+        water.grid = gridOf(20, 15);
+        manager.mapChanged();
+        steps(2);
+        const kinds = sent[0].animals.map((animal) => animal.kind).sort();
+        expect(kinds).toEqual([0, 1, 2, 3]);
     });
 
     it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {
@@ -296,7 +316,15 @@ describe("AquaticLifeManager on the water of a room", () => {
             },
             settings: {
                 water: { runoff: 0, evaporation: 0, speed: 1, absorption: 0, current: 1 },
-                life: { enabled: true, reproductionDelay: 60, maxLifespan: 600, maxSpeed: 1.5, huntInterval: 30 },
+                life: {
+                    enabled: true,
+                    reproductionDelay: 60,
+                    maxLifespan: 600,
+                    maxSpeed: 1.5,
+                    huntInterval: 30,
+                    dolphinReproductionDelay: 120,
+                    dolphinMaxLifespan: 3600,
+                },
             },
             terrain: withHeights(undefined, cells),
         };
