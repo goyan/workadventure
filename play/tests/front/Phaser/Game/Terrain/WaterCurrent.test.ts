@@ -70,10 +70,11 @@ describe("waterCurrentAt", () => {
 });
 
 describe("currentPush", () => {
-    it("is the current times the walking speed and the strength set for the map", () => {
+    it("is the current times a quarter of the walking speed and the strength set for the map", () => {
         const river = waterOf((x) => 30 - x);
-        expect(currentPush(river, 8, 8, 0, 1, 180).x).toBeCloseTo(90, 3);
-        expect(currentPush(river, 8, 8, 0, 2, 180).x).toBeCloseTo(180, 3);
+        // Half of the hardest current: an eighth of the walking speed.
+        expect(currentPush(river, 8, 8, 0, 1, 180).x).toBeCloseTo(22.5, 3);
+        expect(currentPush(river, 8, 8, 0, 2, 180).x).toBeCloseTo(45, 3);
         expect(currentPush(river, 8, 8, 0, 0, 180)).toEqual({ x: 0, y: 0 });
         expect(currentPush(river, 8, 8, 0, Number.NaN, 180)).toEqual({ x: 0, y: 0 });
     });
