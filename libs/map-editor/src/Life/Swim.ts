@@ -2,8 +2,7 @@ import type { WaterGrid } from "../Terrain/WaterGrid";
 import { TERRAIN_CELL } from "../types";
 import type { Animal } from "./Animal";
 import { SPECIES } from "./Species";
-import { canSwimAcross } from "./WaterBodies";
-import type { WaterBodies } from "./WaterBodies";
+import type { Places } from "./WaterBodies";
 
 /** An animal whose cell holds too little water dies after this long without finding some. */
 export const DRY_DEATH_MS = 5000;
@@ -13,6 +12,8 @@ export const WANDER_REACH_CELLS = 6;
 const SLOWEST_SHARE = 0.4;
 
 export const minDepthOf = (animal: Animal): number => SPECIES[animal.kind].minDepthPx;
+/** The level of an animal in its places: the least water it swims in. */
+export const levelOf = (animal: Animal): number => minDepthOf(animal);
 export const cellAt = (pixel: number): number => Math.floor(pixel / TERRAIN_CELL);
 const middleOf = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
 
@@ -23,17 +24,17 @@ const middleOf = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 
  */
 export function swim(
     animal: Animal,
-    bodies: WaterBodies,
-    grid: WaterGrid,
+    bodies: Places,
+    _grid: WaterGrid | undefined,
     maxSpeedPxPerS: number,
     dtMs: number,
     now: number,
     random: () => number,
 ): boolean {
-    const minDepth = minDepthOf(animal);
+    const minDepth = levelOf(animal);
     const cellX = cellAt(animal.x);
     const cellY = cellAt(animal.y);
-    if (!bodies.swimmable(cellX, cellY, minDepth)) {
+    if (!bodies.passable(cellX, cellY, minDepth)) {
         animal.dryAt ??= now;
         if (now - animal.dryAt >= DRY_DEATH_MS) return false;
         let best: { x: number; y: number; depth: number } | undefined;
@@ -43,8 +44,8 @@ export function swim(
             [0, 1],
             [0, -1],
         ]) {
-            const depth = grid.depthAt(cellX + dx, cellY + dy);
-            if (depth < minDepth || !canSwimAcross(grid, cellX, cellY, dx, dy)) continue;
+            if (!bodies.passable(cellX + dx, cellY + dy, minDepth) || !bodies.canCross(cellX, cellY, dx, dy)) continue;
+            const depth = bodies.comfortAt(cellX + dx, cellY + dy);
             if (!best || depth > best.depth) best = { x: cellX + dx, y: cellY + dy, depth };
         }
         animal.targetX = animal.targetY = undefined;
@@ -74,7 +75,7 @@ export function swim(
     }
     const speed = Math.max(0, animal.speed ?? maxSpeedPxPerS);
     const open = (fromX: number, fromY: number, dx: number, dy: number): boolean =>
-        canSwimAcross(grid, fromX, fromY, dx, dy) && bodies.swimmable(fromX + dx, fromY + dy, minDepth);
+        bodies.canCross(fromX, fromY, dx, dy) && bodies.passable(fromX + dx, fromY + dy, minDepth);
     const arrived = advance(animal, animal.targetX, animal.targetY, (speed * dtMs) / 1000, (fromX, fromY, toX, toY) => {
         const dx = toX - fromX;
         const dy = toY - fromY;
