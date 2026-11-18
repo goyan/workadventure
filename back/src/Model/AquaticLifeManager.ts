@@ -4,6 +4,7 @@ import {
     emptyLifeTally,
     emptyPopulation,
     lifeCensus,
+    LifeHistory,
     LIFE_STEP_MS,
     stepPopulation,
     waterBodiesOf,
@@ -26,6 +27,7 @@ const SavedLife = z.object({
     nextId: z.number().int().min(1),
     // Absent from a state saved before the totals were kept.
     since: z.number().finite().optional(),
+    history: z.unknown().optional(),
     totals: z
         .object({
             arrivals: z.number().int().min(0),
@@ -65,6 +67,8 @@ export class AquaticLifeManager {
     /** What happened since the life of the map began (`since`), for its dashboard. */
     private totals: LifeTally = emptyLifeTally();
     private since: number | undefined;
+    /** The prey and the predators over the whole life of the map, for the curve of its dashboard. */
+    private history = new LifeHistory();
     private census: LifeCensus = { habitableBodies: 0, populatedBodies: 0, capacity: 0 };
     /** Whether the room was last told some animals: it is told once more when none is left. */
     private toldSome = false;
@@ -90,6 +94,7 @@ export class AquaticLifeManager {
             this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true };
             this.totals = saved.totals ?? emptyLifeTally();
             this.since = saved.since;
+            this.history = LifeHistory.from(saved.history);
         } catch (error) {
             console.error("Could not restore the life of the water of the map", error);
         }
@@ -113,6 +118,7 @@ export class AquaticLifeManager {
             this.population = emptyPopulation();
             this.totals = emptyLifeTally();
             this.since = undefined;
+            this.history.clear();
             this.clearTimer();
             if (had || this.toldSome) {
                 this.tell();
@@ -174,6 +180,10 @@ export class AquaticLifeManager {
         this.totals.diedOfAge += tally.diedOfAge;
         this.totals.eaten += tally.eaten;
         this.totals.diedDry += tally.diedDry;
+        // The history keeps a sample every few seconds only.
+        let predators = 0;
+        for (const animal of this.population.animals) if (animal.kind === "dolphin") predators++;
+        this.history.add({ at: now, prey: this.population.animals.length - predators, predators });
         this.steps++;
         // Once a second, with the message: the waters as the life sees them.
         if (this.steps % STEPS_PER_MESSAGE === 0) this.census = lifeCensus(this.population, this.bodies);
@@ -183,10 +193,11 @@ export class AquaticLifeManager {
 
     /** All the animals of the room, for a player who joins it. Undefined when there is none. */
     public snapshot(): AquaticLifeMessage | undefined {
-        return this.population.animals.length > 0 ? this.message() : undefined;
+        return this.population.animals.length > 0 ? this.message(true) : undefined;
     }
 
-    private message(): AquaticLifeMessage {
+    /** All the animals and the figures of the life; with its history for a player who joins. */
+    private message(withHistory = false): AquaticLifeMessage {
         return {
             animals: this.population.animals.map((animal) => ({
                 id: animal.id,
@@ -194,7 +205,13 @@ export class AquaticLifeManager {
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
             })),
-            stats: { since: this.since ?? this.now(), ...this.totals, ...this.census },
+            stats: {
+                since: this.since ?? this.now(),
+                ...this.totals,
+                ...this.census,
+                history: withHistory ? this.history.samples : [],
+                historyStepMs: this.history.stepMs,
+            },
         };
     }
 
@@ -213,6 +230,7 @@ export class AquaticLifeManager {
             nextId: this.population.nextId,
             since: this.since,
             totals: this.totals,
+            history: this.history.save(),
         });
         this.store.repository
             .saveVariable(this.hashKey(), "state", state)

@@ -28,6 +28,7 @@ export * from "./Life/WaterBodies";
 export * from "./Life/Animal";
 export * from "./Life/Swim";
 export * from "./Life/Population";
+export * from "./Life/LifeHistory";
 export * from "./Weather/SeasonClock";
 export * from "./Weather/WeatherSchedule";
 export * from "./Weather/RealWeather";

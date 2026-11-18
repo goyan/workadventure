@@ -115,7 +115,8 @@ describe("AquaticLifeManager", () => {
             expect(animal.x).toBeLessThan(160);
             expect(Number.isInteger(animal.x)).toBe(true);
         }
-        expect(manager.snapshot()).toEqual(sent[0]);
+        // A player who joins gets the same animals (with the history of the life, which the room is not told again).
+        expect(manager.snapshot()?.animals).toEqual(sent[0].animals);
     });
 
     it("tells the room every second", () => {
@@ -189,8 +190,35 @@ describe("AquaticLifeManager", () => {
             populatedBodies: 1,
             // A hundred cells: twelve fish.
             capacity: 12,
+            history: [],
+            historyStepMs: 5000,
         });
-        expect(manager.snapshot()?.stats).toEqual(sent[0].stats);
+        expect(manager.snapshot()?.stats).toMatchObject({ arrivals: 2, capacity: 12 });
+    });
+
+    it("gives a player who joins the history of the prey and of the predators, kept across a restart", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        // Twelve seconds: samples at 0, 5 and 10 s.
+        first.steps(24);
+        const history = first.manager.snapshot()?.stats?.history ?? [];
+        expect(history.map((sample) => sample.at)).toEqual([1_000_000, 1_005_000, 1_010_000]);
+        expect(history[0]).toMatchObject({ prey: 2, predators: 0 });
+        // The messages of every second do not carry it.
+        expect(first.sent.at(-1)?.stats?.history).toEqual([]);
+        first.manager.stop();
+
+        const second = createHarness({ saved: first.saved });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(second.manager.snapshot()?.stats?.history).toHaveLength(3);
+        // Turned off, the life forgets its history.
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = false;
+        second.manager.mapChanged();
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = true;
+        second.manager.mapChanged();
+        second.steps(2);
+        expect(second.manager.snapshot()?.stats?.history).toHaveLength(1);
     });
 
     it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {

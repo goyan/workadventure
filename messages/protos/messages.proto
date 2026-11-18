@@ -822,6 +822,17 @@ message AquaticLifeStatsMessage {
   uint32 habitableBodies = 7;
   uint32 populatedBodies = 8;
   uint32 capacity = 9;
+  // The prey and the predators over the whole life of the map, oldest first: only for a player who joins the room
+  // (each browser then adds what it is told). Empty in the messages of every second.
+  repeated AquaticLifeSampleMessage history = 10;
+  // How far apart the samples of the history are now, in milliseconds.
+  double historyStepMs = 11;
+}
+
+message AquaticLifeSampleMessage {
+  double at = 1;
+  uint32 prey = 2;
+  uint32 predators = 3;
 }
 
 message AquaticAnimalMessage {
