@@ -25,6 +25,7 @@ export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
 export * from "./Terrain/WaterWalls";
 export * from "./Life/WaterBodies";
+export * from "./Life/Species";
 export * from "./Life/Animal";
 export * from "./Life/Swim";
 export * from "./Life/Population";

@@ -2,15 +2,15 @@ import type { WaterGrid } from "../Terrain/WaterGrid";
 import { TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
+import { DOLPHIN_SPEED_FACTOR, MAX_ANIMALS, MAX_DOLPHINS, MEALS_FOR_CALF, STARVE_HUNTS } from "./LifeConstants";
 import { cellAt, minDepthOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
 import type { WaterBodies } from "./WaterBodies";
 
+export { DOLPHIN_SPEED_FACTOR, MAX_ANIMALS, MAX_DOLPHINS, MEALS_FOR_CALF, STARVE_HUNTS } from "./LifeConstants";
+
 /** The life is stepped twice a second. */
 export const LIFE_STEP_MS = 500;
-/** The most animals a room holds, dolphins included. */
-export const MAX_ANIMALS = 300;
-export const MAX_DOLPHINS = 12;
 /** The smallest body of water that gets fish, in cells. */
 export const MIN_BODY_CELLS = 40;
 /** A body gets a dolphin with this many cells deep enough for it. */
@@ -19,10 +19,6 @@ export const MIN_DOLPHIN_DEEP_CELLS = 300;
 export const CELLS_PER_FISH = 8;
 /** A body holds a dolphin for this many cells deep enough for it (so the smallest one that gets dolphins holds two). */
 export const DEEP_CELLS_PER_DOLPHIN = 150;
-/** A dolphin dies of hunger after this many hunting intervals without a catch. */
-export const STARVE_HUNTS = 8;
-/** A dolphin must have eaten this many fish since its last calf to have another. */
-export const MEALS_FOR_CALF = 1;
 /** An animal flees an avatar that comes this close (three tiles), in map pixels. */
 export const FEAR_RADIUS_PX = 96;
 /** It flees towards a point this far from where it is. */
@@ -31,8 +27,6 @@ const FLEE_REACH_PX = 3 * TERRAIN_CELL;
 const FLEE_DRAWS = 6;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
-/** A hunting dolphin swims this many times faster than the fastest fish. */
-export const DOLPHIN_SPEED_FACTOR = 1.5;
 /** A mate or a prey is reached within this distance, in map pixels. */
 const REACH_PX = TERRAIN_CELL;
 /** After failing to go straight to a mate or a prey, an animal wanders this long before it tries again. */
