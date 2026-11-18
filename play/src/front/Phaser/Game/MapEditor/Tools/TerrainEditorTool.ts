@@ -10,6 +10,7 @@ import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
 import { brushSettingsOf, commitStroke } from "../../Terrain/TerrainStroke";
+import { WaterMarksView } from "../../Terrain/WaterMarksView";
 import { executeUpdateTerrain } from "../Commands/Facades";
 import { UpdateTerrainFrontCommand } from "../Commands/Terrain/UpdateTerrainFrontCommand";
 import type { MapEditorModeManager } from "../MapEditorModeManager";
@@ -32,6 +33,8 @@ export class TerrainEditorTool extends MapEditorTool {
     private hover: { x: number; y: number } | undefined;
     private pointerCapture: MapDragPointerCapture | undefined;
     private unsubscribeBrush: (() => void) | undefined;
+    /** The sources and the sinks of the map, pointed out while the tool is open: they are hard to find otherwise. */
+    private waterMarks: WaterMarksView | undefined;
 
     private readonly pointerDownEventHandler = (pointer: Phaser.Input.Pointer): void => {
         if (!pointer.leftButtonDown() || this.path) return;
@@ -73,7 +76,9 @@ export class TerrainEditorTool extends MapEditorTool {
         this.scene = mapEditorModeManager.getScene();
     }
 
-    public update(time: number, dt: number): void {}
+    public update(time: number, dt: number): void {
+        this.waterMarks?.update(time);
+    }
 
     public activate(): void {
         this.scene.input.topOnly = true;
@@ -90,6 +95,7 @@ export class TerrainEditorTool extends MapEditorTool {
             () => this.cancelStroke(),
         );
         this.unsubscribeBrush = terrainBrushStore.subscribe(() => this.redraw());
+        this.waterMarks = new WaterMarksView(this.scene, () => this.scene.getGameMap().getWamFile()?.getWam());
         // The bottom of the lakes shows through their water while the relief is edited.
         this.scene.getTerrainView()?.setSeeThrough(true);
         mapEditorVisibilityStore.set(true);
@@ -110,6 +116,8 @@ export class TerrainEditorTool extends MapEditorTool {
         this.pointerCapture = undefined;
         this.graphics?.destroy();
         this.graphics = undefined;
+        this.waterMarks?.destroy();
+        this.waterMarks = undefined;
         this.scene.getTerrainView()?.setSeeThrough(false);
         terrainBlockedStore.set(false);
         this.scene.input.topOnly = false;

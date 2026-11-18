@@ -2176,6 +2176,15 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Sources et puits repérés dans l'outil Relief.** Tant que l'outil Relief est ouvert, chaque objet qui porte une
+propriété de source ou de puits est repéré sur la carte (`Terrain/WaterMarks.ts`, logique pure ;
+`Terrain/WaterMarksView.ts`, dessin, créé et détruit par `TerrainEditorTool`) : une pastille bleue marquée + pour une
+source, orange marquée − pour un puits, là où son eau sort ou part (le milieu de la cellule que le serveur utilise),
+un halo qui bat, le disque qu'elle arrose ou vide, et son débit écrit dessous en m³/h. Une source ou un puits réglé à
+0 est repéré aussi, plus pâle. Les pastilles gardent leur taille à l'écran quel que soit le zoom (14 px de rayon, 10
+px de carte au moins). Les objets sont relus une fois par seconde ; halo fixe pour qui a demandé moins de mouvement.
+Vu par l'éditeur seulement, rien n'est écrit dans la carte. Le panneau Relief rappelle les deux couleurs.
+
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau

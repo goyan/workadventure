@@ -69,6 +69,17 @@
         </button>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.hint()}</p>
+    <p class="retro-hint m-0" data-testid="terrain-water-marks">
+        <span class="whitespace-nowrap"
+            ><span class="inline-block h-2.5 w-2.5 rounded-full align-middle" style="background:#2f9bff"></span>
+            {$LL.mapEditor.terrain.markSource()}</span
+        >
+        <span class="whitespace-nowrap"
+            ><span class="inline-block h-2.5 w-2.5 rounded-full align-middle" style="background:#ff8a1f"></span>
+            {$LL.mapEditor.terrain.markSink()}</span
+        >
+        — {$LL.mapEditor.terrain.marks()}
+    </p>
     {#if $terrainBlockedStore}
         <p class="retro-hint m-0 text-danger-500" role="status" data-testid="terrain-blocked">
             {$LL.mapEditor.terrain.blocked()}
