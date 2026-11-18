@@ -264,7 +264,9 @@ describe("AquaticLifeManager", () => {
                 closest = Math.min(closest, Math.hypot(animal.x - 80, animal.y - 80));
             }
         }
-        expect(closest).toBeGreaterThan(48);
+        // Without their fear a fish swims right under the avatar (3 px in this run); a newborn may appear a little
+        // closer than its parents fled, then swims away.
+        expect(closest).toBeGreaterThan(30);
     });
 
     it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {
