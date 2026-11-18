@@ -8,11 +8,29 @@ import {
     LifeHistory,
     LifeRanges,
     LIFE_STEP_MS,
+    SPECIES_IDS,
+    SPECIES_WIRE,
+    speciesCensus,
     stepPopulation,
     waterBodiesOf,
 } from "@workadventure/map-editor";
-import type { LifeCensus, LifeTally, Population, WaterBodies, WaterGrid } from "@workadventure/map-editor";
-import type { AquaticLifeMessage } from "@workadventure/messages";
+import type {
+    LifeCensus,
+    LifeSample,
+    LifeTally,
+    Population,
+    SpeciesCensus,
+    SpeciesId,
+    SpeciesTallies,
+    WaterBodies,
+    WaterGrid,
+} from "@workadventure/map-editor";
+import type {
+    AquaticLifeMessage,
+    AquaticLifeSampleMessage,
+    AquaticSpeciesCountMessage,
+    AquaticSpeciesStatsMessage,
+} from "@workadventure/messages";
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
 import type { GameRoom } from "./GameRoom";
@@ -23,6 +41,18 @@ const STEPS_PER_MESSAGE = 2;
 const STEPS_PER_SAVE = 60;
 /** The bodies of water are read again once a second at most, and only when the water changed. */
 const STEPS_PER_BODIES = 2;
+
+const count = z.number().int().min(0);
+/** What happened to a species since the life of the map began, as it is saved. */
+const SavedSpeciesTally = z.object({
+    arrivals: count,
+    births: count,
+    diedOfAge: count,
+    eaten: count,
+    starved: count,
+    diedDry: count,
+    meals: z.record(z.enum(SPECIES_IDS), count),
+});
 
 const SavedLife = z.object({
     animals: z.array(Animal).max(1000),
@@ -43,6 +73,25 @@ const SavedLife = z.object({
             predatorDeaths: z.number().int().min(0).default(0),
         })
         .optional(),
+    // Absent from a state saved before the species were counted one by one.
+    bySpecies: z.record(z.enum(SPECIES_IDS), SavedSpeciesTally).optional(),
+});
+
+/** The counts of a record of species, as the messages carry them: in the order of the table, without the zeros. */
+function countsOnWire(counts: Partial<Record<string, number>> | undefined): AquaticSpeciesCountMessage[] {
+    const onWire: AquaticSpeciesCountMessage[] = [];
+    for (const species of SPECIES_IDS) {
+        const count = counts?.[species];
+        if (count) onWire.push({ species: SPECIES_WIRE[species], count });
+    }
+    return onWire;
+}
+
+const sampleOnWire = (sample: LifeSample): AquaticLifeSampleMessage => ({
+    at: sample.at,
+    prey: sample.prey,
+    predators: sample.predators,
+    counts: countsOnWire(sample.counts),
 });
 
 /** What the life needs of the water of the room: its grid, and a number that changes whenever the water does. */
@@ -73,6 +122,10 @@ export class AquaticLifeManager {
     private bodiesStep = -Infinity;
     /** What happened since the life of the map began (`since`), for its dashboard. */
     private totals: LifeTally = emptyLifeTally();
+    /** The same, species by species (and what each ate). */
+    private bySpecies: SpeciesTallies = {};
+    /** How many of each species live, and how many their places hold: read once a second. */
+    private speciesNow: SpeciesCensus[] = [];
     private since: number | undefined;
     /** The prey and the predators over the whole life of the map, for the curve of its dashboard. */
     private history = new LifeHistory();
@@ -104,6 +157,27 @@ export class AquaticLifeManager {
             const saved = SavedLife.parse(JSON.parse(fields.state));
             this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true, dolphinsSeeded: true };
             this.totals = saved.totals ?? emptyLifeTally();
+            // Before the species were counted one by one, the totals told the fish from the dolphins.
+            this.bySpecies = saved.bySpecies ?? {
+                fish: {
+                    arrivals: this.totals.arrivals,
+                    births: this.totals.births,
+                    diedOfAge: this.totals.diedOfAge,
+                    eaten: this.totals.eaten,
+                    starved: 0,
+                    diedDry: this.totals.diedDry,
+                    meals: {},
+                },
+                dolphin: {
+                    arrivals: 0,
+                    births: this.totals.predatorBirths,
+                    diedOfAge: this.totals.predatorDeaths,
+                    eaten: 0,
+                    starved: 0,
+                    diedDry: 0,
+                    meals: this.totals.eaten > 0 ? { fish: this.totals.eaten } : {},
+                },
+            };
             this.since = saved.since;
             this.history = LifeHistory.from(saved.history);
             this.ranges = LifeRanges.from(saved.ranges);
@@ -129,6 +203,8 @@ export class AquaticLifeManager {
             const had = this.population.animals.length > 0;
             this.population = emptyPopulation();
             this.totals = emptyLifeTally();
+            this.bySpecies = {};
+            this.speciesNow = [];
             this.since = undefined;
             this.history.clear();
             this.ranges.clear();
@@ -188,6 +264,7 @@ export class AquaticLifeManager {
             now,
             this.random,
             this.avatars(),
+            this.bySpecies,
         );
         this.totals.arrivals += tally.arrivals;
         this.totals.births += tally.births;
@@ -197,21 +274,49 @@ export class AquaticLifeManager {
         this.totals.predatorBirths += tally.predatorBirths;
         this.totals.predatorDeaths += tally.predatorDeaths;
         // The history keeps a sample every few seconds only.
-        let predators = 0;
-        for (const animal of this.population.animals) if (animal.kind === "dolphin") predators++;
-        const sample = { at: now, prey: this.population.animals.length - predators, predators };
+        const counts: Partial<Record<SpeciesId, number>> = {};
+        for (const animal of this.population.animals) counts[animal.kind] = (counts[animal.kind] ?? 0) + 1;
+        const predators = counts.dolphin ?? 0;
+        const sample = { at: now, prey: this.population.animals.length - predators, predators, counts };
         this.history.add(sample);
         this.ranges.add(sample);
         this.steps++;
         // Once a second, with the message: the waters as the life sees them.
-        if (this.steps % STEPS_PER_MESSAGE === 0) this.census = lifeCensus(this.population, this.bodies);
-        if (this.steps % STEPS_PER_MESSAGE === 0) this.tell();
+        if (this.steps % STEPS_PER_MESSAGE === 0) {
+            this.census = lifeCensus(this.population, this.bodies);
+            this.speciesNow = speciesCensus(this.population, this.bodies);
+            this.tell();
+        }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
     }
 
     /** All the animals of the room, for a player who joins it. Undefined when there is none. */
     public snapshot(): AquaticLifeMessage | undefined {
         return this.population.animals.length > 0 ? this.message(true) : undefined;
+    }
+
+    /** The figures of each species that lives in the room, has room to, or ever did. */
+    private speciesStats(): AquaticSpeciesStatsMessage[] {
+        const stats: AquaticSpeciesStatsMessage[] = [];
+        for (const species of SPECIES_IDS) {
+            const now = this.speciesNow.find((entry) => entry.species === species);
+            const tally = this.bySpecies[species];
+            if (!now && !tally) continue;
+            stats.push({
+                species: SPECIES_WIRE[species],
+                males: now?.males ?? 0,
+                females: now?.females ?? 0,
+                cap: now?.cap ?? 0,
+                arrivals: tally?.arrivals ?? 0,
+                births: tally?.births ?? 0,
+                diedOfAge: tally?.diedOfAge ?? 0,
+                eaten: tally?.eaten ?? 0,
+                starved: tally?.starved ?? 0,
+                diedDry: tally?.diedDry ?? 0,
+                meals: countsOnWire(tally?.meals),
+            });
+        }
+        return stats;
     }
 
     /** All the animals and the figures of the life; with its history for a player who joins. */
@@ -223,14 +328,18 @@ export class AquaticLifeManager {
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
             })),
+            species: this.speciesStats(),
             stats: {
                 since: this.since ?? this.now(),
                 ...this.totals,
                 ...this.census,
-                history: withHistory ? this.history.samples : [],
+                history: withHistory ? this.history.samples.map(sampleOnWire) : [],
                 historyStepMs: this.history.stepMs,
                 ranges: withHistory
-                    ? LIFE_RANGES.map((range) => ({ name: range.name, samples: this.ranges.samples(range.name) }))
+                    ? LIFE_RANGES.map((range) => ({
+                          name: range.name,
+                          samples: this.ranges.samples(range.name).map(sampleOnWire),
+                      }))
                     : [],
             },
         };
@@ -251,6 +360,7 @@ export class AquaticLifeManager {
             nextId: this.population.nextId,
             since: this.since,
             totals: this.totals,
+            bySpecies: this.bySpecies,
             history: this.history.save(),
             ranges: this.ranges.save(),
         });

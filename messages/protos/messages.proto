@@ -812,6 +812,8 @@ message AquaticLifeMessage {
   repeated AquaticAnimalMessage animals = 1;
   // What happened since the life of the map began, and its waters: for the dashboard of the life tool.
   optional AquaticLifeStatsMessage stats = 2;
+  // The figures species by species: those that live in the room, have room to, or ever did.
+  repeated AquaticSpeciesStatsMessage species = 3;
 }
 
 // Totals since `since` (milliseconds, the clock of the server), and the waters of the room as the life sees them.
@@ -841,6 +843,32 @@ message AquaticLifeStatsMessage {
   repeated AquaticLifeRangeMessage ranges = 14;
 }
 
+// A species of the life of a map: how many live now, how many its places can hold, and what happened to it since
+// the life of the map began.
+message AquaticSpeciesStatsMessage {
+  // 0: fish, 1: dolphin, 2: antelope, 3: lion, 4: tiger, 5: gull.
+  uint32 species = 1;
+  uint32 males = 2;
+  uint32 females = 3;
+  uint32 cap = 4;
+  // Those that came by themselves into an empty place.
+  uint32 arrivals = 5;
+  uint32 births = 6;
+  uint32 diedOfAge = 7;
+  uint32 eaten = 8;
+  // Dead of hunger.
+  uint32 starved = 9;
+  // Left without water.
+  uint32 diedDry = 10;
+  // What it ate, by species of prey.
+  repeated AquaticSpeciesCountMessage meals = 11;
+}
+
+message AquaticSpeciesCountMessage {
+  uint32 species = 1;
+  uint32 count = 2;
+}
+
 message AquaticLifeRangeMessage {
   // "5min", "1h", "4h" or "1d".
   string name = 1;
@@ -851,15 +879,20 @@ message AquaticLifeSampleMessage {
   double at = 1;
   uint32 prey = 2;
   uint32 predators = 3;
+  // How many of each species lived then.
+  repeated AquaticSpeciesCountMessage counts = 4;
 }
 
 message AquaticAnimalMessage {
   uint32 id = 1;
-  // 0: male fish, 1: female fish, 2: male dolphin, 3: female dolphin.
+  // Twice the species (see AquaticSpeciesStatsMessage), plus one for a female: 0 male fish, 1 female fish,
+  // 2 male dolphin, 3 female dolphin…
   uint32 kind = 2;
   // Map pixels.
   sint32 x = 3;
   sint32 y = 4;
+  // 0 or absent: as usual, 1: flying, 2: resting, 3: drinking.
+  optional uint32 state = 5;
 }
 
 // What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
