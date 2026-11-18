@@ -6,10 +6,11 @@ import {
     MIN_PAUSE_MS,
     RADIUS_TILES,
     TILE_SIZE,
+    isDrinkLeg,
     WanderSchedule,
     wanderLegOffset,
 } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
-import type { Point, WanderMap } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
+import type { Point, Shore, WanderMap } from "../../../../../src/front/Phaser/Game/Wander/WanderSchedule";
 
 const GRID = 30;
 
@@ -338,5 +339,84 @@ describe("WanderSchedule", () => {
             expect(satNear).toBe(0);
             expect(satFar).toBeGreaterThan(0);
         });
+    });
+});
+
+describe("WanderSchedule, drinking", () => {
+    const INTERVAL = 3 * LEG_MS;
+    // A pond east of the tile (17, 15): the shore is that tile, turned to the east.
+    const SHORE: Shore = { ...centreOf({ x: 17, y: 15 }), toward: "right" };
+    const thirstyMap = (shores = [SHORE], interval = INTERVAL): WanderMap => ({
+        ...makeMap(),
+        shores: () => shores,
+        drinkIntervalMs: () => interval,
+    });
+    const drinkLegs = (entityId: string, interval: number, count: number): number[] => {
+        const legs: number[] = [];
+        for (let leg = 1000; legs.length < count && leg < 1100; leg++) {
+            if (isDrinkLeg(entityId, leg, interval)) legs.push(leg);
+        }
+        if (legs.length < count) throw new Error("No leg to drink");
+        return legs;
+    };
+
+    it("one leg in each interval is a leg to drink, not the same one for every animal", () => {
+        const duck = drinkLegs("duck", INTERVAL, 3);
+        expect(duck[1] - duck[0]).toBe(3);
+        expect(duck[2] - duck[1]).toBe(3);
+        const phases = new Set(
+            ["duck", "lion", "tigre", "chat", "chien", "a", "b"].map((id) => drinkLegs(id, INTERVAL, 1)[0] % 3),
+        );
+        expect(phases.size).toBeGreaterThan(1);
+    });
+
+    it("an interval shorter than a leg is a drink on every leg", () => {
+        expect(isDrinkLeg("duck", 1000, 1_000)).toBe(true);
+        expect(isDrinkLeg("duck", 1001, 1_000)).toBe(true);
+    });
+
+    it("on a leg to drink, the animal walks to the shore, turns to the water and drinks", async () => {
+        const [leg] = drinkLegs("duck", INTERVAL, 1);
+        const schedule = new WanderSchedule("duck", NEST, thirstyMap());
+        const walking = await poseResolved(schedule, at(leg, 100));
+        expect(walking?.drinking).toBeUndefined();
+        const drinking = await poseResolved(schedule, at(leg, LEG_MS - 1_000));
+        expect(drinking).toMatchObject({ x: SHORE.x, y: SHORE.y, direction: "right", moving: false, drinking: true });
+    });
+
+    it("does not drink on the other legs", async () => {
+        const [leg] = drinkLegs("duck", INTERVAL, 1);
+        const schedule = new WanderSchedule("duck", NEST, thirstyMap());
+        const pose = await poseResolved(schedule, at(leg + 1, LEG_MS - 1_000));
+        expect(pose?.drinking).toBeUndefined();
+    });
+
+    it("goes to one of the nearest shores, the same one on every browser", async () => {
+        const far: Shore = { ...centreOf({ x: 24, y: 24 }), toward: "down" };
+        const [leg] = drinkLegs("duck", INTERVAL, 1);
+        const a = await poseResolved(new WanderSchedule("duck", NEST, thirstyMap([far, SHORE])), at(leg, LEG_MS - 1));
+        const b = await poseResolved(new WanderSchedule("duck", NEST, thirstyMap([SHORE, far])), at(leg, LEG_MS - 1));
+        expect(a).toEqual(b);
+        expect(a?.drinking).toBe(true);
+    });
+
+    it("wanders as usual when no water is within its reach, or none can be walked to", async () => {
+        const [leg] = drinkLegs("duck", INTERVAL, 1);
+        const tooFar: Shore = { ...centreOf({ x: 28, y: 15 }), toward: "right" };
+        const none = await poseResolved(new WanderSchedule("duck", NEST, thirstyMap([tooFar])), at(leg, LEG_MS - 1));
+        expect(none?.drinking).toBeUndefined();
+        // The shore is walled in.
+        const walls = new Set(["16,15", "18,15", "17,14", "17,16"]);
+        const walled: WanderMap = { ...makeMap(walls), shores: () => [SHORE], drinkIntervalMs: () => INTERVAL };
+        const unreachable = await poseResolved(new WanderSchedule("duck", NEST, walled), at(leg, LEG_MS - 1));
+        expect(unreachable?.drinking).toBeUndefined();
+    });
+
+    it("never drinks on a map that tells no interval", async () => {
+        const map: WanderMap = { ...makeMap(), shores: () => [SHORE] };
+        const schedule = new WanderSchedule("duck", NEST, map);
+        for (let leg = 1000; leg < 1006; leg++) {
+            expect((await poseResolved(schedule, at(leg, LEG_MS - 1)))?.drinking).toBeUndefined();
+        }
     });
 });

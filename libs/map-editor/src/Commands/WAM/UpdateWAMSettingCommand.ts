@@ -137,7 +137,8 @@ export class UpdateWAMSettingCommand extends Command {
                 const within = (key: keyof typeof LIFE_BOUNDS): number => {
                     const [min, max] = LIFE_BOUNDS[key];
                     const value = sent[key];
-                    // An older client sends no dolphin settings: those of the map are kept.
+                    // An older client sends neither the dolphin settings nor the drinks of the land animals: those of the map
+                    // are kept.
                     if (value === undefined) return kept?.[key] ?? DEFAULT_LIFE_SETTINGS[key];
                     return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : DEFAULT_LIFE_SETTINGS[key];
                 };
@@ -149,6 +150,7 @@ export class UpdateWAMSettingCommand extends Command {
                     huntInterval: within("huntInterval"),
                     dolphinReproductionDelay: within("dolphinReproductionDelay"),
                     dolphinMaxLifespan: within("dolphinMaxLifespan"),
+                    drinkInterval: within("drinkInterval"),
                 };
                 break;
             }

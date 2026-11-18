@@ -31,6 +31,7 @@ function wamWith(enabled: boolean): WAMFileFormat {
                 huntInterval: 30,
                 dolphinReproductionDelay: 120,
                 dolphinMaxLifespan: 3600,
+                drinkInterval: 120,
             },
         },
     };
@@ -387,6 +388,7 @@ describe("AquaticLifeManager on the water of a room", () => {
                     huntInterval: 30,
                     dolphinReproductionDelay: 120,
                     dolphinMaxLifespan: 3600,
+                    drinkInterval: 120,
                 },
             },
             terrain: withHeights(undefined, cells),

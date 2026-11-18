@@ -573,6 +573,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         dolphinMaxLifespan: "Durée de vie maximale des dauphins",
         dolphinHint:
             "Les dauphins arrivent par couple dans un lac profond. Un mâle et une femelle qui ont mangé ont un petit, tant que le lac a de la place (un dauphin pour 150 cases de relief profondes). Un dauphin meurt de faim après huit intervalles de chasse sans prise.",
+        landAnimals: "Animaux terrestres",
+        drinkInterval: "Intervalle entre deux boissons",
+        landAnimalsHint:
+            "Les animaux qui se promènent (jungle, chiens, chats, canards) n'entrent jamais dans l'eau du relief et courent se mettre au sec quand elle monte. À cet intervalle, chacun va boire à la rive la plus proche de son territoire.",
         dashboard: {
             empty: "Aucune vie sur cette carte pour l'instant. Activez-la ci-dessous ; il faut de l'eau dans le relief.",
             population: "Population",

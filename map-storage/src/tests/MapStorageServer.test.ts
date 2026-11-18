@@ -205,6 +205,8 @@ describe("MapStorageServer entity edit permissions", () => {
                 huntInterval: 20,
                 dolphinReproductionDelay: 300,
                 dolphinMaxLifespan: 3600,
+                // Not told by the message: the default.
+                drinkInterval: 120,
             });
         });
 

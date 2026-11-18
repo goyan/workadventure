@@ -1999,6 +1999,12 @@
                   "minimum": 60,
                   "maximum": 172800,
                   "default": 3600
+                },
+                "drinkInterval": {
+                  "type": "number",
+                  "minimum": 20,
+                  "maximum": 3600,
+                  "default": 120
                 }
               },
               "additionalProperties": false

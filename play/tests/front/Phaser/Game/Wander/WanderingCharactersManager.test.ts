@@ -30,6 +30,8 @@ vi.mock("../../../../../src/front/Utils/PathfindingManager", () => ({
 }));
 
 const schedules = vi.hoisted(() => [] as { entityId: string; map: unknown; radiusTiles: number | undefined }[]);
+// What the schedules answer instead of standing at the nest, and how many times they were reset.
+const walk = vi.hoisted(() => ({ pose: undefined as object | undefined, resets: 0 }));
 
 // A character standing still at its nest: the test is about the visibility, not the walk.
 vi.mock("../../../../../src/front/Phaser/Game/Wander/WanderSchedule", async (importOriginal) => ({
@@ -44,12 +46,14 @@ vi.mock("../../../../../src/front/Phaser/Game/Wander/WanderSchedule", async (imp
             schedules.push({ entityId, map, radiusTiles });
         }
         poseAt() {
-            return { x: this.nest.x, y: this.nest.y, direction: "down", moving: false, pausedMs: 0 };
+            return walk.pose ?? { x: this.nest.x, y: this.nest.y, direction: "down", moving: false, pausedMs: 0 };
         }
         setNest(nest: Point): void {
             this.nest = nest;
         }
-        reset(): void {}
+        reset(): void {
+            walk.resets++;
+        }
     },
 }));
 
@@ -61,6 +65,8 @@ function makeSprite() {
         y: 0,
         depth: 0,
         visible: true,
+        angle: 0,
+        scaleY: 1,
         frame: { name: 1 },
         anims: { isPlaying: false },
         setOrigin: () => sprite,
@@ -77,6 +83,14 @@ function makeSprite() {
             sprite.y = y;
             return sprite;
         },
+        setAngle: (angle: number) => {
+            sprite.angle = angle;
+            return sprite;
+        },
+        setScale: (_x: number, y: number) => {
+            sprite.scaleY = y;
+            return sprite;
+        },
         setFrame: (frame: number) => {
             sprite.frame.name = frame;
             return sprite;
@@ -91,9 +105,11 @@ function makeSprite() {
 function makeScene(
     properties: { type: string }[] = [],
     image: { width: number; height: number; frameTotal: number } = { width: 96, height: 128, frameTotal: 13 },
-    options: { withDuck?: boolean; sheetLoaded?: boolean } = {},
+    options: { withDuck?: boolean; sheetLoaded?: boolean; drinkInterval?: number } = {},
 ) {
-    const { withDuck = true, sheetLoaded = true } = options;
+    const { withDuck = true, sheetLoaded = true, drinkInterval } = options;
+    // The water of the relief: pixels of water by cell of 16 px ("column,row"), and its version.
+    const water = { depths: {} as Record<string, number>, version: 0 };
     const entity = {
         entityId: "duck",
         x: 64,
@@ -124,7 +140,15 @@ function makeScene(
             getTileDimensions: () => ({ width: 32, height: 32 }),
             getSharedCollisionGrid: () => Array.from({ length: 10 }, () => Array.from({ length: 10 }, () => 0)),
             getEntitiesManager: () => ({ getEntities: () => new Map(withDuck ? [["duck", entity]] : []) }),
-            getWallBarriers: () => ({ equals: () => true }),
+            getWallBarriers: () => ({ equals: () => true, blocksMove: () => false }),
+        }),
+        getTerrainWater: () => ({
+            version: () => water.version,
+            coveredArea: () => ({ x: 0, y: 0, width: 320, height: 320 }),
+            settledDepthAt: (x: number, y: number) => water.depths[`${Math.floor(x / 16)},${Math.floor(y / 16)}`] ?? 0,
+        }),
+        getGameMap: () => ({
+            getWamFile: () => ({ getWam: () => ({ settings: drinkInterval ? { life: { drinkInterval } } : {} }) }),
         }),
         time: {
             addEvent: ({ callback }: { callback: () => void }) => {
@@ -166,6 +190,11 @@ function makeScene(
         entity: entity as unknown as Entity & { visible: boolean },
         destroySprite,
         markDirty,
+        /** Puts water over cells of the relief, as a new state of the server would. */
+        flood: (depths: Record<string, number>) => {
+            water.depths = depths;
+            water.version++;
+        },
         reconcile: () => reconcile(),
         update: () => update(),
         loadError: (key: string) => loadError({ key }),
@@ -184,6 +213,8 @@ describe("WanderingCharactersManager", () => {
     afterEach(() => {
         manager?.destroy();
         manager = undefined;
+        walk.pose = undefined;
+        walk.resets = 0;
     });
 
     it("makes a visible wandering character that opens doors and hides its entity", () => {
@@ -285,6 +316,23 @@ describe("WanderingCharactersManager", () => {
             expect(schedules).toHaveLength(2);
             scene.update();
             expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 80, y: 48, moving: false });
+        });
+
+        it("a shown character whose nest moved runs to its new walk instead of vanishing", () => {
+            const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            manager.setFreeCharacters([LION], map);
+            scene.update();
+            const start = manager.freeCharacterPose(LION.id);
+            if (!start) throw new Error("The lion is not shown");
+            manager.setFreeCharacters([{ ...LION, nest: { x: start.x + 160, y: start.y } }], map);
+            clock.mockReturnValue(1_000_050);
+            scene.update();
+            expect(scene.sprite.visible).toBe(true);
+            expect(manager.freeCharacterPose(LION.id)?.x).toBeCloseTo(start.x + 9.6, 5);
+            clock.mockRestore();
         });
 
         it("free characters are hidden in the map editor", () => {
@@ -433,6 +481,80 @@ describe("WanderingCharactersManager", () => {
             }).not.toThrow();
             expect(scene.addSprite).not.toHaveBeenCalled();
             expect(manager.freeCharacterPose(LION.id)).toBeUndefined();
+        });
+    });
+
+    describe("water of the relief", () => {
+        // The duck stands on the tile (2, 2); a pond covers the tile (4, 2) (cells 8..9, 4..5).
+        const POND = { "8,4": 8, "9,4": 8, "8,5": 8, "9,5": 8 };
+
+        it("closes the tiles under water, and tells where to drink and how often", () => {
+            const scene = makeScene([], undefined, { drinkInterval: 300 });
+            manager = scene.manager;
+            scene.flood(POND);
+            scene.reconcile();
+            const map = manager.getWanderMap();
+            expect(map.isWalkable({ x: 4, y: 2 })).toBe(false);
+            expect(map.isWalkable({ x: 3, y: 2 })).toBe(true);
+            expect(map.shores?.()).toContainEqual({ x: 3 * 32 + 16, y: 2 * 32 + 16, toward: "right" });
+            expect(map.shores?.()).toHaveLength(4);
+            expect(map.drinkIntervalMs?.()).toBe(300_000);
+        });
+
+        it("drinks every two minutes on a map that says nothing", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            expect(manager.getWanderMap().drinkIntervalMs?.()).toBe(120_000);
+        });
+
+        it("a lake at rest leaves the walks alone; water that comes near makes the character walk again", () => {
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.flood(POND);
+            scene.reconcile();
+            scene.reconcile();
+            // The same water, told again by the server.
+            scene.flood({ ...POND });
+            scene.reconcile();
+            expect(walk.resets).toBe(0);
+            scene.flood({ ...POND, "6,4": 8 });
+            scene.reconcile();
+            expect(walk.resets).toBe(1);
+        });
+
+        it("runs to where its walk has it now when the water changed that walk, instead of jumping there", () => {
+            const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+            const scene = makeScene();
+            manager = scene.manager;
+            scene.reconcile();
+            scene.update();
+            const start = { x: scene.sprite.x, y: scene.sprite.y };
+            scene.flood(POND);
+            scene.reconcile();
+            // Its new walk has it far to the west; the next frame comes 50 ms later.
+            walk.pose = { x: start.x - 160, y: start.y, direction: "left", moving: true, pausedMs: 0 };
+            clock.mockReturnValue(1_000_050);
+            scene.update();
+            // 192 px a second.
+            expect(scene.sprite.x).toBeCloseTo(start.x - 9.6, 5);
+            expect(scene.sprite.y).toBe(start.y);
+            clock.mockRestore();
+        });
+
+        it("draws a drinking character standing, bowed to the water, and straight again afterwards", () => {
+            const scene = makeScene([], { width: 160, height: 128, frameTotal: 21 });
+            manager = scene.manager;
+            scene.reconcile();
+            walk.pose = { x: 80, y: 80, direction: "right", moving: false, pausedMs: 500, drinking: true };
+            scene.update();
+            expect(scene.sprite.angle).toBeGreaterThan(0);
+            // The standing frame of the row "right" of a sheet of 5 columns, not a rest pose.
+            expect(scene.sprite.frame.name).toBe(2 * 5 + 1);
+            walk.pose = { x: 80, y: 80, direction: "right", moving: true, pausedMs: 0 };
+            scene.update();
+            expect(scene.sprite.angle).toBe(0);
+            expect(scene.sprite.scaleY).toBe(1);
         });
     });
 });

@@ -562,6 +562,10 @@ const mapEditor: BaseTranslation = {
         dolphinMaxLifespan: "Longest life of a dolphin",
         dolphinHint:
             "Dolphins come as a couple into a deep lake. A male and a female that have eaten have a calf, while the lake has room (a dolphin for 150 deep cells of relief). A dolphin dies of hunger after eight hunting intervals without a catch.",
+        landAnimals: "Land animals",
+        drinkInterval: "Time between two drinks",
+        landAnimalsHint:
+            "The wandering animals (jungle, dogs, cats, ducks) never enter the water of the relief and run to dry ground when it rises. At this interval, each one goes to drink at the shore nearest to its territory.",
         dashboard: {
             empty: "No life on this map yet. Turn it on below; the relief needs water.",
             population: "Population",

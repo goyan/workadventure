@@ -14,6 +14,7 @@ vi.mock("../../../../src/front/Phaser/Game/Terrain/TerrainMapSettings", () => ({
             huntInterval: 60,
             dolphinReproductionDelay: 300,
             dolphinMaxLifespan: 3600,
+            drinkInterval: 120,
         },
     }),
 }));

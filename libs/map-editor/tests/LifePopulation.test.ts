@@ -23,6 +23,7 @@ const settings: LifeSettings = {
     huntInterval: 30,
     dolphinReproductionDelay: 120,
     dolphinMaxLifespan: 3600,
+    drinkInterval: 120,
 };
 const rows = (row: string, count: number): string[] => Array.from({ length: count }, () => row);
 /** A pond of 8 × 5 shallow cells: the smallest that gets fish. */

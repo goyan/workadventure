@@ -29,6 +29,7 @@
     let huntInterval = $state(start.huntInterval);
     let dolphinReproductionDelay = $state(start.dolphinReproductionDelay);
     let dolphinMaxLifespan = $state(start.dolphinMaxLifespan);
+    let drinkInterval = $state(start.drinkInterval);
 
     // The durations go from seconds to hours: their sliders move by steps that grow with them.
     let reproductionPosition = $state(sliderOfDuration(start.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
@@ -38,6 +39,7 @@
         sliderOfDuration(start.dolphinReproductionDelay, ...LIFE_BOUNDS.dolphinReproductionDelay),
     );
     let dolphinLifespanPosition = $state(sliderOfDuration(start.dolphinMaxLifespan, ...LIFE_BOUNDS.dolphinMaxLifespan));
+    let drinkPosition = $state(sliderOfDuration(start.drinkInterval, ...LIFE_BOUNDS.drinkInterval));
 
     function save(): void {
         executeUpdateWAMSettings({
@@ -50,6 +52,7 @@
                 huntInterval,
                 dolphinReproductionDelay,
                 dolphinMaxLifespan,
+                drinkInterval,
             },
         }).catch((error: unknown) => console.error("The life of the water could not be saved", error));
     }
@@ -167,3 +170,23 @@
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.life.dolphinHint()}</p>
 {/if}
+<!-- The land animals drink whether the life of the water is on or not. -->
+<span class="retro-title mt-2">{$LL.mapEditor.life.landAnimals()}</span>
+<div data-testid="life-drink-interval">
+    <RangeSlider
+        id="terrain-life-drink-interval"
+        label={$LL.mapEditor.life.drinkInterval()}
+        unit=""
+        min={0}
+        max={LIFE_SLIDER_STEPS}
+        step={1}
+        bind:value={drinkPosition}
+        valueFormatter={() => formatDuration(drinkInterval)}
+        onchange={(position) => {
+            drinkInterval = durationAtSlider(position, ...LIFE_BOUNDS.drinkInterval);
+            save();
+        }}
+        buttonShape="square"
+    />
+</div>
+<p class="retro-hint m-0">{$LL.mapEditor.life.landAnimalsHint()}</p>

@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import type { Unsubscriber } from "svelte/store";
+import { DEFAULT_LIFE_SETTINGS } from "@workadventure/map-editor";
 import { getSeats } from "../../Player/Seat";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import { PathfindingManager, PathTileType } from "../../../Utils/PathfindingManager";
@@ -14,8 +15,11 @@ import type { JungleAnimal } from "../Jungle/JunglePlan";
 import { getSolidRectangles } from "../../../Utils/EntityHitbox";
 import { blockRectangles, sameGrids, withAreaBorders } from "./WanderCollisions";
 import type { WanderRectangle } from "./WanderCollisions";
-import { WanderSchedule } from "./WanderSchedule";
-import type { Point, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
+import { drinkStance } from "./WanderDrink";
+import { RADIUS_TILES, WanderSchedule } from "./WanderSchedule";
+import type { Point, Shore, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
+import { blockWetTiles, changedTiles, shoresOf, wetTilesOf } from "./WanderWater";
+import type { WetTiles } from "./WanderWater";
 import {
     WANDER_FRAME_SIZE,
     WANDER_WALK_COLUMNS,
@@ -29,6 +33,17 @@ const RECONCILE_INTERVAL_MS = 500;
 export const ENTITY_ID_PREFIX = "entity:";
 const WALK_FRAME_RATE = 8;
 const DIRECTIONS: WanderDirection[] = ["down", "left", "right", "up"];
+/** How fast a character runs to where its walk has it now, when the water took the ground it was walking on. */
+const FLEE_SPEED_PX_PER_S = 192;
+/** Closer than this to where its walk has it, a fleeing character is back to its walk. */
+const FLEE_DONE_PX = 4;
+/** A frame longer than this (a hidden tab) counts as this much time. */
+const MAX_FRAME_MS = 100;
+/** How far around a tile that became wet or dry the paths may change, beyond the wandering radius, in tiles. */
+const WATER_REACH_MARGIN_TILES = 2;
+/** The system asks for less motion: a drinking animal holds one stance. */
+const REDUCED_MOTION =
+    typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
 // A loaded sheet knows its number of columns: 3 for a walk cycle only, 5 with the rest poses (see WanderSheet).
 type SheetState = "loading" | { columns: number } | "failed";
@@ -66,6 +81,12 @@ interface WanderingCharacter {
     moving: boolean;
     /** Set for a free character only: it is led instead of following its schedule. */
     lead?: WanderLead;
+    /** How far from its nest it wanders, in tiles. */
+    radiusTiles: number;
+    /** Set when the water changed its walk: it runs from where it is shown to where its walk has it now. */
+    fleeing: boolean;
+    /** Whether the sprite is drawn in a drinking stance (turned or squeezed): undone when it stops drinking. */
+    inStance: boolean;
 }
 
 /**
@@ -84,6 +105,14 @@ export class WanderingCharactersManager {
     // rectangles of the objects, refreshed on reconcile.
     private collisionGrid: number[][] | undefined;
     private barriers: TileBarriers | undefined;
+    // The same grid before the water of the relief was added to it: tells a change of the water from the others.
+    private dryGrid: number[][] | undefined;
+    // The water of the relief as the characters see it (see WanderWater), where they can drink, and how often.
+    private wet: WetTiles | undefined;
+    private waterVersion: number | undefined;
+    private shores: Shore[] = [];
+    private drinkIntervalMs: number = DEFAULT_LIFE_SETTINGS.drinkInterval * 1000;
+    private lastUpdateMs = 0;
     private readonly pathfindingManager: PathfindingManager;
     private readonly tileDimensions: { width: number; height: number };
     private isEditorMode = false;
@@ -108,6 +137,8 @@ export class WanderingCharactersManager {
             isWalkable: (tile) => this.isWalkable(tile),
             findPath: (from, to) => this.findPath(from, to),
             seats: () => getSeats(this.scene).map((seat) => seat.feet),
+            shores: () => this.shores,
+            drinkIntervalMs: () => this.drinkIntervalMs,
         };
         this.unsubscribeEditorMode = mapEditorModeStore.subscribe((isOn) => {
             this.isEditorMode = isOn;
@@ -189,6 +220,9 @@ export class WanderingCharactersManager {
                     hasPose: false,
                     opener: { x: animal.nest.x, y: animal.nest.y - WANDER_FRAME_SIZE / 2 },
                     moving: false,
+                    radiusTiles: JUNGLE_RADIUS_TILES,
+                    fleeing: false,
+                    inStance: false,
                 });
                 this.loadSheet(animal.sheetPath);
             } else if (character.entity) {
@@ -202,7 +236,13 @@ export class WanderingCharactersManager {
             } else if (character.nest.x !== animal.nest.x || character.nest.y !== animal.nest.y) {
                 character.nest = animal.nest;
                 character.schedule.setNest(animal.nest);
-                character.hasPose = false;
+                // Its nest moved (the water took it, or gave it back): a character that is shown runs to its new
+                // walk; one that is not appears there.
+                if (character.hasPose && !character.lead) {
+                    character.fleeing = true;
+                } else {
+                    character.hasPose = false;
+                }
             }
         }
         if (removed) {
@@ -330,6 +370,9 @@ export class WanderingCharactersManager {
                     hasPose: false,
                     opener: { x: nest.x, y: nest.y - WANDER_FRAME_SIZE / 2 },
                     moving: false,
+                    radiusTiles: RADIUS_TILES,
+                    fleeing: false,
+                    inStance: false,
                 });
                 this.loadSheet(sheetPath);
             } else if (character.nest.x !== nest.x || character.nest.y !== nest.y) {
@@ -346,13 +389,14 @@ export class WanderingCharactersManager {
 
     /**
      * Feeds the pathfinding with the current collisions and walls, at most once per reconcile: the walls and the
-     * rectangles are rebuilt from every entity, and the borders of the locked areas are added to the walls. Other
-     * collisions or other walls (an object placed, moved or loaded after the characters, an area locked or unlocked)
-     * make every character compute its path again.
+     * rectangles are rebuilt from every entity, the borders of the locked areas are added to the walls, and the tiles
+     * under the water of the relief are closed. Other collisions or other walls (an object placed, moved or loaded
+     * after the characters, an area locked or unlocked) make every character compute its path again; water that
+     * came or went, only the characters that walk near it.
      */
     private refreshMap(): void {
         const gameMapFrontWrapper = this.scene.getGameMapFrontWrapper();
-        const grid = blockRectangles(
+        const dryGrid = blockRectangles(
             gameMapFrontWrapper.getSharedCollisionGrid(),
             this.collisionRectangles(),
             this.tileDimensions,
@@ -360,28 +404,86 @@ export class WanderingCharactersManager {
         // Locking an area closes it to the characters too (checked on every reconcile, twice a second).
         const lockedAreas = (gameMapFrontWrapper.areasManager?.getLockedAreas() ?? []).map((entry) => entry.area);
         const barriers = withAreaBorders(gameMapFrontWrapper.getWallBarriers(), lockedAreas, this.tileDimensions);
-        const changed =
-            this.collisionGrid === undefined ||
+        const wetChanges = this.refreshWater(dryGrid);
+        const drinkIntervalMs =
+            (this.scene.getGameMap().getWamFile()?.getWam().settings?.life?.drinkInterval ??
+                DEFAULT_LIFE_SETTINGS.drinkInterval) * 1000;
+        const first = this.collisionGrid === undefined || this.barriers === undefined || this.dryGrid === undefined;
+        const mapChanged =
+            first ||
+            this.dryGrid === undefined ||
             this.barriers === undefined ||
-            !sameGrids(grid, this.collisionGrid) ||
-            !barriers.equals(this.barriers);
-        if (!changed) {
+            !sameGrids(dryGrid, this.dryGrid) ||
+            !barriers.equals(this.barriers) ||
+            drinkIntervalMs !== this.drinkIntervalMs;
+        if (!mapChanged && wetChanges.length === 0) {
             return;
         }
-        if (this.collisionGrid !== undefined) {
-            for (const character of this.characters.values()) {
-                character.schedule.reset();
-            }
-        }
-        this.collisionGrid = grid;
+        this.drinkIntervalMs = drinkIntervalMs;
+        this.dryGrid = dryGrid;
         this.barriers = barriers;
+        const wet = this.wet;
+        const grid = wet ? blockWetTiles(dryGrid, wet, PathTileType.Collider) : dryGrid;
+        this.collisionGrid = grid;
+        this.shores = wet?.any
+            ? shoresOf(
+                  wet,
+                  this.tileDimensions.width,
+                  (tile) => this.isWalkable(tile),
+                  (from, to) => barriers.blocksMove(from, to),
+              )
+            : [];
         this.pathfindingManager.setCollisionGrid(grid);
         this.pathfindingManager.setBarriers(barriers);
+        if (first) {
+            return;
+        }
+        for (const character of this.characters.values()) {
+            if (mapChanged) {
+                character.schedule.reset();
+            } else if (this.reaches(character, wetChanges)) {
+                // The water came or went near it: it walks around the water as it is now, and runs there.
+                character.schedule.reset();
+                character.fleeing = true;
+            }
+        }
     }
 
     /**
-     * The thin collisions of the objects, that stop the players through the physics, and the water, which animals
-     * never enter. The collisions of the map layer are left out, like for the paths of the players: they are already
+     * Reads the water of the relief again when the server told a new state. Returns the tiles that became wet or
+     * dry since the last time: none most of the time, a lake at rest keeps its shores.
+     */
+    private refreshWater(dryGrid: number[][]): Point[] {
+        const water = this.scene.getTerrainWater();
+        const version = water.version();
+        if (version === this.waterVersion) {
+            return [];
+        }
+        this.waterVersion = version;
+        const wet = wetTilesOf(
+            dryGrid[0]?.length ?? 0,
+            dryGrid.length,
+            this.tileDimensions.width,
+            water.coveredArea(),
+            (x, y) => water.settledDepthAt(x, y),
+            this.wet,
+        );
+        const changes = changedTiles(this.wet, wet);
+        this.wet = wet;
+        return changes;
+    }
+
+    /** Whether one of these tiles is within the reach of the walks of a character. */
+    private reaches(character: WanderingCharacter, tiles: readonly Point[]): boolean {
+        const reach = character.radiusTiles + WATER_REACH_MARGIN_TILES;
+        const nestX = Math.floor(character.nest.x / this.tileDimensions.width);
+        const nestY = Math.floor(character.nest.y / this.tileDimensions.height);
+        return tiles.some((tile) => Math.abs(tile.x - nestX) <= reach && Math.abs(tile.y - nestY) <= reach);
+    }
+
+    /**
+     * The thin collisions of the objects, that stop the players through the physics, and the water of the pools,
+     * which animals never enter (the water of the relief is closed tile by tile, see refreshWater). The collisions of the map layer are left out, like for the paths of the players: they are already
      * walls between tiles (getWallBarriers).
      */
     private collisionRectangles(): WanderRectangle[] {
@@ -489,6 +591,8 @@ export class WanderingCharactersManager {
             return;
         }
         const now = Date.now();
+        const frameMs = Math.min(MAX_FRAME_MS, Math.max(0, now - this.lastUpdateMs));
+        this.lastUpdateMs = now;
         let changed = false;
         for (const character of this.characters.values()) {
             const sheet = this.sheets.get(character.sheetPath);
@@ -510,13 +614,39 @@ export class WanderingCharactersManager {
                     // Led out of view: not shown, rather than left where it was last seen.
                     character.hasPose = false;
                 }
-                if (pose) {
+                if (lead) {
+                    // Only a character on its own walk flees.
+                    character.fleeing = false;
+                }
+                if (pose && character.fleeing && character.hasPose && this.flee(character, sprite, pose, frameMs)) {
+                    changed = true;
+                } else if (pose) {
+                    character.fleeing = false;
                     character.hasPose = true;
                     character.moving = pose.moving;
-                    if (sprite.x !== pose.x || sprite.y !== pose.y) {
-                        sprite.setPosition(pose.x, pose.y);
+                    // A drinking character is drawn from its standing frame, bowed to the water.
+                    const stance = pose.drinking
+                        ? drinkStance(pose.direction, pose.pausedMs, REDUCED_MOTION)
+                        : undefined;
+                    const x = pose.x + (stance?.dx ?? 0);
+                    const y = pose.y + (stance?.dy ?? 0);
+                    if (sprite.x !== x || sprite.y !== y) {
+                        sprite.setPosition(x, y);
                         character.opener.x = pose.x;
                         character.opener.y = pose.y - WANDER_FRAME_SIZE / 2;
+                        changed = true;
+                    }
+                    if (stance) {
+                        if (sprite.angle !== stance.angle || sprite.scaleY !== stance.scaleY) {
+                            sprite.setAngle(stance.angle);
+                            sprite.setScale(1, stance.scaleY);
+                            changed = true;
+                        }
+                        character.inStance = true;
+                    } else if (character.inStance) {
+                        sprite.setAngle(0);
+                        sprite.setScale(1, 1);
+                        character.inStance = false;
                         changed = true;
                     }
                     // Out of the position check: a character standing still where it was created needs it too. Only on
@@ -524,7 +654,7 @@ export class WanderingCharactersManager {
                     // On a seat, drawn like a seated player: over the chair (behind it when it shows its back).
                     // A led character goes where it is led, never onto a seat.
                     const seat =
-                        pose.moving || lead
+                        pose.moving || lead || pose.drinking
                             ? undefined
                             : getSeats(this.scene).find(
                                   (candidate) =>
@@ -539,7 +669,9 @@ export class WanderingCharactersManager {
                     if (pose.moving) {
                         sprite.play(`${character.sheetPath}:${pose.direction}`, true);
                     } else {
-                        const stillFrame = wanderStillFrame(pose.direction, pose.pausedMs, columns);
+                        const stillFrame = pose.drinking
+                            ? wanderIdleFrame(pose.direction, columns)
+                            : wanderStillFrame(pose.direction, pose.pausedMs, columns);
                         // The frames of a sprite sheet are named by their index (a number at runtime).
                         if (sprite.anims.isPlaying || String(sprite.frame.name) !== String(stillFrame)) {
                             sprite.stop();
@@ -566,6 +698,46 @@ export class WanderingCharactersManager {
         if (changed) {
             this.scene.markDirty();
         }
+    }
+
+    /**
+     * Moves a fleeing character a frame closer to where its walk has it now, at a run, in a straight line: the water
+     * took the ground it was walking on, and its walk was computed again around it.
+     * @returns whether it is still running; false once it is there (the caller then puts it on its walk)
+     */
+    private flee(
+        character: WanderingCharacter,
+        sprite: Phaser.GameObjects.Sprite,
+        pose: WanderPose,
+        frameMs: number,
+    ): boolean {
+        const dx = pose.x - sprite.x;
+        const dy = pose.y - sprite.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= FLEE_DONE_PX) {
+            return false;
+        }
+        const step = Math.min(distance, (FLEE_SPEED_PX_PER_S * frameMs) / 1000);
+        const x = sprite.x + (dx / distance) * step;
+        const y = sprite.y + (dy / distance) * step;
+        if (character.inStance) {
+            sprite.setAngle(0);
+            sprite.setScale(1, 1);
+            character.inStance = false;
+        }
+        sprite.setPosition(x, y);
+        sprite.setDepth(y);
+        character.opener.x = x;
+        character.opener.y = y - WANDER_FRAME_SIZE / 2;
+        character.moving = true;
+        let direction: WanderDirection;
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            direction = dx < 0 ? "left" : "right";
+        } else {
+            direction = dy < 0 ? "up" : "down";
+        }
+        sprite.play(`${character.sheetPath}:${direction}`, true);
+        return true;
     }
 
     /** @returns whether the visibility changed */

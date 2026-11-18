@@ -394,7 +394,8 @@ message UpdateWAMSettingsMessage {
   }
 }
 
-// The life in the water of the relief (LifeSettings in libs/map-editor). Durations in real seconds.
+// The life in the water of the relief and the drinks of the land animals (LifeSettings in libs/map-editor).
+// Durations in real seconds.
 message UpdateLifeSettingMessage {
   bool enabled = 1;
   double reproductionDelay = 2;
@@ -405,6 +406,8 @@ message UpdateLifeSettingMessage {
   // The dolphins. Absent from older clients: those of the map are kept.
   optional double dolphinReproductionDelay = 6;
   optional double dolphinMaxLifespan = 7;
+  // How long a land animal waits between two drinks. Absent from a browser that does not know it: kept as it is.
+  optional double drinkInterval = 8;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).

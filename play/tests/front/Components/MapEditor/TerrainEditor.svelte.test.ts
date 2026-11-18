@@ -20,6 +20,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
             huntInterval: 60,
             dolphinReproductionDelay: 300,
             dolphinMaxLifespan: 3600,
+            drinkInterval: 120,
         },
     },
 }));
