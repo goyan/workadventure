@@ -24,6 +24,9 @@ export const weatherEffectsEnabledStore = createWeatherEffectsStore();
  */
 export const cloudsShownStore = createPersistedSwitchStore("weatherCloudsShown", true);
 
+/** Whether this player sees the animals of the water of the relief (fish, dolphins). Personal, kept in the browser. */
+export const aquaticLifeShownStore = createPersistedSwitchStore("aquaticLifeShown", true);
+
 /**
  * Personal height of the clouds, 0 to 1, kept in the browser: zooming in passes under them (they fade out, their
  * shadows stay on the ground); higher clouds need a closer zoom, and at 1 one never passes under them. 0 by default.

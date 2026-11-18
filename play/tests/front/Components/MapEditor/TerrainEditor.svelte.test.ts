@@ -5,7 +5,23 @@ import { get } from "svelte/store";
 const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoisted(() => ({
     executeUpdateTerrain: vi.fn(() => Promise.resolve()),
     executeUpdateWAMSettings: vi.fn(() => Promise.resolve()),
-    mapSettings: { maxDepthTiles: 2, runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 },
+    mapSettings: {
+        maxDepthTiles: 2,
+        runoff: 10,
+        evaporation: 0.2,
+        speed: 60,
+        absorption: 5,
+        current: 1,
+        life: {
+            enabled: false,
+            reproductionDelay: 120,
+            maxLifespan: 900,
+            maxSpeed: 1.5,
+            huntInterval: 60,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
+        },
+    },
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
     executeUpdateTerrain,

@@ -1,4 +1,5 @@
-import { DEFAULT_MAX_DEPTH_TILES, DEFAULT_WATER_SETTINGS } from "@workadventure/map-editor";
+import { DEFAULT_LIFE_SETTINGS, DEFAULT_MAX_DEPTH_TILES, DEFAULT_WATER_SETTINGS } from "@workadventure/map-editor";
+import type { LifeSettings } from "@workadventure/map-editor";
 import { gameManager } from "../GameManager";
 
 /** What the map says of its relief and of the pace of its water, with the defaults of a map that says nothing. */
@@ -9,6 +10,7 @@ export function readTerrainMapSettings(): {
     speed: number;
     absorption: number;
     current: number;
+    life: LifeSettings;
 } {
     const wam = gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam();
     return {
@@ -18,5 +20,6 @@ export function readTerrainMapSettings(): {
         speed: wam?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed,
         absorption: wam?.settings?.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption,
         current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
+        life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
     };
 }

@@ -233,6 +233,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "aquaticLifeMessage": {
+                            // The animals of the water of the relief are the same for every player of the room
+                            const aquaticLifeMessage = message.message.aquaticLifeMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "aquaticLifeMessage",
+                                        aquaticLifeMessage: aquaticLifeMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

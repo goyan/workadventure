@@ -47,6 +47,7 @@ const menu: BaseTranslation = {
         weatherEffects: "Show weather effects (rain, snow and storm light)",
         lampEffects: "Light effects of lamps and dance floors",
         clouds: "Show clouds and their shadows",
+        aquaticLife: "Show aquatic life (fish and dolphins in the water of the relief)",
         cloudsHeight: {
             label: "Cloud height (zooming in passes under them)",
             low: "Low",

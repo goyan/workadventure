@@ -19,6 +19,7 @@ import {
     PositionMessage_Direction,
     type SendUserMessage,
     type TerrainWaterMessage,
+    type AquaticLifeMessage,
 } from "@workadventure/messages";
 import { z } from "zod";
 import type { ITiledMap, ITiledMapLayer, ITiledMapObject, ITiledMapTileset } from "@workadventure/tiled-map-type-guard";
@@ -271,13 +272,13 @@ import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
 import { torchEquippedStore } from "../../Stores/TorchStore";
 import { mapSnowShownStore } from "../../Stores/SeasonalThemeStore";
-import { cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+import { aquaticLifeShownStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
 import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
-import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
+import { aquaticLifeStatsStore, terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -348,6 +349,9 @@ import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { WeatherManager } from "./Weather/WeatherManager";
 import { TerrainWater } from "./Terrain/TerrainWater";
+import { AquaticLife } from "./Life/AquaticLife";
+import { AquaticLifeView } from "./Life/AquaticLifeView";
+import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
@@ -543,6 +547,11 @@ export class GameScene extends DirtyScene {
     /** The water of the hollows of the relief, as the server keeps it. */
     private readonly terrainWater = new TerrainWater();
     private terrainWaterSubscription: Subscription | undefined;
+    /** The animals of the water of the relief, as the server tells them. */
+    private readonly aquaticLife = new AquaticLife();
+    private aquaticLifeView: AquaticLifeView | undefined;
+    private readonly aquaticLifeStats = new LifeStats();
+    private aquaticLifeSubscription: Subscription | undefined;
     private terrainView: TerrainView | undefined;
     private waterFlowView: WaterFlowView | undefined;
     private terrainWaterQueue: Promise<void> = Promise.resolve();
@@ -1549,6 +1558,8 @@ export class GameScene extends DirtyScene {
         areaPropertyVariablesManagerStore.set(undefined);
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = undefined;
+        this.aquaticLifeSubscription?.unsubscribe();
+        this.aquaticLifeSubscription = undefined;
         this.entityStatesManager?.destroy();
         this.entityStatesManager = undefined;
         entityStatesManagerStore.set(undefined);
@@ -1625,6 +1636,8 @@ export class GameScene extends DirtyScene {
         this.terrainView = undefined;
         this.waterFlowView?.destroy();
         this.waterFlowView = undefined;
+        this.aquaticLifeView?.destroy();
+        this.aquaticLifeView = undefined;
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
         this.skyWindowLightManager?.destroy();
@@ -2116,6 +2129,7 @@ export class GameScene extends DirtyScene {
             this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
             this.terrainView?.update(time);
             this.waterFlowView?.update(time);
+            this.aquaticLifeView?.update(time);
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
             this.skyMovingShadows?.update();
@@ -2694,6 +2708,15 @@ export class GameScene extends DirtyScene {
      * A state of the water from the server: unzipped (that takes a moment), then shown. The states are taken one
      * after the other, in the order they came: a change applies to the state just before it.
      */
+    private receiveAquaticLife(message: AquaticLifeMessage): void {
+        this.aquaticLife.receive(message.animals, this.time.now);
+        // The dashboard of the life tool: nothing to show on a map that never had any life.
+        this.aquaticLifeStats.receive(message.animals, message.stats, Date.now());
+        aquaticLifeStatsStore.set(
+            message.stats || message.animals.length > 0 ? this.aquaticLifeStats.view(Date.now()) : undefined,
+        );
+    }
+
     private receiveTerrainWater(message: TerrainWaterMessage): void {
         this.terrainWaterQueue = this.terrainWaterQueue
             .then(async () => {
@@ -3414,6 +3437,14 @@ export class GameScene extends DirtyScene {
                     wam: () => this.getGameMap().getWamFile()?.getWam(),
                     view: () => this.cameras.main.worldView,
                 });
+                // The fish and the dolphins of that water.
+                this.aquaticLifeView?.destroy();
+                this.aquaticLifeView = new AquaticLifeView(
+                    this,
+                    this.aquaticLife,
+                    () => get(aquaticLifeShownStore),
+                    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+                );
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
                 this.skyShadowManager = new SkyShadowManager(this, {
@@ -3706,6 +3737,12 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {
             this.receiveTerrainWater(message);
+        });
+        // The life of that water: the animals of the room now, then all of them every second.
+        this.receiveAquaticLife(room.aquaticLife ?? { animals: [] });
+        this.aquaticLifeSubscription?.unsubscribe();
+        this.aquaticLifeSubscription = this.connection.aquaticLifeMessageStream.subscribe((message) => {
+            this.receiveAquaticLife(message);
         });
         entityStatesManagerStore.set(this.entityStatesManager);
         listeningZoneNamesStore.set(
