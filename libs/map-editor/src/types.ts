@@ -942,8 +942,9 @@ export const WaterSettings = z.object({
 export type WaterSettings = z.infer<typeof WaterSettings>;
 
 /**
- * The life in the water of the relief of a map (fish that breed, dolphins that hunt them), kept by the server. All
- * durations are in real seconds: the speed of the water does not hasten them.
+ * The life in the water of the relief of a map (fish that breed, dolphins that hunt them), kept by the server, and
+ * how often the land animals come to drink it (computed by each browser). All durations are in real seconds: the
+ * speed of the water does not hasten them.
  */
 export const DEFAULT_LIFE_SETTINGS = {
     enabled: false,
@@ -951,12 +952,14 @@ export const DEFAULT_LIFE_SETTINGS = {
     maxLifespan: 900,
     maxSpeed: 1.5,
     huntInterval: 60,
+    drinkInterval: 120,
 } as const;
 export const LIFE_BOUNDS = {
     reproductionDelay: [10, 3600],
     maxLifespan: [30, 86400],
     maxSpeed: [0.2, 6],
     huntInterval: [5, 3600],
+    drinkInterval: [20, 3600],
 } as const;
 export const LifeSettings = z.object({
     enabled: z.boolean().default(DEFAULT_LIFE_SETTINGS.enabled),
@@ -984,6 +987,15 @@ export const LifeSettings = z.object({
         .min(LIFE_BOUNDS.huntInterval[0])
         .max(LIFE_BOUNDS.huntInterval[1])
         .default(DEFAULT_LIFE_SETTINGS.huntInterval),
+    /**
+     * How long a land animal (the wandering ones) waits between two drinks at the water of the relief, in seconds.
+     * It applies whether the life of the water is on or not.
+     */
+    drinkInterval: z
+        .number()
+        .min(LIFE_BOUNDS.drinkInterval[0])
+        .max(LIFE_BOUNDS.drinkInterval[1])
+        .default(DEFAULT_LIFE_SETTINGS.drinkInterval),
 });
 export type LifeSettings = z.infer<typeof LifeSettings>;
 

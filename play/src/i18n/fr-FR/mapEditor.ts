@@ -569,6 +569,10 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         maxSpeed: "Vitesse maximale",
         tilesPerSecond: "cases/s",
         huntInterval: "Intervalle de chasse du dauphin",
+        landAnimals: "Animaux terrestres",
+        drinkInterval: "Intervalle entre deux boissons",
+        landAnimalsHint:
+            "Les animaux qui se promènent (jungle, chiens, chats, canards) n'entrent jamais dans l'eau du relief et courent se mettre au sec quand elle monte. À cet intervalle, chacun va boire à la rive la plus proche de son territoire.",
         dashboard: {
             empty: "Aucune vie sur cette carte pour l'instant. Activez-la ci-dessous ; il faut de l'eau dans le relief.",
             population: "Population",

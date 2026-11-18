@@ -13,6 +13,7 @@ describe("LifeSettings", () => {
             maxLifespan: 900,
             maxSpeed: 1.5,
             huntInterval: 60,
+            drinkInterval: 120,
         });
     });
 
@@ -31,6 +32,7 @@ describe("LifeSettings", () => {
                     maxLifespan: 600,
                     maxSpeed: 2,
                     huntInterval: 20,
+                    drinkInterval: 300,
                 },
             },
         }).execute();
@@ -40,6 +42,7 @@ describe("LifeSettings", () => {
             maxLifespan: 600,
             maxSpeed: 2,
             huntInterval: 20,
+            drinkInterval: 300,
         });
     });
 
@@ -54,6 +57,7 @@ describe("LifeSettings", () => {
                     maxLifespan: 1e9,
                     maxSpeed: Number.NaN,
                     huntInterval: -5,
+                    drinkInterval: 1,
                 },
             },
         }).execute();
@@ -63,6 +67,25 @@ describe("LifeSettings", () => {
             maxLifespan: 86400,
             maxSpeed: 1.5,
             huntInterval: 5,
+            drinkInterval: 20,
         });
+    });
+
+    it("keeps how often the land animals drink when a browser that does not know it saves the rest", async () => {
+        const wam = emptyWam();
+        wam.settings = { life: { ...DEFAULT_LIFE_SETTINGS, drinkInterval: 600 } };
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateLifeSettingMessage",
+                updateLifeSettingMessage: {
+                    enabled: true,
+                    reproductionDelay: 30,
+                    maxLifespan: 600,
+                    maxSpeed: 2,
+                    huntInterval: 20,
+                },
+            },
+        }).execute();
+        expect(wam.settings?.life?.drinkInterval).toBe(600);
     });
 });

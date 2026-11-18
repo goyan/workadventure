@@ -43,7 +43,13 @@ describe("WamManager relief", () => {
                 },
             },
         });
-        expect(manager.getWam().settings?.water).toEqual({ runoff: 3, evaporation: 1, speed: 60, absorption: 5, current: 1 });
+        expect(manager.getWam().settings?.water).toEqual({
+            runoff: 3,
+            evaporation: 1,
+            speed: 60,
+            absorption: 5,
+            current: 1,
+        });
     });
 
     it("keeps the life settings of the room up to date", async () => {
@@ -74,6 +80,8 @@ describe("WamManager relief", () => {
             maxLifespan: 600,
             maxSpeed: 2,
             huntInterval: 20,
+            // Not told by the message: the default.
+            drinkInterval: 120,
         });
     });
 

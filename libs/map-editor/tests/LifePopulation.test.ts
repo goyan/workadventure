@@ -20,6 +20,7 @@ const settings: LifeSettings = {
     maxLifespan: 600,
     maxSpeed: 1.5,
     huntInterval: 30,
+    drinkInterval: 120,
 };
 const rows = (row: string, count: number): string[] => Array.from({ length: count }, () => row);
 /** A pond of 8 × 5 shallow cells: the smallest that gets fish. */

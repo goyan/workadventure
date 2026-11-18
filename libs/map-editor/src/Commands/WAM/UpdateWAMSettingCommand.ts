@@ -133,18 +133,25 @@ export class UpdateWAMSettingCommand extends Command {
             }
             case "updateLifeSettingMessage": {
                 const sent = message.updateLifeSettingMessage;
-                const within = (key: keyof typeof LIFE_BOUNDS): number => {
+                const within = (
+                    key: keyof typeof LIFE_BOUNDS,
+                    fallback: number = DEFAULT_LIFE_SETTINGS[key],
+                ): number => {
                     const [min, max] = LIFE_BOUNDS[key];
-                    return Number.isFinite(sent[key])
-                        ? Math.min(max, Math.max(min, sent[key]))
-                        : DEFAULT_LIFE_SETTINGS[key];
+                    const value = sent[key];
+                    return value !== undefined && Number.isFinite(value)
+                        ? Math.min(max, Math.max(min, value))
+                        : fallback;
                 };
+                // A browser that does not know of the drinks sends none: the map keeps its own.
+                const keptDrinkInterval = this.wam.settings.life?.drinkInterval ?? DEFAULT_LIFE_SETTINGS.drinkInterval;
                 this.wam.settings.life = {
                     enabled: sent.enabled === true,
                     reproductionDelay: within("reproductionDelay"),
                     maxLifespan: within("maxLifespan"),
                     maxSpeed: within("maxSpeed"),
                     huntInterval: within("huntInterval"),
+                    drinkInterval: within("drinkInterval", keptDrinkInterval),
                 };
                 break;
             }

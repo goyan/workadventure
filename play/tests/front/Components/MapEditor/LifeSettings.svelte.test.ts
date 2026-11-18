@@ -24,7 +24,16 @@ const render = (enabled: boolean, maxLifespan = 900): void => {
     flushSync(() => {
         component = mount(LifeSettings, {
             target,
-            props: { initial: { enabled, reproductionDelay: 120, maxLifespan, maxSpeed: 1.5, huntInterval: 60 } },
+            props: {
+                initial: {
+                    enabled,
+                    reproductionDelay: 120,
+                    maxLifespan,
+                    maxSpeed: 1.5,
+                    huntInterval: 60,
+                    drinkInterval: 300,
+                },
+            },
         });
     });
 };
@@ -59,7 +68,7 @@ describe("LifeSettings", () => {
         expect(find("life-max-lifespan")?.textContent).not.toContain("1 min 55");
     });
 
-    it("saves the five settings to the map when the switch is turned on", () => {
+    it("saves the settings to the map when the switch is turned on", () => {
         render(false);
         const input = find("life-enabled")?.querySelector("input");
         if (!input) throw new Error("No switch");
@@ -72,9 +81,30 @@ describe("LifeSettings", () => {
                 maxLifespan: 900,
                 maxSpeed: 1.5,
                 huntInterval: 60,
+                drinkInterval: 300,
             },
         });
         for (const slider of sliders) expect(find(slider)).not.toBeNull();
+    });
+
+    it("shows how often the land animals drink, whether the life of the water is on or not", () => {
+        render(false);
+        expect(find("life-drink-interval")?.textContent).toContain("5 min");
+    });
+
+    it("saves the interval between two drinks moved on its slider, the life of the water left off", () => {
+        render(false);
+        const input = find("life-drink-interval")?.querySelector<HTMLInputElement>('input[type="range"]');
+        if (!input) throw new Error("No slider");
+        flushSync(() => {
+            input.value = "0";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateLifeSettingMessage",
+            updateLifeSettingMessage: expect.objectContaining({ enabled: false, drinkInterval: 20 }),
+        });
     });
 
     it("saves a setting moved on its slider", () => {

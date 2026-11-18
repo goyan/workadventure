@@ -18,5 +18,8 @@ export function outdoorWanderMap(
             const path = await base.findPath(from, to);
             return path.every(isOutdoorPoint) ? path : [];
         },
+        // They drink like the others, at the shores that are outdoors.
+        shores: () => (base.shores?.() ?? []).filter(isOutdoorPoint),
+        drinkIntervalMs: () => base.drinkIntervalMs?.(),
     };
 }

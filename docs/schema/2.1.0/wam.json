@@ -1987,6 +1987,12 @@
                   "minimum": 5,
                   "maximum": 3600,
                   "default": 60
+                },
+                "drinkInterval": {
+                  "type": "number",
+                  "minimum": 20,
+                  "maximum": 3600,
+                  "default": 120
                 }
               },
               "additionalProperties": false

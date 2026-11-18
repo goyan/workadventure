@@ -23,7 +23,14 @@ function wamWith(enabled: boolean): WAMFileFormat {
         entityCollections: [],
         entities: {},
         settings: {
-            life: { enabled, reproductionDelay: 60, maxLifespan: 600, maxSpeed: 1.5, huntInterval: 30 },
+            life: {
+                enabled,
+                reproductionDelay: 60,
+                maxLifespan: 600,
+                maxSpeed: 1.5,
+                huntInterval: 30,
+                drinkInterval: 120,
+            },
         },
     };
 }
@@ -296,7 +303,14 @@ describe("AquaticLifeManager on the water of a room", () => {
             },
             settings: {
                 water: { runoff: 0, evaporation: 0, speed: 1, absorption: 0, current: 1 },
-                life: { enabled: true, reproductionDelay: 60, maxLifespan: 600, maxSpeed: 1.5, huntInterval: 30 },
+                life: {
+                    enabled: true,
+                    reproductionDelay: 60,
+                    maxLifespan: 600,
+                    maxSpeed: 1.5,
+                    huntInterval: 30,
+                    drinkInterval: 120,
+                },
             },
             terrain: withHeights(undefined, cells),
         };

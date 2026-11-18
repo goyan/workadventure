@@ -117,6 +117,32 @@ export class TerrainWater {
     }
 
     /**
+     * Pixels of water over a point of the map in the last state the server sent, without the glide: what every
+     * browser knows alike (the wandering animals walk around it).
+     */
+    public settledDepthAt(x: number, y: number): number {
+        const column = Math.floor(x / TERRAIN_CELL) - this.grid.x;
+        const row = Math.floor(y / TERRAIN_CELL) - this.grid.y;
+        if (column < 0 || row < 0 || column >= this.grid.width || row >= this.grid.height) return 0;
+        return this.to[row * this.grid.width + column];
+    }
+
+    /** The part of the map the grid of the water covers, in map pixels. */
+    public coveredArea(): { x: number; y: number; width: number; height: number } {
+        return {
+            x: this.grid.x * TERRAIN_CELL,
+            y: this.grid.y * TERRAIN_CELL,
+            width: this.grid.width * TERRAIN_CELL,
+            height: this.grid.height * TERRAIN_CELL,
+        };
+    }
+
+    /** Changes each time a state is received or the relief changes. */
+    public version(): number {
+        return this.changes;
+    }
+
+    /**
      * The water over the cells of a canvas (one pixel a cell of the relief, its corner at the cell `cellX`, `cellY`)
      * at this time of the game, written into `levels`: 0 where it is dry or under a film too thin to be seen, else
      * its depth in pixels (1 to 255).

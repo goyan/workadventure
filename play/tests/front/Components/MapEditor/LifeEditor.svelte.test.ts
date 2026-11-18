@@ -6,7 +6,14 @@ vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
 }));
 vi.mock("../../../../src/front/Phaser/Game/Terrain/TerrainMapSettings", () => ({
     readTerrainMapSettings: () => ({
-        life: { enabled: true, reproductionDelay: 120, maxLifespan: 900, maxSpeed: 1.5, huntInterval: 60 },
+        life: {
+            enabled: true,
+            reproductionDelay: 120,
+            maxLifespan: 900,
+            maxSpeed: 1.5,
+            huntInterval: 60,
+            drinkInterval: 120,
+        },
     }),
 }));
 vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {

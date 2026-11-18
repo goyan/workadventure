@@ -558,6 +558,10 @@ const mapEditor: BaseTranslation = {
         maxSpeed: "Fastest speed",
         tilesPerSecond: "tiles/s",
         huntInterval: "Hunting interval of the dolphin",
+        landAnimals: "Land animals",
+        drinkInterval: "Time between two drinks",
+        landAnimalsHint:
+            "The wandering animals (jungle, dogs, cats, ducks) never enter the water of the relief and run to dry ground when it rises. At this interval, each one goes to drink at the shore nearest to its territory.",
         dashboard: {
             empty: "No life on this map yet. Turn it on below; the relief needs water.",
             population: "Population",
