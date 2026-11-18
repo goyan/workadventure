@@ -241,4 +241,33 @@ describe("desktop environment settings", () => {
         );
         expect(readDesktopEnvironment()?.weather).toBe(WeatherType.Rain);
     });
+
+    it("reports every light setting with its words and bounds, details tied to their switch", () => {
+        const controls = readDesktopEnvironment()?.lightControls ?? [];
+        const byName = Object.fromEntries(controls.map((control) => [control.name, control]));
+        expect(byName.nightDarkness).toMatchObject({ group: "night", kind: "number", step: 0.05 });
+        expect(byName.lightBounce).toMatchObject({ kind: "number", min: 0, max: 1, dependsOn: "lightBounceOn" });
+        expect(byName.lightSecondBounceOn).toMatchObject({ kind: "switch", dependsOn: "lightBounceOn" });
+        expect(byName.moonPhaseCurve?.choices?.map((choice) => choice.value)).toEqual(["linear", "realistic"]);
+        expect(byName.shadowTreeShape).toMatchObject({ group: "shadows", kind: "choice", dependsOn: "shadowTrees" });
+        expect(byName.perfCounter).toMatchObject({ group: "other", kind: "switch" });
+        expect(controls.every((control) => typeof control.label === "string")).toBe(true);
+    });
+
+    it("changes a light setting by its name, within its limits, and refuses an unknown one", async () => {
+        await applyDesktopEnvironment({ setting: "light", value: { name: "lightBounceOn", value: false } });
+        await applyDesktopEnvironment({ setting: "light", value: { name: "nightDarkness", value: 0.8 } });
+        await applyDesktopEnvironment({ setting: "light", value: { name: "perfCounter", value: true } });
+        const byName = Object.fromEntries(
+            (readDesktopEnvironment()?.lightControls ?? []).map((control) => [control.name, control.value]),
+        );
+        expect(byName).toMatchObject({ lightBounceOn: false, nightDarkness: 0.8, perfCounter: true });
+        await expect(
+            applyDesktopEnvironment({ setting: "light", value: { name: "notASetting", value: true } }),
+        ).rejects.toThrow();
+        await expect(
+            applyDesktopEnvironment({ setting: "light", value: { name: "lightBounceOn", value: 3 } }),
+        ).rejects.toThrow();
+        expect(save).not.toHaveBeenCalled();
+    });
 });

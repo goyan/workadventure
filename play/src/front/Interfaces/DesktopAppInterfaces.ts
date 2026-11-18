@@ -61,7 +61,26 @@ export type DesktopEnvironmentRequest =
     | { setting: DesktopLightSetting.Source; value: LampMusicSource }
     | { setting: DesktopWeatherSetting.CloudsHeight; value: number }
     | { setting: DesktopWeatherSetting.Auto; value: AutoWeatherSettings }
-    | { setting: DesktopSoundsSetting.Sounds; value: { sound: DesktopSoundSetting; volume: number } };
+    | { setting: DesktopSoundsSetting.Sounds; value: { sound: DesktopSoundSetting; volume: number } }
+    | { setting: "light"; value: { name: string; value: number | boolean | string } };
+
+/**
+ * A light setting of WorkAdventure as the desktop app shows it: its label in the player's language, its bounds and,
+ * for a detail, the switch it depends on. The app draws them all, so a new one shows there without changing the app.
+ */
+export interface DesktopLightControl {
+    name: string;
+    group: "night" | "sky" | "shadows" | "other";
+    label: string;
+    kind: "number" | "switch" | "choice";
+    value: number | boolean | string;
+    min?: number;
+    max?: number;
+    step?: number;
+    choices?: { value: string; label: string }[];
+    /** Shown only while this switch is on. */
+    dependsOn?: string;
+}
 
 export interface DesktopEnvironmentState {
     appearance: DesktopAppearance;
@@ -84,6 +103,8 @@ export interface DesktopEnvironmentState {
     jungle: boolean;
     sounds: Record<DesktopSoundSetting, number>;
     canEditWeather: boolean;
+    /** Every light setting of WorkAdventure (night, sun and moon, shadows), in the order of its menu. */
+    lightControls: DesktopLightControl[];
     busy: boolean;
     error: string;
 }

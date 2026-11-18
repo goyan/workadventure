@@ -38,6 +38,7 @@ import { RETRO_PALETTES, UI_FONTS, retroPaletteStore, uiFontStore } from "../../
 
 import { jungleEnabledStore } from "../../Stores/JungleStore";
 import { createSoundPreview, type PreviewedSoundFamily } from "../../Components/Menu/SoundPreview";
+import { applyDesktopLightControl, readDesktopLightControls } from "./DesktopLightControls";
 
 const soundPreview = createSoundPreview();
 const previewFamilies: Partial<Record<DesktopSoundSetting, PreviewedSoundFamily>> = {
@@ -84,6 +85,13 @@ export const desktopEnvironmentRequestSchema = z.discriminatedUnion("setting", [
     z.object({
         setting: z.literal(DesktopSoundsSetting.Sounds),
         value: z.object({ sound: z.nativeEnum(DesktopSoundSetting), volume: z.number().min(0).max(1) }),
+    }),
+    z.object({
+        setting: z.literal("light"),
+        value: z.object({
+            name: z.string().min(1).max(100),
+            value: z.union([z.number().finite(), z.boolean(), z.string().max(100)]),
+        }),
     }),
 ]);
 
@@ -141,6 +149,7 @@ export function readDesktopEnvironment(busy = false, error = ""): DesktopEnviron
             scene.getMapEditorModeManager() &&
             scene.getGameMap().getWamFile(),
         ),
+        lightControls: readDesktopLightControls(),
         busy,
         error,
     };
@@ -228,6 +237,9 @@ export async function applyDesktopEnvironment(input: DesktopEnvironmentRequest):
             break;
         case DesktopSoundsSetting.Sounds:
             soundStores[request.value.sound].set(request.value.volume);
+            break;
+        case "light":
+            applyDesktopLightControl(request.value.name, request.value.value);
             break;
     }
 }
