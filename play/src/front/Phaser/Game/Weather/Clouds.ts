@@ -257,6 +257,20 @@ export function cloudZoomFade(screenScale: number, height = 0): number {
     return 1 - clamp01((screenScale - ZOOM_WHOLE * higher) / ((ZOOM_GONE - ZOOM_WHOLE) * higher));
 }
 
+/**
+ * Seen from high above, the clouds pass over the buildings too: the camera is over them, and a roof is no shelter
+ * from a cloud that drifts between it and the eye. Not at all while a map pixel takes 0.7 screen pixel or more (the
+ * rooms stay clear when one plays in them), fully from 0.45 down.
+ */
+const ZOOM_OVER_ROOFS_START = 0.7;
+const ZOOM_OVER_ROOFS_FULL = 0.45;
+
+/** How much of a cloud is drawn over what is not outdoors (0: none, 1: as over the ground), by the zoom on screen. */
+export function cloudsOverRoofs(screenScale: number): number {
+    if (!Number.isFinite(screenScale)) return 0;
+    return clamp01((ZOOM_OVER_ROOFS_START - screenScale) / (ZOOM_OVER_ROOFS_START - ZOOM_OVER_ROOFS_FULL));
+}
+
 /** Height of the clouds and longest shadow, in tiles. */
 const CLOUD_HEIGHT_TILES = 3;
 const MAX_SHADOW_TILES = 6;

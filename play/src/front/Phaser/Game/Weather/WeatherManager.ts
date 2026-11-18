@@ -60,6 +60,7 @@ import {
     cloudTint,
     cloudTones,
     cloudZoomFade,
+    cloudsOverRoofs,
     overcastVeil,
     rainPalette,
     shownCloudiness,
@@ -137,6 +138,8 @@ export class WeatherManager {
     private weatherShown = true;
     private cloudsShown = true;
     private cloudsHeight = 0;
+    /** What is not outdoors in the cells being drawn, and how much of the clouds passes over it (see cloudsOverRoofs). */
+    private roofs: { cells: Uint8Array; share: number } | undefined;
     /** The personal settings of the rain (WeatherStore), 1 each by default. */
     private readonly rainSettings = { amount: 1, lean: 1, splashes: 1, puddles: 1, clouds: 1 };
     /** The puddles, on the ground under the objects and the avatars. */
@@ -301,6 +304,9 @@ export class WeatherManager {
         const canvas = this.blocks.begin(view, size);
         // The walls once for all the layers: a cell is painted when its centre is outdoors.
         const outdoor = grid ? outdoorCells(canvas, size, veil) : new Uint8Array(canvas.columns * canvas.rows).fill(1);
+        // Seen from high above, the clouds pass over the buildings too (their shadows stay on the ground outdoors).
+        const overRoofs = grid ? cloudsOverRoofs(this.screenScale()) : 0;
+        this.roofs = overRoofs > 0 ? { cells: outdoor.map((cell) => (cell ? 0 : 1)), share: overRoofs } : undefined;
         if (showWeather && weather === WeatherType.Fog) {
             const density = fogStrengthNow * (night ? FOG_NIGHT_FACTOR : 1);
             this.graphics.fillStyle(FOG_COLOR, FOG_VEIL_ALPHA * density);
@@ -453,6 +459,13 @@ export class WeatherManager {
             this.blocks.paintField(field, tone, outdoor, NO_SHIFT, tint.color, (level) =>
                 cloudAlpha(level, tint.alpha),
             );
+            const { roofs } = this;
+            if (roofs) {
+                const over = cloudTint(color, body * roofs.share, night);
+                this.blocks.paintField(field, tone, roofs.cells, NO_SHIFT, over.color, (level) =>
+                    cloudAlpha(level, over.alpha),
+                );
+            }
         }
     }
 
