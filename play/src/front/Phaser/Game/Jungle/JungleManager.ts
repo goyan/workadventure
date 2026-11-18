@@ -26,6 +26,8 @@ export interface JungleSource {
     wanderMap(): WanderMap;
     tileSize(): number;
     now(): Date;
+    /** Whether the server runs the lions and the tigers of this map itself (the life of the land): no draw then. */
+    simulated?(): boolean;
 }
 
 /** What the calls need from the game: injected too. */
@@ -121,7 +123,7 @@ export class JungleManager {
     }
 
     private plan(): { animals: JungleAnimal[]; map: WanderMap } | undefined {
-        if (!this.enabled) return undefined;
+        if (!this.enabled || this.source.simulated?.() === true) return undefined;
         const trees: JungleTree[] = [];
         let marked = false;
         for (const entity of this.source.placedEntities()) {

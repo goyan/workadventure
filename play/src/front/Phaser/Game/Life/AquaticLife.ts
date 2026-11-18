@@ -5,11 +5,13 @@ export const FADE_MS = 300;
 
 /** The kinds the server tells: 0 a male fish, 1 a female fish, 2 a male dolphin, 3 a female dolphin. */
 export type AquaticKind = 0 | 1 | 2 | 3;
-const isKind = (kind: number): kind is AquaticKind => kind === 0 || kind === 1 || kind === 2 || kind === 3;
+export const isAquaticKind = (kind: number): kind is AquaticKind =>
+    kind === 0 || kind === 1 || kind === 2 || kind === 3;
 
 export interface ShownAnimal {
     id: number;
-    kind: AquaticKind;
+    /** As the server tells it: twice the number of its species, plus one for a female. */
+    kind: number;
     x: number;
     y: number;
     alpha: number;
@@ -18,7 +20,7 @@ export interface ShownAnimal {
 
 interface Entry {
     id: number;
-    kind: AquaticKind;
+    kind: number;
     fromX: number;
     fromY: number;
     toX: number;
@@ -43,10 +45,13 @@ export class AquaticLife {
     private readonly entries = new Map<number, Entry>();
     private started = false;
 
+    /** `accepts` tells the kinds this one shows: those of the water unless told otherwise (the land has its own). */
+    constructor(private readonly accepts: (kind: number) => boolean = isAquaticKind) {}
+
     public receive(animals: readonly { id: number; kind: number; x: number; y: number }[], now: number): void {
         const told = new Set<number>();
         for (const animal of animals) {
-            if (!isKind(animal.kind)) continue;
+            if (!this.accepts(animal.kind)) continue;
             told.add(animal.id);
             const entry = this.entries.get(animal.id);
             if (!entry || entry.goneAt !== undefined) {

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { untrack } from "svelte";
-    import { LIFE_BOUNDS } from "@workadventure/map-editor";
+    import { DEFAULT_LAND_LIFE_SETTINGS, LAND_LIFE_BOUNDS, LIFE_BOUNDS } from "@workadventure/map-editor";
     import type { LifeSettings } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
@@ -30,6 +30,43 @@
     let dolphinReproductionDelay = $state(start.dolphinReproductionDelay);
     let dolphinMaxLifespan = $state(start.dolphinMaxLifespan);
     let drinkInterval = $state(start.drinkInterval);
+    // The life of the land: absent from a map that never had it.
+    let landEnabled = $state(start.landEnabled ?? DEFAULT_LAND_LIFE_SETTINGS.landEnabled);
+    const LAND_DURATIONS = [
+        "antelopeReproductionDelay",
+        "antelopeMaxLifespan",
+        "landHuntInterval",
+        "landPredatorReproductionDelay",
+        "landPredatorMaxLifespan",
+    ] as const;
+    type LandDuration = (typeof LAND_DURATIONS)[number];
+    const landStart = (key: LandDuration): number => start[key] ?? DEFAULT_LAND_LIFE_SETTINGS[key];
+    let land = $state<Record<LandDuration, number>>({
+        antelopeReproductionDelay: landStart("antelopeReproductionDelay"),
+        antelopeMaxLifespan: landStart("antelopeMaxLifespan"),
+        landHuntInterval: landStart("landHuntInterval"),
+        landPredatorReproductionDelay: landStart("landPredatorReproductionDelay"),
+        landPredatorMaxLifespan: landStart("landPredatorMaxLifespan"),
+    });
+    let landPositions = $state<Record<LandDuration, number>>({
+        antelopeReproductionDelay: sliderOfDuration(
+            landStart("antelopeReproductionDelay"),
+            ...LAND_LIFE_BOUNDS.antelopeReproductionDelay,
+        ),
+        antelopeMaxLifespan: sliderOfDuration(
+            landStart("antelopeMaxLifespan"),
+            ...LAND_LIFE_BOUNDS.antelopeMaxLifespan,
+        ),
+        landHuntInterval: sliderOfDuration(landStart("landHuntInterval"), ...LAND_LIFE_BOUNDS.landHuntInterval),
+        landPredatorReproductionDelay: sliderOfDuration(
+            landStart("landPredatorReproductionDelay"),
+            ...LAND_LIFE_BOUNDS.landPredatorReproductionDelay,
+        ),
+        landPredatorMaxLifespan: sliderOfDuration(
+            landStart("landPredatorMaxLifespan"),
+            ...LAND_LIFE_BOUNDS.landPredatorMaxLifespan,
+        ),
+    });
 
     // The durations go from seconds to hours: their sliders move by steps that grow with them.
     let reproductionPosition = $state(sliderOfDuration(start.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
@@ -53,6 +90,8 @@
                 dolphinReproductionDelay,
                 dolphinMaxLifespan,
                 drinkInterval,
+                landEnabled,
+                ...land,
             },
         }).catch((error: unknown) => console.error("The life of the water could not be saved", error));
     }
@@ -190,3 +229,38 @@
     />
 </div>
 <p class="retro-hint m-0">{$LL.mapEditor.life.landAnimalsHint()}</p>
+
+<!-- The life of the land: antelopes, lions and tigers the server runs, whether the life of the water is on or not. -->
+<span class="retro-title mt-2">{$LL.mapEditor.life.land.title()}</span>
+<div data-testid="life-land-enabled">
+    <InputSwitch
+        id="terrain-life-land-enabled"
+        bind:value={landEnabled}
+        label={$LL.mapEditor.life.land.enabled()}
+        labelPosition="right"
+        onchange={save}
+    />
+</div>
+<p class="retro-hint m-0">{$LL.mapEditor.life.land.hint()}</p>
+{#if landEnabled}
+    {#each LAND_DURATIONS as key (key)}
+        <div data-testid="life-land-{key}">
+            <RangeSlider
+                id="terrain-life-land-{key}"
+                label={$LL.mapEditor.life.land[key]()}
+                unit=""
+                min={0}
+                max={LIFE_SLIDER_STEPS}
+                step={1}
+                bind:value={landPositions[key]}
+                valueFormatter={() => formatDuration(land[key])}
+                onchange={(position) => {
+                    const [shortest, longest] = LAND_LIFE_BOUNDS[key];
+                    land[key] = durationAtSlider(position, shortest, longest);
+                    save();
+                }}
+                buttonShape="square"
+            />
+        </div>
+    {/each}
+{/if}
