@@ -56,6 +56,9 @@ const SPRITES: Record<LandSpecies, { rows: string[]; palette: Palette }> = {
     tiger: { rows: CAT, palette: { b: "#f08a24", d: "#2b1a0c", w: "#fff1dc", e: "#1f1305", h: "#2b1a0c" } },
 };
 
+/** A pixel of these drawings is this many pixels of the map: an antelope is about as long as an avatar is tall. */
+const PIXEL = 2;
+
 export const landTextureKey = (species: LandSpecies): string => `land-life:${species}`;
 
 /** Makes the drawn texture of a species of the land, once for a scene. */
@@ -64,14 +67,14 @@ export function ensureLandTexture(scene: Pick<Phaser.Scene, "textures">, species
     if (scene.textures.exists(key)) return key;
     const { rows, palette } = SPRITES[species];
     const width = Math.max(...rows.map((row) => row.length));
-    const texture = scene.textures.createCanvas(key, width, rows.length);
+    const texture = scene.textures.createCanvas(key, width * PIXEL, rows.length * PIXEL);
     if (!texture) return key;
     const context = texture.getContext();
     rows.forEach((row, y) => {
         [...row].forEach((char, x) => {
             if (char !== "b" && char !== "d" && char !== "w" && char !== "e" && char !== "h") return;
             context.fillStyle = palette[char];
-            context.fillRect(x, y, 1, 1);
+            context.fillRect(x * PIXEL, y * PIXEL, PIXEL, PIXEL);
         });
     });
     texture.refresh();
