@@ -58,6 +58,7 @@ describe("rainLean", () => {
 });
 
 describe("rainDrops", () => {
+    const keyOf = (drop: { x: number; y: number; layer: number }) => `${drop.layer}|${drop.x}|${drop.y}`;
     const inView = (drop: { x: number; y: number }) =>
         drop.x >= 0 && drop.x < view.width && drop.y >= 0 && drop.y < view.height;
 
@@ -75,7 +76,9 @@ describe("rainDrops", () => {
     it("keeps the drops of a lighter rain where they are when it gets harder", () => {
         const light = rainDrops(EPOCH, view, 0.3, 0.2);
         const harder = rainDrops(EPOCH, view, 0.6, 0.2);
-        for (const drop of light) expect(harder).toContainEqual(drop);
+        // Compared by a key: thousands of drops, a deep comparison of each against all is too slow.
+        const kept = new Set(harder.map(keyOf));
+        expect(light.every((drop) => kept.has(keyOf(drop)))).toBe(true);
     });
 
     it("moves each drop a little from one image to the next, over a long fall", () => {
@@ -104,15 +107,18 @@ describe("rainDrops", () => {
         const before = rainDrops(EPOCH, view, 1, 0.5);
         const after = rainDrops(EPOCH, view, 1, 0.51);
         // The same drops at the same height, each a few pixels aside at most (the cells looked at may differ).
+        const byHeight = new Map(after.map((drop) => [`${drop.layer}|${drop.y}`, drop.x]));
         for (const drop of before.filter((one) => one.x > 100 && one.x < 700)) {
-            expect(after.some((other) => other.y === drop.y && Math.abs(other.x - drop.x) < 4)).toBe(true);
+            const moved = byHeight.get(`${drop.layer}|${drop.y}`);
+            expect(moved !== undefined && Math.abs(moved - drop.x) < 4).toBe(true);
         }
     });
 
     it("keeps the drops fixed to the map when the camera moves", () => {
         const original = rainDrops(EPOCH, view, 0.7, 0.3).filter(inView);
         const scrolled = rainDrops(EPOCH, { ...view, x: 64 }, 0.7, 0.3).filter(inView);
-        for (const drop of scrolled) expect(original).toContainEqual(drop);
+        const fixed = new Set(original.map(keyOf));
+        expect(scrolled.every((drop) => fixed.has(keyOf(drop)))).toBe(true);
     });
 
     it("rains harder under the thick of a cloud than in a gap", () => {
