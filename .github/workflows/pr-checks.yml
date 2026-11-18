@@ -1,7 +1,7 @@
 # Vérifications d'une pull request vers `infogene` (play, back et contrats partagés).
 # Reprend les étapes de l'ancien « Continuous Integration Play » d'upstream : types, svelte-check, lint, formatage, tests.
 #
-# Trois jobs en parallèle (types et formats, lint, tests), résumés par le contrôle exigé « Contrôles play », partagent l'installation `.github/actions/setup-play`
+# Trois jobs en parallèle (types et formats, lint, tests) et le contrôle de la note de nouveautés, résumés par le contrôle exigé « Contrôles play », partagent l'installation `.github/actions/setup-play`
 # (`node_modules` en cache). Le lint garde un cache ESLint entre les exécutions : seuls les fichiers modifiés sont relus.
 # Les exécutions sur `infogene` (après fusion) remplissent ces caches : une PR ne peut lire que ceux de sa branche de base.
 # Limite du cache ESLint : les règles typées d'un fichier inchangé ne sont pas réévaluées quand un type importé change ;
@@ -117,16 +117,36 @@ jobs:
         run: npm test -- --run
         working-directory: play
 
-  # Seul contrôle exigé par la protection de `infogene` : vert seulement si les trois jobs le sont.
+  # Une pull request doit paraître dans « Nouveautés » (Outils → Nouveautés), dont les textes sont les sujets des
+  # commits `feat|fix(front|carte): …` : au moins un de ses commits doit en être un, ou l'un d'eux doit dire qu'il n'y
+  # a rien à annoncer (ligne « Nouveautes: aucune » dans son message). Les notes à paraître sont dans le résumé de
+  # l'exécution. Le checkout d'une pull request est sa fusion avec la base : HEAD^1 est la base, HEAD^2 la branche.
+  notes:
+    name: Note de nouveautés
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Notes à paraître dans « Nouveautés »
+        run: node play/scripts/check-release-note.mjs "HEAD^1..HEAD^2"
+
+  # Seul contrôle exigé par la protection de `infogene` : vert seulement si les quatre jobs le sont (la note de
+  # nouveautés ne se contrôle que sur une pull request : ignorée après fusion).
   checks:
     name: Contrôles play
     if: always()
-    needs: [types, lint, tests]
+    needs: [types, lint, tests, notes]
     runs-on: ubuntu-latest
     steps:
-      - name: Résultat des trois jobs
+      - name: Résultat des jobs
         run: |
-          echo "types=${{ needs.types.result }} lint=${{ needs.lint.result }} tests=${{ needs.tests.result }}"
+          echo "types=${{ needs.types.result }} lint=${{ needs.lint.result }} tests=${{ needs.tests.result }} notes=${{ needs.notes.result }}"
           test "${{ needs.types.result }}" = success
           test "${{ needs.lint.result }}" = success
           test "${{ needs.tests.result }}" = success
+          test "${{ needs.notes.result }}" = success || test "${{ github.event_name }}/${{ needs.notes.result }}" = push/skipped
