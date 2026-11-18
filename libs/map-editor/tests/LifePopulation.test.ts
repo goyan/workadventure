@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Animal } from "../src/Life/Animal";
-import { emptyPopulation, HUNT_GIVE_UP_MS, LIFE_STEP_MS, MAX_ANIMALS, stepPopulation } from "../src/Life/Population";
+import {
+    emptyPopulation,
+    lifeCensus,
+    HUNT_GIVE_UP_MS,
+    LIFE_STEP_MS,
+    MAX_ANIMALS,
+    stepPopulation,
+} from "../src/Life/Population";
 import type { Population } from "../src/Life/Population";
 import { waterBodiesOf } from "../src/Life/WaterBodies";
 import type { WaterGrid } from "../src/Terrain/WaterGrid";
@@ -200,5 +207,51 @@ describe("stepPopulation", () => {
         const population = seeded([fish(1, "male", 0, 0, 1e12), fish(2, "female", 1, 0, 1e12)]);
         run(population, gridOf(rows("ssssssss.ssssssss", 5)), 2000);
         expect(population.animals).toHaveLength(2);
+    });
+
+    it("tells what happened during a step: arrivals, births, and deaths by their cause", () => {
+        const grid = pond();
+        const bodies = waterBodiesOf(grid);
+        const arrived = stepPopulation(emptyPopulation(), grid, bodies, settings, LIFE_STEP_MS, 0, scripted());
+        expect(arrived).toEqual({ arrivals: 2, births: 0, diedOfAge: 0, eaten: 0, diedDry: 0 });
+
+        const old = seeded([{ ...fish(1, "male", 0, 0, 1e12), lifespanMs: 1000 }, fish(2, "female", 5, 3, 1e12)]);
+        expect(stepPopulation(old, grid, bodies, settings, LIFE_STEP_MS, 1000, scripted())).toMatchObject({
+            diedOfAge: 1,
+            eaten: 0,
+            diedDry: 0,
+        });
+
+        const couple = seeded([fish(1, "male", 2, 2), fish(2, "female", 2, 2)]);
+        const born = stepPopulation(couple, grid, bodies, settings, LIFE_STEP_MS, 0, scripted());
+        expect(born.births).toBeGreaterThanOrEqual(2);
+        expect(born.births).toBe(couple.animals.length - 2);
+
+        const dolphin: Animal = { ...fish(1, "male", 2, 2), kind: "dolphin", sex: undefined };
+        const hunted = seeded([dolphin, fish(2, "male", 2, 2, 1e12), fish(3, "male", 15, 10, 1e12)]);
+        const deep = lake();
+        expect(stepPopulation(hunted, deep, waterBodiesOf(deep), settings, LIFE_STEP_MS, 0, scripted()).eaten).toBe(1);
+
+        const stranded = seeded([{ ...fish(1, "male", 0, 0, 1e12), dryAt: 0 }]);
+        const dry = gridOf(rows("........", 5));
+        expect(
+            stepPopulation(stranded, dry, waterBodiesOf(dry), settings, LIFE_STEP_MS, 5000, scripted()).diedDry,
+        ).toBe(1);
+    });
+
+    it("counts the waters where fish can live, those where some do, and how many fish they can hold", () => {
+        // Two ponds of 40 cells (5 fish each) and a puddle too small for fish.
+        const grid = gridOf(rows("ssssssss.ssssssss.sss", 5));
+        const population = seeded([fish(1, "male", 0, 0, 1e12), fish(2, "female", 1, 0, 1e12)]);
+        expect(lifeCensus(population, waterBodiesOf(grid))).toEqual({
+            habitableBodies: 2,
+            populatedBodies: 1,
+            capacity: 10,
+        });
+        expect(lifeCensus(emptyPopulation(), waterBodiesOf(gridOf(rows("...", 3))))).toEqual({
+            habitableBodies: 0,
+            populatedBodies: 0,
+            capacity: 0,
+        });
     });
 });

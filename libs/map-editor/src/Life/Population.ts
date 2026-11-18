@@ -39,6 +39,46 @@ export interface Population {
     seeded: boolean;
 }
 
+/** What happened to the animals of a room during a step (or summed over many). */
+export interface LifeTally {
+    /** Fish and dolphins that came by themselves into an empty water. */
+    arrivals: number;
+    births: number;
+    diedOfAge: number;
+    eaten: number;
+    /** Left without water. */
+    diedDry: number;
+}
+export const emptyLifeTally = (): LifeTally => ({ arrivals: 0, births: 0, diedOfAge: 0, eaten: 0, diedDry: 0 });
+
+/** The waters of a room as the life sees them. */
+export interface LifeCensus {
+    /** Bodies of water big enough for fish. */
+    habitableBodies: number;
+    /** Those where fish live now. */
+    populatedBodies: number;
+    /** How many fish the habitable bodies can hold together (never more than the room holds). */
+    capacity: number;
+}
+
+const fishCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_FISH));
+
+export function lifeCensus(population: Population, bodies: WaterBodies): LifeCensus {
+    const populated = new Set<number>();
+    for (const animal of population.animals) {
+        if (animal.kind === "fish") populated.add(bodyOf(animal, bodies));
+    }
+    const census: LifeCensus = { habitableBodies: 0, populatedBodies: 0, capacity: 0 };
+    for (let body = 1; body < bodies.sizes.length; body++) {
+        if (bodies.sizes[body].cells < MIN_BODY_CELLS) continue;
+        census.habitableBodies++;
+        if (populated.has(body)) census.populatedBodies++;
+        census.capacity += fishCapOf(bodies.sizes[body].cells);
+    }
+    census.capacity = Math.min(census.capacity, MAX_ANIMALS);
+    return census;
+}
+
 export const emptyPopulation = (): Population => ({ animals: [], nextId: 1, seeded: false });
 
 const bodyOf = (animal: Animal, bodies: WaterBodies): number => bodies.bodyAt(cellAt(animal.x), cellAt(animal.y));
@@ -65,12 +105,16 @@ export function stepPopulation(
     dtMs: number,
     now: number,
     random: () => number,
-): void {
+): LifeTally {
+    const tally = emptyLifeTally();
     const maxSpeed = settings.maxSpeed * TILE_PX;
     const delayMs = settings.reproductionDelay * 1000;
     const dead = new Set<Animal>();
     for (const animal of population.animals) {
-        if (animal.kind === "fish" && now - animal.bornAt >= animal.lifespanMs) dead.add(animal);
+        if (animal.kind === "fish" && now - animal.bornAt >= animal.lifespanMs) {
+            dead.add(animal);
+            tally.diedOfAge++;
+        }
     }
 
     // Who lives in which body, to look for a mate or a prey among neighbours only.
@@ -115,6 +159,7 @@ export function stepPopulation(
         if (!prey) continue;
         if (distance(dolphin, prey) < REACH_PX) {
             dead.add(prey);
+            tally.eaten++;
             dolphin.huntSince = undefined;
             dolphin.readyAt = now + settings.huntInterval * 1000;
             dolphin.targetX = dolphin.targetY = undefined;
@@ -126,7 +171,7 @@ export function stepPopulation(
     const born: Animal[] = [];
     for (const [body, list] of fishByBody) {
         if (body === 0) continue;
-        const cap = Math.max(2, Math.floor(bodies.sizes[body].cells / CELLS_PER_FISH));
+        const cap = fishCapOf(bodies.sizes[body].cells);
         let living = list.filter((fish) => !dead.has(fish)).length;
         for (const male of list) {
             if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
@@ -148,6 +193,7 @@ export function stepPopulation(
                 );
             }
             living += litter;
+            tally.births += litter;
             // With or without young (a full body), both wait a whole delay again; so do the young.
             male.readyAt = female.readyAt = now + delayMs;
             for (const young of born.slice(born.length - litter)) young.readyAt = now + delayMs;
@@ -159,6 +205,7 @@ export function stepPopulation(
         if (dead.has(animal)) continue;
         if (!swim(animal, bodies, grid, maxSpeed, dtMs, now, random)) {
             dead.add(animal);
+            tally.diedDry++;
         } else if (pursuing.has(animal) && animal.targetX === undefined) {
             // Stopped on its straight way to its mate or its prey: it goes round by wandering a while.
             animal.wanderUntil = now + DETOUR_MS;
@@ -166,7 +213,10 @@ export function stepPopulation(
     }
     population.animals = population.animals.filter((animal) => !dead.has(animal)).concat(born);
 
+    const before = population.animals.length;
     spawn(population, bodies, settings, dtMs, now, random);
+    tally.arrivals = population.animals.length - before;
+    return tally;
 }
 
 function newFish(

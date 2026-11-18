@@ -804,6 +804,24 @@ message TerrainWaterMessage {
 // of them each time (a few bytes each, 300 at most). A new id is a birth, a missing one a death.
 message AquaticLifeMessage {
   repeated AquaticAnimalMessage animals = 1;
+  // What happened since the life of the map began, and its waters: for the dashboard of the life tool.
+  optional AquaticLifeStatsMessage stats = 2;
+}
+
+// Totals since `since` (milliseconds, the clock of the server), and the waters of the room as the life sees them.
+message AquaticLifeStatsMessage {
+  double since = 1;
+  // Animals that came by themselves into an empty water.
+  uint32 arrivals = 2;
+  uint32 births = 3;
+  uint32 diedOfAge = 4;
+  uint32 eaten = 5;
+  // Left without water.
+  uint32 diedDry = 6;
+  // Bodies of water big enough for fish, those where fish live, and how many fish they can hold together.
+  uint32 habitableBodies = 7;
+  uint32 populatedBodies = 8;
+  uint32 capacity = 9;
 }
 
 message AquaticAnimalMessage {

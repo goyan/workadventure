@@ -174,6 +174,45 @@ describe("AquaticLifeManager", () => {
         }
     });
 
+    it("tells with the animals what happened since the life began, and the waters they have", () => {
+        const { manager, sent, steps } = createHarness();
+        manager.mapChanged();
+        steps(2);
+        expect(sent[0].stats).toEqual({
+            since: 1_000_000,
+            arrivals: 2,
+            births: 0,
+            diedOfAge: 0,
+            eaten: 0,
+            diedDry: 0,
+            habitableBodies: 1,
+            populatedBodies: 1,
+            // A hundred cells: twelve fish.
+            capacity: 12,
+        });
+        expect(manager.snapshot()?.stats).toEqual(sent[0].stats);
+    });
+
+    it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        first.steps(4);
+        first.manager.stop();
+        const second = createHarness({ saved: first.saved });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        second.clock.now += 60_000;
+        second.steps(2);
+        expect(second.sent.at(-1)?.stats).toMatchObject({ since: 1_000_000, arrivals: 2 });
+
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = false;
+        second.manager.mapChanged();
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = true;
+        second.manager.mapChanged();
+        second.steps(2);
+        expect(second.sent.at(-1)?.stats).toMatchObject({ since: second.clock.now - 1000, arrivals: 2 });
+    });
+
     it("keeps the animals when the grid is replaced, and lets those left without water die after five seconds", () => {
         const { manager, sent, steps, water } = createHarness();
         manager.mapChanged();

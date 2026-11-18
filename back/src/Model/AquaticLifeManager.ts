@@ -1,12 +1,14 @@
 import {
     Animal,
     DEFAULT_LIFE_SETTINGS,
+    emptyLifeTally,
     emptyPopulation,
+    lifeCensus,
     LIFE_STEP_MS,
     stepPopulation,
     waterBodiesOf,
 } from "@workadventure/map-editor";
-import type { Population, WaterBodies, WaterGrid } from "@workadventure/map-editor";
+import type { LifeCensus, LifeTally, Population, WaterBodies, WaterGrid } from "@workadventure/map-editor";
 import type { AquaticLifeMessage } from "@workadventure/messages";
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
@@ -22,6 +24,17 @@ const STEPS_PER_BODIES = 2;
 const SavedLife = z.object({
     animals: z.array(Animal).max(1000),
     nextId: z.number().int().min(1),
+    // Absent from a state saved before the totals were kept.
+    since: z.number().finite().optional(),
+    totals: z
+        .object({
+            arrivals: z.number().int().min(0),
+            births: z.number().int().min(0),
+            diedOfAge: z.number().int().min(0),
+            eaten: z.number().int().min(0),
+            diedDry: z.number().int().min(0),
+        })
+        .optional(),
 });
 
 /** What the life needs of the water of the room: its grid, and a number that changes whenever the water does. */
@@ -49,6 +62,10 @@ export class AquaticLifeManager {
     private bodiesGrid: WaterGrid | undefined;
     private bodiesVersion = -1;
     private bodiesStep = -Infinity;
+    /** What happened since the life of the map began (`since`), for its dashboard. */
+    private totals: LifeTally = emptyLifeTally();
+    private since: number | undefined;
+    private census: LifeCensus = { habitableBodies: 0, populatedBodies: 0, capacity: 0 };
     /** Whether the room was last told some animals: it is told once more when none is left. */
     private toldSome = false;
 
@@ -71,6 +88,8 @@ export class AquaticLifeManager {
             if (!fields.state) return;
             const saved = SavedLife.parse(JSON.parse(fields.state));
             this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true };
+            this.totals = saved.totals ?? emptyLifeTally();
+            this.since = saved.since;
         } catch (error) {
             console.error("Could not restore the life of the water of the map", error);
         }
@@ -92,6 +111,8 @@ export class AquaticLifeManager {
             // Turned off, the water is emptied: turned on again, it starts over.
             const had = this.population.animals.length > 0;
             this.population = emptyPopulation();
+            this.totals = emptyLifeTally();
+            this.since = undefined;
             this.clearTimer();
             if (had || this.toldSome) {
                 this.tell();
@@ -137,16 +158,25 @@ export class AquaticLifeManager {
             this.bodiesVersion = version;
             this.bodiesStep = this.steps;
         }
-        stepPopulation(
+        const now = this.now();
+        this.since ??= now;
+        const tally = stepPopulation(
             this.population,
             grid,
             this.bodies,
             { ...DEFAULT_LIFE_SETTINGS, ...settings },
             LIFE_STEP_MS,
-            this.now(),
+            now,
             this.random,
         );
+        this.totals.arrivals += tally.arrivals;
+        this.totals.births += tally.births;
+        this.totals.diedOfAge += tally.diedOfAge;
+        this.totals.eaten += tally.eaten;
+        this.totals.diedDry += tally.diedDry;
         this.steps++;
+        // Once a second, with the message: the waters as the life sees them.
+        if (this.steps % STEPS_PER_MESSAGE === 0) this.census = lifeCensus(this.population, this.bodies);
         if (this.steps % STEPS_PER_MESSAGE === 0) this.tell();
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
     }
@@ -164,6 +194,7 @@ export class AquaticLifeManager {
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
             })),
+            stats: { since: this.since ?? this.now(), ...this.totals, ...this.census },
         };
     }
 
@@ -177,7 +208,12 @@ export class AquaticLifeManager {
 
     private save(emptied = false): void {
         if (!this.store || (this.population.animals.length === 0 && !emptied)) return;
-        const state = JSON.stringify({ animals: this.population.animals, nextId: this.population.nextId });
+        const state = JSON.stringify({
+            animals: this.population.animals,
+            nextId: this.population.nextId,
+            since: this.since,
+            totals: this.totals,
+        });
         this.store.repository
             .saveVariable(this.hashKey(), "state", state)
             .catch((error) => console.error("Could not save the life of the water of the map", error));
