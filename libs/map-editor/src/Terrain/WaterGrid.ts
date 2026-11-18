@@ -24,10 +24,17 @@ const DRY_PX = 0.01;
  */
 const FLOW_SHARE = 0.2;
 /**
- * How far around its foot a sink takes water when it says nothing, in cells (a tile and a half): it empties what is
- * next to it, and the water further away has to run to it. A sink never dries a lake from afar.
+ * How far around its foot a sink takes water first when it says nothing, in cells (a tile and a half): it empties
+ * what is next to it, then draws down the water joined to it (its basin) when it asks for more.
  */
 const SINK_RADIUS_CELLS = 3;
+/**
+ * The most cells of its basin a sink lowers in one step: about ninety cells around it in open water. The water
+ * further away has to run to it.
+ */
+const BASIN_CELLS = 16_384;
+/** How many times the search of what each cell of a basin gives is halved. */
+const BASIN_RATE_TURNS = 24;
 /** The largest radius of a source or a sink, in cells (ten tiles), and the cells of the disc it then covers. */
 const MAX_RADIUS_CELLS = 20;
 const MAX_DISC_CELLS = (2 * MAX_RADIUS_CELLS + 1) ** 2;
@@ -56,6 +63,11 @@ export const MAX_FLOW_STEPS = 16;
 const FAR_STRIDES = [4, 16];
 /** A cell with less water than this breaks a stretch: a film over a sill does not join two lakes. */
 const FAR_MIN_DEPTH_PX = 2;
+/**
+ * A cell with this much water joins the basin of a sink: half the film the sink leaves in each cell, so that the
+ * water it left, which goes on running to it, still joins it to the rest of the lake at its next step.
+ */
+const BASIN_JOIN_PX = FAR_MIN_DEPTH_PX / 2;
 /** The share of a difference of level two distant cells of a stretch exchange in a step. */
 const FAR_SHARE = 0.25;
 /** How far around the disc of a sink the water moves again during a step, in cells: eight tiles. */
@@ -173,8 +185,15 @@ export class WaterGrid {
     private readonly closed: Uint8Array;
     /** For the search of a sink: the cells of its queue, and the search that last saw each cell. */
     private readonly queue: Int32Array;
+    /** The cells of the basin of a sink, while it is lowered. */
+    private readonly basin: Int32Array;
     private readonly seen: Uint32Array;
     private search = 0;
+    /** For each cell of the basin of a sink: the water it holds over the foot of the sink, and its weight. */
+    private readonly basinAbove: Float32Array;
+    private readonly basinWeights: Float32Array;
+    /** The weights of the cells of a basin that could still give at the rate last tried. */
+    private basinFree = 0;
     /** For the levelling over long distances: the stretch of water each cell belongs to along a line. */
     private stretch = new Int32Array(0);
     private farTurn = false;
@@ -194,6 +213,9 @@ export class WaterGrid {
         this.depth = new Float32Array(size);
         this.next = new Float32Array(size);
         this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
+        this.basin = new Int32Array(Math.min(size, BASIN_CELLS));
+        this.basinAbove = new Float32Array(this.basin.length);
+        this.basinWeights = new Float32Array(this.basin.length);
         this.seen = new Uint32Array(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
@@ -298,7 +320,9 @@ export class WaterGrid {
                 tally.moved = true;
             } else {
                 const radius = radiusOf(flow.radius, SINK_RADIUS_CELLS);
-                const taken = this.drain(index, -flow.px, radius);
+                let taken = this.drain(index, -flow.px, radius);
+                // Its disc did not hold what it asks: the rest comes from the water joined to it.
+                if (taken < -flow.px) taken += this.lowerBasin(index, -flow.px - taken, radius);
                 tally.sinksPx += taken;
                 // A sink with nothing to take does not keep a grid at rest awake.
                 if (taken > 0) tally.moved = true;
@@ -533,6 +557,111 @@ export class WaterGrid {
                 this.seen[neighbour] = this.search;
                 queue[tail++] = neighbour;
             }
+        }
+        return taken;
+    }
+
+    /**
+     * Takes up to `wanted` pixels of water for a sink from its basin: the water joined to its disc by an unbroken
+     * stretch of water (no wall, no dry ground, not even a film of water), nearest first and BASIN_CELLS cells at
+     * most. Each cell gives the more the nearer it is to the sink (in proportion to 1 / (1 + its distance in cells)):
+     * the water goes down in a cone around the sink, so its surface slopes towards the sink all over the basin, and
+     * the current carries what floats to it. None is taken under the foot of the sink (the water lower than a sink
+     * never runs to it), and beyond its disc each cell keeps a film of water. A sink would otherwise wait for the water to creep in from cell to cell, and take a
+     * fraction of what it asks. Returns what it took.
+     */
+    private lowerBasin(start: number, wanted: number, radius: number): number {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        const ground = this.ground;
+        const cells = this.basin;
+        if (cells.length === 0 || wanted <= 0) return 0;
+        this.search++;
+        if (this.search === 0xffffffff) {
+            this.seen.fill(0);
+            this.search = 1;
+        }
+        const startColumn = start % width;
+        const startRow = (start - startColumn) / width;
+        const foot = ground[start];
+        const above = this.basinAbove;
+        const weights = this.basinWeights;
+        let count = 0;
+        let held = 0;
+        // The most a cell of weight 1 could give: over it every cell gives all it holds.
+        let steepest = 0;
+        cells[count++] = start;
+        this.seen[start] = this.search;
+        for (let head = 0; head < count; head++) {
+            const index = cells[head];
+            const surface = ground[index] + depth[index];
+            const column = index % width;
+            const row = (index - column) / width;
+            // The nearer the sink, the more a cell gives: the water goes down in a cone around the sink, as around
+            // a well, and its surface slopes towards the sink from afar.
+            const far = Math.hypot(column - startColumn, row - startRow);
+            const weight = 1 / (1 + far);
+            // Beyond its disc the sink leaves the film that keeps a stretch of water whole: a sink that asks for a
+            // lot digs a hole around itself, it does not cut itself off the rest of the lake.
+            const kept = far > radius ? FAR_MIN_DEPTH_PX : 0;
+            const over = Math.max(0, Math.min(depth[index] - kept, surface - foot));
+            above[head] = over;
+            weights[head] = weight;
+            held += over;
+            if (over / weight > steepest) steepest = over / weight;
+            for (let side = 0; side < 4 && count < cells.length; side++) {
+                const inside =
+                    side === 0 ? column + 1 < width : side === 1 ? column > 0 : side === 2 ? row + 1 < height : row > 0;
+                if (!inside || this.closed[index] & (1 << side)) continue;
+                const neighbour = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
+                if (this.seen[neighbour] === this.search) continue;
+                const away = (neighbour % width) - startColumn;
+                const down = Math.floor(neighbour / width) - startRow;
+                // The disc of the sink was just emptied: the search goes through it, wet or dry. Beyond it, through
+                // the water that stands over the foot of the sink only.
+                if (away * away + down * down > radius * radius) {
+                    if (depth[neighbour] < BASIN_JOIN_PX) continue;
+                    if (ground[neighbour] + depth[neighbour] <= foot + LEVEL_PX) continue;
+                }
+                this.seen[neighbour] = this.search;
+                cells[count++] = neighbour;
+            }
+        }
+        if (held <= 0) return 0;
+        // Each cell gives in proportion to its weight, never more than it holds over the foot of the sink: `rate`
+        // is the water a cell of weight 1 gives. All of it when the sink asks for all there is.
+        let rate = Infinity;
+        if (held > wanted) {
+            const given = (at: number): number => {
+                let sum = 0;
+                let free = 0;
+                for (let place = 0; place < count; place++) {
+                    const share = at * weights[place];
+                    if (share < above[place]) {
+                        sum += share;
+                        free += weights[place];
+                    } else sum += above[place];
+                }
+                this.basinFree = free;
+                return sum;
+            };
+            let low = 0;
+            let high = steepest;
+            for (let turn = 0; turn < BASIN_RATE_TURNS; turn++) {
+                const middle = (low + high) / 2;
+                if (given(middle) > wanted) high = middle;
+                else low = middle;
+            }
+            // What is still missing at this rate, shared between the cells that can still give.
+            const missing = wanted - given(low);
+            rate = this.basinFree > 0 ? low + missing / this.basinFree : low;
+        }
+        let taken = 0;
+        for (let place = 0; place < count; place++) {
+            const out = Math.min(above[place], rate * weights[place]);
+            if (out <= 0) continue;
+            depth[cells[place]] -= out;
+            taken += out;
         }
         return taken;
     }
