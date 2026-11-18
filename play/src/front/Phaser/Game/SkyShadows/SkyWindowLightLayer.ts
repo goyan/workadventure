@@ -11,6 +11,8 @@ const MAX_TEXELS = 2048;
 export interface WindowLightPatch {
     polygon: readonly Point[];
     room: number;
+    /** How much of the light is left there, after the panes it went through (1, all of it, when absent). */
+    strength?: number;
 }
 
 /**
@@ -82,6 +84,7 @@ export class SkyWindowLightLayer {
                 else context.lineTo(x, y);
             });
             context.closePath();
+            context.globalAlpha = Math.min(1, Math.max(0, patch.strength ?? 1));
             context.fill();
             context.restore();
         }

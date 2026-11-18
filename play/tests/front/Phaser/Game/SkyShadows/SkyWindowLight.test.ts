@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { MapLayerModel } from "../../../../../src/front/Phaser/Game/MapEditor/MapLayer/MapLayerModel";
-import { windowLightPatch, windowOpenings } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyWindowLight";
+import {
+    GLASS_KEPT_LIGHT,
+    interiorOpenings,
+    lightThroughPanes,
+    windowLightPatch,
+    windowOpenings,
+} from "../../../../../src/front/Phaser/Game/SkyShadows/SkyWindowLight";
 import type { Point } from "../../../../../src/front/Phaser/Game/SkyShadows/SkyShadowGeometry";
 
 /** Whether a point is inside a polygon (ray casting). */
@@ -117,5 +123,74 @@ describe("windowLightPatch", () => {
         if (!patch) return;
         expect(inside(patch, 80, 128 + (opening.sill + opening.top) / 2 / Math.tan(Math.PI / 6))).toBe(true);
         expect(windowLightPatch(opening, southSun)).toBeUndefined();
+    });
+});
+
+describe("the light of the sky through two windows", () => {
+    // The outdoors south of the wall of the line 8, a corridor (room 0) north of it, then the wall of the line 4, then
+    // a room (room 1). Tall glass on the outside, a window in the inner wall, right behind it.
+    function house(innerWindowX = 2) {
+        const model = new MapLayerModel();
+        for (const x of [1, 2, 3, 4, 5, 6]) {
+            // Walls 3 tiles high: the glass can be tall.
+            model.setWall("h", x, 8, "blanc", 3);
+            model.setWall("h", x, 4, "blanc", 3);
+        }
+        model.setWindow(2, 8, 3);
+        model.setWindow(innerWindowX, 4, 2);
+        const roomAt = (_x: number, y: number): number | undefined =>
+            y < 128 ? 1 : y >= 160 && y < 256 ? 0 : undefined;
+        const isOutdoorAt = (_x: number, y: number): boolean => y >= 288;
+        return {
+            openings: windowOpenings(model, roomAt, isOutdoorAt),
+            interior: interiorOpenings(model, roomAt),
+        };
+    }
+    const lowSouthSun = { azimuth: 180, elevation: 20, shadowLength: { min: 0, max: 256 } };
+
+    it("finds the windows between two rooms, with the room on each side", () => {
+        const { openings, interior } = house();
+        expect(openings).toHaveLength(1);
+        expect(interior).toHaveLength(1);
+        expect(interior[0]).toMatchObject({ x: 64, width: 32, footY: 160, north: 1, south: 0 });
+    });
+
+    it("carries a low sun on into the room behind the inner window, a little weaker for the glass", () => {
+        const { openings, interior } = house();
+        const patches = lightThroughPanes(openings, interior, lowSouthSun);
+
+        expect(patches.map((patch) => [patch.room, patch.strength])).toEqual([
+            [0, 1],
+            [1, GLASS_KEPT_LIGHT],
+        ]);
+        // On the floor of the room, behind the inner window, where a ray through both panes lands.
+        expect(inside(patches[1].polygon, 80, 90)).toBe(true);
+        // Never wider than the light that came in through the first pane.
+        expect(inside(patches[0].polygon, 80, 90)).toBe(true);
+        expect(inside(patches[1].polygon, 40, 90)).toBe(false);
+    });
+
+    it("stops a high sun in the corridor: its light falls short of the inner window", () => {
+        const { openings, interior } = house();
+        const patches = lightThroughPanes(openings, interior, { ...lowSouthSun, elevation: 60 });
+
+        expect(patches.map((patch) => patch.room)).toEqual([0]);
+    });
+
+    it("lets nothing through an inner window the light of the first pane does not reach", () => {
+        const { openings, interior } = house(6);
+        const patches = lightThroughPanes(openings, interior, lowSouthSun);
+
+        expect(patches.map((patch) => patch.room)).toEqual([0]);
+    });
+
+    it("lets nothing in at all from a sun on the other side of the house", () => {
+        const { openings, interior } = house();
+        expect(lightThroughPanes(openings, interior, { ...lowSouthSun, azimuth: 0 })).toEqual([]);
+    });
+
+    it("goes through as many panes as it is allowed, no more", () => {
+        const { openings, interior } = house();
+        expect(lightThroughPanes(openings, interior, lowSouthSun, 1).map((patch) => patch.room)).toEqual([0]);
     });
 });
