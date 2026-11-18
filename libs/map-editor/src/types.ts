@@ -973,8 +973,8 @@ export const DEFAULT_LAND_LIFE_SETTINGS = {
     landEnabled: false,
     antelopeReproductionDelay: 120,
     antelopeMaxLifespan: 900,
-    landHuntInterval: 120,
-    landPredatorReproductionDelay: 600,
+    landHuntInterval: 60,
+    landPredatorReproductionDelay: 300,
     landPredatorMaxLifespan: 3600,
 } as const;
 export const LAND_LIFE_BOUNDS = {

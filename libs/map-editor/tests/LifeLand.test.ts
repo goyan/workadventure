@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Animal } from "../src/Life/Animal";
 import { landPlacesOf } from "../src/Life/LandPlaces";
-import { LIFE_STEP_MS, speciesCensus, STARVE_HUNTS, stepPopulation } from "../src/Life/Population";
+import {
+    ANTELOPES_PER_PREDATOR,
+    LIFE_STEP_MS,
+    speciesCensus,
+    STARVE_HUNTS,
+    stepPopulation,
+} from "../src/Life/Population";
 import type { LifeTally, Population, SpeciesTallies } from "../src/Life/Population";
 import { waterBodiesOf } from "../src/Life/WaterBodies";
 import type { LifeSettings } from "../src/types";
@@ -179,7 +185,8 @@ describe("the life of the land", () => {
             // The fish stays in the deep water.
             fish.x = fish.targetX = 15 * 16 + 8;
             fish.y = fish.targetY = 11 * 16 + 8;
-            expect(deep.step().eaten).toBe(0);
+            deep.step();
+            expect(deep.bySpecies.tiger?.meals.fish).toBeUndefined();
         }
         const tiger = ofKind(deep.population, "tiger")[0];
         // It never even went for it.
@@ -213,17 +220,17 @@ describe("the life of the land", () => {
         expect(ofKind(population, "fish")[0].x).toBeLessThan(14 * 16 + 8);
     });
 
-    it("brings lions and tigers once eight antelopes live on the land, not before", () => {
+    it("brings lions and tigers once enough antelopes live on the land to feed them, not before", () => {
         const herd = (count: number): Animal[] =>
             Array.from({ length: count }, (_, index) => ({
                 ...animal(index + 1, "antelope", "male", 3 + index * 2, 3),
                 readyAt: 1e12,
             }));
         // A random source that always says "now".
-        const few = world(plain(), seeded(herd(7)), {}, () => 0);
+        const few = world(plain(), seeded(herd(ANTELOPES_PER_PREDATOR - 1)), {}, () => 0);
         few.step();
         expect(ofKind(few.population, "lion")).toEqual([]);
-        const enough = world(plain(), seeded(herd(8)), {}, () => 0);
+        const enough = world(plain(), seeded(herd(ANTELOPES_PER_PREDATOR)), {}, () => 0);
         enough.step();
         expect(ofKind(enough.population, "lion").map((one) => one.sex)).toEqual(["male", "female"]);
         expect(ofKind(enough.population, "tiger")).toHaveLength(2);

@@ -2,7 +2,7 @@ import type { WaterGrid } from "../Terrain/WaterGrid";
 import { DEFAULT_LAND_LIFE_SETTINGS, TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
-import { MAX_ANIMALS, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./LifeConstants";
+import { MAX_ANIMALS, MAX_ANTELOPES, MAX_DOLPHINS, MAX_LAND_ANIMALS } from "./LifeConstants";
 import { cellAt, levelOf, swim, WANDER_REACH_CELLS } from "./Swim";
 import { isPredator, SPECIES, SPECIES_IDS } from "./Species";
 import type { Species, SpeciesId } from "./Species";
@@ -17,6 +17,8 @@ export const LIFE_STEP_MS = 500;
 export const MIN_BODY_CELLS = 40;
 /** A body gets a dolphin with this many cells deep enough for it. */
 export const MIN_DOLPHIN_DEEP_CELLS = 300;
+/** Dolphins come into a body once this many fish live in it: they would starve, or empty it, before. */
+export const FISH_PER_DOLPHIN_COUPLE = 30;
 /** A body holds a fish for this many cells (two fish at least). */
 export const CELLS_PER_FISH = 8;
 /** A body holds a dolphin for this many cells deep enough for it (so the smallest one that gets dolphins holds two). */
@@ -29,6 +31,8 @@ const FLEE_REACH_PX = 3 * TERRAIN_CELL;
 const FLEE_DRAWS = 6;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
+/** A hunter aims this far beyond a prey that runs from it, in map pixels. */
+const CHASE_LEAD_PX = 3 * TERRAIN_CELL;
 /** A mate or a prey is reached within this distance, in map pixels. */
 const REACH_PX = TERRAIN_CELL;
 /** After failing to go straight to a mate or a prey, an animal wanders this long before it tries again. */
@@ -117,11 +121,11 @@ type BodySize = Places["sizes"][number];
 export const MIN_LAND_CELLS = 800;
 export const CELLS_PER_ANTELOPE = 160;
 /** A piece of land gets lions and tigers once this many antelopes live on it; it holds a predator for as many. */
-export const ANTELOPES_PER_PREDATOR = 8;
+export const ANTELOPES_PER_PREDATOR = 5;
 const antelopeCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_ANTELOPE));
 /** Lions and tigers share the land: each species gets half of what the antelopes can feed. */
 const landPredatorCapOf = (cells: number): number =>
-    Math.max(2, Math.floor(antelopeCapOf(cells) / ANTELOPES_PER_PREDATOR / 2));
+    Math.max(2, Math.floor(Math.min(antelopeCapOf(cells), MAX_ANTELOPES) / ANTELOPES_PER_PREDATOR / 2));
 const landPredatorTimes = (settings: LifeSettings): SpeciesTimes => ({
     breedDelayMs:
         (settings.landPredatorReproductionDelay ?? DEFAULT_LAND_LIFE_SETTINGS.landPredatorReproductionDelay) * 1000,
@@ -414,6 +418,12 @@ export function stepPopulation(
                 hunter.targetX = hunter.targetY = undefined;
             } else {
                 pursue(hunter, prey, maxSpeed * species.speedFactor);
+                // A prey that runs from its hunter is no longer where it was: the hunter runs on past that point.
+                if (SPECIES[prey.kind].flees.includes(species.id)) {
+                    const far = distance(hunter, prey);
+                    hunter.targetX = prey.x + ((prey.x - hunter.x) / far) * CHASE_LEAD_PX;
+                    hunter.targetY = prey.y + ((prey.y - hunter.y) / far) * CHASE_LEAD_PX;
+                }
             }
         }
     }
@@ -667,14 +677,17 @@ function spawn(
 ): void {
     const fishIn = new Set<number>();
     const dolphinIn = new Set<number>();
+    const fishCount = new Map<number, number>();
     let dolphins = 0;
     let inWater = 0;
     for (const animal of population.animals) {
         if (SPECIES[animal.kind].habitat !== "water") continue;
         inWater++;
         const body = bodyOf(animal, bodies);
-        if (animal.kind === "fish") fishIn.add(body);
-        else {
+        if (animal.kind === "fish") {
+            fishIn.add(body);
+            fishCount.set(body, (fishCount.get(body) ?? 0) + 1);
+        } else {
             dolphinIn.add(body);
             dolphins++;
         }
@@ -708,6 +721,7 @@ function spawn(
         if (
             size.deep >= MIN_DOLPHIN_DEEP_CELLS &&
             !dolphinIn.has(body) &&
+            (fishCount.get(body) ?? 0) >= FISH_PER_DOLPHIN_COUPLE &&
             dolphins + 2 <= MAX_DOLPHINS &&
             inWater + 2 <= MAX_ANIMALS &&
             (firstDolphins || random() < dolphinChance)
