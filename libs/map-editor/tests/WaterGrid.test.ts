@@ -272,6 +272,73 @@ describe("WaterGrid", () => {
         expect(grid.depthAt(28, 20)).toBe(0);
     });
 
+    // Seen in the game: a strong sink emptied its disc, and the water around took so long to run in that the sink
+    // took almost nothing (42 m³ an hour for thousands asked).
+    it("feeds a strong sink faster when the water is given more moves a step", () => {
+        const side = 61;
+        const cells: [number, number, number][] = [];
+        for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) cells.push([x, y, -16]);
+        const lake = terrainOf(cells);
+        const taken = (flowSteps: number | undefined): number => {
+            const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            let total = 0;
+            for (let step = 0; step < 60; step++) {
+                total += grid.step({ ...nothing, flowSteps, flows: [{ cellX: 30, cellY: 30, px: -1e6 }] }).sinksPx;
+            }
+            return total;
+        };
+        const slow = taken(undefined);
+        const fast = taken(16);
+        expect(taken(1)).toBeCloseTo(slow, 3);
+        expect(fast).toBeGreaterThan(slow * 3);
+    });
+
+    it("moves the water again around the sinks only: far from them a step is one move", () => {
+        const side = 121;
+        const cells: [number, number, number][] = [];
+        for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) cells.push([x, y, -16]);
+        const lake = terrainOf(cells);
+        const farAfter = (flowSteps: number): number => {
+            const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            // A mound of water in a corner, a sink in the opposite one.
+            grid.step({ ...nothing, flows: [{ cellX: 10, cellY: 10, px: 4 }] });
+            for (let step = 0; step < 20; step++) {
+                grid.step({ ...nothing, flowSteps, flows: [{ cellX: 100, cellY: 100, px: -1e6 }] });
+            }
+            return grid.depthAt(10, 10);
+        };
+        expect(farAfter(16)).toBeCloseTo(farAfter(1), 4);
+    });
+
+    it("keeps every drop whatever the number of moves a step", () => {
+        const grid = new WaterGrid(slope, gridBoundsOf(slope, []));
+        let poured = 0;
+        let out = 0;
+        for (let step = 0; step < 200; step++) {
+            const tally = grid.step({
+                ...nothing,
+                flowSteps: 8,
+                flows: [
+                    { cellX: 0, cellY: 0, px: 2 },
+                    { cellX: 8, cellY: 0, px: -1 },
+                ],
+            });
+            poured += tally.sourcesPx;
+            out += tally.sinksPx + tally.lostPx;
+        }
+        expect(grid.totalPx()).toBeCloseTo(poured - out, 1);
+    });
+
+    it("never breaks on a broken number of moves", () => {
+        const grid = new WaterGrid(slope, gridBoundsOf(slope, []));
+        for (const flowSteps of [Number.NaN, -3, 0, 1e9]) {
+            expect(() => grid.step({ ...nothing, flowSteps, flows: [{ cellX: 0, cellY: 0, px: 2 }] })).not.toThrow();
+        }
+        expect(grid.totalPx()).toBeGreaterThan(0);
+    });
+
     it("leaves alone the water lower than a sink: it would never run to it", () => {
         // A sink at the top of a dug slope, water at the bottom only.
         const grid = new WaterGrid(slope, gridBoundsOf(slope, []));

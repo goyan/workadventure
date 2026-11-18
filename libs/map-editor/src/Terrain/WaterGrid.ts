@@ -50,6 +50,11 @@ export interface WaterWallSides {
     south: ReadonlySet<string>;
 }
 
+/** The most moves the water makes around a sink in one step. */
+export const MAX_FLOW_STEPS = 16;
+/** How far around the disc of a sink the water moves again during a step, in cells: eight tiles. */
+const SINK_RUSH_CELLS = 16;
+
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
     x: number;
@@ -121,6 +126,12 @@ export interface WaterStepInput {
      * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent).
      */
     flows: readonly { cellX: number; cellY: number; px: number; radius?: number }[];
+    /**
+     * How many times the water moves towards a sink that asks for more than it finds, during the step (1 when
+     * absent, MAX_FLOW_STEPS at most): more on a map whose water goes faster than reality, so that it runs to the
+     * sink as far as the step is long.
+     */
+    flowSteps?: number;
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -263,6 +274,7 @@ export class WaterGrid {
                 }
             }
         }
+        const sinks: { index: number; radius: number; left: number }[] = [];
         for (const flow of input.flows) {
             const index = this.indexOf(flow.cellX, flow.cellY);
             if (!Number.isFinite(flow.px) || flow.px === 0) continue;
@@ -276,13 +288,33 @@ export class WaterGrid {
                 tally.lostPx += flow.px - this.pour(index, flow.px, radiusOf(flow.radius, 0));
                 tally.moved = true;
             } else {
-                const taken = this.drain(index, -flow.px, radiusOf(flow.radius, SINK_RADIUS_CELLS));
+                const radius = radiusOf(flow.radius, SINK_RADIUS_CELLS);
+                const taken = this.drain(index, -flow.px, radius);
                 tally.sinksPx += taken;
                 // A sink with nothing to take does not keep a grid at rest awake.
                 if (taken > 0) tally.moved = true;
+                // What it still asks for: taken as the water runs to it, between the moves of this step.
+                if (-flow.px - taken > 0) sinks.push({ index, radius, left: -flow.px - taken });
             }
         }
         if (this.flow(tally)) tally.moved = true;
+        // Around a sink that still asks for water, the water moves again, as many times as the step asks: on a map
+        // that goes faster than reality a strong sink would otherwise empty its disc and wait for water that creeps
+        // in one cell a step. Only around the sinks: moving the whole grid that often would cost too much.
+        const moves = flowStepsOf(input.flowSteps);
+        for (let move = 1; move < moves; move++) {
+            let asking = false;
+            for (const sink of sinks) {
+                if (sink.left <= 0) continue;
+                this.flowAround(sink.index, sink.radius + SINK_RUSH_CELLS, move % 2 === 1, tally);
+                const taken = this.drain(sink.index, sink.left, sink.radius);
+                sink.left -= taken;
+                tally.sinksPx += taken;
+                if (taken > 0) tally.moved = true;
+                if (sink.left > 0) asking = true;
+            }
+            if (!asking) break;
+        }
         return tally;
     }
 
@@ -491,6 +523,58 @@ export class WaterGrid {
         return taken;
     }
 
+    /**
+     * Moves the water once more within `reach` cells of a cell, in place: each cell in turn gives to its lower
+     * neighbours (`backwards` turns the order round, so that no direction is favoured over the moves). Cheap, for the
+     * surroundings of a sink only; the whole grid moves with `flow`.
+     */
+    private flowAround(centre: number, reach: number, backwards: boolean, tally: WaterTally): void {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        const ground = this.ground;
+        const closed = this.closed;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        const left = Math.max(0, column - reach);
+        const right = Math.min(width - 1, column + reach);
+        const top = Math.max(0, row - reach);
+        const bottom = Math.min(height - 1, row + reach);
+        const offsets = [1, -1, width, -width];
+        const drops = [0, 0, 0, 0];
+        const count = (right - left + 1) * (bottom - top + 1);
+        for (let step = 0; step < count; step++) {
+            const at = backwards ? count - 1 - step : step;
+            const x = left + (at % (right - left + 1));
+            const y = top + Math.floor(at / (right - left + 1));
+            const index = y * width + x;
+            const held = depth[index];
+            if (held <= DRY_PX) continue;
+            const surface = ground[index] + held;
+            let total = 0;
+            for (let side = 0; side < 4; side++) {
+                const inside = side === 0 ? x + 1 < width : side === 1 ? x > 0 : side === 2 ? y + 1 < height : y > 0;
+                let drop = 0;
+                if (!inside) drop = held;
+                else if (!(closed[index] & (1 << side))) {
+                    drop = surface - (ground[index + offsets[side]] + depth[index + offsets[side]]);
+                }
+                drops[side] = drop > 0 ? drop : 0;
+                total += drops[side];
+            }
+            if (total <= DRY_PX) continue;
+            const scale = Math.min(FLOW_SHARE, held / total);
+            for (let side = 0; side < 4; side++) {
+                const out = drops[side] * scale;
+                if (out <= 0) continue;
+                depth[index] -= out;
+                const inside = side === 0 ? x + 1 < width : side === 1 ? x > 0 : side === 2 ? y + 1 < height : y > 0;
+                if (inside) depth[index + offsets[side]] += out;
+                else tally.lostPx += out;
+            }
+            if (depth[index] < 0) depth[index] = 0;
+        }
+    }
+
     /** Moves the water one step. Returns whether any moved. */
     private flow(tally: WaterTally): boolean {
         const { width, height } = this.bounds;
@@ -562,4 +646,10 @@ export class WaterGrid {
 function radiusOf(radius: number | undefined, fallback: number): number {
     if (radius === undefined || !Number.isFinite(radius) || radius < 0) return fallback;
     return Math.min(MAX_RADIUS_CELLS, radius);
+}
+
+/** The moves of the water in a step, within their bounds; one for a step that says nothing. */
+function flowStepsOf(flowSteps: number | undefined): number {
+    if (flowSteps === undefined || !Number.isFinite(flowSteps) || flowSteps < 1) return 1;
+    return Math.min(MAX_FLOW_STEPS, Math.round(flowSteps));
 }
