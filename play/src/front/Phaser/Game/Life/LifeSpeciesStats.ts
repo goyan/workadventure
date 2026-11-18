@@ -204,6 +204,8 @@ export function speciesChart(
     window?: { from: number; to: number },
 ): { species: number; max: number; points: string }[] {
     const countOf = (sample: LifeSample, id: number): number => sample.counts?.[String(id)] ?? 0;
+    // A sample taken before the species were counted says nothing of them.
+    samples = samples.filter((sample) => sample.counts !== undefined);
     const first = window ? window.from : (samples[0]?.at ?? 0);
     const span = (window ? window.to : (samples.at(-1)?.at ?? 0)) - first;
     return species.map((id) => {

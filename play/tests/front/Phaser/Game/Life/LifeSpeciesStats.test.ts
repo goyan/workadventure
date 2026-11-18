@@ -137,6 +137,15 @@ describe("speciesChart", () => {
         ]);
     });
 
+    it("leaves out the samples taken before the species were counted", () => {
+        const samples: LifeSample[] = [
+            { at: 0, prey: 5, predators: 0 },
+            { at: 10, prey: 0, predators: 0, counts: { "0": 10 } },
+            { at: 20, prey: 0, predators: 0, counts: { "0": 10 } },
+        ];
+        expect(speciesChart(samples, [FISH], 100, 44, { from: 0, to: 20 })[0].points).toBe("50,4 100,4");
+    });
+
     it("draws nothing without a sample", () => {
         expect(speciesChart([], [FISH], 100, 40)).toEqual([{ species: FISH, max: 1, points: "" }]);
     });
