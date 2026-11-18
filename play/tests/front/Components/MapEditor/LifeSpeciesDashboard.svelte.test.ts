@@ -127,6 +127,8 @@ describe("LifeSpeciesDashboard", () => {
         flushSync(() => find("life-curve-toggle-1")?.click());
         expect(target.querySelectorAll('[data-testid="life-species-curves"] polyline')).toHaveLength(1);
         expect(find("life-species-curve-0")).not.toBeNull();
+        expect(text("life-curve-max-0")).toBe('(mapEditor.life.species.max {"max":12})');
+        expect(find("life-curve-max-1")).toBeNull();
     });
 
     it("warns of a species that died out", () => {

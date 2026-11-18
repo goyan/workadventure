@@ -576,6 +576,8 @@ const mapEditor: BaseTranslation = {
                 tiger: "Tiger",
                 gull: "Gull",
             },
+            males: "Males",
+            females: "Females",
             fill: "Fill",
             events: {
                 arrivals: "Arrivals",
@@ -585,6 +587,7 @@ const mapEditor: BaseTranslation = {
                 starved: "Starved",
                 diedDry: "Died out of water",
             },
+            max: "max {max}",
             meals: "Who eats whom",
             curves: "Number of each species over time",
             extinct: "Extinct species: {name}, since {time}",

@@ -188,9 +188,13 @@ export class LifeSpeciesStats {
     }
 }
 
+/** A curve leaves a little room above its largest value. */
+const HEADROOM = 1.1;
+
 /**
- * A line for each species in a box, all on the same scale (the most numerous at the top): each sample at its time,
- * oldest on the left. A single sample stands in the middle. With a `window`, the box covers that time.
+ * A line for each species in a box, each on its own scale (its largest value near the top, given as `max`): each
+ * sample at its time, oldest on the left. A single sample stands in the middle. With a `window`, the box covers that
+ * time.
  */
 export function speciesChart(
     samples: readonly LifeSample[],
@@ -198,20 +202,22 @@ export function speciesChart(
     width: number,
     height: number,
     window?: { from: number; to: number },
-): { species: number; points: string }[] {
+): { species: number; max: number; points: string }[] {
     const countOf = (sample: LifeSample, id: number): number => sample.counts?.[String(id)] ?? 0;
-    let max = 0;
-    for (const sample of samples) for (const id of species) max = Math.max(max, countOf(sample, id));
     const first = window ? window.from : (samples[0]?.at ?? 0);
     const span = (window ? window.to : (samples.at(-1)?.at ?? 0)) - first;
-    return species.map((id) => ({
-        species: id,
-        points: samples
-            .map((sample) => {
-                const x = span > 0 ? ((sample.at - first) / span) * width : width / 2;
-                const y = height * (1 - (max > 0 ? countOf(sample, id) / max : 0));
-                return `${Math.round(x)},${Math.round(y)}`;
-            })
-            .join(" "),
-    }));
+    return species.map((id) => {
+        const max = Math.max(1, ...samples.map((sample) => countOf(sample, id)));
+        return {
+            species: id,
+            max,
+            points: samples
+                .map((sample) => {
+                    const x = span > 0 ? ((sample.at - first) / span) * width : width / 2;
+                    const y = height * (1 - countOf(sample, id) / (max * HEADROOM));
+                    return `${Math.round(x)},${Math.round(y)}`;
+                })
+                .join(" "),
+        };
+    });
 }

@@ -587,6 +587,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 tiger: "Tigre",
                 gull: "Mouette",
             },
+            males: "Mâles",
+            females: "Femelles",
             fill: "Remplissage",
             events: {
                 arrivals: "Arrivées",
@@ -596,6 +598,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
                 starved: "Morts de faim",
                 diedDry: "Morts à sec",
             },
+            max: "max {max}",
             meals: "Qui mange qui",
             curves: "Effectif de chaque espèce dans le temps",
             extinct: "Espèce éteinte : {name}, depuis {time}",

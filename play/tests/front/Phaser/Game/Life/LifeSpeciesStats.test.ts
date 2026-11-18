@@ -126,19 +126,19 @@ describe("LifeSpeciesStats", () => {
 });
 
 describe("speciesChart", () => {
-    it("draws a line for each species, all on the scale of the most numerous", () => {
+    it("draws a line for each species, each on its own scale, with a little room above", () => {
         const samples: LifeSample[] = [
-            { at: 0, prey: 0, predators: 0, counts: { "0": 10 } },
-            { at: 10, prey: 0, predators: 0, counts: { "0": 20, "1": 5 } },
+            { at: 0, prey: 0, predators: 0, counts: { "0": 110 } },
+            { at: 10, prey: 0, predators: 0, counts: { "0": 220, "1": 5 } },
         ];
-        expect(speciesChart(samples, [FISH, DOLPHIN], 100, 40)).toEqual([
-            { species: FISH, points: "0,20 100,0" },
-            { species: DOLPHIN, points: "0,40 100,30" },
+        expect(speciesChart(samples, [FISH, DOLPHIN], 100, 44)).toEqual([
+            { species: FISH, max: 220, points: "0,24 100,4" },
+            { species: DOLPHIN, max: 5, points: "0,44 100,4" },
         ]);
     });
 
     it("draws nothing without a sample", () => {
-        expect(speciesChart([], [FISH], 100, 40)).toEqual([{ species: FISH, points: "" }]);
+        expect(speciesChart([], [FISH], 100, 40)).toEqual([{ species: FISH, max: 1, points: "" }]);
     });
 });
 

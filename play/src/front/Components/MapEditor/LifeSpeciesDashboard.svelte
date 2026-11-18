@@ -104,53 +104,55 @@
                 </label>
             </div>
         </div>
+        <!-- A grid, not a table: the tables of the application have their own look. -->
         <div class="overflow-x-auto">
-            <table class="w-full border-collapse text-right">
-                <thead>
-                    <tr>
-                        <th></th>
-                        {#each rows as row (row.species)}
-                            <th
-                                class="px-1 text-xs font-bold"
-                                style="color: {colourOf(row.species)}"
-                                data-testid="life-species-{row.species}-name">{nameOf(row.species)}</th
-                            >
-                        {/each}
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <th class="text-left font-normal">{$LL.mapEditor.life.dashboard.males()}</th>
-                        {#each rows as row (row.species)}
-                            <td class="px-1" data-testid="life-species-{row.species}-males">{row.males}</td>
-                        {/each}
-                    </tr>
-                    <tr>
-                        <th class="text-left font-normal">{$LL.mapEditor.life.dashboard.females()}</th>
-                        {#each rows as row (row.species)}
-                            <td class="px-1" data-testid="life-species-{row.species}-females">{row.females}</td>
-                        {/each}
-                    </tr>
-                    <tr>
-                        <th class="text-left font-normal">{$LL.mapEditor.life.species.fill()}</th>
-                        {#each rows as row (row.species)}
-                            <td class="whitespace-nowrap px-1" data-testid="life-species-{row.species}-fill"
-                                >{row.cap > 0 ? `${row.males + row.females} / ${row.cap}` : "—"}</td
-                            >
-                        {/each}
-                    </tr>
-                    {#each EVENTS as event (event)}
-                        <tr>
-                            <th class="text-left font-normal">{$LL.mapEditor.life.species.events[event]()}</th>
-                            {#each rows as row (row.species)}
-                                <td class="px-1" data-testid="life-species-{row.species}-{event}"
-                                    >{eventsOf(row)[event]}</td
-                                >
-                            {/each}
-                        </tr>
+            <div
+                class="grid gap-x-4 gap-y-0.5 text-right"
+                style="grid-template-columns: 1fr repeat({rows.length}, auto)"
+                role="table"
+            >
+                <div class="contents" role="row">
+                    <span role="columnheader"></span>
+                    {#each rows as row (row.species)}
+                        <span
+                            class="text-xs font-bold"
+                            style="color: {colourOf(row.species)}"
+                            role="columnheader"
+                            data-testid="life-species-{row.species}-name">{nameOf(row.species)}</span
+                        >
                     {/each}
-                </tbody>
-            </table>
+                </div>
+                <div class="contents" role="row">
+                    <span class="text-left" role="rowheader">{$LL.mapEditor.life.species.males()}</span>
+                    {#each rows as row (row.species)}
+                        <span role="cell" data-testid="life-species-{row.species}-males">{row.males}</span>
+                    {/each}
+                </div>
+                <div class="contents" role="row">
+                    <span class="text-left" role="rowheader">{$LL.mapEditor.life.species.females()}</span>
+                    {#each rows as row (row.species)}
+                        <span role="cell" data-testid="life-species-{row.species}-females">{row.females}</span>
+                    {/each}
+                </div>
+                <div class="contents" role="row">
+                    <span class="text-left" role="rowheader">{$LL.mapEditor.life.species.fill()}</span>
+                    {#each rows as row (row.species)}
+                        <span class="whitespace-nowrap" role="cell" data-testid="life-species-{row.species}-fill"
+                            >{row.cap > 0 ? `${row.males + row.females} / ${row.cap}` : "—"}</span
+                        >
+                    {/each}
+                </div>
+                {#each EVENTS as event (event)}
+                    <div class="contents" role="row">
+                        <span class="text-left" role="rowheader">{$LL.mapEditor.life.species.events[event]()}</span>
+                        {#each rows as row (row.species)}
+                            <span role="cell" data-testid="life-species-{row.species}-{event}"
+                                >{eventsOf(row)[event]}</span
+                            >
+                        {/each}
+                    </div>
+                {/each}
+            </div>
         </div>
 
         {#if meals.length > 0}
@@ -185,6 +187,13 @@
                         data-testid="life-curve-toggle-{row.species}"
                     />
                     {nameOf(row.species)}
+                    {#if curves.some((curve) => curve.species === row.species)}
+                        <span data-testid="life-curve-max-{row.species}"
+                            >({$LL.mapEditor.life.species.max({
+                                max: curves.find((curve) => curve.species === row.species)?.max ?? 0,
+                            })})</span
+                        >
+                    {/if}
                 </label>
             {/each}
         </div>
@@ -198,8 +207,8 @@
                 <line
                     x1="0"
                     x2={CHART_WIDTH}
-                    y1={CHART_HEIGHT * (1 - level)}
-                    y2={CHART_HEIGHT * (1 - level)}
+                    y1={CHART_HEIGHT * (1 - level / 1.1)}
+                    y2={CHART_HEIGHT * (1 - level / 1.1)}
                     stroke="white"
                     stroke-opacity="0.12"
                     stroke-width="1"
