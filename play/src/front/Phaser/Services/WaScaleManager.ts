@@ -57,6 +57,8 @@ export class WaScaleManager {
         if (this.scaleManager === undefined) {
             return;
         }
+        // Viewport resize callers do not supply a camera; both zoom branches still need to update it.
+        camera ??= this.game.scene.getScenes(true).find((scene) => scene.cameras.main)?.cameras.main;
         const { width, height } = coWebsiteManager.getGameSize();
         const devicePixelRatio = window.devicePixelRatio ?? 1;
         const { game: gameSize, real: realSize } = this.hdpiManager.getOptimalGameSize({
@@ -105,18 +107,10 @@ export class WaScaleManager {
         this.game.markDirty();
     }
 
-    /**
-     * Use this in case of resizing while focusing on something
-     */
-    public refreshFocusOnTarget(camera?: Camera): void {
+    /** Recenter after a resize without discarding the user's zoom or the focus zone's margin. */
+    public refreshFocusOnTarget(): void {
         if (!this.focusTarget) {
             return;
-        }
-        if (this.focusTarget.width && this.focusTarget.height) {
-            this.setZoomModifier(
-                this.getTargetZoomModifierFor(this.focusTarget.width, this.focusTarget.height),
-                camera,
-            );
         }
 
         this.game.events.emit(WaScaleManagerEvent.RefreshFocusOnTarget, this.focusTarget);
@@ -144,15 +138,7 @@ export class WaScaleManager {
     }
 
     public set zoomModifier(zoomModifier: number) {
-        let camera = undefined;
-        // Let's attempt to get the camera
-        for (const scene of this.game.scene.getScenes(true)) {
-            if (scene.cameras.main) {
-                camera = scene.cameras.main;
-            }
-        }
-
-        this.setZoomModifier(zoomModifier, camera);
+        this.setZoomModifier(zoomModifier);
     }
 
     public setZoomModifier(zoomModifier: number, camera?: Camera, animating = false): void {
