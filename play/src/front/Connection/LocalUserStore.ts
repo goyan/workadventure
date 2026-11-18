@@ -20,7 +20,7 @@ import {
 import type { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { parseStoredZoomModifier, serializeZoomModifier } from "@wa/front/Phaser/Game/ZoomPersistence";
 import type { LocalUser } from "./LocalUser";
-import { areCharacterTexturesValid, isUserNameValid } from "./LocalUserUtils";
+import { areCharacterTexturesValid, isUserNameValid, normalizeUserName } from "./LocalUserUtils";
 
 /** A volume of the Jam music worth keeping: a finite number from 0 (silent) to 1 (full). */
 function isJamMusicVolume(value: number): boolean {
@@ -47,6 +47,7 @@ const ignoreFollowRequests = "ignoreFollowRequests";
 const decreaseAudioPlayerVolumeWhileTalking = "decreaseAudioPlayerVolumeWhileTalking";
 const disableAnimations = "disableAnimations";
 const displayVideoQualityStats = "displayVideoQualityStats";
+const avatarVideosEnabledKey = "avatarVideosEnabled";
 const lastRoomUrl = "lastRoomUrl";
 const authToken = "authToken";
 const notification = "notificationPermission";
@@ -178,6 +179,7 @@ class LocalUserStore {
     }
 
     setName(name: string): void {
+        name = normalizeUserName(name);
         this.name = name;
         this.latestSessionDisplayName = name.trim();
         localStorage.setItem(playerNameKey, name);
@@ -188,8 +190,11 @@ class LocalUserStore {
         if (this.name) {
             return this.name;
         }
-        const value = localStorage.getItem(playerNameKey) || "";
-        return isUserNameValid(value) ? value : null;
+        const value = localStorage.getItem(playerNameKey);
+        if (value === null) return null;
+        if (isUserNameValid(value)) return value;
+        this.setName(value);
+        return this.name ?? null;
     }
 
     setPlayerCharacterIndex(playerCharacterIndex: number): void {
@@ -833,6 +838,14 @@ class LocalUserStore {
 
     getSpeakerDeviceId() {
         return localStorage.getItem(speakerDeviceId);
+    }
+
+    getAvatarVideosEnabled(): boolean {
+        return localStorage.getItem(avatarVideosEnabledKey) !== "false";
+    }
+
+    setAvatarVideosEnabled(enabled: boolean): void {
+        localStorage.setItem(avatarVideosEnabledKey, String(enabled));
     }
 
     setVideoQuality(value: VideoQualitySetting) {

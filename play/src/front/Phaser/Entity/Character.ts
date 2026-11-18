@@ -44,6 +44,7 @@ import { decodeNerfHearts } from "@wa/front/Phaser/Game/Nerf/NerfProtocol";
 import { heartsDropped } from "@wa/front/Phaser/Game/Nerf/NerfHearts";
 import { NERF_BLINK_ALPHA, NERF_BLINK_TINT, nerfBlinkTinted } from "@wa/front/Phaser/Game/Nerf/NerfBlink";
 import { cardinalVehicleHeading, vehicleHeading } from "@wa/front/Phaser/Vehicle/VehicleFrames";
+import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { floorDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
 import { lazyLoadPlayerCharacterTextures } from "./PlayerTexturesLoadingManager";
 import { SpeechBubble } from "./SpeechBubble";
@@ -65,7 +66,7 @@ import Tween = Phaser.Tweens.Tween;
 import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
-const playerNameY = -18;
+const playerNameY = -24;
 /** The system asks for less motion: a Nerf hit flashes once instead of blinking. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 /**
@@ -107,6 +108,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
     private listeningMusic = false;
+    private videoBubbleVisible = false;
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
@@ -223,7 +225,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     ) {
         super(scene, x, y /*, texture, frame*/);
         this.scene = scene;
-        this.playerName = name;
+        this.playerName = normalizeUserName(name);
         this.invisible = true;
         this.clickable = false;
 
@@ -309,10 +311,16 @@ export abstract class Character extends Container implements OutlineableInterfac
                 this.y + playerNameY,
                 this.playerName,
                 playerNameOutlineColor,
+                (hovered): void => {
+                    if (!hovered || this.isClickable()) {
+                        this.emit(hovered ? Phaser.Input.Events.POINTER_OVER : Phaser.Input.Events.POINTER_OUT);
+                    }
+                },
             );
             this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
             this.usernameDisplay.setRaisedHand(this.raisedHand, true);
             this.usernameDisplay.setListeningMusic(this.listeningMusic);
+            this.usernameDisplay.setVideoBubbleVisible(this.videoBubbleVisible);
             this.usernameDisplay.setPlayerDepth(this.depth);
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
@@ -714,6 +722,11 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
         this.usernameDisplay?.setPosition(x, y + playerNameY);
+    }
+
+    public setVideoBubbleVisible(visible: boolean): void {
+        this.videoBubbleVisible = visible;
+        this.usernameDisplay?.setVideoBubbleVisible(visible);
     }
 
     setPosition(x: number, y: number): this {

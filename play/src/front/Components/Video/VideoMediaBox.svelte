@@ -51,6 +51,7 @@
 
     // The inCameraContainer is used to know if the VideoMediaBox is part of a series of video or if it is the highlighted video.
     let inCameraContainer: boolean = !!getContext("inCameraContainer");
+    const inAvatarBubble: boolean = !!getContext("inAvatarBubble");
     let inHighlightFullscreenParticipantList: boolean = !!getContext("inHighlightFullscreenParticipantList");
 
     let extendedSpaceUser = $derived(videoBox.spaceUser);
@@ -350,7 +351,7 @@
 </script>
 
 <div
-    {@attach blocker}
+    {@attach inAvatarBubble ? undefined : blocker}
     class="group/screenshare relative flex justify-center mx-auto h-full w-full @container/videomediabox z-20 select-none"
 >
     <div
@@ -434,7 +435,7 @@
                         isTalking={streamableEntry.isPending ? false : (showVoiceIndicator ?? false)}
                         flipX={streamableEntry.streamable.flipX ?? false}
                         cover={streamableEntry.streamable.displayMode === "cover" &&
-                            (inCameraContainer || inHighlightFullscreenParticipantList || fullScreen)}
+                            (inAvatarBubble || inCameraContainer || inHighlightFullscreenParticipantList || fullScreen)}
                         isBlocked={streamableEntry.isPending ? false : ($isBlockedStore ?? false)}
                         withBackground={streamableEntry.isPending
                             ? false

@@ -398,7 +398,7 @@ const mapEditor: BaseTranslation = {
             unit: "Unit of the flow",
             radius: "Radius (tiles)",
             radiusHint:
-                "The sink takes the water of this disc; the water further away has to run to it. The wider, the more it drains.",
+                "The sink empties this disc first. When it asks for more, it draws the body of water joined to it, harder near itself: the water runs to the sink.",
         },
         lamp: {
             label: "Light zone",
@@ -591,6 +591,13 @@ const mapEditor: BaseTranslation = {
             now: "now",
             historyPrey: "prey (max {max})",
             historyPredators: "predators (max {max})",
+            range: {
+                "5min": "5 min",
+                "1h": "1 h",
+                "4h": "4 h",
+                "1d": "1 day",
+                all: "All",
+            },
         },
     },
     terrain: {

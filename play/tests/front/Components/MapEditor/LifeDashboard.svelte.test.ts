@@ -49,6 +49,7 @@ const view = {
         capacity: 40,
         history: [],
         historyStepMs: 5000,
+        ranges: [],
     },
     lastMinute: { arrivals: 0, births: 4, diedOfAge: 1, eaten: 2, diedDry: 0, predatorBirths: 1, predatorDeaths: 0 },
     history: [
@@ -56,7 +57,25 @@ const view = {
         { at: 60_000, prey: 8, predators: 1 },
         { at: 180_000, prey: 12, predators: 2 },
     ],
+    ranges: {
+        "5min": [
+            { at: 1_000_000, prey: 4, predators: 1 },
+            { at: 1_150_000, prey: 12, predators: 2 },
+        ],
+        "1h": [
+            { at: 250_000, prey: 30, predators: 3 },
+            { at: 1_150_000, prey: 12, predators: 2 },
+        ],
+        "4h": [],
+        "1d": [],
+    },
 };
+const choose = (range: string): void => {
+    flushSync(() => target.querySelector<HTMLInputElement>(`[data-testid="life-range-${range}"]`)?.click());
+};
+const points = (line: number): string[] =>
+    target.querySelectorAll('[data-testid="life-history"] polyline')[line].getAttribute("points")?.trim().split(" ") ??
+    [];
 
 afterEach(async () => {
     const mounted = component;
@@ -109,9 +128,35 @@ describe("LifeDashboard", () => {
         expect(text("life-total-predatorDeaths")).toContain("2");
     });
 
-    it("draws the prey and the predators over time, each on its own scale, with the time it covers", () => {
+    it("draws the last five minutes at first: the present on the right, five minutes ago on the left", () => {
         aquaticLifeStatsStore.set(view);
         render();
+        expect(target.querySelector<HTMLInputElement>('[data-testid="life-range-5min"]')?.checked).toBe(true);
+        // A sample two and a half minutes ago stands in the middle, whatever the first sample is.
+        expect(points(0).map((point) => point.split(",")[0])).toEqual(["150", "300"]);
+        expect(text("life-history-prey-max")).toContain("12");
+        expect(text("life-history-span")).toContain("5 min");
+    });
+
+    it("draws another range when it is chosen, on the scale of that range", () => {
+        aquaticLifeStatsStore.set(view);
+        render();
+        choose("1h");
+        // A quarter of an hour ago: three quarters of the width.
+        expect(points(1).map((point) => point.split(",")[0])).toEqual(["225", "300"]);
+        expect(text("life-history-prey-max")).toContain("30");
+        expect(text("life-history-predators-max")).toContain("3");
+        expect(text("life-history-span")).toContain("1 h");
+        // A range without a sample yet draws nothing.
+        choose("1d");
+        expect(points(0)).toEqual([""]);
+        expect(text("life-history-span")).toContain("24 h");
+    });
+
+    it("draws the whole life of the map when asked, each curve on its own scale, with the time it covers", () => {
+        aquaticLifeStatsStore.set(view);
+        render();
+        choose("all");
         const lines = target.querySelectorAll('[data-testid="life-history"] polyline');
         expect(lines).toHaveLength(2);
         // Three samples each, placed at their time: the second one at a third of the width.

@@ -43,6 +43,7 @@
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
     import { jungleEnabledStore } from "../../Stores/JungleStore";
     import { videoQualityStore } from "../../Stores/MediaStore";
+    import { avatarVideosEnabledStore } from "../../Stores/AvatarVideoStore";
     import { browserNotificationStore } from "../../Stores/BrowserNotificationStore";
     import { helpNotificationSettingsVisibleStore } from "../../Stores/HelpSettingsStore";
     import { screenShareQualityStore } from "../../Stores/ScreenSharingStore";
@@ -891,6 +892,13 @@
     {:else}
         <SettingsSection title={$LL.menu.settings.videoBandwidth.title()}>
             {#snippet icon()}<IconCameraUp />{/snippet}
+            <InputSwitch
+                id="avatar-videos-enabled"
+                bind:value={$avatarVideosEnabledStore}
+                label={$LL.menu.settings.avatarVideos()}
+                labelPosition="right"
+                onchange={() => localUserStore.setAvatarVideosEnabled($avatarVideosEnabledStore)}
+            />
             <div>
                 <SegmentedControl
                     ariaLabel={$LL.menu.settings.videoBandwidth.title()}

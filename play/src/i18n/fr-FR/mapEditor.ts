@@ -410,7 +410,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             unit: "Unité du débit",
             radius: "Rayon (cases)",
             radiusHint:
-                "Le puits retire l'eau de ce disque ; l'eau plus loin doit couler jusqu'à lui. Plus il est large, plus il évacue.",
+                "Le puits vide d'abord ce disque. S'il demande plus, il aspire le plan d'eau relié à lui, plus fort près de lui : l'eau y court vers le puits.",
         },
         lamp: {
             label: "Zone de lumière",
@@ -602,6 +602,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             now: "maintenant",
             historyPrey: "proies (max {max})",
             historyPredators: "prédateurs (max {max})",
+            range: {
+                "5min": "5 min",
+                "1h": "1 h",
+                "4h": "4 h",
+                "1d": "1 jour",
+                all: "Tout",
+            },
         },
     },
     terrain: {

@@ -1,4 +1,5 @@
 import { MAX_USERNAME_LENGTH } from "../Enum/EnvironmentVariable";
+import { isPlayerNameValid, MAX_PLAYER_NAME_LENGTH, normalizePlayerName } from "../../common/PlayerName";
 
 export type LayerNames = "woka" | "body" | "eyes" | "hair" | "clothes" | "hat" | "accessory";
 
@@ -8,10 +9,14 @@ export interface CharacterTexture {
     url: string;
 }
 
-export const maxUserNameLength: number = MAX_USERNAME_LENGTH;
+export const maxUserNameLength: number = Math.min(MAX_USERNAME_LENGTH, MAX_PLAYER_NAME_LENGTH);
 
 export function isUserNameValid(value: unknown): boolean {
-    return typeof value === "string" && value.length > 0 && value.length <= maxUserNameLength && /\S/.test(value);
+    return isPlayerNameValid(value, maxUserNameLength);
+}
+
+export function normalizeUserName(value: unknown): string {
+    return normalizePlayerName(value, maxUserNameLength);
 }
 
 export function isUserNameTooLong(value: unknown): boolean {

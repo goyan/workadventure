@@ -836,6 +836,15 @@ message AquaticLifeStatsMessage {
   repeated AquaticLifeSampleMessage history = 10;
   // How far apart the samples of the history are now, in milliseconds.
   double historyStepMs = 11;
+  // The prey and the predators over the last five minutes, hour, four hours and day, each with its own samples: as
+  // the history, only for a player who joins the room.
+  repeated AquaticLifeRangeMessage ranges = 14;
+}
+
+message AquaticLifeRangeMessage {
+  // "5min", "1h", "4h" or "1d".
+  string name = 1;
+  repeated AquaticLifeSampleMessage samples = 2;
 }
 
 message AquaticLifeSampleMessage {

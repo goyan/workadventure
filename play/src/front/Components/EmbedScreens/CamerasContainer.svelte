@@ -27,6 +27,7 @@
 <script lang="ts">
     import { onMount, setContext } from "svelte";
     import { myCameraPeerStore } from "../../Stores/StreamableCollectionStore";
+    import { avatarVideoBoxIdsStore } from "../../Stores/AvatarVideoStore";
     import type { VideoBox as VideoBoxModel } from "../../Space/VideoBox";
     import VideoBox from "../Video/VideoBox.svelte";
     import type { CamerasContainerMode, VideoBoxLayout } from "../Video/VideoBoxLayout";
@@ -444,7 +445,13 @@
     });
 </script>
 
-<div class="group/cameras-container w-full" bind:clientHeight={maxContainerHeight} class:h-full={mode !== "row"}>
+<div
+    class="group/cameras-container w-full"
+    bind:clientHeight={maxContainerHeight}
+    class:h-full={mode !== "row"}
+    class:hidden={$oneLineStreamableCollectionStore.length > 0 &&
+        $oneLineStreamableCollectionStore.every((box) => $avatarVideoBoxIdsStore.has(box.uniqueId))}
+>
     <div
         bind:clientWidth={containerWidth}
         bind:clientHeight={camerasContainerHeight}
@@ -492,7 +499,7 @@
         -->
         {#each $oneLineStreamableCollectionStore as videoBox (videoBox.uniqueId)}
             {@const layout = videoBoxLayout(videoBox)}
-            {#if layout}
+            {#if layout && !$avatarVideoBoxIdsStore.has(videoBox.uniqueId)}
                 <VideoBox
                     {videoBox}
                     {layout}

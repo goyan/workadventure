@@ -342,7 +342,7 @@ export class GameRoom implements BrothersFinder {
             undefined,
             undefined,
             // The animals fear the avatars that are on the ground, where the water is.
-            () => gameRoom.groundAvatarPositions(),
+            gameRoom.groundAvatarPositions.bind(gameRoom),
         );
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();

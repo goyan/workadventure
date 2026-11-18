@@ -178,6 +178,7 @@ const menu: BaseTranslation = {
                 arcade: "Arcade",
             },
         },
+        avatarVideos: "Videos above avatars",
         videoBandwidth: {
             title: "Video quality",
             low: "Low",

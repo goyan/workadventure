@@ -1,4 +1,6 @@
 <script lang="ts">
+    import { LIFE_RANGES } from "@workadventure/map-editor";
+    import type { LifeRangeName } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { formatDuration } from "../../Phaser/Game/Life/LifeDurations";
     import { chartPoints } from "../../Phaser/Game/Life/LifeStats";
@@ -15,11 +17,18 @@
     let fill = $derived(
         stats && totals && totals.capacity > 0 ? Math.min(100, Math.round((stats.prey / totals.capacity) * 100)) : 0,
     );
-    let history = $derived(stats?.history ?? []);
+    /** The curve shows one range of time at once: the last five minutes, hour, four hours, day, or the whole life. */
+    const RANGES = [...LIFE_RANGES.map((range) => range.name), "all"] as const;
+    let chosen = $state<LifeRangeName | "all">("5min");
+    let range = $derived(LIFE_RANGES.find((candidate) => candidate.name === chosen));
+    let history = $derived((chosen === "all" ? stats?.history : stats?.ranges[chosen]) ?? []);
     let maxPrey = $derived(Math.max(1, ...history.map((sample) => sample.prey)));
     let maxPredators = $derived(Math.max(1, ...history.map((sample) => sample.predators)));
-    /** How long the history covers, in seconds. */
-    let span = $derived(history.length > 1 ? (history[history.length - 1].at - history[0].at) / 1000 : 0);
+    /** A range is drawn whole, up to its last sample (the present); the whole life, from its first sample. */
+    let last = $derived(history.length > 0 ? history[history.length - 1].at : 0);
+    let chartWindow = $derived(range ? { from: last - range.spanMs, to: last } : undefined);
+    /** How long the curve covers, in seconds. */
+    let span = $derived(range ? range.spanMs / 1000 : history.length > 1 ? (last - history[0].at) / 1000 : 0);
 
     const round = (value: number): string => (value >= 10 ? String(Math.round(value)) : value.toFixed(1));
 </script>
@@ -74,6 +83,25 @@
         {/if}
 
         <span class="mt-2 text-xs uppercase text-white/50">{$LL.mapEditor.life.dashboard.history()}</span>
+        <div
+            class="flex flex-wrap gap-x-3 gap-y-1 text-xs"
+            role="radiogroup"
+            aria-label={$LL.mapEditor.life.dashboard.history()}
+        >
+            {#each RANGES as name (name)}
+                <label class="m-0 flex cursor-pointer items-center gap-1">
+                    <input
+                        type="radio"
+                        class="m-0"
+                        name="life-history-range"
+                        value={name}
+                        bind:group={chosen}
+                        data-testid="life-range-{name}"
+                    />
+                    {$LL.mapEditor.life.dashboard.range[name]()}
+                </label>
+            {/each}
+        </div>
         <div class="flex justify-between text-xs">
             <span class="text-[#60a5fa]" data-testid="life-history-prey-max"
                 >{$LL.mapEditor.life.dashboard.historyPrey({ max: maxPrey })}</span
@@ -105,14 +133,21 @@
                 stroke="#60a5fa"
                 stroke-width="2"
                 stroke-linejoin="round"
-                points={chartPoints(history, "prey", maxPrey * HEADROOM, CHART_WIDTH, CHART_HEIGHT)}
+                points={chartPoints(history, "prey", maxPrey * HEADROOM, CHART_WIDTH, CHART_HEIGHT, chartWindow)}
             />
             <polyline
                 fill="none"
                 stroke="#fb923c"
                 stroke-width="2"
                 stroke-linejoin="round"
-                points={chartPoints(history, "predators", maxPredators * HEADROOM, CHART_WIDTH, CHART_HEIGHT)}
+                points={chartPoints(
+                    history,
+                    "predators",
+                    maxPredators * HEADROOM,
+                    CHART_WIDTH,
+                    CHART_HEIGHT,
+                    chartWindow,
+                )}
             />
         </svg>
         <div class="flex justify-between text-xs text-white/50">
