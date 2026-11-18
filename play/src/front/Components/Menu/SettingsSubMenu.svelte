@@ -29,6 +29,7 @@
         nightDarknessStore,
         nightInEditorStore,
         noAreaHighlightStore,
+        realFalloffStore,
         realisticNightStore,
         secondBounceOnStore,
         softEdgeOnStore,
@@ -448,6 +449,12 @@
             <div class="flex flex-col gap-2" data-testid="night-indirect-light">
                 <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.indirect()}</p>
                 <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.indirectHelp()}</p>
+                <InputSwitch
+                    id="night-real-falloff"
+                    bind:value={$realFalloffStore}
+                    label={$LL.menu.settings.night.realFalloff()}
+                    labelPosition="right"
+                />
                 <InputSwitch
                     id="night-ambience-on"
                     bind:value={$ambienceOnStore}

@@ -30,6 +30,18 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     angle: label("Opening"),
                     direction: label("Direction"),
                     intensity: label("Intensity"),
+                    power: label("Power"),
+                    powerPresets: {
+                        candle: label("Candle"),
+                        accent: label("Accent"),
+                        desk: label("Desk"),
+                        bulb: label("Bulb"),
+                        ceiling: label("Ceiling"),
+                        floodlight: label("Floodlight"),
+                    },
+                    powerHint: label("follows the power"),
+                    powerFree: label("free setting hint"),
+                    freeSetting: label("Free setting"),
                     rotation: label("Turn like a rotating beacon"),
                     rotationSpeed: label("Speed"),
                     rotationSpeedUnit: label("rpm"),
@@ -113,7 +125,17 @@ describe("RgbLampEditor", () => {
         flushSync();
         return { saved, lamp };
     }
-    const sliders = () => [...target.querySelectorAll<HTMLInputElement>('input[type="range"]')];
+    // The five settings of the lamp, in this order whatever their place in the panel; the power has its own slider.
+    const sliders = () =>
+        ["radius", "angle", "direction", "intensity", "rotation-speed"].flatMap((name) => {
+            const slider = target.querySelector<HTMLInputElement>(`#rgb-lamp-${name}-lamp-1`);
+            return slider ? [slider] : [];
+        });
+    const power = () => target.querySelector<HTMLInputElement>("#rgb-lamp-power-lamp-1");
+    const preset = (name: string) =>
+        [...target.querySelectorAll<HTMLButtonElement>('[data-testid="rgb-lamp-power"] button')].find(
+            (button) => button.textContent?.trim() === name,
+        );
     const colour = () => target.querySelector<HTMLInputElement>('input[type="color"]');
     function slide(slider: HTMLInputElement, value: string, release = true): void {
         slider.value = value;
@@ -121,6 +143,57 @@ describe("RgbLampEditor", () => {
         if (release) slider.dispatchEvent(new Event("change", { bubbles: true }));
         flushSync();
     }
+
+    describe("power", () => {
+        it("reads the lamp of today as a bulb of about 600 lm, and says its reach and strength follow", () => {
+            render();
+            expect(Number(power()?.value)).toBeGreaterThan(580);
+            expect(Number(power()?.value)).toBeLessThan(620);
+            expect(preset("Bulb")?.getAttribute("aria-pressed")).toBe("true");
+            expect(target.textContent).toContain("follows the power");
+        });
+
+        it("sets the reach and the strength together when a real lamp is chosen, as one step saved", () => {
+            const { saved } = render();
+            preset("Desk")?.click();
+            flushSync();
+
+            expect(saved).toHaveLength(1);
+            expect(saved[0]).toMatchObject({ type: "rgbLampPropertyData", radius: 4.5, intensity: 0.6 });
+            expect(sliders()[0].value).toBe("4.5");
+            expect(sliders()[3].value).toBe("60");
+        });
+
+        it("shows the power being dragged on the map, and saves it when the slider is released", () => {
+            const { saved } = render();
+            const slider = power();
+            if (!slider) throw new Error("no power slider");
+            slide(slider, "1600", false);
+            expect(saved).toHaveLength(0);
+            expect(get(rgbLampPreviewStore)?.settings).toMatchObject({ radius: 10 });
+            slider.dispatchEvent(new Event("change", { bubbles: true }));
+            flushSync();
+            expect(saved[0]).toMatchObject({ type: "rgbLampPropertyData", radius: 10 });
+            expect(saved[0]).not.toHaveProperty("intensity");
+        });
+
+        it("says so for a lamp set freely, to a reach and a strength no real lamp has", () => {
+            render([
+                {
+                    id: "p",
+                    type: "rgbLampPropertyData",
+                    color: "#ffffff",
+                    radius: 10,
+                    direction: 90,
+                    angle: 360,
+                    intensity: 0.3,
+                },
+            ]);
+            expect(target.textContent).toContain("free setting hint");
+            expect(sliders()[0].value).toBe("10");
+            expect(sliders()[3].value).toBe("30");
+        });
+    });
 
     it("shows the defaults of a lamp nothing was set on: warm white, 6 tiles, all around, downwards", () => {
         render();

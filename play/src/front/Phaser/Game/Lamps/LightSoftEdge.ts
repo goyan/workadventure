@@ -50,3 +50,17 @@ export function setLightSecondBounce(on: boolean): void {
 export function lightSecondBounceNow(): boolean {
     return secondBounce;
 }
+
+/** Whether the lights fade as a real lamp does (see realLightFalloff): a personal setting, off by default. */
+let realFalloff = false;
+
+export function setLightRealFalloff(on: boolean): void {
+    if (on !== realFalloff) {
+        realFalloff = on;
+        version++;
+    }
+}
+
+export function lightRealFalloffNow(): boolean {
+    return realFalloff;
+}

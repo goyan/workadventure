@@ -415,6 +415,20 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             angle: "Ouverture",
             direction: "Direction",
             intensity: "Intensité",
+            power: "Puissance",
+            powerPresets: {
+                candle: "Bougie",
+                accent: "Appoint",
+                desk: "Bureau",
+                bulb: "Ampoule",
+                ceiling: "Plafonnier",
+                floodlight: "Projecteur",
+            },
+            powerHint:
+                "Portée {radius} cases, intensité {intensity} % : elles suivent la puissance, comme pour une vraie lampe.",
+            powerFree:
+                "Réglage libre : cette portée et cette intensité ne sont celles d'aucune vraie lampe. Choisir une puissance les recale.",
+            freeSetting: "Réglage libre (portée et intensité séparées)",
             rotation: "Tourner comme un gyrophare",
             rotationSpeed: "Vitesse",
             rotationSpeedUnit: "tr/min",

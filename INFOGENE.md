@@ -453,8 +453,20 @@ n'a pas de position à lui (comme un va-et-vient).
   (`noAreaHighlightStore`, **activé par défaut**) la coupe pour soi tant que l'éclairage réaliste est activé
   (`areaHighlightHiddenStore`) ; coupée pendant qu'on est dans la zone, elle s'efface aussitôt. Sans éclairage
   réaliste, rien ne change. Porté par le code de partage (37 réglages).
+- **Puissance d'une lampe RGB, en lumens** (`Lamps/LampLumens.ts`) : dans l'éditeur de la lampe, le curseur
+  « Puissance » (75 à 6 100 lm) et ses préréglages (Bougie 75, Appoint 200, Bureau 360, Ampoule 600, Plafonnier
+  1 600, Projecteur 3 500) règlent **portée et intensité ensemble**, comme pour une vraie lampe ; les deux anciens
+  curseurs sont dans le bloc « Réglage libre ». Rien ne change dans le format de la carte : la lampe garde `radius` et
+  `intensity`, les lumens n'en sont qu'une lecture (`lumensOfLamp`), et une lampe réglée librement n'en a pas tant
+  qu'on ne choisit pas une puissance. Modèle : lampe à 2,20 m du sol éclairant vers le bas, case de 1,20 m² au sol,
+  éclairement au sol = flux / (2π (d² + h²)), portée arrêtée à 2 lux, pied pleinement éclairé à partir du flux de la
+  lampe par défaut (6 cases, 100 % ≈ 600 lm) ; soit lumens ≈ 15 × cases² + 60. Ces constantes sont des choix, pas
+  des mesures. **Décroissance réelle (réglage personnel, à l'essai)** : Paramètres → Lumière indirecte,
+  « Décroissance réelle de la lumière » (`realFalloffStore`, coupé par défaut) dessine la lumière des lampes et des
+  torches selon cette loi (`realLightFalloff` : plus forte au pied, longue traîne faible, environ 23 % à mi-portée
+  d'une lampe de 6 cases au lieu de 56 %) ; porté par le code de partage (38 réglages).
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
-  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 37 réglages personnels de lumière (obscurité de la nuit,
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 38 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
   forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
   lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu

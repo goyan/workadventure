@@ -403,6 +403,20 @@ const mapEditor: BaseTranslation = {
             angle: "Opening",
             direction: "Direction",
             intensity: "Intensity",
+            power: "Power",
+            powerPresets: {
+                candle: "Candle",
+                accent: "Accent",
+                desk: "Desk",
+                bulb: "Bulb",
+                ceiling: "Ceiling",
+                floodlight: "Floodlight",
+            },
+            powerHint:
+                "Reach {radius:number} tiles, intensity {intensity:number}%: they follow the power, as for a real lamp.",
+            powerFree:
+                "Free setting: this reach and this intensity are those of no real lamp. Choosing a power sets them again.",
+            freeSetting: "Free setting (reach and intensity apart)",
             rotation: "Turn like a rotating beacon",
             rotationSpeed: "Speed",
             rotationSpeedUnit: "rpm",

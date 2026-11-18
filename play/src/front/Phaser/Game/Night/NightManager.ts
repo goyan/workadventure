@@ -10,6 +10,7 @@ import {
     nightDateStore,
     nightInEditorStore,
     nightModeStore,
+    realFalloffStore,
     realisticNightStore,
     shownAmbienceStrengthStore,
     shownLightBounceStore,
@@ -23,7 +24,12 @@ import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
 import { torchLightsStore } from "../../../Stores/TorchStore";
 import type { GameScene } from "../GameScene";
 import { shownMapPlace } from "../Weather/RealWeatherClient";
-import { setLightBounceStrength, setLightSecondBounce, setLightSoftEdgePx } from "../Lamps/LightSoftEdge";
+import {
+    setLightBounceStrength,
+    setLightRealFalloff,
+    setLightSecondBounce,
+    setLightSoftEdgePx,
+} from "../Lamps/LightSoftEdge";
 import {
     NIGHT_MAX_OPACITY,
     nightOpacityAt,
@@ -177,7 +183,12 @@ export class NightManager {
             setLightSecondBounce(on);
             this.scene.markDirty();
         });
+        const unsubscribeRealFalloff = realFalloffStore.subscribe((on) => {
+            setLightRealFalloff(on);
+            this.scene.markDirty();
+        });
         this.unsubscribeIndirect = () => {
+            unsubscribeRealFalloff();
             unsubscribeSecondBounce();
             unsubscribeBounce();
             unsubscribeStrength();
