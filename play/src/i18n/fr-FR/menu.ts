@@ -48,6 +48,7 @@ const menu: DeepPartial<Translation["menu"]> = {
         weatherEffects: "Afficher la météo (pluie, neige et lueurs d’orage)",
         lampEffects: "Effets lumineux des lampes et des pistes de danse",
         clouds: "Afficher les nuages et leurs ombres",
+        aquaticLife: "Afficher la vie aquatique (poissons et dauphins dans l’eau du relief)",
         cloudsHeight: {
             label: "Hauteur des nuages (en zoomant, on passe dessous)",
             low: "Basse",

@@ -11,3 +11,6 @@ export const terrainBlockedStore = writable(false);
 
 /** What comes into the water of the map and goes out of it, as the server last told (the dashboard of the relief tool). */
 export const terrainWaterStatsStore = writable<TerrainWaterStatsMessage | undefined>(undefined);
+
+/** How many fish and dolphins live in the water of the map, as the server last told. */
+export const aquaticLifeCountsStore = writable<{ fish: number; dolphins: number }>({ fish: 0, dolphins: 0 });

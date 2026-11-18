@@ -17,7 +17,12 @@
 
     import { analyticsClient } from "../../Administration/AnalyticsClient";
     import { localUserStore } from "../../Connection/LocalUserStore";
-    import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../Stores/WeatherStore";
+    import {
+        aquaticLifeShownStore,
+        cloudsHeightStore,
+        cloudsShownStore,
+        weatherEffectsEnabledStore,
+    } from "../../Stores/WeatherStore";
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import {
         ambienceFullShareStore,
@@ -563,6 +568,12 @@
                 id="weather-effects-enabled"
                 bind:value={$weatherEffectsEnabledStore}
                 label={$LL.menu.settings.weatherEffects()}
+                labelPosition="right"
+            />
+            <InputSwitch
+                id="aquatic-life-shown"
+                bind:value={$aquaticLifeShownStore}
+                label={$LL.menu.settings.aquaticLife()}
                 labelPosition="right"
             />
             <InputSwitch
