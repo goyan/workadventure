@@ -9,12 +9,12 @@ import { UsernameRaisedHandDisplay } from "./UsernameRaisedHandDisplay";
 import { UsernameStatusDisplay } from "./UsernameStatusDisplay";
 
 const CORRECTION_RATE = 0.65; // When one game pixel is smaller than one screen pixel (zoomed-out), we zoom out the Woka name, but only up to CORRECTION_RATE. After that, the Woka name will stay at its current screen size even if we zoom out more (to keep the text readable)
-const USERNAME_FONT_SIZE = 10;
+const USERNAME_FONT_SIZE = 9;
 const USERNAME_FONT_WEIGHT = 500;
 
-const PLAYER_NAME_BACKGROUND_COLOR = "rgba(27, 42, 65, 0.5)";
-const PLAYER_NAME_BACKGROUND_RADIUS = 8;
-const PLAYER_NAME_PADDING = 4;
+const PLAYER_NAME_BACKGROUND_COLOR = "rgba(32, 32, 38, 0.62)";
+const PLAYER_NAME_BACKGROUND_RADIUS = 5;
+const PLAYER_NAME_PADDING = 5;
 
 type Position = { x: number; y: number };
 
@@ -179,10 +179,13 @@ export class UsernameDisplay {
         element.style.margin = "0";
         element.style.marginRight = `calc(2px * var(--username-dom-scale, 1))`;
         element.style.color = "#ffffff";
-        element.style.fontFamily = "var(--font-main)";
+        element.style.fontFamily = "Roboto, sans-serif";
         element.style.fontSize = `calc(${USERNAME_FONT_SIZE}px * var(--username-dom-scale, 1))`;
         element.style.fontWeight = `${USERNAME_FONT_WEIGHT}`;
         element.style.whiteSpace = "nowrap";
+        element.style.maxWidth = "calc(140px * var(--username-dom-scale, 1))";
+        element.style.overflow = "hidden";
+        element.style.textOverflow = "ellipsis";
         element.style.pointerEvents = "none";
 
         return element;
@@ -260,5 +263,9 @@ export class UsernameDisplay {
             this.element.classList.remove("talking");
             this.element.classList.remove("speaker");
         }
+    }
+
+    public setVideoBubbleVisible(visible: boolean): void {
+        this.element.style.visibility = visible ? "hidden" : "";
     }
 }

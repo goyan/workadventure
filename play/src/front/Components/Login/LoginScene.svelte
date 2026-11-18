@@ -2,7 +2,8 @@
     import type { Game } from "../../Phaser/Game/Game";
     import type { LoginScene } from "../../Phaser/Login/LoginScene";
     import { LoginSceneName } from "../../Phaser/Login/LoginScene";
-    import { MAX_USERNAME_LENGTH } from "../../Enum/EnvironmentVariable";
+    import { isUserNameValid, maxUserNameLength, normalizeUserName } from "../../Connection/LocalUserUtils";
+    import { MIN_PLAYER_NAME_LENGTH } from "../../../common/PlayerName";
     import logoImg from "../images/logo.svg";
     import poweredByWorkAdventureImg from "../images/Powered_By_WorkAdventure_Big.png";
     import bgMap from "../images/map-exemple.webp";
@@ -71,7 +72,9 @@
     async function submit() {
         startValidating = true;
 
-        let finalName = name.trim();
+        const finalName = normalizeUserName(name);
+        name = finalName;
+        errorName = "";
         if (finalName !== "") {
             try {
                 await loginScene.login(finalName);
@@ -130,26 +133,31 @@
                 placeholder={$LL.login.input.name.placeholder()}
                 class="w-52 md:w-96 h-12 text text-center bg-contrast rounded border border-solid border-white/20 mt-4 mb-0"
                 autofocus
-                maxlength={MAX_USERNAME_LENGTH}
+                maxlength={maxUserNameLength}
+                aria-describedby="player-name-rules"
                 bind:value={name}
-                onkeypress={() => {
+                oninput={() => {
                     startValidating = true;
+                    errorName = "";
                 }}
-                class:border-danger={(name.trim() === "" && startValidating) || errorName !== ""}
+                class:border-danger={(!isUserNameValid(name) && startValidating) || errorName !== ""}
             />
-            {#if (name.trim() === "" && startValidating) || errorName !== ""}
+            <p id="player-name-rules" class="text-xs text-white/70 mt-2 mb-0">
+                {$LL.login.input.name.notValidError()} ({MIN_PLAYER_NAME_LENGTH}–{maxUserNameLength})
+            </p>
+            {#if (!isUserNameValid(name) && startValidating) || errorName !== ""}
                 <p class="err text-xs text-danger italic pt-2 mb-0">
-                    {#if errorName}{errorName}{:else}{$LL.login.input.name.empty()}{/if}
+                    {#if errorName}{errorName}{:else}{$LL.login.input.name.notValidError()}{/if}
                 </p>
             {/if}
         </section>
         <section
             class="action flex h-fit justify-center m-0"
-            class:opacity-50={(name.trim() === "" && startValidating) || errorName !== ""}
+            class:opacity-50={errorName !== ""}
         >
             <Button
                 type="submit"
-                disabled={(name.trim() === "" && startValidating) || errorName !== ""}
+                disabled={errorName !== ""}
                 variant="secondary"
                 size="lg"
                 class="mt-4 w-52 md:w-96 bold text-center block loginSceneFormSubmit"

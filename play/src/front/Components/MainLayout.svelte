@@ -52,6 +52,7 @@
     import { allJamRoomsStore } from "../ListeningZone/ListeningZoneController";
     import { joinedJamStore } from "../ListeningZone/ListeningZoneStore";
     import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
+    import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
@@ -525,6 +526,7 @@
             {/if}
 
             {#if !$highlightFullScreen}
+                <AvatarVideoBubbles />
                 <PictureInPicture>
                     {#snippet children({ inPictureInPicture })}
                         <PresentationLayout {inPictureInPicture} />

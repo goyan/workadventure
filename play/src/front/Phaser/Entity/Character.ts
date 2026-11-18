@@ -20,6 +20,7 @@ import { getPlayerAnimations, PlayerAnimationTypes } from "@wa/front/Phaser/Play
 import { ProtobufClientUtils } from "@wa/front/Network/ProtobufClientUtils";
 import { WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
 import { UsernameDisplay } from "@wa/front/Phaser/Components/UsernameDisplay";
+import { normalizeUserName } from "../../Connection/LocalUserUtils";
 import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
@@ -65,7 +66,7 @@ import Tween = Phaser.Tweens.Tween;
 import Rectangle = Phaser.Geom.Rectangle;
 import Body = Phaser.Physics.Arcade.Body;
 
-const playerNameY = -18;
+const playerNameY = -24;
 /** The system asks for less motion: a Nerf hit flashes once instead of blinking. */
 const REDUCED_MOTION = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 /**
@@ -107,6 +108,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     private availabilityStatus: AvailabilityStatusType = AvailabilityStatus.ONLINE;
     private raisedHand = false;
     private listeningMusic = false;
+    private videoBubbleVisible = false;
     private musicHeadphonesEffect: MusicHeadphonesEffect | undefined;
     private nerfEquipped = false;
     private nerfGunEffect: NerfGunEffect | undefined;
@@ -223,7 +225,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     ) {
         super(scene, x, y /*, texture, frame*/);
         this.scene = scene;
-        this.playerName = name;
+        this.playerName = normalizeUserName(name);
         this.invisible = true;
         this.clickable = false;
 
@@ -313,6 +315,7 @@ export abstract class Character extends Container implements OutlineableInterfac
             this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
             this.usernameDisplay.setRaisedHand(this.raisedHand, true);
             this.usernameDisplay.setListeningMusic(this.listeningMusic);
+            this.usernameDisplay.setVideoBubbleVisible(this.videoBubbleVisible);
             this.usernameDisplay.setPlayerDepth(this.depth);
 
             this.outlineColorStoreUnsubscribe = this.outlineColorStore.subscribe((color) => {
@@ -714,6 +717,11 @@ export abstract class Character extends Container implements OutlineableInterfac
 
     protected updateUsernameDisplayPosition(x = this.x, y = this.y): void {
         this.usernameDisplay?.setPosition(x, y + playerNameY);
+    }
+
+    public setVideoBubbleVisible(visible: boolean): void {
+        this.videoBubbleVisible = visible;
+        this.usernameDisplay?.setVideoBubbleVisible(visible);
     }
 
     setPosition(x: number, y: number): this {

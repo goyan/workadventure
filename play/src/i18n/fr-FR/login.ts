@@ -7,7 +7,7 @@ const login: DeepPartial<Translation["login"]> = {
             placeholder: "Entrez votre nom",
             empty: "Le nom est vide",
             tooLongError: "Le nom est trop long",
-            notValidError: "Le nom n'est pas valide",
+            notValidError: "Lettres, chiffres, _ et - uniquement, sans espace. Commencez par une lettre ou un chiffre.",
         },
     },
     genericError: "Une erreur est survenue",

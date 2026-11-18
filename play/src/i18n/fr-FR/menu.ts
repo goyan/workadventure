@@ -180,6 +180,7 @@ const menu: DeepPartial<Translation["menu"]> = {
                 arcade: "Arcade",
             },
         },
+        avatarVideos: "Vidéos au-dessus des avatars",
         videoBandwidth: {
             title: "Qualité vidéo",
             low: "Basse",

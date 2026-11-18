@@ -5,7 +5,7 @@ window.env = {
     DEBUG_MODE: true,
 };
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../../src/front/Enum/EnvironmentVariable.ts", () => {
     return {
@@ -38,14 +38,33 @@ describe("isUserNameValid()", () => {
     it("should not validate spaces", () => {
         expect(isUserNameValid(" ")).toBe(false);
     });
-    it("should validate special characters", () => {
-        expect(isUserNameValid("%&-")).toBe(true);
+    it("should reject special characters", () => {
+        expect(isUserNameValid("%&-")).toBe(false);
     });
     it("should validate accents", () => {
         expect(isUserNameValid("éàëè")).toBe(true);
     });
     it("should validate chinese characters", () => {
         expect(isUserNameValid("中文鍵盤")).toBe(true);
+    });
+});
+
+describe("avatar video preference", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("defaults to enabled and persists both disabling and re-enabling", () => {
+        const values = new Map<string, string>();
+        vi.stubGlobal("localStorage", {
+            getItem: (key: string) => values.get(key) ?? null,
+            setItem: (key: string, value: string) => values.set(key, value),
+        });
+        expect(localUserStore.getAvatarVideosEnabled()).toBe(true);
+        localUserStore.setAvatarVideosEnabled(false);
+        expect(localUserStore.getAvatarVideosEnabled()).toBe(false);
+        expect(values.get("avatarVideosEnabled")).toBe("false");
+        localUserStore.setAvatarVideosEnabled(true);
+        expect(localUserStore.getAvatarVideosEnabled()).toBe(true);
+        expect(values.get("avatarVideosEnabled")).toBe("true");
     });
 });
 
