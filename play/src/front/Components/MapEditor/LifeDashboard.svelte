@@ -1,11 +1,13 @@
 <script lang="ts">
     import { LL } from "../../../i18n/i18n-svelte";
     import { formatDuration } from "../../Phaser/Game/Life/LifeDurations";
+    import { chartPoints } from "../../Phaser/Game/Life/LifeStats";
     import { aquaticLifeStatsStore } from "../../Stores/TerrainEditorStore";
 
-    /** The history is drawn in a box of this size; each line has its own scale. */
-    const CHART_WIDTH = 240;
-    const CHART_HEIGHT = 48;
+    /** The curves are drawn in a box of this size; each has its own scale, with a little room above its largest value. */
+    const CHART_WIDTH = 300;
+    const CHART_HEIGHT = 110;
+    const HEADROOM = 1.1;
     const EVENTS = ["births", "arrivals", "diedOfAge", "eaten", "diedDry"] as const;
 
     let stats = $derived($aquaticLifeStatsStore);
@@ -13,19 +15,11 @@
     let fill = $derived(
         stats && totals && totals.capacity > 0 ? Math.min(100, Math.round((stats.prey / totals.capacity) * 100)) : 0,
     );
-    let maxPrey = $derived(Math.max(1, ...(stats?.history ?? []).map((sample) => sample.prey)));
-    let maxPredators = $derived(Math.max(1, ...(stats?.history ?? []).map((sample) => sample.predators)));
-    // Headroom above the largest value, more for the predators: two flat lines at their largest do not hide each other.
-    const PREY_HEADROOM = 1.1;
-    const PREDATORS_HEADROOM = 1.5;
-
-    /** The points of a line of the history: oldest on the left, its largest value at the top. */
-    function pointsOf(values: number[], max: number): string {
-        const step = values.length > 1 ? CHART_WIDTH / (values.length - 1) : 0;
-        return values
-            .map((value, index) => `${Math.round(index * step)},${Math.round(CHART_HEIGHT * (1 - value / max))}`)
-            .join(" ");
-    }
+    let history = $derived(stats?.history ?? []);
+    let maxPrey = $derived(Math.max(1, ...history.map((sample) => sample.prey)));
+    let maxPredators = $derived(Math.max(1, ...history.map((sample) => sample.predators)));
+    /** How long the history covers, in seconds. */
+    let span = $derived(history.length > 1 ? (history[history.length - 1].at - history[0].at) / 1000 : 0);
 
     const round = (value: number): string => (value >= 10 ? String(Math.round(value)) : value.toFixed(1));
 </script>
@@ -71,36 +65,53 @@
             </div>
         {/if}
 
-        <span class="mt-2 text-xs text-white/50">{$LL.mapEditor.life.dashboard.history()}</span>
+        <span class="mt-2 text-xs uppercase text-white/50">{$LL.mapEditor.life.dashboard.history()}</span>
+        <div class="flex justify-between text-xs">
+            <span class="text-[#60a5fa]" data-testid="life-history-prey-max"
+                >{$LL.mapEditor.life.dashboard.historyPrey({ max: maxPrey })}</span
+            >
+            <span class="text-[#fb923c]" data-testid="life-history-predators-max"
+                >{$LL.mapEditor.life.dashboard.historyPredators({ max: maxPredators })}</span
+            >
+        </div>
         <svg
             viewBox="0 -2 {CHART_WIDTH} {CHART_HEIGHT + 4}"
             class="w-full rounded bg-white/5"
-            preserveAspectRatio="none"
             aria-hidden="true"
             data-testid="life-history"
         >
+            <!-- The scale: nothing, half and the largest value. -->
+            {#each [0, 0.5, 1] as level (level)}
+                <line
+                    x1="0"
+                    x2={CHART_WIDTH}
+                    y1={CHART_HEIGHT * (1 - level / HEADROOM)}
+                    y2={CHART_HEIGHT * (1 - level / HEADROOM)}
+                    stroke="white"
+                    stroke-opacity="0.12"
+                    stroke-width="1"
+                />
+            {/each}
             <polyline
                 fill="none"
                 stroke="#60a5fa"
-                stroke-width="1.5"
-                points={pointsOf(
-                    stats.history.map((sample) => sample.prey),
-                    maxPrey * PREY_HEADROOM,
-                )}
+                stroke-width="2"
+                stroke-linejoin="round"
+                points={chartPoints(history, "prey", maxPrey * HEADROOM, CHART_WIDTH, CHART_HEIGHT)}
             />
             <polyline
                 fill="none"
                 stroke="#fb923c"
-                stroke-width="1.5"
-                points={pointsOf(
-                    stats.history.map((sample) => sample.predators),
-                    maxPredators * PREDATORS_HEADROOM,
-                )}
+                stroke-width="2"
+                stroke-linejoin="round"
+                points={chartPoints(history, "predators", maxPredators * HEADROOM, CHART_WIDTH, CHART_HEIGHT)}
             />
         </svg>
-        <div class="flex justify-between text-xs">
-            <span class="text-[#60a5fa]">{$LL.mapEditor.life.dashboard.historyPrey({ max: maxPrey })}</span>
-            <span class="text-[#fb923c]">{$LL.mapEditor.life.dashboard.historyPredators({ max: maxPredators })}</span>
+        <div class="flex justify-between text-xs text-white/50">
+            <span data-testid="life-history-span"
+                >{$LL.mapEditor.life.dashboard.ago({ duration: formatDuration(span) })}</span
+            >
+            <span>{$LL.mapEditor.life.dashboard.now()}</span>
         </div>
 
         {#if totals}

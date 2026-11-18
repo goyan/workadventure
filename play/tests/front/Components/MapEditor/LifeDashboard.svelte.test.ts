@@ -43,12 +43,14 @@ const view = {
         habitableBodies: 3,
         populatedBodies: 2,
         capacity: 40,
+        history: [],
+        historyStepMs: 5000,
     },
     lastMinute: { arrivals: 0, births: 4, diedOfAge: 1, eaten: 2, diedDry: 0 },
     history: [
-        { prey: 2, predators: 0 },
-        { prey: 8, predators: 1 },
-        { prey: 12, predators: 2 },
+        { at: 0, prey: 2, predators: 0 },
+        { at: 60_000, prey: 8, predators: 1 },
+        { at: 180_000, prey: 12, predators: 2 },
     ],
 };
 
@@ -97,15 +99,20 @@ describe("LifeDashboard", () => {
         expect(text("life-since")).toContain("2 min");
     });
 
-    it("draws the history of the prey and of the predators", () => {
+    it("draws the prey and the predators over time, each on its own scale, with the time it covers", () => {
         aquaticLifeStatsStore.set(view);
         render();
         const lines = target.querySelectorAll('[data-testid="life-history"] polyline');
         expect(lines).toHaveLength(2);
-        // Three samples each; the largest prey just under the top, the predators lower: the lines never overlap there.
-        expect(lines[0].getAttribute("points")?.trim().split(" ")).toHaveLength(3);
-        expect(lines[0].getAttribute("points")?.trim().endsWith(",4")).toBe(true);
-        expect(lines[1].getAttribute("points")?.trim().endsWith(",16")).toBe(true);
+        // Three samples each, placed at their time: the second one at a third of the width.
+        const prey = lines[0].getAttribute("points")?.trim().split(" ") ?? [];
+        expect(prey).toHaveLength(3);
+        expect(prey[1].split(",")[0]).toBe("100");
+        // The scales: the largest prey on the left, the largest predators on the right.
+        expect(text("life-history-prey-max")).toContain("12");
+        expect(text("life-history-predators-max")).toContain("2");
+        // Three minutes of history.
+        expect(text("life-history-span")).toContain("3 min");
     });
 
     it("shows a dash for the prey of a predator when there is no predator", () => {

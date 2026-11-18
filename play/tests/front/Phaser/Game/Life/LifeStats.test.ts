@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LifeStats, LIFE_HISTORY_SAMPLES } from "../../../../../src/front/Phaser/Game/Life/LifeStats";
+import { chartPoints, LifeStats } from "../../../../../src/front/Phaser/Game/Life/LifeStats";
 
 const totals = (births: number, eaten = 0) => ({
     since: 1000,
@@ -11,6 +11,8 @@ const totals = (births: number, eaten = 0) => ({
     habitableBodies: 2,
     populatedBodies: 1,
     capacity: 40,
+    history: [] as { at: number; prey: number; predators: number }[],
+    historyStepMs: 5000,
 });
 const animals = (males: number, females: number, dolphins: number) => [
     ...Array.from({ length: males }, (_, index) => ({ id: index + 1, kind: 0 })),
@@ -45,15 +47,40 @@ describe("LifeStats", () => {
         expect(stats.view(1000).lastMinute.births).toBe(0);
     });
 
-    it("keeps the history of the prey and of the predators, the oldest samples forgotten", () => {
+    it("keeps the history of the prey and of the predators, a sample every five seconds", () => {
         const stats = new LifeStats();
-        for (let second = 0; second < LIFE_HISTORY_SAMPLES + 10; second++) {
+        for (let second = 0; second <= 12; second++) {
             stats.receive(animals(second, 0, 1), totals(0), second * 1000);
         }
-        const { history } = stats.view(0);
-        expect(history).toHaveLength(LIFE_HISTORY_SAMPLES);
-        expect(history[0]).toEqual({ prey: 10, predators: 1 });
-        expect(history.at(-1)).toEqual({ prey: LIFE_HISTORY_SAMPLES + 9, predators: 1 });
+        expect(stats.view(0).history).toEqual([
+            { at: 0, prey: 0, predators: 1 },
+            { at: 5000, prey: 5, predators: 1 },
+            { at: 10000, prey: 10, predators: 1 },
+        ]);
+    });
+
+    it("starts from the history the server gives on joining, then goes on with what it is told", () => {
+        const stats = new LifeStats();
+        const joined = {
+            ...totals(0),
+            history: [
+                { at: 0, prey: 2, predators: 0 },
+                { at: 10_000, prey: 9, predators: 1 },
+            ],
+            historyStepMs: 10_000,
+        };
+        stats.receive(animals(5, 5, 1), joined, 12_000);
+        // Too close to the last sample of the server: not added yet.
+        expect(stats.view(0).history).toHaveLength(2);
+        stats.receive(animals(6, 6, 1), totals(0), 20_000);
+        expect(stats.view(0).history.at(-1)).toEqual({ at: 20_000, prey: 12, predators: 1 });
+    });
+
+    it("forgets its history when the life starts over", () => {
+        const stats = new LifeStats();
+        stats.receive(animals(1, 1, 0), totals(50), 0);
+        stats.receive(animals(1, 1, 0), { ...totals(0), since: 9000 }, 10_000);
+        expect(stats.view(0).history).toEqual([{ at: 10_000, prey: 2, predators: 0 }]);
     });
 
     it("has nothing to show before the server told anything, nor after the life went", () => {
@@ -62,5 +89,23 @@ describe("LifeStats", () => {
         stats.receive(animals(1, 1, 0), totals(1), 0);
         stats.receive([], undefined, 1000);
         expect(stats.view(1000)).toMatchObject({ prey: 0, predators: 0, totals: undefined });
+    });
+});
+
+describe("chartPoints", () => {
+    const samples = [
+        { at: 0, prey: 0, predators: 0 },
+        { at: 30_000, prey: 50, predators: 1 },
+        { at: 120_000, prey: 100, predators: 2 },
+    ];
+
+    it("places each sample at its time, the largest value at the top of the box", () => {
+        expect(chartPoints(samples, "prey", 100, 200, 80)).toBe("0,80 50,40 200,0");
+        expect(chartPoints(samples, "predators", 4, 200, 80)).toBe("0,80 50,60 200,40");
+    });
+
+    it("draws a single sample in the middle, and nothing without any", () => {
+        expect(chartPoints([samples[1]], "prey", 100, 200, 80)).toBe("100,40");
+        expect(chartPoints([], "prey", 100, 200, 80)).toBe("");
     });
 });
