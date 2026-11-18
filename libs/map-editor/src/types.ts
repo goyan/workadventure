@@ -942,6 +942,52 @@ export const WaterSettings = z.object({
 export type WaterSettings = z.infer<typeof WaterSettings>;
 
 /**
+ * The life in the water of the relief of a map (fish that breed, dolphins that hunt them), kept by the server. All
+ * durations are in real seconds: the speed of the water does not hasten them.
+ */
+export const DEFAULT_LIFE_SETTINGS = {
+    enabled: false,
+    reproductionDelay: 120,
+    maxLifespan: 900,
+    maxSpeed: 1.5,
+    huntInterval: 60,
+} as const;
+export const LIFE_BOUNDS = {
+    reproductionDelay: [10, 3600],
+    maxLifespan: [30, 86400],
+    maxSpeed: [0.2, 6],
+    huntInterval: [5, 3600],
+} as const;
+export const LifeSettings = z.object({
+    enabled: z.boolean().default(DEFAULT_LIFE_SETTINGS.enabled),
+    /** How long a fish waits between two matings, and a newborn before its first, in seconds. */
+    reproductionDelay: z
+        .number()
+        .min(LIFE_BOUNDS.reproductionDelay[0])
+        .max(LIFE_BOUNDS.reproductionDelay[1])
+        .default(DEFAULT_LIFE_SETTINGS.reproductionDelay),
+    /** The longest life of a fish, in seconds (each lives 70 % to 100 % of it). */
+    maxLifespan: z
+        .number()
+        .min(LIFE_BOUNDS.maxLifespan[0])
+        .max(LIFE_BOUNDS.maxLifespan[1])
+        .default(DEFAULT_LIFE_SETTINGS.maxLifespan),
+    /** The fastest a fish swims, in tiles (32 map pixels) a second. */
+    maxSpeed: z
+        .number()
+        .min(LIFE_BOUNDS.maxSpeed[0])
+        .max(LIFE_BOUNDS.maxSpeed[1])
+        .default(DEFAULT_LIFE_SETTINGS.maxSpeed),
+    /** How long a dolphin waits between two hunts, in seconds. */
+    huntInterval: z
+        .number()
+        .min(LIFE_BOUNDS.huntInterval[0])
+        .max(LIFE_BOUNDS.huntInterval[1])
+        .default(DEFAULT_LIFE_SETTINGS.huntInterval),
+});
+export type LifeSettings = z.infer<typeof LifeSettings>;
+
+/**
  * The last snow of the map once another weather took its place: its ground melts from `endedAt`. Without `startedAt`,
  * a snow from before its start was kept: its ground was full.
  */
@@ -964,6 +1010,7 @@ export const WAMSettings = z.object({
     /** Per category, by its name in lower case. Fail open like `prefabOverrides`. */
     categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
     water: WaterSettings.optional().catch(undefined),
+    life: LifeSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({
