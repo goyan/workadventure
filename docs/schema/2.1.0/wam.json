@@ -810,7 +810,7 @@
                         "flow": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 2000000
+                          "maximum": 60000000
                         },
                         "radius": {
                           "type": "number",
@@ -860,7 +860,7 @@
                         "flow": {
                           "type": "number",
                           "minimum": 0,
-                          "maximum": 2000000
+                          "maximum": 60000000
                         },
                         "radius": {
                           "type": "number",

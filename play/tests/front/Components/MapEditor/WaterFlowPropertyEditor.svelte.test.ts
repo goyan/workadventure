@@ -139,8 +139,8 @@ describe("WaterFlowPropertyEditor", () => {
         slider.dispatchEvent(new Event("input", { bubbles: true }));
         slider.dispatchEvent(new Event("change", { bubbles: true }));
         flushSync();
-        expect(property.flow).toBe(2_000_000);
-        expect(byTestId<HTMLInputElement>("water-flow-value").value).toBe("120000");
+        expect(property.flow).toBe(60_000_000);
+        expect(byTestId<HTMLInputElement>("water-flow-value").value).toBe("3600000");
         expect(onchange).toHaveBeenCalled();
     });
 
@@ -174,7 +174,7 @@ describe("WaterFlowPropertyEditor", () => {
         const property = placed(1000);
         render(property);
         type("999999999");
-        expect(property.flow).toBe(2_000_000);
+        expect(property.flow).toBe(60_000_000);
         type("-4");
         expect(property.flow).toBe(0);
     });

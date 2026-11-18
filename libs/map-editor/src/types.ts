@@ -339,8 +339,8 @@ export const SwitchTargets = z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("zone") }),
 ]);
 
-/** The most a source gives or a sink takes, in litres a minute: 2000 cubic metres, enough to fill a lake fast. */
-export const MAX_WATER_FLOW = 2_000_000;
+/** The most a source gives or a sink takes, in litres a minute: 1000 cubic metres a second, a large river. */
+export const MAX_WATER_FLOW = 60_000_000;
 /** The largest radius a source pours over or a sink takes from, in tiles, and the radius of a sink that sets none. */
 export const MAX_WATER_RADIUS_TILES = 10;
 export const DEFAULT_SINK_RADIUS_TILES = 1.5;
