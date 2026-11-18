@@ -12,6 +12,7 @@ import {
     WATER_STEP_MS,
     WaterGrid,
     waterObjectsOf,
+    waterWallsOf,
     WeatherType,
 } from "@workadventure/map-editor";
 import type { TerrainData, WaterGridBounds, WaterObject, WaterTally } from "@workadventure/map-editor";
@@ -51,6 +52,8 @@ export class TerrainWaterManager {
     private grid: WaterGrid | undefined;
     private objects: WaterObject[] = [];
     private readTerrain: TerrainData | undefined | null = null;
+    /** The walls the grid was built with (their signature): a wall built or removed makes a new grid. */
+    private readWalls: string | undefined;
     /** The water saved before a restart, until the first grid takes it. */
     private saved: WaterGrid | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
@@ -106,17 +109,21 @@ export class TerrainWaterManager {
         const wam = this.room.getWam();
         this.objects = waterObjectsOf(wam);
         const bounds = gridBoundsOf(wam?.terrain, this.objects);
+        // The walls matter only where there is water to hold: a map without relief nor water object reads none.
+        const walls = bounds ? waterWallsOf(wam) : undefined;
         const sameGrid =
             this.readTerrain !== null &&
             wam?.terrain === this.readTerrain &&
+            walls?.signature === this.readWalls &&
             sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
         // A source or a sink may have come or gone: the water is looked at again.
         this.moving = true;
         if (sameGrid) return;
         this.readTerrain = wam?.terrain;
+        this.readWalls = walls?.signature;
         const before = this.grid ?? this.saved;
         this.saved = undefined;
-        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds) : undefined;
+        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls) : undefined;
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;

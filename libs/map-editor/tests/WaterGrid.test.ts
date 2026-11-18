@@ -140,6 +140,53 @@ describe("WaterGrid", () => {
         expect(door.depthAt(3, 4)).toBe(0);
     });
 
+    describe("walls between cells", () => {
+        // Flat ground, a wall from top to bottom between the columns 9 and 10, but for a doorway at the row 10.
+        const flat = terrainOf([[100, 100, -1]]);
+        const bounds = { x: 0, y: 0, width: 20, height: 20 };
+        const wall = (doorway: boolean): { east: Set<string>; south: Set<string> } => {
+            const east = new Set<string>();
+            for (let y = 0; y < 20; y++) if (!doorway || y !== 10) east.add(cellKey(9, y));
+            return { east, south: new Set<string>() };
+        };
+        const eastSide = (grid: WaterGrid): number => {
+            let total = 0;
+            for (let y = 0; y < 20; y++) for (let x = 10; x < 20; x++) total += grid.depthAt(x, y);
+            return total;
+        };
+
+        it("holds the water on its side of a wall, and lets it through a doorway", () => {
+            const closed = new WaterGrid(flat, bounds, undefined, wall(false));
+            run(closed, 300, { ...nothing, flows: [{ cellX: 5, cellY: 10, px: 2 }] });
+            expect(eastSide(closed)).toBe(0);
+            expect(closed.depthAt(9, 10)).toBeGreaterThan(1);
+            const open = new WaterGrid(flat, bounds, undefined, wall(true));
+            run(open, 300, { ...nothing, flows: [{ cellX: 5, cellY: 10, px: 2 }] });
+            expect(eastSide(open)).toBeGreaterThan(10);
+        });
+
+        it("holds it at a wall along a row too", () => {
+            const south = new Set<string>();
+            for (let x = 0; x < 20; x++) south.add(cellKey(x, 9));
+            const grid = new WaterGrid(flat, bounds, undefined, { east: new Set<string>(), south });
+            run(grid, 300, { ...nothing, flows: [{ cellX: 10, cellY: 5, px: 2 }] });
+            let below = 0;
+            for (let y = 10; y < 20; y++) for (let x = 0; x < 20; x++) below += grid.depthAt(x, y);
+            expect(below).toBe(0);
+        });
+
+        it("never lets a sink take water, nor a source pour it, through a wall", () => {
+            const grid = new WaterGrid(flat, bounds, undefined, wall(false));
+            // A source 2 cells from the wall, pouring over a disc of 4 cells: nothing lands behind the wall.
+            grid.step({ ...nothing, flows: [{ cellX: 8, cellY: 10, px: 60, radius: 4 }] });
+            expect(eastSide(grid)).toBe(0);
+            expect(grid.totalPx()).toBeCloseTo(60, 3);
+            // A sink behind the wall, its disc reaching over it, takes nothing.
+            const tally = grid.step({ ...nothing, flows: [{ cellX: 11, cellY: 10, px: -1000, radius: 6 }] });
+            expect(tally.sinksPx).toBe(0);
+        });
+    });
+
     it("takes water at a sink, never more than is there", () => {
         const pit = terrainOf([
             [0, 0, -32],

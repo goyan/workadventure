@@ -1,7 +1,7 @@
 import { TERRAIN_CHUNK } from "../types";
 import type { TerrainData } from "../types";
 import { CELL_AREA_M2, LITRES_PER_M3, metresOf } from "./Scale";
-import { cellOf, dugCells, heightAt } from "./TerrainGrid";
+import { cellKey, cellOf, dugCells, heightAt } from "./TerrainGrid";
 
 /** Litres over one cell of the relief under one pixel of water. */
 export const CELL_LITRES_PER_PX = CELL_AREA_M2 * -metresOf(-1) * LITRES_PER_M3;
@@ -39,6 +39,15 @@ const PARCEL_REACH_CELLS = 512;
 const BED_FILM_PX = 2;
 /** Two surfaces this close are level: the water of the one runs to a sink in the other. */
 const LEVEL_PX = 0.05;
+
+/**
+ * The walls the water cannot cross, as sides of cells of the relief (keys of cellKey): `east` holds the cells whose
+ * east side is a wall (between the cell and the next one of its row), `south` those whose south side is one.
+ */
+export interface WaterWallSides {
+    east: ReadonlySet<string>;
+    south: ReadonlySet<string>;
+}
 
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
@@ -139,6 +148,11 @@ export class WaterGrid {
     public readonly bounds: WaterGridBounds;
     private readonly ground: Float32Array;
     private readonly blocked: Uint8Array;
+    /**
+     * For each cell, the sides the water cannot cross (a wall between two cells, or a blocked neighbour): a bit for
+     * each side, in the order east, west, south, north.
+     */
+    private readonly closed: Uint8Array;
     /** For the search of a sink: the cells of its queue, and the search that last saw each cell. */
     private readonly queue: Int32Array;
     private readonly seen: Uint32Array;
@@ -150,6 +164,7 @@ export class WaterGrid {
         terrain: TerrainData | undefined,
         bounds: WaterGridBounds | undefined,
         blocked?: (cellX: number, cellY: number) => boolean,
+        walls?: WaterWallSides,
     ) {
         this.bounds = bounds ?? { x: 0, y: 0, width: 0, height: 0 };
         const size = this.bounds.width * this.bounds.height;
@@ -166,6 +181,23 @@ export class WaterGrid {
                 const cellY = this.bounds.y + row;
                 this.ground[index] = heightAt(terrain, cellX, cellY);
                 if (blocked?.(cellX, cellY)) this.blocked[index] = 1;
+            }
+        }
+        this.closed = new Uint8Array(size);
+        const { width, height } = this.bounds;
+        for (let row = 0; row < height; row++) {
+            for (let column = 0; column < width; column++) {
+                const index = row * width + column;
+                const key = cellKey(this.bounds.x + column, this.bounds.y + row);
+                // A wall on the east or the south side of a cell closes it for the cell and for its neighbour.
+                if (column + 1 < width && (walls?.east.has(key) || this.blocked[index + 1] || this.blocked[index])) {
+                    this.closed[index] |= 1;
+                    this.closed[index + 1] |= 2;
+                }
+                if (row + 1 < height && (walls?.south.has(key) || this.blocked[index + width] || this.blocked[index])) {
+                    this.closed[index] |= 4;
+                    this.closed[index + width] |= 8;
+                }
             }
         }
     }
@@ -333,8 +365,8 @@ export class WaterGrid {
                         if (depth[index] > DRY_PX) edge = true;
                         continue;
                     }
+                    if (this.closed[index] & (1 << side)) continue;
                     const neighbour = index + (side === 0 ? 1 : side === 1 ? -1 : side === 2 ? width : -width);
-                    if (this.blocked[neighbour]) continue;
                     const level = ground[neighbour] + depth[neighbour];
                     if (level < lowest) {
                         lowest = level;
@@ -362,21 +394,35 @@ export class WaterGrid {
         return kept;
     }
 
-    /** The cells of the grid within `radius` cells of a cell, walls left out, the cell itself first. */
+    /**
+     * The cells of the grid a source pours over: those within `radius` cells of its own that are reached from it
+     * without crossing a wall, its own first.
+     */
     private discAround(centre: number, radius: number): number[] {
         const { width, height } = this.bounds;
         const column = centre % width;
         const row = (centre - column) / width;
-        const reach = Math.floor(radius);
+        this.search++;
+        if (this.search === 0xffffffff) {
+            this.seen.fill(0);
+            this.search = 1;
+        }
         const cells = [centre];
-        for (let down = -reach; down <= reach; down++) {
-            for (let away = -reach; away <= reach; away++) {
-                if ((away === 0 && down === 0) || away * away + down * down > radius * radius) continue;
-                const x = column + away;
-                const y = row + down;
-                if (x < 0 || y < 0 || x >= width || y >= height) continue;
-                const index = y * width + x;
-                if (!this.blocked[index]) cells.push(index);
+        this.seen[centre] = this.search;
+        for (let head = 0; head < cells.length && cells.length < MAX_DISC_CELLS; head++) {
+            const index = cells[head];
+            const x = index % width;
+            const y = (index - x) / width;
+            for (let side = 0; side < 4; side++) {
+                if (this.closed[index] & (1 << side)) continue;
+                const nextX = x + (side === 0 ? 1 : side === 1 ? -1 : 0);
+                const nextY = y + (side === 2 ? 1 : side === 3 ? -1 : 0);
+                if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+                const neighbour = nextY * width + nextX;
+                if (this.seen[neighbour] === this.search) continue;
+                if ((nextX - column) ** 2 + (nextY - row) ** 2 > radius * radius) continue;
+                this.seen[neighbour] = this.search;
+                cells.push(neighbour);
             }
         }
         return cells;
@@ -431,10 +477,11 @@ export class WaterGrid {
                               ? index - width
                               : -1;
                 if (neighbour < 0 || this.seen[neighbour] === this.search) continue;
+                if (this.closed[index] & (1 << side)) continue;
                 const away = (neighbour % width) - startColumn;
                 const down = Math.floor(neighbour / width) - startRow;
                 if (away * away + down * down > radius * radius) continue;
-                if (this.blocked[neighbour] || depth[neighbour] <= DRY_PX) continue;
+                if (depth[neighbour] <= DRY_PX) continue;
                 if (this.ground[neighbour] + depth[neighbour] < surface - LEVEL_PX) continue;
                 this.seen[neighbour] = this.search;
                 queue[tail++] = neighbour;
@@ -449,7 +496,7 @@ export class WaterGrid {
         const depth = this.depth;
         const next = this.next;
         const ground = this.ground;
-        const blocked = this.blocked;
+        const closed = this.closed;
         next.set(depth);
         let moved = false;
         for (let row = 0; row < height; row++) {
@@ -471,7 +518,7 @@ export class WaterGrid {
                     const neighbour = levels[side];
                     let drop: number;
                     if (neighbour < 0) drop = held;
-                    else if (blocked[neighbour]) drop = 0;
+                    else if (closed[index] & (1 << side)) drop = 0;
                     else drop = surface - (ground[neighbour] + depth[neighbour]);
                     if (drop > 0) {
                         drops[side] = drop;
