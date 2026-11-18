@@ -1,4 +1,4 @@
-import { cellKey } from "../Terrain/TerrainGrid";
+import { cellOf } from "../Terrain/TerrainGrid";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
 import type { Places, WaterCell } from "./WaterBodies";
 
@@ -33,12 +33,24 @@ export function landPlacesOf(input: LandInput): Places {
     const { width, height, walls, depthAt } = input;
     const inside = (cellX: number, cellY: number): boolean =>
         cellX >= 0 && cellY >= 0 && cellX < width && cellY < height;
+    // The walls as bits of the cells, read once: 1 the east side is closed, 2 the south side.
+    const closed = new Uint8Array(width * height);
+    for (const [sides, bit] of [
+        [walls.east, 1],
+        [walls.south, 2],
+    ] as const) {
+        for (const key of sides) {
+            const { x, y } = cellOf(key);
+            if (inside(x, y)) closed[y * width + x] |= bit;
+        }
+    }
     const canCross = (cellX: number, cellY: number, dx: number, dy: number): boolean => {
         if (!inside(cellX, cellY) || !inside(cellX + dx, cellY + dy)) return false;
-        if (dx === 1 && dy === 0) return !walls.east.has(cellKey(cellX, cellY));
-        if (dx === -1 && dy === 0) return !walls.east.has(cellKey(cellX - 1, cellY));
-        if (dx === 0 && dy === 1) return !walls.south.has(cellKey(cellX, cellY));
-        if (dx === 0 && dy === -1) return !walls.south.has(cellKey(cellX, cellY - 1));
+        const index = cellY * width + cellX;
+        if (dx === 1 && dy === 0) return (closed[index] & 1) === 0;
+        if (dx === -1 && dy === 0) return (closed[index - 1] & 1) === 0;
+        if (dx === 0 && dy === 1) return (closed[index] & 2) === 0;
+        if (dx === 0 && dy === -1) return (closed[index - width] & 2) === 0;
         return false;
     };
     const walkable = (index: number): boolean => depthAt(index % width, Math.floor(index / width)) < WADE_DEPTH_PX;
