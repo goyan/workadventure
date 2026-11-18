@@ -49,6 +49,8 @@ import type {
     RoomShortDescription,
     TokenExpiredMessage,
     UpdateWAMSettingsMessage,
+    ModifyTerrainMessage,
+    TerrainWaterMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
     UserLeftMessage as UserLeftMessageTsProto,
@@ -237,6 +239,9 @@ export class RoomConnection implements RoomConnection {
     public readonly areaPropertyVariableMessageStream = this._areaPropertyVariableMessageStream.asObservable();
     private readonly _entityStateMessageStream = new Subject<{ entityId: string; key: string; value: string }>();
     public readonly entityStateMessageStream = this._entityStateMessageStream.asObservable();
+    /** The water of the relief: what changed since the state before, once a second while it moves. */
+    private readonly _terrainWaterMessageStream = new Subject<TerrainWaterMessage>();
+    public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -461,6 +466,10 @@ export class RoomConnection implements RoomConnection {
                                     this._entityStateMessageStream.next(subMessage.entityStateMessage);
                                     break;
                                 }
+                                case "terrainWaterMessage": {
+                                    this._terrainWaterMessageStream.next(subMessage.terrainWaterMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -665,6 +674,7 @@ export class RoomConnection implements RoomConnection {
                         playerVariables,
                         areaPropertyVariables,
                         entityStates: roomJoinedMessage.entityState ?? [],
+                        terrainWater: roomJoinedMessage.terrainWater,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -1441,6 +1451,23 @@ export class RoomConnection implements RoomConnection {
                         message: {
                             $case: "updateWAMSettingsMessage",
                             updateWAMSettingsMessage,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    public emitModifyTerrain(commandId: string, modifyTerrainMessage: ModifyTerrainMessage): void {
+        this.send({
+            message: {
+                $case: "editMapCommandMessage",
+                editMapCommandMessage: {
+                    id: commandId,
+                    editMapMessage: {
+                        message: {
+                            $case: "modifyTerrainMessage",
+                            modifyTerrainMessage,
                         },
                     },
                 },
@@ -2357,6 +2384,7 @@ export class RoomConnection implements RoomConnection {
         this._variableMessageStream.complete();
         this._areaPropertyVariableMessageStream.complete();
         this._entityStateMessageStream.complete();
+        this._terrainWaterMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();

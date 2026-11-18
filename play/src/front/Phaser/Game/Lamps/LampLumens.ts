@@ -1,3 +1,5 @@
+import { TILE_AREA_M2 } from "@workadventure/map-editor";
+
 /**
  * The power of a lamp, in lumens, in place of a reach and a strength set apart. A real lamp has one figure, its flux:
  * its light weakens with the square of the distance, and its "reach" is only where that light gets too faint to see.
@@ -8,7 +10,6 @@
  * taken for TILE_AREA_M2 of floor. With these, the lamp of today (6 tiles, full strength) is a living room bulb.
  */
 const LAMP_HEIGHT_M = 2.2;
-const TILE_AREA_M2 = 1.2;
 const REACH_LUX = 2;
 const LUX_TO_LUMENS = 2 * Math.PI * REACH_LUX;
 /** What the reach is dragged by, and what the strength is set by, in the editor. */

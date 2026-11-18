@@ -1,0 +1,249 @@
+import { gunzipSync, gzipSync } from "node:zlib";
+import {
+    CELL_AREA_M2,
+    CELL_LITRES_PER_PX,
+    DEFAULT_WATER_SETTINGS,
+    gridBoundsOf,
+    LITRES_PER_M3,
+    rainRateAt,
+    ratesOf,
+    stepInputOf,
+    WATER_MESSAGE_MS,
+    WATER_STEP_MS,
+    WaterGrid,
+    waterObjectsOf,
+    WeatherType,
+} from "@workadventure/map-editor";
+import type { TerrainData, WaterGridBounds, WaterObject, WaterTally } from "@workadventure/map-editor";
+import type { TerrainWaterMessage } from "@workadventure/messages";
+import { z } from "zod";
+import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
+import type { GameRoom } from "./GameRoom";
+import type { RainTimelineService } from "./Services/RainTimelineService";
+
+/** The room is told the water once a second (every tenth step), what changed only. */
+const STEPS_PER_MESSAGE = WATER_MESSAGE_MS / WATER_STEP_MS;
+/** A whole state is sent again this often, so a browser that lost its place finds it again. */
+const MESSAGES_PER_FULL_STATE = 30;
+/** The water is saved every half minute while it changes. */
+const STEPS_PER_SAVE = 300;
+
+const SavedBounds = z.object({
+    x: z.number().int(),
+    y: z.number().int(),
+    width: z.number().int().min(0).max(4096),
+    height: z.number().int().min(0).max(4096),
+});
+
+type Sums = Omit<WaterTally, "moved">;
+const noSums = (): Sums => ({ rainPx: 0, sourcesPx: 0, sinksPx: 0, evaporationPx: 0, absorptionPx: 0, lostPx: 0 });
+
+/**
+ * Keeps the water of the relief of a room: a depth of water for each cell of a grid (WaterGrid), stepped ten times a
+ * second with the rain of the map, its dry weather, its sources and its sinks. The server alone computes it, so that
+ * every player sees the same water; the room is told once a second what changed, and what came in and went out
+ * (the dashboard of the relief tool). The water is saved, so it survives a restart.
+ *
+ * A room without relief nor water object costs nothing: no timer, nothing read. Water at rest with nothing coming in
+ * is not stepped. GameRoom tells when the map changed (mapChanged): the water stays where it was.
+ */
+export class TerrainWaterManager {
+    private grid: WaterGrid | undefined;
+    private objects: WaterObject[] = [];
+    private readTerrain: TerrainData | undefined | null = null;
+    /** The water saved before a restart, until the first grid takes it. */
+    private saved: WaterGrid | undefined;
+    private timer: ReturnType<typeof setInterval> | undefined;
+    private steps = 0;
+    private sums: Sums = noSums();
+    /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
+    private moving = true;
+    /** How hard it rains (mm an hour), read once a second. */
+    private rainRate = 0;
+    /** What the room was last told, to send only what changed since. */
+    private sentBytes: Uint8Array | undefined;
+    private sentRates = false;
+    private seq = 0;
+    private messagesSinceFull = 0;
+    private changedSinceSave = false;
+
+    constructor(
+        private readonly room: Pick<GameRoom, "getWam" | "sendSubMessageToRoom">,
+        private readonly rain: Pick<RainTimelineService, "slotsFor">,
+        private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
+        private readonly now: () => number = Date.now,
+    ) {}
+
+    /**
+     * Brings back the water saved before a restart. A store that does not answer, or water that cannot be read, must
+     * not keep the room closed: the map is then dry.
+     */
+    public async restore(): Promise<void> {
+        if (!this.store) return;
+        try {
+            const fields = await this.store.repository.loadVariables(this.hashKey());
+            if (!fields.grid || !fields.bounds) return;
+            const bounds = SavedBounds.parse(JSON.parse(fields.bounds));
+            const grid = new WaterGrid(undefined, bounds);
+            if (grid.readDepths(new Uint8Array(gunzipSync(Buffer.from(fields.grid, "base64"))))) this.saved = grid;
+        } catch (error) {
+            console.error("Could not restore the water of the relief of the map", error);
+        }
+    }
+
+    public start(): void {
+        this.mapChanged();
+    }
+
+    public stop(): void {
+        if (this.timer) clearInterval(this.timer);
+        this.timer = undefined;
+        this.save();
+    }
+
+    /** The map of the room changed (or was just read): the grid follows its relief and its water objects. */
+    public mapChanged(): void {
+        const wam = this.room.getWam();
+        this.objects = waterObjectsOf(wam);
+        const bounds = gridBoundsOf(wam?.terrain, this.objects);
+        const sameGrid =
+            this.readTerrain !== null &&
+            wam?.terrain === this.readTerrain &&
+            sameBounds(bounds, this.grid?.bounds ?? undefined, this.grid !== undefined);
+        // A source or a sink may have come or gone: the water is looked at again.
+        this.moving = true;
+        if (sameGrid) return;
+        this.readTerrain = wam?.terrain;
+        const before = this.grid ?? this.saved;
+        this.saved = undefined;
+        this.grid = bounds ? new WaterGrid(wam?.terrain, bounds) : undefined;
+        if (this.grid && before) this.grid.takeFrom(before);
+        // The cells are not the same any more: the room is told the whole state at its next message.
+        this.sentBytes = undefined;
+        if (this.grid && !this.timer) {
+            this.timer = setInterval(() => this.tick(), WATER_STEP_MS);
+            // The water of a room must never keep the process alive.
+            this.timer.unref?.();
+        } else if (!this.grid) {
+            if (this.timer) clearInterval(this.timer);
+            this.timer = undefined;
+        }
+    }
+
+    /**
+     * A step from the timer. An error there would take the whole server down, with every room: the water of this room
+     * stops instead (until its map changes), and the error is reported once.
+     */
+    private tick(): void {
+        try {
+            this.step();
+        } catch (error) {
+            console.error("The water of the relief of the map stopped on an error", error);
+            if (this.timer) clearInterval(this.timer);
+            this.timer = undefined;
+        }
+    }
+
+    /** One step of the water (ten a second), and once a second the room is told. */
+    public step(): void {
+        const grid = this.grid;
+        if (!grid) return;
+        const settings = this.room.getWam()?.settings;
+        if (this.steps % STEPS_PER_MESSAGE === 0) {
+            // Only a map in real weather has a timeline to read.
+            const slots =
+                settings?.weather === WeatherType.Real ? this.rain.slotsFor(settings.weatherLocation) : undefined;
+            this.rainRate = rainRateAt(settings, this.now(), slots);
+        }
+        this.steps++;
+        const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
+        if (this.moving || pouring) {
+            const tally = grid.step(stepInputOf(settings?.water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
+            this.moving = tally.moved;
+            if (tally.moved) this.changedSinceSave = true;
+            this.sums.rainPx += tally.rainPx;
+            this.sums.sourcesPx += tally.sourcesPx;
+            this.sums.sinksPx += tally.sinksPx;
+            this.sums.evaporationPx += tally.evaporationPx;
+            this.sums.absorptionPx += tally.absorptionPx;
+            this.sums.lostPx += tally.lostPx;
+        }
+        if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(grid);
+        if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** The whole state the room was last told, for a player who joins it. Undefined on a map without water. */
+    public snapshot(): TerrainWaterMessage | undefined {
+        if (!this.grid || !this.sentBytes) return undefined;
+        return { ...this.grid.bounds, seq: this.seq, full: true, depths: gzipSync(this.sentBytes) };
+    }
+
+    /** Tells the room what changed over the last second, and what came in and went out. Nothing when nothing did. */
+    private tell(grid: WaterGrid): void {
+        const sums = this.sums;
+        this.sums = noSums();
+        const speed = this.room.getWam()?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
+        const rates = ratesOf(sums, (STEPS_PER_MESSAGE * WATER_STEP_MS) / 1000, speed);
+        const anyRate = Object.values(rates).some((rate) => rate > 0);
+        const bytes = grid.writeDepths();
+        const previous = this.sentBytes;
+        const full = !previous || previous.length !== bytes.length || this.messagesSinceFull >= MESSAGES_PER_FULL_STATE;
+        let changed = full;
+        let payload = bytes;
+        if (!full) {
+            payload = new Uint8Array(bytes.length);
+            for (let index = 0; index < bytes.length; index++) {
+                payload[index] = bytes[index] ^ previous[index];
+                if (payload[index] !== 0) changed = true;
+            }
+        }
+        // Still water: nothing to say, but for the rates going back to nothing.
+        if (!changed && !anyRate && !this.sentRates) return;
+        // A dry map the room was never told about: still nothing to say (a player who joins sees it dry).
+        if (previous === undefined && !anyRate && grid.totalPx() === 0) return;
+        this.sentBytes = bytes;
+        this.sentRates = anyRate;
+        this.messagesSinceFull = full ? 0 : this.messagesSinceFull + 1;
+        this.seq++;
+        this.room.sendSubMessageToRoom({
+            message: {
+                $case: "terrainWaterMessage",
+                terrainWaterMessage: {
+                    ...grid.bounds,
+                    seq: this.seq,
+                    full,
+                    depths: gzipSync(payload),
+                    stats: {
+                        ...rates,
+                        stock: (grid.totalPx() * CELL_LITRES_PER_PX) / LITRES_PER_M3,
+                        wetArea: grid.wetCells() * CELL_AREA_M2,
+                        rainRate: this.rainRate,
+                    },
+                },
+            },
+        });
+    }
+
+    private save(): void {
+        if (!this.store || !this.grid || !this.changedSinceSave) return;
+        this.changedSinceSave = false;
+        const fields: [string, string][] = [
+            ["grid", Buffer.from(gzipSync(this.grid.writeDepths())).toString("base64")],
+            ["bounds", JSON.stringify(this.grid.bounds)],
+        ];
+        for (const [field, value] of fields) {
+            this.store.repository
+                .saveVariable(this.hashKey(), field, value)
+                .catch((error) => console.error("Could not save the water of the relief of the map", error));
+        }
+    }
+
+    private hashKey(): string {
+        return `terrain-water:${this.store?.roomUrl ?? ""}`;
+    }
+}
+
+function sameBounds(a: WaterGridBounds | undefined, b: WaterGridBounds | undefined, hasGrid: boolean): boolean {
+    if (!a || !hasGrid || !b) return !a && !hasGrid;
+    return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}

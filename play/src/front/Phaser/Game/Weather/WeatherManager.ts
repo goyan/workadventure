@@ -1,4 +1,4 @@
-import { WeatherType } from "@workadventure/map-editor";
+import { heightAt, TERRAIN_CELL, WeatherType } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
@@ -511,7 +511,15 @@ export class WeatherManager {
         }
         if (this.reducedMotion) return;
         const splashing = intensity * this.rainSettings.splashes;
+        const lakes = this.scene.getTerrainWater?.();
+        const time = this.scene.time.now;
         for (const splash of keepOutdoorParticles(rainSplashes(epoch, view, splashing, local), isOutdoor)) {
+            if (lakes && lakes.depthAt(splash.x, splash.y, time) > 0) {
+                // On the water of the relief a drop leaves a ring that widens and fades.
+                this.graphics.lineStyle(1, RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
+                this.graphics.strokeCircle(splash.x, splash.y, 1.5 + splash.stage * 1.5);
+                continue;
+            }
             this.graphics.fillStyle(RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
             if (splash.stage === 0) {
                 this.graphics.fillRect(splash.x, splash.y, 1, 1);
@@ -545,8 +553,11 @@ export class WeatherManager {
         const view = { x: left, y: top, width: camera.width * 2.5, height: camera.height * 2.5 };
         const grid = this.options.outdoorGrid?.();
         const cover = grid ? this.options.raisedCover?.() : undefined;
+        const terrain = this.scene.getGameMap().getWamFile()?.getWam().terrain;
+        // Where the ground has a relief, its own water is drawn (TerrainView): no puddle there.
         const outdoors = (x: number, y: number): boolean =>
-            !grid || (grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true);
+            (!grid || (grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true)) &&
+            heightAt(terrain, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL)) === 0;
         const puddles = puddlesIn(view, wetness, size).filter((puddle) =>
             // A puddle lies whole outdoors, never across a wall.
             [

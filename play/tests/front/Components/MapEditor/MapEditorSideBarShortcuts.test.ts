@@ -56,5 +56,6 @@ describe("MapEditorSideBar", () => {
         expect(shortcutOf("WAMSettingsEditor")).toBe("· Shortcut: 4");
         expect(shortcutOf("SelectionEditor")).toBe("· Shortcut: 7");
         expect(shortcutOf("MapLayerEditor")).toBe("· Shortcut: 8");
+        expect(shortcutOf("TerrainEditor")).toBe("· Shortcut: 9");
     });
 });

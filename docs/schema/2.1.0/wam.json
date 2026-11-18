@@ -784,6 +784,92 @@
                         "type"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
+                        },
+                        "buttonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/buttonLabel"
+                        },
+                        "hideButtonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/hideButtonLabel"
+                        },
+                        "resourceUrl": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/resourceUrl"
+                        },
+                        "serverData": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/serverData"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "waterSourcePropertyData"
+                        },
+                        "flow": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2000000
+                        },
+                        "anchorX": {
+                          "type": "number",
+                          "minimum": -4096,
+                          "maximum": 4096
+                        },
+                        "anchorY": {
+                          "type": "number",
+                          "minimum": -4096,
+                          "maximum": 4096
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "flow"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/id"
+                        },
+                        "buttonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/buttonLabel"
+                        },
+                        "hideButtonLabel": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/hideButtonLabel"
+                        },
+                        "resourceUrl": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/resourceUrl"
+                        },
+                        "serverData": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/0/properties/serverData"
+                        },
+                        "type": {
+                          "type": "string",
+                          "const": "waterSinkPropertyData"
+                        },
+                        "flow": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 2000000
+                        },
+                        "anchorX": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorX"
+                        },
+                        "anchorY": {
+                          "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorY"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "type",
+                        "flow"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 }
@@ -1824,6 +1910,36 @@
                 ],
                 "additionalProperties": false
               }
+            },
+            "water": {
+              "type": "object",
+              "properties": {
+                "runoff": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "default": 10
+                },
+                "evaporation": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 10,
+                  "default": 0.2
+                },
+                "speed": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 1000,
+                  "default": 60
+                },
+                "absorption": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100,
+                  "default": 5
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false
@@ -1945,6 +2061,36 @@
         },
         "vendor": {
           "description": "Use this field to store data that is not handled directly by WorkAdventure. This is a good place to store data generated by an admin (like access rights)"
+        },
+        "terrain": {
+          "type": "object",
+          "properties": {
+            "chunks": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -256,
+                  "maximum": 0
+                },
+                "minItems": 256,
+                "maxItems": 256
+              },
+              "propertyNames": {
+                "pattern": "^-?\\d{1,6},-?\\d{1,6}$"
+              }
+            },
+            "maxDepthTiles": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8
+            }
+          },
+          "required": [
+            "chunks"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

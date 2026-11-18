@@ -7,6 +7,7 @@ import {
     DeleteEntityCommand,
     UpdateAreaCommand,
     UpdateEntityCommand,
+    UpdateTerrainCommand,
     UpdateWAMMetadataCommand,
     UpdateWAMSettingCommand,
     WamFile,
@@ -188,6 +189,11 @@ export class WamManager {
                 const message = editMapMessage.modifiyWAMMetadataMessage;
                 const wam = wamFile.getWam();
                 await new UpdateWAMMetadataCommand(wam, message, editMapCommandMessage.id).execute();
+                break;
+            }
+            case "modifyTerrainMessage": {
+                const message = editMapMessage.modifyTerrainMessage;
+                await new UpdateTerrainCommand(wamFile.getWam(), message, editMapCommandMessage.id).execute();
                 break;
             }
             case "deleteCustomEntityMessage": {

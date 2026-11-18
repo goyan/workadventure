@@ -6,6 +6,7 @@ import type {
     EditMapCommandMessage,
     PositionMessage,
     SayMessage,
+    TerrainWaterMessage,
 } from "@workadventure/messages";
 import type { WokaTextureDescriptionInterface } from "../Phaser/Entity/PlayerTextures";
 import type { CompanionTextureDescriptionInterface } from "../Phaser/Companion/CompanionTextures";
@@ -87,6 +88,8 @@ export interface RoomJoinedMessageInterface {
     areaPropertyVariables: AreaPropertyVariable[];
     /** The states of the objects of the map that differ from their default (a lamp that is off). */
     entityStates: { entityId: string; key: string; value: string }[];
+    /** The water of the relief of the map (its whole state) as the server computes it; absent on a dry map. */
+    terrainWater?: TerrainWaterMessage;
     characterTextures: WokaTextureDescriptionInterface[];
     companionTexture?: CompanionTextureDescriptionInterface;
     commandsToApply?: EditMapCommandMessage[];

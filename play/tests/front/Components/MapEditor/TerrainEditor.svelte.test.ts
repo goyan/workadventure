@@ -1,0 +1,145 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { flushSync, mount, unmount } from "svelte";
+import { get } from "svelte/store";
+
+const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoisted(() => ({
+    executeUpdateTerrain: vi.fn(() => Promise.resolve()),
+    executeUpdateWAMSettings: vi.fn(() => Promise.resolve()),
+    mapSettings: { maxDepthTiles: 2, runoff: 10, evaporation: 0.2, speed: 60, absorption: 5 },
+}));
+vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
+    executeUpdateTerrain,
+    executeUpdateWAMSettings,
+}));
+vi.mock("../../../../src/front/Phaser/Game/Terrain/TerrainMapSettings", () => ({
+    readTerrainMapSettings: () => ({ ...mapSettings }),
+}));
+vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
+    const { readable } = await import("svelte/store");
+    // Any translation renders as its key.
+    const translations = (path: string[]): unknown =>
+        new Proxy(() => undefined, {
+            get: (_target, name) => translations([...path, String(name)]),
+            apply: () => path.join("."),
+        });
+    const LL = readable(translations([]));
+    return { ...(await importOriginal<Record<string, unknown>>()), LL, default: LL };
+});
+
+const { default: TerrainEditor } = await import("../../../../src/front/Components/MapEditor/TerrainEditor.svelte");
+const { DEFAULT_TERRAIN_BRUSH, terrainBlockedStore, terrainBrushStore } =
+    await import("../../../../src/front/Stores/TerrainEditorStore");
+
+// In the document: a checkbox outside of it does not change when clicked.
+const target = document.body.appendChild(document.createElement("div"));
+let component: ReturnType<typeof mount> | undefined;
+
+function render(): void {
+    flushSync(() => {
+        component = mount(TerrainEditor, { target });
+    });
+}
+const byTestId = <T extends HTMLElement>(id: string): T => {
+    const element = target.querySelector<T>(`[data-testid="${id}"]`);
+    if (!element) throw new Error(`No element ${id}`);
+    return element;
+};
+const setRange = (id: string, value: number): void => {
+    const input = byTestId(id).querySelector<HTMLInputElement>('input[type="range"]');
+    if (!input) throw new Error(`No slider in ${id}`);
+    input.value = String(value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    flushSync();
+};
+
+afterEach(async () => {
+    const mounted = component;
+    component = undefined;
+    if (mounted) await unmount(mounted);
+    terrainBrushStore.set(DEFAULT_TERRAIN_BRUSH);
+    terrainBlockedStore.set(false);
+    executeUpdateTerrain.mockClear();
+    executeUpdateWAMSettings.mockClear();
+});
+
+describe("TerrainEditor real values", () => {
+    it("says under each setting of the map what it is worth in reality", () => {
+        render();
+        for (const [id, key] of [
+            ["terrain-max-depth", "maxDepth"],
+            ["terrain-runoff", "runoff"],
+            ["terrain-evaporation", "evaporation"],
+            ["terrain-absorption", "absorption"],
+            ["terrain-speed", "speed"],
+        ]) {
+            expect(byTestId(id).textContent).toContain(`mapEditor.terrain.real.${key}`);
+        }
+    });
+});
+
+describe("TerrainEditor", () => {
+    it("switches between digging and filling", () => {
+        render();
+        expect(get(terrainBrushStore).mode).toBe("dig");
+        byTestId("terrain-mode-fill").click();
+        expect(get(terrainBrushStore).mode).toBe("fill");
+        byTestId("terrain-mode-dig").click();
+        expect(get(terrainBrushStore).mode).toBe("dig");
+    });
+
+    it("sets the diameter of the brush, the force following it while it is automatic", () => {
+        render();
+        setRange("terrain-diameter", 8);
+        expect(get(terrainBrushStore)).toMatchObject({ diameterTiles: 8, forcePx: undefined });
+        // An eighth of 8 tiles: 32 px.
+        expect(byTestId("terrain-force").textContent).toContain("32");
+    });
+
+    it("keeps a chosen force when the diameter changes, and gives it up when set back to automatic", () => {
+        render();
+        byTestId("terrain-force-auto").querySelector("input")?.click();
+        flushSync();
+        setRange("terrain-force", 6);
+        expect(get(terrainBrushStore).forcePx).toBe(6);
+        setRange("terrain-diameter", 10);
+        expect(get(terrainBrushStore)).toMatchObject({ diameterTiles: 10, forcePx: 6 });
+        byTestId("terrain-force-auto").querySelector("input")?.click();
+        flushSync();
+        expect(get(terrainBrushStore).forcePx).toBeUndefined();
+    });
+
+    it("saves the maximum depth and the pace of the water in the map", () => {
+        render();
+        setRange("terrain-max-depth", 5);
+        expect(executeUpdateTerrain).toHaveBeenCalledWith(new Map(), 5);
+        setRange("terrain-runoff", 20);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: { runoff: 20, evaporation: 0.2, speed: 60, absorption: 5 },
+        });
+        setRange("terrain-evaporation", 1);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 60, absorption: 5 },
+        });
+        setRange("terrain-speed", 300);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 5 },
+        });
+        setRange("terrain-absorption", 20);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 20 },
+        });
+    });
+
+    it("says why nothing happens over ground that may not be dug", () => {
+        render();
+        expect(target.querySelector('[data-testid="terrain-blocked"]')).toBeNull();
+        terrainBlockedStore.set(true);
+        flushSync();
+        expect(byTestId("terrain-blocked").textContent).toContain("mapEditor.terrain.blocked");
+    });
+});

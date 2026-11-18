@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writable } from "svelte/store";
 import { mockDeep } from "vitest-mock-extended";
-import { WeatherType, type WAMFileFormat } from "@workadventure/map-editor";
+import { cellKey, WeatherType, type WAMFileFormat, withHeights } from "@workadventure/map-editor";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
 
 const sounds = vi.hoisted(() => ({ update: vi.fn() }));
@@ -763,5 +763,35 @@ describe("puddles", () => {
         rainPuddlesStore.set(0);
         manager.update(40, new Date(40));
         expect(graphics.fillStyle.mock.calls.slice(drawn).some(([color]) => color === 0x4f7ba6)).toBe(false);
+    });
+
+    it("leaves the puddles out where the ground has a relief: its own water is drawn there", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Rain };
+        scene.cameras.main.worldView.width = 640;
+        scene.cameras.main.worldView.height = 640;
+        // Dug everywhere around the screen.
+        const cells = new Map<string, number>();
+        for (let y = -120; y < 220; y++) for (let x = -120; x < 220; x++) cells.set(cellKey(x, y), -8);
+        wam.terrain = withHeights(undefined, cells);
+        rainPuddlesStore.set(1);
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(graphics.fillStyle.mock.calls.some(([color]) => color === 0x4f7ba6)).toBe(false);
+    });
+
+    it("turns the splashes of the rain into rings on the water of the relief", () => {
+        const { scene, graphics, wam } = fixture();
+        wam.settings = { weather: WeatherType.Storm };
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(graphics.strokeCircle.mock.calls).toHaveLength(0);
+        manager.destroy();
+        scene.getTerrainWater.mockReturnValue({ depthAt: () => 12 } as unknown as ReturnType<
+            GameScene["getTerrainWater"]
+        >);
+        manager = new WeatherManager(scene);
+        manager.update(0, new Date(0));
+        expect(graphics.strokeCircle.mock.calls.length).toBeGreaterThan(0);
     });
 });
