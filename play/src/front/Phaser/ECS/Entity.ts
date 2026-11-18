@@ -12,6 +12,8 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
+import { snowyTreeTexture } from "../Game/Nature/SnowyTreeTexture";
+import { isSwayingTree } from "../Game/Nature/TreeSway";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
 import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
 import { FLOOR_LEVEL_DEPTH, floorDepth, floorPieceDepth } from "../Game/MapEditor/MapLayer/FloorDepth";
@@ -149,8 +151,14 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
             ? TexturesHelper.addEntityAnimation(this.scene, this.prefab.imagePath, animation)
             : undefined;
         const seasonalPath = this.prefab.seasonal?.[this.season];
+        // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture).
+        const snowyTree =
+            this.season === Season.Winter && isSwayingTree(this.prefab.id)
+                ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath)
+                : undefined;
         this.setTexture(
-            seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath,
+            snowyTree ??
+                (seasonalPath && this.scene.textures.exists(seasonalPath) ? seasonalPath : this.prefab.imagePath),
         );
         if (animationKey) {
             this.play(animationKey);
