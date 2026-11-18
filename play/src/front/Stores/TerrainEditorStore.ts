@@ -1,5 +1,6 @@
 import type { TerrainWaterStatsMessage } from "@workadventure/messages";
 import { writable } from "svelte/store";
+import type { LifeSpeciesView } from "../Phaser/Game/Life/LifeSpeciesStats";
 import type { LifeStatsView } from "../Phaser/Game/Life/LifeStats";
 import type { TerrainBrush } from "../Phaser/Game/Terrain/TerrainStroke";
 
@@ -15,3 +16,5 @@ export const terrainWaterStatsStore = writable<TerrainWaterStatsMessage | undefi
 
 /** The figures of the life of the water of the map (the dashboard of the life tool); undefined until told. */
 export const aquaticLifeStatsStore = writable<LifeStatsView | undefined>(undefined);
+/** The same species by species; no row on a map without life, or whose server does not tell of the species. */
+export const aquaticLifeSpeciesStore = writable<LifeSpeciesView | undefined>(undefined);
