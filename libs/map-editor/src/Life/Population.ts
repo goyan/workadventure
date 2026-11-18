@@ -2,8 +2,10 @@ import type { WaterGrid } from "../Terrain/WaterGrid";
 import { TERRAIN_CELL } from "../types";
 import type { LifeSettings } from "../types";
 import type { Animal } from "./Animal";
-import { DOLPHIN_SPEED_FACTOR, MAX_ANIMALS, MAX_DOLPHINS, MEALS_FOR_CALF, STARVE_HUNTS } from "./LifeConstants";
+import { MAX_ANIMALS, MAX_DOLPHINS } from "./LifeConstants";
 import { cellAt, minDepthOf, swim, WANDER_REACH_CELLS } from "./Swim";
+import { isPredator, SPECIES, SPECIES_IDS } from "./Species";
+import type { Species, SpeciesId } from "./Species";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
 import type { WaterBodies } from "./WaterBodies";
 
@@ -33,8 +35,6 @@ const REACH_PX = TERRAIN_CELL;
 const DETOUR_MS = 3000;
 /** A tile is 32 map pixels: speeds are set in tiles a second. */
 const TILE_PX = 32;
-const SMALLEST_LITTER = 2;
-const LARGEST_LITTER = 4;
 /** A fish lives between this share of the longest life and the longest life, so that a litter does not die at once. */
 const SHORTEST_LIFE_SHARE = 0.7;
 
@@ -46,6 +46,32 @@ export interface Population {
     /** The same for the dolphins. */
     dolphinsSeeded?: boolean;
 }
+
+/** What happened to the animals of one species during a step (or summed over many). */
+export interface SpeciesTally {
+    /** Those that came by themselves into an empty place. */
+    arrivals: number;
+    births: number;
+    diedOfAge: number;
+    eaten: number;
+    /** Dead of hunger. */
+    starved: number;
+    /** Left without water. */
+    diedDry: number;
+    /** What it ate, by species of prey. */
+    meals: Partial<Record<SpeciesId, number>>;
+}
+/** What happened species by species (and what each ate): `stepPopulation` adds to it. */
+export type SpeciesTallies = Partial<Record<SpeciesId, SpeciesTally>>;
+export const emptySpeciesTally = (): SpeciesTally => ({
+    arrivals: 0,
+    births: 0,
+    diedOfAge: 0,
+    eaten: 0,
+    starved: 0,
+    diedDry: 0,
+    meals: {},
+});
 
 /** What happened to the animals of a room during a step (or summed over many). */
 export interface LifeTally {
@@ -83,6 +109,37 @@ export interface LifeCensus {
 const dolphinCapOf = (deepCells: number): number => Math.floor(deepCells / DEEP_CELLS_PER_DOLPHIN);
 const fishCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_FISH));
 
+type BodySize = WaterBodies["sizes"][number];
+/** How many animals of a species a body of water holds. */
+function placeCapOf(species: SpeciesId, size: BodySize): number {
+    return species === "dolphin" ? dolphinCapOf(size.deep) : fishCapOf(size.cells);
+}
+/** Whether a body of water is big enough for a species to come into it. */
+function habitable(species: SpeciesId, size: BodySize): boolean {
+    return species === "dolphin" ? size.deep >= MIN_DOLPHIN_DEEP_CELLS : size.cells >= MIN_BODY_CELLS;
+}
+
+/** What the settings of the map say of a species, in milliseconds. */
+interface SpeciesTimes {
+    breedDelayMs: number;
+    maxLifespanMs: number;
+    huntIntervalMs: number;
+}
+function timesOf(species: SpeciesId, settings: LifeSettings): SpeciesTimes {
+    const huntIntervalMs = settings.huntInterval * 1000;
+    return species === "dolphin"
+        ? {
+              breedDelayMs: settings.dolphinReproductionDelay * 1000,
+              maxLifespanMs: settings.dolphinMaxLifespan * 1000,
+              huntIntervalMs,
+          }
+        : {
+              breedDelayMs: settings.reproductionDelay * 1000,
+              maxLifespanMs: settings.maxLifespan * 1000,
+              huntIntervalMs,
+          };
+}
+
 export function lifeCensus(population: Population, bodies: WaterBodies): LifeCensus {
     const populated = new Set<number>();
     for (const animal of population.animals) {
@@ -96,6 +153,35 @@ export function lifeCensus(population: Population, bodies: WaterBodies): LifeCen
         census.capacity += fishCapOf(bodies.sizes[body].cells);
     }
     census.capacity = Math.min(census.capacity, MAX_ANIMALS);
+    return census;
+}
+
+/** How many of a species live in a room, and how many its places can hold. */
+export interface SpeciesCensus {
+    species: SpeciesId;
+    males: number;
+    females: number;
+    cap: number;
+}
+
+/** The species that live in the room or have room to: in the order of the table. */
+export function speciesCensus(population: Population, bodies: WaterBodies): SpeciesCensus[] {
+    const census: SpeciesCensus[] = [];
+    for (const species of SPECIES_IDS) {
+        let males = 0;
+        let females = 0;
+        for (const animal of population.animals) {
+            if (animal.kind !== species) continue;
+            if (animal.sex === "female") females++;
+            else males++;
+        }
+        let cap = 0;
+        for (let body = 1; body < bodies.sizes.length; body++) {
+            if (habitable(species, bodies.sizes[body])) cap += placeCapOf(species, bodies.sizes[body]);
+        }
+        cap = Math.min(cap, SPECIES[species].roomCap);
+        if (males + females > 0 || cap > 0) census.push({ species, males, females, cap });
+    }
     return census;
 }
 
@@ -113,12 +199,15 @@ function nearest(from: Animal, candidates: readonly Animal[]): Animal | undefine
 }
 
 /**
- * One step of the life of the water of a room: the old die, dolphins hunt, fish mate, everyone swims (those left
- * without water die), and the bodies of water big enough get their first fish and their dolphin. The same inputs
- * (random included) give the same life: the server alone runs it.
+ * One step of the life of a room: the old and the starved die, the predators hunt, each species breeds, everyone
+ * swims (those left without water die), and the places big enough get their first animals. What a species is (what
+ * it eats, where it lives, how fast it goes) is read in the table of the species. The same inputs (random included)
+ * give the same life: the server alone runs it.
  *
  * The animals fear the avatars: `threats` are where the avatars stand, in map pixels. An animal near one swims away
  * at its fastest, and neither mates nor hunts meanwhile.
+ *
+ * It returns what happened in the room, and adds to `bySpecies` what happened to each species.
  */
 export function stepPopulation(
     population: Population,
@@ -129,26 +218,27 @@ export function stepPopulation(
     now: number,
     random: () => number,
     threats: readonly { x: number; y: number }[] = [],
+    bySpecies: SpeciesTallies = {},
 ): LifeTally {
     const tally = emptyLifeTally();
+    const of = (species: SpeciesId): SpeciesTally => (bySpecies[species] ??= emptySpeciesTally());
     const maxSpeed = settings.maxSpeed * TILE_PX;
-    const delayMs = settings.reproductionDelay * 1000;
-    const starveMs = STARVE_HUNTS * settings.huntInterval * 1000;
     const dead = new Set<Animal>();
     for (const animal of population.animals) {
-        if (animal.kind === "fish") {
-            if (now - animal.bornAt >= animal.lifespanMs) {
-                dead.add(animal);
-                tally.diedOfAge++;
-            }
-            continue;
-        }
-        // A dolphin kept from before dolphins had a sex.
-        animal.sex ??= random() < 0.5 ? "male" : "female";
-        if (now - animal.bornAt >= animal.lifespanMs || now - (animal.ateAt ?? animal.bornAt) >= starveMs) {
-            dead.add(animal);
-            tally.predatorDeaths++;
-        }
+        const species = SPECIES[animal.kind];
+        const times = timesOf(animal.kind, settings);
+        // A predator kept from before predators had a sex.
+        if (isPredator(species)) animal.sex ??= random() < 0.5 ? "male" : "female";
+        const old = now - animal.bornAt >= animal.lifespanMs;
+        const starved =
+            species.starveHunts !== undefined &&
+            now - (animal.ateAt ?? animal.bornAt) >= species.starveHunts * times.huntIntervalMs;
+        if (!old && !starved) continue;
+        dead.add(animal);
+        if (old) of(animal.kind).diedOfAge++;
+        else of(animal.kind).starved++;
+        if (isPredator(species)) tally.predatorDeaths++;
+        else tally.diedOfAge++;
     }
 
     // Who is frightened, and by which avatar (the nearest one).
@@ -169,15 +259,24 @@ export function stepPopulation(
         }
     }
 
-    // Who lives in which body, to look for a mate or a prey among neighbours only.
-    const fishByBody = new Map<number, Animal[]>();
-    for (const animal of population.animals) {
-        if (animal.kind !== "fish" || dead.has(animal)) continue;
-        const body = bodyOf(animal, bodies);
-        const list = fishByBody.get(body);
-        if (list) list.push(animal);
-        else fishByBody.set(body, [animal]);
+    // Who lives in which body, species by species, to look for a mate or a prey among neighbours only.
+    const living = new Map<SpeciesId, Map<number, Animal[]>>();
+    const count = new Map<SpeciesId, number>();
+    for (const species of SPECIES_IDS) {
+        living.set(species, new Map());
+        count.set(species, 0);
     }
+    for (const animal of population.animals) {
+        if (dead.has(animal)) continue;
+        count.set(animal.kind, (count.get(animal.kind) ?? 0) + 1);
+        const byBody = living.get(animal.kind);
+        if (!byBody) continue;
+        const body = bodyOf(animal, bodies);
+        const list = byBody.get(body);
+        if (list) list.push(animal);
+        else byBody.set(body, [animal]);
+    }
+    const neighbours = (species: SpeciesId, body: number): Animal[] => living.get(species)?.get(body) ?? [];
     const pursuing = new Set<Animal>();
     const pursue = (animal: Animal, target: Animal, speed: number): void => {
         animal.targetX = target.x;
@@ -186,131 +285,172 @@ export function stepPopulation(
         pursuing.add(animal);
     };
     const detouring = (animal: Animal): boolean => (animal.wanderUntil ?? 0) > now;
+    const predators = SPECIES_IDS.map((id) => SPECIES[id]).filter(isPredator);
+    const preys = SPECIES_IDS.map((id) => SPECIES[id]).filter((species) => !isPredator(species));
 
-    for (const dolphin of population.animals) {
-        if (dolphin.kind !== "dolphin" || dead.has(dolphin) || now < dolphin.readyAt) continue;
-        if (frightened.has(dolphin)) continue;
-        dolphin.huntSince ??= now;
-        if (now - dolphin.huntSince >= HUNT_GIVE_UP_MS) {
-            dolphin.huntSince = undefined;
-            dolphin.readyAt = now + settings.huntInterval * 1000;
-            continue;
-        }
-        if (detouring(dolphin)) continue;
-        const body = bodyOf(dolphin, bodies);
-        // Shallow water is a refuge: a fish is a prey only where the dolphin itself can swim.
-        const prey =
-            body === 0
-                ? undefined
-                : nearest(
-                      dolphin,
-                      (fishByBody.get(body) ?? []).filter(
-                          (fish) =>
-                              !dead.has(fish) && bodies.swimmable(cellAt(fish.x), cellAt(fish.y), DOLPHIN_DEPTH_PX),
-                      ),
-                  );
-        if (!prey) continue;
-        if (distance(dolphin, prey) < REACH_PX) {
-            dead.add(prey);
-            tally.eaten++;
-            dolphin.ateAt = now;
-            dolphin.meals = (dolphin.meals ?? 0) + 1;
-            dolphin.huntSince = undefined;
-            dolphin.readyAt = now + settings.huntInterval * 1000;
-            dolphin.targetX = dolphin.targetY = undefined;
-        } else {
-            pursue(dolphin, prey, maxSpeed * DOLPHIN_SPEED_FACTOR);
+    for (const species of predators) {
+        const { huntIntervalMs } = timesOf(species.id, settings);
+        for (const hunter of population.animals) {
+            if (hunter.kind !== species.id || dead.has(hunter) || now < hunter.readyAt) continue;
+            if (frightened.has(hunter)) continue;
+            hunter.huntSince ??= now;
+            if (now - hunter.huntSince >= HUNT_GIVE_UP_MS) {
+                hunter.huntSince = undefined;
+                hunter.readyAt = now + huntIntervalMs;
+                continue;
+            }
+            if (detouring(hunter)) continue;
+            const body = bodyOf(hunter, bodies);
+            // Where the hunter cannot go is a refuge: a prey is one only where the hunter itself can be.
+            const prey =
+                body === 0
+                    ? undefined
+                    : nearest(
+                          hunter,
+                          species.prey
+                              .flatMap((id) => neighbours(id, body))
+                              .filter(
+                                  (other) =>
+                                      !dead.has(other) &&
+                                      bodies.swimmable(cellAt(other.x), cellAt(other.y), species.minDepthPx),
+                              ),
+                      );
+            if (!prey) continue;
+            if (distance(hunter, prey) < REACH_PX) {
+                dead.add(prey);
+                tally.eaten++;
+                count.set(prey.kind, (count.get(prey.kind) ?? 1) - 1);
+                of(prey.kind).eaten++;
+                const meals = of(species.id).meals;
+                meals[prey.kind] = (meals[prey.kind] ?? 0) + 1;
+                hunter.ateAt = now;
+                hunter.meals = (hunter.meals ?? 0) + 1;
+                hunter.huntSince = undefined;
+                hunter.readyAt = now + huntIntervalMs;
+                hunter.targetX = hunter.targetY = undefined;
+            } else {
+                pursue(hunter, prey, maxSpeed * species.speedFactor);
+            }
         }
     }
 
     const born: Animal[] = [];
+    const total = (): number => population.animals.length - dead.size + born.length;
+    const litterOf = (species: Species): number => {
+        const [smallest, largest] = species.litter;
+        return smallest === largest ? smallest : smallest + Math.floor(random() * (largest - smallest + 1));
+    };
 
-    // The dolphins breed too: a fed male goes to a fed female of its body, while their water has room for a calf.
-    const dolphinsByBody = new Map<number, Animal[]>();
-    let dolphins = 0;
-    for (const animal of population.animals) {
-        if (animal.kind !== "dolphin" || dead.has(animal)) continue;
-        dolphins++;
-        const body = bodyOf(animal, bodies);
-        const list = dolphinsByBody.get(body);
-        if (list) list.push(animal);
-        else dolphinsByBody.set(body, [animal]);
-    }
-    const canBreed = (dolphin: Animal): boolean =>
-        now >= (dolphin.mateAt ?? 0) && (dolphin.meals ?? 0) >= MEALS_FOR_CALF;
-    const calfDelayMs = settings.dolphinReproductionDelay * 1000;
-    for (const [body, list] of dolphinsByBody) {
-        if (body === 0) continue;
-        const cap = dolphinCapOf(bodies.sizes[body].deep);
-        let living = list.length;
-        for (const male of list) {
-            // A dolphin on a hunt does not court.
-            if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
-            if (frightened.has(male)) continue;
-            if (living >= cap || dolphins >= MAX_DOLPHINS) break;
-            if (population.animals.length - dead.size + born.length >= MAX_ANIMALS) break;
-            const female = nearest(
-                male,
-                list.filter((other) => other.sex === "female" && canBreed(other) && !frightened.has(other)),
-            );
-            if (!female) continue;
-            if (distance(male, female) >= REACH_PX) {
-                pursue(male, female, maxSpeed);
-                continue;
+    // The predators breed: a fed male goes to a fed female of its body, while their place has room for a young.
+    for (const species of predators) {
+        const { breedDelayMs } = timesOf(species.id, settings);
+        const canBreed = (animal: Animal): boolean =>
+            !dead.has(animal) && now >= (animal.mateAt ?? 0) && (animal.meals ?? 0) >= species.mealsForYoung;
+        let ofSpecies = count.get(species.id) ?? 0;
+        for (const [body, list] of living.get(species.id) ?? []) {
+            if (body === 0) continue;
+            const cap = placeCapOf(species.id, bodies.sizes[body]);
+            let inBody = list.filter((animal) => !dead.has(animal)).length;
+            for (const male of list) {
+                // A predator on a hunt does not court.
+                if (male.sex !== "male" || !canBreed(male) || pursuing.has(male) || detouring(male)) continue;
+                if (frightened.has(male)) continue;
+                if (inBody >= cap || ofSpecies >= species.roomCap) break;
+                if (total() >= MAX_ANIMALS) break;
+                const female = nearest(
+                    male,
+                    list.filter((other) => other.sex === "female" && canBreed(other) && !frightened.has(other)),
+                );
+                if (!female) continue;
+                if (distance(male, female) >= REACH_PX) {
+                    pursue(male, female, maxSpeed);
+                    continue;
+                }
+                const litter = Math.min(
+                    litterOf(species),
+                    cap - inBody,
+                    species.roomCap - ofSpecies,
+                    MAX_ANIMALS - total(),
+                );
+                for (let index = 0; index < litter; index++) {
+                    born.push({
+                        ...newAnimal(
+                            population,
+                            species.id,
+                            random() < 0.5 ? "male" : "female",
+                            female.x,
+                            female.y,
+                            now,
+                            settings,
+                            random,
+                        ),
+                        mateAt: now + breedDelayMs,
+                    });
+                }
+                inBody += litter;
+                ofSpecies += litter;
+                tally.predatorBirths += litter;
+                of(species.id).births += litter;
+                male.mateAt = female.mateAt = now + breedDelayMs;
+                male.meals = female.meals = 0;
+                male.targetX = male.targetY = undefined;
             }
-            born.push({
-                ...newDolphin(
-                    population,
-                    random() < 0.5 ? "male" : "female",
-                    female.x,
-                    female.y,
-                    now,
-                    settings,
-                    random,
-                ),
-                mateAt: now + calfDelayMs,
-            });
-            living++;
-            dolphins++;
-            tally.predatorBirths++;
-            male.mateAt = female.mateAt = now + calfDelayMs;
-            male.meals = female.meals = 0;
-            male.targetX = male.targetY = undefined;
         }
     }
 
-    for (const [body, list] of fishByBody) {
-        if (body === 0) continue;
-        const cap = fishCapOf(bodies.sizes[body].cells);
-        let living = list.filter((fish) => !dead.has(fish)).length;
-        for (const male of list) {
-            if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
-            if (frightened.has(male)) continue;
-            const female = nearest(
-                male,
-                list.filter(
-                    (fish) => fish.sex === "female" && !dead.has(fish) && now >= fish.readyAt && !frightened.has(fish),
-                ),
-            );
-            if (!female) continue;
-            if (distance(male, female) >= REACH_PX) {
-                pursue(male, female, maxSpeed);
-                continue;
-            }
-            const wanted = SMALLEST_LITTER + Math.floor(random() * (LARGEST_LITTER - SMALLEST_LITTER + 1));
-            const room = MAX_ANIMALS - (population.animals.length - dead.size + born.length);
-            const litter = Math.max(0, Math.min(wanted, LARGEST_LITTER, cap - living, room));
-            for (let index = 0; index < litter; index++) {
-                born.push(
-                    newFish(population, random() < 0.5 ? "male" : "female", female.x, female.y, now, settings, random),
+    // The prey breed: a male that is ready goes to a female that is, while their place has room for young.
+    for (const species of preys) {
+        const { breedDelayMs } = timesOf(species.id, settings);
+        let ofSpecies = count.get(species.id) ?? 0;
+        for (const [body, list] of living.get(species.id) ?? []) {
+            if (body === 0) continue;
+            const cap = placeCapOf(species.id, bodies.sizes[body]);
+            let inBody = list.filter((animal) => !dead.has(animal)).length;
+            for (const male of list) {
+                if (male.sex !== "male" || dead.has(male) || now < male.readyAt || detouring(male)) continue;
+                if (frightened.has(male)) continue;
+                const female = nearest(
+                    male,
+                    list.filter(
+                        (other) =>
+                            other.sex === "female" &&
+                            !dead.has(other) &&
+                            now >= other.readyAt &&
+                            !frightened.has(other),
+                    ),
                 );
+                if (!female) continue;
+                if (distance(male, female) >= REACH_PX) {
+                    pursue(male, female, maxSpeed);
+                    continue;
+                }
+                const litter = Math.max(
+                    0,
+                    Math.min(litterOf(species), cap - inBody, species.roomCap - ofSpecies, MAX_ANIMALS - total()),
+                );
+                for (let index = 0; index < litter; index++) {
+                    born.push(
+                        newAnimal(
+                            population,
+                            species.id,
+                            random() < 0.5 ? "male" : "female",
+                            female.x,
+                            female.y,
+                            now,
+                            settings,
+                            random,
+                        ),
+                    );
+                }
+                inBody += litter;
+                ofSpecies += litter;
+                tally.births += litter;
+                of(species.id).births += litter;
+                // With or without young (a full body), both wait a whole delay again; so do the young.
+                male.readyAt = female.readyAt = now + breedDelayMs;
+                for (const young of born.slice(born.length - litter)) young.readyAt = now + breedDelayMs;
+                male.targetX = male.targetY = undefined;
             }
-            living += litter;
-            tally.births += litter;
-            // With or without young (a full body), both wait a whole delay again; so do the young.
-            male.readyAt = female.readyAt = now + delayMs;
-            for (const young of born.slice(born.length - litter)) young.readyAt = now + delayMs;
-            male.targetX = male.targetY = undefined;
         }
     }
 
@@ -322,6 +462,7 @@ export function stepPopulation(
         if (!swim(animal, bodies, grid, maxSpeed, dtMs, now, random)) {
             dead.add(animal);
             tally.diedDry++;
+            of(animal.kind).diedDry++;
         } else if (pursuing.has(animal) && animal.targetX === undefined) {
             // Stopped on its straight way to its mate or its prey: it goes round by wandering a while.
             animal.wanderUntil = now + DETOUR_MS;
@@ -332,6 +473,7 @@ export function stepPopulation(
     const before = population.animals.length;
     spawn(population, bodies, settings, dtMs, now, random);
     tally.arrivals = population.animals.length - before;
+    for (const arrived of population.animals.slice(before)) of(arrived.kind).arrivals++;
     return tally;
 }
 
@@ -350,7 +492,7 @@ function flee(
     const cellX = cellAt(animal.x);
     const cellY = cellAt(animal.y);
     const body = bodies.bodyAt(cellX, cellY);
-    animal.speed = animal.kind === "dolphin" ? maxSpeed * DOLPHIN_SPEED_FACTOR : maxSpeed;
+    animal.speed = maxSpeed * SPECIES[animal.kind].speedFactor;
     let dx = animal.x - threat.x;
     let dy = animal.y - threat.y;
     const far = Math.hypot(dx, dy);
@@ -389,8 +531,10 @@ function flee(
     }
 }
 
-function newFish(
+/** A newborn, or an animal that comes by itself: a predator has just eaten, and waits before its first hunt. */
+function newAnimal(
     population: Population,
+    species: SpeciesId,
     sex: "male" | "female",
     x: number,
     y: number,
@@ -398,38 +542,22 @@ function newFish(
     settings: LifeSettings,
     random: () => number,
 ): Animal {
-    return {
+    const times = timesOf(species, settings);
+    const animal: Animal = {
         id: population.nextId++,
-        kind: "fish",
+        kind: species,
         sex,
         x,
         y,
         bornAt: now,
-        lifespanMs: settings.maxLifespan * 1000 * (SHORTEST_LIFE_SHARE + (1 - SHORTEST_LIFE_SHARE) * random()),
+        lifespanMs: times.maxLifespanMs * (SHORTEST_LIFE_SHARE + (1 - SHORTEST_LIFE_SHARE) * random()),
         readyAt: now,
     };
-}
-
-function newDolphin(
-    population: Population,
-    sex: "male" | "female",
-    x: number,
-    y: number,
-    now: number,
-    settings: LifeSettings,
-    random: () => number,
-): Animal {
-    return {
-        id: population.nextId++,
-        kind: "dolphin",
-        sex,
-        x,
-        y,
-        bornAt: now,
-        lifespanMs: settings.dolphinMaxLifespan * 1000 * (SHORTEST_LIFE_SHARE + (1 - SHORTEST_LIFE_SHARE) * random()),
-        readyAt: now + settings.huntInterval * 1000,
-        ateAt: now,
-    };
+    if (isPredator(SPECIES[species])) {
+        animal.readyAt = now + times.huntIntervalMs;
+        animal.ateAt = now;
+    }
+    return animal;
 }
 
 /** The first fish of the bodies big enough, and their dolphins. */
@@ -470,7 +598,7 @@ function spawn(
                 const cell = bodies.anyCell(body, FISH_DEPTH_PX, random);
                 if (!cell) continue;
                 population.animals.push(
-                    newFish(population, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
+                    newAnimal(population, "fish", sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
                 );
                 population.seeded = true;
             }
@@ -489,7 +617,16 @@ function spawn(
                 if (!cell) continue;
                 dolphins++;
                 population.animals.push(
-                    newDolphin(population, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
+                    newAnimal(
+                        population,
+                        "dolphin",
+                        sex,
+                        middle(cell.cellX),
+                        middle(cell.cellY),
+                        now,
+                        settings,
+                        random,
+                    ),
                 );
                 population.dolphinsSeeded = true;
             }
