@@ -2142,7 +2142,13 @@ ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
 
-**Limite connue** : l'eau traverse les murs ; le passage par les portes seulement est prévu dans une PR suivante.
+**Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
+(`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
+l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient
+l'eau à son pied, un mur vertical entre les deux colonnes de sa ligne. Une porte laisse passer l'eau, ouverte ou
+fermée : une inondation entre dans un bâtiment par ses portes. Un puits ne prend pas l'eau de l'autre côté d'un mur,
+une source ne verse pas à travers. Un mur construit ou retiré refait la grille en gardant l'eau là où elle est. Les
+murs d'un palier ne comptent pas (l'eau reste au sol).
 
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources

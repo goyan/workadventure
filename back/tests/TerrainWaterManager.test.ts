@@ -250,6 +250,42 @@ describe("TerrainWaterManager", () => {
         expect(down.sent.length).toBeGreaterThan(0);
     });
 
+    it("holds the water behind a wall of the map tool, and follows a wall built later, keeping the water", () => {
+        // A source on flat ground at the cell (4, 4); a wall along the foot of the tile row 3 (cells 6 and 7).
+        const wam = wamWith(undefined);
+        wam.settings = { weather: WeatherType.Clear, water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0 } };
+        wam.entities = { spring: sourceAt(4, 4, 600) };
+        const wallPiece = (column: number) => ({
+            x: column * 32,
+            y: 96,
+            prefabRef: { collectionName: "Carte Murs", id: "Carte Murs:facade-blanc-mid:Default:Down" },
+        });
+        const { manager, sent, steps } = createHarness({ wam });
+        manager.start();
+        steps(100);
+        const before = depthsAfter(sent);
+        // No wall yet: the water went south of the row 7.
+        expect(before.at(4, 9)).toBeGreaterThan(0);
+        // A long wall under the source, built while the water is there.
+        for (let column = -30; column < 30; column++) wam.entities[`wall${column}`] = wallPiece(column);
+        manager.mapChanged();
+        steps(10);
+        const after = depthsAfter(sent);
+        // The water is still there, and the room was told the whole state again.
+        expect(after.at(4, 4)).toBeGreaterThan(0);
+        expect(sent[sent.length - 1].full).toBe(true);
+        manager.stop();
+        // From a dry map with the wall, nothing ever reaches the other side.
+        const walled = createHarness({ wam: { ...wam } });
+        walled.manager.start();
+        walled.steps(200);
+        const held = depthsAfter(walled.sent);
+        expect(held.at(4, 7)).toBeGreaterThan(0);
+        expect(held.at(4, 8)).toBe(0);
+        expect(held.at(4, 12)).toBe(0);
+        walled.manager.stop();
+    });
+
     // A step runs in a timer: an error there would otherwise take the whole server down, with every room.
     it("stops the water of the room, without throwing, when a step fails", () => {
         vi.useFakeTimers();

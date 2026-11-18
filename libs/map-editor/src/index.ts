@@ -23,6 +23,7 @@ export * from "./Terrain/TerrainGrid";
 export * from "./Terrain/TerrainBrush";
 export * from "./Terrain/WaterGrid";
 export * from "./Terrain/WaterInputs";
+export * from "./Terrain/WaterWalls";
 export * from "./Weather/SeasonClock";
 export * from "./Weather/WeatherSchedule";
 export * from "./Weather/RealWeather";
