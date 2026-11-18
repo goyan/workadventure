@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/svelte";
 import { skyWindowLightsStore } from "../../../Stores/SkyWindowLightStore";
-import { MAP_LAYER_WALL_LIKE_COLLECTIONS } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { MAP_LAYER_DOOR_COLLECTION, MAP_LAYER_WALL_LIKE_COLLECTIONS } from "../MapEditor/MapLayer/MapLayerCatalog";
+import { edgeKey } from "../MapEditor/MapLayer/MapLayerModel";
 import { modelFromPlacedPrefabs, type PlacedPrefabLike } from "../MapEditor/MapLayer/MapLayerOperations";
 import type { SkyLight } from "../Night/SkyLight";
 import type { SkyShadowManagerOptions, SkyShadowScene } from "./SkyShadowManager";
@@ -33,6 +34,8 @@ export class SkyWindowLightManager {
     private pieces: PlacedPrefabLike[] = [];
     private openings: WindowOpening[] = [];
     private interior: InteriorOpening[] = [];
+    /** The doors that are open now, by their place (edgeKey): the light of the sky comes in through them. */
+    private openDoors = new Set<string>();
     private signature = "";
     private openingsKey = "";
     private readAt: number | undefined;
@@ -81,13 +84,17 @@ export class SkyWindowLightManager {
         if (key !== this.openingsKey) {
             this.openingsKey = key;
             const model = modelFromPlacedPrefabs(this.pieces);
+            const open = this.openDoors;
+            const isDoorOpen = (door: { orientation: "h" | "v"; x: number; y: number }): boolean =>
+                open.has(edgeKey(door.orientation, door.x, door.y));
             this.openings = windowOpenings(
                 model,
                 (x, y) => grid.roomAt(x, y),
                 (x, y) => grid.isOutdoorAt(x, y),
+                isDoorOpen,
             );
             // The panes between two rooms: the light that came into one goes on into the other.
-            this.interior = interiorOpenings(model, (x, y) => grid.roomAt(x, y));
+            this.interior = interiorOpenings(model, (x, y) => grid.roomAt(x, y), isDoorOpen);
         }
         if (this.openings.length === 0) {
             this.clear();
@@ -132,17 +139,31 @@ export class SkyWindowLightManager {
 
     private readWalls(): void {
         const pieces: PlacedPrefabLike[] = [];
+        const openDoors: PlacedPrefabLike[] = [];
         let signature = "";
         for (const entity of this.options.entities()) {
             const { prefab } = entity;
             if (entity.elevation >= RAISED || !MAP_LAYER_WALL_LIKE_COLLECTIONS.includes(prefab.collectionName))
                 continue;
-            pieces.push({ x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id });
-            signature += `${prefab.id}@${entity.x},${entity.y};`;
+            const piece = { x: entity.x, y: entity.y, collectionName: prefab.collectionName, prefabId: prefab.id };
+            const open =
+                prefab.collectionName === MAP_LAYER_DOOR_COLLECTION &&
+                entity.id !== undefined &&
+                (this.options.isDoorOpen?.(entity.id) ?? false);
+            pieces.push(piece);
+            if (open) openDoors.push(piece);
+            // An open door is another wall for the light: the openings are read again when one opens or closes.
+            signature += `${prefab.id}@${entity.x},${entity.y}${open ? "!" : ""};`;
         }
         if (signature !== this.signature) {
             this.signature = signature;
             this.pieces = pieces;
+            // A door is read from its first piece, open or not: the doors that are open now are read apart.
+            const open = new Set<string>();
+            for (const door of modelFromPlacedPrefabs(openDoors).getDoors()) {
+                open.add(edgeKey(door.orientation, door.x, door.y));
+            }
+            this.openDoors = open;
         }
     }
 

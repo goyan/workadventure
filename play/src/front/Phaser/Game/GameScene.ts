@@ -3404,6 +3404,8 @@ export class GameScene extends DirtyScene {
                     outdoorGrid: () => this.getOutdoorGrid(),
                     outdoorVersion: () => this.getOutdoorVersion(),
                     enabled: () => !get(mapEditorModeStore),
+                    // The light of the sky comes in through the doors that are open now.
+                    isDoorOpen: (entityId) => this.isDoorOpen(entityId),
                 });
                 this.treeSway?.destroy();
                 this.treePoses?.destroy();

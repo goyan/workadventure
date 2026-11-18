@@ -49,7 +49,27 @@ function windowed(): ShadowSourceEntity[] {
     }));
 }
 
-function setup(light: () => SkyLight | undefined, entities: ShadowSourceEntity[]) {
+/** The same room, with a plain door in its south wall instead of a window. */
+function doored(): ShadowSourceEntity[] {
+    const model = new MapLayerModel();
+    for (const x of [1, 2, 3, 4]) model.setWall("h", x, 4, "blanc");
+    model.setDoor({ orientation: "h", x: 3, y: 4 });
+    return computePlacements(model).map((piece, index) => ({
+        id: `piece-${index}`,
+        x: piece.x,
+        y: piece.y,
+        displayWidth: 32,
+        displayHeight: 32,
+        elevation: 0,
+        prefab: { collectionName: piece.collectionName, id: piece.prefabId },
+    }));
+}
+
+function setup(
+    light: () => SkyLight | undefined,
+    entities: ShadowSourceEntity[],
+    isDoorOpen?: (entityId: string) => boolean,
+) {
     const scene = {
         markDirty: vi.fn(),
         cameras: { main: { worldView: { x: 0, y: 0, width: 320, height: 320 }, zoom: 1 } },
@@ -60,6 +80,7 @@ function setup(light: () => SkyLight | undefined, entities: ShadowSourceEntity[]
         outdoorGrid: () => grid,
         outdoorVersion: () => 1,
         enabled: () => true,
+        isDoorOpen,
     });
 }
 
@@ -92,6 +113,27 @@ describe("SkyWindowLightManager", () => {
         manager.destroy();
         expect(get(skyWindowLightsStore)).toEqual([]);
     });
+    it("lets the sun in through a plain door while it is open, and no longer once it is closed", () => {
+        let open = false;
+        const manager = setup(
+            () => sun,
+            doored(),
+            () => open,
+        );
+        manager.update(0);
+        expect(draw).not.toHaveBeenCalled();
+
+        open = true;
+        // The walls are looked at again half a second later.
+        manager.update(600);
+        expect(draw).toHaveBeenCalledTimes(1);
+
+        open = false;
+        manager.update(1200);
+        expect(hide).toHaveBeenCalled();
+        manager.destroy();
+    });
+
     it("stops drawing, without stopping the game, when drawing fails", () => {
         const manager = setup(() => moon, windowed());
         draw.mockImplementationOnce(() => {

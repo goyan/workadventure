@@ -1,5 +1,5 @@
 import { MAP_LAYER_TILE_SIZE } from "../MapEditor/MapLayer/MapLayerCatalog";
-import { doorHeight, type MapLayerModel } from "../MapEditor/MapLayer/MapLayerModel";
+import { doorHeight, type DoorRef, type MapLayerModel } from "../MapEditor/MapLayer/MapLayerModel";
 import { SHADOW_MAX_LENGTH, shadowDirection, shadowOffset } from "./SkyShadowGeometry";
 import type { Point, ShadowLight } from "./SkyShadowGeometry";
 
@@ -22,6 +22,8 @@ export interface WindowOpening {
     /** The room the light comes into (OutdoorGrid.roomAt), and on which side of the wall it lies. */
     room: number;
     inside: "north" | "south";
+    /** False for an open door (see Pane); glass when absent. */
+    glass?: boolean;
 }
 
 interface Pane {
@@ -30,20 +32,37 @@ interface Pane {
     width: number;
     sill: number;
     height: number;
+    /** False for an open door: nothing stands in the way of the light, which loses nothing there. */
+    glass: boolean;
 }
 
-/** The glass of the horizontal walls of the map layer: its windows, and its glazed doors. */
-function panesOf(model: MapLayerModel): Pane[] {
+/** Whether a door of the map layer is open now (never, when the state of the doors is not known). */
+export type IsDoorOpen = (door: DoorRef) => boolean;
+
+/**
+ * What lets the light of the sky through the horizontal walls of the map layer: its windows, its glazed doors, and
+ * its doors that are open now, glazed or not.
+ */
+function panesOf(model: MapLayerModel, isDoorOpen: IsDoorOpen): Pane[] {
     const size = MAP_LAYER_TILE_SIZE;
     const panes: Pane[] = [];
     for (const window of model.getWindows()) {
         const height = model.getWindowHeight(window.x, window.y) ?? 1;
-        panes.push({ x: window.x * size, y: window.y, width: size, sill: WINDOW_SILL, height });
+        panes.push({ x: window.x * size, y: window.y, width: size, sill: WINDOW_SILL, height, glass: true });
     }
     for (const door of model.getDoors()) {
         // A horizontal door stands on the segments x - 1 and x (doorEdges): two tiles wide, its glass to the floor.
-        if (door.orientation !== "h" || door.glazed !== true) continue;
-        panes.push({ x: (door.x - 1) * size, y: door.y, width: 2 * size, sill: 0, height: doorHeight(door) });
+        if (door.orientation !== "h") continue;
+        const open = isDoorOpen(door);
+        if (!open && door.glazed !== true) continue;
+        panes.push({
+            x: (door.x - 1) * size,
+            y: door.y,
+            width: 2 * size,
+            sill: 0,
+            height: doorHeight(door),
+            glass: !open,
+        });
     }
     return panes;
 }
@@ -57,9 +76,10 @@ export function windowOpenings(
     model: MapLayerModel,
     roomAt: (x: number, y: number) => number | undefined,
     isOutdoorAt: (x: number, y: number) => boolean,
+    isDoorOpen: IsDoorOpen = () => false,
 ): WindowOpening[] {
     const size = MAP_LAYER_TILE_SIZE;
-    const panes = panesOf(model);
+    const panes = panesOf(model, isDoorOpen);
     const openings: WindowOpening[] = [];
     for (const pane of panes) {
         const centre = pane.x + pane.width / 2;
@@ -85,6 +105,7 @@ export function windowOpenings(
             top: pane.height * size - GLASS_TOP_MARGIN,
             room,
             inside,
+            glass: pane.glass,
         });
     }
     return openings;
@@ -125,16 +146,19 @@ export interface InteriorOpening {
     /** The rooms on each side of its wall (OutdoorGrid.roomAt). */
     north: number;
     south: number;
+    /** False for an open door: the light loses nothing there. */
+    glass?: boolean;
 }
 
 /** The windows and the glazed doors of the map layer between two rooms. */
 export function interiorOpenings(
     model: MapLayerModel,
     roomAt: (x: number, y: number) => number | undefined,
+    isDoorOpen: IsDoorOpen = () => false,
 ): InteriorOpening[] {
     const size = MAP_LAYER_TILE_SIZE;
     const openings: InteriorOpening[] = [];
-    for (const pane of panesOf(model)) {
+    for (const pane of panesOf(model, isDoorOpen)) {
         const centre = pane.x + pane.width / 2;
         const north = roomAt(centre, pane.y * size - PROBE);
         const south = roomAt(centre, (pane.y + 1) * size + PROBE);
@@ -147,6 +171,7 @@ export function interiorOpenings(
             top: pane.height * size - GLASS_TOP_MARGIN,
             north,
             south,
+            glass: pane.glass,
         });
     }
     return openings;
@@ -268,7 +293,8 @@ export function lightThroughPanes(
             const next = inside === "north" ? pane.north : pane.south;
             const near = inside === "north" ? pane.south : pane.north;
             if (near !== patch.room) continue;
-            const strength = patch.strength * GLASS_KEPT_LIGHT;
+            // Glass takes a little of the light; an open door none.
+            const strength = patch.strength * (pane.glass === false ? 1 : GLASS_KEPT_LIGHT);
             const beyond = windowLightPatch({ ...pane, room: next, inside }, light);
             if (!beyond) continue;
             const exact = convexIntersection(patch.polygon, beyond);

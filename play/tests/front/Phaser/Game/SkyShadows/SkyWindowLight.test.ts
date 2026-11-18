@@ -255,3 +255,55 @@ describe("the light of the sky relayed by an inner window it reaches", () => {
         expect(patches.some((patch) => patch.room === 1)).toBe(false);
     });
 });
+
+describe("the light of the sky through an open door", () => {
+    const openDoor = () => true;
+
+    it("comes in through a plain door while it is open, over its whole width and from the floor", () => {
+        const { model, roomAt, isOutdoorAt } = setup("north");
+        model.setDoor({ orientation: "h", x: 4, y: 3 });
+
+        expect(windowOpenings(model, roomAt, isOutdoorAt)).toEqual([]);
+        const openings = windowOpenings(model, roomAt, isOutdoorAt, openDoor);
+        expect(openings).toHaveLength(1);
+        expect(openings[0]).toMatchObject({ x: 96, width: 64, sill: 0, inside: "north", glass: false });
+        const patch = windowLightPatch(openings[0], southSun);
+        expect(patch && inside(patch, 120, 90)).toBe(true);
+    });
+
+    it("keeps a glazed door a pane of glass while it is closed, and an opening once it is open", () => {
+        const { model, roomAt, isOutdoorAt } = setup("north");
+        model.setDoor({ orientation: "h", x: 4, y: 3 });
+        model.setDoorGlazed({ orientation: "h", x: 4, y: 3 }, true);
+
+        expect(windowOpenings(model, roomAt, isOutdoorAt)[0]).toMatchObject({ glass: true });
+        expect(windowOpenings(model, roomAt, isOutdoorAt, openDoor)[0]).toMatchObject({ glass: false });
+    });
+
+    it("goes on into the next room through an open door without losing anything, unlike through glass", () => {
+        // The outdoors south of the line 8, a corridor (room 0), the wall of the line 5 with a door, a room (room 1).
+        const model = new MapLayerModel();
+        for (const x of [1, 2, 3, 4, 5, 6]) {
+            model.setWall("h", x, 8, "blanc");
+            model.setWall("h", x, 5, "blanc");
+        }
+        model.setWindow(3, 8);
+        model.setWindow(4, 8);
+        model.setDoor({ orientation: "h", x: 4, y: 5 });
+        const roomAt = (_x: number, y: number): number | undefined =>
+            y < 160 ? 1 : y >= 192 && y < 256 ? 0 : undefined;
+        const isOutdoorAt = (_x: number, y: number): boolean => y >= 288;
+        const sun = { azimuth: 180, elevation: 20 };
+        const through = (isDoorOpen: () => boolean) =>
+            lightThroughPanes(
+                windowOpenings(model, roomAt, isOutdoorAt, isDoorOpen),
+                interiorOpenings(model, roomAt, isDoorOpen),
+                sun,
+            ).filter((patch) => patch.room === 1);
+
+        expect(through(() => false)).toEqual([]);
+        const lit = through(openDoor);
+        expect(lit.length).toBeGreaterThan(0);
+        expect(lit.every((patch) => patch.strength === 1)).toBe(true);
+    });
+});
