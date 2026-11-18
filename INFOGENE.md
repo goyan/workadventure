@@ -2217,6 +2217,64 @@ murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors
 Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
 par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
 
+## Vie aquatique (poissons et dauphins)
+
+Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-18-vie-aquatique*`.
+
+**En jeu.** Dans l'eau du relief vivent des poissons bleus (mâles) et roses (femelles), et des dauphins. Ils
+apparaissent seuls : un couple dans tout corps d'eau d'au moins 40 cellules à 8 px d'eau ou plus, un dauphin dans un
+corps qui a au moins 300 cellules profondes (16 px, là où l'avatar nage). Les poissons nagent au hasard sans jamais
+quitter leur eau ni traverser un mur. Un mâle prêt va vers la femelle prête la plus proche de son corps d'eau : 2 à 4
+petits, de sexe tiré au hasard, puis chacun attend un délai de reproduction. Un poisson vit entre 70 % et 100 % de la
+durée de vie maximale. Le dauphin chasse à intervalle régulier le poisson le plus proche en eau profonde, à 1,5 fois
+la vitesse des poissons ; l'eau de 8 à 16 px est un refuge, il abandonne après 20 s sans prise. Un animal dont l'eau
+baisse fuit vers la cellule voisine la plus profonde et meurt après 5 s à sec. Un corps d'eau vidé de ses poissons en
+retrouve après environ un délai de reproduction.
+
+**Dauphins.** Mâles et femelles (la femelle a un gris rosé), ils arrivent par couple. Un mâle et une femelle prêts qui
+ont mangé au moins un poisson depuis leur dernier petit ont un petit, puis attendent le délai de reproduction des
+dauphins ; un dauphin en chasse ne courtise pas. Ils meurent de vieillesse (70 % à 100 % de leur durée de vie maximale)
+et de faim après huit intervalles de chasse sans prise. Un lac dont les dauphins ont disparu en retrouve après environ
+un délai de reproduction des dauphins.
+
+**Peur des avatars.** Poissons et dauphins s'écartent d'un avatar qui approche à moins de trois cases (96 px), à leur
+vitesse la plus grande, sans quitter leur eau ; tant qu'ils ont peur ils ne se reproduisent pas et ne chassent pas.
+Seuls comptent les avatars au sol (`GameRoom.groundAvatarPositions`).
+
+**Plafonds.** Un poisson pour 8 cellules de son corps d'eau (2 au moins), un dauphin pour 150 cellules profondes,
+300 animaux et 12 dauphins par salle.
+
+**Outil Vie de l'éditeur** (poisson dans la barre d'outils, chiffre 0, éditeurs de la carte entière). Il réunit le
+tableau de bord et les réglages. Tableau de bord, mis à jour chaque seconde : proies (poissons, mâles et femelles),
+prédateurs (dauphins), proies par prédateur, remplissage des eaux (poissons sur la capacité des plans d'eau),
+plans d'eau peuplés sur ceux qui peuvent l'être, **courbe des proies et des prédateurs dans le temps** (toute la vie
+de la carte : `back` garde un échantillon toutes les 5 s, puis un sur deux quand il y en a plus de 360 ; une échelle
+par courbe), et naissances, arrivées, morts de vieillesse, mangés, morts à sec, naissances et morts de dauphins sur la
+dernière minute et depuis le début. Le panneau défile. Les totaux viennent du serveur (`AquaticLifeStatsMessage`, gardés avec les
+animaux) ; couper la vie les remet à zéro.
+
+**Réglages de la carte** (même outil, « Réglages de la simulation ») :
+interrupteur (coupé par défaut ; couper vide l'eau), délai de reproduction (10 s à 1 h, 2 min par défaut), durée de
+vie maximale (30 s à 24 h, 15 min), vitesse maximale (0,2 à 6 cases/s, 1,5), intervalle de chasse (5 s à 1 h, 1 min),
+délai de reproduction des dauphins (30 s à 2 h, 5 min), durée de vie maximale des dauphins (1 min à 48 h, 1 h).
+Les durées sont en temps réel : la vitesse de l'eau ne les accélère pas. Enregistrés dans `wam.settings.life`
+(`UpdateLifeSettingMessage`).
+
+**Réglage personnel.** Paramètres → Ambiance : « Afficher la vie aquatique » (activé par défaut).
+
+**Comment ça marche.** Les règles sont des fonctions pures de `libs/map-editor/src/Life/` (`WaterBodies`, `Swim`,
+`Population`), aléa et heure injectés. `back` seul les fait tourner (`AquaticLifeManager`, deux pas par seconde, sur
+la grille de `TerrainWaterManager`), annonce tous les animaux à la salle chaque seconde (`AquaticLifeMessage` : id,
+genre, position en pixels de carte) et les garde dans Redis (`aquatic-life:<salle>`). Le navigateur ne décide rien :
+`Life/AquaticLife.ts` fait glisser chaque animal vers sa dernière position et fond les naissances et les morts,
+`AquaticLifeView.ts` les dessine (images faites en code) juste au-dessus de l'eau. Une erreur dans un pas arrête la
+vie de la salle, pas l'eau ni la salle.
+
+**Limites.** Eau du relief du sol seulement (ni piscines d'objets, ni étages). Pas de recherche de chemin : un animal
+qui bute sur un obstacle en allant vers sa cible erre 3 s puis reprend. Les animaux sont dessinés par-dessus l'eau,
+sans passer derrière les objets. `play`, `back` et `map-storage` se déploient ensemble.
+
+
 ## Météo de la carte
 
 Dans « Outils → Météo », un éditeur de la carte choisit

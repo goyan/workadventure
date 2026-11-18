@@ -3,7 +3,9 @@ import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
     AutoWeather,
     CategorySettings,
+    DEFAULT_LIFE_SETTINGS,
     DEFAULT_WATER_SETTINGS,
+    LIFE_BOUNDS,
     MAX_WATER_CURRENT,
     MAX_WATER_SPEED,
     MegaphoneSettings,
@@ -126,6 +128,27 @@ export class UpdateWAMSettingCommand extends Command {
                     speed: speed === undefined ? keptSpeed : within(speed, 1, MAX_WATER_SPEED, keptSpeed),
                     absorption: absorption === undefined ? keptAbsorption : within(absorption, 0, 100, keptAbsorption),
                     current: current === undefined ? keptCurrent : within(current, 0, MAX_WATER_CURRENT, keptCurrent),
+                };
+                break;
+            }
+            case "updateLifeSettingMessage": {
+                const sent = message.updateLifeSettingMessage;
+                const kept = this.wam.settings.life;
+                const within = (key: keyof typeof LIFE_BOUNDS): number => {
+                    const [min, max] = LIFE_BOUNDS[key];
+                    const value = sent[key];
+                    // An older client sends no dolphin settings: those of the map are kept.
+                    if (value === undefined) return kept?.[key] ?? DEFAULT_LIFE_SETTINGS[key];
+                    return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : DEFAULT_LIFE_SETTINGS[key];
+                };
+                this.wam.settings.life = {
+                    enabled: sent.enabled === true,
+                    reproductionDelay: within("reproductionDelay"),
+                    maxLifespan: within("maxLifespan"),
+                    maxSpeed: within("maxSpeed"),
+                    huntInterval: within("huntInterval"),
+                    dolphinReproductionDelay: within("dolphinReproductionDelay"),
+                    dolphinMaxLifespan: within("dolphinMaxLifespan"),
                 };
                 break;
             }

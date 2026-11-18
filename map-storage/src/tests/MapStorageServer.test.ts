@@ -178,6 +178,42 @@ describe("MapStorageServer entity edit permissions", () => {
         expect(addCommandToQueue).toHaveBeenCalledWith("map.wam", response);
     });
 
+    describe("life in the water", () => {
+        const life: EditMapMessage = {
+            $case: "updateWAMSettingsMessage",
+            updateWAMSettingsMessage: {
+                message: {
+                    $case: "updateLifeSettingMessage",
+                    updateLifeSettingMessage: {
+                        enabled: true,
+                        reproductionDelay: 1,
+                        maxLifespan: 600,
+                        maxSpeed: 99,
+                        huntInterval: 20,
+                    },
+                },
+            },
+        };
+
+        it("lets a map editor set it, within its bounds", async () => {
+            await expectAccepted(MAP_EDITOR, life);
+            expect(wamFile.getWam().settings?.life).toEqual({
+                enabled: true,
+                reproductionDelay: 10,
+                maxLifespan: 600,
+                maxSpeed: 6,
+                huntInterval: 20,
+                dolphinReproductionDelay: 300,
+                dolphinMaxLifespan: 3600,
+            });
+        });
+
+        it("refuses a visitor", async () => {
+            await expectRefused(VISITOR, life);
+            expect(wamFile.getWam().settings?.life).toBeUndefined();
+        });
+    });
+
     describe("relief", () => {
         const dig = (cells: { x: number; y: number; height: number }[]): EditMapMessage => ({
             $case: "modifyTerrainMessage",

@@ -390,7 +390,21 @@ message UpdateWAMSettingsMessage {
     UpdateCategorySettingMessage updateCategorySettingMessage = 4;
     UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
+    UpdateLifeSettingMessage updateLifeSettingMessage = 7;
   }
+}
+
+// The life in the water of the relief (LifeSettings in libs/map-editor). Durations in real seconds.
+message UpdateLifeSettingMessage {
+  bool enabled = 1;
+  double reproductionDelay = 2;
+  double maxLifespan = 3;
+  // Tiles (32 map pixels) a second.
+  double maxSpeed = 4;
+  double huntInterval = 5;
+  // The dolphins. Absent from older clients: those of the map are kept.
+  optional double dolphinReproductionDelay = 6;
+  optional double dolphinMaxLifespan = 7;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).
@@ -787,6 +801,62 @@ message TerrainWaterMessage {
   // Two bytes a cell (eighths of a pixel of water, low byte first), row by row, gzipped.
   bytes depths = 7;
   optional TerrainWaterStatsMessage stats = 8;
+}
+
+// The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all
+// of them each time (a few bytes each, 300 at most). A new id is a birth, a missing one a death.
+message AquaticLifeMessage {
+  repeated AquaticAnimalMessage animals = 1;
+  // What happened since the life of the map began, and its waters: for the dashboard of the life tool.
+  optional AquaticLifeStatsMessage stats = 2;
+}
+
+// Totals since `since` (milliseconds, the clock of the server), and the waters of the room as the life sees them.
+message AquaticLifeStatsMessage {
+  double since = 1;
+  // Animals that came by themselves into an empty water.
+  uint32 arrivals = 2;
+  uint32 births = 3;
+  uint32 diedOfAge = 4;
+  uint32 eaten = 5;
+  // Left without water.
+  uint32 diedDry = 6;
+  // Bodies of water big enough for fish, those where fish live, and how many fish they can hold together.
+  uint32 habitableBodies = 7;
+  uint32 populatedBodies = 8;
+  uint32 capacity = 9;
+  // The prey and the predators over the whole life of the map, oldest first: only for a player who joins the room
+  // (each browser then adds what it is told). Empty in the messages of every second.
+  // The dolphins: calves born, and deaths (of age or of hunger).
+  uint32 predatorBirths = 12;
+  uint32 predatorDeaths = 13;
+  repeated AquaticLifeSampleMessage history = 10;
+  // How far apart the samples of the history are now, in milliseconds.
+  double historyStepMs = 11;
+  // The prey and the predators over the last five minutes, hour, four hours and day, each with its own samples: as
+  // the history, only for a player who joins the room.
+  repeated AquaticLifeRangeMessage ranges = 14;
+}
+
+message AquaticLifeRangeMessage {
+  // "5min", "1h", "4h" or "1d".
+  string name = 1;
+  repeated AquaticLifeSampleMessage samples = 2;
+}
+
+message AquaticLifeSampleMessage {
+  double at = 1;
+  uint32 prey = 2;
+  uint32 predators = 3;
+}
+
+message AquaticAnimalMessage {
+  uint32 id = 1;
+  // 0: male fish, 1: female fish, 2: male dolphin, 3: female dolphin.
+  uint32 kind = 2;
+  // Map pixels.
+  sint32 x = 3;
+  sint32 y = 4;
 }
 
 // What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
@@ -1416,6 +1486,7 @@ message SubMessage {
     DuckRushEventMessage duckRushEventMessage = 33;
     EntityStateMessage entityStateMessage = 34;
     TerrainWaterMessage terrainWaterMessage = 35;
+    AquaticLifeMessage aquaticLifeMessage = 36;
   }
 }
 
@@ -1516,6 +1587,8 @@ message RoomJoinedMessage {
   repeated EntityStateMessage entityState = 20;
   // The water of the relief (its whole state), for a player who joins the room. Absent on a map without water.
   optional TerrainWaterMessage terrainWater = 22;
+  // The animals of the water of the relief, for a player who joins the room. Absent on a map without any.
+  optional AquaticLifeMessage aquaticLife = 23;
 }
 
 message WebRtcStartMessage {
@@ -2075,6 +2148,7 @@ message SubToPusherRoomMessage {
     AreaPropertyVariableMessage areaPropertyVariableMessage = 8;
     EntityStateMessage entityStateMessage = 10;
     TerrainWaterMessage terrainWaterMessage = 11;
+    AquaticLifeMessage aquaticLifeMessage = 12;
   }
 }
 

@@ -67,6 +67,8 @@ export class TerrainWaterManager {
     private sentBytes: Uint8Array | undefined;
     private sentRates = false;
     private seq = 0;
+    /** Counts the changes of the water (a step that moved it, a new grid): what lives in it reads it again then. */
+    private version = 0;
     private messagesSinceFull = 0;
     private changedSinceSave = false;
 
@@ -124,6 +126,7 @@ export class TerrainWaterManager {
         const before = this.grid ?? this.saved;
         this.saved = undefined;
         this.grid = bounds ? new WaterGrid(wam?.terrain, bounds, undefined, walls) : undefined;
+        this.version++;
         if (this.grid && before) this.grid.takeFrom(before);
         // The cells are not the same any more: the room is told the whole state at its next message.
         this.sentBytes = undefined;
@@ -167,6 +170,7 @@ export class TerrainWaterManager {
         if (this.moving || pouring) {
             const tally = grid.step(stepInputOf(settings?.water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
             this.moving = tally.moved;
+            if (tally.moved) this.version++;
             if (tally.moved) this.changedSinceSave = true;
             this.sums.rainPx += tally.rainPx;
             this.sums.sourcesPx += tally.sourcesPx;
@@ -177,6 +181,16 @@ export class TerrainWaterManager {
         }
         if (this.steps % STEPS_PER_MESSAGE === 0) this.tell(grid);
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** The grid of the water, for what lives in it. Undefined on a map without water. */
+    public getGrid(): WaterGrid | undefined {
+        return this.grid;
+    }
+
+    /** A number that changes whenever the water does. */
+    public waterVersion(): number {
+        return this.version;
     }
 
     /** The whole state the room was last told, for a player who joins it. Undefined on a map without water. */

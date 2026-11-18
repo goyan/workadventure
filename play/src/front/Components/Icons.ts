@@ -171,6 +171,7 @@ export { default as IconBell } from "~icons/tabler/bell";
 export { default as IconStack2 } from "~icons/tabler/stack-2";
 export { default as IconWall } from "~icons/tabler/wall";
 export { default as IconShovel } from "~icons/tabler/shovel";
+export { default as IconFish } from "~icons/tabler/fish";
 export { default as IconDroplet } from "~icons/tabler/droplet";
 export { default as IconBrush } from "~icons/tabler/brush";
 export { default as IconEraser } from "~icons/tabler/eraser";

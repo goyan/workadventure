@@ -7,6 +7,7 @@ import type {
     PositionMessage,
     SayMessage,
     TerrainWaterMessage,
+    AquaticLifeMessage,
 } from "@workadventure/messages";
 import type { WokaTextureDescriptionInterface } from "../Phaser/Entity/PlayerTextures";
 import type { CompanionTextureDescriptionInterface } from "../Phaser/Companion/CompanionTextures";
@@ -90,6 +91,7 @@ export interface RoomJoinedMessageInterface {
     entityStates: { entityId: string; key: string; value: string }[];
     /** The water of the relief of the map (its whole state) as the server computes it; absent on a dry map. */
     terrainWater?: TerrainWaterMessage;
+    aquaticLife?: AquaticLifeMessage;
     characterTextures: WokaTextureDescriptionInterface[];
     companionTexture?: CompanionTextureDescriptionInterface;
     commandsToApply?: EditMapCommandMessage[];

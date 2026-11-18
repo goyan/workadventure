@@ -35,6 +35,7 @@ import type {
     EntityEvent,
     EntityStateMessage,
     TerrainWaterMessage,
+    AquaticLifeMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
@@ -116,6 +117,7 @@ import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager"
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { TerrainWaterManager } from "./TerrainWaterManager";
+import { AquaticLifeManager } from "./AquaticLifeManager";
 import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
@@ -154,6 +156,7 @@ export class GameRoom implements BrothersFinder {
     private entityStateManager: EntityStateManager | undefined;
     private switchTriggers: SwitchTriggerEvaluator | undefined;
     private terrainWater: TerrainWaterManager | undefined;
+    private aquaticLife: AquaticLifeManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -331,6 +334,21 @@ export class GameRoom implements BrothersFinder {
         terrainWater.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
+        // The life in that water (fish, dolphins): its own pace, nothing on a map whose life is off.
+        const aquaticLife = new AquaticLifeManager(
+            gameRoom,
+            terrainWater,
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            undefined,
+            // The animals fear the avatars that are on the ground, where the water is.
+            gameRoom.groundAvatarPositions.bind(gameRoom),
+        );
+        gameRoom.aquaticLife = aquaticLife;
+        await aquaticLife.restore();
+        aquaticLife.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
 
         return gameRoom;
     }
@@ -1122,6 +1140,22 @@ export class GameRoom implements BrothersFinder {
         return this.terrainWater?.snapshot();
     }
 
+    /** Where the avatars standing on the ground are, in map pixels (not those on a raised floor). */
+    public groundAvatarPositions(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const user of this.users.values()) {
+            if (!sameFloor(user.getFloorZ(), 0)) continue;
+            const { x, y } = user.getPosition();
+            positions.push({ x, y });
+        }
+        return positions;
+    }
+
+    /** The animals of the water of the relief, sent to a user who joins the room. */
+    public getAquaticLife(): AquaticLifeMessage | undefined {
+        return this.aquaticLife?.snapshot();
+    }
+
     /** The states of the objects of the map that differ from their default, sent to a user who joins the room. */
     public getEntityStates(): EntityStateMessage[] {
         return this.entityStateManager?.getAll() ?? [];
@@ -1698,6 +1732,8 @@ export class GameRoom implements BrothersFinder {
         await this.wamManager.applyCommand(editMapCommandMessage);
         // The relief or the sources and sinks may have changed.
         this.terrainWater?.mapChanged();
+        // After the water: the life reads its grid, and its own setting.
+        this.aquaticLife?.mapChanged();
 
         if (GameRoom.commandInvalidatesJitsiModeratorTagFinder(editMapMessage.$case)) {
             this.jitsiModeratorTagFinderPromise = undefined;

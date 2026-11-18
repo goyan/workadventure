@@ -57,5 +57,6 @@ describe("MapEditorSideBar", () => {
         expect(shortcutOf("SelectionEditor")).toBe("· Shortcut: 7");
         expect(shortcutOf("MapLayerEditor")).toBe("· Shortcut: 8");
         expect(shortcutOf("TerrainEditor")).toBe("· Shortcut: 9");
+        expect(shortcutOf("LifeEditor")).toBe("· Shortcut: 0");
     });
 });
