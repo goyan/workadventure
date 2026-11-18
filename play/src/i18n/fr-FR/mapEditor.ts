@@ -409,7 +409,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             unit: "Unité du débit",
             radius: "Rayon (cases)",
             radiusHint:
-                "Le puits vide d'abord ce disque. S'il demande plus, il fait baisser tout le plan d'eau relié à lui.",
+                "Le puits vide d'abord ce disque. S'il demande plus, il aspire le plan d'eau relié à lui, plus fort près de lui : l'eau y court vers le puits.",
         },
         lamp: {
             label: "Zone de lumière",

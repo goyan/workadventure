@@ -2136,9 +2136,11 @@ retiré : l'eau y apparaissait au point le plus bas de toute la région creusée
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau
 d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire d'abord l'eau d'un disque autour de son pied ; s'il demande plus que ce disque ne contient, il fait
-baisser d'un même niveau le plan d'eau relié à lui (`lowerBasin` : sans traverser un mur, un sol sec ni un film de
-moins de 2 px, jamais sous son propre pied, 16 384 cellules au plus par pas, soit environ 90 cellules autour ; l'eau
-plus loin doit couler jusqu'à lui). Avant, il attendait que l'eau arrive de cellule en cellule et ne prenait qu'une
+baisser le plan d'eau relié à lui en cône (`lowerBasin` : chaque cellule donne en proportion de 1 / (1 + sa distance
+au puits), si bien que la surface penche vers le puits dans tout le bassin et que le courant y emporte ce qui flotte ;
+sans traverser un mur, un sol sec ni un film de moins de 1 px, jamais sous son propre pied, en laissant 2 px d'eau
+dans chaque cellule hors du disque pour rester relié au lac, 16 384 cellules au plus par pas, soit environ 90
+cellules autour ; l'eau plus loin doit couler jusqu'à lui). Avant, il attendait que l'eau arrive de cellule en cellule et ne prenait qu'une
 fraction d'un débit réglé haut. Ce rayon se règle
 par objet, en cases (`radius`, de 0 à 10) : une case et demie par défaut pour un puits ; pour une source, 0 (au pied)
 ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter

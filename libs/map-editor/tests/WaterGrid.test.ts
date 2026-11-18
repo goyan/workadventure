@@ -242,23 +242,43 @@ describe("WaterGrid", () => {
             return grid;
         };
 
-        it("takes the rest from the whole lake, lowered to one level", () => {
+        it("takes the rest from the whole lake, the more the nearer: the water slopes towards the sink", () => {
             const grid = lakeOf(41);
+            const before = grid.totalPx();
             const tally = grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: -5000 }] });
+            // Its disc (29 cells of 10 px) does not hold it: the sink still has all it asks.
             expect(tally.sinksPx).toBeCloseTo(5000, 1);
-            // Its disc (29 cells of 10 px) is empty; the 1652 other cells gave the rest, as much each.
-            const left = 10 - (5000 - 290) / 1652;
-            expect(grid.depthAt(30, 20)).toBeCloseTo(left, 1);
-            expect(grid.depthAt(20, 8)).toBeCloseTo(left, 1);
-            expect(grid.depthAt(0, 0)).toBeCloseTo(left, 1);
+            expect(grid.totalPx()).toBeCloseTo(before - 5000, 0);
+            // Every cell of the lake gave, down to its corner, and the nearer ones gave more: a cone around the sink.
+            expect(grid.depthAt(0, 0)).toBeLessThan(9.9);
+            expect(grid.depthAt(40, 40)).toBeLessThan(9.9);
+            for (const [near, far] of [
+                [26, 30],
+                [30, 34],
+                [34, 38],
+            ]) {
+                expect(grid.depthAt(near, 20)).toBeLessThan(grid.depthAt(far, 20) - 0.05);
+                expect(grid.depthAt(20, 40 - near)).toBeLessThan(grid.depthAt(20, 40 - far) - 0.05);
+            }
+        });
+
+        it("leaves a film of water beyond its disc, so that it stays joined to the rest of the lake", () => {
+            const grid = lakeOf(41);
+            // More than the cells next to its disc hold, less than the lake.
+            grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: -9000 }] });
+            const taken = grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: -3000 }] }).sinksPx;
+            // The second step still finds the lake: a sink that dried the cells around itself would take nothing more.
+            expect(taken).toBeGreaterThan(2500);
         });
 
         it("empties the lake when it asks for more than the lake holds", () => {
             const grid = lakeOf(41);
             const before = grid.totalPx();
             const tally = grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: -1e6 }] });
-            expect(tally.sinksPx).toBeCloseTo(before, 1);
-            expect(grid.totalPx()).toBeLessThan(1);
+            // All of it but the film of 2 px it leaves beyond its disc (29 cells).
+            const film = (41 * 41 - 29) * 2;
+            expect(tally.sinksPx).toBeCloseTo(before - film, 0);
+            expect(grid.totalPx()).toBeCloseTo(film, 0);
         });
 
         it("leaves the lake alone while its disc holds what it asks", () => {
@@ -292,7 +312,7 @@ describe("WaterGrid", () => {
             drained.step({ ...nothing, flows: [{ cellX: 5, cellY: 10, px: -1e6 }] });
             const control = flooded();
             control.step(nothing);
-            expect(drained.depthAt(2, 3)).toBeLessThan(0.01);
+            expect(drained.depthAt(2, 3)).toBeLessThan(2.01);
             expect(eastSide(drained)).toBeCloseTo(eastSide(control), 3);
         });
 
@@ -304,7 +324,7 @@ describe("WaterGrid", () => {
             const grid = new WaterGrid(ponds, gridBoundsOf(ponds, []));
             run(grid, 100, { ...nothing, rainPx: 0.1 });
             grid.step({ ...nothing, flows: [{ cellX: 2, cellY: 0, px: -1e6 }] });
-            expect(grid.depthAt(8, 0)).toBeLessThan(0.01);
+            expect(grid.depthAt(8, 0)).toBeLessThan(2.01);
             expect(grid.depthAt(15, 0)).toBeCloseTo(10, 3);
         });
 
@@ -318,14 +338,15 @@ describe("WaterGrid", () => {
             run(grid, 100, { ...nothing, rainPx: (5 * 3 + 16 * 15) / 21 / 100 });
             run(grid, 3000);
             expect(grid.depthAt(2, 0)).toBeCloseTo(3, 0);
-            // What stands over the level of the shelf, all along the canal: the pit holds 12 px under it.
+            // What stands over the level of the shelf, all along the canal (the pit holds 12 px under it), but for the
+            // film the sink leaves on the shelf.
             let over = 0;
-            for (let x = 0; x < 21; x++) over += grid.depthAt(x, 0) - (x < 5 ? 0 : 12);
-            expect(over).toBeGreaterThan(40);
+            for (let x = 0; x < 21; x++) over += grid.depthAt(x, 0) - (x === 0 ? 0 : x < 5 ? 2 : 12);
+            expect(over).toBeGreaterThan(35);
             // A sink on the shelf, taking from its own cell only.
             const tally = grid.step({ ...nothing, flows: [{ cellX: 0, cellY: 0, px: -1e6, radius: 0 }] });
             expect(tally.sinksPx).toBeCloseTo(over, 1);
-            expect(grid.depthAt(2, 0)).toBeLessThan(0.1);
+            expect(grid.depthAt(2, 0)).toBeCloseTo(2, 1);
             expect(grid.depthAt(12, 0)).toBeCloseTo(12, 0);
         });
 
@@ -378,8 +399,8 @@ describe("WaterGrid", () => {
         const lake = terrainOf(cells);
         const taken = (flowSteps: number | undefined): number => {
             const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
-            // A film of water (1.5 px), too thin for the sink to take it from afar: it has to run to it.
-            run(grid, 100, { ...nothing, rainPx: 0.015 });
+            // A film of water (0.8 px), too thin for the sink to take it from afar: it has to run to it.
+            run(grid, 100, { ...nothing, rainPx: 0.008 });
             let total = 0;
             for (let step = 0; step < 60; step++) {
                 total += grid.step({ ...nothing, flowSteps, flows: [{ cellX: 30, cellY: 30, px: -1e6 }] }).sinksPx;
@@ -399,8 +420,8 @@ describe("WaterGrid", () => {
         const lake = terrainOf(cells);
         const farAfter = (sink: boolean): number => {
             const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
-            // A film of water (1.5 px), too thin for the sink to take it from afar.
-            run(grid, 100, { ...nothing, rainPx: 0.015 });
+            // A film of water (0.8 px), too thin for the sink to take it from afar.
+            run(grid, 100, { ...nothing, rainPx: 0.008 });
             // A mound of water in a corner, a sink (or none) in the opposite one.
             grid.step({ ...nothing, flows: [{ cellX: 10, cellY: 10, px: 4 }] });
             for (let step = 0; step < 5; step++) {
