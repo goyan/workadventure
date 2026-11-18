@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { LIFE_HISTORY_MAX, LIFE_HISTORY_STEP_MS, LifeHistory } from "../src/Life/LifeHistory";
+import {
+    LIFE_HISTORY_MAX,
+    LIFE_HISTORY_STEP_MS,
+    LIFE_RANGE_MAX,
+    LIFE_RANGES,
+    LifeHistory,
+    LifeRanges,
+} from "../src/Life/LifeHistory";
 
 describe("LifeHistory", () => {
     it("keeps a sample every five seconds, not more", () => {
@@ -41,5 +48,58 @@ describe("LifeHistory", () => {
         history.clear();
         expect(history.samples).toEqual([]);
         expect(history.stepMs).toBe(LIFE_HISTORY_STEP_MS);
+    });
+});
+
+describe("LifeRanges", () => {
+    const span = (name: string) => LIFE_RANGES.find((range) => range.name === name)!;
+
+    it("keeps, for each range, a sample every step of that range", () => {
+        const ranges = new LifeRanges();
+        // Two samples a second for a minute and a half.
+        for (let half = 0; half <= 180; half++) ranges.add({ at: half * 500, prey: half, predators: 0 });
+        const fine = ranges.samples("5min").map((sample) => sample.at);
+        expect(fine.slice(0, 3)).toEqual([0, 2500, 5000]);
+        expect(fine).toHaveLength(37);
+        expect(ranges.samples("1h").map((sample) => sample.at)).toEqual([0, 30_000, 60_000, 90_000]);
+        expect(ranges.samples("4h").map((sample) => sample.at)).toEqual([0]);
+        expect(ranges.samples("1d").map((sample) => sample.at)).toEqual([0]);
+    });
+
+    it("forgets what is older than the range", () => {
+        const ranges = new LifeRanges();
+        // Two hours, a sample every ten seconds.
+        for (let at = 0; at <= 2 * 3_600_000; at += 10_000) ranges.add({ at, prey: 1, predators: 0 });
+        const last = 2 * 3_600_000;
+        for (const name of ["5min", "1h"] as const) {
+            const samples = ranges.samples(name);
+            expect(samples[samples.length - 1].at).toBe(last);
+            expect(samples[0].at).toBeGreaterThanOrEqual(last - span(name).spanMs);
+            expect(samples[0].at).toBeLessThan(last - span(name).spanMs + 2 * span(name).stepMs);
+            expect(samples.length).toBeLessThanOrEqual(LIFE_RANGE_MAX);
+        }
+        // The longer ranges still know the beginning.
+        expect(ranges.samples("4h")[0].at).toBe(0);
+        expect(ranges.samples("1d")[0].at).toBe(0);
+    });
+
+    it("starts again from what was saved, range by range, and from nothing when that cannot be read", () => {
+        const ranges = new LifeRanges();
+        for (let at = 0; at <= 120_000; at += 500) ranges.add({ at, prey: 3, predators: 1 });
+        const back = LifeRanges.from(JSON.parse(JSON.stringify(ranges.save())));
+        for (const range of LIFE_RANGES) expect(back.samples(range.name)).toEqual(ranges.samples(range.name));
+        // A range that is missing or unknown: the others are still read.
+        const partial = LifeRanges.from({ "1h": [{ at: 5, prey: 1, predators: 0 }], other: [] });
+        expect(partial.samples("1h")).toEqual([{ at: 5, prey: 1, predators: 0 }]);
+        expect(partial.samples("5min")).toEqual([]);
+        expect(LifeRanges.from({ "1h": "x" }).samples("1h")).toEqual([]);
+        expect(LifeRanges.from(undefined).samples("1d")).toEqual([]);
+    });
+
+    it("forgets everything when cleared", () => {
+        const ranges = new LifeRanges();
+        ranges.add({ at: 0, prey: 1, predators: 0 });
+        ranges.clear();
+        for (const range of LIFE_RANGES) expect(ranges.samples(range.name)).toEqual([]);
     });
 });

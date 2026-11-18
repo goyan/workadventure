@@ -587,6 +587,13 @@ const mapEditor: BaseTranslation = {
             now: "now",
             historyPrey: "prey (max {max})",
             historyPredators: "predators (max {max})",
+            range: {
+                "5min": "5 min",
+                "1h": "1 h",
+                "4h": "4 h",
+                "1d": "1 day",
+                all: "All",
+            },
         },
     },
     terrain: {

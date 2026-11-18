@@ -4,7 +4,9 @@ import {
     emptyLifeTally,
     emptyPopulation,
     lifeCensus,
+    LIFE_RANGES,
     LifeHistory,
+    LifeRanges,
     LIFE_STEP_MS,
     stepPopulation,
     waterBodiesOf,
@@ -28,6 +30,7 @@ const SavedLife = z.object({
     // Absent from a state saved before the totals were kept.
     since: z.number().finite().optional(),
     history: z.unknown().optional(),
+    ranges: z.unknown().optional(),
     totals: z
         .object({
             arrivals: z.number().int().min(0),
@@ -73,6 +76,8 @@ export class AquaticLifeManager {
     private since: number | undefined;
     /** The prey and the predators over the whole life of the map, for the curve of its dashboard. */
     private history = new LifeHistory();
+    /** The same over the last five minutes, hour, four hours and day. */
+    private ranges = new LifeRanges();
     private census: LifeCensus = { habitableBodies: 0, populatedBodies: 0, capacity: 0 };
     /** Whether the room was last told some animals: it is told once more when none is left. */
     private toldSome = false;
@@ -101,6 +106,7 @@ export class AquaticLifeManager {
             this.totals = saved.totals ?? emptyLifeTally();
             this.since = saved.since;
             this.history = LifeHistory.from(saved.history);
+            this.ranges = LifeRanges.from(saved.ranges);
         } catch (error) {
             console.error("Could not restore the life of the water of the map", error);
         }
@@ -125,6 +131,7 @@ export class AquaticLifeManager {
             this.totals = emptyLifeTally();
             this.since = undefined;
             this.history.clear();
+            this.ranges.clear();
             this.clearTimer();
             if (had || this.toldSome) {
                 this.tell();
@@ -192,7 +199,9 @@ export class AquaticLifeManager {
         // The history keeps a sample every few seconds only.
         let predators = 0;
         for (const animal of this.population.animals) if (animal.kind === "dolphin") predators++;
-        this.history.add({ at: now, prey: this.population.animals.length - predators, predators });
+        const sample = { at: now, prey: this.population.animals.length - predators, predators };
+        this.history.add(sample);
+        this.ranges.add(sample);
         this.steps++;
         // Once a second, with the message: the waters as the life sees them.
         if (this.steps % STEPS_PER_MESSAGE === 0) this.census = lifeCensus(this.population, this.bodies);
@@ -220,6 +229,9 @@ export class AquaticLifeManager {
                 ...this.census,
                 history: withHistory ? this.history.samples : [],
                 historyStepMs: this.history.stepMs,
+                ranges: withHistory
+                    ? LIFE_RANGES.map((range) => ({ name: range.name, samples: this.ranges.samples(range.name) }))
+                    : [],
             },
         };
     }
@@ -240,6 +252,7 @@ export class AquaticLifeManager {
             since: this.since,
             totals: this.totals,
             history: this.history.save(),
+            ranges: this.ranges.save(),
         });
         this.store.repository
             .saveVariable(this.hashKey(), "state", state)

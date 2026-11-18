@@ -598,6 +598,13 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             now: "maintenant",
             historyPrey: "proies (max {max})",
             historyPredators: "prédateurs (max {max})",
+            range: {
+                "5min": "5 min",
+                "1h": "1 h",
+                "4h": "4 h",
+                "1d": "1 jour",
+                all: "Tout",
+            },
         },
     },
     terrain: {

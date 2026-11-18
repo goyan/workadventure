@@ -56,3 +56,68 @@ export class LifeHistory {
         return history;
     }
 }
+
+/**
+ * The ranges of time the curve of the life tool can show, each with its own samples: how far back it goes, and how
+ * far apart its samples are (about 120 samples each).
+ */
+export const LIFE_RANGES = [
+    { name: "5min", spanMs: 5 * 60_000, stepMs: 2500 },
+    { name: "1h", spanMs: 60 * 60_000, stepMs: 30_000 },
+    { name: "4h", spanMs: 4 * 60 * 60_000, stepMs: 2 * 60_000 },
+    { name: "1d", spanMs: 24 * 60 * 60_000, stepMs: 10 * 60_000 },
+] as const;
+export type LifeRangeName = (typeof LIFE_RANGES)[number]["name"];
+/** No range keeps more samples than this. */
+export const LIFE_RANGE_MAX = 150;
+
+const SavedRange = z.array(LifeSample).max(LIFE_RANGE_MAX);
+
+/**
+ * The prey and the predators over the last five minutes, hour, four hours and day: for each range, a sample every
+ * step of that range, and nothing older than the range. Unlike `LifeHistory`, the recent past stays fine however old
+ * the life of the map is.
+ */
+export class LifeRanges {
+    private kept = new Map<LifeRangeName, LifeSample[]>();
+
+    public add(sample: LifeSample): void {
+        for (const range of LIFE_RANGES) {
+            const samples = this.samples(range.name);
+            const last = samples.length > 0 ? samples[samples.length - 1] : undefined;
+            if (last && sample.at - last.at < range.stepMs) continue;
+            samples.push(sample);
+            while (samples[0].at < sample.at - range.spanMs || samples.length > LIFE_RANGE_MAX) samples.shift();
+            this.kept.set(range.name, samples);
+        }
+    }
+
+    /** The samples of a range, oldest first. */
+    public samples(name: LifeRangeName): LifeSample[] {
+        return this.kept.get(name) ?? [];
+    }
+
+    public clear(): void {
+        this.kept.clear();
+    }
+
+    public save(): Record<LifeRangeName, LifeSample[]> {
+        return {
+            "5min": this.samples("5min"),
+            "1h": this.samples("1h"),
+            "4h": this.samples("4h"),
+            "1d": this.samples("1d"),
+        };
+    }
+
+    /** The ranges that were saved; a range that is missing or cannot be read starts empty. */
+    public static from(saved: unknown): LifeRanges {
+        const ranges = new LifeRanges();
+        if (typeof saved !== "object" || saved === null) return ranges;
+        for (const range of LIFE_RANGES) {
+            const read = SavedRange.safeParse((saved as Record<string, unknown>)[range.name]);
+            if (read.success) ranges.kept.set(range.name, read.data);
+        }
+        return ranges;
+    }
+}

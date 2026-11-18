@@ -15,6 +15,7 @@ const totals = (births: number, eaten = 0) => ({
     capacity: 40,
     history: [] as { at: number; prey: number; predators: number }[],
     historyStepMs: 5000,
+    ranges: [] as { name: string; samples: { at: number; prey: number; predators: number }[] }[],
 });
 const animals = (males: number, females: number, dolphins: number) => [
     ...Array.from({ length: males }, (_, index) => ({ id: index + 1, kind: 0 })),
@@ -89,6 +90,56 @@ describe("LifeStats", () => {
         expect(stats.view(0).history).toEqual([{ at: 10_000, prey: 2, predators: 0 }]);
     });
 
+    it("keeps the prey and the predators over each range, up to the present", () => {
+        const stats = new LifeStats();
+        for (let second = 0; second <= 61; second++) {
+            stats.receive(animals(second, 0, 1), totals(0), second * 1000);
+        }
+        const ranges = stats.view(61_000).ranges;
+        // Every message of the server (a second apart) is further than the step of the shortest range.
+        expect(ranges["5min"].map((sample) => sample.at).slice(0, 4)).toEqual([0, 3000, 6000, 9000]);
+        // The longer ranges: their samples, then the present.
+        expect(ranges["1h"]).toEqual([
+            { at: 0, prey: 0, predators: 1 },
+            { at: 30_000, prey: 30, predators: 1 },
+            { at: 60_000, prey: 60, predators: 1 },
+            { at: 61_000, prey: 61, predators: 1 },
+        ]);
+        expect(ranges["1d"]).toEqual([
+            { at: 0, prey: 0, predators: 1 },
+            { at: 61_000, prey: 61, predators: 1 },
+        ]);
+    });
+
+    it("shows of a range only what is not older than it", () => {
+        const stats = new LifeStats();
+        stats.receive(animals(4, 0, 0), totals(0), 0);
+        stats.receive(animals(6, 0, 0), totals(0), 100_000);
+        // Six minutes later nothing came: the sample at 0 is out of the five minutes.
+        expect(stats.view(360_000).ranges["5min"]).toEqual([
+            { at: 100_000, prey: 6, predators: 0 },
+            { at: 360_000, prey: 6, predators: 0 },
+        ]);
+    });
+
+    it("starts from the ranges the server gives on joining, and forgets them when the life starts over", () => {
+        const stats = new LifeStats();
+        const joined = {
+            ...totals(0),
+            ranges: [
+                { name: "1h", samples: [{ at: 1000, prey: 2, predators: 0 }] },
+                { name: "unknown", samples: [{ at: 1000, prey: 9, predators: 9 }] },
+            ],
+        };
+        stats.receive(animals(5, 5, 1), joined, 12_000);
+        expect(stats.view(12_000).ranges["1h"]).toEqual([
+            { at: 1000, prey: 2, predators: 0 },
+            { at: 12_000, prey: 10, predators: 1 },
+        ]);
+        stats.receive(animals(1, 1, 0), { ...totals(0), since: 9000 }, 20_000);
+        expect(stats.view(20_000).ranges["1h"]).toEqual([{ at: 20_000, prey: 2, predators: 0 }]);
+    });
+
     it("has nothing to show before the server told anything, nor after the life went", () => {
         const stats = new LifeStats();
         expect(stats.view(0).totals).toBeUndefined();
@@ -104,6 +155,11 @@ describe("chartPoints", () => {
         { at: 30_000, prey: 50, predators: 1 },
         { at: 120_000, prey: 100, predators: 2 },
     ];
+
+    it("places the samples in a given window of time, the present on the right", () => {
+        const window = { from: 20_000, to: 120_000 };
+        expect(chartPoints(samples.slice(1), "prey", 100, 200, 80, window)).toBe("20,40 200,0");
+    });
 
     it("places each sample at its time, the largest value at the top of the box", () => {
         expect(chartPoints(samples, "prey", 100, 200, 80)).toBe("0,80 50,40 200,0");

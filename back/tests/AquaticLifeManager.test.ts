@@ -210,6 +210,7 @@ describe("AquaticLifeManager", () => {
             capacity: 12,
             history: [],
             historyStepMs: 5000,
+            ranges: [],
         });
         expect(manager.snapshot()?.stats).toMatchObject({ arrivals: 2, capacity: 12 });
     });
@@ -237,6 +238,40 @@ describe("AquaticLifeManager", () => {
         second.manager.mapChanged();
         second.steps(2);
         expect(second.manager.snapshot()?.stats?.history).toHaveLength(1);
+    });
+
+    it("gives a player who joins the prey and the predators over each range, kept across a restart", async () => {
+        const first = createHarness();
+        first.manager.mapChanged();
+        // Forty seconds: the five minutes have a sample every 2.5 s, the hour every 30 s, the longer ranges one.
+        first.steps(80);
+        const ranges = (harness: typeof first): Record<string, number[]> =>
+            Object.fromEntries(
+                (harness.manager.snapshot()?.stats?.ranges ?? []).map((range) => [
+                    range.name,
+                    range.samples.map((sample) => sample.at),
+                ]),
+            );
+        expect(Object.keys(ranges(first))).toEqual(["5min", "1h", "4h", "1d"]);
+        expect(ranges(first)["5min"]).toHaveLength(16);
+        expect(ranges(first)["5min"].slice(0, 3)).toEqual([1_000_000, 1_002_500, 1_005_000]);
+        expect(ranges(first)["1h"]).toEqual([1_000_000, 1_030_000]);
+        expect(ranges(first)["1d"]).toEqual([1_000_000]);
+        // The messages of every second do not carry them.
+        expect(first.sent.at(-1)?.stats?.ranges).toEqual([]);
+        first.manager.stop();
+
+        const second = createHarness({ saved: first.saved });
+        await second.manager.restore();
+        second.manager.mapChanged();
+        expect(ranges(second)["1h"]).toEqual([1_000_000, 1_030_000]);
+        // Turned off, the life forgets them.
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = false;
+        second.manager.mapChanged();
+        if (second.wam.settings?.life) second.wam.settings.life.enabled = true;
+        second.manager.mapChanged();
+        second.steps(2);
+        expect(ranges(second)["1h"]).toHaveLength(1);
     });
 
     it("tells the dolphins of a deep lake with their sex: a male and a female", () => {
