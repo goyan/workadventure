@@ -12,7 +12,7 @@ import { Season, GameMapProperties } from "@workadventure/map-editor";
 import { deepmergeInto } from "deepmerge-ts";
 import type { Unsubscriber } from "svelte/store";
 import { get } from "svelte/store";
-import { snowyTreeTexture } from "../Game/Nature/SnowyTreeTexture";
+import { SNOW_STEPS, seedOf, snowyTreeTexture, treeSnowStep } from "../Game/Nature/SnowyTreeTexture";
 import { isSwayingTree } from "../Game/Nature/TreeSway";
 import { parseFloorPiece } from "../Game/MapEditor/MapLayer/MapLayerFloors";
 import { parseAnyLevelPrefab } from "../Game/MapEditor/MapLayer/MapLayerLevels";
@@ -85,6 +85,8 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
     private automaticDepth = 0;
     private prefab: EntityPrefab;
     private season = Season.Summer;
+    /** How much snow covers the ground, 0 to 1: a tree under snow whitens with it, at its own pace. */
+    private snowCover = 1;
 
     private activatable!: boolean;
     private oldPosition: { x: number; y: number };
@@ -154,7 +156,11 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         // A tree under snow turns white but its trunk: its own summer image, covered (see snowyTreeTexture).
         const snowyTree =
             this.season === Season.Winter && isSwayingTree(this.prefab.id)
-                ? snowyTreeTexture(this.scene, this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath)
+                ? snowyTreeTexture(
+                      this.scene,
+                      this.prefab.seasonal?.[Season.Summer] ?? this.prefab.imagePath,
+                      this.snowCover >= 1 ? SNOW_STEPS : treeSnowStep(this.snowCover, seedOf(this.entityId)),
+                  )
                 : undefined;
         this.setTexture(
             snowyTree ??
@@ -179,8 +185,9 @@ export class Entity extends Sprite implements ActivatableInterface, OutlineableI
         (this.scene as GameScene).markDirty();
     }
 
-    public setSeason(season: Season): void {
+    public setSeason(season: Season, snowCover = 1): void {
         this.season = season;
+        this.snowCover = snowCover;
         if (this.prefab.seasonal) this.showPrefabTexture();
     }
 
