@@ -72,6 +72,7 @@
     import FontSettings from "./FontSettings.svelte";
     import LightSettingsShare from "./LightSettingsShare.svelte";
     import NightSettings from "./NightSettings.svelte";
+    import RainSettings from "./RainSettings.svelte";
     import SkyLightSettings from "./SkyLightSettings.svelte";
     import SeasonalThemeSettings from "./SeasonalThemeSettings.svelte";
     import MapWeatherSection from "./MapWeatherSection.svelte";
@@ -394,6 +395,9 @@
                     </span>
                 </div>
             </div>
+        {/if}
+        {#if $weatherEffectsEnabledStore}
+            <RainSettings />
         {/if}
         <SkyLightSettings />
         <InputSwitch

@@ -29,6 +29,12 @@ export type RealWeatherState =
           windFrom?: number;
           /** Wind speed (km/h), changed from that of the quarter hour before. */
           windSpeed?: number;
+          /** Since when it has been raining (rain and storm together), for the puddles to fill. */
+          rainSince?: number;
+          /** When the last rain stopped, for the puddles to dry. */
+          rainDryFrom?: number;
+          /** How hard it rains (mm an hour), changed from that of the quarter hour before. */
+          rainRate?: number;
       }
     | { status: "unavailable" };
 
@@ -43,7 +49,10 @@ function turnedWind(before: number | undefined, now: number | undefined, elapsed
     return (before + turn * share + 360) % 360;
 }
 
-/** The wind speed from `before` to `now`, `elapsed` ms into the quarter hour, over the same ten minutes as its turn. */
+/**
+ * A speed or a rate from `before` to `now`, `elapsed` ms into the quarter hour, over the same ten minutes as the turn
+ * of the wind: the wind speed, and how hard it rains.
+ */
 function changedWindSpeed(before: number | undefined, now: number | undefined, elapsed: number): number | undefined {
     if (now === undefined || before === undefined) return now;
     return before + (now - before) * Math.max(0, Math.min(1, elapsed / WIND_TURN_MS));
@@ -67,6 +76,10 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
     const raining = now.weather === WeatherType.Rain || now.weather === WeatherType.Storm;
     const windFrom = turnedWind(now.windFromBefore, now.windFrom, date.getTime() - now.slotAt);
     const windSpeed = changedWindSpeed(now.windSpeedBefore, now.windSpeed, date.getTime() - now.slotAt);
+    // A rain that starts or stops does so at once, as before: only a rain going on gets harder or lighter slowly.
+    const rainRate = raining
+        ? changedWindSpeed(now.rainRateBefore, now.rainRate, date.getTime() - now.slotAt)
+        : undefined;
     return {
         status: "known",
         weather: now.weather,
@@ -77,6 +90,9 @@ export function realWeatherStateAt(forecast: RealForecastState, date: Date | und
         ...(raining && now.cloudiness > 0 ? { cloudCover: now.cloudiness } : {}),
         ...(windFrom !== undefined ? { windFrom } : {}),
         ...(windSpeed !== undefined ? { windSpeed } : {}),
+        ...(rainRate !== undefined ? { rainRate } : {}),
+        ...(now.rainSince !== undefined ? { rainSince: now.rainSince } : {}),
+        ...(now.rainEndedAt !== undefined ? { rainDryFrom: now.rainEndedAt } : {}),
     };
 }
 
@@ -102,6 +118,9 @@ export function withRealWeather(
                 cloudCover: real.cloudCover,
                 windFrom: real.windFrom,
                 windSpeed: real.windSpeed,
+                rainRate: real.rainRate,
+                rainSince: real.rainSince,
+                rainDryFrom: real.rainDryFrom,
                 weatherAuto,
                 weatherLocation,
             };

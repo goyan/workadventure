@@ -25,12 +25,14 @@ describe("world weather", () => {
         expect(weatherParticles(WeatherType.Clear, 1000, view)).toEqual([]);
     });
     it("keeps overlapping particles fixed in the world when the camera moves", () => {
-        const original = weatherParticles(WeatherType.Rain, 1000, view);
-        const shifted = weatherParticles(WeatherType.Rain, 1000, { ...view, x: 64 });
+        const original = weatherParticles(WeatherType.Snow, 1000, view);
+        const shifted = weatherParticles(WeatherType.Snow, 1000, { ...view, x: 64 });
         expect(original.filter((particle) => particle.x >= 0 && particle.x < 800)).toEqual(
             shifted.filter((particle) => particle.x >= 0 && particle.x < 800),
         );
-        expect(weatherParticles(WeatherType.Rain, 1100, view)).not.toEqual(original);
+        expect(weatherParticles(WeatherType.Snow, 1100, view)).not.toEqual(original);
+        // The rain and the storm have their own drops (Rain.ts).
+        expect(weatherParticles(WeatherType.Rain, 1000, view)).toEqual([]);
     });
     it("bounds particle work even when zoomed far out", () => {
         expect(weatherParticles(WeatherType.Snow, 1000, { ...view, width: 20000, height: 20000 }).length).toBeLessThan(

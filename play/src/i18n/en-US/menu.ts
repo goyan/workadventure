@@ -52,6 +52,14 @@ const menu: BaseTranslation = {
             low: "Low",
             always: "Always visible",
         },
+        rain: {
+            title: "Rain (settings for me)",
+            amount: "Amount of drops",
+            lean: "Lean with the wind",
+            splashes: "Splashes on the ground (0%: none)",
+            puddles: "Puddles (0%: none)",
+            clouds: "More rain under the clouds (0%: the same everywhere)",
+        },
         skyLight: {
             sun: "Sun shadows and light",
             moon: "Moon shadows and light",

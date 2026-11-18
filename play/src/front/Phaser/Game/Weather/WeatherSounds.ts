@@ -5,6 +5,7 @@ import Debug from "debug";
 import { localUserStore } from "../../../Connection/LocalUserStore";
 import { weatherVolumeStore } from "../../../Stores/SoundEffectsStore";
 import { lastStrike } from "./WeatherFrame";
+import { rainLoudness, USUAL_RAIN } from "./Rain";
 
 export const WEATHER_SOUNDS = [
     { key: "audio-weather-night-rain", url: "/resources/objects/weather/night_rain.mp3" },
@@ -28,7 +29,14 @@ export class WeatherSounds {
 
     constructor(private readonly sound: Phaser.Sound.BaseSoundManager) {}
 
-    public update(weather: WeatherType, serverDate: Date | undefined, editing: boolean, night = false): void {
+    /** `rain`: how hard a rain falls, 0 to 1 (rainIntensity), which sets how loud it is. */
+    public update(
+        weather: WeatherType,
+        serverDate: Date | undefined,
+        editing: boolean,
+        night = false,
+        rain = USUAL_RAIN,
+    ): void {
         const volume = editing || localUserStore.getBlockAudio() ? 0 : get(weatherVolumeStore);
         if (volume === 0) {
             this.ambient?.pause();
@@ -59,7 +67,8 @@ export class WeatherSounds {
             this.ambient.loop = true;
             this.ambient.preload = "none";
         }
-        this.ambient.volume = volume * (weather === WeatherType.Storm ? 0.22 : 0.14);
+        this.ambient.volume =
+            volume * (weather === WeatherType.Storm ? 0.22 : weather === WeatherType.Rain ? rainLoudness(rain) : 0.14);
         if (this.ambient.paused && !this.playPending) {
             this.playPending = true;
             this.ambient

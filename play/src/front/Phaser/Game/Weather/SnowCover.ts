@@ -54,6 +54,12 @@ export interface MapSnowSettings {
     windFrom?: number;
     /** Real weather only (never saved): wind speed (km/h), which sets how fast the clouds go. */
     windSpeed?: number;
+    /** Real weather only (never saved): since when it has been raining, rain and storm together. */
+    rainSince?: number;
+    /** Real weather only (never saved): when the last rain stopped, the puddles drying from then. */
+    rainDryFrom?: number;
+    /** Real weather only (never saved): how hard it rains, mm an hour (rainIntensity). */
+    rainRate?: number;
 }
 
 /**

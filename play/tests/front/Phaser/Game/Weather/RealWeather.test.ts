@@ -8,6 +8,7 @@ import {
 import type { RealWeatherSlot } from "../../../../../src/common/RealWeather";
 import { fogStrength } from "../../../../../src/front/Phaser/Game/Weather/WeatherFrame";
 import { snowCoverage } from "../../../../../src/front/Phaser/Game/Weather/SnowCover";
+import { mapGroundWetness } from "../../../../../src/front/Phaser/Game/Weather/Puddles";
 
 const auto = { frequency: "calm" as const, include: [WeatherType.Rain] };
 const SLOT = 15 * 60 * 1000;
@@ -150,11 +151,14 @@ describe("realWeatherStateAt", () => {
             weather: WeatherType.Rain,
             since: 0,
             until: 2 * SLOT,
+            rainSince: 0,
         });
         expect(realWeatherStateAt(forecast, new Date(2 * SLOT))).toEqual({
             status: "known",
             weather: WeatherType.Snow,
             since: 2 * SLOT,
+            // The rain just stopped: its puddles dry from then.
+            rainDryFrom: 2 * SLOT,
         });
     });
 
@@ -231,5 +235,46 @@ describe("wind of the real weather", () => {
         expect(state(5 * 60_000)).toMatchObject({ windSpeed: 20 });
         expect(state(10 * 60_000)).toMatchObject({ windSpeed: 30 });
         expect(withRealWeather({ weather: WeatherType.Real }, state(10 * 60_000))).toMatchObject({ windSpeed: 30 });
+    });
+
+    it("keeps one wet episode through rain and storm, and dries from the end of the last rain", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Rain, temperature: 5 },
+            { at: SLOT, weather: WeatherType.Storm, temperature: 5 },
+            { at: 2 * SLOT, weather: WeatherType.Rain, temperature: 5 },
+            { at: 3 * SLOT, weather: WeatherType.Clear, temperature: 5 },
+            { at: 4 * SLOT, weather: WeatherType.Fog, temperature: 5 },
+            { at: 5 * SLOT, weather: WeatherType.Fog, temperature: 5 },
+            { at: 6 * SLOT, weather: WeatherType.Fog, temperature: 5 },
+        ];
+        const state = (time: number) => realWeatherStateAt({ status: "known", slots }, new Date(time));
+        // The storm and the rain after it began with the first rain.
+        expect(state(SLOT + 1)).toMatchObject({ weather: WeatherType.Storm, since: SLOT, rainSince: 0 });
+        expect(state(2 * SLOT + 1)).toMatchObject({ weather: WeatherType.Rain, since: 2 * SLOT, rainSince: 0 });
+        // The ground dries from the end of the rain, also once the clear spell has turned to fog.
+        expect(state(3 * SLOT + 1)).toMatchObject({ rainDryFrom: 3 * SLOT });
+        expect(state(4 * SLOT + 1)).toMatchObject({ rainDryFrom: 3 * SLOT });
+        expect(state(6 * SLOT + 1)).not.toHaveProperty("rainDryFrom");
+        const shown = withRealWeather({ weather: WeatherType.Real }, state(2 * SLOT + 1));
+        expect(shown).toMatchObject({ rainSince: 0 });
+        expect(mapGroundWetness(shown, new Date(2 * SLOT + 1))).toBe(1);
+    });
+
+    it("lets a rain going on get harder over ten minutes, a starting one fall at once", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Clear, temperature: 5 },
+            { at: SLOT, weather: WeatherType.Rain, temperature: 5, rainRate: 1 },
+            { at: 2 * SLOT, weather: WeatherType.Rain, temperature: 5, rainRate: 9 },
+            { at: 3 * SLOT, weather: WeatherType.Clear, temperature: 5 },
+        ];
+        const state = (time: number) => realWeatherStateAt({ status: "known", slots }, new Date(time));
+        expect(state(SLOT)).toMatchObject({ rainRate: 1 });
+        expect(state(2 * SLOT)).toMatchObject({ rainRate: 1 });
+        expect(state(2 * SLOT + 5 * 60_000)).toMatchObject({ rainRate: 5 });
+        expect(state(2 * SLOT + 10 * 60_000)).toMatchObject({ rainRate: 9 });
+        expect(state(3 * SLOT + 60_000)).not.toHaveProperty("rainRate");
+        expect(withRealWeather({ weather: WeatherType.Real }, state(2 * SLOT + 10 * 60_000))).toMatchObject({
+            rainRate: 9,
+        });
     });
 });

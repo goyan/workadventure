@@ -9,6 +9,7 @@ import {
 } from "../../src/common/RealWeather";
 import type { ObservedWeather, RealWeatherSlot } from "../../src/common/RealWeather";
 import { OPEN_METEO_ASKED_AT, OPEN_METEO_PARIS } from "./OpenMeteoFixture";
+import { OPEN_METEO_RAINY } from "./OpenMeteoRainyFixture";
 
 describe("weatherFromWmoCode", () => {
     // WMO weather interpretation codes, as listed by the Open-Meteo documentation.
@@ -264,5 +265,32 @@ describe("RealWeatherForecast", () => {
         expect(RealWeatherForecast.safeParse({ slots: [{ at: 0, weather: "real", temperature: null }] }).success).toBe(
             false,
         );
+    });
+});
+
+describe("how hard it rains", () => {
+    it("reads the rate of a real rain: the precipitation of the quarter hour, four times that an hour", () => {
+        const slots = slotsFromOpenMeteo(OPEN_METEO_RAINY);
+        // Code 53 with 0.2 mm, 51 with 0.1 mm, then showers (80) with 0.4 mm over the quarter hour.
+        expect(slots?.[0]).toMatchObject({ weather: WeatherType.Rain, rainRate: 0.8 });
+        expect(slots?.[2]).toMatchObject({ weather: WeatherType.Rain, rainRate: 0.4 });
+        expect(slots?.[6]).toMatchObject({ weather: WeatherType.Rain, rainRate: 1.6 });
+    });
+
+    it("gives no rate outside a rain or a storm, nor to an answer without precipitation", () => {
+        expect(slotsFromOpenMeteo(OPEN_METEO_PARIS)?.every((slot) => slot.rainRate === undefined)).toBe(true);
+        const clear = {
+            minutely_15: { time: [0, 900], weather_code: [0, 71], temperature_2m: [5, 5], precipitation: [0, 0.3] },
+        };
+        expect(slotsFromOpenMeteo(clear)?.some((slot) => "rainRate" in slot)).toBe(false);
+    });
+
+    it("tells the rate of the quarter hour under way and of the one before", () => {
+        const slots: RealWeatherSlot[] = [
+            { at: 0, weather: WeatherType.Rain, temperature: 5, rainRate: 0.4 },
+            { at: SLOT, weather: WeatherType.Rain, temperature: 5, rainRate: 8 },
+        ];
+        expect(realWeatherAt(slots, SLOT + 1)).toMatchObject({ rainRate: 8, rainRateBefore: 0.4 });
+        expect(realWeatherAt(slots, 1)).toMatchObject({ rainRate: 0.4, rainRateBefore: undefined });
     });
 });

@@ -155,7 +155,7 @@ export class RealWeatherService {
             url.searchParams.set("longitude", String(longitude));
             url.searchParams.set(
                 "minutely_15",
-                "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m",
+                "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation",
             );
             url.searchParams.set("past_minutely_15", String(PAST_SLOTS));
             url.searchParams.set("forecast_minutely_15", String(FORECAST_SLOTS));

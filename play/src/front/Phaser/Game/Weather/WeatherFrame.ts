@@ -43,21 +43,23 @@ export interface WeatherParticle {
     length: number;
 }
 
-/** A field fixed to world coordinates, so camera movement never drags the rain along. */
+/**
+ * The snowflakes, a field fixed to world coordinates, so camera movement never drags them along. The rain and the
+ * storm have their own drops (Rain.ts); no other weather falls.
+ */
 export function weatherParticles(weather: WeatherType, epoch: number, view: WeatherView): WeatherParticle[] {
-    if (weather === WeatherType.Clear) return [];
+    if (weather !== WeatherType.Snow) return [];
     const cellSize = Math.max(64, Math.ceil(Math.sqrt((view.width * view.height) / 350)));
-    const snow = weather === WeatherType.Snow;
-    const speed = snow ? 18 : weather === WeatherType.Storm ? 210 : 150;
+    const speed = 18;
     const time = epoch / 1000;
     const particles: WeatherParticle[] = [];
     for (let row = Math.floor(view.y / cellSize) - 1; row <= Math.ceil((view.y + view.height) / cellSize); row++) {
         for (let col = Math.floor(view.x / cellSize) - 1; col <= Math.ceil((view.x + view.width) / cellSize); col++) {
             const seed = Math.abs(Math.sin(col * 127.1 + row * 311.7) * 43758.5453) % 1;
             particles[particles.length] = {
-                x: col * cellSize + seed * cellSize + (snow ? Math.sin(time + seed * 20) * 5 : 0),
+                x: col * cellSize + seed * cellSize + Math.sin(time + seed * 20) * 5,
                 y: row * cellSize + ((seed * cellSize + time * speed) % cellSize),
-                length: snow ? 2 : weather === WeatherType.Storm ? 13 : 9,
+                length: 2,
             };
         }
     }

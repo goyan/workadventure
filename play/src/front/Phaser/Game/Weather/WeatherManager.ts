@@ -1,7 +1,16 @@
 import { WeatherType } from "@workadventure/map-editor";
 import type { Unsubscriber } from "svelte/store";
 import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
-import { cloudsHeightStore, cloudsShownStore, weatherEffectsEnabledStore } from "../../../Stores/WeatherStore";
+import {
+    cloudsHeightStore,
+    cloudsShownStore,
+    rainAmountStore,
+    rainCloudsStore,
+    rainLeanStore,
+    rainPuddlesStore,
+    rainSplashesStore,
+    weatherEffectsEnabledStore,
+} from "../../../Stores/WeatherStore";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { GameScene } from "../GameScene";
 import type { OutdoorGrid } from "../Outdoor/OutdoorGrid";
@@ -27,6 +36,18 @@ import {
 } from "./WeatherFrame";
 import type { WeatherView } from "./WeatherFrame";
 import { shownWeatherSettings } from "./RealWeatherClient";
+import {
+    forcedRainLevel,
+    parseRainLevel,
+    rainDrops,
+    rainIntensity,
+    rainLean,
+    rainSplashes,
+    rainUnderCloud,
+    rainVeilAlpha,
+} from "./Rain";
+import type { RainLocal } from "./Rain";
+import { mapGroundWetness, PUDDLE_ROW, puddleRows, puddlesIn } from "./Puddles";
 import {
     cloudAlpha,
     cloudBlockSize,
@@ -80,6 +101,13 @@ const RAIN_CLOUDS = { color: 0x7d8794, alpha: 0.65, cloudiness: 0.9 };
 const STORM_CLOUDS = { color: 0x2b3240, alpha: 0.75, cloudiness: 1 };
 const MIN_RAIN_COVER = 0.6;
 const OVERCAST_COLOR = 0x8a94a3;
+const RAIN_COLOR = 0xcfe3f5;
+/** Over the grass of the seasons (0.6), under the objects and the avatars. */
+const PUDDLE_DEPTH = 0.7;
+const PUDDLE_COLOR = 0x4f7ba6;
+const PUDDLE_EDGE_COLOR = 0x26384d;
+/** Opacity of a splash as the drop hits, spreads and fades. */
+const SPLASH_ALPHAS = [0.75, 0.55, 0.3];
 
 export interface WeatherManagerOptions {
     /** Outdoor cells of the map: weather is only drawn there. Without a grid, it covers the whole view. */
@@ -109,9 +137,17 @@ export class WeatherManager {
     private weatherShown = true;
     private cloudsShown = true;
     private cloudsHeight = 0;
+    /** The personal settings of the rain (WeatherStore), 1 each by default. */
+    private readonly rainSettings = { amount: 1, lean: 1, splashes: 1, puddles: 1, clouds: 1 };
+    /** The puddles, on the ground under the objects and the avatars. */
+    private readonly puddleGraphics: Phaser.GameObjects.Graphics;
+    private lastPuddleKey = "";
+    private puddlesVisible = false;
     /** Where the sky has drifted to with the wind of the map (the real one, or the usual drift). */
     private readonly skyDrift = new SkyDrift();
     private readonly reducedMotion: boolean;
+    // Development override of the rain intensity (`?rainLevel`), fixed for the life of the scene.
+    private readonly forcedRain = parseRainLevel(window.location.search, import.meta.env.DEV);
     // What the last fog image looked like: a still fog is not drawn again until one of these changes.
     private lastFogKey: string | undefined;
     /** What the last drawing covered (the view and its margin), to draw again before a scroll reaches its edge. */
@@ -129,7 +165,13 @@ export class WeatherManager {
             weatherEffectsEnabledStore.subscribe((shown) => (this.weatherShown = shown)),
             cloudsShownStore.subscribe((shown) => (this.cloudsShown = shown)),
             cloudsHeightStore.subscribe((height) => (this.cloudsHeight = height)),
+            rainAmountStore.subscribe((value) => (this.rainSettings.amount = value)),
+            rainLeanStore.subscribe((value) => (this.rainSettings.lean = value)),
+            rainSplashesStore.subscribe((value) => (this.rainSettings.splashes = value)),
+            rainPuddlesStore.subscribe((value) => (this.rainSettings.puddles = value)),
+            rainCloudsStore.subscribe((value) => (this.rainSettings.clouds = value)),
         ];
+        this.puddleGraphics = scene.add.graphics().setDepth(PUDDLE_DEPTH).setVisible(false);
         this.graphics = scene.add
             .graphics()
             .setDepth(DEPTH_NIGHT_INDEX + 1)
@@ -149,7 +191,14 @@ export class WeatherManager {
         const realFogUntil = real ? settings?.weatherEndsAt : undefined;
         const theme = this.options.seasonalTheme?.();
         const weather = effectiveWeather(weatherAtTime(configured, serverDate, settings?.weatherAuto), theme);
-        this.sounds.update(weather, serverDate, this.editing, night);
+        const storm = weather === WeatherType.Storm;
+        const forcedRain = forcedRainLevel(this.forcedRain, now);
+        const rain = forcedRain ?? rainIntensity(settings?.rainRate, storm);
+        const raining = storm || weather === WeatherType.Rain;
+        // A forced level (development) soaks the ground as much, so the puddles can be seen at once.
+        const wetness = Math.max(mapGroundWetness(settings, serverDate), raining ? (forcedRain ?? 0) : 0);
+        this.drawPuddles(this.weatherShown && !this.editing && theme !== SeasonalTheme.Christmas ? wetness : 0);
+        this.sounds.update(weather, serverDate, this.editing, night, rain);
         const enabled = this.weatherShown && !this.editing;
         // The snow of the map is the Christmas decor fading in (SeasonalThemeManager): this ground stays grass.
         this.snowGround.update(
@@ -263,13 +312,14 @@ export class WeatherManager {
             });
         } else if (showWeather) {
             if (weather !== WeatherType.Snow) {
-                this.graphics.fillStyle(0x27344b, weather === WeatherType.Storm ? 0.2 : 0.05);
+                this.graphics.fillStyle(0x27344b, storm ? 0.2 : rainVeilAlpha(rain));
                 for (const rect of veil) this.graphics.fillRect(rect.x, rect.y, rect.width, rect.height);
             }
             // The rain falls from grey clouds, the storm from dark ones (not at night, with the personal switch).
             const covering =
                 weather === WeatherType.Storm ? STORM_CLOUDS : weather === WeatherType.Rain ? RAIN_CLOUDS : undefined;
-            if (covering && this.cloudsShown) {
+            let underClouds: RainLocal | undefined;
+            if (covering) {
                 // The real cover when known, never so thin that the rain seems to fall from a clear sky.
                 const cover =
                     settings?.cloudCover === undefined
@@ -277,25 +327,28 @@ export class WeatherManager {
                         : Math.max(MIN_RAIN_COVER, settings.cloudCover);
                 const patches = cloudPatches(epoch, view, shownRainCover(cover), this.reducedMotion, sky);
                 const levels = fieldLevels(canvas, size, patches);
-                const body = covering.alpha * this.zoomFade();
-                this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
+                if (this.cloudsShown) {
+                    const body = covering.alpha * this.zoomFade();
+                    this.paintCumulus(canvas, levels, outdoor, size, rainPalette(covering.color), body, sunlight.night);
+                }
+                // More rain under the thick of a cloud, less in a gap: the showers cross the map with the clouds.
+                underClouds = (x, y) => {
+                    const column = Math.floor((x - canvas.x) / size);
+                    const row = Math.floor((y - canvas.y) / size);
+                    if (column < 0 || row < 0 || column >= canvas.columns || row >= canvas.rows) return 1;
+                    return rainUnderCloud(levels[row * canvas.columns + column] / FOG_LEVELS, this.rainSettings.clouds);
+                };
             }
             if (weather === WeatherType.Snow) {
                 this.graphics.fillStyle(0xf2f5ff, 0.8);
-            } else {
-                this.graphics.lineStyle(1, 0xa8c9e5, 0.65);
-                this.graphics.beginPath();
-            }
-            for (const particle of keepOutdoorParticles(weatherParticles(weather, epoch, view), isOutdoor)) {
-                if (weather === WeatherType.Snow) {
+                for (const particle of keepOutdoorParticles(weatherParticles(weather, epoch, view), isOutdoor)) {
                     this.graphics.fillRect(Math.round(particle.x), Math.round(particle.y), 2, 2);
-                } else {
-                    this.graphics.moveTo(particle.x, particle.y);
-                    this.graphics.lineTo(particle.x - particle.length / 3, particle.y + particle.length);
                 }
+            } else {
+                const lean = rainLean(settings?.windFrom, settings?.windSpeed, this.rainSettings.lean);
+                this.drawRain(epoch, view, rain, lean, isOutdoor, underClouds);
             }
-            if (weather !== WeatherType.Snow) this.graphics.strokePath();
-            if (weather === WeatherType.Storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
+            if (storm && serverDate) this.drawLightning(epoch, view, veil, isOutdoor);
         }
         if (showClouds) {
             const zoom = this.screenScale();
@@ -403,6 +456,122 @@ export class WeatherManager {
         }
     }
 
+    /**
+     * The rain: drops in three planes leaning with the wind, each a faint streak ending in a brighter head, and the
+     * splashes of those reaching the ground (none when motion is reduced). Outdoors only, over everything.
+     */
+    private drawRain(
+        epoch: number,
+        view: WeatherView,
+        intensity: number,
+        lean: number,
+        isOutdoor: ((x: number, y: number) => boolean) | undefined,
+        local: RainLocal | undefined,
+    ): void {
+        const amount = intensity * this.rainSettings.amount;
+        // A drop shows where its whole streak is outdoors (head, middle and tail): no trail over the edge of a roof.
+        const drops = rainDrops(epoch, view, amount, lean, local).filter(
+            (drop) =>
+                !isOutdoor ||
+                [0, 0.5, 1].every((share) =>
+                    isOutdoor(drop.x - lean * drop.length * share, drop.y - drop.length * share),
+                ),
+        );
+        for (let layer = 0; layer < 3; layer++) {
+            const plane = drops.filter((drop) => drop.layer === layer);
+            if (plane.length === 0) continue;
+            // The whole streak faint, then its lower half again: a bright head with a trail.
+            for (const [share, fade] of [
+                [1, 0.45],
+                [0.5, 1],
+            ] as const) {
+                // The near drops are thicker: they read as closer.
+                this.graphics.lineStyle(layer === 2 ? 1.5 : 1, RAIN_COLOR, plane[0].alpha * fade);
+                this.graphics.beginPath();
+                for (const drop of plane) {
+                    const height = drop.length * share;
+                    this.graphics.moveTo(drop.x - lean * height, drop.y - height);
+                    this.graphics.lineTo(drop.x, drop.y);
+                }
+                this.graphics.strokePath();
+            }
+        }
+        if (this.reducedMotion) return;
+        const splashing = intensity * this.rainSettings.splashes;
+        for (const splash of keepOutdoorParticles(rainSplashes(epoch, view, splashing, local), isOutdoor)) {
+            this.graphics.fillStyle(RAIN_COLOR, SPLASH_ALPHAS[splash.stage]);
+            if (splash.stage === 0) {
+                this.graphics.fillRect(splash.x, splash.y, 1, 1);
+            } else {
+                const spread = splash.stage + 1;
+                this.graphics.fillRect(splash.x - spread, splash.y - 1, 1, 1);
+                this.graphics.fillRect(splash.x + spread, splash.y - 1, 1, 1);
+                if (splash.stage === 1) this.graphics.fillRect(splash.x, splash.y, 1, 1);
+            }
+        }
+    }
+
+    /**
+     * The puddles of a ground this wet (0: none), outdoors only: drawn on the ground once, then again only when the
+     * wetness, the personal size or the part of the map on the screen changes.
+     */
+    private drawPuddles(wetness: number): void {
+        const size = this.rainSettings.puddles;
+        if (wetness <= 0 || size <= 0) {
+            this.lastPuddleKey = "";
+            this.hidePuddles();
+            return;
+        }
+        const camera = this.scene.cameras.main.worldView;
+        // Whole screens around the camera: a scroll rarely asks for a new drawing.
+        const left = Math.floor(camera.x / camera.width - 0.5) * camera.width;
+        const top = Math.floor(camera.y / camera.height - 0.5) * camera.height;
+        const key = [left, top, camera.width, camera.height, Math.round(wetness * 100), size].join("|");
+        if (key === this.lastPuddleKey) return;
+        this.lastPuddleKey = key;
+        const view = { x: left, y: top, width: camera.width * 2.5, height: camera.height * 2.5 };
+        const grid = this.options.outdoorGrid?.();
+        const cover = grid ? this.options.raisedCover?.() : undefined;
+        const outdoors = (x: number, y: number): boolean =>
+            !grid || (grid.isOutdoorAt(x, y) && cover?.has(x, y) !== true);
+        const puddles = puddlesIn(view, wetness, size).filter((puddle) =>
+            // A puddle lies whole outdoors, never across a wall.
+            [
+                [0, 0],
+                [-1, 0],
+                [1, 0],
+                [0, -1],
+                [0, 1],
+            ].every(([x, y]) => outdoors(puddle.x + x * puddle.radiusX, puddle.y + y * puddle.radiusY)),
+        );
+        if (puddles.length === 0) {
+            this.hidePuddles();
+            return;
+        }
+        this.puddleGraphics.clear().setVisible(true);
+        this.puddlesVisible = true;
+        for (const puddle of puddles) {
+            const rows = puddleRows(puddle);
+            this.puddleGraphics.fillStyle(PUDDLE_COLOR, 0.3);
+            for (const row of rows) this.puddleGraphics.fillRect(row.x, row.y, row.width, PUDDLE_ROW);
+            // The sky on the far edge of the water, the wet earth under the near one.
+            const [first, last] = [rows[0], rows[rows.length - 1]];
+            if (!first || first.width < 6) continue;
+            this.puddleGraphics.fillStyle(RAIN_COLOR, 0.3);
+            this.puddleGraphics.fillRect(first.x + 2, first.y, first.width - 4, 1);
+            this.puddleGraphics.fillStyle(PUDDLE_EDGE_COLOR, 0.3);
+            this.puddleGraphics.fillRect(last.x + 2, last.y + PUDDLE_ROW - 1, last.width - 4, 1);
+        }
+        this.scene.markDirty();
+    }
+
+    private hidePuddles(): void {
+        if (!this.puddlesVisible) return;
+        this.puddleGraphics.clear().setVisible(false);
+        this.puddlesVisible = false;
+        this.scene.markDirty();
+    }
+
     /** How much of the clouds shows at this zoom, at the height this person set for them. */
     private zoomFade(): number {
         return cloudZoomFade(this.screenScale(), this.cloudsHeight);
@@ -453,6 +622,7 @@ export class WeatherManager {
         this.sounds.destroy();
         this.snowGround.destroy();
         this.graphics.destroy();
+        this.puddleGraphics.destroy();
         this.blocks.destroy();
     }
 }
