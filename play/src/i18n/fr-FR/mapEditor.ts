@@ -577,6 +577,29 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         drinkInterval: "Intervalle entre deux boissons",
         landAnimalsHint:
             "Les animaux qui se promènent (jungle, chiens, chats, canards) n'entrent jamais dans l'eau du relief et courent se mettre au sec quand elle monte. À cet intervalle, chacun va boire à la rive la plus proche de son territoire.",
+        species: {
+            title: "Par espèce",
+            name: {
+                fish: "Poisson",
+                dolphin: "Dauphin",
+                antelope: "Antilope",
+                lion: "Lion",
+                tiger: "Tigre",
+                gull: "Mouette",
+            },
+            fill: "Remplissage",
+            events: {
+                arrivals: "Arrivées",
+                births: "Naissances",
+                diedOfAge: "Morts de vieillesse",
+                eaten: "Mangés",
+                starved: "Morts de faim",
+                diedDry: "Morts à sec",
+            },
+            meals: "Qui mange qui",
+            curves: "Effectif de chaque espèce dans le temps",
+            extinct: "Espèce éteinte : {name}, depuis {time}",
+        },
         dashboard: {
             empty: "Aucune vie sur cette carte pour l'instant. Activez-la ci-dessous ; il faut de l'eau dans le relief.",
             population: "Population",
