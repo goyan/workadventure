@@ -755,6 +755,12 @@ branche feat/xxx ──PR──▶ infogene ──(auto)──▶ BETA  wa-beta.
 1. **Créer une branche** depuis `infogene` : `git switch -c feat/ma-modif origin/infogene`.
 2. **Commits petits et ciblés**, message en français : `feat(front): …`, `fix(front): …`, `test(front): …`, `ci: …`.
    Un patch qui touche peu de fichiers se rebase facilement sur les prochaines versions de WorkAdventure.
+   **Au moins un commit `feat(front): …`, `fix(front): …`, `feat(carte): …` ou `fix(carte): …`** par pull request,
+   rédigé pour un lecteur non technique : son sujet est le texte affiché dans « Outils → Nouveautés ». Le contrôle
+   « Note de nouveautés » refuse la pull request sinon, et liste dans le résumé de son exécution les notes à paraître.
+   Rien à annoncer (docs, CI, tests) : écrire la ligne `Nouveautes: aucune` dans le message d'un commit. Ne pas
+   fusionner en « squash » (le sujet deviendrait le titre de la pull request). Contrôle en local :
+   `node play/scripts/check-release-note.mjs` (compare à `origin/infogene`).
 3. **Ouvrir une pull request vers `infogene`**. Elle doit avoir : les vérifications vertes (voir ci-dessous) et **une relecture**.
 4. **Après fusion**, la CI construit l'image et la **beta se met à jour seule** (~10 min). Tester sur https://wa-beta.goyan.fr
    (Ctrl+F5). _Le code n'est pas déployé en beta avant la fusion._
