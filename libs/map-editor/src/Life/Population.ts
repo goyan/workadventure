@@ -31,6 +31,8 @@ const FLEE_REACH_PX = 3 * TERRAIN_CELL;
 const FLEE_DRAWS = 6;
 /** A dolphin that caught nothing for this long stops hunting until its next interval. */
 export const HUNT_GIVE_UP_MS = 20_000;
+/** The two animals of a couple that comes to the land are at most this many cells apart on each axis. */
+const COUPLE_REACH_CELLS = 3;
 /** A hunter aims this far beyond a prey that runs from it, in map pixels. */
 const CHASE_LEAD_PX = 3 * TERRAIN_CELL;
 /** A mate or a prey is reached within this distance, in map pixels. */
@@ -722,8 +724,8 @@ function spawn(
             size.deep >= MIN_DOLPHIN_DEEP_CELLS &&
             !dolphinIn.has(body) &&
             (fishCount.get(body) ?? 0) >= FISH_PER_DOLPHIN_COUPLE &&
+            // Not the room of the water: its fish may fill it, and the dolphins make room.
             dolphins + 2 <= MAX_DOLPHINS &&
-            inWater + 2 <= MAX_ANIMALS &&
             (firstDolphins || random() < dolphinChance)
         ) {
             for (const sex of ["male", "female"] as const) {
@@ -778,9 +780,15 @@ function spawnOnLand(
     const middle = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
     const couple = (species: SpeciesId, body: number): boolean => {
         let came = false;
+        const level = SPECIES[species].maxDepthPx ?? 0;
+        let near: { cellX: number; cellY: number } | undefined;
         for (const sex of ["male", "female"] as const) {
-            const cell = land.anyCell(body, levelOf({ kind: species } as Animal), random);
+            // The second one comes beside the first: a couple.
+            const cell = near
+                ? (land.randomCell(body, near, COUPLE_REACH_CELLS, level, random) ?? near)
+                : land.anyCell(body, level, random);
             if (!cell) continue;
+            near ??= cell;
             population.animals.push(
                 newAnimal(population, species, sex, middle(cell.cellX), middle(cell.cellY), now, settings, random),
             );

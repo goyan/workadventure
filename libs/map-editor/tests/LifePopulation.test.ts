@@ -190,6 +190,20 @@ describe("stepPopulation", () => {
         expect(dolphinsOf(none)).toHaveLength(0);
     });
 
+    it("brings dolphins to a water whose fish fill the room", () => {
+        // 60 × 50 deep cells hold more fish than a room does.
+        const grid = gridOf(rows("d".repeat(60), 50));
+        const population: Population = {
+            animals: Array.from({ length: MAX_ANIMALS }, (_, index) =>
+                fish(index + 1, "male", index % 60, Math.floor(index / 60), 1e12),
+            ),
+            nextId: 1000,
+            seeded: true,
+        };
+        run(population, grid, 5000);
+        expect(dolphinsOf(population)).toHaveLength(2);
+    });
+
     it("brings no dolphin to a water that holds fewer than thirty fish: they would empty it", () => {
         const population: Population = {
             animals: Array.from({ length: FISH_PER_DOLPHIN_COUPLE - 1 }, (_, index) =>

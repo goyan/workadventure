@@ -111,6 +111,9 @@ describe("the life of the land", () => {
         expect(ofKind(population, "antelope").map((one) => one.sex)).toEqual(["male", "female"]);
         expect(bySpecies.antelope?.arrivals).toBe(2);
         expect(population.landSeeded).toBe(true);
+        // They come together: a couple, not two strangers at both ends of the map.
+        const [male, female] = ofKind(population, "antelope");
+        expect(Math.hypot(male.x - female.x, male.y - female.y)).toBeLessThan(8 * 16);
     });
 
     it("brings none to a land too small, nor while the land is off, nor without the land", () => {
