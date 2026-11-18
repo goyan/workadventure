@@ -408,6 +408,13 @@ message UpdateLifeSettingMessage {
   optional double dolphinMaxLifespan = 7;
   // How long a land animal waits between two drinks. Absent from a browser that does not know it: kept as it is.
   optional double drinkInterval = 8;
+  // The life of the land (antelopes, lions, tigers). Absent from a browser that does not know it: kept as it is.
+  optional bool landEnabled = 9;
+  optional double antelopeReproductionDelay = 10;
+  optional double antelopeMaxLifespan = 11;
+  optional double landHuntInterval = 12;
+  optional double landPredatorReproductionDelay = 13;
+  optional double landPredatorMaxLifespan = 14;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).

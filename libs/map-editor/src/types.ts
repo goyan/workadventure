@@ -965,6 +965,27 @@ export const LIFE_BOUNDS = {
     dolphinMaxLifespan: [60, 172800],
     drinkInterval: [20, 3600],
 } as const;
+/**
+ * The life on the land of a map (antelopes that breed, lions and tigers that hunt them and the fish of the shallow
+ * water), kept by the server. Absent from a map saved before it existed: off, with these values.
+ */
+export const DEFAULT_LAND_LIFE_SETTINGS = {
+    landEnabled: false,
+    antelopeReproductionDelay: 120,
+    antelopeMaxLifespan: 900,
+    landHuntInterval: 120,
+    landPredatorReproductionDelay: 600,
+    landPredatorMaxLifespan: 3600,
+} as const;
+export const LAND_LIFE_BOUNDS = {
+    antelopeReproductionDelay: [10, 3600],
+    antelopeMaxLifespan: [30, 86400],
+    landHuntInterval: [5, 3600],
+    landPredatorReproductionDelay: [30, 7200],
+    landPredatorMaxLifespan: [60, 172800],
+} as const;
+const landDuration = (key: keyof typeof LAND_LIFE_BOUNDS) =>
+    z.number().min(LAND_LIFE_BOUNDS[key][0]).max(LAND_LIFE_BOUNDS[key][1]).optional().catch(undefined);
 export const LifeSettings = z.object({
     enabled: z.boolean().default(DEFAULT_LIFE_SETTINGS.enabled),
     /** How long a fish waits between two matings, and a newborn before its first, in seconds. */
@@ -1012,6 +1033,15 @@ export const LifeSettings = z.object({
         .min(LIFE_BOUNDS.drinkInterval[0])
         .max(LIFE_BOUNDS.drinkInterval[1])
         .default(DEFAULT_LIFE_SETTINGS.drinkInterval),
+    /** Whether antelopes, lions and tigers live on the outdoor land of the map (independent of `enabled`). */
+    landEnabled: z.boolean().optional().catch(undefined),
+    /** How long an antelope waits between two matings, and its longest life, in seconds. */
+    antelopeReproductionDelay: landDuration("antelopeReproductionDelay"),
+    antelopeMaxLifespan: landDuration("antelopeMaxLifespan"),
+    /** The lions and the tigers: between two hunts, between two young, and their longest life, in seconds. */
+    landHuntInterval: landDuration("landHuntInterval"),
+    landPredatorReproductionDelay: landDuration("landPredatorReproductionDelay"),
+    landPredatorMaxLifespan: landDuration("landPredatorMaxLifespan"),
 });
 export type LifeSettings = z.infer<typeof LifeSettings>;
 

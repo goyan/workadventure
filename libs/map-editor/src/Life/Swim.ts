@@ -12,8 +12,11 @@ export const WANDER_REACH_CELLS = 6;
 const SLOWEST_SHARE = 0.4;
 
 export const minDepthOf = (animal: Animal): number => SPECIES[animal.kind].minDepthPx;
-/** The level of an animal in its places: the least water it swims in. */
-export const levelOf = (animal: Animal): number => minDepthOf(animal);
+/** The level of an animal in its places: the least water it swims in, or on land the water it does not go into. */
+export const levelOf = (animal: Animal): number => {
+    const species = SPECIES[animal.kind];
+    return species.habitat === "land" ? (species.maxDepthPx ?? 0) : species.minDepthPx;
+};
 export const cellAt = (pixel: number): number => Math.floor(pixel / TERRAIN_CELL);
 const middleOf = (cell: number): number => cell * TERRAIN_CELL + TERRAIN_CELL / 2;
 

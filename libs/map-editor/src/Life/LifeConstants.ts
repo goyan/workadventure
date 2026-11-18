@@ -7,3 +7,7 @@ export const STARVE_HUNTS = 8;
 export const MEALS_FOR_CALF = 1;
 /** A hunting dolphin swims this many times faster than the fastest fish. */
 export const DOLPHIN_SPEED_FACTOR = 1.5;
+/** The most animals of the land a room holds, and of each of its species. */
+export const MAX_LAND_ANIMALS = 100;
+export const MAX_ANTELOPES = 60;
+export const MAX_LAND_PREDATORS = 12;

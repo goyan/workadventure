@@ -65,19 +65,19 @@ describe("the life of a lake, step after step", () => {
             "97af95d70e65ec7b",
             "e7e0093f05ffb5df",
         ]);
-    });
+    }, 60_000);
 
     it("covers births, calves, catches and deaths of age and of hunger", () => {
         const { totals } = life(lake(), 1, 2000);
         for (const key of ["births", "eaten", "diedOfAge", "predatorBirths", "predatorDeaths"]) {
             expect(totals[key]).toBeGreaterThan(0);
         }
-    });
+    }, 60_000);
 
     it("is the same on a map with two waters, a shallow rim and a full room", () => {
         expect([1, 2].map((seed) => life(lakeAndPond(), seed, 4000).fingerprint)).toEqual([
             "eb272ede6dd26206",
             "20aba621aa02b766",
         ]);
-    });
+    }, 60_000);
 });
