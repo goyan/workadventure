@@ -53,12 +53,13 @@ export function snowyTreePixel([red, green, blue, alpha]: Rgba, rowShare: number
 
 /**
  * How far snow covers one tree, from 0 to SNOW_STEPS, when it covers `groundCover` (0 to 1) of the ground: each tree
- * (`seed`, 0 to 1, its own) starts a bit late, then catches up with the ground, all white once the ground is.
+ * (`seed`, 0 to 1, its own) starts a bit late, then catches up with the ground, all white once the ground is: never
+ * ahead of it.
  */
 export function treeSnowStep(groundCover: number, seed: number): number {
     if (groundCover >= 1) return SNOW_STEPS;
     const delay = TREE_DELAY * seed;
-    const cover = Math.max(0, Math.min(1, (groundCover - delay) / (1 - TREE_DELAY)));
+    const cover = Math.max(0, Math.min(1, (groundCover - delay) / (1 - delay)));
     return Math.floor(cover * SNOW_STEPS);
 }
 
@@ -78,7 +79,7 @@ export function accumulatedSnow(pixels: ArrayLike<number>, width: number, height
     const mask = new Uint8Array(width * height);
     if (step >= SNOW_STEPS) return mask.fill(1);
     if (step <= 0) return mask;
-    const thickness = 1 + Math.pow(step / SNOW_STEPS, 1.4) * height * SNOW_DEPTH;
+    const thickness = 1 + Math.pow(step / SNOW_STEPS, 2) * height * SNOW_DEPTH;
     const kind = (column: number, row: number): "sky" | "line" | "wood" | "leaf" => {
         if (column < 0 || row < 0 || column >= width || row >= height) return "sky";
         const at = (row * width + column) * 4;

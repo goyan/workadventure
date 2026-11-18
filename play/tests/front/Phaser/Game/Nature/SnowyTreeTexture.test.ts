@@ -71,6 +71,9 @@ describe("snow accumulating on a tree", () => {
         expect(treeSnowStep(0, 0)).toBe(0);
         expect(treeSnowStep(1, 0.9)).toBe(SNOW_STEPS);
         expect(treeSnowStep(0.3, 0)).toBeGreaterThan(treeSnowStep(0.3, 0.9));
+        for (const ground of [0.1, 0.3, 0.5, 0.7, 0.95])
+            for (const seed of [0, 0.4, 0.99])
+                expect(treeSnowStep(ground, seed)).toBeLessThanOrEqual(ground * SNOW_STEPS);
         expect(seedOf("tree-a")).toBe(seedOf("tree-a"));
         expect(seedOf("tree-a")).not.toBe(seedOf("tree-b"));
         expect(seedOf("tree-a")).toBeGreaterThanOrEqual(0);
