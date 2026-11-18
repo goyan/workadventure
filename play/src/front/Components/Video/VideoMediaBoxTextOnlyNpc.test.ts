@@ -12,7 +12,8 @@ vi.mock("../../Space/localSpaceUser", () => ({ localSpaceUser: vi.fn() }));
 vi.mock("../../Phaser/Game/GameManager", () => ({ gameManager: { getCurrentGameScene: vi.fn() } }));
 vi.mock("../../Administration/AnalyticsClient", () => ({ analyticsClient: { trackAdminEvent: vi.fn() } }));
 vi.mock("../../Administration/CurrentMeeting", () => ({ meetingOf: vi.fn() }));
-vi.mock("../../Utils/screenBlocker", () => ({ blocker: () => undefined }));
+const blockerSpy = vi.hoisted(() => vi.fn(() => undefined));
+vi.mock("../../Utils/screenBlocker", () => ({ blocker: blockerSpy }));
 vi.mock("../../Utils/svelte-floatingui-show", () => ({ showFloatingUi: vi.fn() }));
 vi.mock("../../Stores/HighlightedEmbedScreenStore", () => ({ highlightedEmbedScreen: writable(undefined) }));
 vi.mock("../../Stores/ActionsCamStore", () => ({ highlightFullScreen: writable(false) }));
@@ -48,7 +49,40 @@ describe("VideoMediaBox text-only NPC", () => {
     afterEach(() => {
         vi.useRealTimers();
         vi.restoreAllMocks();
+        vi.clearAllMocks();
     });
+
+    it.each([true, false])(
+        "only fixed video panels displace the camera (avatar bubble: %s)",
+        async (inAvatarBubble) => {
+            const user = mock<SpaceUserExtended>({
+                ...SpaceUser.fromPartial({ uuid: "npc:bob", spaceUserId: "bob", name: "Bob" }),
+                pictureStore: readable(undefined),
+                reactiveUser: {
+                    uuid: readable("npc:bob"),
+                    microphoneState: readable(false),
+                    megaphoneState: readable(false),
+                },
+                space: mock({ getName: () => "bubble" }),
+            });
+            const box = VideoBox.fromRemoteSpaceUser(user, false, false);
+            const target = document.createElement("div");
+            document.body.appendChild(target);
+            const component = mount(VideoMediaBox, {
+                target,
+                props: { videoBox: box, activeUserName: false },
+                context: new Map([["inAvatarBubble", inAvatarBubble]]),
+            });
+            try {
+                flushSync();
+                expect(blockerSpy).toHaveBeenCalledTimes(inAvatarBubble ? 0 : 1);
+            } finally {
+                await unmount(component);
+                box.destroy();
+                target.remove();
+            }
+        },
+    );
 
     it("renders the name and avatar without a media stream and keeps them visible after 30 seconds", async () => {
         vi.useFakeTimers();

@@ -54,6 +54,7 @@
     import { requestedMicrophoneDeviceIdStore, silentStore } from "../Stores/MediaStore";
     import { hideActionBarStoreBecauseOfChatBar } from "../Chat/ChatSidebarWidthStore";
     import { floorLevelsStore } from "../Stores/FloorLevelsStore";
+    import AvatarVideoBubbles from "./Video/AvatarVideoBubbles.svelte";
     import { mapEditorSideBarWidthStore } from "./MapEditor/MapEditorSideBarWidthStore";
     import { calendarRemindersStore, startCalendarReminders } from "./Calendar/CalendarReminder";
     import ActionBar from "./ActionBar/ActionBar.svelte";
@@ -525,6 +526,7 @@
             {/if}
 
             {#if !$highlightFullScreen}
+                <AvatarVideoBubbles />
                 <PictureInPicture>
                     {#snippet children({ inPictureInPicture })}
                         <PresentationLayout {inPictureInPicture} />
