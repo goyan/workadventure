@@ -2127,7 +2127,7 @@ carte plate, aucune migration). Échelle des lampes : une case = 1,2 m² de sol 
 **L'eau est simulée par cellules** (`WaterGrid`) : chaque cellule a une hauteur d'eau, et à chaque pas l'eau passe
 vers les voisines dont la surface (sol + eau) est plus basse. Une source fait donc une flaque à son pied, qui coule
 dans la pente ; un creux plein déborde par son point le plus bas ; sur sol plat une inondation monte et avance tant
-que l'eau arrive. La surface de l'eau est plafonnée à 18 px au-dessus du sol : juste au-dessus de la profondeur où l'on nage (16 px, environ 0,5 m), loin sous le premier palier (52 px) : on
+que l'eau arrive. La surface de l'eau est plafonnée à 18 px au-dessus du sol : juste au-dessus de la profondeur où l'on nage (16 px, environ 0,5 m), loin sous le premier palier (52 px) ; ce plafond vaut pour toute l'eau, versée, tombée ou qui coule (sans lui, une forte pluie sur une large région creusée empilait l'eau en dôme, la surface en pente partout, parce que l'eau n'avance que d'une cellule par pas) : on
 garde les pieds au sec à l'étage. La grille couvre l'emprise du relief et des sources, plus 48 cellules de marge
 (600 × 600 au plus) ; l'eau qui en sort est perdue. Un premier modèle « une cuvette, un niveau » a été essayé puis
 retiré : l'eau y apparaissait au point le plus bas de toute la région creusée, loin de la source.

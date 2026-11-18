@@ -355,6 +355,34 @@ describe("WaterGrid", () => {
         expect(tally.lostPx).toBeGreaterThan(0);
     });
 
+    // Seen on a map under the rain: the water of a wide dug region piled up into a dome hundreds of pixels high,
+    // its surface sloping everywhere, because the rain brings water faster than it can run away.
+    it("never lets the rain pile the water of a wide hollow into a dome: what is over the highest level is lost", () => {
+        const side = 61;
+        const wide = terrainOf(
+            Array.from(
+                { length: side * side },
+                (_, index) => [index % side, Math.floor(index / side), -8] as [number, number, number],
+            ),
+        );
+        const grid = new WaterGrid(wide, gridBoundsOf(wide, []));
+        let rain = 0;
+        let lost = 0;
+        for (let step = 0; step < 1500; step++) {
+            const tally = grid.step({ ...nothing, rainPx: 0.5 });
+            rain += tally.rainPx;
+            lost += tally.lostPx;
+        }
+        // In the middle, far from any edge, the surface is at the highest level and no higher, and it is level.
+        const middle = (side - 1) / 2;
+        expect(grid.depthAt(middle, middle) - 8).toBeLessThanOrEqual(MAX_WATER_SURFACE_PX + 0.01);
+        expect(grid.depthAt(middle, middle) - 8).toBeGreaterThan(MAX_WATER_SURFACE_PX - 1);
+        expect(Math.abs(grid.depthAt(middle, middle) - grid.depthAt(middle + 6, middle))).toBeLessThan(0.5);
+        // Every drop is counted: what the grid holds is the rain less what was lost.
+        expect(grid.totalPx()).toBeCloseTo(rain - lost, -1);
+        expect(lost).toBeGreaterThan(0);
+    });
+
     it("never lets a flood rise over its highest level, however much water comes", () => {
         const pit = terrainOf([[0, 0, -8]]);
         // A small closed yard: walls all around, so the water can only rise.

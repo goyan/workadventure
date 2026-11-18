@@ -12,7 +12,8 @@ const MAX_GRID_SIDE = 600;
 /**
  * The highest the surface of the water gets above the ground of the map, in pixels: just over the depth where an
  * avatar swims (16 px, about half a metre), so a flood makes one swim, and far under the first raised floor of a
- * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost.
+ * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost, and so is what the rain
+ * or the running water would pile over it.
  */
 export const MAX_WATER_SURFACE_PX = 18;
 /** Under this depth a cell is dry: the water left by rounding does not keep the grid moving. */
@@ -540,6 +541,16 @@ export class WaterGrid {
         }
         for (let index = 0; index < next.length; index++) {
             if (next[index] < 0) next[index] = 0;
+            // Water runs from a cell to the next one only so fast: where more comes than can run away (a hard rain
+            // on a wide hollow), it would pile up into a dome, its surface sloping everywhere. What stands over the
+            // highest level is lost instead, as when it is poured: the surface stays level and under that level.
+            const over = ground[index] + next[index] - MAX_WATER_SURFACE_PX;
+            if (over > 0 && next[index] > 0) {
+                const taken = Math.min(over, next[index]);
+                next[index] -= taken;
+                tally.lostPx += taken;
+                moved = true;
+            }
         }
         this.depth = next;
         this.next = depth;
