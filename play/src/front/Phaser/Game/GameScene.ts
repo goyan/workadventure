@@ -276,6 +276,7 @@ import { skyShadowCategoriesStore } from "../../Stores/SkyLightStore";
 import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
+import { areaHighlightHiddenStore } from "../../Stores/NightStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -531,6 +532,7 @@ export class GameScene extends DirtyScene {
     private gameJungle: GameJungle | undefined;
     private nightManager: NightManager | undefined;
     private perfMonitor: PerfMonitor | undefined;
+    private unsubscribeAreaHighlight: Unsubscriber | undefined;
     private lampManager: LampManager | undefined;
     private gameSwitches: GameSwitches | undefined;
     private weatherManager: WeatherManager | undefined;
@@ -1596,6 +1598,8 @@ export class GameScene extends DirtyScene {
         this.nightManager?.destroy();
         this.perfMonitor?.destroy();
         this.perfMonitor = undefined;
+        this.unsubscribeAreaHighlight?.();
+        this.unsubscribeAreaHighlight = undefined;
         this.wallFade?.destroy();
         this.wallFade = undefined;
         this.fadedWallFloor?.destroy();
@@ -3303,6 +3307,11 @@ export class GameScene extends DirtyScene {
                 this.nightManager = new NightManager(this, () => this.skyWeatherFactor());
                 this.perfMonitor?.destroy();
                 this.perfMonitor = new PerfMonitor(this.events, this.game.events);
+                // The highlight of an area, dropped while inside it: the rest of the map is lit again at once.
+                this.unsubscribeAreaHighlight?.();
+                this.unsubscribeAreaHighlight = areaHighlightHiddenStore.subscribe((hidden) => {
+                    if (hidden) this._focusFx?.hide();
+                });
                 // The objects of the map that are lamps; `?lampDemo` lights them with a made-up beat. One set at a time.
                 this.lampManager?.destroy();
                 const lampDemo = parseLampDemo(window.location.search);

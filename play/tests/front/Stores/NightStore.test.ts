@@ -71,3 +71,30 @@ describe("the three effects of the indirect light, each turned on or off", () =>
         expect(get(night.shownLightBounceStore)).toBe(0.5);
     });
 });
+
+describe("the highlight of the areas under the realistic lighting", () => {
+    beforeEach(() => localStorage.clear());
+
+    it("is kept while the realistic lighting is off, whatever the choice", async () => {
+        const night = await loadStore();
+        night.realisticNightStore.set(false);
+        night.noAreaHighlightStore.set(true);
+
+        expect(get(night.areaHighlightHiddenStore)).toBe(false);
+    });
+
+    it("is dropped by default once the realistic lighting is on: the rest of the map is not darkened by a room", async () => {
+        const night = await loadStore();
+        night.realisticNightStore.set(true);
+
+        expect(get(night.areaHighlightHiddenStore)).toBe(true);
+    });
+
+    it("is kept under the realistic lighting by a player who asks for it", async () => {
+        const night = await loadStore();
+        night.realisticNightStore.set(true);
+        night.noAreaHighlightStore.set(false);
+
+        expect(get(night.areaHighlightHiddenStore)).toBe(false);
+    });
+});

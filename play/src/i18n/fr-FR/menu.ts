@@ -142,6 +142,10 @@ const menu: DeepPartial<Translation["menu"]> = {
             bounce: "Rebond sur les murs : {percent} % de la lumière renvoyée (0 : aucun)",
             softEdge: "Bords des lumières adoucis sur {pixels} px (0 : nets)",
             keptInEditor: "Même éclairage dans l'éditeur de carte qu'en jeu, pour régler les lampes",
+            realisticAdvanced: "Réglages avancés",
+            noAreaHighlight: "Ne plus assombrir le reste de la carte en entrant dans une zone",
+            noAreaHighlightHelp:
+                "Coupe pour vous la « Mise en évidence » des zones (salles de réunion, zones silencieuses) tant que l'éclairage réaliste est activé.",
             realistic: "Éclairage réaliste : les pièces ne s'allument plus toutes seules",
             realisticHelp:
                 "La nuit, une pièce n'est éclairée que par ses lampes (interrupteurs, capteurs). Réglage personnel.",

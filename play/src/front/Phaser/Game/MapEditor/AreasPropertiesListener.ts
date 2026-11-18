@@ -40,6 +40,7 @@ import {
     audioManagerVolumeStore,
 } from "../../../Stores/AudioManagerStore";
 import { chatVisibilityStore, chatZoneLiveStore } from "../../../Stores/ChatStore";
+import { areaHighlightHiddenStore } from "../../../Stores/NightStore";
 /**
  * @DEPRECATED - This is the old way to show trigger message
  import { layoutManagerActionStore } from "../../../Stores/LayoutManagerStore";
@@ -907,6 +908,10 @@ export class AreasPropertiesListener {
     private handleHighlightPropertyOnEnter(areaData: AreaData, property: HighlightPropertyData): void {
         if (!this.scene.focusFx) {
             // Maybe not supported (Canvas renderer)
+            return;
+        }
+        if (get(areaHighlightHiddenStore)) {
+            // Dropped by this player under the realistic lighting: the rest of the map is not darkened.
             return;
         }
         this.scene.focusFx.attachToArea(areaData);

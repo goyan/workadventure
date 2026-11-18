@@ -88,3 +88,14 @@ export const shownSecondBounceStore = derived(
     [bounceOnStore, secondBounceOnStore],
     ([bounceOn, secondOn]) => bounceOn && secondOn,
 );
+
+/**
+ * Under the realistic lighting, the areas no longer darken the rest of the map when entered (their "highlight"
+ * property): a room is lit by its lamps, not by a veil around it. A player may keep the highlight all the same.
+ */
+export const noAreaHighlightStore = createPersistedSwitchStore("nightNoAreaHighlight", true);
+/** Whether the highlight of the areas is dropped now: asked for (the default), under the realistic lighting only. */
+export const areaHighlightHiddenStore = derived(
+    [realisticNightStore, noAreaHighlightStore],
+    ([realistic, dropped]) => realistic && dropped,
+);

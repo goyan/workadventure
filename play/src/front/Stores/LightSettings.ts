@@ -14,6 +14,7 @@ import {
     lightBounceStore,
     lightSoftEdgeStore,
     nightDarknessStore,
+    noAreaHighlightStore,
     realisticNightStore,
     secondBounceOnStore,
     softEdgeOnStore,
@@ -69,6 +70,7 @@ const limits = (prefix: string, stores: typeof sunLightLimits): Record<string, S
 const LIGHT_SETTINGS: Readonly<Record<string, Setting>> = {
     nightDarkness: number(nightDarknessStore),
     nightRealistic: onOff(realisticNightStore),
+    noAreaHighlight: onOff(noAreaHighlightStore),
     ambienceStrength: number(ambienceStrengthStore),
     ambienceFullShare: number(ambienceFullShareStore),
     lightSoftEdge: number(lightSoftEdgeStore),
