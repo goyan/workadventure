@@ -395,6 +395,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             less: "Diminuer le débit",
             more: "Augmenter le débit",
             unit: "Unité du débit",
+            radius: "Rayon (cases)",
+            radiusHint: "L'eau est versée sur tout ce disque. À 0, elle sort au pied de l'objet.",
         },
         waterSink: {
             label: "Puits (évacuation)",
@@ -405,6 +407,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             less: "Diminuer le débit",
             more: "Augmenter le débit",
             unit: "Unité du débit",
+            radius: "Rayon (cases)",
+            radiusHint:
+                "Le puits retire l'eau de ce disque ; l'eau plus loin doit couler jusqu'à lui. Plus il est large, plus il évacue.",
         },
         lamp: {
             label: "Zone de lumière",

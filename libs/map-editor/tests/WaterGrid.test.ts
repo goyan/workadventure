@@ -196,6 +196,35 @@ describe("WaterGrid", () => {
         expect(grid.depthAt(20, 8)).toBeCloseTo(10, 3);
     });
 
+    it("takes water further around a sink that was given a larger radius", () => {
+        const lake = terrainOf(
+            Array.from(
+                { length: 41 * 41 },
+                (_, index) => [index % 41, Math.floor(index / 41), -16] as [number, number, number],
+            ),
+        );
+        const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
+        run(grid, 100, { ...nothing, rainPx: 0.1 });
+        const tally = grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: -1e6, radius: 10 }] });
+        // Eight cells away the water is taken; fifteen cells away it is not. A disc of radius 10: 317 cells of 10 px.
+        expect(grid.depthAt(28, 20)).toBeLessThan(5);
+        expect(grid.depthAt(35, 20)).toBeCloseTo(10, 3);
+        expect(tally.sinksPx).toBeCloseTo(3170, 0);
+    });
+
+    it("pours a source over the disc it was given, not at one point", () => {
+        const flat = terrainOf([[100, 100, -1]]);
+        const grid = new WaterGrid(flat, { x: 0, y: 0, width: 40, height: 40 });
+        // 81 px over a disc of radius 5 (81 cells): about a pixel of water each, before it runs.
+        const tally = grid.step({ ...nothing, flows: [{ cellX: 20, cellY: 20, px: 81, radius: 5 }] });
+        expect(tally.lostPx).toBe(0);
+        expect(grid.totalPx()).toBeCloseTo(81, 3);
+        expect(grid.depthAt(20, 20)).toBeLessThan(3);
+        expect(grid.depthAt(24, 20)).toBeGreaterThan(0.2);
+        expect(grid.depthAt(20, 16)).toBeGreaterThan(0.2);
+        expect(grid.depthAt(28, 20)).toBe(0);
+    });
+
     it("leaves alone the water lower than a sink: it would never run to it", () => {
         // A sink at the top of a dug slope, water at the bottom only.
         const grid = new WaterGrid(slope, gridBoundsOf(slope, []));

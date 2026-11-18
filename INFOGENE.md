@@ -2135,8 +2135,9 @@ retiré : l'eau y apparaissait au point le plus bas de toute la région creusée
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau
-d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire l'eau à une
-case et demie autour de son pied (l'eau plus loin doit couler jusqu'à lui). Une entrée de catalogue peut porter
+d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire l'eau d'un disque autour de son pied (l'eau plus loin doit couler jusqu'à lui). Ce rayon se règle
+par objet, en cases (`radius`, de 0 à 10) : une case et demie par défaut pour un puits ; pour une source, 0 (au pied)
+ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 `waterFlow: { kind: "source" | "sink", flow (m³/h), anchor }` : l'objet posé est alors une source ou un puits
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).

@@ -1,4 +1,4 @@
-import { MAX_WATER_FLOW } from "@workadventure/map-editor";
+import { MAX_WATER_FLOW, MAX_WATER_RADIUS_TILES } from "@workadventure/map-editor";
 import type { EntityDataProperties, EntityPrefab } from "@workadventure/map-editor";
 
 /** A flow is stored in litres a minute, and given in cubic metres an hour in a catalogue and in the editor. */
@@ -39,6 +39,7 @@ export function newWaterProperties(prefab: Pick<EntityPrefab, "waterFlow">, newI
             id: newId(),
             type: water.kind === "source" ? "waterSourcePropertyData" : "waterSinkPropertyData",
             flow: Math.min(MAX_WATER_FLOW, Math.round(water.flow * LITRES_A_MINUTE_PER_M3_AN_HOUR)),
+            ...(water.radius === undefined ? {} : { radius: Math.min(MAX_WATER_RADIUS_TILES, water.radius) }),
             ...(water.anchor ? { anchorX: Math.round(water.anchor.x), anchorY: Math.round(water.anchor.y) } : {}),
         },
     ];

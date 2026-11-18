@@ -1,4 +1,11 @@
-import { DEFAULT_WATER_SETTINGS, TERRAIN_CELL, WaterSinkPropertyData, WaterSourcePropertyData } from "../types";
+import {
+    DEFAULT_SINK_RADIUS_TILES,
+    DEFAULT_WATER_SETTINGS,
+    TERRAIN_CELL,
+    TILE_PX,
+    WaterSinkPropertyData,
+    WaterSourcePropertyData,
+} from "../types";
 import type { WAMFileFormat, WaterSettings } from "../types";
 import { LITRES_PER_M3, metresOf } from "./Scale";
 import { CELL_LITRES_PER_PX } from "./WaterGrid";
@@ -15,6 +22,8 @@ export interface WaterObject {
     cellX: number;
     cellY: number;
     litresPerMinute: number;
+    /** The radius of the disc a source pours over or a sink takes from, in cells of the relief (0: its cell only). */
+    radiusCells: number;
 }
 
 /**
@@ -34,6 +43,9 @@ export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined)
                 cellX: Math.floor((entity.x + (found.anchorX ?? 0)) / TERRAIN_CELL),
                 cellY: Math.floor((entity.y + (found.anchorY ?? 0)) / TERRAIN_CELL),
                 litresPerMinute: source.success ? found.flow : -found.flow,
+                radiusCells: Math.round(
+                    ((found.radius ?? (source.success ? 0 : DEFAULT_SINK_RADIUS_TILES)) * TILE_PX) / TERRAIN_CELL,
+                ),
             });
         }
     }
@@ -68,6 +80,7 @@ export function stepInputOf(
                 cellX: object.cellX,
                 cellY: object.cellY,
                 px: (object.litresPerMinute * 60 * hours) / CELL_LITRES_PER_PX,
+                radius: object.radiusCells,
             })),
     };
 }

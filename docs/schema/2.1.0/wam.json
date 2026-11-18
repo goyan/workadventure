@@ -812,6 +812,11 @@
                           "minimum": 0,
                           "maximum": 2000000
                         },
+                        "radius": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
+                        },
                         "anchorX": {
                           "type": "number",
                           "minimum": -4096,
@@ -856,6 +861,11 @@
                           "type": "number",
                           "minimum": 0,
                           "maximum": 2000000
+                        },
+                        "radius": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 10
                         },
                         "anchorX": {
                           "$ref": "#/definitions/WAMFileFormat/properties/entities/additionalProperties/properties/properties/items/anyOf/10/properties/anchorX"
