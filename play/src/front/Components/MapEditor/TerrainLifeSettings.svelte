@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { untrack } from "svelte";
     import { LIFE_BOUNDS } from "@workadventure/map-editor";
     import type { LifeSettings } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
@@ -19,18 +20,19 @@
     }
 
     let { initial }: Props = $props();
+    // Read once, when the panel opens: each change below is then written back to the map, for every editor.
+    const start = untrack(() => initial);
 
-    // Each change is written back to the map, for every editor; the server then runs the life with it.
-    let enabled = $state(initial.enabled);
-    let reproductionDelay = $state(initial.reproductionDelay);
-    let maxLifespan = $state(initial.maxLifespan);
-    let maxSpeed = $state(initial.maxSpeed);
-    let huntInterval = $state(initial.huntInterval);
+    let enabled = $state(start.enabled);
+    let reproductionDelay = $state(start.reproductionDelay);
+    let maxLifespan = $state(start.maxLifespan);
+    let maxSpeed = $state(start.maxSpeed);
+    let huntInterval = $state(start.huntInterval);
 
     // The durations go from seconds to hours: their sliders move by steps that grow with them.
-    let reproductionPosition = $state(sliderOfDuration(initial.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
-    let lifespanPosition = $state(sliderOfDuration(initial.maxLifespan, ...LIFE_BOUNDS.maxLifespan));
-    let huntPosition = $state(sliderOfDuration(initial.huntInterval, ...LIFE_BOUNDS.huntInterval));
+    let reproductionPosition = $state(sliderOfDuration(start.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
+    let lifespanPosition = $state(sliderOfDuration(start.maxLifespan, ...LIFE_BOUNDS.maxLifespan));
+    let huntPosition = $state(sliderOfDuration(start.huntInterval, ...LIFE_BOUNDS.huntInterval));
 
     function save(): void {
         executeUpdateWAMSettings({
