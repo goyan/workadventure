@@ -393,6 +393,10 @@ n'a pas de position à lui (comme un va-et-vient).
   95 % (très sombre), 60 % par défaut comme avant ; c'est l'opacité du voile en pleine nuit (`nightDarknessStore`,
   gardé dans le navigateur, `nightOpacityWith`) : crépuscule et aube en gardent leur part, la lune l'éclaircit comme
   avant, lampes, torches et halos le percent comme avant. « Revenir à 60 % » sous le curseur.
+- **Sélecteur des effets de lumière indirecte** : chacun des trois effets a son interrupteur, « 1 · Ambiance des
+  pièces », « 2 · Bords des lumières adoucis », « 3 · Rebond de la lumière sur les murs » (`ambienceOnStore`,
+  `softEdgeOnStore`, `bounceOnStore`, tous activés par défaut) ; un effet coupé ne dessine plus rien mais garde son
+  dosage (`shown…Store`), pour comparer avec et sans d'un clic. Portés par le code de partage (35 réglages).
 - **Lumière indirecte (réglages personnels)** : Paramètres → Ambiance → Cycle jour/nuit, trois curseurs gardés dans le
   navigateur. (1) **Ambiance des pièces** (`Night/AmbientLight.ts`, `roomAmbience`) : une pièce (zone de la carte) où
   entre la lumière d'une lampe RGB ou d'une torche, par sa porte ou depuis un coin, est éclaircie partout ; curseur
@@ -437,7 +441,7 @@ n'a pas de position à lui (comme un va-et-vient).
   compteur est affiché). Le jeu ne redessine que quand quelque chose a changé : le temps de rendu d'une scène au repos
   est proche de zéro.
 - **Partager ses réglages de lumière** : Paramètres → Ambiance, « Copier le code de mes réglages » donne un code
-  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 32 réglages personnels de lumière (obscurité de la nuit,
+  (`LUM1-…`, `Stores/LightSettingsCode.ts`) qui porte les 35 réglages personnels de lumière (obscurité de la nuit,
   éclairage réaliste, lumière indirecte, soleil et lune avec leurs limites, ce qui projette une ombre et sous quelle
   forme) ; l'autre le colle dans « Coller un code reçu » puis « Appliquer ». Rien ne passe par le serveur. À la
   lecture, seuls les réglages connus et du bon genre sont appliqués, chacun gardant ses bornes ; un réglage inconnu

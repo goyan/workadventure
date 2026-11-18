@@ -21,12 +21,15 @@
     import { lampDemoEnabledStore } from "../../Stores/LampDemoStore";
     import {
         ambienceFullShareStore,
+        ambienceOnStore,
         ambienceStrengthStore,
+        bounceOnStore,
         lightBounceStore,
         lightSoftEdgeStore,
         nightDarknessStore,
         nightInEditorStore,
         realisticNightStore,
+        softEdgeOnStore,
     } from "../../Stores/NightStore";
     import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../../Phaser/Game/Night/NightClock";
     import { lampEffectsEnabledStore } from "../../Stores/LampEffectsStore";
@@ -440,41 +443,83 @@
                     </button>
                 {/if}
             </div>
-            <div class="flex flex-col gap-1" data-testid="night-indirect-light">
+            <div class="flex flex-col gap-2" data-testid="night-indirect-light">
                 <p class="m-0 text-sm font-bold text-white/90">{$LL.menu.settings.night.indirect()}</p>
                 <p class="m-0 text-xs text-white/60">{$LL.menu.settings.night.indirectHelp()}</p>
-                <span class="text-sm text-white"
-                    >{$LL.menu.settings.night.ambienceStrength({
-                        percent: Math.round($ambienceStrengthStore * 100),
-                    })}</span
-                >
-                <RangeSlider
-                    id="night-ambience-strength"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    bind:value={$ambienceStrengthStore}
+                <InputSwitch
+                    id="night-ambience-on"
+                    bind:value={$ambienceOnStore}
+                    label={$LL.menu.settings.night.ambienceOn()}
+                    labelPosition="right"
                 />
-                <span class="text-sm text-white"
-                    >{$LL.menu.settings.night.ambienceFullShare({
-                        percent: Math.round($ambienceFullShareStore * 100),
-                    })}</span
-                >
-                <RangeSlider
-                    id="night-ambience-full-share"
-                    min={0.05}
-                    max={1}
-                    step={0.05}
-                    bind:value={$ambienceFullShareStore}
+                {#if $ambienceOnStore}
+                    <div class="flex flex-col gap-1 ps-4">
+                        <span class="text-sm text-white"
+                            >{$LL.menu.settings.night.ambienceStrength({
+                                percent: Math.round($ambienceStrengthStore * 100),
+                            })}</span
+                        >
+                        <RangeSlider
+                            id="night-ambience-strength"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            bind:value={$ambienceStrengthStore}
+                        />
+                        <span class="text-sm text-white"
+                            >{$LL.menu.settings.night.ambienceFullShare({
+                                percent: Math.round($ambienceFullShareStore * 100),
+                            })}</span
+                        >
+                        <RangeSlider
+                            id="night-ambience-full-share"
+                            min={0.05}
+                            max={1}
+                            step={0.05}
+                            bind:value={$ambienceFullShareStore}
+                        />
+                    </div>
+                {/if}
+                <InputSwitch
+                    id="night-soft-edge-on"
+                    bind:value={$softEdgeOnStore}
+                    label={$LL.menu.settings.night.softEdgeOn()}
+                    labelPosition="right"
                 />
-                <span class="text-sm text-white"
-                    >{$LL.menu.settings.night.softEdge({ pixels: Math.round($lightSoftEdgeStore) })}</span
-                >
-                <RangeSlider id="night-light-soft-edge" min={0} max={32} step={2} bind:value={$lightSoftEdgeStore} />
-                <span class="text-sm text-white">
-                    {$LL.menu.settings.night.bounce({ percent: Math.round($lightBounceStore * 100) })}
-                </span>
-                <RangeSlider id="night-light-bounce" min={0} max={1} step={0.05} bind:value={$lightBounceStore} />
+                {#if $softEdgeOnStore}
+                    <div class="flex flex-col gap-1 ps-4">
+                        <span class="text-sm text-white"
+                            >{$LL.menu.settings.night.softEdge({ pixels: Math.round($lightSoftEdgeStore) })}</span
+                        >
+                        <RangeSlider
+                            id="night-light-soft-edge"
+                            min={0}
+                            max={32}
+                            step={2}
+                            bind:value={$lightSoftEdgeStore}
+                        />
+                    </div>
+                {/if}
+                <InputSwitch
+                    id="night-bounce-on"
+                    bind:value={$bounceOnStore}
+                    label={$LL.menu.settings.night.bounceOn()}
+                    labelPosition="right"
+                />
+                {#if $bounceOnStore}
+                    <div class="flex flex-col gap-1 ps-4">
+                        <span class="text-sm text-white">
+                            {$LL.menu.settings.night.bounce({ percent: Math.round($lightBounceStore * 100) })}
+                        </span>
+                        <RangeSlider
+                            id="night-light-bounce"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            bind:value={$lightBounceStore}
+                        />
+                    </div>
+                {/if}
             </div>
             <InputSwitch
                 id="night-kept-in-editor"
