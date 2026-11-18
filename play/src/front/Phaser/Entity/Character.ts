@@ -409,7 +409,7 @@ export abstract class Character extends Container implements OutlineableInterfac
     /**
      * The speed the current of the water of the relief gives the character, in pixels a second: nothing out of the
      * water, in still or shallow water, on a raised floor, or on a map that set its current to nothing. At its
-     * hardest (and the usual strength) it carries as fast as one walks (`walkSpeed`).
+     * hardest (and the usual strength) it carries at a quarter of the speed one walks at (`walkSpeed`).
      */
     protected waterCurrentPush(walkSpeed: number): CurrentVector {
         const water = this.floorZ < 2 ? this.scene?.getTerrainWater?.() : undefined;

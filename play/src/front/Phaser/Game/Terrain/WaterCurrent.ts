@@ -21,6 +21,9 @@ export const CURRENT_FULL_SLOPE = 2;
 /** A slope slighter than this is water coming to rest, not a current. */
 export const CURRENT_REST_SLOPE = 0.1;
 
+/** The speed of the hardest current at the usual strength, as a share of the walking speed: one walks against it. */
+export const CURRENT_WALK_SHARE = 0.25;
+
 const NONE: CurrentVector = { x: 0, y: 0 };
 
 /**
@@ -57,8 +60,9 @@ export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: nu
 }
 
 /**
- * The speed the current gives to an avatar at a point, in pixels a second: the current, times the walking speed (a
- * current at its hardest carries as fast as one walks), times the strength set for the map (0: no current).
+ * The speed the current gives to an avatar at a point, in pixels a second: the current, times a quarter of the
+ * walking speed (a current at its hardest carries four times slower than one walks), times the strength set for the
+ * map (0: no current).
  */
 export function currentPush(
     water: CurrentWater | undefined,
@@ -71,5 +75,6 @@ export function currentPush(
     if (!Number.isFinite(strength) || strength <= 0) return NONE;
     const current = waterCurrentAt(water, x, y, now);
     if (current.x === 0 && current.y === 0) return NONE;
-    return { x: current.x * walkSpeed * strength, y: current.y * walkSpeed * strength };
+    const speed = walkSpeed * CURRENT_WALK_SHARE * strength;
+    return { x: current.x * speed, y: current.y * speed };
 }
