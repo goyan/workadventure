@@ -8,7 +8,8 @@ import { shadowArea, shadowRedraw, shadowResolution } from "./SkyShadowFrame";
 import type { DrawnShadows, ShadowFrame } from "./SkyShadowFrame";
 import { SkyWindowLightLayer } from "./SkyWindowLightLayer";
 import type { WindowLightPatch } from "./SkyWindowLightLayer";
-import { windowLightPatch, windowOpenings } from "./SkyWindowLight";
+import { interiorOpenings, lightThroughPanes, windowOpenings } from "./SkyWindowLight";
+import type { InteriorOpening } from "./SkyWindowLight";
 import type { WindowOpening } from "./SkyWindowLight";
 
 /** The walls are looked at again twice a second at most. */
@@ -31,6 +32,7 @@ export class SkyWindowLightManager {
     private readonly layer: SkyWindowLightLayer;
     private pieces: PlacedPrefabLike[] = [];
     private openings: WindowOpening[] = [];
+    private interior: InteriorOpening[] = [];
     private signature = "";
     private openingsKey = "";
     private readAt: number | undefined;
@@ -84,6 +86,8 @@ export class SkyWindowLightManager {
                 (x, y) => grid.roomAt(x, y),
                 (x, y) => grid.isOutdoorAt(x, y),
             );
+            // The panes between two rooms: the light that came into one goes on into the other.
+            this.interior = interiorOpenings(model, (x, y) => grid.roomAt(x, y));
         }
         if (this.openings.length === 0) {
             this.clear();
@@ -109,11 +113,7 @@ export class SkyWindowLightManager {
             return;
         }
         const area = shadowArea(frame.view);
-        const patches: WindowLightPatch[] = [];
-        for (const opening of this.openings) {
-            const polygon = windowLightPatch(opening, light);
-            if (polygon) patches.push({ polygon, room: opening.room });
-        }
+        const patches: WindowLightPatch[] = lightThroughPanes(this.openings, this.interior, light);
         // No pane faces the light: nothing to draw, nor to pierce the veil with.
         if (patches.length === 0) {
             this.clear();
