@@ -454,7 +454,7 @@ n'a pas de position à lui (comme un va-et-vient).
   (`areaHighlightHiddenStore`) ; coupée pendant qu'on est dans la zone, elle s'efface aussitôt. Sans éclairage
   réaliste, rien ne change. Porté par le code de partage (37 réglages).
 - **Puissance d'une lampe RGB, en lumens** (`Lamps/LampLumens.ts`) : dans l'éditeur de la lampe, le curseur
-  « Puissance » (75 à 6 100 lm) et ses préréglages (Bougie 75, Appoint 200, Bureau 360, Ampoule 600, Plafonnier
+  « Puissance » (75 à 6 100 lm) et ses préréglages (Bougie 75, Appoint 200, Bureau 360, Ampoule 450, Plafonnier
   1 600, Projecteur 3 500) règlent **portée et intensité ensemble**, comme pour une vraie lampe ; les deux anciens
   curseurs sont dans le bloc « Réglage libre ». Rien ne change dans le format de la carte : la lampe garde `radius` et
   `intensity`, les lumens n'en sont qu'une lecture (`lumensOfLamp`), et une lampe réglée librement n'en a pas tant
