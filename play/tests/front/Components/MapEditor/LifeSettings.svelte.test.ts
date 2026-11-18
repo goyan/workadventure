@@ -31,6 +31,8 @@ const render = (enabled: boolean, maxLifespan = 900): void => {
                     maxLifespan,
                     maxSpeed: 1.5,
                     huntInterval: 60,
+                    dolphinReproductionDelay: 300,
+                    dolphinMaxLifespan: 3600,
                     drinkInterval: 300,
                 },
             },
@@ -38,7 +40,14 @@ const render = (enabled: boolean, maxLifespan = 900): void => {
     });
 };
 const find = (testId: string): HTMLElement | null => target.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
-const sliders = ["life-reproduction-delay", "life-max-lifespan", "life-max-speed", "life-hunt-interval"];
+const sliders = [
+    "life-reproduction-delay",
+    "life-max-lifespan",
+    "life-max-speed",
+    "life-hunt-interval",
+    "life-dolphin-reproduction-delay",
+    "life-dolphin-max-lifespan",
+];
 
 afterEach(async () => {
     const mounted = component;
@@ -60,6 +69,8 @@ describe("LifeSettings", () => {
         expect(find("life-reproduction-delay")?.textContent).toContain("2 min");
         expect(find("life-max-lifespan")?.textContent).toContain("15 min");
         expect(find("life-hunt-interval")?.textContent).toContain("1 min");
+        expect(find("life-dolphin-reproduction-delay")?.textContent).toContain("5 min");
+        expect(find("life-dolphin-max-lifespan")?.textContent).toContain("1 h");
     });
 
     it("shows the very duration the map holds, even between two steps of its slider", () => {
@@ -81,6 +92,8 @@ describe("LifeSettings", () => {
                 maxLifespan: 900,
                 maxSpeed: 1.5,
                 huntInterval: 60,
+                dolphinReproductionDelay: 300,
+                dolphinMaxLifespan: 3600,
                 drinkInterval: 300,
             },
         });

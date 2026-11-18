@@ -13,6 +13,8 @@ describe("LifeSettings", () => {
             maxLifespan: 900,
             maxSpeed: 1.5,
             huntInterval: 60,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
             drinkInterval: 120,
         });
     });
@@ -36,14 +38,32 @@ describe("LifeSettings", () => {
                 },
             },
         }).execute();
+        // An older client sends no dolphin settings: those of the map (here the defaults) are kept.
         expect(wam.settings?.life).toEqual({
             enabled: true,
             reproductionDelay: 30,
             maxLifespan: 600,
             maxSpeed: 2,
             huntInterval: 20,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
             drinkInterval: 300,
         });
+        await new UpdateWAMSettingCommand(wam, {
+            message: {
+                $case: "updateLifeSettingMessage",
+                updateLifeSettingMessage: {
+                    enabled: true,
+                    reproductionDelay: 30,
+                    maxLifespan: 600,
+                    maxSpeed: 2,
+                    huntInterval: 20,
+                    dolphinReproductionDelay: 5,
+                    dolphinMaxLifespan: 900,
+                },
+            },
+        }).execute();
+        expect(wam.settings?.life).toMatchObject({ dolphinReproductionDelay: 30, dolphinMaxLifespan: 900 });
     });
 
     it("brings values out of bounds back to the bounds", async () => {
@@ -67,6 +87,8 @@ describe("LifeSettings", () => {
             maxLifespan: 86400,
             maxSpeed: 1.5,
             huntInterval: 5,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
             drinkInterval: 20,
         });
     });

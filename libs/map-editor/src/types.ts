@@ -952,6 +952,8 @@ export const DEFAULT_LIFE_SETTINGS = {
     maxLifespan: 900,
     maxSpeed: 1.5,
     huntInterval: 60,
+    dolphinReproductionDelay: 300,
+    dolphinMaxLifespan: 3600,
     drinkInterval: 120,
 } as const;
 export const LIFE_BOUNDS = {
@@ -959,6 +961,8 @@ export const LIFE_BOUNDS = {
     maxLifespan: [30, 86400],
     maxSpeed: [0.2, 6],
     huntInterval: [5, 3600],
+    dolphinReproductionDelay: [30, 7200],
+    dolphinMaxLifespan: [60, 172800],
     drinkInterval: [20, 3600],
 } as const;
 export const LifeSettings = z.object({
@@ -987,6 +991,18 @@ export const LifeSettings = z.object({
         .min(LIFE_BOUNDS.huntInterval[0])
         .max(LIFE_BOUNDS.huntInterval[1])
         .default(DEFAULT_LIFE_SETTINGS.huntInterval),
+    /** How long a dolphin waits between two calves, and a calf before its first, in seconds. */
+    dolphinReproductionDelay: z
+        .number()
+        .min(LIFE_BOUNDS.dolphinReproductionDelay[0])
+        .max(LIFE_BOUNDS.dolphinReproductionDelay[1])
+        .default(DEFAULT_LIFE_SETTINGS.dolphinReproductionDelay),
+    /** The longest life of a dolphin, in seconds (each lives 70 % to 100 % of it). */
+    dolphinMaxLifespan: z
+        .number()
+        .min(LIFE_BOUNDS.dolphinMaxLifespan[0])
+        .max(LIFE_BOUNDS.dolphinMaxLifespan[1])
+        .default(DEFAULT_LIFE_SETTINGS.dolphinMaxLifespan),
     /**
      * How long a land animal (the wandering ones) waits between two drinks at the water of the relief, in seconds.
      * It applies whether the life of the water is on or not.

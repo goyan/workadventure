@@ -32,6 +32,8 @@ const SPRITES: Record<AquaticKind, { rows: string[]; palette: Palette }> = {
     0: { rows: FISH, palette: { b: "#3b82f6", d: "#1d4ed8", w: "#bfdbfe", e: "#0f172a" } },
     1: { rows: FISH, palette: { b: "#f472b6", d: "#db2777", w: "#fce7f3", e: "#0f172a" } },
     2: { rows: DOLPHIN, palette: { b: "#7b93a8", d: "#566d82", w: "#dbe5ee", e: "#0f172a" } },
+    // The female dolphin: the same shape, a touch of pink in its grey.
+    3: { rows: DOLPHIN, palette: { b: "#a892a6", d: "#7c6a80", w: "#f0e2ec", e: "#0f172a" } },
 };
 
 export const aquaticTextureKey = (kind: AquaticKind): string => `aquatic-life:${kind}`;

@@ -1988,6 +1988,18 @@
                   "maximum": 3600,
                   "default": 60
                 },
+                "dolphinReproductionDelay": {
+                  "type": "number",
+                  "minimum": 30,
+                  "maximum": 7200,
+                  "default": 300
+                },
+                "dolphinMaxLifespan": {
+                  "type": "number",
+                  "minimum": 60,
+                  "maximum": 172800,
+                  "default": 3600
+                },
                 "drinkInterval": {
                   "type": "number",
                   "minimum": 20,

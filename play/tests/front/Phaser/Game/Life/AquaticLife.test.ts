@@ -68,9 +68,9 @@ describe("AquaticLife", () => {
 
     it("counts the fish and the dolphins, and ignores a kind it does not know", () => {
         const life = new AquaticLife();
-        life.receive([fish(1, 0, 0, 0), fish(2, 0, 0, 1), fish(3, 0, 0, 2), fish(4, 0, 0, 9)], 0);
-        expect(life.counts()).toEqual({ fish: 2, dolphins: 1 });
-        expect(life.shown(0, false)).toHaveLength(3);
+        life.receive([fish(1, 0, 0, 0), fish(2, 0, 0, 1), fish(3, 0, 0, 2), fish(5, 0, 0, 3), fish(4, 0, 0, 9)], 0);
+        expect(life.counts()).toEqual({ fish: 2, dolphins: 2 });
+        expect(life.shown(0, false)).toHaveLength(4);
     });
 
     it("forgets the dead by itself, even when nothing is drawn", () => {

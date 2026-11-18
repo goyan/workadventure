@@ -3,9 +3,9 @@ export const GLIDE_MS = 1000;
 /** A newborn appears, and a dead animal goes, in this long. */
 export const FADE_MS = 300;
 
-/** The kinds the server tells: 0 a male fish, 1 a female fish, 2 a dolphin. */
-export type AquaticKind = 0 | 1 | 2;
-const isKind = (kind: number): kind is AquaticKind => kind === 0 || kind === 1 || kind === 2;
+/** The kinds the server tells: 0 a male fish, 1 a female fish, 2 a male dolphin, 3 a female dolphin. */
+export type AquaticKind = 0 | 1 | 2 | 3;
+const isKind = (kind: number): kind is AquaticKind => kind === 0 || kind === 1 || kind === 2 || kind === 3;
 
 export interface ShownAnimal {
     id: number;
@@ -108,7 +108,7 @@ export class AquaticLife {
         let dolphins = 0;
         for (const entry of this.entries.values()) {
             if (entry.goneAt !== undefined) continue;
-            if (entry.kind === 2) dolphins++;
+            if (entry.kind >= 2) dolphins++;
             else fish++;
         }
         return { fish, dolphins };

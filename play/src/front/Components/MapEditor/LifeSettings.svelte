@@ -27,12 +27,18 @@
     let maxLifespan = $state(start.maxLifespan);
     let maxSpeed = $state(start.maxSpeed);
     let huntInterval = $state(start.huntInterval);
+    let dolphinReproductionDelay = $state(start.dolphinReproductionDelay);
+    let dolphinMaxLifespan = $state(start.dolphinMaxLifespan);
     let drinkInterval = $state(start.drinkInterval);
 
     // The durations go from seconds to hours: their sliders move by steps that grow with them.
     let reproductionPosition = $state(sliderOfDuration(start.reproductionDelay, ...LIFE_BOUNDS.reproductionDelay));
     let lifespanPosition = $state(sliderOfDuration(start.maxLifespan, ...LIFE_BOUNDS.maxLifespan));
     let huntPosition = $state(sliderOfDuration(start.huntInterval, ...LIFE_BOUNDS.huntInterval));
+    let dolphinReproductionPosition = $state(
+        sliderOfDuration(start.dolphinReproductionDelay, ...LIFE_BOUNDS.dolphinReproductionDelay),
+    );
+    let dolphinLifespanPosition = $state(sliderOfDuration(start.dolphinMaxLifespan, ...LIFE_BOUNDS.dolphinMaxLifespan));
     let drinkPosition = $state(sliderOfDuration(start.drinkInterval, ...LIFE_BOUNDS.drinkInterval));
 
     function save(): void {
@@ -44,6 +50,8 @@
                 maxLifespan,
                 maxSpeed,
                 huntInterval,
+                dolphinReproductionDelay,
+                dolphinMaxLifespan,
                 drinkInterval,
             },
         }).catch((error: unknown) => console.error("The life of the water could not be saved", error));
@@ -126,6 +134,41 @@
             buttonShape="square"
         />
     </div>
+    <div data-testid="life-dolphin-reproduction-delay">
+        <RangeSlider
+            id="terrain-life-dolphin-reproduction-delay"
+            label={$LL.mapEditor.life.dolphinReproductionDelay()}
+            unit=""
+            min={0}
+            max={LIFE_SLIDER_STEPS}
+            step={1}
+            bind:value={dolphinReproductionPosition}
+            valueFormatter={() => formatDuration(dolphinReproductionDelay)}
+            onchange={(position) => {
+                dolphinReproductionDelay = durationAtSlider(position, ...LIFE_BOUNDS.dolphinReproductionDelay);
+                save();
+            }}
+            buttonShape="square"
+        />
+    </div>
+    <div data-testid="life-dolphin-max-lifespan">
+        <RangeSlider
+            id="terrain-life-dolphin-max-lifespan"
+            label={$LL.mapEditor.life.dolphinMaxLifespan()}
+            unit=""
+            min={0}
+            max={LIFE_SLIDER_STEPS}
+            step={1}
+            bind:value={dolphinLifespanPosition}
+            valueFormatter={() => formatDuration(dolphinMaxLifespan)}
+            onchange={(position) => {
+                dolphinMaxLifespan = durationAtSlider(position, ...LIFE_BOUNDS.dolphinMaxLifespan);
+                save();
+            }}
+            buttonShape="square"
+        />
+    </div>
+    <p class="retro-hint m-0">{$LL.mapEditor.life.dolphinHint()}</p>
 {/if}
 <!-- The land animals drink whether the life of the water is on or not. -->
 <span class="retro-title mt-2">{$LL.mapEditor.life.landAnimals()}</span>

@@ -403,8 +403,11 @@ message UpdateLifeSettingMessage {
   // Tiles (32 map pixels) a second.
   double maxSpeed = 4;
   double huntInterval = 5;
+  // The dolphins. Absent from older clients: those of the map are kept.
+  optional double dolphinReproductionDelay = 6;
+  optional double dolphinMaxLifespan = 7;
   // How long a land animal waits between two drinks. Absent from a browser that does not know it: kept as it is.
-  optional double drinkInterval = 6;
+  optional double drinkInterval = 8;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).
@@ -827,6 +830,9 @@ message AquaticLifeStatsMessage {
   uint32 capacity = 9;
   // The prey and the predators over the whole life of the map, oldest first: only for a player who joins the room
   // (each browser then adds what it is told). Empty in the messages of every second.
+  // The dolphins: calves born, and deaths (of age or of hunger).
+  uint32 predatorBirths = 12;
+  uint32 predatorDeaths = 13;
   repeated AquaticLifeSampleMessage history = 10;
   // How far apart the samples of the history are now, in milliseconds.
   double historyStepMs = 11;
@@ -840,7 +846,7 @@ message AquaticLifeSampleMessage {
 
 message AquaticAnimalMessage {
   uint32 id = 1;
-  // 0: male fish, 1: female fish, 2: dolphin.
+  // 0: male fish, 1: female fish, 2: male dolphin, 3: female dolphin.
   uint32 kind = 2;
   // Map pixels.
   sint32 x = 3;

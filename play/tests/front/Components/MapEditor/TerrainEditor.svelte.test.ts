@@ -18,6 +18,8 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
             maxLifespan: 900,
             maxSpeed: 1.5,
             huntInterval: 60,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
             drinkInterval: 120,
         },
     },

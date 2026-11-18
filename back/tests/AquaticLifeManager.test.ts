@@ -29,6 +29,8 @@ function wamWith(enabled: boolean): WAMFileFormat {
                 maxLifespan: 600,
                 maxSpeed: 1.5,
                 huntInterval: 30,
+                dolphinReproductionDelay: 120,
+                dolphinMaxLifespan: 3600,
                 drinkInterval: 120,
             },
         },
@@ -66,7 +68,15 @@ function createHarness({
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         return seed / 0x80000000;
     };
-    const manager = new AquaticLifeManager(room, water, { repository, roomUrl: "room" }, () => clock.now, random);
+    const avatars: { x: number; y: number }[] = [];
+    const manager = new AquaticLifeManager(
+        room,
+        water,
+        { repository, roomUrl: "room" },
+        () => clock.now,
+        random,
+        () => avatars,
+    );
     /** Steps of half a second, the clock moving with them. */
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) {
@@ -74,7 +84,7 @@ function createHarness({
             clock.now += 500;
         }
     };
-    return { manager, wam, sent, repository, water, clock, steps, saved };
+    return { manager, wam, sent, repository, water, clock, steps, saved, avatars };
 }
 
 describe("AquaticLifeManager", () => {
@@ -193,6 +203,8 @@ describe("AquaticLifeManager", () => {
             diedOfAge: 0,
             eaten: 0,
             diedDry: 0,
+            predatorBirths: 0,
+            predatorDeaths: 0,
             habitableBodies: 1,
             populatedBodies: 1,
             // A hundred cells: twelve fish.
@@ -226,6 +238,36 @@ describe("AquaticLifeManager", () => {
         second.manager.mapChanged();
         second.steps(2);
         expect(second.manager.snapshot()?.stats?.history).toHaveLength(1);
+    });
+
+    it("tells the dolphins of a deep lake with their sex: a male and a female", () => {
+        const { manager, sent, steps, water } = createHarness();
+        // 20 × 15 cells under 20 px of water: deep enough for a couple of dolphins.
+        water.grid = gridOf(20, 15);
+        manager.mapChanged();
+        steps(2);
+        const kinds = sent[0].animals.map((animal) => animal.kind).sort();
+        expect(kinds).toEqual([0, 1, 2, 3]);
+    });
+
+    it("makes the fish keep away from an avatar standing in the middle of their pond", () => {
+        const { manager, sent, steps, avatars } = createHarness();
+        manager.mapChanged();
+        steps(2);
+        // The pond is 160 px wide: an avatar in its middle frightens every fish that comes within 96 px.
+        avatars.push({ x: 80, y: 80 });
+        let closest = Infinity;
+        for (let second = 0; second < 30; second++) {
+            steps(2);
+            // The first seconds are for swimming away.
+            if (second < 6) continue;
+            for (const animal of sent.at(-1)?.animals ?? []) {
+                closest = Math.min(closest, Math.hypot(animal.x - 80, animal.y - 80));
+            }
+        }
+        // Without their fear a fish swims right under the avatar (3 px in this run); a newborn may appear a little
+        // closer than its parents fled, then swims away.
+        expect(closest).toBeGreaterThan(30);
     });
 
     it("keeps its totals across a restart, and starts them over when the life is turned off and on", async () => {
@@ -309,6 +351,8 @@ describe("AquaticLifeManager on the water of a room", () => {
                     maxLifespan: 600,
                     maxSpeed: 1.5,
                     huntInterval: 30,
+                    dolphinReproductionDelay: 120,
+                    dolphinMaxLifespan: 3600,
                     drinkInterval: 120,
                 },
             },
