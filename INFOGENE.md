@@ -470,7 +470,11 @@ n'a pas de position à lui (comme un va-et-vient).
   des murs horizontaux, `interiorOpenings`). Les rayons du ciel sont parallèles : un point de la pièce suivante est
   éclairé quand il est à la fois dans la tache de la vitre d'entrée (non découpée à sa pièce) et dans la tache que
   jetterait la vitre intérieure si elle donnait dehors ; la tache de la pièce suivante est l'intersection des deux,
-  découpée à cette pièce. Un soleil bas porte loin et traverse ; un soleil haut s'arrête avant le mur intérieur ; des
+  découpée à cette pièce. Ce calcul exact ne laisse presque rien passer avec des vitres d'une case (les hauteurs de
+  la carte sont petites devant ses distances : le rayon arrive au mur d'en face sous l'appui de la fenêtre) ; quand il
+  ne donne rien, la vitre **relaie** : une lumière qui traverse la pièce jusqu'à moins d'une case du mur intérieur
+  éclaire la vitre qu'elle atteint, et cette vitre jette sa propre tache dans la pièce suivante, sur la largeur que
+  la lumière couvre (`spanAt`). Un soleil bas porte loin et traverse ; un soleil haut s'arrête avant le mur intérieur ; des
   vitres hautes laissent passer plus. Chaque vitre traversée garde 85 % de la lumière ; 3 vitres en enfilade au plus.
   Limites : rien n'est regardé entre les deux vitres (meuble, cloison), murs horizontaux seulement, une porte ouverte
   ne laisse pas passer cette lumière, et la tache reste bornée par la longueur maximale des ombres réglée.

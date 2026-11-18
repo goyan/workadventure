@@ -209,12 +209,49 @@ export interface ThroughPatch {
 }
 
 /**
+ * A light that comes this close to the foot of an inner wall reaches its glass: the walls are drawn standing up over
+ * the last row of the floor before them, and their glass rises above the floor.
+ */
+const PANE_REACH_PX = MAP_LAYER_TILE_SIZE;
+/** A width of glass narrower than this (map pixels) relays nothing. */
+const MIN_RELAY_WIDTH = 2;
+
+/**
+ * The stretch a convex patch covers along the horizontal line `y`: from its left to its right there. When the patch
+ * stops short of the line by less than `tolerance`, the stretch of its edge nearest to the line; undefined further.
+ */
+function spanAt(polygon: readonly Point[], y: number, tolerance: number): { from: number; to: number } | undefined {
+    const ys = polygon.map((point) => point.y);
+    const top = Math.min(...ys);
+    const bottom = Math.max(...ys);
+    if (y < top - tolerance || y > bottom + tolerance) return undefined;
+    const line = Math.min(bottom, Math.max(top, y));
+    const xs: number[] = [];
+    for (let index = 0; index < polygon.length; index++) {
+        const a = polygon[index];
+        const b = polygon[(index + 1) % polygon.length];
+        if (a.y === b.y) {
+            if (Math.abs(a.y - line) < 1e-6) xs.push(a.x, b.x);
+        } else if (line >= Math.min(a.y, b.y) && line <= Math.max(a.y, b.y)) {
+            xs.push(a.x + ((line - a.y) / (b.y - a.y)) * (b.x - a.x));
+        }
+    }
+    return xs.length === 0 ? undefined : { from: Math.min(...xs), to: Math.max(...xs) };
+}
+
+/**
  * The light of the sky on the floors of the rooms: what comes in through each pane that faces it, and what goes on
- * through the panes between two rooms. The rays of the sky are parallel: where one lands tells the whole of its way,
- * so a point of the next room is lit when it lies both in the patch of the pane the light came in through (not cut to
- * its room) and in the patch the inner pane would throw if it gave on the outdoors. A low sun reaches far and goes
- * through; a high one falls short of the inner wall. Each pane crossed takes a little of the light. Nothing between
- * the two panes is looked at: the first room is taken to be clear on the way.
+ * through the panes between two rooms. Two ways on, for the same inner pane:
+ *
+ * - the exact one: the rays of the sky are parallel, so a point of the next room is lit when it lies both in the patch
+ *   of the pane the light came in through (not cut to its room) and in the patch the inner pane would throw if it
+ *   gave on the outdoors. It only happens with tall glass or a very low light: the heights of the map are small
+ *   against its distances;
+ * - the relay, which is what the eye expects: a light that crosses the room up to the inner wall lights the glass it
+ *   reaches, and that glass throws its own patch into the next room, over the width the light covers.
+ *
+ * The exact patch is kept when there is one; the relay otherwise. Each pane crossed takes a little of the light.
+ * Nothing between the two panes is looked at: the first room is taken to be clear on the way.
  */
 export function lightThroughPanes(
     openings: readonly WindowOpening[],
@@ -231,11 +268,23 @@ export function lightThroughPanes(
             const next = inside === "north" ? pane.north : pane.south;
             const near = inside === "north" ? pane.south : pane.north;
             if (near !== patch.room) continue;
+            const strength = patch.strength * GLASS_KEPT_LIGHT;
             const beyond = windowLightPatch({ ...pane, room: next, inside }, light);
             if (!beyond) continue;
-            const polygon = convexIntersection(patch.polygon, beyond);
-            if (polygon.length < 3 || areaOf(polygon) < MIN_PATCH_AREA) continue;
-            follow({ polygon, room: next, strength: patch.strength * GLASS_KEPT_LIGHT }, inside, panes + 1);
+            const exact = convexIntersection(patch.polygon, beyond);
+            if (exact.length >= 3 && areaOf(exact) >= MIN_PATCH_AREA) {
+                follow({ polygon: exact, room: next, strength }, inside, panes + 1);
+                continue;
+            }
+            // The side of the wall the light comes to: its foot from the south, the top of its row from the north.
+            const wallLine = inside === "north" ? pane.footY : pane.footY - MAP_LAYER_TILE_SIZE;
+            const span = spanAt(patch.polygon, wallLine, PANE_REACH_PX);
+            if (!span) continue;
+            const from = Math.max(pane.x, span.from);
+            const to = Math.min(pane.x + pane.width, span.to);
+            if (to - from < MIN_RELAY_WIDTH) continue;
+            const relayed = windowLightPatch({ ...pane, x: from, width: to - from, room: next, inside }, light);
+            if (relayed) follow({ polygon: relayed, room: next, strength }, inside, panes + 1);
         }
     };
     for (const opening of openings) {
