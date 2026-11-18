@@ -30,9 +30,29 @@ describe("waterObjectsOf", () => {
             }),
         );
         expect(objects).toEqual([
-            { cellX: 9, cellY: 21, litresPerMinute: 1200 },
-            { cellX: 1, cellY: 1, litresPerMinute: -300 },
+            // A source pours at its foot, a sink takes a tile and a half around (3 cells), unless a radius is set.
+            { cellX: 9, cellY: 21, litresPerMinute: 1200, radiusCells: 0 },
+            { cellX: 1, cellY: 1, litresPerMinute: -300, radiusCells: 3 },
         ]);
+        const sized = waterObjectsOf(
+            wam({
+                wide: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "s", type: "waterSourcePropertyData", flow: 1, radius: 2 }],
+                },
+                deep: {
+                    x: 0,
+                    y: 0,
+                    prefabRef,
+                    properties: [{ id: "k", type: "waterSinkPropertyData", flow: 1, radius: 4.5 }],
+                },
+            }),
+        );
+        // A radius is set in tiles: two cells a tile.
+        expect(sized.map((object) => object.radiusCells)).toEqual([4, 9]);
+        expect(stepInputOf(water, 0, sized, 1).flows.map((flow) => flow.radius)).toEqual([4, 9]);
         expect(waterObjectsOf(undefined)).toEqual([]);
     });
 });
@@ -61,8 +81,8 @@ describe("stepInputOf", () => {
 
     it("pours the sources and drains the sinks by their flow", () => {
         const objects = [
-            { cellX: 2, cellY: 3, litresPerMinute: 600 },
-            { cellX: 5, cellY: 5, litresPerMinute: -120 },
+            { cellX: 2, cellY: 3, litresPerMinute: 600, radiusCells: 0 },
+            { cellX: 5, cellY: 5, litresPerMinute: -120, radiusCells: 3 },
         ];
         // One second: 10 litres in, 2 litres out.
         const input = stepInputOf(water, 0, objects, 1);
@@ -75,8 +95,13 @@ describe("stepInputOf", () => {
     });
 
     it("goes as many times faster as the map says, and survives broken settings", () => {
-        const fast = stepInputOf({ ...water, speed: 60 }, 10, [{ cellX: 0, cellY: 0, litresPerMinute: 600 }], 60);
-        const real = stepInputOf(water, 10, [{ cellX: 0, cellY: 0, litresPerMinute: 600 }], 3600);
+        const fast = stepInputOf(
+            { ...water, speed: 60 },
+            10,
+            [{ cellX: 0, cellY: 0, litresPerMinute: 600, radiusCells: 0 }],
+            60,
+        );
+        const real = stepInputOf(water, 10, [{ cellX: 0, cellY: 0, litresPerMinute: 600, radiusCells: 0 }], 3600);
         expect(fast.rainPx).toBeCloseTo(real.rainPx);
         expect(fast.flows[0].px).toBeCloseTo(real.flows[0].px);
         const broken = stepInputOf(

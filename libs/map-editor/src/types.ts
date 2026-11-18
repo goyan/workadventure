@@ -339,8 +339,11 @@ export const SwitchTargets = z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("zone") }),
 ]);
 
-/** The most a source gives or a sink takes, in litres a minute: 2000 cubic metres, enough to fill a lake fast. */
-export const MAX_WATER_FLOW = 2_000_000;
+/** The most a source gives or a sink takes, in litres a minute: 1000 cubic metres a second, a large river. */
+export const MAX_WATER_FLOW = 60_000_000;
+/** The largest radius a source pours over or a sink takes from, in tiles, and the radius of a sink that sets none. */
+export const MAX_WATER_RADIUS_TILES = 10;
+export const DEFAULT_SINK_RADIUS_TILES = 1.5;
 
 /**
  * Where the water comes out of (or goes into) the object, from the corner of its image, in pixels: its foot, written
@@ -358,6 +361,8 @@ const WaterAnchor = {
 export const WaterSourcePropertyData = PropertyBase.extend({
     type: z.literal("waterSourcePropertyData"),
     flow: z.number().min(0).max(MAX_WATER_FLOW),
+    /** The radius of the disc the water is poured over, in tiles: at the foot of the object when absent. */
+    radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
     ...WaterAnchor,
 });
 
@@ -365,6 +370,8 @@ export const WaterSourcePropertyData = PropertyBase.extend({
 export const WaterSinkPropertyData = PropertyBase.extend({
     type: z.literal("waterSinkPropertyData"),
     flow: z.number().min(0).max(MAX_WATER_FLOW),
+    /** The radius of the disc the water is taken from, in tiles: DEFAULT_SINK_RADIUS_TILES when absent. */
+    radius: z.number().min(0).max(MAX_WATER_RADIUS_TILES).optional(),
     ...WaterAnchor,
 });
 
@@ -647,6 +654,8 @@ export const EntityRawPrefab = z.object({
         .object({
             kind: z.enum(["source", "sink"]),
             flow: z.number().min(0),
+            /** The radius the object starts with, in tiles (see the water properties). */
+            radius: z.number().min(0).optional().catch(undefined),
             anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
         })
         .optional()

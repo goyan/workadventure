@@ -383,6 +383,8 @@ const mapEditor: BaseTranslation = {
             less: "Lower the flow",
             more: "Raise the flow",
             unit: "Unit of the flow",
+            radius: "Radius (tiles)",
+            radiusHint: "The water is poured over this whole disc. At 0 it comes out at the foot of the object.",
         },
         waterSink: {
             label: "Sink (drain)",
@@ -393,6 +395,9 @@ const mapEditor: BaseTranslation = {
             less: "Lower the flow",
             more: "Raise the flow",
             unit: "Unit of the flow",
+            radius: "Radius (tiles)",
+            radiusHint:
+                "The sink takes the water of this disc; the water further away has to run to it. The wider, the more it drains.",
         },
         lamp: {
             label: "Light zone",

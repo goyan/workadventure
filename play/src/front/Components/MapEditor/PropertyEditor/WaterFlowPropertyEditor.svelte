@@ -1,5 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
+    import { DEFAULT_SINK_RADIUS_TILES, MAX_WATER_RADIUS_TILES } from "@workadventure/map-editor";
     import type { EntityPrefab, WaterSinkPropertyData, WaterSourcePropertyData } from "@workadventure/map-editor";
     import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
     import {
@@ -80,6 +81,14 @@
         onchange?.();
     }
 
+    // The disc a source pours over or a sink takes from, in tiles: a source pours at its foot until one is set.
+    let radius = $state(property.radius ?? (property.type === "waterSinkPropertyData" ? DEFAULT_SINK_RADIUS_TILES : 0));
+
+    function setRadius(value: number): void {
+        property.radius = value;
+        onchange?.();
+    }
+
     function step(direction: 1 | -1): void {
         setFlow(steppedFlow(shown, direction, waterFlowUnit(unit).first));
     }
@@ -154,6 +163,21 @@
                     buttonShape="square"
                     wrapperMargins={false}
                 />
+            </div>
+            <div class="mt-3" data-testid="water-flow-radius">
+                <RangeSlider
+                    id="water-flow-radius-{property.id}"
+                    label={texts.radius()}
+                    unit=""
+                    min={0}
+                    max={MAX_WATER_RADIUS_TILES}
+                    step={0.5}
+                    bind:value={radius}
+                    onchange={setRadius}
+                    buttonShape="square"
+                    wrapperMargins={false}
+                />
+                <p class="m-0 mt-1 text-xs text-white/60">{texts.radiusHint()}</p>
             </div>
             <p class="m-0 mt-2 text-xs text-white/60">{texts.real()}</p>
         </span>

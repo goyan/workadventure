@@ -23,11 +23,13 @@ const DRY_PX = 0.01;
  */
 const FLOW_SHARE = 0.2;
 /**
- * How far around its foot a sink takes water, in cells (a tile and a half): it empties what is next to it, and the
- * water further away has to run to it. A sink never dries a lake from afar.
+ * How far around its foot a sink takes water when it says nothing, in cells (a tile and a half): it empties what is
+ * next to it, and the water further away has to run to it. A sink never dries a lake from afar.
  */
 const SINK_RADIUS_CELLS = 3;
-const SINK_REACH_CELLS = (2 * SINK_RADIUS_CELLS + 1) ** 2;
+/** The largest radius of a source or a sink, in cells (ten tiles), and the cells of the disc it then covers. */
+const MAX_RADIUS_CELLS = 20;
+const MAX_DISC_CELLS = (2 * MAX_RADIUS_CELLS + 1) ** 2;
 /** A source pours its water of one step in parcels of this many pixels at least, and in this many parcels at most. */
 const PARCEL_PX = 1;
 const MAX_PARCELS = 256;
@@ -104,8 +106,11 @@ export interface WaterStepInput {
     evaporationPx: number;
     /** Water the flat ground drinks from each wet cell that is not dug. */
     absorptionPx: number;
-    /** Sources (positive) and sinks (negative), each at a cell of the map. */
-    flows: readonly { cellX: number; cellY: number; px: number }[];
+    /**
+     * Sources (positive) and sinks (negative), each at a cell of the map. `radius` is the disc, in cells, a source
+     * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent).
+     */
+    flows: readonly { cellX: number; cellY: number; px: number; radius?: number }[];
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -152,7 +157,7 @@ export class WaterGrid {
         this.blocked = new Uint8Array(size);
         this.depth = new Float32Array(size);
         this.next = new Float32Array(size);
-        this.queue = new Int32Array(Math.min(size, SINK_REACH_CELLS));
+        this.queue = new Int32Array(Math.min(size, MAX_DISC_CELLS));
         this.seen = new Uint32Array(size);
         for (let row = 0; row < this.bounds.height; row++) {
             for (let column = 0; column < this.bounds.width; column++) {
@@ -235,10 +240,10 @@ export class WaterGrid {
             }
             if (flow.px > 0) {
                 tally.sourcesPx += flow.px;
-                tally.lostPx += flow.px - this.pour(index, flow.px);
+                tally.lostPx += flow.px - this.pour(index, flow.px, radiusOf(flow.radius, 0));
                 tally.moved = true;
             } else {
-                const taken = this.drain(index, -flow.px);
+                const taken = this.drain(index, -flow.px, radiusOf(flow.radius, SINK_RADIUS_CELLS));
                 tally.sinksPx += taken;
                 // A sink with nothing to take does not keep a grid at rest awake.
                 if (taken > 0) tally.moved = true;
@@ -294,15 +299,18 @@ export class WaterGrid {
      * flooded when the hollows are full. Returns what stayed in the grid: a parcel that runs off the edge, or finds
      * the water at its highest level, is lost.
      */
-    private pour(start: number, px: number): number {
+    private pour(start: number, px: number, radius: number): number {
         const { width, height } = this.bounds;
+        // The cells the source pours over: its own, or those of its disc, each in turn.
+        const starts = radius > 0 ? this.discAround(start, radius) : undefined;
+        const spread = starts ? starts.length : 1;
         const depth = this.depth;
         const ground = this.ground;
-        const parcels = Math.min(MAX_PARCELS, Math.max(1, Math.ceil(px / PARCEL_PX)));
+        const parcels = Math.min(MAX_PARCELS, Math.max(1, Math.ceil(px / PARCEL_PX), Math.min(spread, MAX_PARCELS)));
         const size = px / parcels;
         let kept = 0;
         for (let parcel = 0; parcel < parcels; parcel++) {
-            let index = start;
+            let index = starts ? starts[Math.floor((parcel * spread) / parcels)] : start;
             let left = size;
             for (let move = 0; move < PARCEL_REACH_CELLS && left > 0; move++) {
                 const surface = ground[index] + depth[index];
@@ -354,13 +362,33 @@ export class WaterGrid {
         return kept;
     }
 
+    /** The cells of the grid within `radius` cells of a cell, walls left out, the cell itself first. */
+    private discAround(centre: number, radius: number): number[] {
+        const { width, height } = this.bounds;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        const reach = Math.floor(radius);
+        const cells = [centre];
+        for (let down = -reach; down <= reach; down++) {
+            for (let away = -reach; away <= reach; away++) {
+                if ((away === 0 && down === 0) || away * away + down * down > radius * radius) continue;
+                const x = column + away;
+                const y = row + down;
+                if (x < 0 || y < 0 || x >= width || y >= height) continue;
+                const index = y * width + x;
+                if (!this.blocked[index]) cells.push(index);
+            }
+        }
+        return cells;
+    }
+
     /**
      * Takes up to `wanted` pixels of water for a sink standing at a cell: the water of its cell first, then the
-     * water that would run to it within a tile and a half, nearest first (from cell to cell, never down to a lower
+     * water that would run to it within its radius (cells), nearest first (from cell to cell, never down to a lower
      * surface: the water below a sink stays). So a sink takes what a few cells hold and receive, not only what
      * happens to creep into one cell, and the water further away comes to it by running. Returns what it took.
      */
-    private drain(start: number, wanted: number): number {
+    private drain(start: number, wanted: number, radius: number): number {
         const { width, height } = this.bounds;
         const depth = this.depth;
         const queue = this.queue;
@@ -405,7 +433,7 @@ export class WaterGrid {
                 if (neighbour < 0 || this.seen[neighbour] === this.search) continue;
                 const away = (neighbour % width) - startColumn;
                 const down = Math.floor(neighbour / width) - startRow;
-                if (away * away + down * down > SINK_RADIUS_CELLS * SINK_RADIUS_CELLS) continue;
+                if (away * away + down * down > radius * radius) continue;
                 if (this.blocked[neighbour] || depth[neighbour] <= DRY_PX) continue;
                 if (this.ground[neighbour] + depth[neighbour] < surface - LEVEL_PX) continue;
                 this.seen[neighbour] = this.search;
@@ -470,4 +498,10 @@ export class WaterGrid {
         this.next = depth;
         return moved;
     }
+}
+
+/** The radius of a source or a sink in cells, within its bounds; `fallback` for one that gives none. */
+function radiusOf(radius: number | undefined, fallback: number): number {
+    if (radius === undefined || !Number.isFinite(radius) || radius < 0) return fallback;
+    return Math.min(MAX_RADIUS_CELLS, radius);
 }

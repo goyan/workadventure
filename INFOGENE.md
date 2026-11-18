@@ -2114,7 +2114,7 @@ panneau : profondeur maximale (1 à 8 cases, 2 par défaut), ruissellement (10 p
 dix fois la surface du creux), évaporation par temps sec (0,2 mm/h par défaut), absorption du sol plat (5 mm/h),
 **vitesse de l'eau** (60 par défaut : une minute pour une heure ; à 1, comme en vrai, une pluie remplit un lac en
 des heures). **Source** et **puits** sont des
-propriétés d'objet (`waterSourcePropertyData`, `waterSinkPropertyData`, débit enregistré en litres par minute, réglé en m³/h, de 0 à 120 000), à ajouter à
+propriétés d'objet (`waterSourcePropertyData`, `waterSinkPropertyData`, débit enregistré en litres par minute, réglé en m³/h, L/s, L/min ou m³/s, de 0 à 1 000 m³/s), à ajouter à
 n'importe quel objet depuis son panneau : une source verse à son pied, un puits retire l'eau qui arrive au sien. Le
 pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
 `Terrain/WaterAnchor.ts`), car `back` ne connaît pas la taille des objets.
@@ -2135,8 +2135,9 @@ retiré : l'eau y apparaissait au point le plus bas de toute la région creusée
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau
-d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire l'eau à une
-case et demie autour de son pied (l'eau plus loin doit couler jusqu'à lui). Une entrée de catalogue peut porter
+d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire l'eau d'un disque autour de son pied (l'eau plus loin doit couler jusqu'à lui). Ce rayon se règle
+par objet, en cases (`radius`, de 0 à 10) : une case et demie par défaut pour un puits ; pour une source, 0 (au pied)
+ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 `waterFlow: { kind: "source" | "sink", flow (m³/h), anchor }` : l'objet posé est alors une source ou un puits
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).

@@ -35,8 +35,13 @@ describe("newWaterProperties", () => {
         ]);
     });
 
+    it("gives the object the radius of its catalogue entry, in tiles", () => {
+        const [property] = newWaterProperties({ waterFlow: { kind: "sink", flow: 600, radius: 2.5 } }, () => "id");
+        expect(property).toMatchObject({ radius: 2.5 });
+    });
+
     it("never asks more than the largest flow", () => {
         const [property] = newWaterProperties({ waterFlow: { kind: "sink", flow: 1e12 } }, () => "id");
-        expect(property).toMatchObject({ flow: 2_000_000 });
+        expect(property).toMatchObject({ flow: 60_000_000 });
     });
 });

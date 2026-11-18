@@ -139,16 +139,42 @@ describe("WaterFlowPropertyEditor", () => {
         slider.dispatchEvent(new Event("input", { bubbles: true }));
         slider.dispatchEvent(new Event("change", { bubbles: true }));
         flushSync();
-        expect(property.flow).toBe(2_000_000);
-        expect(byTestId<HTMLInputElement>("water-flow-value").value).toBe("120000");
+        expect(property.flow).toBe(60_000_000);
+        expect(byTestId<HTMLInputElement>("water-flow-value").value).toBe("3600000");
         expect(onchange).toHaveBeenCalled();
+    });
+
+    it("sets the radius of a sink in tiles, from a tile and a half when none was set", () => {
+        const property: WaterSinkPropertyData = {
+            id: "k",
+            type: "waterSinkPropertyData",
+            flow: 500,
+            anchorX: 48,
+            anchorY: 144,
+        };
+        const onchange = render(property);
+        const slider = byTestId("water-flow-radius").querySelector<HTMLInputElement>('input[type="range"]');
+        if (!slider) throw new Error("No radius slider");
+        expect(Number(slider.value)).toBe(1.5);
+        expect(Number(slider.max)).toBe(10);
+        slider.value = "4";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(property.radius).toBe(4);
+        expect(onchange).toHaveBeenCalled();
+    });
+
+    it("sets the radius of a source from nothing: it pours at its foot until one is set", () => {
+        render(placed(1000));
+        const slider = byTestId("water-flow-radius").querySelector<HTMLInputElement>('input[type="range"]');
+        expect(Number(slider?.value)).toBe(0);
     });
 
     it("never saves more than the largest flow, nor a negative one", () => {
         const property = placed(1000);
         render(property);
         type("999999999");
-        expect(property.flow).toBe(2_000_000);
+        expect(property.flow).toBe(60_000_000);
         type("-4");
         expect(property.flow).toBe(0);
     });

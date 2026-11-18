@@ -29,7 +29,7 @@ describe("water flow units", () => {
         expect(flowFromUnit(0.1, "m3s")).toBeCloseTo(6000, 6);
         expect(flowFromUnit(-5, "ls")).toBe(0);
         expect(flowFromUnit(Number.NaN, "ls")).toBe(0);
-        expect(flowFromUnit(1e9, "m3s")).toBe(2_000_000);
+        expect(flowFromUnit(1e9, "m3s")).toBe(60_000_000);
     });
 
     it("steps up and down by the size of the value: units under 10, tens under 100, hundreds under 1000", () => {
@@ -55,10 +55,10 @@ describe("water flow units", () => {
 
     it("sets a flow with a slider that is fine near nothing and coarse near the largest flow", () => {
         expect(flowAtSlider(0)).toBe(0);
-        expect(flowAtSlider(WATER_FLOW_SLIDER_STEPS)).toBe(2_000_000);
-        // The middle of the slider is far under the middle of the range: about a thousandth of it.
+        expect(flowAtSlider(WATER_FLOW_SLIDER_STEPS)).toBe(60_000_000);
+        // The middle of the slider is far under the middle of the range: a few thousandths of it at most.
         expect(flowAtSlider(WATER_FLOW_SLIDER_STEPS / 2)).toBeGreaterThan(500);
-        expect(flowAtSlider(WATER_FLOW_SLIDER_STEPS / 2)).toBeLessThan(5000);
+        expect(flowAtSlider(WATER_FLOW_SLIDER_STEPS / 2)).toBeLessThan(50_000);
         // It never goes down when the slider goes up, and a flow finds its place back on it.
         let before = 0;
         for (let position = 1; position <= WATER_FLOW_SLIDER_STEPS; position++) {
