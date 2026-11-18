@@ -800,6 +800,21 @@ message TerrainWaterMessage {
   optional TerrainWaterStatsMessage stats = 8;
 }
 
+// The animals living in the water of the relief of a room (fish, dolphins), told by the server once a second: all
+// of them each time (a few bytes each, 300 at most). A new id is a birth, a missing one a death.
+message AquaticLifeMessage {
+  repeated AquaticAnimalMessage animals = 1;
+}
+
+message AquaticAnimalMessage {
+  uint32 id = 1;
+  // 0: male fish, 1: female fish, 2: dolphin.
+  uint32 kind = 2;
+  // Map pixels.
+  sint32 x = 3;
+  sint32 y = 4;
+}
+
 // What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
 // of the map, and what it holds: for the dashboard of the relief tool.
 message TerrainWaterStatsMessage {
@@ -1427,6 +1442,7 @@ message SubMessage {
     DuckRushEventMessage duckRushEventMessage = 33;
     EntityStateMessage entityStateMessage = 34;
     TerrainWaterMessage terrainWaterMessage = 35;
+    AquaticLifeMessage aquaticLifeMessage = 36;
   }
 }
 
@@ -1527,6 +1543,8 @@ message RoomJoinedMessage {
   repeated EntityStateMessage entityState = 20;
   // The water of the relief (its whole state), for a player who joins the room. Absent on a map without water.
   optional TerrainWaterMessage terrainWater = 22;
+  // The animals of the water of the relief, for a player who joins the room. Absent on a map without any.
+  optional AquaticLifeMessage aquaticLife = 23;
 }
 
 message WebRtcStartMessage {
@@ -2086,6 +2104,7 @@ message SubToPusherRoomMessage {
     AreaPropertyVariableMessage areaPropertyVariableMessage = 8;
     EntityStateMessage entityStateMessage = 10;
     TerrainWaterMessage terrainWaterMessage = 11;
+    AquaticLifeMessage aquaticLifeMessage = 12;
   }
 }
 

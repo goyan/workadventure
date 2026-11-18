@@ -51,6 +51,7 @@ import type {
     UpdateWAMSettingsMessage,
     ModifyTerrainMessage,
     TerrainWaterMessage,
+    AquaticLifeMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
     UserLeftMessage as UserLeftMessageTsProto,
@@ -242,6 +243,8 @@ export class RoomConnection implements RoomConnection {
     /** The water of the relief: what changed since the state before, once a second while it moves. */
     private readonly _terrainWaterMessageStream = new Subject<TerrainWaterMessage>();
     public readonly terrainWaterMessageStream = this._terrainWaterMessageStream.asObservable();
+    private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
+    public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
     private readonly _entityMessageStream = new Subject<EntityMessageTsProto>();
     public readonly entityMessageStream = this._entityMessageStream.asObservable();
     private readonly _editMapCommandMessageStream = new Subject<EditMapCommandMessage>();
@@ -470,6 +473,10 @@ export class RoomConnection implements RoomConnection {
                                     this._terrainWaterMessageStream.next(subMessage.terrainWaterMessage);
                                     break;
                                 }
+                                case "aquaticLifeMessage": {
+                                    this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
+                                    break;
+                                }
                                 case "entityMessage": {
                                     this._entityMessageStream.next(subMessage.entityMessage);
                                     break;
@@ -675,6 +682,7 @@ export class RoomConnection implements RoomConnection {
                         areaPropertyVariables,
                         entityStates: roomJoinedMessage.entityState ?? [],
                         terrainWater: roomJoinedMessage.terrainWater,
+                        aquaticLife: roomJoinedMessage.aquaticLife,
                         applications: applications,
                     } as RoomJoinedMessageInterface);
                     this.isRoomJoined = true;
@@ -2385,6 +2393,7 @@ export class RoomConnection implements RoomConnection {
         this._areaPropertyVariableMessageStream.complete();
         this._entityStateMessageStream.complete();
         this._terrainWaterMessageStream.complete();
+        this._aquaticLifeMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();
