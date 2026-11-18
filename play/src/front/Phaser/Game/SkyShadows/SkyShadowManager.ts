@@ -34,6 +34,8 @@ export interface SkyShadowManagerOptions {
     swayVersion?: () => number | undefined;
     /** False in the map editor, or with the shadows turned off by this person. */
     enabled: () => boolean;
+    /** Whether the door that is this object of the map is open now: the light of the sky comes in through it then. */
+    isDoorOpen?: (entityId: string) => boolean;
 }
 
 /** The scene as the shadows need it (a GameScene fits). */

@@ -465,6 +465,13 @@ n'a pas de position à lui (comme un va-et-vient).
   « Décroissance réelle de la lumière » (`realFalloffStore`, coupé par défaut) dessine la lumière des lampes et des
   torches selon cette loi (`realLightFalloff` : plus forte au pied, longue traîne faible, environ 23 % à mi-portée
   d'une lampe de 6 cases au lieu de 56 %) ; porté par le code de partage (38 réglages).
+- **Lumière du ciel par une porte ouverte** : une porte horizontale de l'outil Carte, pleine ou vitrée, laisse entrer
+  la lumière du soleil ou de la lune **tant qu'elle est ouverte**, sur ses deux cases de large et depuis le sol ; une
+  porte vitrée fermée reste une vitre, une porte pleine fermée ne laisse rien passer. Vaut pour une porte qui donne
+  dehors et pour une porte entre deux pièces (la lumière continue, comme par une fenêtre intérieure, **sans** les 15 %
+  perdus par un verre). L'état des portes est relu deux fois par seconde au plus (`SkyWindowLightManager.readWalls`,
+  option `isDoorOpen`) : la tache apparaît ou disparaît une demi-seconde au plus après la porte. Portes verticales
+  non concernées, comme les fenêtres.
 - **Lumière du ciel à travers deux fenêtres** (`SkyShadows/SkyWindowLight.ts`, `lightThroughPanes`) : la lumière du
   soleil ou de la lune entrée par une vitre continue par les vitres **entre deux pièces** (fenêtres et portes vitrées
   des murs horizontaux, `interiorOpenings`). Les rayons du ciel sont parallèles : un point de la pièce suivante est
