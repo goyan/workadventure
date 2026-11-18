@@ -236,7 +236,13 @@ export class WanderingCharactersManager {
             } else if (character.nest.x !== animal.nest.x || character.nest.y !== animal.nest.y) {
                 character.nest = animal.nest;
                 character.schedule.setNest(animal.nest);
-                character.hasPose = false;
+                // Its nest moved (the water took it, or gave it back): a character that is shown runs to its new
+                // walk; one that is not appears there.
+                if (character.hasPose && !character.lead) {
+                    character.fleeing = true;
+                } else {
+                    character.hasPose = false;
+                }
             }
         }
         if (removed) {

@@ -353,7 +353,10 @@ describe("WanderSchedule, drinking", () => {
     });
     const drinkLegs = (entityId: string, interval: number, count: number): number[] => {
         const legs: number[] = [];
-        for (let leg = 1000; legs.length < count; leg++) if (isDrinkLeg(entityId, leg, interval)) legs.push(leg);
+        for (let leg = 1000; legs.length < count && leg < 1100; leg++) {
+            if (isDrinkLeg(entityId, leg, interval)) legs.push(leg);
+        }
+        if (legs.length < count) throw new Error("No leg to drink");
         return legs;
     };
 

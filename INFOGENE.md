@@ -1442,7 +1442,8 @@ par son maître ne change pas.
 - **Ils n'entrent pas dans l'eau** (`WanderWater.ts`, pur) : une case de 32 px est mouillée dès qu'une de ses quatre
   cellules de relief porte 2 px d'eau (`WET_ON_PX`), et le reste jusqu'à moins de 1 px (`WET_OFF_PX`) : une rive qui
   oscille ne bouge pas. L'eau lue est le dernier état envoyé par le serveur (`TerrainWater.settledDepthAt`), sans le
-  glissement d'affichage : la même pour tous. Les cases mouillées sont fermées dans la grille des promeneurs
+  glissement d'affichage : la même eau pour tous (mais voir les limites : entre 1 et 2 px, la case dépend de ce que
+  le navigateur a vu avant). Les cases mouillées sont fermées dans la grille des promeneurs
   (`WanderingCharactersManager.refreshMap`), relue au plus deux fois par seconde et seulement si le serveur a annoncé
   un nouvel état.
 - **Ils fuient l'eau qui monte** : quand des cases deviennent mouillées ou sèches, seuls les animaux dont le territoire
@@ -1452,16 +1453,21 @@ par son maître ne change pas.
   par animal ; destination = une des 6 rives les plus proches du nid dans son rayon (case sèche et libre qui touche
   une case mouillée par un côté, sans mur entre les deux, `shoresOf`), la première atteignable. Arrivé, il se tourne
   vers l'eau (`WanderPose.drinking`). Tout se déduit de l'identifiant, du numéro d'étape et de la carte : même rive
-  pour tous, sans réseau. Sans eau à portée, promenade habituelle.
+  pour tous ceux qui voient les mêmes cases mouillées, sans réseau. Sans eau à portée, promenade habituelle.
 - **Animation** (`WanderDrink.ts`, pur) : aucune planche n'a d'image « boire » ; l'image debout s'incline vers l'eau
   (de profil, 16°) ou s'accroupit (de face ou de dos), la tête va et vient d'un pixel, puis l'animal se redresse un
   quart du cycle de 2,4 s. Pose fixe en mouvement réduit.
 - **Réglage** : `settings.life.drinkInterval` (secondes, 20 à 3600, 120 par défaut), curseur « Intervalle entre deux
   boissons » de l'outil Vie, actif même quand les poissons sont coupés. Champ facultatif `drinkInterval = 6` de
   `UpdateLifeSettingMessage` : un navigateur plus ancien qui enregistre les autres réglages laisse celui-ci tel quel.
-- **Limites** : la fuite va en ligne droite (elle peut couper un coin d'eau ou d'objet) ; un animal dont le nid est
-  sous l'eau y reste ; une carte entièrement inondée fige les animaux ; l'eau des piscines était déjà évitée, on n'y
-  boit pas ; pas de ronds dans l'eau.
+- **Nids** : le nid d'un animal de la jungle est la case libre la plus proche de son arbre ; une case mouillée n'est
+  pas libre, donc l'eau qui prend le nid le déplace, et l'animal court au nouveau (`setFreeCharacters`). Un animal
+  posé sur la carte garde son nid, même sous l'eau.
+- **Limites** : la fuite va en ligne droite (elle peut couper un coin d'eau ou d'objet) ; un animal posé dont le nid
+  est sous l'eau y reste ; une carte entièrement inondée fige les animaux ; une case entre 1 et 2 px d'eau est
+  mouillée pour un navigateur qui l'a vue plus haute et sèche pour un navigateur arrivé depuis : deux joueurs peuvent
+  alors voir un animal à deux endroits, jusqu'à ce que l'eau monte ou descende ; l'eau des piscines était déjà
+  évitée, on n'y boit pas ; pas de ronds dans l'eau ; seuil de 2 px choisi sans mesure.
 
 ### Gobeur (retiré)
 

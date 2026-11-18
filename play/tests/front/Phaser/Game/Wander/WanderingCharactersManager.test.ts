@@ -318,6 +318,23 @@ describe("WanderingCharactersManager", () => {
             expect(manager.freeCharacterPose(LION.id)).toEqual({ x: 80, y: 48, moving: false });
         });
 
+        it("a shown character whose nest moved runs to its new walk instead of vanishing", () => {
+            const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+            const scene = makeScene([], undefined, { withDuck: false });
+            manager = scene.manager;
+            const map = manager.getWanderMap();
+            manager.setFreeCharacters([LION], map);
+            scene.update();
+            const start = manager.freeCharacterPose(LION.id);
+            if (!start) throw new Error("The lion is not shown");
+            manager.setFreeCharacters([{ ...LION, nest: { x: start.x + 160, y: start.y } }], map);
+            clock.mockReturnValue(1_000_050);
+            scene.update();
+            expect(scene.sprite.visible).toBe(true);
+            expect(manager.freeCharacterPose(LION.id)?.x).toBeCloseTo(start.x + 9.6, 5);
+            clock.mockRestore();
+        });
+
         it("free characters are hidden in the map editor", () => {
             const scene = makeScene([], undefined, { withDuck: false });
             manager = scene.manager;
