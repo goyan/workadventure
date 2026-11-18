@@ -2149,6 +2149,15 @@ fois par tranche de 4 de la vitesse de la carte (`flowSteps`, 15 à la vitesse 6
 qu'une fois par pas : la faire avancer partout aussi souvent coûterait trop au serveur (mesuré : 37 ms par pas pour
 15 avancées sur 190 000 cellules mouillées, contre 2,5 ms pour une).
 
+**Eau à grande échelle.** Entre voisines, une cellule ne peut pas donner plus d'un quart de la différence de niveau
+sans que le calcul oscille : l'eau n'avance donc que d'une cellule par pas. Sur une carte accélérée (`flowSteps` > 1),
+un pas sur deux, chaque cellule échange aussi avec celles situées 4 et 16 cellules plus loin sur sa ligne puis sur sa
+colonne (`flowFar`), un quart de leur différence, à condition qu'une étendue d'eau ininterrompue les relie : ni mur,
+ni sol sec, ni simple film d'eau (moins de 2 px) entre elles. L'eau ne quitte jamais son étendue ; elle fait plus tôt
+ce que plusieurs pas de cellule en cellule auraient fait. Un lac se met à niveau et alimente un puits lointain bien
+plus vite. Mesuré sur une grille de 491 × 407 (machine chargée, ordre de grandeur) : environ 4 ms de plus par pas,
+et douze puits puissants évacuent 13 fois plus d'eau qu'avant ces deux changements.
+
 **Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
 (`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
 l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient
