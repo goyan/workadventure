@@ -8,7 +8,7 @@ import {
 } from "../types";
 import type { WAMFileFormat, WaterSettings } from "../types";
 import { LITRES_PER_M3, metresOf } from "./Scale";
-import { CELL_LITRES_PER_PX } from "./WaterGrid";
+import { CELL_LITRES_PER_PX, MAX_FLOW_STEPS } from "./WaterGrid";
 import type { WaterStepInput, WaterTally } from "./WaterGrid";
 
 /** The water of a map is stepped this often: ten times a second, so that it is seen running. */
@@ -52,6 +52,9 @@ export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined)
     return objects;
 }
 
+/** The water moves once more a step for each of these many times the map goes faster than reality. */
+const SPEED_PER_FLOW_STEP = 4;
+
 /** Pixels of water a millimetre of water makes. */
 const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
 
@@ -74,6 +77,9 @@ export function stepInputOf(
         rainPx: rain * hours * PX_PER_MM * (1 + figure(settings.runoff)),
         evaporationPx: rain > 0 ? 0 : figure(settings.evaporation) * hours * PX_PER_MM,
         absorptionPx: figure(settings.absorption) * hours * PX_PER_MM,
+        // A map that goes faster than reality gives its water more moves a step towards its sinks: a quarter of
+        // its speed.
+        flowSteps: Math.max(1, Math.min(MAX_FLOW_STEPS, Math.round(figure(settings.speed, 1) / SPEED_PER_FLOW_STEP))),
         flows: objects
             .filter((object) => Number.isFinite(object.litresPerMinute) && hours > 0)
             .map((object) => ({

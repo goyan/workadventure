@@ -7,7 +7,7 @@ import { GameSceneUserInputHandler } from "../../../../src/front/Phaser/UserInpu
 import { UserInputManager } from "../../../../src/front/Phaser/UserInput/UserInputManager";
 import { mapEditorModeStore } from "../../../../src/front/Stores/MapEditorStore";
 import { releaseNotesVisibleStore } from "../../../../src/front/Stores/ReleaseNotesStore";
-import { karaokeInputFocusStore } from "../../../../src/front/Stores/UserInputStore";
+import { inputFormFocusStore, karaokeInputFocusStore } from "../../../../src/front/Stores/UserInputStore";
 import { loadLocaleAsync } from "../../../../src/i18n/i18n-util.async";
 import { setLocale } from "../../../../src/i18n/i18n-svelte";
 import type { NerfManager } from "../../../../src/front/Phaser/Game/Nerf/NerfManager";
@@ -106,6 +106,50 @@ describe("UserInputManager wheel and Nerf events", () => {
         manager.destroy();
         mapEditorModeStore.set(false);
         vi.restoreAllMocks();
+    });
+
+    describe("after a control of a panel was used", () => {
+        // What MainLayout does for the whole page: a focused field suspends the game inputs until it is left.
+        const onFocusIn = (): void => inputFormFocusStore.set(true);
+        const onFocusOut = (): void => inputFormFocusStore.set(false);
+        let field: HTMLInputElement;
+        const focusField = (type: string): void => {
+            field = document.createElement("input");
+            field.type = type;
+            document.body.appendChild(field);
+            document.addEventListener("focusin", onFocusIn);
+            document.addEventListener("focusout", onFocusOut);
+            field.focus();
+        };
+        afterEach(() => {
+            document.removeEventListener("focusin", onFocusIn);
+            document.removeEventListener("focusout", onFocusOut);
+            field.remove();
+            inputFormFocusStore.set(false);
+        });
+        const scroll = (): void =>
+            emitWheel(new WheelEvent("wheel", { deltaX: 4, deltaY: 6, deltaMode: WheelEvent.DOM_DELTA_PIXEL }), 4, 6);
+
+        // Seen in the relief editor: after moving a slider, scrolling over the map did nothing until a click on it,
+        // and a click digs.
+        it.each(["range", "checkbox", "color", "radio"])(
+            "scrolls the map again without a click after a %s was used: the wheel over the map leaves it",
+            (type) => {
+                focusField(type);
+                expect(manager.isControlsEnabled).toBe(false);
+                scroll();
+                expect(document.activeElement).not.toBe(field);
+                expect(manager.isControlsEnabled).toBe(true);
+                expect(cameraManager.panBy.mock.calls).toEqual([[4, 6]]);
+            },
+        );
+
+        it.each(["text", "number", "search"])("leaves a %s field being typed in alone", (type) => {
+            focusField(type);
+            scroll();
+            expect(document.activeElement).toBe(field);
+            expect(cameraManager.panBy.mock.calls).toEqual([]);
+        });
     });
 
     it("routes trackpad scrolling and pinch zoom through the active scene handler", () => {

@@ -45,7 +45,8 @@
     }
 </script>
 
-<div class="flex flex-col gap-3 p-3" data-testid="terrain-editor">
+<!-- Like the panel of the Map tool: it scrolls when it is taller than the room the editor leaves it. -->
+<div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" data-testid="terrain-editor">
     <span class="retro-title">{$LL.mapEditor.terrain.title()}</span>
     <div class="flex gap-2">
         <button

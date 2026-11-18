@@ -71,6 +71,17 @@ afterEach(async () => {
     executeUpdateWAMSettings.mockClear();
 });
 
+describe("TerrainEditor layout", () => {
+    // Seen on a laptop screen: the panel is taller than the screen, its last settings could not be reached.
+    it("scrolls when it is taller than the room the editor leaves it", () => {
+        render();
+        const panel = byTestId("terrain-editor");
+        expect(panel.classList.contains("overflow-y-auto")).toBe(true);
+        expect(panel.classList.contains("min-h-0")).toBe(true);
+        expect(panel.classList.contains("flex-1")).toBe(true);
+    });
+});
+
 describe("TerrainEditor real values", () => {
     it("says under each setting of the map what it is worth in reality", () => {
         render();

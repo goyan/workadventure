@@ -21,6 +21,12 @@ export const CURRENT_FULL_SLOPE = 2;
 /** A slope slighter than this is water coming to rest, not a current. */
 export const CURRENT_REST_SLOPE = 0.1;
 
+/** The speed of the hardest current at the usual strength, as a share of the walking speed: one walks against it. */
+export const CURRENT_WALK_SHARE = 0.25;
+
+/** Ground this much lower than the ground under the water is a drop: the water falls there. */
+export const CURRENT_DROP_PX = 8;
+
 const NONE: CurrentVector = { x: 0, y: 0 };
 
 /**
@@ -28,8 +34,9 @@ const NONE: CurrentVector = { x: 0, y: 0 };
  * and water) goes down around it, as the server makes the water run. Each part is between -1 and 1, the whole never
  * longer than 1: the share of the hardest push. Nothing in still water, in water too shallow to carry, or dry.
  *
- * Dry ground higher than the water is a bank, not a slope: one is not pushed away from a shore. Dry ground lower
- * than the water is a drop: the water falls there, and carries towards it.
+ * Dry ground, or ground under a film too thin to carry anyone, is a bank or the edge of a flood, not a slope: one is
+ * neither pushed away from a shore nor carried onto it. Where the ground itself drops (a hollow lower than the ground
+ * under the water), the water falls, and carries towards it.
  */
 export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: number, now: number): CurrentVector {
     if (!water) return NONE;
@@ -38,12 +45,16 @@ export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: nu
     const terrain = water.relief();
     const cellX = Math.floor(x / TERRAIN_CELL);
     const cellY = Math.floor(y / TERRAIN_CELL);
-    const here = heightAt(terrain, cellX, cellY) + depth;
+    const groundHere = heightAt(terrain, cellX, cellY);
+    const here = groundHere + depth;
     const surface = (awayX: number, awayY: number): number => {
         const ground = heightAt(terrain, cellX + awayX, cellY + awayY);
         const held = water.depthAt((cellX + awayX + 0.5) * TERRAIN_CELL, (cellY + awayY + 0.5) * TERRAIN_CELL, now);
-        if (held > 0) return ground + held;
-        return ground > here ? here : ground;
+        // Water deep enough to carry someone: its surface.
+        if (held >= CURRENT_MIN_DEPTH_PX) return ground + held;
+        // Dry ground, or a film too thin to carry anyone: a bank or the edge of a flood, not a slope, unless the
+        // ground itself drops there (the water falls into a hollow).
+        return ground < groundHere - CURRENT_DROP_PX ? ground + held : here;
     };
     // The slope over the two cells on each side, so that one cell out of line does not turn the current.
     const slopeX = ((surface(1, 0) - surface(-1, 0)) / 2 + (surface(2, 0) - surface(-2, 0)) / 4) / 2;
@@ -57,8 +68,9 @@ export function waterCurrentAt(water: CurrentWater | undefined, x: number, y: nu
 }
 
 /**
- * The speed the current gives to an avatar at a point, in pixels a second: the current, times the walking speed (a
- * current at its hardest carries as fast as one walks), times the strength set for the map (0: no current).
+ * The speed the current gives to an avatar at a point, in pixels a second: the current, times a quarter of the
+ * walking speed (a current at its hardest carries four times slower than one walks), times the strength set for the
+ * map (0: no current).
  */
 export function currentPush(
     water: CurrentWater | undefined,
@@ -71,5 +83,6 @@ export function currentPush(
     if (!Number.isFinite(strength) || strength <= 0) return NONE;
     const current = waterCurrentAt(water, x, y, now);
     if (current.x === 0 && current.y === 0) return NONE;
-    return { x: current.x * walkSpeed * strength, y: current.y * walkSpeed * strength };
+    const speed = walkSpeed * CURRENT_WALK_SHARE * strength;
+    return { x: current.x * speed, y: current.y * speed };
 }

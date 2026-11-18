@@ -2127,7 +2127,7 @@ carte plate, aucune migration). Échelle des lampes : une case = 1,2 m² de sol 
 **L'eau est simulée par cellules** (`WaterGrid`) : chaque cellule a une hauteur d'eau, et à chaque pas l'eau passe
 vers les voisines dont la surface (sol + eau) est plus basse. Une source fait donc une flaque à son pied, qui coule
 dans la pente ; un creux plein déborde par son point le plus bas ; sur sol plat une inondation monte et avance tant
-que l'eau arrive. La surface de l'eau est plafonnée à 18 px au-dessus du sol : juste au-dessus de la profondeur où l'on nage (16 px, environ 0,5 m), loin sous le premier palier (52 px) : on
+que l'eau arrive. La surface de l'eau est plafonnée à 18 px au-dessus du sol : juste au-dessus de la profondeur où l'on nage (16 px, environ 0,5 m), loin sous le premier palier (52 px) ; ce plafond vaut pour toute l'eau, versée, tombée ou qui coule (sans lui, une forte pluie sur une large région creusée empilait l'eau en dôme, la surface en pente partout, parce que l'eau n'avance que d'une cellule par pas) : on
 garde les pieds au sec à l'étage. La grille couvre l'emprise du relief et des sources, plus 48 cellules de marge
 (600 × 600 au plus) ; l'eau qui en sort est perdue. Un premier modèle « une cuvette, un niveau » a été essayé puis
 retiré : l'eau y apparaissait au point le plus bas de toute la région creusée, loin de la source.
@@ -2142,6 +2142,22 @@ ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
 
+**Eau plus vive autour des puits.** L'eau n'avance que d'une cellule par pas ; sur une carte accélérée, un puits
+puissant vidait son disque puis attendait une eau qui arrivait trop lentement. Autour d'un puits qui demande encore
+de l'eau (son disque et 16 cellules de plus), l'eau avance de nouveau pendant le même pas, jusqu'à 16 fois : une
+fois par tranche de 4 de la vitesse de la carte (`flowSteps`, 15 à la vitesse 60). Le reste de la grille n'avance
+qu'une fois par pas : la faire avancer partout aussi souvent coûterait trop au serveur (mesuré : 37 ms par pas pour
+15 avancées sur 190 000 cellules mouillées, contre 2,5 ms pour une).
+
+**Eau à grande échelle.** Entre voisines, une cellule ne peut pas donner plus d'un quart de la différence de niveau
+sans que le calcul oscille : l'eau n'avance donc que d'une cellule par pas. Sur une carte accélérée (`flowSteps` > 1),
+un pas sur deux, chaque cellule échange aussi avec celles situées 4 et 16 cellules plus loin sur sa ligne puis sur sa
+colonne (`flowFar`), un quart de leur différence, à condition qu'une étendue d'eau ininterrompue les relie : ni mur,
+ni sol sec, ni simple film d'eau (moins de 2 px) entre elles. L'eau ne quitte jamais son étendue ; elle fait plus tôt
+ce que plusieurs pas de cellule en cellule auraient fait. Un lac se met à niveau et alimente un puits lointain bien
+plus vite. Mesuré sur une grille de 491 × 407 (machine chargée, ordre de grandeur) : environ 4 ms de plus par pas,
+et douze puits puissants évacuent 13 fois plus d'eau qu'avant ces deux changements.
+
 **Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
 (`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
 l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient
@@ -2153,11 +2169,19 @@ murs d'un palier ne comptent pas (l'eau reste au sol).
 **Courant.** L'eau emporte l'avatar : le navigateur lit la pente de la surface de l'eau (sol + eau) autour de lui
 (`Terrain/WaterCurrent.ts`, sur deux cellules de chaque côté) et l'ajoute à son déplacement. Rien dans une eau au
 repos (pente sous 0,1 px par cellule) ni sous un quart de case d'eau ; à moitié entre un quart et une demi-case,
-pleinement quand on nage. À une pente de 2 px par cellule la poussée est à son maximum : la vitesse de la marche,
-multipliée par la « force du courant » de la carte (`settings.water.current`, de 0 à 2, 1 par défaut ; 0 coupe le
-courant). Une berge sèche plus haute que l'eau ne repousse pas ; un creux sec plus bas attire (l'eau y tombe). Pas
+pleinement quand on nage. À une pente de 2 px par cellule la poussée est à son maximum : le quart de la vitesse de la marche,
+multiplié par la « force du courant » de la carte (`settings.water.current`, de 0 à 2, 1 par défaut ; 0 coupe le
+courant). Un sol sec, ou sous un film d'eau trop mince pour emporter, n'est pas une pente : une berge ne repousse pas, et le bord d'une inondation n'attire pas ; seul un creux nettement plus bas que le sol sous l'eau attire (l'eau y tombe). Pas
 de poussée assis, en suivi, sur un palier, ni pendant un trajet au double-clic. Les autres joueurs voient la dérive
 par la position, comme tout déplacement.
+
+**Canoë.** Troisième véhicule au choix (Mon avatar → Véhicule), avec ses trois couleurs (coque, bord, pagaie). Ce
+n'est pas un véhicule du sol : il se met à l'eau tout seul. Là où l'on nagerait dans l'eau du relief (16 px et
+plus), l'avatar est dans son canoë au lieu de nager, pour tout le monde (`Player.updateCanoe` passe le véhicule en
+mode « toujours » sur l'eau et « coupé » ailleurs ; `isCanoeAfloat`). Vitesse de la marche (la nage est à 0,6), deux
+fois plus en pagayant fort (touche de course) ; le courant l'emporte moitié moins qu'un nageur. Pas de canoë à
+terre, dans une piscine (on y nage), sur un palier, en suivi, ni pour un costume qui n'est pas humain ; la roue
+d'actions ne propose rien pour lui. Dessiné en code (`Vehicle/CanoeArtwork.ts`), comme les autres véhicules.
 
 **`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
 ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources

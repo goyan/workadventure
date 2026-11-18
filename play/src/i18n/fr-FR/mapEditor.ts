@@ -633,7 +633,7 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang.",
             current:
-                "À 1, le courant le plus fort emporte à la vitesse de la marche : on lui résiste en courant. Rien dans une eau au repos ni sous un quart de case d'eau.",
+                "À 1, le courant le plus fort emporte au quart de la vitesse de la marche : on lui résiste en marchant. Rien dans une eau au repos ni sous un quart de case d'eau.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",

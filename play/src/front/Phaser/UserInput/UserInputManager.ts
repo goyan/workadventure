@@ -274,6 +274,10 @@ export class UserInputManager {
         this.scene.input.on(
             Phaser.Input.Events.POINTER_WHEEL,
             (pointer: Pointer, gameObjects: GameObject[], deltaX: number, deltaY: number, deltaZ: number) => {
+                // A slider or a checkbox of a panel keeps the focus once used, and a focused field suspends the game
+                // inputs: scrolling over the map then did nothing until a click on it (which, in the relief editor,
+                // digs). The wheel over the map leaves such a control; a field being typed in keeps its focus.
+                releaseFocusedControl();
                 if (this.isInputDisabled) {
                     return;
                 }
@@ -317,5 +321,21 @@ export class UserInputManager {
             }
             this.userInputHandler.handleKeyDownEvent(event);
         });
+    }
+}
+
+/** The inputs one types text in: the wheel over the map never takes their focus away. */
+const TYPING_INPUT_TYPES = new Set(["text", "search", "email", "password", "number", "tel", "url", "date", "time"]);
+
+/**
+ * Takes the focus away from a control that is used without typing (a slider, a checkbox, a colour, a list), so that
+ * the game inputs it suspended while focused come back. A field being typed in is left alone.
+ */
+function releaseFocusedControl(): void {
+    const focused = document.activeElement;
+    if (focused instanceof HTMLInputElement) {
+        if (!TYPING_INPUT_TYPES.has(focused.type)) focused.blur();
+    } else if (focused instanceof HTMLSelectElement) {
+        focused.blur();
     }
 }

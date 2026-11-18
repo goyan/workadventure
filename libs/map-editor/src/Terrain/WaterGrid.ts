@@ -12,7 +12,8 @@ const MAX_GRID_SIDE = 600;
 /**
  * The highest the surface of the water gets above the ground of the map, in pixels: just over the depth where an
  * avatar swims (16 px, about half a metre), so a flood makes one swim, and far under the first raised floor of a
- * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost.
+ * building (52 px), so one keeps dry feet upstairs. What a source pours beyond it is lost, and so is what the rain
+ * or the running water would pile over it.
  */
 export const MAX_WATER_SURFACE_PX = 18;
 /** Under this depth a cell is dry: the water left by rounding does not keep the grid moving. */
@@ -48,6 +49,17 @@ export interface WaterWallSides {
     east: ReadonlySet<string>;
     south: ReadonlySet<string>;
 }
+
+/** The most moves the water makes around a sink in one step. */
+export const MAX_FLOW_STEPS = 16;
+/** How far a cell exchanges water with another of its stretch, in cells, over long distances. */
+const FAR_STRIDES = [4, 16];
+/** A cell with less water than this breaks a stretch: a film over a sill does not join two lakes. */
+const FAR_MIN_DEPTH_PX = 2;
+/** The share of a difference of level two distant cells of a stretch exchange in a step. */
+const FAR_SHARE = 0.25;
+/** How far around the disc of a sink the water moves again during a step, in cells: eight tiles. */
+const SINK_RUSH_CELLS = 16;
 
 /** The cells a water grid covers, in cells of the relief. */
 export interface WaterGridBounds {
@@ -120,6 +132,12 @@ export interface WaterStepInput {
      * pours over (its cell only when absent) or a sink takes from (a tile and a half when absent).
      */
     flows: readonly { cellX: number; cellY: number; px: number; radius?: number }[];
+    /**
+     * How many times the water moves towards a sink that asks for more than it finds, during the step (1 when
+     * absent, MAX_FLOW_STEPS at most): more on a map whose water goes faster than reality, so that it runs to the
+     * sink as far as the step is long.
+     */
+    flowSteps?: number;
 }
 
 /** What came in and went out during one step, in pixels of water over one cell (CELL_LITRES_PER_PX litres each). */
@@ -157,6 +175,9 @@ export class WaterGrid {
     private readonly queue: Int32Array;
     private readonly seen: Uint32Array;
     private search = 0;
+    /** For the levelling over long distances: the stretch of water each cell belongs to along a line. */
+    private stretch = new Int32Array(0);
+    private farTurn = false;
     private depth: Float32Array;
     private next: Float32Array;
 
@@ -277,6 +298,7 @@ export class WaterGrid {
                 }
             }
         }
+        const sinks: { index: number; radius: number; left: number }[] = [];
         for (const flow of input.flows) {
             const index = this.indexOf(flow.cellX, flow.cellY);
             if (!Number.isFinite(flow.px) || flow.px === 0) continue;
@@ -290,13 +312,38 @@ export class WaterGrid {
                 tally.lostPx += flow.px - this.pour(index, flow.px, radiusOf(flow.radius, 0));
                 tally.moved = true;
             } else {
-                const taken = this.drain(index, -flow.px, radiusOf(flow.radius, SINK_RADIUS_CELLS));
+                const radius = radiusOf(flow.radius, SINK_RADIUS_CELLS);
+                const taken = this.drain(index, -flow.px, radius);
                 tally.sinksPx += taken;
                 // A sink with nothing to take does not keep a grid at rest awake.
                 if (taken > 0) tally.moved = true;
+                // What it still asks for: taken as the water runs to it, between the moves of this step.
+                if (-flow.px - taken > 0) sinks.push({ index, radius, left: -flow.px - taken });
             }
         }
         if (this.flow(tally)) tally.moved = true;
+        // On a map that goes faster than reality the water also levels over long distances: a lake would otherwise
+        // take minutes to feel a sink or a source at its other end.
+        // Every other step: half the cost for the server, and still far ahead of the moves from cell to cell.
+        this.farTurn = !this.farTurn;
+        if (this.farTurn && flowStepsOf(input.flowSteps) > 1 && this.flowFar()) tally.moved = true;
+        // Around a sink that still asks for water, the water moves again, as many times as the step asks: on a map
+        // that goes faster than reality a strong sink would otherwise empty its disc and wait for water that creeps
+        // in one cell a step. Only around the sinks: moving the whole grid that often would cost too much.
+        const moves = flowStepsOf(input.flowSteps);
+        for (let move = 1; move < moves; move++) {
+            let asking = false;
+            for (const sink of sinks) {
+                if (sink.left <= 0) continue;
+                this.flowAround(sink.index, sink.radius + SINK_RUSH_CELLS, move % 2 === 1, tally);
+                const taken = this.drain(sink.index, sink.left, sink.radius);
+                sink.left -= taken;
+                tally.sinksPx += taken;
+                if (taken > 0) tally.moved = true;
+                if (sink.left > 0) asking = true;
+            }
+            if (!asking) break;
+        }
         return tally;
     }
 
@@ -505,6 +552,119 @@ export class WaterGrid {
         return taken;
     }
 
+    /**
+     * Moves the water once more within `reach` cells of a cell, in place: each cell in turn gives to its lower
+     * neighbours (`backwards` turns the order round, so that no direction is favoured over the moves). Cheap, for the
+     * surroundings of a sink only; the whole grid moves with `flow`.
+     */
+    private flowAround(centre: number, reach: number, backwards: boolean, tally: WaterTally): void {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        const ground = this.ground;
+        const closed = this.closed;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        const left = Math.max(0, column - reach);
+        const right = Math.min(width - 1, column + reach);
+        const top = Math.max(0, row - reach);
+        const bottom = Math.min(height - 1, row + reach);
+        const offsets = [1, -1, width, -width];
+        const drops = [0, 0, 0, 0];
+        const count = (right - left + 1) * (bottom - top + 1);
+        for (let step = 0; step < count; step++) {
+            const at = backwards ? count - 1 - step : step;
+            const x = left + (at % (right - left + 1));
+            const y = top + Math.floor(at / (right - left + 1));
+            const index = y * width + x;
+            const held = depth[index];
+            if (held <= DRY_PX) continue;
+            const surface = ground[index] + held;
+            let total = 0;
+            for (let side = 0; side < 4; side++) {
+                const inside = side === 0 ? x + 1 < width : side === 1 ? x > 0 : side === 2 ? y + 1 < height : y > 0;
+                let drop = 0;
+                if (!inside) drop = held;
+                else if (!(closed[index] & (1 << side))) {
+                    drop = surface - (ground[index + offsets[side]] + depth[index + offsets[side]]);
+                }
+                drops[side] = drop > 0 ? drop : 0;
+                total += drops[side];
+            }
+            if (total <= DRY_PX) continue;
+            const scale = Math.min(FLOW_SHARE, held / total);
+            for (let side = 0; side < 4; side++) {
+                const out = drops[side] * scale;
+                if (out <= 0) continue;
+                depth[index] -= out;
+                const inside = side === 0 ? x + 1 < width : side === 1 ? x > 0 : side === 2 ? y + 1 < height : y > 0;
+                if (inside) depth[index + offsets[side]] += out;
+                else tally.lostPx += out;
+            }
+            if (depth[index] < 0) depth[index] = 0;
+        }
+    }
+
+    /**
+     * Levels the water over long distances: along each row, then each column, a cell exchanges water with the cells
+     * 4 and 16 cells further when an unbroken stretch of water joins them (no wall, no dry ground, not even a film
+     * of water between them), a quarter of their difference of level. Water never leaves its stretch: it does what a
+     * few moves from cell to cell would have done, sooner. Returns whether any moved.
+     */
+    private flowFar(): boolean {
+        const { width, height } = this.bounds;
+        const depth = this.depth;
+        const ground = this.ground;
+        const closed = this.closed;
+        const size = width * height;
+        if (this.stretch.length !== size) this.stretch = new Int32Array(size);
+        const stretch = this.stretch;
+        let moved = false;
+        for (let axis = 0; axis < 2; axis++) {
+            // The stretches of this direction: the same number for the cells of an unbroken run of water.
+            const lines = axis === 0 ? height : width;
+            const length = axis === 0 ? width : height;
+            const along = axis === 0 ? 1 : width;
+            const across = axis === 0 ? width : 1;
+            const wall = axis === 0 ? 1 : 4;
+            let id = 0;
+            for (let line = 0; line < lines; line++) {
+                let open = false;
+                for (let place = 0; place < length; place++) {
+                    const index = line * across + place * along;
+                    if (depth[index] < FAR_MIN_DEPTH_PX) {
+                        stretch[index] = 0;
+                        open = false;
+                        continue;
+                    }
+                    // A new stretch at the start of the line, after a break, or behind a wall.
+                    if (!open || closed[index - along] & wall) id++;
+                    stretch[index] = id;
+                    open = true;
+                }
+            }
+            for (const stride of FAR_STRIDES) {
+                const jump = stride * along;
+                for (let line = 0; line < lines; line++) {
+                    for (let place = 0; place + stride < length; place++) {
+                        const index = line * across + place * along;
+                        const other = index + jump;
+                        if (stretch[index] === 0 || stretch[index] !== stretch[other]) continue;
+                        const drop = ground[index] + depth[index] - (ground[other] + depth[other]);
+                        if (drop > -LEVEL_PX && drop < LEVEL_PX) continue;
+                        // The giver keeps enough water to stay part of its stretch.
+                        const giver = drop > 0 ? index : other;
+                        const amount = Math.min(Math.abs(drop) * FAR_SHARE, depth[giver] - FAR_MIN_DEPTH_PX);
+                        if (amount <= DRY_PX) continue;
+                        depth[giver] -= amount;
+                        depth[drop > 0 ? other : index] += amount;
+                        moved = true;
+                    }
+                }
+            }
+        }
+        return moved;
+    }
+
     /** Moves the water one step. Returns whether any moved. */
     private flow(tally: WaterTally): boolean {
         const { width, height } = this.bounds;
@@ -555,6 +715,16 @@ export class WaterGrid {
         }
         for (let index = 0; index < next.length; index++) {
             if (next[index] < 0) next[index] = 0;
+            // Water runs from a cell to the next one only so fast: where more comes than can run away (a hard rain
+            // on a wide hollow), it would pile up into a dome, its surface sloping everywhere. What stands over the
+            // highest level is lost instead, as when it is poured: the surface stays level and under that level.
+            const over = ground[index] + next[index] - MAX_WATER_SURFACE_PX;
+            if (over > 0 && next[index] > 0) {
+                const taken = Math.min(over, next[index]);
+                next[index] -= taken;
+                tally.lostPx += taken;
+                moved = true;
+            }
         }
         this.depth = next;
         this.next = depth;
@@ -566,4 +736,10 @@ export class WaterGrid {
 function radiusOf(radius: number | undefined, fallback: number): number {
     if (radius === undefined || !Number.isFinite(radius) || radius < 0) return fallback;
     return Math.min(MAX_RADIUS_CELLS, radius);
+}
+
+/** The moves of the water in a step, within their bounds; one for a step that says nothing. */
+function flowStepsOf(flowSteps: number | undefined): number {
+    if (flowSteps === undefined || !Number.isFinite(flowSteps) || flowSteps < 1) return 1;
+    return Math.min(MAX_FLOW_STEPS, Math.round(flowSteps));
 }

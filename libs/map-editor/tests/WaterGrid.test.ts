@@ -272,6 +272,136 @@ describe("WaterGrid", () => {
         expect(grid.depthAt(28, 20)).toBe(0);
     });
 
+    // Seen in the game: a strong sink emptied its disc, and the water around took so long to run in that the sink
+    // took almost nothing (42 m³ an hour for thousands asked).
+    it("feeds a strong sink faster when the water is given more moves a step", () => {
+        const side = 61;
+        const cells: [number, number, number][] = [];
+        for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) cells.push([x, y, -16]);
+        const lake = terrainOf(cells);
+        const taken = (flowSteps: number | undefined): number => {
+            const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            let total = 0;
+            for (let step = 0; step < 60; step++) {
+                total += grid.step({ ...nothing, flowSteps, flows: [{ cellX: 30, cellY: 30, px: -1e6 }] }).sinksPx;
+            }
+            return total;
+        };
+        const slow = taken(undefined);
+        const fast = taken(16);
+        expect(taken(1)).toBeCloseTo(slow, 3);
+        expect(fast).toBeGreaterThan(slow * 3);
+    });
+
+    it("moves the water again around the sinks only: far from a sink, the water goes as it does without it", () => {
+        const side = 121;
+        const cells: [number, number, number][] = [];
+        for (let y = 0; y < side; y++) for (let x = 0; x < side; x++) cells.push([x, y, -16]);
+        const lake = terrainOf(cells);
+        const farAfter = (sink: boolean): number => {
+            const grid = new WaterGrid(lake, gridBoundsOf(lake, []));
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            // A mound of water in a corner, a sink (or none) in the opposite one.
+            grid.step({ ...nothing, flows: [{ cellX: 10, cellY: 10, px: 4 }] });
+            for (let step = 0; step < 5; step++) {
+                grid.step({ ...nothing, flowSteps: 16, flows: sink ? [{ cellX: 100, cellY: 100, px: -1e6 }] : [] });
+            }
+            return grid.depthAt(10, 10);
+        };
+        expect(farAfter(true)).toBeCloseTo(farAfter(false), 4);
+    });
+
+    describe("over long distances", () => {
+        // A canal 200 cells long and one wide, dug 16 px deep, holding 10 px of still water.
+        const canal = terrainOf(Array.from({ length: 200 }, (_, x) => [x, 0, -16] as [number, number, number]));
+        const filled = (walls?: { east: Set<string>; south: Set<string> }): WaterGrid => {
+            const grid = new WaterGrid(canal, gridBoundsOf(canal, []), undefined, walls);
+            run(grid, 100, { ...nothing, rainPx: 0.1 });
+            return grid;
+        };
+        // Water poured at one end: how much higher the other end of the canal stands after 150 steps.
+        const riseAtFarEnd = (flowSteps: number, walls?: { east: Set<string>; south: Set<string> }): number => {
+            const grid = filled(walls);
+            const before = grid.depthAt(190, 0);
+            run(grid, 150, { ...nothing, flowSteps, flows: [{ cellX: 2, cellY: 0, px: 4 }] });
+            return grid.depthAt(190, 0) - before;
+        };
+
+        it("levels a long stretch of water much sooner on a map that goes faster than reality", () => {
+            expect(riseAtFarEnd(1)).toBeLessThan(0.05);
+            expect(riseAtFarEnd(15)).toBeGreaterThan(0.5);
+        });
+
+        it("still never crosses a wall", () => {
+            const wall = { east: new Set([cellKey(99, 0)]), south: new Set<string>() };
+            expect(riseAtFarEnd(15, wall)).toBe(0);
+        });
+
+        it("never carries water over dry ground, nor over a film of water: two ponds stay two ponds", () => {
+            // Two ponds 30 cells long, 20 cells of ground between them, 6 px lower than their rims.
+            const cells: [number, number, number][] = [];
+            for (let x = 0; x < 30; x++) cells.push([x, 0, -16], [x + 50, 0, -16]);
+            for (let x = 30; x < 50; x++) cells.push([x, 0, -6]);
+            const ponds = terrainOf(cells);
+            const grid = new WaterGrid(ponds, gridBoundsOf(ponds, []));
+            // 8 px of water in the first pond only: its surface is 2 px under the ground between the ponds.
+            for (let step = 0; step < 60; step++) {
+                grid.step({ ...nothing, flowSteps: 15, flows: [{ cellX: 5, cellY: 0, px: 4 }] });
+            }
+            let second = 0;
+            for (let x = 50; x < 80; x++) second += grid.depthAt(x, 0);
+            expect(grid.depthAt(20, 0)).toBeGreaterThan(5);
+            expect(second).toBe(0);
+        });
+
+        it("keeps every drop", () => {
+            const grid = filled();
+            const before = grid.totalPx();
+            let poured = 0;
+            let lost = 0;
+            for (let step = 0; step < 100; step++) {
+                const tally = grid.step({ ...nothing, flowSteps: 15, flows: [{ cellX: 2, cellY: 0, px: 4 }] });
+                poured += tally.sourcesPx;
+                lost += tally.lostPx;
+            }
+            expect(grid.totalPx()).toBeCloseTo(before + poured - lost, 1);
+        });
+
+        it("comes to rest: still water stays still", () => {
+            const grid = filled();
+            run(grid, 300, { ...nothing, flowSteps: 15 });
+            expect(grid.step({ ...nothing, flowSteps: 15 }).moved).toBe(false);
+        });
+    });
+
+    it("keeps every drop whatever the number of moves a step", () => {
+        const grid = new WaterGrid(slope, gridBoundsOf(slope, []));
+        let poured = 0;
+        let out = 0;
+        for (let step = 0; step < 200; step++) {
+            const tally = grid.step({
+                ...nothing,
+                flowSteps: 8,
+                flows: [
+                    { cellX: 0, cellY: 0, px: 2 },
+                    { cellX: 8, cellY: 0, px: -1 },
+                ],
+            });
+            poured += tally.sourcesPx;
+            out += tally.sinksPx + tally.lostPx;
+        }
+        expect(grid.totalPx()).toBeCloseTo(poured - out, 1);
+    });
+
+    it("never breaks on a broken number of moves", () => {
+        const grid = new WaterGrid(slope, gridBoundsOf(slope, []));
+        for (const flowSteps of [Number.NaN, -3, 0, 1e9]) {
+            expect(() => grid.step({ ...nothing, flowSteps, flows: [{ cellX: 0, cellY: 0, px: 2 }] })).not.toThrow();
+        }
+        expect(grid.totalPx()).toBeGreaterThan(0);
+    });
+
     it("leaves alone the water lower than a sink: it would never run to it", () => {
         // A sink at the top of a dug slope, water at the bottom only.
         const grid = new WaterGrid(slope, gridBoundsOf(slope, []));
@@ -353,6 +483,34 @@ describe("WaterGrid", () => {
         expect(grid.depthAt(0, 0)).toBeLessThanOrEqual(MAX_WATER_SURFACE_PX + 4);
         expect(Number.isFinite(grid.totalPx())).toBe(true);
         expect(tally.lostPx).toBeGreaterThan(0);
+    });
+
+    // Seen on a map under the rain: the water of a wide dug region piled up into a dome hundreds of pixels high,
+    // its surface sloping everywhere, because the rain brings water faster than it can run away.
+    it("never lets the rain pile the water of a wide hollow into a dome: what is over the highest level is lost", () => {
+        const side = 61;
+        const wide = terrainOf(
+            Array.from(
+                { length: side * side },
+                (_, index) => [index % side, Math.floor(index / side), -8] as [number, number, number],
+            ),
+        );
+        const grid = new WaterGrid(wide, gridBoundsOf(wide, []));
+        let rain = 0;
+        let lost = 0;
+        for (let step = 0; step < 1500; step++) {
+            const tally = grid.step({ ...nothing, rainPx: 0.5 });
+            rain += tally.rainPx;
+            lost += tally.lostPx;
+        }
+        // In the middle, far from any edge, the surface is at the highest level and no higher, and it is level.
+        const middle = (side - 1) / 2;
+        expect(grid.depthAt(middle, middle) - 8).toBeLessThanOrEqual(MAX_WATER_SURFACE_PX + 0.01);
+        expect(grid.depthAt(middle, middle) - 8).toBeGreaterThan(MAX_WATER_SURFACE_PX - 1);
+        expect(Math.abs(grid.depthAt(middle, middle) - grid.depthAt(middle + 6, middle))).toBeLessThan(0.5);
+        // Every drop is counted: what the grid holds is the rain less what was lost.
+        expect(grid.totalPx()).toBeCloseTo(rain - lost, -1);
+        expect(lost).toBeGreaterThan(0);
     });
 
     it("never lets a flood rise over its highest level, however much water comes", () => {

@@ -59,6 +59,22 @@ describe("waterCurrentAt", () => {
         expect(at(lake)).toEqual({ x: 0, y: 0 });
     });
 
+    // Seen in the game: swimming in a flood, one was carried to its shore all the time.
+    it("is not carried to the shore of a flood: flat ground, dry or barely wet, is not where the water falls", () => {
+        // A flood 18 px deep over flat ground, dry from the cell 1 on.
+        const dryShore = waterOf(
+            (x) => (x >= 1 ? 0 : 18),
+            () => 0,
+        );
+        expect(at(dryShore)).toEqual({ x: 0, y: 0 });
+        // The same flood thinning out towards its edge: 18 px here, then a film too thin to carry anyone.
+        const thinEdge = waterOf(
+            (x) => (x >= 1 ? 5 : 18),
+            () => 0,
+        );
+        expect(at(thinEdge)).toEqual({ x: 0, y: 0 });
+    });
+
     it("is drawn towards a drop: dry ground lower than the water, where it falls", () => {
         // East of the cell 0 the ground is dug deeper and still dry: the water pours there.
         const fall = waterOf(
@@ -70,10 +86,11 @@ describe("waterCurrentAt", () => {
 });
 
 describe("currentPush", () => {
-    it("is the current times the walking speed and the strength set for the map", () => {
+    it("is the current times a quarter of the walking speed and the strength set for the map", () => {
         const river = waterOf((x) => 30 - x);
-        expect(currentPush(river, 8, 8, 0, 1, 180).x).toBeCloseTo(90, 3);
-        expect(currentPush(river, 8, 8, 0, 2, 180).x).toBeCloseTo(180, 3);
+        // Half of the hardest current: an eighth of the walking speed.
+        expect(currentPush(river, 8, 8, 0, 1, 180).x).toBeCloseTo(22.5, 3);
+        expect(currentPush(river, 8, 8, 0, 2, 180).x).toBeCloseTo(45, 3);
         expect(currentPush(river, 8, 8, 0, 0, 180)).toEqual({ x: 0, y: 0 });
         expect(currentPush(river, 8, 8, 0, Number.NaN, 180)).toEqual({ x: 0, y: 0 });
     });
