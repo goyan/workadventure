@@ -194,3 +194,64 @@ describe("the light of the sky through two windows", () => {
         expect(lightThroughPanes(openings, interior, lowSouthSun, 1).map((patch) => patch.room)).toEqual([0]);
     });
 });
+
+describe("the light of the sky relayed by an inner window it reaches", () => {
+    // As on the map: glass one tile high on the outside (line 8) and in the inner wall (line 5), a corridor two tiles
+    // deep between them (room 0), a room behind (room 1).
+    function corridor() {
+        const model = new MapLayerModel();
+        for (const x of [1, 2, 3, 4, 5, 6]) {
+            model.setWall("h", x, 8, "blanc");
+            model.setWall("h", x, 5, "blanc");
+        }
+        model.setWindow(2, 8);
+        model.setWindow(3, 8);
+        model.setWindow(2, 5);
+        model.setWindow(3, 5);
+        const roomAt = (_x: number, y: number): number | undefined =>
+            y < 160 ? 1 : y >= 192 && y < 256 ? 0 : undefined;
+        const isOutdoorAt = (_x: number, y: number): boolean => y >= 288;
+        return {
+            openings: windowOpenings(model, roomAt, isOutdoorAt),
+            interior: interiorOpenings(model, roomAt),
+        };
+    }
+    const morningSun = { azimuth: 180, elevation: 20 };
+
+    it("goes on into the room when the light crosses the corridor up to the inner window", () => {
+        const { openings, interior } = corridor();
+        const patches = lightThroughPanes(openings, interior, morningSun);
+        const relayed = patches.filter((patch) => patch.room === 1);
+
+        expect(relayed.length).toBeGreaterThan(0);
+        expect(relayed.every((patch) => patch.strength === GLASS_KEPT_LIGHT)).toBe(true);
+        // On the floor of the room, a little behind the inner window.
+        expect(relayed.some((patch) => inside(patch.polygon, 80, 130))).toBe(true);
+    });
+
+    it("relays the light only over the width of glass the light reaches, when the sun comes from the side", () => {
+        const { openings, interior } = corridor();
+        // From the south-east: the light drifts west on its way across the corridor.
+        const relayed = lightThroughPanes(openings, interior, { azimuth: 150, elevation: 16 }).filter(
+            (patch) => patch.room === 1,
+        );
+        const straight = lightThroughPanes(openings, interior, { azimuth: 180, elevation: 16 }).filter(
+            (patch) => patch.room === 1,
+        );
+        const width = (list: typeof relayed): number =>
+            list.reduce((sum, patch) => {
+                const xs = patch.polygon.slice(0, 2).map((point) => point.x);
+                return sum + Math.abs(xs[1] - xs[0]);
+            }, 0);
+
+        expect(relayed.length).toBeGreaterThan(0);
+        expect(width(relayed)).toBeLessThan(width(straight));
+    });
+
+    it("does not go on when the light falls short of the inner wall", () => {
+        const { openings, interior } = corridor();
+        const patches = lightThroughPanes(openings, interior, { azimuth: 180, elevation: 50 });
+
+        expect(patches.some((patch) => patch.room === 1)).toBe(false);
+    });
+});
