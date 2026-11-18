@@ -15,6 +15,9 @@
     );
     let maxPrey = $derived(Math.max(1, ...(stats?.history ?? []).map((sample) => sample.prey)));
     let maxPredators = $derived(Math.max(1, ...(stats?.history ?? []).map((sample) => sample.predators)));
+    // Headroom above the largest value, more for the predators: two flat lines at their largest do not hide each other.
+    const PREY_HEADROOM = 1.1;
+    const PREDATORS_HEADROOM = 1.5;
 
     /** The points of a line of the history: oldest on the left, its largest value at the top. */
     function pointsOf(values: number[], max: number): string {
@@ -82,7 +85,7 @@
                 stroke-width="1.5"
                 points={pointsOf(
                     stats.history.map((sample) => sample.prey),
-                    maxPrey,
+                    maxPrey * PREY_HEADROOM,
                 )}
             />
             <polyline
@@ -91,7 +94,7 @@
                 stroke-width="1.5"
                 points={pointsOf(
                     stats.history.map((sample) => sample.predators),
-                    maxPredators,
+                    maxPredators * PREDATORS_HEADROOM,
                 )}
             />
         </svg>

@@ -102,9 +102,10 @@ describe("LifeDashboard", () => {
         render();
         const lines = target.querySelectorAll('[data-testid="life-history"] polyline');
         expect(lines).toHaveLength(2);
-        // Three samples each, the last prey at the top of its scale.
+        // Three samples each; the largest prey just under the top, the predators lower: the lines never overlap there.
         expect(lines[0].getAttribute("points")?.trim().split(" ")).toHaveLength(3);
-        expect(lines[0].getAttribute("points")?.trim().endsWith(",0")).toBe(true);
+        expect(lines[0].getAttribute("points")?.trim().endsWith(",4")).toBe(true);
+        expect(lines[1].getAttribute("points")?.trim().endsWith(",16")).toBe(true);
     });
 
     it("shows a dash for the prey of a predator when there is no predator", () => {
