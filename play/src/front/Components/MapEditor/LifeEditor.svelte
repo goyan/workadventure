@@ -8,7 +8,7 @@
     const saved = readTerrainMapSettings();
 </script>
 
-<div class="flex flex-col gap-3 p-3" data-testid="life-editor">
+<div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" data-testid="life-editor">
     <span class="retro-title">{$LL.mapEditor.life.title()}</span>
     <LifeDashboard />
     <LifeSettings initial={saved.life} />
