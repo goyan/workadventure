@@ -5,7 +5,7 @@ import { get } from "svelte/store";
 const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoisted(() => ({
     executeUpdateTerrain: vi.fn(() => Promise.resolve()),
     executeUpdateWAMSettings: vi.fn(() => Promise.resolve()),
-    mapSettings: { maxDepthTiles: 2, runoff: 10, evaporation: 0.2, speed: 60, absorption: 5 },
+    mapSettings: { maxDepthTiles: 2, runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 },
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
     executeUpdateTerrain,
@@ -72,6 +72,7 @@ describe("TerrainEditor real values", () => {
             ["terrain-evaporation", "evaporation"],
             ["terrain-absorption", "absorption"],
             ["terrain-speed", "speed"],
+            ["terrain-current", "current"],
         ]) {
             expect(byTestId(id).textContent).toContain(`mapEditor.terrain.real.${key}`);
         }
@@ -116,22 +117,34 @@ describe("TerrainEditor", () => {
         setRange("terrain-runoff", 20);
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff: 20, evaporation: 0.2, speed: 60, absorption: 5 },
+            updateWaterSettingMessage: { runoff: 20, evaporation: 0.2, speed: 60, absorption: 5, current: 1 },
         });
         setRange("terrain-evaporation", 1);
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 60, absorption: 5 },
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 60, absorption: 5, current: 1 },
         });
         setRange("terrain-speed", 300);
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 5 },
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 5, current: 1 },
         });
         setRange("terrain-absorption", 20);
         expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
             $case: "updateWaterSettingMessage",
-            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 20 },
+            updateWaterSettingMessage: { runoff: 20, evaporation: 1, speed: 300, absorption: 20, current: 1 },
+        });
+    });
+
+    it("saves the strength of the current, from none to twice as strong", () => {
+        render();
+        const slider = byTestId("terrain-current").querySelector<HTMLInputElement>('input[type="range"]');
+        expect(Number(slider?.min)).toBe(0);
+        expect(Number(slider?.max)).toBe(2);
+        setRange("terrain-current", 0);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateWaterSettingMessage",
+            updateWaterSettingMessage: { runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 0 },
         });
     });
 

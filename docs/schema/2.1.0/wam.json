@@ -1947,6 +1947,12 @@
                   "minimum": 0,
                   "maximum": 100,
                   "default": 5
+                },
+                "current": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2,
+                  "default": 1
                 }
               },
               "additionalProperties": false

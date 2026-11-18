@@ -8,6 +8,7 @@ export function readTerrainMapSettings(): {
     evaporation: number;
     speed: number;
     absorption: number;
+    current: number;
 } {
     const wam = gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam();
     return {
@@ -16,5 +17,6 @@ export function readTerrainMapSettings(): {
         evaporation: wam?.settings?.water?.evaporation ?? DEFAULT_WATER_SETTINGS.evaporation,
         speed: wam?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed,
         absorption: wam?.settings?.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption,
+        current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
     };
 }

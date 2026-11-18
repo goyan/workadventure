@@ -917,7 +917,9 @@ export const TerrainData = z.object({
 export type TerrainData = z.infer<typeof TerrainData>;
 
 /** How fast the water of the relief comes and goes on a map. */
-export const DEFAULT_WATER_SETTINGS = { runoff: 10, evaporation: 0.2, speed: 60, absorption: 5 } as const;
+export const DEFAULT_WATER_SETTINGS = { runoff: 10, evaporation: 0.2, speed: 60, absorption: 5, current: 1 } as const;
+/** The strongest current a map may set: twice the usual one. */
+export const MAX_WATER_CURRENT = 2;
 export const MAX_WATER_SPEED = 1000;
 export const WaterSettings = z.object({
     /** Ground around a hollow whose rain runs into it, in times the surface of the hollow. */
@@ -931,6 +933,11 @@ export const WaterSettings = z.object({
     speed: z.number().min(1).max(MAX_WATER_SPEED).default(DEFAULT_WATER_SETTINGS.speed),
     /** Water the flat ground drinks from the sheet of a flood, in mm an hour: how fast a flood goes down. */
     absorption: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.absorption),
+    /**
+     * How hard the current of the water carries the avatars: 0 not at all, 1 as fast as one walks where it is
+     * hardest, up to twice that.
+     */
+    current: z.number().min(0).max(MAX_WATER_CURRENT).default(DEFAULT_WATER_SETTINGS.current),
 });
 export type WaterSettings = z.infer<typeof WaterSettings>;
 

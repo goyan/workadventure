@@ -401,6 +401,8 @@ message UpdateWaterSettingMessage {
   optional double speed = 3;
   // Water the flat ground drinks from a flood, in mm an hour. Absent from older clients: the one of the map is kept.
   optional double absorption = 4;
+  // How hard the current of the water carries the avatars (0: not at all). Absent from older clients: kept.
+  optional double current = 5;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.

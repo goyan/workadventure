@@ -27,7 +27,7 @@ function wamWith(terrain: TerrainData | undefined, weather: WeatherType = Weathe
         areas: [],
         entityCollections: [],
         entities: {},
-        settings: { weather, water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0 } },
+        settings: { weather, water: { runoff: 10, evaporation: 0, speed: 1, absorption: 0, current: 1 } },
         terrain,
     };
 }
@@ -253,7 +253,10 @@ describe("TerrainWaterManager", () => {
     it("holds the water behind a wall of the map tool, and follows a wall built later, keeping the water", () => {
         // A source on flat ground at the cell (4, 4); a wall along the foot of the tile row 3 (cells 6 and 7).
         const wam = wamWith(undefined);
-        wam.settings = { weather: WeatherType.Clear, water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0 } };
+        wam.settings = {
+            weather: WeatherType.Clear,
+            water: { runoff: 0, evaporation: 0, speed: 60, absorption: 0, current: 1 },
+        };
         wam.entities = { spring: sourceAt(4, 4, 600) };
         const wallPiece = (column: number) => ({
             x: column * 32,

@@ -580,12 +580,15 @@ const mapEditor: BaseTranslation = {
             falling: "falling",
             steady: "steady",
         },
+        current: "Strength of the current (0: avatars are not carried)",
         real: {
             maxDepth: "In reality: a tile is about 1.10 m. Pond: 1 tile; large pond: 2 to 3; lake: 4 and more.",
             runoff: "In reality: the ground feeding a pond is 5 to 20 times its surface; 0 for a built basin.",
             evaporation: "In reality: 0.05 mm/h in winter, 0.1 to 0.3 mm/h in summer (3 to 6 mm a day).",
             absorption: "In reality: clay 1 to 5 mm/h, lawn 5 to 15, sand 20 to 30; soaked ground or asphalt: 0.",
             speed: "In reality: 1. At that speed a rain of 10 mm/h takes hours to fill a pond.",
+            current:
+                "At 1 the hardest current carries as fast as one walks: one resists it by running. Nothing in still water nor under a quarter of a tile of water.",
         },
         paceHint:
             "Hollows fill with the rain of the map and dry in fine weather. A source or a sink is added to any object from its properties.",

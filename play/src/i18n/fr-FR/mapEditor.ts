@@ -591,12 +591,15 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             falling: "baisse",
             steady: "stable",
         },
+        current: "Force du courant (0 : les avatars ne sont pas emportés)",
         real: {
             maxDepth: "En réel : une case fait environ 1,10 m. Mare : 1 case ; étang : 2 à 3 ; lac : 4 et plus.",
             runoff: "En réel : le terrain qui alimente une mare fait 5 à 20 fois sa surface ; 0 pour un bassin maçonné.",
             evaporation: "En réel : 0,05 mm/h en hiver, 0,1 à 0,3 mm/h en été (3 à 6 mm par jour).",
             absorption: "En réel : argile 1 à 5 mm/h, pelouse 5 à 15, sable 20 à 30 ; sol gorgé d'eau ou bitume : 0.",
             speed: "En réel : 1. À cette vitesse, une pluie de 10 mm/h met des heures à remplir un étang.",
+            current:
+                "À 1, le courant le plus fort emporte à la vitesse de la marche : on lui résiste en courant. Rien dans une eau au repos ni sous un quart de case d'eau.",
         },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",
