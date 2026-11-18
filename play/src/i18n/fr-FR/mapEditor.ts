@@ -601,6 +601,17 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             current:
                 "À 1, le courant le plus fort emporte à la vitesse de la marche : on lui résiste en courant. Rien dans une eau au repos ni sous un quart de case d'eau.",
         },
+        life: {
+            title: "Simulation / Vie",
+            enabled: "Poissons et dauphins dans l'eau",
+            hint: "Des poissons apparaissent seuls dans toute eau assez grande (40 cases de relief à un quart de case d'eau), se reproduisent et meurent ; un dauphin les chasse dans les lacs profonds. Les durées sont en temps réel.",
+            counts: "{fish} poisson(s), {dolphins} dauphin(s) sur la carte",
+            reproductionDelay: "Délai de reproduction",
+            maxLifespan: "Durée de vie maximale des poissons",
+            maxSpeed: "Vitesse maximale",
+            tilesPerSecond: "cases/s",
+            huntInterval: "Intervalle de chasse du dauphin",
+        },
         paceHint:
             "Les creux se remplissent avec la pluie de la carte et sèchent par beau temps. Une source ou un puits s'ajoute à n'importe quel objet depuis ses propriétés.",
     },

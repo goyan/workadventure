@@ -590,6 +590,17 @@ const mapEditor: BaseTranslation = {
             current:
                 "At 1 the hardest current carries as fast as one walks: one resists it by running. Nothing in still water nor under a quarter of a tile of water.",
         },
+        life: {
+            title: "Simulation / Life",
+            enabled: "Fish and dolphins in the water",
+            hint: "Fish appear by themselves in any water big enough (40 cells of relief under a quarter of a tile of water), breed and die; a dolphin hunts them in deep lakes. Durations are in real time.",
+            counts: "{fish} fish, {dolphins} dolphin(s) on the map",
+            reproductionDelay: "Breeding delay",
+            maxLifespan: "Longest life of a fish",
+            maxSpeed: "Fastest speed",
+            tilesPerSecond: "tiles/s",
+            huntInterval: "Hunting interval of the dolphin",
+        },
         paceHint:
             "Hollows fill with the rain of the map and dry in fine weather. A source or a sink is added to any object from its properties.",
     },
