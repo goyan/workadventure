@@ -1,10 +1,9 @@
 <script lang="ts">
     import { LIFE_RANGES } from "@workadventure/map-editor";
-    import type { LifeRangeName } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { speciesChart } from "../../Phaser/Game/Life/LifeSpeciesStats";
     import type { SpeciesRow } from "../../Phaser/Game/Life/LifeSpeciesStats";
-    import { aquaticLifeSpeciesStore } from "../../Stores/TerrainEditorStore";
+    import { aquaticLifeSpeciesStore, lifeRangeStore } from "../../Stores/TerrainEditorStore";
 
     /** The species by their number in the messages: their name in the translations, and the colour of their curve. */
     const SPECIES = [
@@ -18,12 +17,12 @@
     const EVENTS = ["arrivals", "births", "diedOfAge", "eaten", "starved", "diedDry"] as const;
     const CHART_WIDTH = 300;
     const CHART_HEIGHT = 110;
-    const RANGES = [...LIFE_RANGES.map((range) => range.name), "all"] as const;
 
     let view = $derived($aquaticLifeSpeciesStore);
     let rows = $derived(view?.rows ?? []);
     let period = $state<"minute" | "total">("minute");
-    let chosen = $state<LifeRangeName | "all">("5min");
+    /** The range of time chosen in the dashboard above. */
+    let chosen = $derived($lifeRangeStore);
     let hidden = $state<number[]>([]);
 
     const nameOf = (species: number): string => {
@@ -175,25 +174,6 @@
         {/if}
 
         <span class="mt-2 text-xs uppercase text-white/50">{$LL.mapEditor.life.species.curves()}</span>
-        <div
-            class="flex flex-wrap gap-x-3 gap-y-1 text-xs"
-            role="radiogroup"
-            aria-label={$LL.mapEditor.life.species.curves()}
-        >
-            {#each RANGES as name (name)}
-                <label class="m-0 flex cursor-pointer items-center gap-1">
-                    <input
-                        type="radio"
-                        class="m-0"
-                        name="life-species-range"
-                        value={name}
-                        bind:group={chosen}
-                        data-testid="life-species-range-{name}"
-                    />
-                    {$LL.mapEditor.life.dashboard.range[name]()}
-                </label>
-            {/each}
-        </div>
         <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
             {#each rows as row (row.species)}
                 <label class="m-0 flex cursor-pointer items-center gap-1" style="color: {colourOf(row.species)}">

@@ -18,7 +18,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", async (importOriginal) => {
 
 const { default: LifeSpeciesDashboard } =
     await import("../../../../src/front/Components/MapEditor/LifeSpeciesDashboard.svelte");
-const { aquaticLifeSpeciesStore } = await import("../../../../src/front/Stores/TerrainEditorStore");
+const { aquaticLifeSpeciesStore, lifeRangeStore } = await import("../../../../src/front/Stores/TerrainEditorStore");
 
 const target = document.body.appendChild(document.createElement("div"));
 let component: ReturnType<typeof mount> | undefined;
@@ -74,7 +74,7 @@ const samples: LifeSample[] = [
 const view = (rows: SpeciesRow[]): LifeSpeciesView => ({
     rows,
     history: samples,
-    ranges: { "5min": samples, "1h": samples, "4h": samples, "1d": samples },
+    ranges: { "5min": samples, "1h": [], "4h": samples, "1d": samples },
 });
 
 describe("LifeSpeciesDashboard", () => {
@@ -134,5 +134,13 @@ describe("LifeSpeciesDashboard", () => {
         expect(text("life-extinct-1")).toContain("mapEditor.life.species.extinct");
         expect(text("life-extinct-1")).toContain("mapEditor.life.species.name.dolphin");
         expect(find("life-extinct-0")).toBeNull();
+    });
+
+    it("draws the range of time chosen in the dashboard above", () => {
+        render(view([fish, dolphin]));
+        expect(find("life-species-curve-0")?.getAttribute("points")).not.toBe("");
+        flushSync(() => lifeRangeStore.set("1h"));
+        expect(find("life-species-curve-0")?.getAttribute("points")).toBe("");
+        flushSync(() => lifeRangeStore.set("5min"));
     });
 });

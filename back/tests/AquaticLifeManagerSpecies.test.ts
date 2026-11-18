@@ -173,4 +173,35 @@ describe("AquaticLifeManager, species by species", () => {
         });
         expect(speciesOf(second.manager.snapshot(), FISH)).toMatchObject({ eaten: 1 });
     });
+
+    it("tells nothing of a species that never lived in a room restored from before the species were counted", async () => {
+        const saved = {
+            state: JSON.stringify({
+                animals: [animal(1, "fish")],
+                nextId: 2,
+                totals: {
+                    arrivals: 2,
+                    births: 3,
+                    diedOfAge: 1,
+                    eaten: 0,
+                    diedDry: 0,
+                    predatorBirths: 0,
+                    predatorDeaths: 0,
+                },
+            }),
+        };
+        const { manager, steps } = harness(saved);
+        await manager.restore();
+        steps(2);
+        expect(manager.snapshot()?.species.map((entry) => entry.species)).toEqual([FISH]);
+    });
+
+    it("tells who lives to a player who joins right after a restart, before the first step", async () => {
+        const saved = {
+            state: JSON.stringify({ animals: [animal(1, "fish"), animal(2, "fish", { sex: "female" })], nextId: 3 }),
+        };
+        const { manager } = harness(saved);
+        await manager.restore();
+        expect(speciesOf(manager.snapshot(), FISH)).toMatchObject({ males: 1, females: 1 });
+    });
 });

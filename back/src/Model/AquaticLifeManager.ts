@@ -3,11 +3,13 @@ import {
     DEFAULT_LIFE_SETTINGS,
     emptyLifeTally,
     emptyPopulation,
+    isPredator,
     lifeCensus,
     LIFE_RANGES,
     LifeHistory,
     LifeRanges,
     LIFE_STEP_MS,
+    SPECIES,
     SPECIES_IDS,
     SPECIES_WIRE,
     speciesCensus,
@@ -276,7 +278,8 @@ export class AquaticLifeManager {
         // The history keeps a sample every few seconds only.
         const counts: Partial<Record<SpeciesId, number>> = {};
         for (const animal of this.population.animals) counts[animal.kind] = (counts[animal.kind] ?? 0) + 1;
-        const predators = counts.dolphin ?? 0;
+        let predators = 0;
+        for (const species of SPECIES_IDS) if (isPredator(SPECIES[species])) predators += counts[species] ?? 0;
         const sample = { at: now, prey: this.population.animals.length - predators, predators, counts };
         this.history.add(sample);
         this.ranges.add(sample);
@@ -299,21 +302,34 @@ export class AquaticLifeManager {
     private speciesStats(): AquaticSpeciesStatsMessage[] {
         const stats: AquaticSpeciesStatsMessage[] = [];
         for (const species of SPECIES_IDS) {
-            const now = this.speciesNow.find((entry) => entry.species === species);
+            // Who lives is counted now: the census is a second old, and empty right after a restart.
+            let males = 0;
+            let females = 0;
+            for (const animal of this.population.animals) {
+                if (animal.kind !== species) continue;
+                if (animal.sex === "female") females++;
+                else males++;
+            }
+            const cap = this.speciesNow.find((entry) => entry.species === species)?.cap ?? 0;
             const tally = this.bySpecies[species];
-            if (!now && !tally) continue;
+            const meals = countsOnWire(tally?.meals);
+            const happened =
+                tally !== undefined &&
+                (meals.length > 0 ||
+                    tally.arrivals + tally.births + tally.diedOfAge + tally.eaten + tally.starved + tally.diedDry > 0);
+            if (males + females === 0 && cap === 0 && !happened) continue;
             stats.push({
                 species: SPECIES_WIRE[species],
-                males: now?.males ?? 0,
-                females: now?.females ?? 0,
-                cap: now?.cap ?? 0,
+                males,
+                females,
+                cap,
                 arrivals: tally?.arrivals ?? 0,
                 births: tally?.births ?? 0,
                 diedOfAge: tally?.diedOfAge ?? 0,
                 eaten: tally?.eaten ?? 0,
                 starved: tally?.starved ?? 0,
                 diedDry: tally?.diedDry ?? 0,
-                meals: countsOnWire(tally?.meals),
+                meals,
             });
         }
         return stats;

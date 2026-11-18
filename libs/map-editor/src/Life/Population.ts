@@ -110,14 +110,6 @@ const dolphinCapOf = (deepCells: number): number => Math.floor(deepCells / DEEP_
 const fishCapOf = (cells: number): number => Math.max(2, Math.floor(cells / CELLS_PER_FISH));
 
 type BodySize = WaterBodies["sizes"][number];
-/** How many animals of a species a body of water holds. */
-function placeCapOf(species: SpeciesId, size: BodySize): number {
-    return species === "dolphin" ? dolphinCapOf(size.deep) : fishCapOf(size.cells);
-}
-/** Whether a body of water is big enough for a species to come into it. */
-function habitable(species: SpeciesId, size: BodySize): boolean {
-    return species === "dolphin" ? size.deep >= MIN_DOLPHIN_DEEP_CELLS : size.cells >= MIN_BODY_CELLS;
-}
 
 /** What the settings of the map say of a species, in milliseconds. */
 interface SpeciesTimes {
@@ -125,20 +117,43 @@ interface SpeciesTimes {
     maxLifespanMs: number;
     huntIntervalMs: number;
 }
-function timesOf(species: SpeciesId, settings: LifeSettings): SpeciesTimes {
-    const huntIntervalMs = settings.huntInterval * 1000;
-    return species === "dolphin"
-        ? {
-              breedDelayMs: settings.dolphinReproductionDelay * 1000,
-              maxLifespanMs: settings.dolphinMaxLifespan * 1000,
-              huntIntervalMs,
-          }
-        : {
-              breedDelayMs: settings.reproductionDelay * 1000,
-              maxLifespanMs: settings.maxLifespan * 1000,
-              huntIntervalMs,
-          };
-}
+
+/**
+ * What is not in the table of the species because it reads the places and the settings of the map: every species
+ * must say it here.
+ */
+const PLACES: Record<
+    SpeciesId,
+    {
+        /** How many of them a body of water holds. */
+        cap: (size: BodySize) => number;
+        /** Whether a body of water is big enough for them to come into it. */
+        habitable: (size: BodySize) => boolean;
+        times: (settings: LifeSettings) => SpeciesTimes;
+    }
+> = {
+    fish: {
+        cap: (size) => fishCapOf(size.cells),
+        habitable: (size) => size.cells >= MIN_BODY_CELLS,
+        times: (settings) => ({
+            breedDelayMs: settings.reproductionDelay * 1000,
+            maxLifespanMs: settings.maxLifespan * 1000,
+            huntIntervalMs: settings.huntInterval * 1000,
+        }),
+    },
+    dolphin: {
+        cap: (size) => dolphinCapOf(size.deep),
+        habitable: (size) => size.deep >= MIN_DOLPHIN_DEEP_CELLS,
+        times: (settings) => ({
+            breedDelayMs: settings.dolphinReproductionDelay * 1000,
+            maxLifespanMs: settings.dolphinMaxLifespan * 1000,
+            huntIntervalMs: settings.huntInterval * 1000,
+        }),
+    },
+};
+const placeCapOf = (species: SpeciesId, size: BodySize): number => PLACES[species].cap(size);
+const habitable = (species: SpeciesId, size: BodySize): boolean => PLACES[species].habitable(size);
+const timesOf = (species: SpeciesId, settings: LifeSettings): SpeciesTimes => PLACES[species].times(settings);
 
 export function lifeCensus(population: Population, bodies: WaterBodies): LifeCensus {
     const populated = new Set<number>();
