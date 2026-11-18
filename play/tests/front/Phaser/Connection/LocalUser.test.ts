@@ -44,8 +44,8 @@ describe("isUserNameValid()", () => {
     it("should validate accents", () => {
         expect(isUserNameValid("éàëè")).toBe(true);
     });
-    it("should validate chinese characters", () => {
-        expect(isUserNameValid("中文鍵盤")).toBe(true);
+    it("should reject non-Latin characters", () => {
+        expect(isUserNameValid("中文鍵盤")).toBe(false);
     });
 });
 
@@ -65,6 +65,33 @@ describe("avatar video preference", () => {
         localUserStore.setAvatarVideosEnabled(true);
         expect(localUserStore.getAvatarVideosEnabled()).toBe(true);
         expect(values.get("avatarVideosEnabled")).toBe("true");
+    });
+});
+
+describe("legacy player names", () => {
+    it.each(["AB        ", "P I C A V R S", "中文鍵盤", "Ali\u200bce"])(
+        "replaces and persists the old invalid name %s on read",
+        async (oldName) => {
+            localStorage.setItem("playerName", oldName);
+            vi.resetModules();
+            const { localUserStore: freshStore } = await import("../../../../src/front/Connection/LocalUserStore");
+            const replacement = freshStore.getName();
+            expect(isUserNameValid(replacement)).toBe(true);
+            expect(replacement).not.toBe(oldName);
+            expect(localStorage.getItem("playerName")).toBe(replacement);
+            expect(freshStore.getName()).toBe(replacement);
+            vi.resetModules();
+            const { localUserStore: reloadedStore } = await import("../../../../src/front/Connection/LocalUserStore");
+            expect(reloadedStore.getName()).toBe(replacement);
+        },
+    );
+
+    it("preserves an old valid name", async () => {
+        localStorage.setItem("playerName", "Hervé");
+        vi.resetModules();
+        const { localUserStore: freshStore } = await import("../../../../src/front/Connection/LocalUserStore");
+        expect(freshStore.getName()).toBe("Hervé");
+        expect(localStorage.getItem("playerName")).toBe("Hervé");
     });
 });
 

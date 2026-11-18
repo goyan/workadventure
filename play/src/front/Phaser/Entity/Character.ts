@@ -311,6 +311,11 @@ export abstract class Character extends Container implements OutlineableInterfac
                 this.y + playerNameY,
                 this.playerName,
                 playerNameOutlineColor,
+                (hovered): void => {
+                    if (!hovered || this.isClickable()) {
+                        this.emit(hovered ? Phaser.Input.Events.POINTER_OVER : Phaser.Input.Events.POINTER_OUT);
+                    }
+                },
             );
             this.usernameDisplay.setAvailabilityStatus(this.availabilityStatus, true);
             this.usernameDisplay.setRaisedHand(this.raisedHand, true);

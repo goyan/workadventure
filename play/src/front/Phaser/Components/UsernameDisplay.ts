@@ -43,6 +43,16 @@ export class UsernameDisplay {
     };
     private toForeFront: boolean = false;
     private depth: number = 0;
+    private hovered = false;
+    private readonly onMouseEnter = (): void => {
+        this.hovered = true;
+        this.onHover(true);
+    };
+    private readonly onMouseLeave = (): void => {
+        if (!this.hovered) return;
+        this.hovered = false;
+        this.onHover(false);
+    };
 
     constructor(
         private scene: GameScene,
@@ -50,6 +60,7 @@ export class UsernameDisplay {
         private y: number,
         playerName: string,
         outlineColor: number | undefined,
+        private readonly onHover: (hovered: boolean) => void,
     ) {
         this.playerName = playerName;
         this.displayScale = this.getDisplayScale(waScaleManager.zoomModifier);
@@ -66,6 +77,8 @@ export class UsernameDisplay {
         this.element.ariaHidden = "true";
         this.element.className = "username-display";
         this.element.style.background = PLAYER_NAME_BACKGROUND_COLOR;
+        this.element.addEventListener("mouseenter", this.onMouseEnter);
+        this.element.addEventListener("mouseleave", this.onMouseLeave);
 
         this.applyStyles();
         this.updatePlayerDepth();
@@ -147,6 +160,9 @@ export class UsernameDisplay {
     }
 
     public destroy(): void {
+        this.onMouseLeave();
+        this.element.removeEventListener("mouseenter", this.onMouseEnter);
+        this.element.removeEventListener("mouseleave", this.onMouseLeave);
         this.element.remove();
         this.statusDisplay.destroy();
         this.megaphoneDisplay.destroy();
@@ -266,6 +282,7 @@ export class UsernameDisplay {
     }
 
     public setVideoBubbleVisible(visible: boolean): void {
+        if (visible) this.onMouseLeave();
         this.element.style.visibility = visible ? "hidden" : "";
     }
 }

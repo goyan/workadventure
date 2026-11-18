@@ -6,7 +6,8 @@ const login: BaseTranslation = {
             placeholder: "Enter your name",
             empty: "The name is empty",
             tooLongError: "Name is too long",
-            notValidError: "Letters, numbers, _ and - only, without spaces. Start with a letter or number.",
+            notValidError:
+                "Latin letters and accents, numbers, _ and -. Up to three words, at least two characters per word and a single space between words.",
         },
     },
     genericError: "An error occurred",
