@@ -360,7 +360,22 @@ message EditMapMessage {
     DeleteCustomEntityMessage deleteCustomEntityMessage = 11;
     ModifiyWAMMetadataMessage modifiyWAMMetadataMessage = 12;
     UploadFileMessage uploadFileMessage = 13;
+    ModifyTerrainMessage modifyTerrainMessage = 14;
   }
+}
+
+// The relief of the ground (TerrainData in libs/map-editor): the new heights of the cells one stroke of the brush
+// changed, bounded in number, and the maximum depth of the map when it is changed.
+message ModifyTerrainMessage {
+  repeated TerrainCellMessage cells = 1;
+  optional int32 maxDepthTiles = 2;
+}
+
+// A cell of the relief (16 map pixels wide) and its height in pixels of altitude: 0 on the ground, negative when dug.
+message TerrainCellMessage {
+  sint32 x = 1;
+  sint32 y = 2;
+  sint32 height = 3;
 }
 
 message ErrorCommandMessage {
@@ -374,7 +389,18 @@ message UpdateWAMSettingsMessage {
     UpdatePrefabOverrideSettingMessage updatePrefabOverrideSettingMessage = 3;
     UpdateCategorySettingMessage updateCategorySettingMessage = 4;
     UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
+    UpdateWaterSettingMessage updateWaterSettingMessage = 6;
   }
+}
+
+// How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).
+message UpdateWaterSettingMessage {
+  double runoff = 1;
+  double evaporation = 2;
+  // How many times faster than in reality the water goes. Absent from older clients: the one of the map is kept.
+  optional double speed = 3;
+  // Water the flat ground drinks from a flood, in mm an hour. Absent from older clients: the one of the map is kept.
+  optional double absorption = 4;
 }
 
 // Map-wide weather, validated against WeatherType before it is stored.
@@ -742,6 +768,39 @@ message EntityStateMessage {
   string entityId = 1;
   string key = 2;
   string value = 3;
+}
+
+// The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a
+// rectangle of the map. The server alone computes it, so that every player sees the same water.
+message TerrainWaterMessage {
+  // The rectangle, in cells of the relief (16 map pixels).
+  sint32 x = 1;
+  sint32 y = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  // Counts the messages of a room: a browser that missed one waits for the next full state.
+  uint32 seq = 5;
+  // Whether `depths` is the whole state, or what changed since the message before (bytes to XOR with it).
+  bool full = 6;
+  // Two bytes a cell (eighths of a pixel of water, low byte first), row by row, gzipped.
+  bytes depths = 7;
+  optional TerrainWaterStatsMessage stats = 8;
+}
+
+// What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
+// of the map, and what it holds: for the dashboard of the relief tool.
+message TerrainWaterStatsMessage {
+  double rain = 1;
+  double sources = 2;
+  double sinks = 3;
+  double evaporation = 4;
+  double absorption = 5;
+  double lost = 6;
+  // Cubic metres of water on the map, and square metres under water.
+  double stock = 7;
+  double wetArea = 8;
+  // How hard it rains now, in mm an hour.
+  double rainRate = 9;
 }
 
 // A sound attached to an entity was activated and must be played by every player of the map.
@@ -1354,6 +1413,7 @@ message SubMessage {
     SpaceStatePatchMessage spaceStatePatchMessage = 32;
     DuckRushEventMessage duckRushEventMessage = 33;
     EntityStateMessage entityStateMessage = 34;
+    TerrainWaterMessage terrainWaterMessage = 35;
   }
 }
 
@@ -1452,6 +1512,8 @@ message RoomJoinedMessage {
   CompanionTextureMessage companionTexture = 18;
   repeated AreaPropertyVariableMessage areaPropertyVariable = 19;
   repeated EntityStateMessage entityState = 20;
+  // The water of the relief (its whole state), for a player who joins the room. Absent on a map without water.
+  optional TerrainWaterMessage terrainWater = 22;
 }
 
 message WebRtcStartMessage {
@@ -2010,6 +2072,7 @@ message SubToPusherRoomMessage {
     ZoneMessage zoneMessage = 7;
     AreaPropertyVariableMessage areaPropertyVariableMessage = 8;
     EntityStateMessage entityStateMessage = 10;
+    TerrainWaterMessage terrainWaterMessage = 11;
   }
 }
 

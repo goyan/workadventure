@@ -1,0 +1,100 @@
+import { DEFAULT_WATER_SETTINGS, TERRAIN_CELL, WaterSinkPropertyData, WaterSourcePropertyData } from "../types";
+import type { WAMFileFormat, WaterSettings } from "../types";
+import { LITRES_PER_M3, metresOf } from "./Scale";
+import { CELL_LITRES_PER_PX } from "./WaterGrid";
+import type { WaterStepInput, WaterTally } from "./WaterGrid";
+
+/** The water of a map is stepped this often: ten times a second, so that it is seen running. */
+export const WATER_STEP_MS = 100;
+
+/** The room is told the water this often (what changed only): the browsers glide from one state to the next. */
+export const WATER_MESSAGE_MS = 1000;
+
+/** A source (positive flow) or a sink (negative) of the map, at the cell where its water comes out. */
+export interface WaterObject {
+    cellX: number;
+    cellY: number;
+    litresPerMinute: number;
+}
+
+/**
+ * The sources and the sinks of a map: the objects with a water property, each at the foot of its object (the
+ * position of the object plus the anchor the editor wrote in the property; the server knows nothing of the size of
+ * the objects). A broken property is left out.
+ */
+export function waterObjectsOf(wam: Pick<WAMFileFormat, "entities"> | undefined): WaterObject[] {
+    const objects: WaterObject[] = [];
+    for (const entity of Object.values(wam?.entities ?? {})) {
+        for (const property of entity.properties ?? []) {
+            const source = WaterSourcePropertyData.safeParse(property);
+            const sink = source.success ? undefined : WaterSinkPropertyData.safeParse(property);
+            const found = source.success ? source.data : sink?.success ? sink.data : undefined;
+            if (!found || found.flow === 0) continue;
+            objects.push({
+                cellX: Math.floor((entity.x + (found.anchorX ?? 0)) / TERRAIN_CELL),
+                cellY: Math.floor((entity.y + (found.anchorY ?? 0)) / TERRAIN_CELL),
+                litresPerMinute: source.success ? found.flow : -found.flow,
+            });
+        }
+    }
+    return objects;
+}
+
+/** Pixels of water a millimetre of water makes. */
+const PX_PER_MM = 1 / (-metresOf(-1) * 1000);
+
+/**
+ * What one step of `seconds` does to the water of a map, from its settings, how hard it rains (mm an hour) and its
+ * sources and sinks: the rain on the hollows (with the runoff of the ground around), the evaporation in dry weather
+ * only, what the flat ground drinks, the flows. All of it goes `speed` times faster than in reality.
+ */
+export function stepInputOf(
+    water: WaterSettings | undefined,
+    rainMmPerHour: number,
+    objects: readonly WaterObject[],
+    seconds: number,
+): WaterStepInput {
+    const settings = water ?? DEFAULT_WATER_SETTINGS;
+    const figure = (value: number, fallback = 0): number => (Number.isFinite(value) && value > 0 ? value : fallback);
+    const hours = (figure(seconds) * figure(settings.speed, 1)) / 3600;
+    const rain = figure(rainMmPerHour);
+    return {
+        rainPx: rain * hours * PX_PER_MM * (1 + figure(settings.runoff)),
+        evaporationPx: rain > 0 ? 0 : figure(settings.evaporation) * hours * PX_PER_MM,
+        absorptionPx: figure(settings.absorption) * hours * PX_PER_MM,
+        flows: objects
+            .filter((object) => Number.isFinite(object.litresPerMinute) && hours > 0)
+            .map((object) => ({
+                cellX: object.cellX,
+                cellY: object.cellY,
+                px: (object.litresPerMinute * 60 * hours) / CELL_LITRES_PER_PX,
+            })),
+    };
+}
+
+/** What came into and went out of the water of a map, in cubic metres an hour of the time of the map. */
+export interface WaterRates {
+    rain: number;
+    sources: number;
+    sinks: number;
+    evaporation: number;
+    absorption: number;
+    lost: number;
+}
+
+/**
+ * The rates of a tally summed over `seconds` of real time on a map whose water goes `speed` times faster: cubic
+ * metres an hour of the time of the map, so they compare with its settings whatever its speed.
+ */
+export function ratesOf(tally: Omit<WaterTally, "moved">, seconds: number, speed: number): WaterRates {
+    const hours = (seconds * (Number.isFinite(speed) && speed >= 1 ? speed : 1)) / 3600;
+    const rate = (px: number): number => (hours > 0 ? (px * CELL_LITRES_PER_PX) / LITRES_PER_M3 / hours : 0);
+    return {
+        rain: rate(tally.rainPx),
+        sources: rate(tally.sourcesPx),
+        sinks: rate(tally.sinksPx),
+        evaporation: rate(tally.evaporationPx),
+        absorption: rate(tally.absorptionPx),
+        lost: rate(tally.lostPx),
+    };
+}

@@ -116,6 +116,8 @@ export class CanvasBlockSurface implements BlockSurface {
     constructor(
         private readonly scene: Phaser.Scene,
         depth: number,
+        /** Blends neighbouring blocks instead of showing each as a sharp square (the relief of the ground). */
+        private readonly smooth = false,
     ) {
         this.image = scene.add.image(0, 0, "__DEFAULT").setOrigin(0, 0).setDepth(depth).setVisible(false);
     }
@@ -135,7 +137,9 @@ export class CanvasBlockSurface implements BlockSurface {
             this.texture =
                 this.scene.textures.addCanvas(`weather-blocks:${this.id}:${this.sizes++}:${columns}x${rows}`, canvas) ??
                 undefined;
-            this.texture?.setFilter(Phaser.Textures.FilterMode.NEAREST);
+            this.texture?.setFilter(
+                this.smooth ? Phaser.Textures.FilterMode.LINEAR : Phaser.Textures.FilterMode.NEAREST,
+            );
             this.pixels = this.texture?.getContext().createImageData(columns, rows);
             if (this.texture) this.image.setTexture(this.texture.key);
             previous?.destroy();
@@ -181,6 +185,6 @@ export class CanvasBlockSurface implements BlockSurface {
     }
 }
 
-export function createBlockSurface(scene: Phaser.Scene, depth: number): BlockSurface {
-    return new CanvasBlockSurface(scene, depth);
+export function createBlockSurface(scene: Phaser.Scene, depth: number, smooth = false): BlockSurface {
+    return new CanvasBlockSurface(scene, depth, smooth);
 }

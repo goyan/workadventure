@@ -2099,6 +2099,78 @@ pas, puis s’active sans fermer le menu. Une déconnexion de l’extension dés
 traduite existante indique les prérequis. Deux tests DOM reproduisent ces transitions ; le menu français et son activation
 ont aussi été vérifiés dans le navigateur local après rebase sur `infogene`.
 
+## Relief et lacs
+
+Lot 1 de « relief et eau vivante » (conception et plan dans le dépôt d'infra,
+`docs/superpowers/{specs,plans}/2026-11-18-relief-eau*`). Rivières et inondations : lots suivants.
+
+**Dans l'éditeur.** Nouvel outil **Relief** (pelle, chiffre 9, éditeurs de la carte entière seulement). Le pinceau est
+une sphère : « Creuser » enlève au sol une calotte (toute la force au centre, rien au bord), « Remblayer » la remet.
+Un clic ou un glissé est un geste, envoyé au relâchement en une commande (annulée d'un Ctrl+Z) ; Échap l'abandonne.
+Dans un même geste une cellule n'est creusée qu'une fois, repasser creuse davantage, jusqu'à la profondeur maximale
+de la carte. Curseurs : diamètre (1 à 12 cases), force (automatique : un huitième du diamètre). Le relief ne se creuse
+que dehors (grille extérieure de la météo), jamais sous un mur. Réglages enregistrés dans la carte, dans le même
+panneau : profondeur maximale (1 à 8 cases, 2 par défaut), ruissellement (10 par défaut : le terrain autour apporte
+dix fois la surface du creux), évaporation par temps sec (0,2 mm/h par défaut), absorption du sol plat (5 mm/h),
+**vitesse de l'eau** (60 par défaut : une minute pour une heure ; à 1, comme en vrai, une pluie remplit un lac en
+des heures). **Source** et **puits** sont des
+propriétés d'objet (`waterSourcePropertyData`, `waterSinkPropertyData`, débit enregistré en litres par minute, réglé en m³/h, de 0 à 120 000), à ajouter à
+n'importe quel objet depuis son panneau : une source verse à son pied, un puits retire l'eau qui arrive au sien. Le
+pied (milieu du bas de l'image) est écrit dans la propriété par l'éditeur (`anchorX`, `anchorY`,
+`Terrain/WaterAnchor.ts`), car `back` ne connaît pas la taille des objets.
+
+**Modèle** (`libs/map-editor/src/Terrain/`, lu à l'identique par `back` et par le front). Le relief est un champ
+facultatif du WAM (`terrain` : hauteurs par cellule de 16 px, 0 au sol, négatif creusé, par blocs de 16 × 16 ; absent =
+carte plate, aucune migration). Échelle des lampes : une case = 1,2 m² de sol (`TILE_AREA_M2`), donc 1 mm de pluie =
+1,2 litre par case.
+
+**L'eau est simulée par cellules** (`WaterGrid`) : chaque cellule a une hauteur d'eau, et à chaque pas l'eau passe
+vers les voisines dont la surface (sol + eau) est plus basse. Une source fait donc une flaque à son pied, qui coule
+dans la pente ; un creux plein déborde par son point le plus bas ; sur sol plat une inondation monte et avance tant
+que l'eau arrive. La surface de l'eau est plafonnée à 18 px au-dessus du sol : juste au-dessus de la profondeur où l'on nage (16 px, environ 0,5 m), loin sous le premier palier (52 px) : on
+garde les pieds au sec à l'étage. La grille couvre l'emprise du relief et des sources, plus 48 cellules de marge
+(600 × 600 au plus) ; l'eau qui en sort est perdue. Un premier modèle « une cuvette, un niveau » a été essayé puis
+retiré : l'eau y apparaissait au point le plus bas de toute la région creusée, loin de la source.
+
+**Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
+par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
+(m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau
+d'une source descend la plus grande pente jusqu'au premier creux, en mouillant le lit ; un puits retire l'eau à une
+case et demie autour de son pied (l'eau plus loin doit couler jusqu'à lui). Une entrée de catalogue peut porter
+`waterFlow: { kind: "source" | "sink", flow (m³/h), anchor }` : l'objet posé est alors une source ou un puits
+aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
+réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
+
+**Limite connue** : l'eau traverse les murs ; le passage par les portes seulement est prévu dans une PR suivante.
+
+**`back` calcule** (`TerrainWaterManager`) : dix pas par seconde, avec la pluie sur les cellules creusées (et le
+ruissellement), l'évaporation des cellules mouillées par temps sec seulement, l'eau bue par le sol plat, les sources
+et les puits (`WaterInputs.ts`). Une fois par seconde il annonce à la salle ce qui a changé (deux octets par cellule,
+en huitièmes de pixel, XOR avec l'état précédent, gzip ; état complet à l'arrivée d'un joueur, après une édition du
+relief et toutes les 30 annonces) et les chiffres du bilan. Une eau au repos sans rien qui arrive n'est ni calculée
+ni annoncée ; une carte sans relief ni source ne coûte rien. L'eau est sauvée dans Redis (`terrain-water:<salle>`)
+toutes les 30 s et reprise au redémarrage, sans rattrapage du temps d'arrêt. Quand le relief change, l'eau reste où
+elle était. `back` connaît la pluie par `rainRateAt` : pluie fixe 2 mm/h, orage 10 mm/h, programme automatique, débit
+réel d'Open-Meteo pour une carte en Réel (`RainTimelineService`). Le programme automatique, les saisons et la lecture
+d'Open-Meteo vivent pour cela dans `libs/map-editor/src/Weather/` (les anciens chemins du front les réexportent).
+
+**Tableau de bord** (panneau Relief, « Bilan de l'eau ») : ce qui entre (pluie, sources) et ce qui sort (puits,
+évaporation, bu par le sol, perdu au bord) en m³/h du temps de la carte, avec l'unité propre du réglage à côté (mm/h),
+une barre par ligne à la même échelle, la tendance (entrées moins sorties), le stock en m³ et la surface sous l'eau.
+Mis à jour chaque seconde par `back` tant que l'eau bouge.
+
+**En jeu.** `Terrain/TerrainView.ts` dessine le relief (fond assombri avec la profondeur, pentes éclairées du
+nord-ouest) et l'eau (bleu clair, plus sombre avec la profondeur, liseré sur la rive) dans un canevas lissé d'un
+pixel par cellule, sous les objets et les avatars, redessiné seulement quand le relief, l'eau ou la vue changent
+(dix fois par seconde pendant que l'eau glisse d'un état au suivant). On **nage** au-delà d'une demi-case d'eau
+(16 px), comme dans une piscine, sans invite ; en dessous on marche. Un avatar sur un palier ne nage pas. Les flaques
+de la pluie ne se posent pas sur le relief ; les éclaboussures deviennent des ronds sur l'eau.
+
+**Limites.** L'eau traverse encore les murs (elle devra passer par les portes seulement : `back` ne connaît pas les
+murs). Pas de mode Rivière tracée. Relief négatif seulement, au sol et dehors. Animaux et compagnons ignorent l'eau.
+Pas de courant qui pousse l'avatar. Un geste immense part en plusieurs commandes (autant d'annulations). Les valeurs
+par défaut du rythme sont à doser avec le tableau de bord. `play`, `back` et `map-storage` se déploient ensemble.
+
 ## Météo de la carte
 
 Dans « Outils → Météo », un éditeur de la carte choisit

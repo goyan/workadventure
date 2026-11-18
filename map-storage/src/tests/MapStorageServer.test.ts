@@ -178,6 +178,32 @@ describe("MapStorageServer entity edit permissions", () => {
         expect(addCommandToQueue).toHaveBeenCalledWith("map.wam", response);
     });
 
+    describe("relief", () => {
+        const dig = (cells: { x: number; y: number; height: number }[]): EditMapMessage => ({
+            $case: "modifyTerrainMessage",
+            modifyTerrainMessage: { cells },
+        });
+
+        it("lets a map editor dig, saves the relief and broadcasts the command", async () => {
+            await expectAccepted(MAP_EDITOR, dig([{ x: 3, y: 4, height: -24 }]));
+            expect(wamFile.getWam().terrain?.chunks["0,0"]?.[4 * 16 + 3]).toBe(-24);
+            expect(mapsManager.executeCommand).toHaveBeenCalledOnce();
+        });
+
+        it("refuses a visitor and a zone editor: the relief belongs to the whole map", async () => {
+            await expectRefused(VISITOR, dig([{ x: 3, y: 4, height: -24 }]));
+            await expectRefused(ZONE_EDITOR, dig([{ x: 1, y: 1, height: -24 }]));
+        });
+
+        it("answers an error to a command with too many cells, and changes nothing", async () => {
+            const cells = Array.from({ length: 20001 }, (_, index) => ({ x: index, y: 0, height: -1 }));
+            const response = await send(MAP_EDITOR, dig(cells));
+            expect(response.editMapMessage?.message?.$case).toBe("errorCommandMessage");
+            expect(wamFile.getWam().terrain).toBeUndefined();
+            expect(addCommandToQueue).not.toHaveBeenCalled();
+        });
+    });
+
     it("keeps the start of a snow chosen again, so that its ground keeps the snow it holds", async () => {
         wamFile.getWam().settings = { weather: WeatherType.Snow, weatherStartedAt: 600_000 };
         vi.spyOn(Date, "now").mockReturnValue(1_800_000);

@@ -18,6 +18,7 @@ import {
     type GroupUsersUpdateMessage,
     PositionMessage_Direction,
     type SendUserMessage,
+    type TerrainWaterMessage,
 } from "@workadventure/messages";
 import { z } from "zod";
 import type { ITiledMap, ITiledMapLayer, ITiledMapObject, ITiledMapTileset } from "@workadventure/tiled-map-type-guard";
@@ -276,6 +277,7 @@ import type { SkyShadowCategories } from "../../Stores/SkyLightStore";
 import { mapLayerBuiltLevelsStore, mapLayerLevelStore } from "../../Stores/MapLayerStore";
 import { floorLevelsBuiltStore } from "../../Stores/FloorLevelsStore";
 import { areaHighlightHiddenStore } from "../../Stores/NightStore";
+import { terrainWaterStatsStore } from "../../Stores/TerrainEditorStore";
 import { KaraokeSpotlight } from "./KaraokeSpotlight";
 import { FadedWallFloorView } from "./MapEditor/MapLayer/FadedWallFloorView";
 import { groundPrefabOfUpper } from "./MapEditor/MapLayer/MapLayerLevels";
@@ -345,6 +347,9 @@ import { LocateManager } from "./LocateManager";
 import { DuckRushManager } from "./DuckRushManager";
 import { WanderingCharactersManager } from "./Wander/WanderingCharactersManager";
 import { WeatherManager } from "./Weather/WeatherManager";
+import { TerrainWater } from "./Terrain/TerrainWater";
+import { TerrainView } from "./Terrain/TerrainView";
+import { gunzip } from "./Terrain/WaterStateCodec";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import { GameJungle } from "./Jungle/GameJungle";
 import type { OutdoorGrid } from "./Outdoor/OutdoorGrid";
@@ -534,6 +539,11 @@ export class GameScene extends DirtyScene {
     private lampManager: LampManager | undefined;
     private gameSwitches: GameSwitches | undefined;
     private weatherManager: WeatherManager | undefined;
+    /** The water of the hollows of the relief, as the server keeps it. */
+    private readonly terrainWater = new TerrainWater();
+    private terrainWaterSubscription: Subscription | undefined;
+    private terrainView: TerrainView | undefined;
+    private terrainWaterQueue: Promise<void> = Promise.resolve();
     private skyShadowManager: SkyShadowManager | undefined;
     private skyWindowLightManager: SkyWindowLightManager | undefined;
     private skyMovingShadows: SkyMovingShadows | undefined;
@@ -1535,6 +1545,8 @@ export class GameScene extends DirtyScene {
         this.playerVariablesManager?.close();
         this.areaPropertyVariablesManager?.destroy();
         areaPropertyVariablesManagerStore.set(undefined);
+        this.terrainWaterSubscription?.unsubscribe();
+        this.terrainWaterSubscription = undefined;
         this.entityStatesManager?.destroy();
         this.entityStatesManager = undefined;
         entityStatesManagerStore.set(undefined);
@@ -1607,6 +1619,8 @@ export class GameScene extends DirtyScene {
         this.gameSwitches?.destroy();
         this.gameSwitches = undefined;
         this.weatherManager?.destroy();
+        this.terrainView?.destroy();
+        this.terrainView = undefined;
         this.skyShadowManager?.destroy();
         this.skyShadowManager = undefined;
         this.skyWindowLightManager?.destroy();
@@ -2094,6 +2108,9 @@ export class GameScene extends DirtyScene {
                 this.nightManager?.isNight(),
                 this.nightManager?.sunPosition(),
             );
+            // The relief may have been edited: the water follows it (nothing is done while it stays the same).
+            this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
+            this.terrainView?.update(time);
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
             this.skyMovingShadows?.update();
@@ -2666,6 +2683,30 @@ export class GameScene extends DirtyScene {
     /** Server (Paris) time shared by every client, undefined until the clock is synchronised. */
     public getServerDate(): Date | undefined {
         return this.nightManager?.serverDate();
+    }
+
+    /**
+     * A state of the water from the server: unzipped (that takes a moment), then shown. The states are taken one
+     * after the other, in the order they came: a change applies to the state just before it.
+     */
+    private receiveTerrainWater(message: TerrainWaterMessage): void {
+        this.terrainWaterQueue = this.terrainWaterQueue
+            .then(async () => {
+                const depths = await gunzip(message.depths);
+                this.terrainWater.receive({ ...message, depths }, this.time.now);
+                if (message.stats) terrainWaterStatsStore.set(message.stats);
+            })
+            .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
+    }
+
+    /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
+    public getTerrainView(): TerrainView | undefined {
+        return this.terrainView;
+    }
+
+    /** The water of the hollows of the relief of the map (lakes), the same for everyone. */
+    public getTerrainWater(): TerrainWater {
+        return this.terrainWater;
     }
 
     /** The weather of the map shown now, the same for everyone (without one's own seasonal theme). */
@@ -3358,6 +3399,9 @@ export class GameScene extends DirtyScene {
                     raisedCover: () => this.raisedWeatherCover(),
                     seasonalTheme: () => this.getSeasonalTheme(),
                 });
+                // The relief of the ground and the water of its hollows.
+                this.terrainView?.destroy();
+                this.terrainView = new TerrainView(this, this.terrainWater);
                 // The shadows of the sun and of the moon, outdoors. One set at a time.
                 this.skyShadowManager?.destroy();
                 this.skyShadowManager = new SkyShadowManager(this, {
@@ -3644,6 +3688,13 @@ export class GameScene extends DirtyScene {
         areaPropertyVariablesManagerStore.set(this.areaPropertyVariablesManager);
         this.entityStatesManager?.destroy();
         this.entityStatesManager = new EntityStatesManager(this.connection, room.entityStates);
+        // The water of the relief: what the room holds now, then every change.
+        this.terrainWater.setTerrain(this.getGameMap().getWamFile()?.getWam().terrain);
+        if (room.terrainWater) this.receiveTerrainWater(room.terrainWater);
+        this.terrainWaterSubscription?.unsubscribe();
+        this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {
+            this.receiveTerrainWater(message);
+        });
         entityStatesManagerStore.set(this.entityStatesManager);
         listeningZoneNamesStore.set(
             new Map(

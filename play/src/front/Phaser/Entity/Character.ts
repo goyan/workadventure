@@ -23,6 +23,7 @@ import { findSeatUnderFeet } from "@wa/front/Phaser/Player/Seat";
 import {
     BODY_CENTER_OFFSET_Y,
     getWaterRectangles,
+    isDeepTerrainWater,
     isPointInWater,
     isWithinOneTileOfWater,
 } from "@wa/front/Phaser/Game/Water/WaterZones";
@@ -396,10 +397,10 @@ export abstract class Character extends Container implements OutlineableInterfac
     protected isSwimmingHere(): boolean {
         // The water of its floor only: a character on a raised floor or a stair drawn over a pool of the ground does
         // not swim, and it swims in a pool of its own floor.
-        return isPointInWater(getWaterRectangles(this.scene, this.floorZ), {
-            x: this.x,
-            y: this.y + BODY_CENTER_OFFSET_Y,
-        });
+        const body = { x: this.x, y: this.y + BODY_CENTER_OFFSET_Y };
+        if (isPointInWater(getWaterRectangles(this.scene, this.floorZ), body)) return true;
+        // A lake of the relief, on the ground only: deep enough, one swims in it as in a pool.
+        return this.floorZ < 2 && isDeepTerrainWater(this.scene.getTerrainWater?.(), body, this.scene.time.now);
     }
 
     /**

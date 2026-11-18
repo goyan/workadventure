@@ -34,6 +34,7 @@ import type {
     EmoteEventMessage,
     EntityEvent,
     EntityStateMessage,
+    TerrainWaterMessage,
     JoinRoomMessage,
     MapBbbData,
     MapDetailsData,
@@ -114,6 +115,8 @@ import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
+import { TerrainWaterManager } from "./TerrainWaterManager";
+import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
 import { BubbleListeners } from "./BubbleListeners";
@@ -150,6 +153,7 @@ export class GameRoom implements BrothersFinder {
     private listeningZoneManager: ListeningZoneManager | undefined;
     private entityStateManager: EntityStateManager | undefined;
     private switchTriggers: SwitchTriggerEvaluator | undefined;
+    private terrainWater: TerrainWaterManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
     private versionNumber = 1;
@@ -317,6 +321,16 @@ export class GameRoom implements BrothersFinder {
         // No need to unsubscribe since GameRoom.destroy completes this stream.
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => switchTriggers.stop());
+        // Keeps the water of the hollows of the relief (lakes): saved across restarts, nothing on a map without relief.
+        const terrainWater = new TerrainWaterManager(gameRoom, rainTimelineService, {
+            repository: await getVariablesRepository(),
+            roomUrl,
+        });
+        gameRoom.terrainWater = terrainWater;
+        await terrainWater.restore();
+        terrainWater.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => terrainWater.stop());
 
         return gameRoom;
     }
@@ -1103,6 +1117,11 @@ export class GameRoom implements BrothersFinder {
         this.switchTriggers?.reportAnimals(String(user.id), switchIds);
     }
 
+    /** The water of the relief of the map (its whole state), sent to a user who joins the room. */
+    public getTerrainWater(): TerrainWaterMessage | undefined {
+        return this.terrainWater?.snapshot();
+    }
+
     /** The states of the objects of the map that differ from their default, sent to a user who joins the room. */
     public getEntityStates(): EntityStateMessage[] {
         return this.entityStateManager?.getAll() ?? [];
@@ -1677,6 +1696,8 @@ export class GameRoom implements BrothersFinder {
         }
 
         await this.wamManager.applyCommand(editMapCommandMessage);
+        // The relief or the sources and sinks may have changed.
+        this.terrainWater?.mapChanged();
 
         if (GameRoom.commandInvalidatesJitsiModeratorTagFinder(editMapMessage.$case)) {
             this.jitsiModeratorTagFinderPromise = undefined;

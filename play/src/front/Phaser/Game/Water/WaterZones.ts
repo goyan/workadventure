@@ -78,6 +78,21 @@ function allWaterRectangles(scene: Phaser.Scene): CachedWater {
     return cache;
 }
 
+/** One swims in the water of the relief from this depth on, in pixels (half a tile); under it one walks. */
+export const SWIM_DEPTH_PX = 16;
+
+/**
+ * Whether a point is in water of the relief deep enough to swim (TerrainWater): the lakes dug in the ground, unlike
+ * the pools above, have no edge to dive from, one walks into them.
+ */
+export function isDeepTerrainWater(
+    water: { depthAt(x: number, y: number, now: number): number } | undefined,
+    point: Point,
+    now: number,
+): boolean {
+    return water !== undefined && water.depthAt(point.x, point.y, now) >= SWIM_DEPTH_PX;
+}
+
 export function isPointInWater(rectangles: WaterRectangle[], point: Point): boolean {
     return rectangles.some(
         (r) => point.x >= r.x && point.x < r.x + r.width && point.y >= r.y && point.y < r.y + r.height,

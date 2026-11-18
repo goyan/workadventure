@@ -3,6 +3,8 @@ import type { WAMFileFormat, WAMSettings } from "../../types";
 import {
     AutoWeather,
     CategorySettings,
+    DEFAULT_WATER_SETTINGS,
+    MAX_WATER_SPEED,
     MegaphoneSettings,
     PrefabOverride,
     RecordingSettings,
@@ -107,6 +109,21 @@ export class UpdateWAMSettingCommand extends Command {
                         this.wam.settings.weatherAuto = auto.data;
                     }
                 }
+                break;
+            }
+            case "updateWaterSettingMessage": {
+                const { runoff, evaporation, speed, absorption } = message.updateWaterSettingMessage;
+                const within = (value: number, min: number, max: number, fallback: number): number =>
+                    Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+                // An older client sends no speed: the one of the map is kept.
+                const keptSpeed = this.wam.settings.water?.speed ?? DEFAULT_WATER_SETTINGS.speed;
+                const keptAbsorption = this.wam.settings.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption;
+                this.wam.settings.water = {
+                    runoff: within(runoff, 0, 100, DEFAULT_WATER_SETTINGS.runoff),
+                    evaporation: within(evaporation, 0, 10, DEFAULT_WATER_SETTINGS.evaporation),
+                    speed: speed === undefined ? keptSpeed : within(speed, 1, MAX_WATER_SPEED, keptSpeed),
+                    absorption: absorption === undefined ? keptAbsorption : within(absorption, 0, 100, keptAbsorption),
+                };
                 break;
             }
             default: {

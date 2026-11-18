@@ -247,6 +247,7 @@ export class SocketManager {
             playerVariable: playerVariablesMessage,
             areaPropertyVariable: areaPropertyVariables,
             entityState: room.getEntityStates(),
+            terrainWater: room.getTerrainWater(),
         };
 
         user.write({

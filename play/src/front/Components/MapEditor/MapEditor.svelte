@@ -15,6 +15,7 @@
     import EntityEditor from "./EntityEditor/EntityEditor.svelte";
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
     import MapLayerEditor from "./MapLayerEditor.svelte";
+    import TerrainEditor from "./TerrainEditor.svelte";
     import SelectionEditor from "./SelectionEditor.svelte";
     import ConfigureMyRoom from "./WAMSettingsEditor.svelte";
     import MapEditorResizeHandle from "./MapEditorResizeHandle.svelte";
@@ -88,6 +89,9 @@
                 {/if}
                 {#if $mapEditorSelectedToolStore === EditorToolName.MapLayerEditor}
                     <MapLayerEditor />
+                {/if}
+                {#if $mapEditorSelectedToolStore === EditorToolName.TerrainEditor}
+                    <TerrainEditor />
                 {/if}
                 {#if $mapEditorSelectedToolStore === EditorToolName.SelectionEditor}
                     <SelectionEditor />

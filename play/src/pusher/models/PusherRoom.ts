@@ -220,6 +220,19 @@ export class PusherRoom {
                             }
                             break;
                         }
+                        case "terrainWaterMessage": {
+                            // The water of the relief is the same for every player of the room
+                            const terrainWaterMessage = message.message.terrainWaterMessage;
+                            for (const listener of this.listeners) {
+                                listener.emitInBatch({
+                                    message: {
+                                        $case: "terrainWaterMessage",
+                                        terrainWaterMessage: terrainWaterMessage,
+                                    },
+                                });
+                            }
+                            break;
+                        }
                         case "entityMessage": {
                             // Entity events are room-wide: a sound carries further than a zone
                             const entityMessage = message.message.entityMessage;

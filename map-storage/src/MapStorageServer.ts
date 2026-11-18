@@ -12,6 +12,7 @@ import {
     AreaDataProperties,
     EntityPermissions,
     UpdateWAMMetadataCommand,
+    UpdateTerrainCommand,
     UpdateWAMSettingCommand,
     WeatherType,
 } from "@workadventure/map-editor";
@@ -441,6 +442,16 @@ const mapStorageServer: MapStorageServer = {
                             mapKey,
                             mapUrl.host,
                             new UpdateWAMSettingCommand(wam, message, commandId),
+                        );
+                        break;
+                    }
+                    case "modifyTerrainMessage": {
+                        // The relief belongs to the whole map: editors of the map only (checked above), never the
+                        // editors of a single zone. The command bounds its own size and heights.
+                        await mapsManager.executeCommand(
+                            mapKey,
+                            mapUrl.host,
+                            new UpdateTerrainCommand(wamFile.getWam(), editMapMessage.modifyTerrainMessage, commandId),
                         );
                         break;
                     }

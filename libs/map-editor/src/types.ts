@@ -339,6 +339,35 @@ export const SwitchTargets = z.discriminatedUnion("mode", [
     z.object({ mode: z.literal("zone") }),
 ]);
 
+/** The most a source gives or a sink takes, in litres a minute: 2000 cubic metres, enough to fill a lake fast. */
+export const MAX_WATER_FLOW = 2_000_000;
+
+/**
+ * Where the water comes out of (or goes into) the object, from the corner of its image, in pixels: its foot, written
+ * by the editor, which knows the size of the object (the server does not). Absent: the corner itself.
+ */
+const WaterAnchor = {
+    anchorX: z.number().min(-4096).max(4096).optional(),
+    anchorY: z.number().min(-4096).max(4096).optional(),
+};
+
+/**
+ * A source of water: the object pours this many litres a minute into the hollow of the relief it stands in (or the
+ * nearest one close by). The water itself is kept by the server (see Terrain/WaterBalance.ts).
+ */
+export const WaterSourcePropertyData = PropertyBase.extend({
+    type: z.literal("waterSourcePropertyData"),
+    flow: z.number().min(0).max(MAX_WATER_FLOW),
+    ...WaterAnchor,
+});
+
+/** A sink: the object takes this many litres a minute out of the hollow it stands in, while there is water. */
+export const WaterSinkPropertyData = PropertyBase.extend({
+    type: z.literal("waterSinkPropertyData"),
+    flow: z.number().min(0).max(MAX_WATER_FLOW),
+    ...WaterAnchor,
+});
+
 /**
  * A switch: activating the object sets the state `key` of its targets. The wiring is in the WAM; the state itself is
  * kept by the server (see EntityStates.ts). Several switches may command the same object: none has a position of
@@ -469,6 +498,8 @@ export const EntityDataProperty = z.discriminatedUnion("type", [
     LampPropertyData,
     RgbLampPropertyData,
     SwitchPropertyData,
+    WaterSourcePropertyData,
+    WaterSinkPropertyData,
 ]);
 
 export const EntityDataProperties = z.array(EntityDataProperty);
@@ -604,6 +635,20 @@ export const EntityRawPrefab = z.object({
      */
     switch: z
         .union([z.boolean(), z.enum(["presence", "hours"])])
+        .optional()
+        .catch(undefined),
+    /**
+     * A source or a sink of water ready to use (a fountain, a chasm): placed from the catalog, the object is given a
+     * `waterSourcePropertyData` or a `waterSinkPropertyData` of this flow, in cubic metres an hour. `anchor` is where
+     * its water comes out or goes, in pixels from the top-left corner of the image (the middle of its foot when
+     * absent). Any other object can be made a source or a sink in the editor. Fail open like `castsShadow`.
+     */
+    waterFlow: z
+        .object({
+            kind: z.enum(["source", "sink"]),
+            flow: z.number().min(0),
+            anchor: z.object({ x: z.number(), y: z.number() }).optional().catch(undefined),
+        })
         .optional()
         .catch(undefined),
     // UUID of the user who uploaded this custom entity. Stamped by map-storage from the
@@ -837,6 +882,49 @@ export const WeatherLocation = z.object({
 });
 export type WeatherLocation = z.infer<typeof WeatherLocation>;
 
+/** Side of a tile, in map pixels and in pixels of altitude. */
+export const TILE_PX = 32;
+/** Side of a cell of the relief, in map pixels: half a tile. */
+export const TERRAIN_CELL = 16;
+/** Cells along the side of a chunk of the relief: the relief is stored by chunks, only where it was dug. */
+export const TERRAIN_CHUNK = 16;
+/** The lowest height a cell can have, in pixels of altitude: 8 tiles under the ground. */
+export const TERRAIN_MIN_HEIGHT = -256;
+/** How deep the relief of a map may be dug, in tiles: set for each map, within these bounds. */
+export const DEFAULT_MAX_DEPTH_TILES = 2;
+export const MAX_DEPTH_TILES = 8;
+
+/**
+ * The relief of the ground of a map: a height for each cell (TERRAIN_CELL map pixels wide), 0 on the ground and
+ * negative where it was dug, by chunks of TERRAIN_CHUNK × TERRAIN_CHUNK cells keyed "chunkX,chunkY" (row by row).
+ */
+export const TerrainData = z.object({
+    chunks: z.record(
+        z.string().regex(/^-?\d{1,6},-?\d{1,6}$/),
+        z.array(z.number().int().min(TERRAIN_MIN_HEIGHT).max(0)).length(TERRAIN_CHUNK * TERRAIN_CHUNK),
+    ),
+    maxDepthTiles: z.number().int().min(1).max(MAX_DEPTH_TILES).optional(),
+});
+export type TerrainData = z.infer<typeof TerrainData>;
+
+/** How fast the water of the relief comes and goes on a map. */
+export const DEFAULT_WATER_SETTINGS = { runoff: 10, evaporation: 0.2, speed: 60, absorption: 5 } as const;
+export const MAX_WATER_SPEED = 1000;
+export const WaterSettings = z.object({
+    /** Ground around a hollow whose rain runs into it, in times the surface of the hollow. */
+    runoff: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.runoff),
+    /** Water lost by a wet surface in dry weather, in mm an hour. */
+    evaporation: z.number().min(0).max(10).default(DEFAULT_WATER_SETTINGS.evaporation),
+    /**
+     * How many times faster than in reality the water of the map goes (1: as in reality, where a rain fills a lake
+     * in hours; 60 by default: a minute for an hour).
+     */
+    speed: z.number().min(1).max(MAX_WATER_SPEED).default(DEFAULT_WATER_SETTINGS.speed),
+    /** Water the flat ground drinks from the sheet of a flood, in mm an hour: how fast a flood goes down. */
+    absorption: z.number().min(0).max(100).default(DEFAULT_WATER_SETTINGS.absorption),
+});
+export type WaterSettings = z.infer<typeof WaterSettings>;
+
 /**
  * The last snow of the map once another weather took its place: its ground melts from `endedAt`. Without `startedAt`,
  * a snow from before its start was kept: its ground was full.
@@ -859,6 +947,7 @@ export const WAMSettings = z.object({
     prefabOverrides: z.record(z.string(), PrefabOverride).optional().catch(undefined),
     /** Per category, by its name in lower case. Fail open like `prefabOverrides`. */
     categories: z.record(z.string(), CategorySettings).optional().catch(undefined),
+    water: WaterSettings.optional().catch(undefined),
 });
 
 export const WAMFileFormat = z.object({
@@ -871,6 +960,8 @@ export const WAMFileFormat = z.object({
     settings: WAMSettings.optional(),
     metadata: WAMMetadata.optional().describe("Contains metadata about the map (name, description, copyright, etc.)"),
     vendor: WAMVendor.optional(),
+    /** Fail open: a broken relief must not make the whole map unreadable. */
+    terrain: TerrainData.optional().catch(undefined),
 });
 
 export const MapsCacheSingleMapFormat = z.object({
@@ -906,7 +997,9 @@ export type EntityDataPropertiesKeys =
     | "openFile"
     | "livekitRoomProperty"
     | "lampPropertyData"
-    | "switchPropertyData";
+    | "switchPropertyData"
+    | "waterSourcePropertyData"
+    | "waterSinkPropertyData";
 export type AreaCoordinates = z.infer<typeof AreaCoordinates>;
 export type AreaData = z.infer<typeof AreaData>;
 export type AreaDataProperties = z.infer<typeof AreaDataProperties>;
@@ -944,6 +1037,8 @@ export type RgbLampPropertyData = z.infer<typeof RgbLampPropertyData>;
 export type SwitchTargets = z.infer<typeof SwitchTargets>;
 export type SwitchTrigger = z.infer<typeof SwitchTrigger>;
 export type SwitchPropertyData = z.infer<typeof SwitchPropertyData>;
+export type WaterSourcePropertyData = z.infer<typeof WaterSourcePropertyData>;
+export type WaterSinkPropertyData = z.infer<typeof WaterSinkPropertyData>;
 export type MatrixRoomPropertyData = z.infer<typeof MatrixRoomPropertyData>;
 export type PersonalAreaAccessClaimMode = z.infer<typeof PersonalAreaAccessClaimMode>;
 export type ExtensionModuleAreaPropertyData = z.infer<typeof ExtensionModuleAreaProperty>;

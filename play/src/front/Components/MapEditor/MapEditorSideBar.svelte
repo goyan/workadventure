@@ -22,6 +22,7 @@
         IconSunMoon,
         IconSettings,
         IconWall,
+        IconShovel,
     } from "@wa-icons";
 
     type SideBarTool = {
@@ -74,6 +75,12 @@
                 toolName: EditorToolName.WAMSettingsEditor,
                 iconComponent: IconSettings,
                 tooltiptext: $LL.mapEditor.sideBar.configureMyRoom(),
+            });
+            // The relief of the ground: dug with a brush, its hollows fill with the rain.
+            tools.push({
+                toolName: EditorToolName.TerrainEditor,
+                iconComponent: IconShovel,
+                tooltiptext: $LL.mapEditor.sideBar.terrainEditor(),
             });
         }
 

@@ -35,6 +35,8 @@
     import FloorLevelPicker from "../FloorLevelPicker.svelte";
     import { mapLayerBuiltLevelsStore } from "../../../Stores/MapLayerStore";
     import SwitchPropertyEditor from "../PropertyEditor/SwitchPropertyEditor.svelte";
+    import WaterFlowPropertyEditor from "../PropertyEditor/WaterFlowPropertyEditor.svelte";
+    import { waterAnchorOf } from "../../../Phaser/Game/Terrain/WaterAnchor";
     import { selfSensorProperty } from "../../../Phaser/Game/Switches/SwitchWiring";
     import DanceFloorSizeEditor from "./DanceFloorSizeEditor.svelte";
     import PlacedImageSizeEditor from "./PlacedImageSizeEditor.svelte";
@@ -287,6 +289,15 @@
                 return $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind === "rgb"
                     ? { id, type, key: "on", targets: { mode: "ids", ids: [$mapEditorSelectedEntityStore.entityId] } }
                     : { id, type, key: "on", targets: { mode: "zone" } };
+            case "waterSourcePropertyData":
+            case "waterSinkPropertyData":
+                // 60 cubic metres an hour by default (the flow is in litres a minute), at the foot of the object.
+                return {
+                    id,
+                    type,
+                    flow: 1000,
+                    ...($mapEditorSelectedEntityStore ? waterAnchorOf($mapEditorSelectedEntityStore) : {}),
+                };
             default:
                 throw new Error(`Unknown property type ${type}`);
         }
@@ -536,6 +547,27 @@
                 />
             </div>
         {/if}
+        <!-- Any object can be a source or a sink of the water of the relief, once each. -->
+        {#if !properties.some((property) => property.type === "waterSourcePropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="waterSourcePropertyData"
+                    onclick={() => {
+                        onAddProperty("waterSourcePropertyData");
+                    }}
+                />
+            </div>
+        {/if}
+        {#if !properties.some((property) => property.type === "waterSinkPropertyData")}
+            <div class="properties-buttons flex flex-row m-2">
+                <AddPropertyButtonWrapper
+                    property="waterSinkPropertyData"
+                    onclick={() => {
+                        onAddProperty("waterSinkPropertyData");
+                    }}
+                />
+            </div>
+        {/if}
         <!-- A lamp (its catalog entry says so) can have the size of its light set, once. A dance floor has its own
              size editor (see DanceFloorSizeEditor), an RGB lamp its own settings (see RgbLampEditor). -->
         {#if $mapEditorSelectedEntityStore?.getPrefab().lamp && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore.getPrefab().lamp?.kind !== "rgb" && !properties.some((property) => property.type === "lampPropertyData")}
@@ -768,6 +800,15 @@
                                     onchange={() => onSetProperty(properties[i])}
                                 />
                             {/if}
+                        {:else if properties[i].type === "waterSourcePropertyData" || properties[i].type === "waterSinkPropertyData"}
+                            {#if $mapEditorSelectedEntityStore}<WaterFlowPropertyEditor
+                                    entity={$mapEditorSelectedEntityStore}
+                                    bind:property={properties[i]}
+                                    onclose={() => {
+                                        onDeleteProperty(property.id);
+                                    }}
+                                    onchange={() => onUpdateProperty(properties[i])}
+                                />{/if}
                         {:else if properties[i].type === "lampPropertyData"}
                             {#if $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "dancefloor" && $mapEditorSelectedEntityStore?.getPrefab().lamp?.kind !== "rgb"}
                                 <LampPropertyEditor
