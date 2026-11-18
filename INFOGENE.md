@@ -2142,6 +2142,13 @@ ou un disque sur lequel l'eau est versée. Une entrée de catalogue peut porter
 aussitôt (catalogue `Infogène Eau` du dépôt d'infra : fontaine de 2 × 2 cases, gouffre rond de 3 cases). Sous chaque
 réglage de l'eau, une ligne rappelle ses valeurs réelles (ordres de grandeur).
 
+**Eau plus vive autour des puits.** L'eau n'avance que d'une cellule par pas ; sur une carte accélérée, un puits
+puissant vidait son disque puis attendait une eau qui arrivait trop lentement. Autour d'un puits qui demande encore
+de l'eau (son disque et 16 cellules de plus), l'eau avance de nouveau pendant le même pas, jusqu'à 16 fois : une
+fois par tranche de 4 de la vitesse de la carte (`flowSteps`, 15 à la vitesse 60). Le reste de la grille n'avance
+qu'une fois par pas : la faire avancer partout aussi souvent coûterait trop au serveur (mesuré : 37 ms par pas pour
+15 avancées sur 190 000 cellules mouillées, contre 2,5 ms pour une).
+
 **Murs et portes.** Les murs de l'outil Carte arrêtent l'eau : `back` les lit dans les objets de la carte
 (`waterWallsOf`, d'après le nom et la place des pièces `Carte Murs` et `Carte Fenêtres` du sol, sans le code de
 l'éditeur ; un test du front vérifie que les deux lisent les mêmes murs). Un mur horizontal ou une fenêtre retient

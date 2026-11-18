@@ -94,6 +94,17 @@ describe("stepInputOf", () => {
         expect(input.flows[1].px * CELL_LITRES_PER_PX).toBeCloseTo(-2);
     });
 
+    it("gives the water more moves a step on a map that goes faster, so that it keeps up with what comes and goes", () => {
+        const moves = (speed: number): number | undefined => stepInputOf({ ...water, speed }, 0, [], 0.1).flowSteps;
+        // As in reality: one move a step. A minute for an hour: fifteen. Never more than sixteen.
+        expect(moves(1)).toBe(1);
+        expect(moves(4)).toBe(1);
+        expect(moves(20)).toBe(5);
+        expect(moves(60)).toBe(15);
+        expect(moves(1000)).toBe(16);
+        expect(stepInputOf(undefined, 0, [], 0.1).flowSteps).toBe(15);
+    });
+
     it("goes as many times faster as the map says, and survives broken settings", () => {
         const fast = stepInputOf(
             { ...water, speed: 60 },
@@ -110,7 +121,7 @@ describe("stepInputOf", () => {
             [],
             1,
         );
-        expect(broken).toEqual({ rainPx: 0, evaporationPx: 0, absorptionPx: 0, flows: [] });
+        expect(broken).toEqual({ rainPx: 0, evaporationPx: 0, absorptionPx: 0, flowSteps: 1, flows: [] });
         expect(stepInputOf(undefined, 10, [], 3600).rainPx).toBeGreaterThan(0);
     });
 });
