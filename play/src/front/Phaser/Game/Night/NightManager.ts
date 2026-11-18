@@ -5,15 +5,15 @@ import { mapEditorModeStore } from "../../../Stores/MapEditorStore";
 import {
     NightMode,
     ambienceFullShareStore,
-    ambienceStrengthStore,
-    lightBounceStore,
-    lightSoftEdgeStore,
     mapTimeZoneStore,
     nightDarknessStore,
-    nightInEditorStore,
     nightDateStore,
+    nightInEditorStore,
     nightModeStore,
     realisticNightStore,
+    shownAmbienceStrengthStore,
+    shownLightBounceStore,
+    shownLightSoftEdgeStore,
 } from "../../../Stores/NightStore";
 import { skyLightSettingsStore } from "../../../Stores/SkyLightStore";
 import { partyRoomsStore } from "../../../Stores/LampEffectsStore";
@@ -153,7 +153,7 @@ export class NightManager {
             this.lastClockAt = undefined;
             this.scene.markDirty();
         });
-        const unsubscribeStrength = ambienceStrengthStore.subscribe((strength) => {
+        const unsubscribeStrength = shownAmbienceStrengthStore.subscribe((strength) => {
             // A new object: the bounced light is worked out again, and the veil drawn again.
             this.ambienceSettings = { ...this.ambienceSettings, strength };
             this.scene.markDirty();
@@ -162,12 +162,12 @@ export class NightManager {
             this.ambienceSettings = { ...this.ambienceSettings, fullShare };
             this.scene.markDirty();
         });
-        const unsubscribeSoftEdge = lightSoftEdgeStore.subscribe((px) => {
+        const unsubscribeSoftEdge = shownLightSoftEdgeStore.subscribe((px) => {
             // The lights are drawn again with their new edge.
             setLightSoftEdgePx(px);
             this.scene.markDirty();
         });
-        const unsubscribeBounce = lightBounceStore.subscribe((strength) => {
+        const unsubscribeBounce = shownLightBounceStore.subscribe((strength) => {
             // The lamps are cast again with what their walls send back.
             setLightBounceStrength(strength);
             this.scene.markDirty();

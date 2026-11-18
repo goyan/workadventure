@@ -1,4 +1,4 @@
-import { get, writable, type Writable } from "svelte/store";
+import { derived, get, writable, type Readable, type Writable } from "svelte/store";
 import { localUserStore } from "../Connection/LocalUserStore";
 import { NIGHT_DARKNESS_MAX, NIGHT_DARKNESS_MIN, NIGHT_MAX_OPACITY } from "../Phaser/Game/Night/NightClock";
 import { createPersistedNumberStore, createPersistedSwitchStore } from "./PersistedSwitchStore";
@@ -60,6 +60,22 @@ export const ambienceFullShareStore = createPersistedNumberStore("nightAmbienceF
 export const lightSoftEdgeStore = createPersistedNumberStore("nightLightSoftEdge", 8, 0, 32);
 /** The share of its light a wall sends back, for this player (0: no bounce): a light then turns the corner of a door. */
 export const lightBounceStore = createPersistedNumberStore("nightLightBounce", 0.4, 0, 1);
+/**
+ * The three effects of the indirect light, each turned on or off at will (all on by default): the setting of an effect
+ * is kept while it is off, to compare with and without at a click.
+ */
+export const ambienceOnStore = createPersistedSwitchStore("nightAmbienceOn", true);
+export const softEdgeOnStore = createPersistedSwitchStore("nightLightSoftEdgeOn", true);
+export const bounceOnStore = createPersistedSwitchStore("nightLightBounceOn", true);
+
+const whileOn = (on: Readable<boolean>, setting: Readable<number>): Readable<number> =>
+    derived([on, setting], ([isOn, value]) => (isOn ? value : 0));
+
+/** What each effect is drawn with now: its setting while it is on, nothing once it is off. */
+export const shownAmbienceStrengthStore = whileOn(ambienceOnStore, ambienceStrengthStore);
+export const shownLightSoftEdgeStore = whileOn(softEdgeOnStore, lightSoftEdgeStore);
+export const shownLightBounceStore = whileOn(bounceOnStore, lightBounceStore);
+
 /** The time zone of the place of the map shown now (undefined: none, the time of Paris), for the clock. */
 export const mapTimeZoneStore = writable<string | undefined>(undefined);
 /** Whether this player keeps the night in the map editor, to set the lamps as they will look (hidden there by default). */
