@@ -568,7 +568,11 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         maxLifespan: "Durée de vie maximale des poissons",
         maxSpeed: "Vitesse maximale",
         tilesPerSecond: "cases/s",
-        huntInterval: "Intervalle de chasse du dauphin",
+        huntInterval: "Intervalle de chasse des dauphins",
+        dolphinReproductionDelay: "Délai de reproduction des dauphins",
+        dolphinMaxLifespan: "Durée de vie maximale des dauphins",
+        dolphinHint:
+            "Les dauphins arrivent par couple dans un lac profond. Un mâle et une femelle qui ont mangé ont un petit, tant que le lac a de la place (un dauphin pour 150 cases de relief profondes). Un dauphin meurt de faim après huit intervalles de chasse sans prise.",
         dashboard: {
             empty: "Aucune vie sur cette carte pour l'instant. Activez-la ci-dessous ; il faut de l'eau dans le relief.",
             population: "Population",
@@ -587,6 +591,8 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             diedOfAge: "Morts de vieillesse",
             eaten: "Mangés",
             diedDry: "Morts à sec",
+            predatorBirths: "Naissances de dauphins",
+            predatorDeaths: "Dauphins morts (âge, faim)",
             history: "Proies et prédateurs dans le temps",
             ago: "il y a {duration}",
             now: "maintenant",

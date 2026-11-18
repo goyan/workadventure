@@ -8,6 +8,8 @@ const totals = (births: number, eaten = 0) => ({
     diedOfAge: 0,
     eaten,
     diedDry: 0,
+    predatorBirths: 0,
+    predatorDeaths: 0,
     habitableBodies: 2,
     populatedBodies: 1,
     capacity: 40,
@@ -17,7 +19,8 @@ const totals = (births: number, eaten = 0) => ({
 const animals = (males: number, females: number, dolphins: number) => [
     ...Array.from({ length: males }, (_, index) => ({ id: index + 1, kind: 0 })),
     ...Array.from({ length: females }, (_, index) => ({ id: 1000 + index, kind: 1 })),
-    ...Array.from({ length: dolphins }, (_, index) => ({ id: 2000 + index, kind: 2 })),
+    // The dolphins: males and females in turn.
+    ...Array.from({ length: dolphins }, (_, index) => ({ id: 2000 + index, kind: 2 + (index % 2) })),
 ];
 
 describe("LifeStats", () => {
@@ -25,6 +28,7 @@ describe("LifeStats", () => {
         const stats = new LifeStats();
         stats.receive(animals(7, 5, 2), totals(0), 0);
         expect(stats.view(0)).toMatchObject({ males: 7, females: 5, prey: 12, predators: 2, preyPerPredator: 6 });
+        expect(stats.view(0)).toMatchObject({ predatorMales: 1, predatorFemales: 1 });
         stats.receive(animals(3, 3, 0), totals(0), 1000);
         expect(stats.view(1000).preyPerPredator).toBeUndefined();
     });
@@ -37,6 +41,8 @@ describe("LifeStats", () => {
         stats.receive(animals(1, 1, 0), totals(20, 3), 90_000);
         // A minute ago the totals were those of the message at 30 s.
         expect(stats.view(90_000).lastMinute).toMatchObject({ births: 6, eaten: 2 });
+        stats.receive(animals(1, 1, 0), { ...totals(20, 3), predatorBirths: 2, predatorDeaths: 1 }, 91_000);
+        expect(stats.view(91_000).lastMinute).toMatchObject({ predatorBirths: 2, predatorDeaths: 1 });
         expect(stats.view(90_000).totals).toMatchObject({ births: 20, eaten: 3, since: 1000 });
     });
 

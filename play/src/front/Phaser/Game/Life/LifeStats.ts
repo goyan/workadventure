@@ -12,6 +12,9 @@ export interface LifeTotals {
     diedOfAge: number;
     eaten: number;
     diedDry: number;
+    /** The dolphins: calves born, and deaths of age or of hunger. */
+    predatorBirths: number;
+    predatorDeaths: number;
     habitableBodies: number;
     populatedBodies: number;
     capacity: number;
@@ -26,9 +29,19 @@ export interface LifeEvents {
     diedOfAge: number;
     eaten: number;
     diedDry: number;
+    predatorBirths: number;
+    predatorDeaths: number;
 }
-const EVENTS = ["arrivals", "births", "diedOfAge", "eaten", "diedDry"] as const;
-const noEvents = (): LifeEvents => ({ arrivals: 0, births: 0, diedOfAge: 0, eaten: 0, diedDry: 0 });
+const EVENTS = ["arrivals", "births", "diedOfAge", "eaten", "diedDry", "predatorBirths", "predatorDeaths"] as const;
+const noEvents = (): LifeEvents => ({
+    arrivals: 0,
+    births: 0,
+    diedOfAge: 0,
+    eaten: 0,
+    diedDry: 0,
+    predatorBirths: 0,
+    predatorDeaths: 0,
+});
 
 /** What the dashboard of the life tool shows. */
 export interface LifeStatsView {
@@ -38,6 +51,8 @@ export interface LifeStatsView {
     prey: number;
     /** The dolphins. */
     predators: number;
+    predatorMales: number;
+    predatorFemales: number;
     /** Undefined without a predator. */
     preyPerPredator: number | undefined;
     /** Undefined until the server told, and when the map has no life. */
@@ -55,19 +70,22 @@ export interface LifeStatsView {
 export class LifeStats {
     private males = 0;
     private females = 0;
-    private predators = 0;
+    private predatorMales = 0;
+    private predatorFemales = 0;
     private totals: LifeTotals | undefined;
     /** The totals of the server as they came, to know what they were a minute ago. */
     private samples: { at: number; totals: LifeTotals }[] = [];
     private history = new LifeHistory();
 
     public receive(animals: readonly { kind: number }[], totals: LifeTotals | undefined, now: number): void {
-        this.males = this.females = this.predators = 0;
+        this.males = this.females = this.predatorMales = this.predatorFemales = 0;
         for (const animal of animals) {
             if (animal.kind === 0) this.males++;
             else if (animal.kind === 1) this.females++;
-            else if (animal.kind === 2) this.predators++;
+            else if (animal.kind === 2) this.predatorMales++;
+            else if (animal.kind === 3) this.predatorFemales++;
         }
+        const predators = this.predatorMales + this.predatorFemales;
         const last = this.samples.at(-1)?.totals;
         // Totals that go back, or another start: the life was turned off and on.
         if (!totals || (last && (totals.since !== last.since || EVENTS.some((key) => totals[key] < last[key])))) {
@@ -84,11 +102,12 @@ export class LifeStats {
             // Kept a little beyond the minute, to find what the totals were then.
             while (this.samples.length > 2 && this.samples[1].at <= now - LAST_MINUTE_MS) this.samples.shift();
         }
-        if (totals) this.history.add({ at: now, prey: this.males + this.females, predators: this.predators });
+        if (totals) this.history.add({ at: now, prey: this.males + this.females, predators });
     }
 
     public view(now: number): LifeStatsView {
         const prey = this.males + this.females;
+        const predators = this.predatorMales + this.predatorFemales;
         const lastMinute = noEvents();
         const latest = this.samples.at(-1)?.totals;
         if (latest) {
@@ -103,8 +122,10 @@ export class LifeStats {
             males: this.males,
             females: this.females,
             prey,
-            predators: this.predators,
-            preyPerPredator: this.predators > 0 ? prey / this.predators : undefined,
+            predators,
+            predatorMales: this.predatorMales,
+            predatorFemales: this.predatorFemales,
+            preyPerPredator: predators > 0 ? prey / predators : undefined,
             totals: this.totals,
             lastMinute,
             history: [...this.history.samples],

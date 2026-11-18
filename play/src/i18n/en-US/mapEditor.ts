@@ -557,7 +557,11 @@ const mapEditor: BaseTranslation = {
         maxLifespan: "Longest life of a fish",
         maxSpeed: "Fastest speed",
         tilesPerSecond: "tiles/s",
-        huntInterval: "Hunting interval of the dolphin",
+        huntInterval: "Hunting interval of the dolphins",
+        dolphinReproductionDelay: "Breeding delay of the dolphins",
+        dolphinMaxLifespan: "Longest life of a dolphin",
+        dolphinHint:
+            "Dolphins come as a couple into a deep lake. A male and a female that have eaten have a calf, while the lake has room (a dolphin for 150 deep cells of relief). A dolphin dies of hunger after eight hunting intervals without a catch.",
         dashboard: {
             empty: "No life on this map yet. Turn it on below; the relief needs water.",
             population: "Population",
@@ -576,6 +580,8 @@ const mapEditor: BaseTranslation = {
             diedOfAge: "Died of age",
             eaten: "Eaten",
             diedDry: "Died without water",
+            predatorBirths: "Dolphin calves",
+            predatorDeaths: "Dolphins dead (age, hunger)",
             history: "Prey and predators over time",
             ago: "{duration} ago",
             now: "now",

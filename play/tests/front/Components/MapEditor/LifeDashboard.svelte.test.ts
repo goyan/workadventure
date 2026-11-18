@@ -32,6 +32,8 @@ const view = {
     females: 5,
     prey: 12,
     predators: 2,
+    predatorMales: 1,
+    predatorFemales: 1,
     preyPerPredator: 6,
     totals: {
         since: Date.now() - 125_000,
@@ -40,13 +42,15 @@ const view = {
         diedOfAge: 9,
         eaten: 11,
         diedDry: 1,
+        predatorBirths: 3,
+        predatorDeaths: 2,
         habitableBodies: 3,
         populatedBodies: 2,
         capacity: 40,
         history: [],
         historyStepMs: 5000,
     },
-    lastMinute: { arrivals: 0, births: 4, diedOfAge: 1, eaten: 2, diedDry: 0 },
+    lastMinute: { arrivals: 0, births: 4, diedOfAge: 1, eaten: 2, diedDry: 0, predatorBirths: 1, predatorDeaths: 0 },
     history: [
         { at: 0, prey: 2, predators: 0 },
         { at: 60_000, prey: 8, predators: 1 },
@@ -75,6 +79,8 @@ describe("LifeDashboard", () => {
         expect(text("life-males")).toContain("7");
         expect(text("life-females")).toContain("5");
         expect(text("life-predators")).toContain("2");
+        expect(text("life-predator-males")).toContain("1");
+        expect(text("life-predator-females")).toContain("1");
         expect(text("life-prey-per-predator")).toContain("6");
     });
 
@@ -97,6 +103,10 @@ describe("LifeDashboard", () => {
         expect(text("life-total-diedDry")).toContain("1");
         expect(text("life-total-arrivals")).toContain("2");
         expect(text("life-since")).toContain("2 min");
+        // The dolphins have their own lines.
+        expect(text("life-minute-predatorBirths")).toContain("1");
+        expect(text("life-total-predatorBirths")).toContain("3");
+        expect(text("life-total-predatorDeaths")).toContain("2");
     });
 
     it("draws the prey and the predators over time, each on its own scale, with the time it covers", () => {

@@ -8,7 +8,7 @@
     const CHART_WIDTH = 300;
     const CHART_HEIGHT = 110;
     const HEADROOM = 1.1;
-    const EVENTS = ["births", "arrivals", "diedOfAge", "eaten", "diedDry"] as const;
+    const EVENTS = ["births", "arrivals", "diedOfAge", "eaten", "diedDry", "predatorBirths", "predatorDeaths"] as const;
 
     let stats = $derived($aquaticLifeStatsStore);
     let totals = $derived(stats?.totals);
@@ -46,6 +46,14 @@
         <div class="flex justify-between" data-testid="life-predators">
             <span>{$LL.mapEditor.life.dashboard.predators()}</span>
             <span class="font-bold">{stats.predators}</span>
+        </div>
+        <div class="flex justify-end gap-3 text-xs">
+            <span class="text-[#93a9bd]" data-testid="life-predator-males"
+                >{stats.predatorMales} {$LL.mapEditor.life.dashboard.males()}</span
+            >
+            <span class="text-[#c9a9c4]" data-testid="life-predator-females"
+                >{stats.predatorFemales} {$LL.mapEditor.life.dashboard.females()}</span
+            >
         </div>
         <div class="flex justify-between" data-testid="life-prey-per-predator">
             <span>{$LL.mapEditor.life.dashboard.preyPerPredator()}</span>

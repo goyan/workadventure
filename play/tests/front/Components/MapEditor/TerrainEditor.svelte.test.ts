@@ -12,7 +12,15 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         speed: 60,
         absorption: 5,
         current: 1,
-        life: { enabled: false, reproductionDelay: 120, maxLifespan: 900, maxSpeed: 1.5, huntInterval: 60 },
+        life: {
+            enabled: false,
+            reproductionDelay: 120,
+            maxLifespan: 900,
+            maxSpeed: 1.5,
+            huntInterval: 60,
+            dolphinReproductionDelay: 300,
+            dolphinMaxLifespan: 3600,
+        },
     },
 }));
 vi.mock("../../../../src/front/Phaser/Game/MapEditor/Commands/Facades", () => ({
