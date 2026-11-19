@@ -15,6 +15,7 @@ export function readTerrainMapSettings(): {
     speed: number;
     absorption: number;
     current: number;
+    maxSurface: number;
     life: LifeSettings;
     meadow: MeadowSettings;
 } {
@@ -26,6 +27,7 @@ export function readTerrainMapSettings(): {
         speed: wam?.settings?.water?.speed ?? DEFAULT_WATER_SETTINGS.speed,
         absorption: wam?.settings?.water?.absorption ?? DEFAULT_WATER_SETTINGS.absorption,
         current: wam?.settings?.water?.current ?? DEFAULT_WATER_SETTINGS.current,
+        maxSurface: wam?.settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface,
         life: { ...DEFAULT_LIFE_SETTINGS, ...wam?.settings?.life },
         meadow: { ...DEFAULT_MEADOW_SETTINGS, ...wam?.settings?.meadow },
     };

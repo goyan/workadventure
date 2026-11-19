@@ -3206,6 +3206,16 @@ c'est la simulation ordinaire : l'eau des rives redescend vers le lac. Sur une c
 modèle reposait l'eau du cratère sur l'anneau voisin : dans un lac plein, il n'y avait que 2 px de place sous le
 plafond et 93 % de l'eau était perdue, sans vague visible.)
 
+**Hauteur maximale de l'eau (réglage de la carte).** L'eau d'une carte ne monte pas plus haut que 18 px au-dessus de
+son niveau de débordement (règle de la #317 contre les dômes d'eau) ; ce qui dépasse est perdu à chaque pas. Le
+panneau Relief a un curseur « Hauteur maximale de l'eau au-dessus du sol », de 18 à 256 px
+(`settings.water.maxSurface`, 18 par défaut : rien ne change pour une carte qui ne le règle pas ;
+`UpdateWaterSettingMessage.maxSurface`, champ 6, facultatif). Le serveur l'applique à la grille à chaque pas
+(`WaterGrid.setMaxSurface`) : crue, source, pluie et vague d'un météore montent alors jusque-là. Baissé, ce qui
+dépasse est perdu au pas suivant. Au-delà de 52 px l'eau atteint les étages ; sous une forte pluie avec ruissellement
+sur une carte accélérée, l'eau peut de nouveau s'empiler (c'est ce que le plafond de 18 px empêchait). `play`, `back`
+et `map-storage` se déploient ensemble pour ce réglage.
+
 **Les cercles de la vague.** Quand le météore tombe dans l'eau, trois cercles clairs partent du bord du cratère et
 suivent le front de l'onde du serveur (même vitesse, même portée), de plus en plus pâles ; rien sur sol sec ni pour
 qui a demandé moins de mouvement. Dessinés par le navigateur (`waveCircles`), seulement là où il y a de l'eau (au moins 2 px, lue tous les 12 px le
@@ -3239,8 +3249,7 @@ bouton dans `AppsMenuContent.svelte`, icône `meteor` de `PixelIcons.ts`, tir da
 déploient ensemble ; `map-storage` n'est pas concerné.
 
 **Limites connues.** La gerbe bleue ou brune et les cercles sont décidés avec l'eau que le navigateur connaît à
-l'annonce du météore. La vague ne monte pas plus haut que le plafond de l'eau (18 px au-dessus du niveau de
-débordement). Les cercles sont dessinés sur toute eau à leur portée, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
+l'annonce du météore. La vague ne monte pas plus haut que la hauteur maximale de l'eau de la carte (18 px par défaut, réglable). Les cercles sont dessinés sur toute eau à leur portée, même derrière un mur que l'onde ne traverse pas. Un poisson dans le cratère vidé peut
 mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (une rafale de 5 météores tous les
 3 s par joueur, avec 8 px apportés par cellule du cratère). Pas de son. Rien n'a été vu à l'écran à l'écriture de
 cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu

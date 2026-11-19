@@ -181,6 +181,10 @@ export class TerrainWaterManager {
             return;
         }
         const settings = this.room.getWam()?.settings;
+        // The map says how high its water may stand; lowered, what stands over it goes at this step.
+        const highest = grid.maxSurface();
+        grid.setMaxSurface(settings?.water?.maxSurface ?? DEFAULT_WATER_SETTINGS.maxSurface);
+        if (grid.maxSurface() !== highest) this.moving = true;
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             // Only a map in real weather has a timeline to read.
             const slots =
