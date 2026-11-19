@@ -2,11 +2,11 @@ import * as Phaser from "phaser";
 import { TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { MeadowState } from "../Terrain/MeadowState";
-import { embersOf, flameOf, flameOutline, nearestTiles, smokeOf, tileSeed } from "./FlameShape";
+import { embersOf, flameOf, flameOutline, smokeOf, spreadTiles, tileSeed } from "./FlameShape";
 import type { Flame } from "./FlameShape";
 
-/** Flames are drawn on this many tiles at most: the nearest to the middle of the view (the others keep their glow). */
-const MAX_FLAMES = 400;
+/** Flames are drawn on about this many tiles at most: beyond, on a share of them all over the view, bigger. */
+const MAX_FLAMES = 600;
 /** Tiles around the view whose flames are drawn too: a flame leans and rises over its neighbours. */
 const VIEW_MARGIN_TILES = 3;
 /** Where the foot of a flame stands in its tile, from its top: towards its bottom, as what stands on the ground. */
@@ -70,11 +70,7 @@ export class FireView {
         }
         this.clear();
         if (burning.length === 0) return;
-        const shown = nearestTiles(
-            burning,
-            { x: view.centerX / TILE_PX - 0.5, y: view.centerY / TILE_PX - 0.5 },
-            MAX_FLAMES,
-        );
+        const { tiles: shown, scale } = spreadTiles(burning, MAX_FLAMES);
         const wind = this.wind();
         const reducedMotion = this.reducedMotion();
         const seconds = now / 1000;
@@ -90,17 +86,26 @@ export class FireView {
             const footX = (tile.x + 0.5) * TILE_PX;
             const footY = (tile.y + FOOT_IN_TILE) * TILE_PX;
             const flame = flameOf(input);
-            this.drawFlame(this.rowOf(tile.y), flame, footX, footY);
+            this.drawFlame(this.rowOf(tile.y), flame, footX, footY, scale);
             for (const ember of embersOf(input)) {
                 this.glow.fillStyle(EMBER_COLOR, ember.alpha);
-                this.glow.fillRect(footX + ember.x - 1, footY - flame.height * 0.6 + ember.y - 1, 2, 2);
+                this.glow.fillRect(
+                    footX + ember.x * scale - 1,
+                    footY + (ember.y - flame.height * 0.6) * scale - 1,
+                    2,
+                    2,
+                );
             }
             for (const puff of smokeOf(input)) {
                 this.smoke.fillStyle(SMOKE_COLOR, puff.alpha);
-                this.smoke.fillCircle(footX + puff.x, footY + puff.y, puff.radius);
+                this.smoke.fillCircle(footX + puff.x * scale, footY + puff.y * scale, puff.radius * scale);
             }
             this.glow.fillStyle(GLOW_COLOR, GLOW_ALPHA * input.intensity);
-            this.glow.fillCircle(footX, footY - flame.height * 0.4, GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity));
+            this.glow.fillCircle(
+                footX,
+                footY - flame.height * 0.4 * scale,
+                GLOW_RADIUS_PX * (0.5 + 0.5 * input.intensity) * scale,
+            );
         }
         this.drawn = true;
         this.scene.markDirty();
@@ -123,10 +128,16 @@ export class FireView {
         return row;
     }
 
-    private drawFlame(graphics: Phaser.GameObjects.Graphics, flame: Flame, footX: number, footY: number): void {
+    private drawFlame(
+        graphics: Phaser.GameObjects.Graphics,
+        flame: Flame,
+        footX: number,
+        footY: number,
+        scale: number,
+    ): void {
         for (const tongue of TONGUES) {
             graphics.fillStyle(tongue.color, tongue.alpha);
-            const outline = flameOutline(flame, tongue.scale);
+            const outline = flameOutline(flame, tongue.scale * scale);
             graphics.beginPath();
             graphics.moveTo(footX + outline[0].x, footY + outline[0].y);
             for (let index = 1; index < outline.length; index++) {

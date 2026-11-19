@@ -3248,7 +3248,7 @@ ce lot dessine le feu. Rien ne change côté serveur ni sur le fil.
 - `Fire/FireView.ts` : une couche de dessin par rangée de cases, à la profondeur du pied (une flamme passe devant ce
   qui est plus au nord et derrière ce qui est plus au sud) ; quatre langues emboîtées, du rouge au blanc chaud ;
   fumée sous le voile de nuit ; lueur en fusion additive au-dessus des lumières des lampes.
-- 400 flammes au plus à l'écran, les plus proches du centre de la vue (`nearestTiles`).
+- 600 flammes au plus à l'écran, au-delà une part des cases en feu, réparties sur toute la vue et dessinées plus grosses (`spreadTiles`).
 - Mouvement réduit : flammes fixes, sans braises. Le scintillement reste doux (pas de flash).
 - Chaque navigateur dessine ses flammes : deux joueurs voient le même feu, pas les mêmes langues.
 

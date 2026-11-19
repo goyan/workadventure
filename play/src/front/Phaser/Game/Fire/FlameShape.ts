@@ -143,13 +143,20 @@ export function tileSeed(tileX: number, tileY: number): number {
     return (hash >>> 8) / 0x1000000;
 }
 
-/** The tiles to draw flames on when too many burn in the view: the nearest to its middle. */
-export function nearestTiles<T extends { x: number; y: number }>(
+/** Flames grow this much at most when they are thinned. */
+export const FLAME_MAX_SPREAD_SCALE = 3;
+
+/**
+ * The tiles to draw flames on when too many burn in the view: a share of them all over it, always the same ones,
+ * and how much bigger to draw them so that the fire looks as full.
+ */
+export function spreadTiles<T extends { x: number; y: number }>(
     tiles: readonly T[],
-    middle: { x: number; y: number },
     max: number,
-): T[] {
-    if (tiles.length <= max) return [...tiles];
-    const distance = (tile: T): number => (tile.x - middle.x) ** 2 + (tile.y - middle.y) ** 2;
-    return [...tiles].sort((one, other) => distance(one) - distance(other)).slice(0, max);
+): { tiles: T[]; scale: number } {
+    if (tiles.length <= max) return { tiles: [...tiles], scale: 1 };
+    const share = max / tiles.length;
+    const kept = tiles.filter((tile) => tileSeed(tile.x, tile.y) < share);
+    if (kept.length === 0) return { tiles: [], scale: 1 };
+    return { tiles: kept, scale: Math.min(FLAME_MAX_SPREAD_SCALE, Math.sqrt(tiles.length / kept.length)) };
 }

@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
     embersOf,
     FLAME_MAX_HEIGHT_PX,
+    FLAME_MAX_SPREAD_SCALE,
     FLAME_MIN_HEIGHT_PX,
     flameOf,
     flameOutline,
-    nearestTiles,
+    spreadTiles,
     smokeOf,
     tileSeed,
 } from "../../../../../src/front/Phaser/Game/Fire/FlameShape";
@@ -130,7 +131,7 @@ describe("embersOf and smokeOf", () => {
     });
 });
 
-describe("tileSeed and nearestTiles", () => {
+describe("tileSeed and spreadTiles", () => {
     it("gives each tile its own time, always the same for a tile", () => {
         expect(tileSeed(3, 4)).toBe(tileSeed(3, 4));
         expect(tileSeed(3, 4)).not.toBe(tileSeed(4, 3));
@@ -138,17 +139,26 @@ describe("tileSeed and nearestTiles", () => {
         expect(tileSeed(3, 4)).toBeLessThan(1);
     });
 
-    it("keeps the flames nearest the middle of the view when there are too many", () => {
+    it("thins the flames all over the view when there are too many, and makes them bigger", () => {
+        const tiles = [];
+        for (let y = 0; y < 40; y++) for (let x = 0; x < 100; x++) tiles.push({ x, y });
+        const spread = spreadTiles(tiles, 400);
+        expect(spread.tiles.length).toBeGreaterThan(300);
+        expect(spread.tiles.length).toBeLessThan(500);
+        // Both ends of the view keep flames: no fire is left bare.
+        expect(spread.tiles.filter((tile) => tile.x < 20).length).toBeGreaterThan(40);
+        expect(spread.tiles.filter((tile) => tile.x >= 80).length).toBeGreaterThan(40);
+        expect(spread.scale).toBeGreaterThan(2.8);
+        expect(spread.scale).toBeLessThanOrEqual(FLAME_MAX_SPREAD_SCALE);
+        // The same tiles each time.
+        expect(spreadTiles(tiles, 400).tiles).toEqual(spread.tiles);
+    });
+
+    it("keeps every flame at its size when few enough burn", () => {
         const tiles = [
             { x: 0, y: 0 },
-            { x: 10, y: 10 },
-            { x: 11, y: 10 },
             { x: 30, y: 30 },
         ];
-        expect(nearestTiles(tiles, { x: 10, y: 10 }, 2)).toEqual([
-            { x: 10, y: 10 },
-            { x: 11, y: 10 },
-        ]);
-        expect(nearestTiles(tiles, { x: 10, y: 10 }, 10)).toHaveLength(4);
+        expect(spreadTiles(tiles, 400)).toEqual({ tiles, scale: 1 });
     });
 });
