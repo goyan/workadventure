@@ -49,6 +49,8 @@ export const RealWeatherSlot = z.object({
     windSpeed: z.number().min(0).max(500).optional(),
     /** How hard it rains over the quarter hour, mm an hour (a rain or a storm only; absent: not given). */
     rainRate: z.number().min(0).max(2000).optional(),
+    /** Relative humidity of the air over the quarter hour, in % (absent: not given). */
+    humidity: z.number().min(0).max(100).optional(),
 });
 export type RealWeatherSlot = z.infer<typeof RealWeatherSlot>;
 
@@ -72,7 +74,7 @@ export function openMeteoTimelineUrl(latitude: number, longitude: number): URL {
     url.searchParams.set("longitude", String(longitude));
     url.searchParams.set(
         "minutely_15",
-        "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation",
+        "weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation,relative_humidity_2m",
     );
     url.searchParams.set("past_minutely_15", String(REAL_WEATHER_PAST_SLOTS));
     url.searchParams.set("forecast_minutely_15", String(REAL_WEATHER_FORECAST_SLOTS));
@@ -93,24 +95,35 @@ const OpenMeteoTimeline = z.object({
         wind_speed_10m: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
         /** Rain, showers and snow of the quarter hour (mm), asked since the rain has levels; absent from older answers. */
         precipitation: z.array(z.number().min(0).max(500).nullable()).max(96).optional(),
+        /** Relative humidity of the air (%), asked since the grass dries and burns; absent from older answers. */
+        relative_humidity_2m: z.array(z.number().min(0).max(100).nullable()).max(96).optional(),
     }),
 });
 
 /**
- * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation
+ * The timeline of an Open-Meteo answer asked with minutely_15=weather_code,temperature_2m,cloud_cover,wind_direction_10m,wind_speed_10m,precipitation,relative_humidity_2m
  * and timeformat=unixtime.
  * Each value is taken for the quarter hour starting at its time. Undefined when the answer has no such timeline.
  */
 export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefined {
     const parsed = OpenMeteoTimeline.safeParse(answer);
     if (!parsed.success) return undefined;
-    const { time, weather_code, temperature_2m, cloud_cover, wind_direction_10m, wind_speed_10m, precipitation } =
-        parsed.data.minutely_15;
+    const {
+        time,
+        weather_code,
+        temperature_2m,
+        cloud_cover,
+        wind_direction_10m,
+        wind_speed_10m,
+        precipitation,
+        relative_humidity_2m,
+    } = parsed.data.minutely_15;
     if (weather_code.length !== time.length || temperature_2m.length !== time.length) return undefined;
     if (cloud_cover && cloud_cover.length !== time.length) return undefined;
     if (wind_direction_10m && wind_direction_10m.length !== time.length) return undefined;
     if (wind_speed_10m && wind_speed_10m.length !== time.length) return undefined;
     if (precipitation && precipitation.length !== time.length) return undefined;
+    if (relative_humidity_2m && relative_humidity_2m.length !== time.length) return undefined;
     return time.map((seconds, index) => {
         const code = weather_code[index];
         // The cloud cover itself when given (any weather: it sets the clouds over the rain too), else the WMO code.
@@ -134,6 +147,7 @@ export function slotsFromOpenMeteo(answer: unknown): RealWeatherSlot[] | undefin
             ...(typeof wind_direction_10m?.[index] === "number" ? { windFrom: wind_direction_10m[index] } : {}),
             ...(typeof wind_speed_10m?.[index] === "number" ? { windSpeed: wind_speed_10m[index] } : {}),
             ...(raining && typeof fallen === "number" ? { rainRate: fallen * QUARTERS_AN_HOUR } : {}),
+            ...(typeof relative_humidity_2m?.[index] === "number" ? { humidity: relative_humidity_2m[index] } : {}),
         };
     });
 }
