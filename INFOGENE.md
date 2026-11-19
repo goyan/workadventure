@@ -2185,6 +2185,17 @@ un halo qui bat, le disque qu'elle arrose ou vide, et son débit écrit dessous 
 px de carte au moins). Les objets sont relus une fois par seconde ; halo fixe pour qui a demandé moins de mouvement.
 Vu par l'éditeur seulement, rien n'est écrit dans la carte. Le panneau Relief rappelle les deux couleurs.
 
+**Aplanir, lisser, lire le relief.** L'outil Relief a deux modes de plus. « Aplanir » ramène le sol vers un niveau,
+d'une force au plus par passage : le niveau du sol là où le geste commence (une pipette), ou une profondeur choisie
+dans le panneau ; le milieu du pinceau sort plat, son bord en pente (`discWeight`), ce qui donne un fond de lac plat
+et des berges. « Lisser » rapproche chaque case de la moyenne d'elle-même et de ses huit voisines (tout le chemin
+en un passage à 32 px de force). Les deux respectent la profondeur maximale de la carte et les cases interdites
+(`strokeChanges`, modes `flatten` et `smooth`). Tant que l'outil est ouvert, le panneau dit la profondeur du sol
+sous le curseur, et la carte montre les courbes de niveau : une ligne fine tous les 8 px de profondeur, une plus
+marquée par case (`Terrain/TerrainContours.ts`), le long des bords des cases, pour celui qui édite seulement (un
+interrupteur les masque ; au-delà de 30 000 morceaux, seules les lignes marquées sont dessinées). Rien ne change
+dans la carte enregistrée ni sur le fil : un geste envoie toujours des hauteurs par case.
+
 **Le relief et l'eau s'arrêtent aux bords de la carte.** Le sol affiché au-delà des bords d'une carte
 (`exteriorTexture`) n'est qu'une image : aucun avatar n'y marche. L'outil Relief y refuse donc le pinceau (rouge,
 comme sous un mur), et le serveur n'y simule plus d'eau : la grille d'eau est coupée aux bords de la carte, taille

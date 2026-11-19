@@ -1,9 +1,20 @@
 <script lang="ts">
-    import { defaultForcePx, MAX_DEPTH_TILES, MAX_WATER_CURRENT, MAX_WATER_SPEED } from "@workadventure/map-editor";
+    import {
+        defaultForcePx,
+        MAX_DEPTH_TILES,
+        MAX_WATER_CURRENT,
+        MAX_WATER_SPEED,
+        TILE_PX,
+    } from "@workadventure/map-editor";
     import { LL } from "../../../i18n/i18n-svelte";
     import { executeUpdateTerrain, executeUpdateWAMSettings } from "../../Phaser/Game/MapEditor/Commands/Facades";
     import { readTerrainMapSettings } from "../../Phaser/Game/Terrain/TerrainMapSettings";
-    import { terrainBlockedStore, terrainBrushStore } from "../../Stores/TerrainEditorStore";
+    import {
+        terrainBlockedStore,
+        terrainBrushStore,
+        terrainContoursStore,
+        terrainHoverHeightStore,
+    } from "../../Stores/TerrainEditorStore";
     import InputSwitch from "../Input/InputSwitch.svelte";
     import RangeSlider from "../Input/RangeSlider.svelte";
     import TerrainWaterDashboard from "./TerrainWaterDashboard.svelte";
@@ -11,6 +22,7 @@
     /** The widest brush, in tiles, and the strongest stroke, in pixels of altitude. */
     const MAX_DIAMETER_TILES = 12;
     const MAX_FORCE_PX = 64;
+    const MODES = ["dig", "fill", "flatten", "smooth"] as const;
 
     // What the map says now; each slider below writes its change back to the map, for every editor.
     const saved = readTerrainMapSettings();
@@ -27,8 +39,17 @@
     // The force follows the diameter while it is automatic.
     let shownForce = $derived(forceAuto ? Math.round(defaultForcePx(diameterTiles)) : forcePx);
 
+    // The flatten mode goes to the level of the ground where the stroke starts, until a depth is chosen here.
+    let flattenFromStart = $state($terrainBrushStore.targetPx === undefined);
+    let flattenDepthPx = $state(-($terrainBrushStore.targetPx ?? 0));
+
     function setBrush(): void {
-        terrainBrushStore.update((brush) => ({ ...brush, diameterTiles, forcePx: forceAuto ? undefined : forcePx }));
+        terrainBrushStore.update((brush) => ({
+            ...brush,
+            diameterTiles,
+            forcePx: forceAuto ? undefined : forcePx,
+            targetPx: flattenFromStart ? undefined : -flattenDepthPx,
+        }));
     }
 
     function saveWater(): void {
@@ -48,27 +69,64 @@
 <!-- Like the panel of the Map tool: it scrolls when it is taller than the room the editor leaves it. -->
 <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" data-testid="terrain-editor">
     <span class="retro-title">{$LL.mapEditor.terrain.title()}</span>
-    <div class="flex gap-2">
-        <button
-            type="button"
-            class="btn btn-sm grow {$terrainBrushStore.mode === 'dig' ? 'btn-secondary' : 'btn-light btn-ghost'}"
-            aria-pressed={$terrainBrushStore.mode === "dig"}
-            data-testid="terrain-mode-dig"
-            onclick={() => terrainBrushStore.update((brush) => ({ ...brush, mode: "dig" }))}
-        >
-            {$LL.mapEditor.terrain.dig()}
-        </button>
-        <button
-            type="button"
-            class="btn btn-sm grow {$terrainBrushStore.mode === 'fill' ? 'btn-secondary' : 'btn-light btn-ghost'}"
-            aria-pressed={$terrainBrushStore.mode === "fill"}
-            data-testid="terrain-mode-fill"
-            onclick={() => terrainBrushStore.update((brush) => ({ ...brush, mode: "fill" }))}
-        >
-            {$LL.mapEditor.terrain.fill()}
-        </button>
+    <div class="grid grid-cols-2 gap-2">
+        {#each MODES as mode (mode)}
+            <button
+                type="button"
+                class="btn btn-sm {$terrainBrushStore.mode === mode ? 'btn-secondary' : 'btn-light btn-ghost'}"
+                aria-pressed={$terrainBrushStore.mode === mode}
+                data-testid="terrain-mode-{mode}"
+                onclick={() => terrainBrushStore.update((brush) => ({ ...brush, mode }))}
+            >
+                {$LL.mapEditor.terrain[mode]()}
+            </button>
+        {/each}
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.hint()}</p>
+    {#if $terrainBrushStore.mode === "flatten"}
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.flattenHint()}</p>
+        <div data-testid="terrain-flatten-from-start">
+            <InputSwitch
+                id="terrain-flatten-from-start"
+                bind:value={flattenFromStart}
+                label={$LL.mapEditor.terrain.flattenFromStart()}
+                labelPosition="right"
+                onchange={setBrush}
+            />
+        </div>
+        {#if !flattenFromStart}
+            <div data-testid="terrain-flatten-depth">
+                <RangeSlider
+                    id="terrain-flatten-depth"
+                    label={$LL.mapEditor.terrain.flattenDepth()}
+                    unit="px"
+                    min={0}
+                    max={maxDepthTiles * TILE_PX}
+                    step={1}
+                    bind:value={flattenDepthPx}
+                    onchange={setBrush}
+                    buttonShape="square"
+                />
+            </div>
+        {/if}
+    {:else if $terrainBrushStore.mode === "smooth"}
+        <p class="retro-hint m-0">{$LL.mapEditor.terrain.smoothHint()}</p>
+    {/if}
+    {#if $terrainHoverHeightStore !== undefined}
+        <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-height">
+            {$terrainHoverHeightStore < 0
+                ? $LL.mapEditor.terrain.hoverHeight({ depth: -$terrainHoverHeightStore })
+                : $LL.mapEditor.terrain.hoverLevel()}
+        </p>
+    {/if}
+    <div data-testid="terrain-contours">
+        <InputSwitch
+            id="terrain-contours"
+            bind:value={$terrainContoursStore}
+            label={$LL.mapEditor.terrain.contours()}
+            labelPosition="right"
+        />
+    </div>
     <p class="retro-hint m-0" data-testid="terrain-water-marks">
         <span class="whitespace-nowrap"
             ><span class="inline-block h-2.5 w-2.5 rounded-full align-middle" style="background:#2f9bff"></span>

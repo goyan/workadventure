@@ -13,6 +13,12 @@ describe("brushSettingsOf", () => {
         expect(brushSettingsOf({ ...brush, diameterTiles: 12 }, 2).forcePx).toBe(48);
         expect(brushSettingsOf({ ...brush, forcePx: 5 }, 3)).toMatchObject({ forcePx: 5, maxDepthTiles: 3 });
     });
+
+    it("flattens towards the ground where the stroke starts, unless the panel sets a level", () => {
+        expect(brushSettingsOf({ ...brush, mode: "flatten" }, 2, -24).targetPx).toBe(-24);
+        expect(brushSettingsOf({ ...brush, mode: "flatten", targetPx: -40 }, 2, -24).targetPx).toBe(-40);
+        expect(brushSettingsOf({ ...brush, mode: "smooth" }, 2, -24)).not.toHaveProperty("targetPx");
+    });
 });
 
 describe("commitStroke", () => {

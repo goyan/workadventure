@@ -1,14 +1,20 @@
-import { cellInMap, DEFAULT_MAX_DEPTH_TILES, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
+import { cellInMap, DEFAULT_MAX_DEPTH_TILES, heightAt, TERRAIN_CELL, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { EditMapCommandMessage } from "@workadventure/messages";
 import * as Phaser from "phaser";
 import { get } from "svelte/store";
 import { mapEditorVisibilityStore } from "../../../../Stores/MapEditorStore";
-import { terrainBlockedStore, terrainBrushStore } from "../../../../Stores/TerrainEditorStore";
+import {
+    terrainBlockedStore,
+    terrainBrushStore,
+    terrainContoursStore,
+    terrainHoverHeightStore,
+} from "../../../../Stores/TerrainEditorStore";
 import { MapDragPointerCapture } from "../../../UserInput/MapDragPointerCapture";
 import { DEPTH_MAP_EDITOR_AREAS_INDEX } from "../../DepthIndexes";
 import type { GameMapFrontWrapper } from "../../GameMap/GameMapFrontWrapper";
 import type { GameScene } from "../../GameScene";
+import { contourSegments } from "../../Terrain/TerrainContours";
 import { brushSettingsOf, commitStroke } from "../../Terrain/TerrainStroke";
 import { WaterMarksView } from "../../Terrain/WaterMarksView";
 import { executeUpdateTerrain } from "../Commands/Facades";
@@ -18,9 +24,15 @@ import { MapEditorTool } from "./MapEditorTool";
 
 const BRUSH_COLOR = 0x7fd4ff;
 const BLOCKED_COLOR = 0xff6b6b;
+/** A contour line every quarter of a tile of depth, a stronger one every tile. */
+const CONTOUR_STEP_PX = 8;
+const CONTOUR_MAJOR_PX = TILE_PX;
+/** Beyond this many pieces of lines, only the stronger ones are drawn. */
+const MAX_CONTOUR_SEGMENTS = 30000;
 
 /**
- * The relief tool of the map editor: a sphere pressed into the ground digs it, the same shape fills it back. A click
+ * The relief tool of the map editor: a sphere pressed into the ground digs it, the same shape fills it back; the
+ * ground is also flattened towards a level, or smoothed. The contour lines of the relief are drawn while it is open. A click
  * or a drag is one stroke: it is sent when the button is released, as one command (undone as one), and Escape drops
  * it. The ground is dug outdoors only, never under a wall.
  */
@@ -35,6 +47,10 @@ export class TerrainEditorTool extends MapEditorTool {
     private unsubscribeBrush: (() => void) | undefined;
     /** The sources and the sinks of the map, pointed out while the tool is open: they are hard to find otherwise. */
     private waterMarks: WaterMarksView | undefined;
+    private contours: Phaser.GameObjects.Graphics | undefined;
+    /** The relief the contour lines were last drawn from: drawn again when the map holds another one. */
+    private contoursOf: TerrainData | null | undefined = null;
+    private unsubscribeContours: (() => void) | undefined;
 
     private readonly pointerDownEventHandler = (pointer: Phaser.Input.Pointer): void => {
         if (!pointer.leftButtonDown() || this.path) return;
@@ -45,14 +61,18 @@ export class TerrainEditorTool extends MapEditorTool {
     private readonly pointerMoveEventHandler = (pointer: Phaser.Input.Pointer): void => {
         this.hover = { x: pointer.worldX, y: pointer.worldY };
         if (this.path && pointer.id === this.pointerId) this.path.push(this.hover);
-        terrainBlockedStore.set(!this.allowed(this.cellOf(this.hover.x), this.cellOf(this.hover.y)));
+        const cellX = this.cellOf(this.hover.x);
+        const cellY = this.cellOf(this.hover.y);
+        terrainBlockedStore.set(!this.allowed(cellX, cellY));
+        terrainHoverHeightStore.set(this.onMap(cellX, cellY) ? heightAt(this.terrain(), cellX, cellY) : undefined);
         this.redraw();
     };
     private readonly pointerUpEventHandler = (pointer: Phaser.Input.Pointer): void => {
         if (!this.path || pointer.id !== this.pointerId) return;
         const path = this.path;
         this.cancelStroke();
-        commitStroke(path, this.settings(), this.terrain(), this.allowed, (changes) =>
+        const start = heightAt(this.terrain(), this.cellOf(path[0].x), this.cellOf(path[0].y));
+        commitStroke(path, this.settings(start), this.terrain(), this.allowed, (changes) =>
             executeUpdateTerrain(changes),
         ).catch((error: unknown) => console.error("The relief could not be edited", error));
     };
@@ -63,6 +83,7 @@ export class TerrainEditorTool extends MapEditorTool {
         // A captured stroke never really leaves the canvas: it ends on pointer up or Escape.
         if (this.pointerCapture?.active) return;
         this.hover = undefined;
+        terrainHoverHeightStore.set(undefined);
         this.cancelStroke();
     };
     /**
@@ -70,12 +91,7 @@ export class TerrainEditorTool extends MapEditorTool {
      * everywhere on the map. Never past the edges of the map: the ground shown there is only a picture.
      */
     private readonly allowed = (cellX: number, cellY: number): boolean => {
-        const map = this.scene.Map;
-        const size = {
-            width: Math.ceil(map.widthInPixels / TERRAIN_CELL),
-            height: Math.ceil(map.heightInPixels / TERRAIN_CELL),
-        };
-        if (!cellInMap(cellX, cellY, size)) return false;
+        if (!this.onMap(cellX, cellY)) return false;
         const grid = this.scene.getOutdoorGrid();
         return !grid || grid.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL);
     };
@@ -85,8 +101,43 @@ export class TerrainEditorTool extends MapEditorTool {
         this.scene = mapEditorModeManager.getScene();
     }
 
+    private onMap(cellX: number, cellY: number): boolean {
+        const map = this.scene.Map;
+        return cellInMap(cellX, cellY, {
+            width: Math.ceil(map.widthInPixels / TERRAIN_CELL),
+            height: Math.ceil(map.heightInPixels / TERRAIN_CELL),
+        });
+    }
+
     public update(time: number, dt: number): void {
         this.waterMarks?.update(time);
+        // The relief of the map is another object each time it is edited, here or by someone else.
+        if (this.terrain() !== this.contoursOf) this.drawContours();
+    }
+
+    /** The contour lines of the relief: thin ones every quarter of a tile of depth, stronger ones every tile. */
+    private drawContours(): void {
+        const graphics = this.contours;
+        if (!graphics) return;
+        const terrain = this.terrain();
+        this.contoursOf = terrain;
+        graphics.clear();
+        if (get(terrainContoursStore)) {
+            const segments = contourSegments(terrain, CONTOUR_STEP_PX, CONTOUR_MAJOR_PX);
+            const crowded = segments.length > MAX_CONTOUR_SEGMENTS;
+            for (const major of [false, true]) {
+                if (!major && crowded) continue;
+                graphics.lineStyle(1, 0xffffff, major ? 0.75 : 0.3);
+                graphics.beginPath();
+                for (const segment of segments) {
+                    if (segment.major !== major) continue;
+                    graphics.moveTo(segment.x1, segment.y1);
+                    graphics.lineTo(segment.x2, segment.y2);
+                }
+                graphics.strokePath();
+            }
+        }
+        this.scene.markDirty();
     }
 
     public activate(): void {
@@ -104,6 +155,9 @@ export class TerrainEditorTool extends MapEditorTool {
             () => this.cancelStroke(),
         );
         this.unsubscribeBrush = terrainBrushStore.subscribe(() => this.redraw());
+        this.contours = this.scene.add.graphics().setDepth(DEPTH_MAP_EDITOR_AREAS_INDEX);
+        this.contoursOf = null;
+        this.unsubscribeContours = terrainContoursStore.subscribe(() => this.drawContours());
         this.waterMarks = new WaterMarksView(this.scene, () => this.scene.getGameMap().getWamFile()?.getWam());
         // The bottom of the lakes shows through their water while the relief is edited.
         this.scene.getTerrainView()?.setSeeThrough(true);
@@ -127,6 +181,11 @@ export class TerrainEditorTool extends MapEditorTool {
         this.graphics = undefined;
         this.waterMarks?.destroy();
         this.waterMarks = undefined;
+        this.unsubscribeContours?.();
+        this.unsubscribeContours = undefined;
+        this.contours?.destroy();
+        this.contours = undefined;
+        terrainHoverHeightStore.set(undefined);
         this.scene.getTerrainView()?.setSeeThrough(false);
         terrainBlockedStore.set(false);
         this.scene.input.topOnly = false;
@@ -158,8 +217,12 @@ export class TerrainEditorTool extends MapEditorTool {
         return this.scene.getGameMap().getWamFile()?.getWam().terrain;
     }
 
-    private settings() {
-        return brushSettingsOf(get(terrainBrushStore), this.terrain()?.maxDepthTiles ?? DEFAULT_MAX_DEPTH_TILES);
+    private settings(startHeightPx = 0) {
+        return brushSettingsOf(
+            get(terrainBrushStore),
+            this.terrain()?.maxDepthTiles ?? DEFAULT_MAX_DEPTH_TILES,
+            startHeightPx,
+        );
     }
 
     private cellOf(pixels: number): number {
