@@ -694,24 +694,34 @@
     }
 }
 
-/* The action bar, like the hotbar of a game: each group a tray with a bevel, each button a key that sinks when
-   pressed, a glow on the keys that are on (active, muted, live). The bevel is drawn with inset shadows only, so the
-   trays made of one segment per button join without seams. */
+/* The action bar, like the hotbar of a game and like the build kit of the map editor: each group a dark tray, each
+   button a slot with a frame that sinks when pressed, the slots that are on lit with a glow and a pixel in their
+   corner. The tray bevel is drawn with inset shadows only, so the trays made of one segment per button join without
+   seams. */
 .action-tray {
+    background-color: hsl(var(--contrast-1000) / 0.72);
     box-shadow:
-        inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4);
+        inset 0 2px 6px hsl(var(--contrast-1100) / 0.45),
+        inset 0 -1px 0 hsl(var(--contrast-100) / 0.06);
 }
 .action-slot {
     border-radius: 10px;
+    border: 2px solid hsl(var(--contrast-500) / 0.7);
     transition:
         transform 100ms ease,
         filter 120ms ease,
+        border-color 120ms ease,
         box-shadow 120ms ease;
+}
+.action-slot:not(.is-active):not(.is-forbidden):not(.is-live) {
+    background-color: hsl(var(--contrast-600) / 0.55);
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1000) / 0.45),
+        inset 0 2px 0 hsl(var(--contrast-100) / 0.08);
 }
 .action-slot:not(:disabled):hover {
     filter: brightness(1.15);
-    box-shadow: inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
+    border-color: hsl(var(--secondary-500) / 0.6);
 }
 .action-slot:not(:disabled):active {
     transform: scale(0.92);
@@ -719,27 +729,344 @@
 .action-slot.is-active,
 .action-slot.is-forbidden,
 .action-slot.is-live {
+    border-color: hsl(0 0% 100% / 0.35);
     box-shadow:
         inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
-        inset 0 1px 0 hsl(0 0% 100% / 0.18);
+        inset 0 2px 0 hsl(0 0% 100% / 0.2);
 }
 .action-slot.is-active {
+    border-color: hsl(var(--secondary-500));
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
-        inset 0 1px 0 hsl(0 0% 100% / 0.18),
-        0 0 10px hsl(var(--secondary-500) / 0.45);
+        0 0 0 2px hsl(var(--secondary-500) / 0.18),
+        0 0 10px hsl(var(--secondary-500) / 0.45),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
 }
 .action-slot.is-forbidden {
     box-shadow:
-        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
-        inset 0 1px 0 hsl(0 0% 100% / 0.18),
-        0 0 10px hsl(var(--danger) / 0.5);
+        0 0 10px hsl(var(--danger) / 0.5),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35);
+}
+.action-slot.is-active::after,
+.action-slot.is-forbidden::after,
+.action-slot.is-live::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 4px;
+    height: 4px;
+    background: hsl(0 0% 100% / 0.85);
 }
 @media (prefers-reduced-motion: reduce) {
     .action-slot {
         transition: none;
     }
     .action-slot:not(:disabled):active {
+        transform: none;
+    }
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+   Game theme engine: the floating interface of the game (action bar groups, dropdown menus, side panels, selects)
+   shares one look, drawn from the palette tokens. Everything below has the specificity of `:where()` (zero) or of a
+   single class, so a component that styles itself keeps its own look.
+   ------------------------------------------------------------------------------------------------------------------ */
+
+/* The panels that float over the map: a hairline frame, a bevel and a soft drop shadow. */
+:where(.bg-contrast\/80.backdrop-blur, .bg-contrast\/80.backdrop-blur-md, .chatWindow) {
+    border: 1px solid hsl(var(--contrast-600) / 0.7);
+    box-shadow:
+        inset 0 1px 0 hsl(var(--contrast-100) / 0.07),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.35),
+        0 8px 24px hsl(var(--contrast-1100) / 0.35);
+}
+/* The segments of an action bar group draw their frame on the group only: no seam between two buttons. */
+:where(.action-tray) {
+    border-inline: 0;
+    box-shadow:
+        inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4);
+}
+:where(.chatWindow) {
+    border-block: 0;
+    border-inline-start: 0;
+}
+
+/* The rows of a dropdown menu: the icon sits in a small slot, the row lights up with the accent on hover. */
+.menu-slot {
+    position: relative;
+    border-radius: 8px;
+    transition:
+        background-color 120ms ease,
+        transform 100ms ease;
+}
+.menu-slot::before {
+    content: "";
+    position: absolute;
+    inset-block: 6px;
+    inset-inline-start: 0;
+    width: 3px;
+    border-radius: 2px;
+    background: hsl(var(--secondary-500));
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+.menu-slot:hover::before,
+.menu-slot:focus-visible::before {
+    opacity: 1;
+}
+.menu-slot:active {
+    transform: scale(0.98);
+}
+.menu-slot .menu-slot-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: hsl(var(--contrast-600) / 0.55);
+    box-shadow: inset 0 -2px 0 hsl(var(--contrast-1100) / 0.4);
+}
+.menu-slot:hover .menu-slot-icon {
+    color: hsl(var(--secondary-500));
+}
+
+/* Native selects and fields everywhere follow the palette; a component that styles them keeps its own look. */
+:where(select, input[type="text"], input[type="search"], input[type="number"], input[type="email"], textarea) {
+    color-scheme: dark;
+    color: hsl(var(--contrast-100));
+    background-color: hsl(var(--contrast-1000) / 0.85);
+    border: 1px solid hsl(var(--contrast-600));
+    border-radius: 8px;
+}
+:where(select) {
+    appearance: none;
+    padding: 6px 32px 6px 10px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, hsl(var(--contrast-300)) 50%),
+        linear-gradient(135deg, hsl(var(--contrast-300)) 50%, transparent 50%);
+    background-position:
+        calc(100% - 16px) 55%,
+        calc(100% - 11px) 55%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+:where(select:hover) {
+    border-color: hsl(var(--contrast-500));
+}
+:where(select:focus-visible, input:focus-visible, textarea:focus-visible) {
+    outline: none;
+    border-color: hsl(var(--secondary-500));
+    box-shadow: 0 0 0 2px hsl(var(--secondary-500) / 0.25);
+}
+:where(option) {
+    color: hsl(var(--contrast-100));
+    background-color: hsl(var(--contrast-900));
+}
+:root[data-retro-palette="light"] :where(select, input, textarea) {
+    color-scheme: light;
+}
+@media (prefers-reduced-motion: reduce) {
+    .menu-slot {
+        transition: none;
+    }
+    .menu-slot:active {
+        transform: none;
+    }
+}
+
+/* The fishing game: the contest panel under the clock and the cards of what a line caught. */
+.fishing-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: hsl(var(--contrast-100));
+    border-radius: 12px;
+    background: linear-gradient(180deg, hsl(200 60% 30% / 0.35), transparent 60%), hsl(var(--contrast) / 0.88);
+    border: 1px solid hsl(var(--contrast-600) / 0.8);
+    box-shadow:
+        inset 0 1px 0 hsl(var(--contrast-100) / 0.08),
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
+        0 8px 24px hsl(var(--contrast-1100) / 0.35);
+    backdrop-filter: blur(10px);
+}
+.fishing-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 13px;
+}
+.fishing-badge {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    color: #6fc3ee;
+    background: hsl(var(--contrast-600) / 0.6);
+    box-shadow: inset 0 -2px 0 hsl(var(--contrast-1100) / 0.45);
+}
+.fishing-timer {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-variant-numeric: tabular-nums;
+    background: hsl(var(--contrast-1000) / 0.7);
+    box-shadow: inset 0 1px 2px hsl(var(--contrast-1100) / 0.6);
+}
+.fishing-timer.hurry {
+    color: #fff;
+    background: hsl(var(--danger));
+    animation: fishing-pulse 1s ease-in-out infinite;
+}
+.fishing-sub,
+.fishing-best {
+    color: hsl(var(--contrast-300));
+}
+.fishing-empty {
+    padding: 8px;
+    text-align: center;
+    border-radius: 8px;
+    color: hsl(var(--contrast-200));
+    background: hsl(var(--contrast-1000) / 0.4);
+}
+.fishing-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.fishing-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    background: hsl(var(--contrast-1000) / 0.35);
+}
+.fishing-row.own {
+    font-weight: 700;
+    background: hsl(var(--secondary-500) / 0.18);
+    box-shadow: inset 0 0 0 1px hsl(var(--secondary-500) / 0.6);
+}
+.fishing-rank {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    background: hsl(var(--contrast-600) / 0.7);
+}
+.fishing-rank.rank-1 {
+    color: #3a2a00;
+    background: linear-gradient(180deg, #ffe58a, #e0a821);
+}
+.fishing-rank.rank-2 {
+    color: #22262c;
+    background: linear-gradient(180deg, #eef2f6, #a9b3bf);
+}
+.fishing-rank.rank-3 {
+    color: #2b1608;
+    background: linear-gradient(180deg, #f2b88a, #b86a35);
+}
+.fishing-weight {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.fishing-biggest {
+    padding: 6px 8px;
+    border-radius: 8px;
+    color: #3a2a00;
+    font-weight: 600;
+    background: linear-gradient(180deg, #ffe58a, #f0bf3a);
+}
+.fishing-key {
+    width: 100%;
+    margin-top: 2px;
+    padding: 5px 8px;
+    border-radius: 8px;
+    font-weight: 700;
+    color: hsl(var(--contrast-100));
+    background: hsl(var(--contrast-600) / 0.7);
+    box-shadow: inset 0 -3px 0 hsl(var(--contrast-1100) / 0.45);
+    transition:
+        filter 120ms ease,
+        transform 100ms ease;
+}
+.fishing-key.primary {
+    color: #fff;
+    background: hsl(var(--secondary));
+}
+.fishing-key:hover {
+    filter: brightness(1.15);
+}
+.fishing-key:active {
+    transform: scale(0.95);
+}
+.fishing-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px 6px 6px;
+    font-size: 13px;
+    color: hsl(var(--contrast-100));
+    border-radius: 12px;
+    background: hsl(var(--contrast) / 0.9);
+    border: 1px solid hsl(var(--contrast-600) / 0.8);
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
+        0 8px 20px hsl(var(--contrast-1100) / 0.4);
+    backdrop-filter: blur(10px);
+    animation: fishing-pop 320ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.fishing-card.own {
+    font-weight: 700;
+    border-color: hsl(var(--secondary-500) / 0.8);
+    box-shadow:
+        inset 0 -3px 0 hsl(var(--contrast-1100) / 0.4),
+        0 0 14px hsl(var(--secondary-500) / 0.45);
+}
+.fishing-card.missed {
+    color: hsl(var(--contrast-200));
+}
+@keyframes fishing-pop {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes fishing-pulse {
+    50% {
+        filter: brightness(1.3);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fishing-card,
+    .fishing-timer.hurry {
+        animation: none;
+    }
+    .fishing-key {
+        transition: none;
+    }
+    .fishing-key:active {
         transform: none;
     }
 }

@@ -3,6 +3,7 @@
     import { formatKilograms } from "../../Phaser/Game/Fishing/FishingProtocol";
     import { fishingCardsStore } from "../../Stores/FishingStore";
     import type { FishingCard } from "../../Stores/FishingStore";
+    import { IconFish, IconRipple } from "@wa-icons";
 
     /** What a card says: a catch with its fish and its weight, or why the line came back empty. */
     function textOf(card: FishingCard, language: string): string {
@@ -24,16 +25,22 @@
 >
     {#each $fishingCardsStore as card (card.id)}
         <div
-            class="rounded-md bg-contrast/85 px-3 py-1.5 text-sm text-white shadow-lg backdrop-blur"
-            class:font-bold={card.kind === "caught" && card.own}
+            class="fishing-card"
+            class:own={card.kind === "caught" && card.own}
+            class:missed={card.kind !== "caught"}
             data-testid="fishing-card-{card.kind}"
         >
-            {#if card.kind === "caught"}
-                <span
-                    class="mr-1 inline-block h-2 w-3 rounded-full align-middle"
-                    style:background-color={card.female ? "#e98bb5" : "#4f8fd8"}
-                ></span>
-            {/if}
+            <span
+                class="fishing-badge"
+                aria-hidden="true"
+                style:color={card.kind === "caught" ? (card.female ? "#e98bb5" : "#6fa8ee") : undefined}
+            >
+                {#if card.kind === "caught"}
+                    <IconFish font-size="16" />
+                {:else}
+                    <IconRipple font-size="16" />
+                {/if}
+            </span>
             {textOf(card, $locale)}
         </div>
     {/each}

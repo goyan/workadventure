@@ -166,7 +166,7 @@
     </div>
 {:else}
     <button
-        class="group flex p-2 gap-2 mb-1 items-center hover:bg-white/10 transition-all cursor-pointer font-bold text-sm text-neutral-100 w-full pointer-events-auto text-start rounded select-none
+        class="menu-slot group flex p-2 gap-2 mb-1 items-center hover:bg-white/10 transition-all cursor-pointer font-bold text-sm text-neutral-100 w-full pointer-events-auto text-start rounded select-none
                     {buttonState === 'disabled' ? 'opacity-50 cursor-not-allowed' : ''}
                     {buttonState === 'disabledForbidden' ? 'bg-danger opacity-70 cursor-not-allowed' : ''}
                     {buttonState === 'active' && !isGradient
@@ -188,7 +188,9 @@
         bind:this={wrapperDiv}
     >
         {#if hasImage}
-            <div class="transition-all w-6 h-6 aspect-square text-center flex items-center justify-center">
+            <div
+                class="menu-slot-icon transition-all w-6 h-6 aspect-square text-center flex items-center justify-center"
+            >
                 {@render children?.()}
             </div>
         {/if}

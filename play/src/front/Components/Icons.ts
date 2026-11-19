@@ -202,6 +202,8 @@ export { default as IconBox } from "~icons/tabler/box";
 export { default as IconDeviceDesktop } from "~icons/tabler/device-desktop";
 export { default as IconCategory } from "~icons/tabler/category-2";
 export { default as IconLayersSubtract } from "~icons/tabler/layers-subtract";
+export { default as IconRipple } from "~icons/tabler/ripple";
+export { default as IconTrophy } from "~icons/tabler/trophy";
 export { default as IconTrees } from "~icons/tabler/trees";
 export { default as IconSnowflake } from "~icons/tabler/snowflake";
 export { default as IconBriefcase } from "~icons/tabler/briefcase";

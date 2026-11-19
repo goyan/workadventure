@@ -37,7 +37,7 @@
 {#if updateAvailable}
     <div
         role="status"
-        class="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
+        class="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
     >
         <ToastContainer theme="secondary" extraClasses="w-full max-w-sm">
             <p class="m-0 text-sm leading-snug">{$LL.refreshPrompt.newVersion()}</p>
@@ -70,7 +70,7 @@
 {:else if reloadedNotes !== undefined}
     <div
         role="status"
-        class="fixed top-4 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
+        class="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] w-max max-w-[calc(100vw-2rem)] pointer-events-auto"
     >
         <ToastContainer theme="secondary" extraClasses="w-full max-w-sm">
             <p class="m-0 text-sm leading-snug">{$LL.refreshPrompt.updated()}</p>
