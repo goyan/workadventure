@@ -340,10 +340,14 @@ export class GameRoom implements BrothersFinder {
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => switchTriggers.stop());
         // Keeps the water of the hollows of the relief (lakes): saved across restarts, nothing on a map without relief.
-        const terrainWater = new TerrainWaterManager(gameRoom, rainTimelineService, {
-            repository: await getVariablesRepository(),
-            roomUrl,
-        });
+        const terrainWater = new TerrainWaterManager(
+            gameRoom,
+            rainTimelineService,
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            // The water stays on the map: no avatar walks on the ground shown past its edges.
+            gameRoom.mapSizeInCells.bind(gameRoom),
+        );
         gameRoom.terrainWater = terrainWater;
         await terrainWater.restore();
         terrainWater.start();
@@ -382,7 +386,11 @@ export class GameRoom implements BrothersFinder {
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
-        gameRoom.readMapSize(() => aquaticLife.mapChanged());
+        gameRoom.readMapSize(() => {
+            // The water first: the life of the map lives on its grid.
+            terrainWater.mapChanged();
+            aquaticLife.mapChanged();
+        });
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
 

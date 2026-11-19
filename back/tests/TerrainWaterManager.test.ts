@@ -36,7 +36,13 @@ function createHarness({
     wam = wamWith(lake),
     saved = {},
     failingStore = false,
-}: { wam?: WAMFileFormat; saved?: Record<string, string>; failingStore?: boolean } = {}) {
+    mapSize = () => undefined,
+}: {
+    wam?: WAMFileFormat;
+    saved?: Record<string, string>;
+    failingStore?: boolean;
+    mapSize?: () => { width: number; height: number } | undefined;
+} = {}) {
     const sent: TerrainWaterMessage[] = [];
     const repository = {
         loadVariables: vi.fn((_roomUrl: string) =>
@@ -53,8 +59,12 @@ function createHarness({
             if (message.message?.$case === "terrainWaterMessage") sent.push(message.message.terrainWaterMessage);
         },
     };
-    const manager = new TerrainWaterManager(room, rain, { repository, roomUrl: "room" }, () =>
-        Date.UTC(2026, 6, 14, 12),
+    const manager = new TerrainWaterManager(
+        room,
+        rain,
+        { repository, roomUrl: "room" },
+        () => Date.UTC(2026, 6, 14, 12),
+        mapSize,
     );
     const steps = (count: number): void => {
         for (let step = 0; step < count; step++) manager.step();
@@ -211,6 +221,36 @@ describe("TerrainWaterManager", () => {
         expect(depthsAfter([last]).at(1, 1)).toBeGreaterThan(before / 2);
         // Three seconds at 100 litres a second: 0.3 m³, all of it still there.
         expect(last.stats?.stock).toBeCloseTo(0.3, 2);
+    });
+
+    it("keeps its water inside the map: nothing is simulated past its edges, nor for a relief dug outside", () => {
+        const map: { size?: { width: number; height: number } } = {};
+        const wam = wamWith(terrainOf([...hollow, [500, 2, -32]]));
+        wam.entities.spring = sourceAt(1, 1, 6000);
+        const { manager, sent, steps } = createHarness({ wam, mapSize: () => map.size });
+        const told = (): TerrainWaterMessage | undefined => {
+            manager.mapChanged();
+            steps(10);
+            return sent.at(-1);
+        };
+        manager.start();
+        // The size of the map is not read yet: the grid covers all the relief.
+        const before = told();
+        expect((before?.x ?? 0) + (before?.width ?? 0)).toBeGreaterThan(500);
+
+        map.size = { width: 60, height: 40 };
+        const inside = told();
+        expect(inside?.full).toBe(true);
+        expect(inside?.x).toBe(0);
+        expect(inside?.y).toBe(0);
+        expect((inside?.x ?? 0) + (inside?.width ?? 0)).toBeLessThanOrEqual(60);
+        expect((inside?.y ?? 0) + (inside?.height ?? 0)).toBeLessThanOrEqual(40);
+        // The water poured before the size was read is still in its hollow.
+        expect(depthsAfter(sent).at(1, 1)).toBeGreaterThan(0);
+
+        // A size that could not be read (empty) dries nothing: the grid is the one of a map of unknown size.
+        map.size = { width: 0, height: 0 };
+        expect(told()?.width).toBe(before?.width);
     });
 
     it("saves the water and brings it back after a restart", async () => {

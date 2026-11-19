@@ -77,6 +77,8 @@ export class TerrainWaterManager {
         private readonly rain: Pick<RainTimelineService, "slotsFor">,
         private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
         private readonly now: () => number = Date.now,
+        /** The size of the map in cells of the relief, once read: the water stays inside the map. */
+        private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
     ) {}
 
     /**
@@ -110,7 +112,13 @@ export class TerrainWaterManager {
     public mapChanged(): void {
         const wam = this.room.getWam();
         this.objects = waterObjectsOf(wam);
-        const bounds = gridBoundsOf(wam?.terrain, this.objects);
+        // A map whose size could not be read keeps all its water: an empty size would dry the whole map.
+        const size = this.mapSize();
+        const bounds = gridBoundsOf(
+            wam?.terrain,
+            this.objects,
+            size && size.width > 0 && size.height > 0 ? size : undefined,
+        );
         // The walls matter only where there is water to hold: a map without relief nor water object reads none.
         const walls = bounds ? waterWallsOf(wam) : undefined;
         const sameGrid =

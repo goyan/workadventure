@@ -2185,6 +2185,15 @@ un halo qui bat, le disque qu'elle arrose ou vide, et son débit écrit dessous 
 px de carte au moins). Les objets sont relus une fois par seconde ; halo fixe pour qui a demandé moins de mouvement.
 Vu par l'éditeur seulement, rien n'est écrit dans la carte. Le panneau Relief rappelle les deux couleurs.
 
+**Le relief et l'eau s'arrêtent aux bords de la carte.** Le sol affiché au-delà des bords d'une carte
+(`exteriorTexture`) n'est qu'une image : aucun avatar n'y marche. L'outil Relief y refuse donc le pinceau (rouge,
+comme sous un mur), et le serveur n'y simule plus d'eau : la grille d'eau est coupée aux bords de la carte, taille
+lue dans la carte Tiled (`cellInMap`, `gridBoundsOf(…, map)`, `GameRoom.mapSizeInCells`). Un relief creusé hors
+carte avant ce changement reste dans la carte et se voit toujours, mais à sec : ni eau, ni poissons, ni pêche. Une
+source ou un puits posé hors carte ne compte plus. Tant que la taille de la carte n'est pas lue (ou si elle ne peut
+pas l'être), rien n'est coupé. `map-storage` ne connaît pas la taille de la carte : un navigateur modifié peut
+encore y écrire un relief hors carte, qui restera à sec.
+
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau

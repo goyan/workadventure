@@ -22,6 +22,20 @@ function chunkOf(cellX: number, cellY: number): { key: string; index: number } {
     };
 }
 
+/** The size of a map in cells of the relief. */
+export interface MapCells {
+    width: number;
+    height: number;
+}
+
+/**
+ * Whether a cell is on the map. The ground shown past the edges of a map is only a picture: no avatar walks there, so
+ * nothing is dug nor simulated there. Every cell is held while the size of the map is not known.
+ */
+export function cellInMap(cellX: number, cellY: number, map: MapCells | undefined): boolean {
+    return !map || (cellX >= 0 && cellY >= 0 && cellX < map.width && cellY < map.height);
+}
+
 /** The height of a cell in pixels of altitude: 0 on the ground of the map, negative where it was dug. */
 export function heightAt(terrain: TerrainData | undefined, cellX: number, cellY: number): number {
     if (!terrain) return 0;

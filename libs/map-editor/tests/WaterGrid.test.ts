@@ -37,6 +37,44 @@ describe("gridBoundsOf", () => {
     });
 });
 
+describe("gridBoundsOf on a map of a known size", () => {
+    const map = { width: 100, height: 80 };
+
+    it("stops at the edges of the map: the margin of a flood never goes past them", () => {
+        expect(gridBoundsOf(terrainOf([[10, 20, -8]]), [], map)).toEqual({
+            x: 0,
+            y: 0,
+            width: 10 + 1 + WATER_GRID_MARGIN,
+            height: 20 + 1 + WATER_GRID_MARGIN,
+        });
+        expect(gridBoundsOf(terrainOf([[90, 70, -8]]), [], map)).toEqual({
+            x: 90 - WATER_GRID_MARGIN,
+            y: 70 - WATER_GRID_MARGIN,
+            width: 100 - (90 - WATER_GRID_MARGIN),
+            height: 80 - (70 - WATER_GRID_MARGIN),
+        });
+    });
+
+    it("leaves out the relief and the water objects that are outside the map", () => {
+        const inside = gridBoundsOf(terrainOf([[10, 20, -8]]), [], map);
+        expect(
+            gridBoundsOf(
+                terrainOf([
+                    [10, 20, -8],
+                    [300, 20, -8],
+                    [10, -40, -8],
+                ]),
+                [{ cellX: 100, cellY: 20 }],
+                map,
+            ),
+        ).toEqual(inside);
+    });
+
+    it("has nothing to simulate when all the relief is outside the map", () => {
+        expect(gridBoundsOf(terrainOf([[100, 80, -8]]), [{ cellX: -1, cellY: 3 }], map)).toBeUndefined();
+    });
+});
+
 describe("WaterGrid", () => {
     // A slope dug from (0,0) down to (8,0): each cell 4 px lower than the one before.
     const slope = terrainOf(Array.from({ length: 9 }, (_, x) => [x, 0, -4 - 4 * x] as [number, number, number]));
