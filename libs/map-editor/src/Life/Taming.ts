@@ -7,10 +7,11 @@ import type { Places } from "./WaterBodies";
 /** How many animals of the life a player may have tamed at once. */
 export const MAX_TAMED = 5;
 /**
- * A player tames an animal this close to their feet, in map pixels: three tiles. The browser offers it within a
- * tile and a half, where it shows the animal; the server knows both up to a second late.
+ * A player tames an animal this close to their feet, in map pixels: five tiles. The browser offers it within a
+ * tile and a half of where it shows the animal, which is where the server had it up to a second ago: an animal at
+ * its fastest has gone some three tiles since.
  */
-export const TAME_REACH_PX = 96;
+export const TAME_REACH_PX = 160;
 
 /** Why an animal was not tamed. */
 export type TameRefusal = "unknown" | "species" | "taken" | "far" | "full";

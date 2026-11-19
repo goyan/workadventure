@@ -85,7 +85,7 @@ describe("AquaticLifeManager, taming", () => {
         steps(1);
         const before = sent.length;
         expect(manager.tame(7, 1)).toBe(false);
-        masters.set(7, { x: 500, y: 200, ground: true });
+        masters.set(7, { x: 700, y: 200, ground: true });
         expect(manager.tame(7, 1)).toBe(false);
         masters.set(7, { x: 210, y: 200, ground: false });
         expect(manager.tame(7, 1)).toBe(false);
