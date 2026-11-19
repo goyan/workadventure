@@ -266,3 +266,32 @@ describe("LandLifeView, what is drawn now", () => {
         ]);
     });
 });
+
+describe("an animal that glides slowly", () => {
+    it("keeps facing where it goes, whatever the rounding of its place on screen", () => {
+        const { view, life, sprites } = createView({ sheets: { lion: 3 }, sheetOf: () => "lion" });
+        life.receive([{ id: 1, kind: 6, x: 100, y: 100 }], 0);
+        view.update(0);
+        // Twelve pixels to the right and eight down in a second: less than a pixel a frame.
+        life.receive([{ id: 1, kind: 6, x: 112, y: 108 }], 1000);
+        const rows = new Set<number>();
+        for (let now = 1016; now < 2000; now += 16) {
+            view.update(now);
+            rows.add(Math.floor(Number(sprites[0].frame.name) / 3));
+        }
+        expect([...rows]).toEqual([Math.floor(landFrame("right", false, 0, 3) / 3)]);
+    });
+
+    it("does not turn round when it is drawn here (the antelope)", () => {
+        const { view, life, sprites } = createView();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 0);
+        view.update(0);
+        life.receive([{ id: 1, kind: 4, x: 112, y: 108 }], 1000);
+        const flips = new Set<boolean>();
+        for (let now = 1016; now < 2000; now += 16) {
+            view.update(now);
+            flips.add(sprites[0].flipX);
+        }
+        expect([...flips]).toEqual([false]);
+    });
+});

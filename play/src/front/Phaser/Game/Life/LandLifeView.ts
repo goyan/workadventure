@@ -37,6 +37,12 @@ interface Shown {
     moving: boolean;
     /** Tamed: drawn behind its master. */
     led: boolean;
+    /**
+     * Where the life had it at the last frame, not rounded: the sprite sits on whole pixels, and what the rounding
+     * leaves is larger than a slow step, so a heading read against the sprite turns at every frame.
+     */
+    atX: number;
+    atY: number;
 }
 
 type SceneOfView = Pick<Phaser.Scene, "add" | "cameras" | "textures" | "load"> & { markDirty(): void };
@@ -110,6 +116,8 @@ export class LandLifeView {
                     species,
                     moving: false,
                     led: false,
+                    atX: animal.x,
+                    atY: animal.y,
                 };
                 this.shown.set(animal.id, entry);
                 changed ||= onScreen(x, y);
@@ -124,7 +132,9 @@ export class LandLifeView {
             const moving = led ? led.moving : moved;
             entry.direction = led
                 ? led.direction
-                : directionOf(animal.x - sprite.x, animal.y - sprite.y, entry.direction);
+                : directionOf(animal.x - entry.atX, animal.y - entry.atY, entry.direction);
+            entry.atX = animal.x;
+            entry.atY = animal.y;
             if (moved || sprite.alpha !== animal.alpha) changed ||= onScreen(x, y) || onScreen(sprite.x, sprite.y);
             entry.moving = moving;
             entry.led = led !== undefined;
