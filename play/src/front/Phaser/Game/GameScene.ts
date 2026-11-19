@@ -413,6 +413,7 @@ import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
 import { FishingManager } from "./Fishing/FishingManager";
 import { MeteorView } from "./Catastrophe/MeteorView";
+import { FireView } from "./Fire/FireView";
 import { DownpourView } from "./Catastrophe/DownpourView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
@@ -597,6 +598,7 @@ export class GameScene extends DirtyScene {
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     private meteorView: MeteorView | undefined;
+    private fireView: FireView | undefined;
     private downpourView: DownpourView | undefined;
     private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
@@ -1753,6 +1755,8 @@ export class GameScene extends DirtyScene {
         this.catastropheSubscription = undefined;
         this.meteorView?.destroy();
         this.meteorView = undefined;
+        this.fireView?.destroy();
+        this.fireView = undefined;
         this.downpourView?.destroy();
         this.downpourView = undefined;
         rodEquippedStore.set(false);
@@ -2280,6 +2284,7 @@ export class GameScene extends DirtyScene {
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
             this.meteorView?.update(time);
+            this.fireView?.update(time);
             this.downpourView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
@@ -4132,6 +4137,14 @@ export class GameScene extends DirtyScene {
             () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
         );
         this.meteorView = meteorView;
+        // The flames of the tiles on fire, laid by the wind of the scene.
+        this.fireView?.destroy();
+        this.fireView = new FireView(
+            this,
+            this.meadow,
+            () => this.shownWeather(),
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
         this.downpourView?.destroy();
         const downpourView = new DownpourView(
             this,
