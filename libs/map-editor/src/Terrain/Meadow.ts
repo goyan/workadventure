@@ -41,18 +41,23 @@ const CORNER_SPREAD_SHARE = 0.7;
 /** The wind that doubles the chance downwind (km/h), and how far it may push or hold the fire. */
 const FIRE_WIND_KMH = 30;
 const FIRE_WIND_BOUNDS: readonly [number, number] = [0.1, 3];
+/** The wind that halves the spread of the flanks of a fire (km/h), and how much more it holds its back. */
+const FLANK_WIND_KMH = 10;
+const BACK_HOLD = 0.8;
 /**
- * What a tile has to burn, from 0 to 1: its grass, and on a ground gone dry (this dry at least) the dead litter of a
- * dry land, this much whatever its grass. A full meadow burns BURN_SECONDS, a tile with less in proportion.
+ * What a tile has to burn, from 0 to 1: its grass, and on a ground gone dry the dead litter of a dry land (none
+ * under the first dryness, DRY_GROUND_FUEL from the second on), whatever its grass. A full meadow burns BURN_SECONDS, a tile with less in proportion.
  */
-const DRY_GROUND_BURNS = 0.5;
+const DRY_GROUND_BURNS: readonly [number, number] = [0.15, 0.5];
 const DRY_GROUND_FUEL = 0.8;
 /**
- * Under a strong wind the fire leaps: a tile on fire throws embers downwind, a tile further for each EMBER_WIND_KMH
- * of wind (EMBER_MAX_TILES at most), over what would stop the flames.
+ * Under the wind the head of a grass fire runs at about 16 % of the wind speed, 20 km/h at most (Cheney et al. 1998,
+ * Cruz et al. 2022), carried by embers landing ahead of the flames. A tile is about 1.1 m and a step 2 s: that is
+ * this many tiles downwind at each step for each km/h of wind, HEAD_MAX_TILES at most. Embers go over what would
+ * stop the flames.
  */
-const EMBER_WIND_KMH = 30;
-const EMBER_MAX_TILES = 6;
+const HEAD_TILES_PER_KMH = 0.08;
+const HEAD_MAX_TILES = 10;
 /** What does not burn: too little to burn, a soil this wet, this much ash. */
 const FIRE_MIN_FUEL = 0.05;
 const FIRE_MAX_MOISTURE = 0.9;
@@ -65,7 +70,7 @@ const SELF_START_DRYNESS = 0.9;
 const SELF_START_TRIES = 20;
 
 /** The grass dries, or greens again, most of the way towards what the conditions make it in this many seconds. */
-export const DRYING_SECONDS = 90;
+export const DRYING_SECONDS = 30;
 /** An animal that grazes eats a full tile of grass in this many seconds. */
 export const GRAZE_SECONDS = 120;
 /** From this much grass under it, an animal that stands still is seen grazing. */
@@ -242,7 +247,10 @@ export class Meadow {
 
     /** What a tile has to burn: its grass, or the litter of a dry ground where there is less grass than that. */
     private fuelOf(index: number): number {
-        return Math.max(this.grass[index], this.dryness[index] >= DRY_GROUND_BURNS ? DRY_GROUND_FUEL : 0);
+        // The litter burns from a ground a little dry, and in full from a ground half dry: no sudden threshold.
+        const [from, full] = DRY_GROUND_BURNS;
+        const cured = Math.min(1, Math.max(0, (this.dryness[index] - from) / (full - from)));
+        return Math.max(this.grass[index], DRY_GROUND_FUEL * cured);
     }
 
     /** Whether a tile can take fire: something to burn on a soil that grows grass, neither wet nor burnt nor burning. */
@@ -487,10 +495,16 @@ export class Meadow {
                     if (!this.burns(other)) continue;
                     const corner = dx !== 0 && dy !== 0;
                     const along = (dx * windX + dy * windY) / (corner ? Math.SQRT2 : 1);
-                    const wind = Math.min(
-                        FIRE_WIND_BOUNDS[1],
-                        Math.max(FIRE_WIND_BOUNDS[0], 1 + (speed / FIRE_WIND_KMH) * along),
-                    );
+                    // The wind holds the flanks and the back of a fire as much as it drives its head: a fire in
+                    // the wind is long and narrow (four times as long as wide at 30 km/h, seven at 50).
+                    const calm = 1 / (1 + speed / FLANK_WIND_KMH);
+                    const head = Math.min(FIRE_WIND_BOUNDS[1], 1 + speed / FIRE_WIND_KMH);
+                    // Without wind a fire has no back: it spreads alike all around.
+                    const wind =
+                        along >= 0
+                            ? // Straight downwind far more than aslant: the head is narrow.
+                              calm + (head - calm) * along ** 3
+                            : calm * (1 + BACK_HOLD * (1 - calm) * along);
                     const chance =
                         FIRE_SPREAD_CHANCE *
                         pace *
@@ -500,16 +514,18 @@ export class Meadow {
                     if (random() < chance) this.light(other);
                 }
             }
-            // Embers: further downwind than its neighbours, less likely the further they land.
-            const leaps = Math.min(EMBER_MAX_TILES, Math.floor(speed / EMBER_WIND_KMH));
-            for (let leap = 2; leap <= 1 + leaps; leap++) {
+            // Embers: as far downwind as the head of the fire runs at a step, a little less likely the further.
+            const reach = Math.min(HEAD_MAX_TILES, Math.round(speed * HEAD_TILES_PER_KMH));
+            for (let leap = 2; leap <= reach; leap++) {
                 const x = tileX + Math.round(windX * leap);
                 const y = tileY + Math.round(windY * leap);
                 if (x < 0 || y < 0 || x >= width || y >= height) break;
                 const other = y * width + x;
                 if (!this.burns(other)) continue;
                 const chance =
-                    ((FIRE_SPREAD_CHANCE * 2) / leap) *
+                    FIRE_SPREAD_CHANCE *
+                    2 *
+                    (1 - (0.5 * (leap - 1)) / reach) *
                     pace *
                     (GREEN_SPREAD_SHARE + (1 - GREEN_SPREAD_SHARE) * dryness[other]);
                 if (random() < chance) this.light(other);

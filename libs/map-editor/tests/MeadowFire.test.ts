@@ -46,7 +46,7 @@ describe("a patch of fire", () => {
     it("does not take on bare green ground, on sand, on a sodden soil nor under water", () => {
         const terrain = withSoils(undefined, new Map(tile(4, 4, soilCode("sand"))));
         const meadow = prairie(1, terrain);
-        meadow.set(6, 6, 0.1, 0, 0.2);
+        meadow.set(6, 6, 0.1, 0, 0.1);
         meadow.set(8, 8, 1, 1, 1);
         for (const [x, y] of [
             [4, 4],
@@ -77,6 +77,15 @@ describe("a patch of fire", () => {
         expect(meadow.fireAt(8, 8)).toBe(0);
         expect(meadow.ashAt(8, 8)).toBe(1);
         expect(meadow.grassAt(6, 6)).toBe(0);
+    });
+
+    it("takes on a ground half dry already, where it burns less long: no sudden threshold", () => {
+        const meadow = prairie(1);
+        meadow.set(8, 8, 0.05, 0, 0.3);
+        expect(meadow.ignite(8, 8, 0)).toBe(1);
+        run(meadow, 12);
+        expect(meadow.fireAt(8, 8)).toBe(0);
+        expect(meadow.ashAt(8, 8)).toBe(1);
     });
 
     it("keeps its size within what a patch may be", () => {
@@ -202,12 +211,13 @@ describe("the fire spreading", () => {
         still.ignite(10, 10, 0);
         run(still, 4, lucky);
         expect(still.fireAt(13, 10)).toBe(0);
-        // At 120 km/h from the west its embers land four tiles further east at each step.
+        // At 120 km/h from the west the head runs ten tiles east at each step: 20 km/h, as fast as grass fires go.
         const gale = prairie(1);
         gale.ignite(5, 10, 0);
         run(gale, 4, { ...lucky, windFrom: 270, windSpeed: 120 });
         expect(gale.fireAt(10, 10)).toBeGreaterThan(0);
-        expect(gale.fireAt(14, 10)).toBeGreaterThan(0);
+        expect(gale.fireAt(15, 10)).toBeGreaterThan(0);
+        expect(gale.fireAt(20, 10)).toBeGreaterThan(0);
         // Nothing leaps upwind.
         expect(gale.fireAt(2, 10)).toBe(0);
         // A strip of sand two tiles wide does not stop them.
