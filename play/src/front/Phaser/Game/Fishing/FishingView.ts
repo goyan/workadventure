@@ -14,7 +14,8 @@ const BITE_COLOUR = 0xffd23f;
 const SLACK_PX = 6;
 const GAUGE_WIDTH = 34;
 const GAUGE_HEIGHT = 5;
-const GAUGE_ABOVE_PX = 40;
+/** Above the name of the player, which sits over their head. */
+const GAUGE_ABOVE_PX = 54;
 
 /** An avatar that holds a rod, as the view needs it. */
 export interface RodHolder {
