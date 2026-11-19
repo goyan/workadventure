@@ -253,7 +253,7 @@ const menu: BaseTranslation = {
                 low: "Optional effects off: no weather, clouds, sky shadows, indirect lighting or tile animations.",
                 medium: "Light weather and simple shadows; clouds, detailed silhouettes and light bounces off.",
                 high: "Clouds, realistic silhouettes, soft light edges and one light bounce.",
-                ultra: "All rendering effects, realistic attenuation and maximum rain, shadow length, soft edges and two light bounces.",
+                ultra: "All rendering effects: dark night, realistic attenuation, thin soft edges, two light bounces, maximum rain and shadow length.",
                 custom: "A detail differs from the presets. Your individual settings are kept.",
             },
             metrics: "{fps} FPS · CPU frame: {cpu} ms · {budget}% of the 60 FPS budget",
