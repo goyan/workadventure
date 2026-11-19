@@ -666,6 +666,17 @@ const mapEditor: BaseTranslation = {
             'Paint a soil on the map. Rock and clay keep the water; sand and gravel drink it, in a hollow too; earth and meadow drink a flood like the ground of the map. "Ground of the map" wipes the paint.',
         soilErase: "Ground of the map (wipe)",
         hoverSoil: "Soil under the pointer: {soil}",
+        meadow: {
+            title: "Grass of the map",
+            hint: "Grass grows by itself on earth, meadow and clay when the soil is moist without being under water, by day, out of the winter, and slower with the altitude. It dies on a dry or flooded soil.",
+            enabled: "Let the grass grow",
+            grow: "Full meadow in (good conditions)",
+            thirst: "Dead of thirst in (dry soil)",
+            hold: "How long the soil holds its moisture",
+            holdHint:
+                "× 1: earth stays moist about ten minutes after the rain. Higher, the meadow lasts longer between two showers.",
+        },
+        hoverMeadow: "Moisture of the soil: {moisture}% · grass: {grass}%",
         soils: {
             earth: "Earth",
             meadow: "Meadow",

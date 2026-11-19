@@ -677,6 +677,17 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
             "Peignez un sol sur la carte. Rocher et argile gardent l'eau ; sable et gravier la boivent, même dans un creux ; terre et prairie boivent une crue comme le sol d'origine. « Sol d'origine » efface la peinture.",
         soilErase: "Sol d'origine (effacer)",
         hoverSoil: "Sol sous le curseur : {soil}",
+        meadow: {
+            title: "Herbe de la carte",
+            hint: "L'herbe pousse seule sur la terre, la prairie et l'argile quand le sol est humide sans être sous l'eau, de jour, hors de l'hiver, et moins vite en altitude. Elle meurt sur un sol sec ou inondé.",
+            enabled: "Laisser pousser l'herbe",
+            grow: "Pré plein en (bonnes conditions)",
+            thirst: "Mort de soif en (sol sec)",
+            hold: "Tenue de l'humidité du sol",
+            holdHint:
+                "× 1 : la terre reste humide une dizaine de minutes après la pluie. Plus haut, le pré tient plus longtemps entre deux averses.",
+        },
+        hoverMeadow: "Humidité du sol : {moisture} % · herbe : {grass} %",
         soils: {
             earth: "Terre",
             meadow: "Prairie",

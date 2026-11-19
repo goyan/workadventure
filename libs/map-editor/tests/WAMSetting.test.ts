@@ -77,6 +77,34 @@ describe("WAM Setting", () => {
         vi.restoreAllMocks();
     });
 
+    it("stores the settings of the meadow within their bounds, and reads a map that has none as on", async () => {
+        const wam: WAMFileFormat = { ...defaultWamFile, settings: { weather: WeatherType.Rain } };
+        expect(WamSchema.parse(wam).settings?.meadow).toBeUndefined();
+        await new UpdateWAMSettingCommand(
+            wam,
+            {
+                message: {
+                    $case: "updateMeadowSettingMessage",
+                    updateMeadowSettingMessage: {
+                        enabled: false,
+                        growMinutes: 9999,
+                        thirstMinutes: 45,
+                        moistureHold: 0,
+                    },
+                },
+            },
+            "id",
+        ).execute();
+        expect(wam.settings?.meadow).toEqual({
+            enabled: false,
+            growMinutes: 120,
+            thirstMinutes: 45,
+            moistureHold: 0.25,
+        });
+        expect(wam.settings?.weather).toBe(WeatherType.Rain);
+        expect(WamSchema.parse(wam).settings?.meadow?.enabled).toBe(false);
+    });
+
     it("accepts fog as map weather", () => {
         expect(WamSchema.parse({ ...defaultWamFile, settings: { weather: "fog" } }).settings?.weather).toBe("fog");
     });

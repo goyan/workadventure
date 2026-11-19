@@ -36,6 +36,7 @@ import type {
     EntityEvent,
     EntityStateMessage,
     TerrainWaterMessage,
+    MeadowMessage,
     AquaticLifeMessage,
     FishingMessage,
     JoinRoomMessage,
@@ -118,6 +119,7 @@ import { LockableAreaManager } from "./AreaPropertyEvents/LockableAreaManager";
 import { ListeningZoneManager } from "./AreaPropertyEvents/ListeningZoneManager";
 import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
+import { MeadowManager } from "./MeadowManager";
 import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
 import { anglersOf, FishingManager } from "./FishingManager";
@@ -162,6 +164,7 @@ export class GameRoom implements BrothersFinder {
     private entityStateManager: EntityStateManager | undefined;
     private switchTriggers: SwitchTriggerEvaluator | undefined;
     private terrainWater: TerrainWaterManager | undefined;
+    private meadow: MeadowManager | undefined;
     private aquaticLife: AquaticLifeManager | undefined;
     /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
     private mapCells: { width: number; height: number } | undefined;
@@ -386,10 +389,25 @@ export class GameRoom implements BrothersFinder {
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
+        // The moisture of the soil and the grass that grows by itself, over the whole map: saved across restarts.
+        const meadow = new MeadowManager(
+            gameRoom,
+            rainTimelineService,
+            () => terrainWater.getGrid(),
+            { repository: await getVariablesRepository(), roomUrl },
+            undefined,
+            gameRoom.mapSizeInCells.bind(gameRoom),
+        );
+        gameRoom.meadow = meadow;
+        await meadow.restore();
+        meadow.start();
+        // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
+        gameRoom.destroyRoomStream.subscribe(() => meadow.stop());
         gameRoom.readMapSize(() => {
             // The water first: the life of the map lives on its grid.
             terrainWater.mapChanged();
             aquaticLife.mapChanged();
+            meadow.mapChanged();
         });
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
@@ -1186,6 +1204,11 @@ export class GameRoom implements BrothersFinder {
         return this.terrainWater?.snapshot();
     }
 
+    /** The meadow of the map (its whole state), sent to a user who joins the room. */
+    public getMeadow(): MeadowMessage | undefined {
+        return this.meadow?.snapshot();
+    }
+
     /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
     public mapSizeInCells(): { width: number; height: number } | undefined {
         return this.mapCells;
@@ -1854,6 +1877,7 @@ export class GameRoom implements BrothersFinder {
         this.terrainWater?.mapChanged();
         // After the water: the life reads its grid, and its own setting.
         this.aquaticLife?.mapChanged();
+        this.meadow?.mapChanged();
 
         if (GameRoom.commandInvalidatesJitsiModeratorTagFinder(editMapMessage.$case)) {
             this.jitsiModeratorTagFinderPromise = undefined;

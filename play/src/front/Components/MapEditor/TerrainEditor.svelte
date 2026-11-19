@@ -4,6 +4,7 @@
         MAX_DEPTH_TILES,
         MAX_WATER_CURRENT,
         MAX_WATER_SPEED,
+        MEADOW_BOUNDS,
         SOILS,
         soilCode,
         soilName,
@@ -17,6 +18,7 @@
         terrainBrushStore,
         terrainContoursStore,
         terrainHoverHeightStore,
+        terrainHoverMeadowStore,
         terrainHoverSoilStore,
     } from "../../Stores/TerrainEditorStore";
     import { SOIL_TINTS } from "../../Phaser/Game/Terrain/TerrainShading";
@@ -63,6 +65,18 @@
             $case: "updateWaterSettingMessage",
             updateWaterSettingMessage: { runoff, evaporation, speed, absorption, current },
         }).catch((error: unknown) => console.error("The pace of the water could not be saved", error));
+    }
+
+    let meadowOn = $state(saved.meadow.enabled);
+    let growMinutes = $state(saved.meadow.growMinutes);
+    let thirstMinutes = $state(saved.meadow.thirstMinutes);
+    let moistureHold = $state(saved.meadow.moistureHold);
+
+    function saveMeadow(): void {
+        executeUpdateWAMSettings({
+            $case: "updateMeadowSettingMessage",
+            updateMeadowSettingMessage: { enabled: meadowOn, growMinutes, thirstMinutes, moistureHold },
+        }).catch((error: unknown) => console.error("The settings of the meadow could not be saved", error));
     }
 
     function saveMaxDepth(): void {
@@ -170,6 +184,14 @@
                 {$LL.mapEditor.terrain.hoverSoil({ soil: $LL.mapEditor.terrain.soils[hovered]() })}
             </p>
         {/if}
+    {/if}
+    {#if $terrainHoverMeadowStore}
+        <p class="m-0 text-sm text-white" role="status" data-testid="terrain-hover-meadow">
+            {$LL.mapEditor.terrain.hoverMeadow({
+                moisture: Math.round($terrainHoverMeadowStore.moisture * 100),
+                grass: Math.round($terrainHoverMeadowStore.grass * 100),
+            })}
+        </p>
     {/if}
     <div data-testid="terrain-contours">
         <InputSwitch
@@ -324,4 +346,58 @@
         <p class="retro-hint m-0">{$LL.mapEditor.terrain.real.current()}</p>
     </div>
     <p class="retro-hint m-0">{$LL.mapEditor.terrain.paceHint()}</p>
+
+    <span class="retro-title mt-2">{$LL.mapEditor.terrain.meadow.title()}</span>
+    <p class="retro-hint m-0">{$LL.mapEditor.terrain.meadow.hint()}</p>
+    <div data-testid="terrain-meadow-enabled">
+        <InputSwitch
+            id="terrain-meadow-enabled"
+            bind:value={meadowOn}
+            label={$LL.mapEditor.terrain.meadow.enabled()}
+            labelPosition="right"
+            onchange={saveMeadow}
+        />
+    </div>
+    {#if meadowOn}
+        <div data-testid="terrain-meadow-grow">
+            <RangeSlider
+                id="terrain-meadow-grow"
+                label={$LL.mapEditor.terrain.meadow.grow()}
+                unit="min"
+                min={MEADOW_BOUNDS.growMinutes[0]}
+                max={MEADOW_BOUNDS.growMinutes[1]}
+                step={1}
+                bind:value={growMinutes}
+                onchange={saveMeadow}
+                buttonShape="square"
+            />
+        </div>
+        <div data-testid="terrain-meadow-thirst">
+            <RangeSlider
+                id="terrain-meadow-thirst"
+                label={$LL.mapEditor.terrain.meadow.thirst()}
+                unit="min"
+                min={MEADOW_BOUNDS.thirstMinutes[0]}
+                max={MEADOW_BOUNDS.thirstMinutes[1]}
+                step={1}
+                bind:value={thirstMinutes}
+                onchange={saveMeadow}
+                buttonShape="square"
+            />
+        </div>
+        <div data-testid="terrain-meadow-hold">
+            <RangeSlider
+                id="terrain-meadow-hold"
+                label={$LL.mapEditor.terrain.meadow.hold()}
+                unit="×"
+                min={MEADOW_BOUNDS.moistureHold[0]}
+                max={MEADOW_BOUNDS.moistureHold[1]}
+                step={0.25}
+                bind:value={moistureHold}
+                onchange={saveMeadow}
+                buttonShape="square"
+            />
+            <p class="retro-hint m-0">{$LL.mapEditor.terrain.meadow.holdHint()}</p>
+        </div>
+    {/if}
 </div>

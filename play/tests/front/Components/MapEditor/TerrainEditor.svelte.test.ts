@@ -12,6 +12,7 @@ const { executeUpdateTerrain, executeUpdateWAMSettings, mapSettings } = vi.hoist
         speed: 60,
         absorption: 5,
         current: 1,
+        meadow: { enabled: true, growMinutes: 10, thirstMinutes: 20, moistureHold: 1 },
         life: {
             enabled: false,
             reproductionDelay: 120,
@@ -115,6 +116,15 @@ describe("TerrainEditor", () => {
         expect(get(terrainBrushStore).mode).toBe("raise");
         byTestId("terrain-mode-dig").click();
         expect(get(terrainBrushStore).mode).toBe("dig");
+    });
+
+    it("saves the settings of the meadow of the map", () => {
+        render();
+        setRange("terrain-meadow-grow", 25);
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateMeadowSettingMessage",
+            updateMeadowSettingMessage: { enabled: true, growMinutes: 25, thirstMinutes: 20, moistureHold: 1 },
+        });
     });
 
     it("chooses the soil the brush paints", () => {

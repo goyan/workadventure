@@ -2054,6 +2054,34 @@
                 }
               },
               "additionalProperties": false
+            },
+            "meadow": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "growMinutes": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 120,
+                  "default": 10
+                },
+                "thirstMinutes": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 240,
+                  "default": 20
+                },
+                "moistureHold": {
+                  "type": "number",
+                  "minimum": 0.25,
+                  "maximum": 8,
+                  "default": 1
+                }
+              },
+              "additionalProperties": false
             }
           },
           "additionalProperties": false

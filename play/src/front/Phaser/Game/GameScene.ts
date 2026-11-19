@@ -19,6 +19,7 @@ import {
     PositionMessage_Direction,
     type SendUserMessage,
     type TerrainWaterMessage,
+    type MeadowMessage,
     type AquaticLifeMessage,
 } from "@workadventure/messages";
 import { z } from "zod";
@@ -377,6 +378,7 @@ import { LifeStats } from "./Life/LifeStats";
 import { TerrainView } from "./Terrain/TerrainView";
 import { WaterFlowView } from "./Terrain/WaterFlowView";
 import { gunzip } from "./Terrain/WaterStateCodec";
+import { MeadowState } from "./Terrain/MeadowState";
 import { entityOutdoorRect, OutdoorTracker } from "./Outdoor/OutdoorTracker";
 import { feetOf, GameJungle } from "./Jungle/GameJungle";
 import { joinedUserId } from "./Jungle/JungleCompanions";
@@ -574,6 +576,10 @@ export class GameScene extends DirtyScene {
     private weatherManager: WeatherManager | undefined;
     /** The water of the hollows of the relief, as the server keeps it. */
     private readonly terrainWater = new TerrainWater();
+    /** The grass and the moisture of the soil of the map, as the server tells them. */
+    private readonly meadow = new MeadowState();
+    private meadowSubscription: Subscription | undefined;
+    private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
@@ -1600,6 +1606,8 @@ export class GameScene extends DirtyScene {
         areaPropertyVariablesManagerStore.set(undefined);
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = undefined;
+        this.meadowSubscription?.unsubscribe();
+        this.meadowSubscription = undefined;
         this.aquaticLifeSubscription?.unsubscribe();
         this.aquaticLifeSubscription = undefined;
         this.entityStatesManager?.destroy();
@@ -2870,6 +2878,20 @@ export class GameScene extends DirtyScene {
             .catch((error: unknown) => console.warn("A state of the water of the relief could not be read", error));
     }
 
+    private receiveMeadow(message: MeadowMessage): void {
+        this.meadowQueue = this.meadowQueue
+            .then(async () => {
+                const [grass, moisture] = await Promise.all([gunzip(message.grass), gunzip(message.moisture)]);
+                this.meadow.receive({ width: message.width, height: message.height, grass, moisture });
+            })
+            .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
+    }
+
+    /** The meadow of the map, for what reads its grass and the moisture of its soil. */
+    public getMeadow(): MeadowState {
+        return this.meadow;
+    }
+
     /** The drawing of the relief, for the editor to show the bottom through the water while it is edited. */
     public getTerrainView(): TerrainView | undefined {
         return this.terrainView;
@@ -3582,7 +3604,7 @@ export class GameScene extends DirtyScene {
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
-                this.terrainView = new TerrainView(this, this.terrainWater);
+                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow);
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {
@@ -3938,6 +3960,12 @@ export class GameScene extends DirtyScene {
         this.terrainWaterSubscription?.unsubscribe();
         this.terrainWaterSubscription = this.connection.terrainWaterMessageStream.subscribe((message) => {
             this.receiveTerrainWater(message);
+        });
+        // The meadow of the map: what the room holds now, then every change.
+        if (room.meadow) this.receiveMeadow(room.meadow);
+        this.meadowSubscription?.unsubscribe();
+        this.meadowSubscription = this.connection.meadowMessageStream.subscribe((message) => {
+            this.receiveMeadow(message);
         });
         // The life of that water: the animals of the room now, then all of them every second.
         this.receiveAquaticLife(room.aquaticLife ?? { animals: [], species: [] });

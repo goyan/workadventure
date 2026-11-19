@@ -1,4 +1,4 @@
-import { cellOf, heightAt, SOILS, soilAt, TERRAIN_CELL, TERRAIN_CHUNK } from "@workadventure/map-editor";
+import { cellOf, heightAt, SOILS, soilAt, TERRAIN_CELL, TERRAIN_CHUNK, TILE_PX } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
@@ -17,6 +17,8 @@ import {
     slopeAlpha,
     slopeShade,
 } from "./TerrainShading";
+import { GRASS_COLOR, grassAlpha, mottledCover } from "./MeadowState";
+import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 
 /** Over the grass of the seasons (0.6), under the puddles (0.7), the objects and the avatars. */
@@ -35,6 +37,9 @@ interface ReliefLayers extends BlockCanvasArea {
     raised: Uint8Array;
     /** For each soil painted on the canvas (by its number in the map): 1 on its cells. */
     soils: Map<number, Uint8Array>;
+    /** The grass of the meadow over the canvas, and the state of the meadow it was read from. */
+    grass: Uint8Array | undefined;
+    meadowVersion: number;
     shaded: Uint8Array;
     lit: Uint8Array;
     /** Whether any cell of the canvas is dug or sloped: nothing to paint otherwise. */
@@ -61,6 +66,8 @@ export class TerrainView {
         private readonly scene: GameScene,
         private readonly water: TerrainWater,
         surface?: BlockSurface,
+        /** The meadow of the map: its grass is drawn on the ground, under the water. */
+        private readonly meadow?: MeadowState,
     ) {
         // Smooth: a hollow and its water have soft slopes and edges, not the squares of its cells.
         this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH, true);
@@ -72,7 +79,7 @@ export class TerrainView {
     }
 
     public update(now: number): void {
-        if (!this.water.hasAnything()) {
+        if (!this.water.hasAnything() && !this.meadow?.hasGrass()) {
             if (this.visible) {
                 this.surface.hide();
                 this.visible = false;
@@ -84,7 +91,7 @@ export class TerrainView {
         }
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}`;
         if (key === this.lastKey && this.drawn && wellInside(this.drawn, screen, DRAW_MARGIN / 5)) return;
         this.lastKey = key;
         this.drawn = paddedView(screen, DRAW_MARGIN);
@@ -107,6 +114,9 @@ export class TerrainView {
         for (const [code, cells] of relief.soils) {
             const tint = SOIL_TINTS[SOILS[code - 1]];
             if (tint) this.surface.paintField(canvas, cells, everywhere, NO_SHIFT, tint.color, () => tint.alpha);
+        }
+        if (relief.grass) {
+            this.surface.paintField(canvas, relief.grass, everywhere, NO_SHIFT, GRASS_COLOR, grassAlpha);
         }
         if (relief.dug) {
             this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
@@ -166,6 +176,7 @@ export class TerrainView {
         if (
             kept &&
             kept.terrain === terrain &&
+            kept.meadowVersion === (this.meadow?.version() ?? 0) &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -183,6 +194,8 @@ export class TerrainView {
             ground: new Uint8Array(size),
             raised: new Uint8Array(size),
             soils: new Map(),
+            grass: undefined,
+            meadowVersion: this.meadow?.version() ?? 0,
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
             dug: false,
@@ -232,6 +245,27 @@ export class TerrainView {
                     if (shade !== 0) layers.dug = true;
                 }
             }
+        }
+        if (this.meadow?.hasGrass()) {
+            // The grass of each tile, on its cells that are outdoors for this browser (a roof drawn in the map).
+            const outdoor = this.scene.getOutdoorGrid?.();
+            const cellsATile = TILE_PX / TERRAIN_CELL;
+            const grass = new Uint8Array(size);
+            let any = false;
+            for (let row = 0; row < canvas.rows; row++) {
+                for (let column = 0; column < canvas.columns; column++) {
+                    const cellX = left + column;
+                    const cellY = top + row;
+                    const cover = this.meadow.grassAt(Math.floor(cellX / cellsATile), Math.floor(cellY / cellsATile));
+                    if (cover === 0) continue;
+                    if (outdoor && !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)) {
+                        continue;
+                    }
+                    grass[row * canvas.columns + column] = mottledCover(cover, cellX, cellY);
+                    any = true;
+                }
+            }
+            if (any) layers.grass = grass;
         }
         this.relief = layers;
         return layers;

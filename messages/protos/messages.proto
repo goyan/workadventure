@@ -401,7 +401,16 @@ message UpdateWAMSettingsMessage {
     UpdateWeatherSettingMessage updateWeatherSettingMessage = 5;
     UpdateWaterSettingMessage updateWaterSettingMessage = 6;
     UpdateLifeSettingMessage updateLifeSettingMessage = 7;
+    UpdateMeadowSettingMessage updateMeadowSettingMessage = 8;
   }
+}
+
+// The meadow of the map (MeadowSettings in libs/map-editor): the grass that grows by itself on its fertile soils.
+message UpdateMeadowSettingMessage {
+  bool enabled = 1;
+  double growMinutes = 2;
+  double thirstMinutes = 3;
+  double moistureHold = 4;
 }
 
 // The life in the water of the relief and the drinks of the land animals (LifeSettings in libs/map-editor).
@@ -898,6 +907,18 @@ message EntityStateMessage {
   string entityId = 1;
   string key = 2;
   string value = 3;
+}
+
+// The meadow of the map (Meadow in libs/map-editor): the grass and the moisture of the soil of each tile, as the
+// server alone computes them, so that every player sees the same meadow. The whole state, sent when it changed.
+message MeadowMessage {
+  // The size of the map, in tiles (32 map pixels).
+  uint32 width = 1;
+  uint32 height = 2;
+  // A byte a tile (0: bare, 255: a full meadow), row by row, gzipped.
+  bytes grass = 3;
+  // A byte a tile (0: dry, 255: sodden), row by row, gzipped.
+  bytes moisture = 4;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a
@@ -1648,6 +1669,7 @@ message SubMessage {
     TerrainWaterMessage terrainWaterMessage = 35;
     AquaticLifeMessage aquaticLifeMessage = 36;
     FishingMessage fishingMessage = 40;
+    MeadowMessage meadowMessage = 41;
   }
 }
 
@@ -1752,6 +1774,8 @@ message RoomJoinedMessage {
   optional AquaticLifeMessage aquaticLife = 23;
   // The fishing lines in the water of the relief, for a player who joins the room. Absent when there is none.
   optional FishingMessage fishing = 30;
+  // The meadow of the map (its whole state), for a player who joins the room. Absent where nothing ever grew.
+  optional MeadowMessage meadow = 31;
 }
 
 message WebRtcStartMessage {
@@ -2318,6 +2342,7 @@ message SubToPusherRoomMessage {
     TerrainWaterMessage terrainWaterMessage = 11;
     AquaticLifeMessage aquaticLifeMessage = 12;
     FishingMessage fishingMessage = 20;
+    MeadowMessage meadowMessage = 21;
   }
 }
 
