@@ -4,6 +4,7 @@ import {
     CELL_AREA_M2,
     CELL_LITRES_PER_PX,
     DEFAULT_WATER_SETTINGS,
+    DOWNPOUR_PX_PER_SECOND,
     gridBoundsOf,
     LITRES_PER_M3,
     meteorShape,
@@ -12,6 +13,7 @@ import {
     ratesOf,
     stepInputOf,
     TERRAIN_CELL,
+    TILE_PX,
     WATER_MESSAGE_MS,
     WATER_STEP_MS,
     WaterGrid,
@@ -19,7 +21,14 @@ import {
     waterWallsOf,
     WeatherType,
 } from "@workadventure/map-editor";
-import type { ImpactWave, TerrainData, WaterGridBounds, WaterObject, WaterTally } from "@workadventure/map-editor";
+import type {
+    Downpour,
+    ImpactWave,
+    TerrainData,
+    WaterGridBounds,
+    WaterObject,
+    WaterTally,
+} from "@workadventure/map-editor";
 import type { TerrainWaterMessage } from "@workadventure/messages";
 import { z } from "zod";
 import type { VariablesRepositoryInterface } from "../Services/Repository/VariablesRepositoryInterface";
@@ -68,6 +77,8 @@ export class TerrainWaterManager {
     private toldAtStep = 0;
     /** The waves of the impacts still running. */
     private waves: ImpactWave[] = [];
+    /** The downpours falling on the map now, asked at each step: none until the catastrophes of the room say. */
+    private downpours: () => readonly Downpour[] = () => [];
     private sums: Sums = noSums();
     /** Whether the last step moved any water: a grid at rest with nothing coming in is not stepped. */
     private moving = true;
@@ -192,8 +203,10 @@ export class TerrainWaterManager {
             this.rainRate = rainRateAt(settings, this.now(), slots);
         }
         this.steps++;
-        const waving = this.waves.length > 0;
-        if (waving) this.advanceWaves(grid);
+        // Both each step: a downpour goes on raining while the wave of a meteor runs.
+        const raining = this.pourDownpours(grid);
+        const waving = this.waves.length > 0 || raining;
+        if (this.waves.length > 0) this.advanceWaves(grid);
         const pouring = this.rainRate > 0 || this.objects.some((object) => object.litresPerMinute > 0);
         if (this.moving || pouring) {
             const tally = grid.step(stepInputOf(settings?.water, this.rainRate, this.objects, WATER_STEP_MS / 1000));
@@ -211,6 +224,37 @@ export class TerrainWaterManager {
             this.tell(grid);
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** The catastrophes of the room say which downpours are falling. */
+    public setDownpours(downpours: () => readonly Downpour[]): void {
+        this.downpours = downpours;
+    }
+
+    /**
+     * The downpours rain on the water during a step: counted with the rain. True when water fell, so that the room
+     * sees it rise as often as under a wave.
+     */
+    private pourDownpours(grid: WaterGrid): boolean {
+        const falling = this.downpours();
+        if (falling.length === 0) return false;
+        const px = (DOWNPOUR_PX_PER_SECOND * WATER_STEP_MS) / 1000;
+        let laid = 0;
+        for (const downpour of falling) {
+            laid += grid.rainOn(
+                Math.floor(downpour.x / TERRAIN_CELL),
+                Math.floor(downpour.y / TERRAIN_CELL),
+                downpour.wholeMap ? undefined : (downpour.radiusTiles * TILE_PX) / TERRAIN_CELL,
+                px,
+            );
+        }
+        if (laid > 0) {
+            this.sums.rainPx += laid;
+            this.moving = true;
+            this.version++;
+            this.changedSinceSave = true;
+        }
+        return laid > 0;
     }
 
     /** The waves of the impacts move on; one that ended is forgotten, and what it lost is counted. */

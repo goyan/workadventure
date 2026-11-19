@@ -1,11 +1,18 @@
 <script lang="ts">
-    import { METEOR_MAX_TILES, METEOR_MIN_TILES } from "@workadventure/map-editor";
+    import {
+        DOWNPOUR_MAX_TILES,
+        DOWNPOUR_MIN_TILES,
+        METEOR_MAX_TILES,
+        METEOR_MIN_TILES,
+    } from "@workadventure/map-editor";
     import { onDestroy } from "svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import {
         armedCatastropheStore,
         catastrophePanelStore,
         disarmCatastrophe,
+        downpourRadiusTilesStore,
+        downpourWholeMapStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
     } from "../../Stores/CatastropheStore";
@@ -22,6 +29,12 @@
         if (next === "weather") disarmCatastrophe();
     }
     const meteorArmed = $derived($armedCatastropheStore === "meteor");
+    const downpourArmed = $derived($armedCatastropheStore === "downpour");
+    // The size shown is that of the armed catastrophe, and stays that of the last one armed.
+    let sized = $state<"meteor" | "downpour">("meteor");
+    $effect(() => {
+        if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
+    });
 
     // Escape only matters while something is armed: the listener lives exactly that long.
     function onKeydown(event: KeyboardEvent): void {
@@ -75,23 +88,67 @@
                     <PixelIcon name="meteor" size={16} />
                     <span>{$LL.actionbar.catastrophe.meteor()}</span>
                 </button>
-                <label class="flex items-center gap-2">
-                    <input
-                        type="range"
-                        class="w-24"
-                        min={METEOR_MIN_TILES}
-                        max={METEOR_MAX_TILES}
-                        step="1"
-                        aria-label={$LL.actionbar.catastrophe.sizeLabel()}
-                        data-testid="catastrophe-meteor-size"
-                        bind:value={$meteorRadiusTilesStore}
-                    />
-                    <span class="whitespace-nowrap"
-                        >{$LL.actionbar.catastrophe.size({ tiles: $meteorRadiusTilesStore })}</span
-                    >
-                </label>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-full px-2 py-1 {downpourArmed
+                        ? 'bg-white/30 ring-1 ring-white'
+                        : 'bg-white/10 hover:bg-white/20'}"
+                    aria-pressed={downpourArmed}
+                    data-testid="catastrophe-downpour"
+                    onclick={() => toggleArmedCatastrophe("downpour")}
+                >
+                    <PixelIcon name="downpour" size={16} />
+                    <span>{$LL.actionbar.catastrophe.downpour()}</span>
+                </button>
+                {#if sized === "downpour"}
+                    <label class="flex items-center gap-1 whitespace-nowrap">
+                        <input
+                            type="checkbox"
+                            data-testid="catastrophe-downpour-whole-map"
+                            bind:checked={$downpourWholeMapStore}
+                        />
+                        <span>{$LL.actionbar.catastrophe.wholeMap()}</span>
+                    </label>
+                    {#if !$downpourWholeMapStore}
+                        <label class="flex items-center gap-2">
+                            <input
+                                type="range"
+                                class="w-24"
+                                min={DOWNPOUR_MIN_TILES}
+                                max={DOWNPOUR_MAX_TILES}
+                                step="1"
+                                aria-label={$LL.actionbar.catastrophe.downpourSizeLabel()}
+                                data-testid="catastrophe-downpour-size"
+                                bind:value={$downpourRadiusTilesStore}
+                            />
+                            <span class="whitespace-nowrap"
+                                >{$LL.actionbar.catastrophe.size({ tiles: $downpourRadiusTilesStore })}</span
+                            >
+                        </label>
+                    {/if}
+                {:else}
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="range"
+                            class="w-24"
+                            min={METEOR_MIN_TILES}
+                            max={METEOR_MAX_TILES}
+                            step="1"
+                            aria-label={$LL.actionbar.catastrophe.sizeLabel()}
+                            data-testid="catastrophe-meteor-size"
+                            bind:value={$meteorRadiusTilesStore}
+                        />
+                        <span class="whitespace-nowrap"
+                            >{$LL.actionbar.catastrophe.size({ tiles: $meteorRadiusTilesStore })}</span
+                        >
+                    </label>
+                {/if}
                 <span class="text-white/60">
-                    {meteorArmed ? $LL.actionbar.catastrophe.armedHelp() : $LL.actionbar.catastrophe.idleHelp()}
+                    {downpourArmed
+                        ? $LL.actionbar.catastrophe.downpourArmedHelp()
+                        : meteorArmed
+                          ? $LL.actionbar.catastrophe.armedHelp()
+                          : $LL.actionbar.catastrophe.idleHelp()}
                 </span>
             </div>
         {/if}

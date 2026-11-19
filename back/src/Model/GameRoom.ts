@@ -367,6 +367,7 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInPixels.bind(gameRoom),
             terrainWater.strike.bind(terrainWater),
         );
+        terrainWater.setDownpours(() => catastrophes.downpours());
         gameRoom.catastrophes = catastrophes;
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => catastrophes.stop());
@@ -427,6 +428,8 @@ export class GameRoom implements BrothersFinder {
             () => fireDanger(fireConditions.conditions(), fireConditions.thresholds()),
         );
         gameRoom.meadow = meadow;
+        // A downpour also soaks the ground of the meadow.
+        catastrophes.soakWith(meadow.soak.bind(meadow));
         await meadow.restore();
         meadow.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
@@ -1312,9 +1315,16 @@ export class GameRoom implements BrothersFinder {
         return anglersOf(this.users.values());
     }
 
-    /** A player launches a catastrophe (a meteor) at a point of the map. */
-    public launchCatastrophe(kind: CatastropheKind, x: number, y: number, radiusTiles: number): void {
-        this.catastrophes?.launch(kind, x, y, radiusTiles);
+    /** A player launches a catastrophe at a point of the map: a meteor, or the downpour that follows their pointer. */
+    public launchCatastrophe(
+        user: User,
+        kind: CatastropheKind,
+        x: number,
+        y: number,
+        radiusTiles: number,
+        wholeMap: boolean,
+    ): void {
+        this.catastrophes?.request(user.id, kind, x, y, radiusTiles, wholeMap);
     }
 
     /** A player casts their fishing line at a point of the map. */

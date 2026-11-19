@@ -34,6 +34,8 @@ import {
 } from "../../../../src/front/Stores/FishingStore";
 import {
     catastrophePanelStore,
+    downpourRadiusTilesStore,
+    downpourWholeMapStore,
     meteorRadiusTilesStore,
     toggleArmedCatastrophe,
 } from "../../../../src/front/Stores/CatastropheStore";
@@ -767,6 +769,97 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             handler.handlePointerUpEvent(moved, []);
 
             expect(launch).not.toHaveBeenCalled();
+        });
+
+        describe("a downpour", () => {
+            let ticks: (() => void)[];
+            const remove = vi.fn();
+
+            function armDownpour(): void {
+                catastrophePanelStore.set(true);
+                toggleArmedCatastrophe("downpour");
+            }
+            function held(): ReturnType<typeof pointer> {
+                const result = pointer(0, 1);
+                result.isDown = true;
+                return result;
+            }
+
+            beforeEach(() => {
+                ticks = [];
+                Object.defineProperty(scene, "time", {
+                    configurable: true,
+                    value: {
+                        addEvent: (config: { callback: () => void }) => {
+                            ticks.push(config.callback);
+                            return { remove };
+                        },
+                    },
+                });
+            });
+
+            afterEach(() => {
+                downpourWholeMapStore.set(false);
+                downpourRadiusTilesStore.set(3);
+            });
+
+            it("rains under the pointer as soon as the click is pressed, and again while it is held", () => {
+                armDownpour();
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 3, false]]);
+
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(500, 700));
+                ticks[0]();
+                expect(launch.mock.calls[1]).toEqual([CatastropheKind.CATASTROPHE_DOWNPOUR, 500, 700, 3, false]);
+            });
+
+            it("holding the click does not drag the map, and releasing it launches nothing more", () => {
+                armDownpour();
+                const press = held();
+                handler.handlePointerDownEvent(press, []);
+                handler.handlePointerMoveEvent(press, []);
+                expect(cameraManager.startManualPan.mock.calls).toEqual([]);
+                expect(remove).not.toHaveBeenCalled();
+
+                handler.handlePointerUpEvent(pointer(0, 1), []);
+                expect(remove).toHaveBeenCalled();
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(scene.moveTo.mock.calls).toEqual([]);
+            });
+
+            it("carries the size and the whole map chosen in the panel", () => {
+                armDownpour();
+                downpourRadiusTilesStore.set(9);
+                downpourWholeMapStore.set(true);
+                handler.handlePointerDownEvent(held(), []);
+                expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_DOWNPOUR, 480, 640, 9, true]]);
+            });
+
+            it("stops once the click is no longer held or the downpour is disarmed, and keeps the cloud on the map", () => {
+                armDownpour();
+                const press = held();
+                camera.getWorldPoint.mockReturnValue(new Phaser.Math.Vector2(-50, 9999));
+                handler.handlePointerDownEvent(press, []);
+                expect(launch.mock.calls[0].slice(1, 3)).toEqual([0, 1183]);
+
+                press.isDown = false;
+                ticks[0]();
+                expect(launch).toHaveBeenCalledTimes(1);
+                expect(remove).toHaveBeenCalled();
+
+                remove.mockClear();
+                handler.handlePointerDownEvent(held(), []);
+                catastrophePanelStore.set(false);
+                expect(remove).toHaveBeenCalled();
+            });
+
+            it("does not rain with the right button", () => {
+                armDownpour();
+                const right = pointer(2, 1);
+                right.isDown = true;
+                handler.handlePointerDownEvent(right, []);
+                expect(launch).not.toHaveBeenCalled();
+            });
         });
 
         it("nothing is launched with the right button, in the editor, or unarmed", () => {
