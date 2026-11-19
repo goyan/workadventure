@@ -45,12 +45,12 @@ describe("strawLevel", () => {
         // Full straw on a full, dry meadow; none on green grass.
         expect(strawLevel(255, 255)).toBe(255);
         expect(strawLevel(255, 0)).toBe(0);
-        // Bare fertile ground gone dry yellows too, less than grass: 120 of 255.
-        expect(strawLevel(0, 255)).toBe(120);
+        // Bare fertile ground gone dry yellows too, a little less than grass: 200 of 255.
+        expect(strawLevel(0, 255)).toBe(200);
         expect(strawLevel(0, 0)).toBe(0);
-        // Thin grass gone dry still yellows the ground it grows on: 180 of 255 at least.
-        expect(strawLevel(1, 255)).toBe(180);
-        expect(strawLevel(1, 128)).toBe(Math.round((180 * 128) / 255));
+        // Thin grass gone dry still yellows the ground it grows on: 230 of 255 at least.
+        expect(strawLevel(1, 255)).toBe(230);
+        expect(strawLevel(1, 128)).toBe(Math.round((230 * 128) / 255));
         // And denser grass a little more.
         expect(strawLevel(128, 255)).toBeGreaterThan(strawLevel(1, 255));
         expect(strawLevel(128, 255)).toBeLessThan(255);

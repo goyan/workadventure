@@ -22,14 +22,14 @@ export function mottledCover(cover: number, cellX: number, cellY: number): numbe
 }
 
 /** The colour of the grass gone dry: straw, drawn over the ground as much as its grass is dry. */
-export const STRAW_COLOR = 0xd9c257;
-export const STRAW_ALPHA = 0.9;
+export const STRAW_COLOR = 0xe0c24a;
+export const STRAW_ALPHA = 0.92;
 /**
  * A dry ground is seen dry, not only its meadows: bare ground where grass can grow yellows this much (of 255), and
  * thin grass this much already.
  */
-const BARE_GROUND_STRAW = 120;
-const THIN_GRASS_STRAW = 180;
+const BARE_GROUND_STRAW = 200;
+const THIN_GRASS_STRAW = 230;
 
 /**
  * How much straw is drawn over a cell, from the cover of its grass and the dryness of its ground (0 to 255 each):
