@@ -405,6 +405,7 @@ import { NerfManager } from "./Nerf/NerfManager";
 import { TorchManager } from "./Torch/TorchManager";
 import { TORCH_EQUIPPED_VARIABLE, TORCH_INTENSITY_VARIABLE } from "./Torch/TorchProtocol";
 import { FishingManager } from "./Fishing/FishingManager";
+import { MeteorView } from "./Catastrophe/MeteorView";
 import { ROD_EQUIPPED_VARIABLE } from "./Fishing/FishingProtocol";
 import { NERF_EQUIPPED_VARIABLE, NERF_HEARTS_VARIABLE, NERF_SOUND_KEY, NERF_SOUND_URL } from "./Nerf/NerfProtocol";
 import { CoffeeManager } from "./Coffee/CoffeeManager";
@@ -468,6 +469,9 @@ const MAX_PATH_REROUTES = 5;
 
 /** The pieces of a wall two tiles high or more, by their identifier (`…-h2`, `…-h3`, `…-h4`). */
 const TALL_WALL = /-h[234](?:[-:]|$)/;
+
+/** Water this deep, in pixels, makes the ground wet: the burst of a meteor is then water, not dust. */
+const METEOR_WET_DEPTH_PX = 2;
 
 export class GameScene extends DirtyScene {
     Terrains: Array<Tileset>;
@@ -581,6 +585,8 @@ export class GameScene extends DirtyScene {
     private meadowSubscription: Subscription | undefined;
     private meadowQueue: Promise<void> = Promise.resolve();
     private terrainWaterSubscription: Subscription | undefined;
+    private meteorView: MeteorView | undefined;
+    private catastropheSubscription: Subscription | undefined;
     /** The animals of the water of the relief, as the server tells them. */
     private readonly aquaticLife = new AquaticLife();
     private aquaticLifeView: AquaticLifeView | undefined;
@@ -1727,6 +1733,10 @@ export class GameScene extends DirtyScene {
         torchEquippedStore.set(false);
         this._fishingManager?.destroy();
         this._fishingManager = undefined;
+        this.catastropheSubscription?.unsubscribe();
+        this.catastropheSubscription = undefined;
+        this.meteorView?.destroy();
+        this.meteorView = undefined;
         rodEquippedStore.set(false);
         this._coffeeManager?.destroy();
         this._coffeeManager = undefined;
@@ -2227,6 +2237,7 @@ export class GameScene extends DirtyScene {
             // Before the night veil: it is pierced with the lights the torches have just drawn.
             this._torchManager?.update(time);
             this._fishingManager?.update(time);
+            this.meteorView?.update(time);
             this.nightManager?.update(time);
             this.lampManager?.update(time);
             this.gameSwitches?.update(time);
@@ -4029,6 +4040,17 @@ export class GameScene extends DirtyScene {
         this._torchManager = new TorchManager(this);
         this._fishingManager?.destroy();
         this._fishingManager = new FishingManager(this, room.fishing);
+        this.catastropheSubscription?.unsubscribe();
+        this.meteorView?.destroy();
+        const meteorView = new MeteorView(
+            this,
+            (x, y) => this.terrainWater.depthAt(x, y, this.time.now) >= METEOR_WET_DEPTH_PX,
+            () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+        );
+        this.meteorView = meteorView;
+        this.catastropheSubscription = this.connection?.catastropheMessageStream.subscribe((message) => {
+            meteorView.add(message, this.time.now);
+        });
         this.karaokeSpotlight?.destroy();
         this.karaokeSpotlight = new KaraokeSpotlight(this);
         this.CurrentPlayer.setSwimwear(localUserStore.getSwimwear() ?? playerVariables.get(SWIMWEAR_VARIABLE));

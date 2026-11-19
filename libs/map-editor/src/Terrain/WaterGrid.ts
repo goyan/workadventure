@@ -372,6 +372,72 @@ export class WaterGrid {
         return wet;
     }
 
+    /**
+     * Empties the disc of `radius` cells around a cell (never behind a wall) and returns the water taken, with how
+     * many cells the disc has. Undefined outside the grid or in a wall.
+     */
+    public takeDisc(cellX: number, cellY: number, radius: number): { takenPx: number; cells: number } | undefined {
+        const centre = this.indexOf(cellX, cellY);
+        if (centre === undefined || this.blocked[centre]) return undefined;
+        const disc = this.discAround(centre, radius, discLimit(radius));
+        let takenPx = 0;
+        for (const index of disc) {
+            takenPx += this.depth[index];
+            this.depth[index] = 0;
+        }
+        return { takenPx, cells: disc.length };
+    }
+
+    /**
+     * Lays up to `px` of water on the ring around a cell: the cells further than `inner` cells from it and no further
+     * than `outer`, reached from it without crossing a wall (all the disc when `inner` is negative). Each cell takes
+     * an even share, never over its highest level, and a cell already `deepPx` deep no more than `crestPx`: open water
+     * only swells as a wave goes by, the ground around it is flooded. Returns what was laid.
+     */
+    public layRing(
+        cellX: number,
+        cellY: number,
+        inner: number,
+        outer: number,
+        px: number,
+        crestPx = Infinity,
+        deepPx = Infinity,
+    ): number {
+        const centre = this.indexOf(cellX, cellY);
+        if (centre === undefined || this.blocked[centre] || px <= 0) return 0;
+        const { width } = this.bounds;
+        const column = centre % width;
+        const row = (centre - column) / width;
+        const cells: number[] = [];
+        const rooms: number[] = [];
+        for (const index of this.discAround(centre, outer, discLimit(outer))) {
+            const x = index % width;
+            const y = (index - x) / width;
+            if (inner >= 0 && (x - column) ** 2 + (y - row) ** 2 <= inner * inner) continue;
+            let room = this.spill[index] + MAX_WATER_SURFACE_PX - (this.ground[index] + this.depth[index]);
+            if (this.depth[index] >= deepPx) room = Math.min(room, crestPx);
+            if (room <= 0) continue;
+            cells.push(index);
+            rooms.push(room);
+        }
+        let left = px;
+        // Even shares, and what a full cell cannot take goes to the others: a few rounds settle it.
+        for (let round = 0; round < 4 && left > LEVEL_PX; round++) {
+            let open = 0;
+            for (const room of rooms) if (room > 0) open++;
+            if (open === 0) break;
+            const share = left / open;
+            for (let cell = 0; cell < cells.length; cell++) {
+                if (rooms[cell] <= 0) continue;
+                const stays = Math.min(share, rooms[cell]);
+                this.depth[cells[cell]] += stays;
+                rooms[cell] -= stays;
+                left -= stays;
+            }
+        }
+        return px - left;
+    }
+
     /** One step: what comes in and goes out, then the water moves towards the lower neighbours. */
     public step(input: WaterStepInput): WaterTally {
         const tally: WaterTally = {
@@ -580,7 +646,7 @@ export class WaterGrid {
      * The cells of the grid a source pours over: those within `radius` cells of its own that are reached from it
      * without crossing a wall, its own first.
      */
-    private discAround(centre: number, radius: number): number[] {
+    private discAround(centre: number, radius: number, maxCells = MAX_DISC_CELLS): number[] {
         const { width, height } = this.bounds;
         const column = centre % width;
         const row = (centre - column) / width;
@@ -591,7 +657,7 @@ export class WaterGrid {
         }
         const cells = [centre];
         this.seen[centre] = this.search;
-        for (let head = 0; head < cells.length && cells.length < MAX_DISC_CELLS; head++) {
+        for (let head = 0; head < cells.length && cells.length < maxCells; head++) {
             const index = cells[head];
             const x = index % width;
             const y = (index - x) / width;
@@ -958,6 +1024,11 @@ export class WaterGrid {
 }
 
 /** The radius of a source or a sink in cells, within its bounds; `fallback` for one that gives none. */
+/** How many cells a disc of that radius holds at most: the wave of an impact goes further than a source pours. */
+function discLimit(radius: number): number {
+    return Math.max(MAX_DISC_CELLS, (2 * Math.ceil(radius) + 1) ** 2);
+}
+
 function radiusOf(radius: number | undefined, fallback: number): number {
     if (radius === undefined || !Number.isFinite(radius) || radius < 0) return fallback;
     return Math.min(MAX_RADIUS_CELLS, radius);

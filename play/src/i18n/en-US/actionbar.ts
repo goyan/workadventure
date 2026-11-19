@@ -69,6 +69,14 @@ const actionbar = {
     calendar: "Calendar",
     todoList: "Todo list",
     weather: "Weather",
+    catastrophe: {
+        label: "Disaster",
+        meteor: "Meteor",
+        size: "{tiles} tiles",
+        sizeLabel: "Size of the meteor: radius of its crater, in tiles",
+        armedHelp: "Click on the map · Esc to cancel",
+        idleHelp: "Pick a disaster",
+    },
     weatherBanner: {
         label: "Map weather: now, in 1 h and in 4 h",
         now: "Now",

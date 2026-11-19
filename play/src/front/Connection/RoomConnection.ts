@@ -53,6 +53,8 @@ import type {
     TerrainWaterMessage,
     MeadowMessage,
     AquaticLifeMessage,
+    CatastropheKind,
+    CatastropheMessage,
     FishingMessage,
     UploadEntityMessage,
     UserJoinedMessage as UserJoinedMessageTsProto,
@@ -249,6 +251,9 @@ export class RoomConnection implements RoomConnection {
     public readonly meadowMessageStream = this._meadowMessageStream.asObservable();
     private readonly _aquaticLifeMessageStream = new Subject<AquaticLifeMessage>();
     public readonly aquaticLifeMessageStream = this._aquaticLifeMessageStream.asObservable();
+    /** The catastrophes the room throws, each announced once with the time left before its impact. */
+    private readonly _catastropheMessageStream = new Subject<CatastropheMessage>();
+    public readonly catastropheMessageStream = this._catastropheMessageStream.asObservable();
     /** The fishing lines of the room, whenever one changes. */
     private readonly _fishingMessageStream = new Subject<FishingMessage>();
     public readonly fishingMessageStream = this._fishingMessageStream.asObservable();
@@ -486,6 +491,10 @@ export class RoomConnection implements RoomConnection {
                                 }
                                 case "aquaticLifeMessage": {
                                     this._aquaticLifeMessageStream.next(subMessage.aquaticLifeMessage);
+                                    break;
+                                }
+                                case "catastropheMessage": {
+                                    this._catastropheMessageStream.next(subMessage.catastropheMessage);
                                     break;
                                 }
                                 case "fishingMessage": {
@@ -1214,6 +1223,16 @@ export class RoomConnection implements RoomConnection {
             message: {
                 $case: "castFishingLineMessage",
                 castFishingLineMessage: { x: Math.round(x), y: Math.round(y) },
+            },
+        });
+    }
+
+    /** Launches a catastrophe at a point of the map, in map pixels. The server decides. */
+    emitLaunchCatastrophe(kind: CatastropheKind, x: number, y: number, radiusTiles: number): void {
+        this.send({
+            message: {
+                $case: "launchCatastropheMessage",
+                launchCatastropheMessage: { kind, x: Math.round(x), y: Math.round(y), radiusTiles },
             },
         });
     }
@@ -2453,6 +2472,7 @@ export class RoomConnection implements RoomConnection {
         this._meadowMessageStream.complete();
         this._aquaticLifeMessageStream.complete();
         this._fishingMessageStream.complete();
+        this._catastropheMessageStream.complete();
         this._entityMessageStream.complete();
         this._editMapCommandMessageStream.complete();
         this._playerDetailsUpdatedMessageStream.complete();

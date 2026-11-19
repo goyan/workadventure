@@ -744,6 +744,7 @@ message ClientToServerMessage {
     CastFishingLineMessage castFishingLineMessage = 60;
     ReelFishingLineMessage reelFishingLineMessage = 61;
     StartFishingContestMessage startFishingContestMessage = 64;
+    LaunchCatastropheMessage launchCatastropheMessage = 65;
     VideoQualityReportMessage videoQualityReportMessage = 50;
     AnalyticsEventReportMessage analyticsEventReportMessage = 52;
     EntityMessage entityMessage = 53;
@@ -815,6 +816,30 @@ message SetEntityStateMessage {
 // animals nor the walls of the map). All of them at each report, none once nothing is sensed any more.
 message ReportSwitchPresenceMessage {
   repeated string switchIds = 1;
+}
+
+enum CatastropheKind {
+  CATASTROPHE_METEOR = 0;
+}
+
+// Browser to server: a player launches a catastrophe at a point of the map, in map pixels. The server decides.
+message LaunchCatastropheMessage {
+  CatastropheKind kind = 1;
+  int32 x = 2;
+  int32 y = 3;
+  // A meteor: the radius of its crater, in tiles. The server keeps it within what a meteor may be.
+  int32 radiusTiles = 4;
+}
+
+// Server to room: a catastrophe is on its way.
+message CatastropheMessage {
+  int32 id = 1;
+  CatastropheKind kind = 2;
+  int32 x = 3;
+  int32 y = 4;
+  int32 impactInMs = 5;
+  // A meteor: the radius of its crater, in tiles, as the server kept it.
+  int32 radiusTiles = 6;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does
@@ -1670,6 +1695,7 @@ message SubMessage {
     AquaticLifeMessage aquaticLifeMessage = 36;
     FishingMessage fishingMessage = 40;
     MeadowMessage meadowMessage = 41;
+    CatastropheMessage catastropheMessage = 42;
   }
 }
 
@@ -2319,6 +2345,7 @@ message PusherToBackMessage {
     CastFishingLineMessage castFishingLineMessage = 44;
     ReelFishingLineMessage reelFishingLineMessage = 45;
     StartFishingContestMessage startFishingContestMessage = 48;
+    LaunchCatastropheMessage launchCatastropheMessage = 49;
   }
 }
 
@@ -2343,6 +2370,7 @@ message SubToPusherRoomMessage {
     AquaticLifeMessage aquaticLifeMessage = 12;
     FishingMessage fishingMessage = 20;
     MeadowMessage meadowMessage = 21;
+    CatastropheMessage catastropheMessage = 22;
   }
 }
 

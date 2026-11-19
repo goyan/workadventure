@@ -257,6 +257,11 @@ const roomManager = {
                             room.startFishingContest(user, message.message.startFishingContestMessage.minutes);
                             break;
                         }
+                        case "launchCatastropheMessage": {
+                            const { kind, x, y, radiusTiles } = message.message.launchCatastropheMessage;
+                            room.launchCatastrophe(user, kind, x, y, radiusTiles);
+                            break;
+                        }
                         default: {
                             const _exhaustiveCheck: never = message.message;
                         }

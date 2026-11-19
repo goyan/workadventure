@@ -74,6 +74,14 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     calendar: "Calendrier",
     todoList: "Liste de tâches",
     weather: "Météo",
+    catastrophe: {
+        label: "Catastrophe",
+        meteor: "Météore",
+        size: "{tiles} cases",
+        sizeLabel: "Taille du météore : rayon du cratère, en cases",
+        armedHelp: "Cliquez sur la carte · Échap pour annuler",
+        idleHelp: "Choisissez une catastrophe",
+    },
     weatherBanner: {
         label: "Météo de la carte : maintenant, dans 1 h et dans 4 h",
         now: "Maintenant",
