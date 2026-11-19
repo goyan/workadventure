@@ -55,6 +55,21 @@ const EVENT_ON_WIRE: Record<FishingEvent["type"], number> = {
 };
 
 /**
+ * Where the players of a room cast from, in map pixels, by user id. The water is on the ground: a player on a raised
+ * floor, drawn its altitude up the screen, casts from the ground under them (as far as from the ground).
+ */
+export function anglersOf(
+    users: Iterable<{ id: number; getPosition(): { x: number; y: number }; getFloorZ(): number }>,
+): Map<number, { x: number; y: number }> {
+    const anglers = new Map<number, { x: number; y: number }>();
+    for (const user of users) {
+        const { x, y } = user.getPosition();
+        anglers.set(user.id, { x, y: y + user.getFloorZ() });
+    }
+    return anglers;
+}
+
+/**
  * The fishing lines of a room (the rules are in libs/map-editor, Life/Fishing). The server alone decides what a line
  * catches, so that every player sees the same fish bite and no browser can make up a catch. The lines are stepped
  * with the life of the water, just before it (see AquaticLifeManager): a line only tells a fish of the map where to
@@ -78,7 +93,7 @@ export class FishingManager {
 
     constructor(
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
-        /** Where the players who may fish stand (those on the ground, where the water is), by user id. */
+        /** Where the players who may fish stand, by user id (see anglersOf). */
         private readonly anglers: () => ReadonlyMap<number, { x: number; y: number }>,
         private readonly store?: { repository: VariablesRepositoryInterface; roomUrl: string },
         private readonly now: () => number = Date.now,

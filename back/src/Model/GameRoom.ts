@@ -120,7 +120,7 @@ import { EntityStateManager } from "./EntityStateManager";
 import { SwitchTriggerEvaluator } from "./SwitchTriggerEvaluator";
 import { TerrainWaterManager } from "./TerrainWaterManager";
 import { AquaticLifeManager } from "./AquaticLifeManager";
-import { FishingManager } from "./FishingManager";
+import { anglersOf, FishingManager } from "./FishingManager";
 import { rainTimelineService } from "./Services/RainTimelineService";
 import { KaraokeLeaderboardManager } from "./AreaPropertyEvents/KaraokeLeaderboardManager";
 import { MaxUsersInAreaManager } from "./AreaPropertyEvents/MaxUsersInAreaManager";
@@ -357,7 +357,7 @@ export class GameRoom implements BrothersFinder {
         // The fishing lines in that water: stepped with the life, just before it.
         const fishing = new FishingManager(
             gameRoom,
-            gameRoom.groundAnglers.bind(gameRoom),
+            gameRoom.anglers.bind(gameRoom),
             { repository: await getVariablesRepository(), roomUrl },
             undefined,
             undefined,
@@ -1240,15 +1240,9 @@ export class GameRoom implements BrothersFinder {
         this.aquaticLife?.release(user.id, animalId);
     }
 
-    /** Where the players who may fish stand, by user id: those on the ground, where the water is. */
-    public groundAnglers(): Map<number, { x: number; y: number }> {
-        const anglers = new Map<number, { x: number; y: number }>();
-        for (const user of this.users.values()) {
-            if (!sameFloor(user.getFloorZ(), 0)) continue;
-            const { x, y } = user.getPosition();
-            anglers.set(user.id, { x, y });
-        }
-        return anglers;
+    /** Where the players of the room cast their fishing line from, by user id: on the ground or over it. */
+    public anglers(): Map<number, { x: number; y: number }> {
+        return anglersOf(this.users.values());
     }
 
     /** A player casts their fishing line at a point of the map. */

@@ -41,6 +41,15 @@ describe("the fishing rod in the hand", () => {
         expect(rod.chargeTiles(800)).toBeUndefined();
     });
 
+    it("casts from the ground under an avatar that stands on a raised floor", () => {
+        const rod = new FishingRod();
+        rod.press(0, false);
+        // Drawn 64 px up the screen, the avatar stands over the ground point (100, 164).
+        expect(rod.release(750, { x: 100, y: 100, floorZ: 64, direction: "right" })).toEqual({ x: 244, y: 164 });
+        rod.press(1000, false);
+        expect(rod.release(1750, { x: 100, y: 100, floorZ: 64, direction: "up" })).toEqual({ x: 100, y: 20 });
+    });
+
     it("does not cast when the key was not pressed for it", () => {
         const rod = new FishingRod();
         expect(rod.release(750, { x: 100, y: 100, direction: "right" })).toBeUndefined();

@@ -23,14 +23,18 @@ export class FishingRod {
         return this.pressedAt === undefined ? undefined : castTiles(now - this.pressedAt);
     }
 
-    /** The key goes up: where the float should land, when a cast was charging. */
+    /**
+     * The key goes up: where the float should land, when a cast was charging. An avatar on a raised floor (`floorZ`
+     * pixels up the screen) casts from the ground under it, where the water is.
+     */
     public release(
         now: number,
-        player: { x: number; y: number; direction: FishingDirection },
+        player: { x: number; y: number; floorZ?: number; direction: FishingDirection },
     ): { x: number; y: number } | undefined {
         const tiles = this.chargeTiles(now);
         this.pressedAt = undefined;
-        return tiles === undefined ? undefined : castPoint(player.x, player.y, player.direction, tiles);
+        if (tiles === undefined) return undefined;
+        return castPoint(player.x, player.y + (player.floorZ ?? 0), player.direction, tiles);
     }
 
     /** The cast is given up (the avatar walked, the rod was put away). */
