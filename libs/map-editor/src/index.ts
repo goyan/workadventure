@@ -35,6 +35,7 @@ export * from "./Catastrophe/Downpour";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
 export * from "./Terrain/LandTrees";
+export * from "./Terrain/TreeFire";
 export * from "./Life/Species";
 export * from "./Life/Animal";
 export * from "./Life/Swim";

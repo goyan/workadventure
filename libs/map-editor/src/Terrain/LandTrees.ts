@@ -19,3 +19,43 @@ export function landTreesOf(wam: Pick<WAMFileFormat, "entities"> | undefined): {
     }
     return trees;
 }
+
+/** The families of the nature catalogue that are all trees, snowy and seasonal ones included. */
+const TREE_PREFIXES = [
+    "Nature:tree-",
+    "Nature:seasonal-",
+    "Nature:snow-tree-",
+    "Nature:snow-evergreen-",
+    "Nature:winter-auto-",
+];
+/** The trees of the first nature set (oaks, palms, bare trees): its other objects are stumps, rocks, bushes, grass. */
+const TREE_NATURE_SETS = new Set(["nature-1", "nature-2", "nature-3", "nature-4", "nature-5", "nature-6"]);
+
+/**
+ * Whether an object of the catalogues is a tree: the ones that sway in the wind, follow the seasons and burn. One
+ * list for the server and the browser.
+ */
+export function isTreePrefab(prefabId: string): boolean {
+    if (TREE_PREFIXES.some((prefix) => prefabId.startsWith(prefix))) return true;
+    const family = /^Nature:(nature-\d+):/.exec(prefabId)?.[1];
+    return family !== undefined && TREE_NATURE_SETS.has(family);
+}
+
+/** A tree that can burn: the id of its object, and where its foot is taken to stand (map pixels, see landTreesOf). */
+export interface BurnableTree {
+    id: string;
+    x: number;
+    y: number;
+}
+
+/** Every tree of a map that stands on the ground, with its id: the ones a fire can take. */
+export function burnableTreesOf(wam: Pick<WAMFileFormat, "entities"> | undefined): BurnableTree[] {
+    const trees: BurnableTree[] = [];
+    for (const [id, entity] of Object.entries(wam?.entities ?? {})) {
+        const prefab = entity?.prefabRef?.id;
+        if (!prefab || !isTreePrefab(prefab)) continue;
+        if ((entity.elevation ?? 0) > 0) continue;
+        trees.push({ id, x: entity.x + TILE_PX, y: entity.y + 2 * TILE_PX });
+    }
+    return trees;
+}
