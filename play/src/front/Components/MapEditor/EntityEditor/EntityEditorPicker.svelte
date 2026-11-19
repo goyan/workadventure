@@ -337,7 +337,6 @@
                 role="tab"
                 class="build-slot"
                 aria-selected={$selectCategoryStore === undefined}
-                aria-pressed={$selectCategoryStore === undefined}
                 aria-label={$LL.mapEditor.entityEditor.allObjects()}
                 data-testid="clearCurrentSelection"
                 onclick={displayTagListAndClearCurrentSelection}
@@ -353,7 +352,6 @@
                     role="tab"
                     class="build-slot"
                     aria-selected={selected}
-                    aria-pressed={selected}
                     aria-label={label}
                     data-testid="entityCategory-{category.tag}"
                     onclick={() => onSelectedTag(category)}
