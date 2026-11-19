@@ -15,7 +15,7 @@ const AQUATIC_ALPHA = 0.7;
  * Draws the animals of the water of the relief: an image each, where AquaticLife says, turned towards where it
  * goes. Nothing is drawn while the player hides them.
  */
-/** About how long a fish and a dolphin are, in map pixels: under two screen pixels they are not drawn. */
+/** About how long a fish and a dolphin are, in map pixels: under one screen pixel they are not drawn. */
 const FISH_PX = 8;
 const DOLPHIN_PX = 24;
 
@@ -49,8 +49,8 @@ export class AquaticLifeView {
         let changed = false;
         for (const animal of this.life.shown(now, this.reducedMotion())) {
             if (!isAquaticKind(animal.kind)) continue;
-            // Seen from far a fish is a pixel: not drawn (a dolphin, three times as long, still is).
-            if (!distinguishable(this.scene, animal.kind >> 1 === 1 ? DOLPHIN_PX : FISH_PX)) continue;
+            // A bright fish on dark water is told apart down to a single pixel: not drawn under it only.
+            if (!distinguishable(this.scene, animal.kind >> 1 === 1 ? DOLPHIN_PX : FISH_PX, 1)) continue;
             seen.add(animal.id);
             const x = Math.round(animal.x);
             const y = Math.round(animal.y);
