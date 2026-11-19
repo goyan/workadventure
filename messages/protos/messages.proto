@@ -825,6 +825,8 @@ enum CatastropheKind {
   CATASTROPHE_METEOR = 0;
   // A downpour: it rains hard under the pointer of a player (or on the whole map) for as long as they keep telling.
   CATASTROPHE_DOWNPOUR = 1;
+  // A patch of fire set on the grass under the pointer of a player: what follows is the fire of the meadow.
+  CATASTROPHE_FIRE = 2;
 }
 
 // Browser to server: a player sets the conditions the fire of the room goes by (heat, humidity of the air, wind) by
@@ -984,6 +986,10 @@ message MeadowMessage {
   bytes moisture = 4;
   // A byte a tile (0: green grass, 255: straw, ready to burn), row by row, gzipped. Empty from an older server.
   bytes dryness = 5;
+  // A byte a tile (0: no fire, 255: a fire at its height), row by row, gzipped. Empty from an older server.
+  bytes fire = 6;
+  // A byte a tile (0: none, 255: burnt through), the ash a fire left, row by row, gzipped. Empty from an older server.
+  bytes ash = 7;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a

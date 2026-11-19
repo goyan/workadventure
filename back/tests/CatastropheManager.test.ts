@@ -205,3 +205,61 @@ describe("CatastropheManager, downpours", () => {
         expect(manager.rain(1, 10, 10, 3, false)).toBe(false);
     });
 });
+
+describe("a patch of fire", () => {
+    const FIRE = CatastropheKind.CATASTROPHE_FIRE;
+    function fireHarness() {
+        const lit: { x: number; y: number; radiusTiles: number }[] = [];
+        const clock = { now: 1_000_000 };
+        const room = { sendSubMessageToRoom: (_message: SubToPusherRoomMessage): void => undefined };
+        const manager = new CatastropheManager(
+            room,
+            () => MAP,
+            () => undefined,
+            () => undefined,
+            () => clock.now,
+        );
+        manager.igniteWith((x, y, radiusTiles) => lit.push({ x, y, radiusTiles }));
+        return { manager, lit, clock };
+    }
+
+    it("is set where the player asks, its size kept within what a patch may be", () => {
+        const { manager, lit } = fireHarness();
+        expect(manager.request(1, FIRE, 320, 160, 3, false)).toBe(true);
+        expect(manager.request(2, FIRE, 320, 160, 999, false)).toBe(true);
+        expect(manager.request(3, FIRE, 320, 160, Number.NaN, false)).toBe(true);
+        expect(lit).toEqual([
+            { x: 320, y: 160, radiusTiles: 3 },
+            { x: 320, y: 160, radiusTiles: 8 },
+            { x: 320, y: 160, radiusTiles: 2 },
+        ]);
+    });
+
+    it("is refused outside the map, for numbers that are not, and after five in a second for a player", () => {
+        const { manager, lit, clock } = fireHarness();
+        for (const [x, y] of [
+            [-1, 10],
+            [10, MAP.height],
+            [Number.NaN, 10],
+            [10, Number.POSITIVE_INFINITY],
+        ]) {
+            expect(manager.request(1, FIRE, x, y, 2, false)).toBe(false);
+        }
+        expect(lit).toEqual([]);
+        for (let patch = 0; patch < 5; patch++) expect(manager.request(1, FIRE, 10, 10, 2, false)).toBe(true);
+        expect(manager.request(1, FIRE, 10, 10, 2, false)).toBe(false);
+        expect(manager.request(2, FIRE, 10, 10, 2, false)).toBe(true);
+        clock.now += 1000;
+        expect(manager.request(1, FIRE, 10, 10, 2, false)).toBe(true);
+    });
+
+    it("stops nothing when the meadow throws, and is refused once the room is closed", () => {
+        const { manager } = fireHarness();
+        manager.igniteWith(() => {
+            throw new Error("no meadow");
+        });
+        expect(() => manager.request(1, FIRE, 10, 10, 2, false)).not.toThrow();
+        manager.stop();
+        expect(manager.request(2, FIRE, 10, 10, 2, false)).toBe(false);
+    });
+});

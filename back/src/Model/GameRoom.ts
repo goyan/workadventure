@@ -424,12 +424,21 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInCells.bind(gameRoom),
             // The antelopes of the life of the land graze the meadow.
             () => aquaticLife.grazers(),
-            // The grass dries by the conditions of the room.
-            () => fireDanger(fireConditions.conditions(), fireConditions.thresholds()),
+            // The grass dries by the conditions of the room, and their wind pushes its fire.
+            () => {
+                const conditions = fireConditions.conditions();
+                return {
+                    danger: fireDanger(conditions, fireConditions.thresholds()),
+                    windFrom: conditions.windFrom,
+                    windSpeed: conditions.windSpeed,
+                };
+            },
         );
         gameRoom.meadow = meadow;
         // A downpour also soaks the ground of the meadow.
         catastrophes.soakWith(meadow.soak.bind(meadow));
+        // A patch of fire a player sets burns the grass of the meadow.
+        catastrophes.igniteWith(meadow.ignite.bind(meadow));
         await meadow.restore();
         meadow.start();
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe

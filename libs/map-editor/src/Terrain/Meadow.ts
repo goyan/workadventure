@@ -22,6 +22,8 @@ export const DRY_MOISTURE = 0.08;
 export const GROW_SECONDS = 600;
 export const THIRST_SECONDS = 1200;
 export const DROWN_SECONDS = 60;
+/** At the highest danger, without rain, a soil loses its moisture this many times faster: the hot wind dries it out. */
+const PARCHING = 20;
 /** A tile on fire burns its full grass in this many seconds, and its fire is at its height after FIRE_RISE_SECONDS. */
 export const BURN_SECONDS = 20;
 const FIRE_RISE_SECONDS = 5;
@@ -303,6 +305,12 @@ export class Meadow {
         const growSeconds = set(input.growSeconds, GROW_SECONDS);
         const thirstSeconds = set(input.thirstSeconds, THIRST_SECONDS);
         const holds = set(input.moistureHold, 1);
+        const danger =
+            input.fireDanger !== undefined && Number.isFinite(input.fireDanger)
+                ? Math.min(1, Math.max(0, input.fireDanger))
+                : 0;
+        // A hot, dry wind dries the soil itself, not under the rain.
+        const parching = rain > 0 ? 1 : 1 + PARCHING * danger;
         const { width, height, moisture, next, grass, dryness, fire, ash, water, hold, ground, fertility, outdoor } =
             this;
         water.fill(0);
@@ -318,7 +326,10 @@ export class Meadow {
                     moisture[index] = 1;
                 } else {
                     const kept = moisture[index] + rain * seconds * RAIN_GAIN;
-                    moisture[index] = Math.min(1, kept - kept * Math.min(1, seconds / (hold[index] * holds)));
+                    moisture[index] = Math.min(
+                        1,
+                        kept - kept * Math.min(1, (seconds * parching) / (hold[index] * holds)),
+                    );
                 }
             }
         }
@@ -368,10 +379,6 @@ export class Meadow {
         this.burn(input, seconds);
         // The grass dries towards what the conditions and its soil make it: straw on a dry soil when it is hot, dry
         // and windy, green again on a wet soil or when the conditions ease.
-        const danger =
-            input.fireDanger !== undefined && Number.isFinite(input.fireDanger)
-                ? Math.min(1, Math.max(0, input.fireDanger))
-                : 0;
         const share = 1 - Math.exp(-seconds / DRYING_SECONDS);
         for (let index = 0; index < dryness.length; index++) {
             if (grass[index] <= 0) {

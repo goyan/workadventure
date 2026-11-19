@@ -337,6 +337,27 @@ describe("the dryness of the grass", () => {
         expect(flooded.drynessAt(3, 2)).toBeLessThan(0.05);
     });
 
+    it("comes with a soil the hot, dry wind dries out: sodden earth is dry in two minutes at the highest danger", () => {
+        // A whole map of sodden earth under grass: nowhere for its moisture to spread to.
+        const sodden = (): Meadow => {
+            const meadow = new Meadow(size, undefined, undefined);
+            for (let y = 0; y < size.height; y++) for (let x = 0; x < size.width; x++) meadow.set(x, y, 1, 1);
+            return meadow;
+        };
+        const parched = sodden();
+        run(parched, 120, burning);
+        expect(parched.moistureAt(3, 2)).toBeLessThan(0.1);
+        expect(parched.drynessAt(3, 2)).toBeGreaterThan(0.5);
+        // In mild air the same earth is still wet.
+        const mild = sodden();
+        run(mild, 120, { ...dry, daylight: false });
+        expect(mild.moistureAt(3, 2)).toBeGreaterThan(0.7);
+        // And the rain keeps it wet whatever the air.
+        const rained = sodden();
+        run(rained, 120, { ...burning, rainMmPerHour: 20 });
+        expect(rained.moistureAt(3, 2)).toBeGreaterThan(0.7);
+    });
+
     it("goes back down when the conditions do", () => {
         const meadow = new Meadow(size, undefined, undefined);
         meadow.set(3, 2, 0, 1, 1);
