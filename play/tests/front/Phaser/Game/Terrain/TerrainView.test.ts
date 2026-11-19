@@ -1,4 +1,4 @@
-import { cellKey, withHeights } from "@workadventure/map-editor";
+import { cellKey, Season, withHeights } from "@workadventure/map-editor";
 import type { TerrainData } from "@workadventure/map-editor";
 import { describe, expect, it, vi } from "vitest";
 import type { GameScene } from "../../../../../src/front/Phaser/Game/GameScene";
@@ -132,5 +132,35 @@ describe("TerrainView", () => {
         expect(surface.hide).toHaveBeenCalledTimes(1);
         view.destroy();
         expect(surface.destroy).toHaveBeenCalledOnce();
+    });
+
+    it("draws the snow of the heights in the season of the map, and again when the season turns", () => {
+        const top = withHeights(undefined, new Map([[cellKey(2, 2), 200]]));
+        const worldView = { x: 0, y: 0, width: 640, height: 480 };
+        const scene = { cameras: { main: { worldView } }, markDirty: vi.fn() };
+        const surface = {
+            begin: vi.fn((_view: unknown, _resolution: number) => ({ x: -160, y: -128, columns: 62, rows: 47 })),
+            paintField: vi.fn(),
+            end: vi.fn(),
+            hide: vi.fn(),
+            destroy: vi.fn(),
+        };
+        const water = new TerrainWater();
+        water.setTerrain(top);
+        let season = Season.Summer;
+        const view = new TerrainView(scene as unknown as GameScene, water, surface, undefined, () => season);
+        const snowFields = (): Uint8Array[] =>
+            surface.paintField.mock.calls.filter((call) => call[4] === 0xf3f7ff).map((call) => call[1] as Uint8Array);
+        view.update(0);
+        // 200 px is under the snow line of the summer.
+        expect(snowFields()).toHaveLength(0);
+        season = Season.Winter;
+        view.update(16);
+        expect(surface.begin).toHaveBeenCalledTimes(2);
+        const fields = snowFields();
+        expect(fields).toHaveLength(1);
+        // The cell (2, 2) on a canvas that starts at the cell (-10, -8), 62 columns wide: a full cover.
+        expect(fields[0][(2 + 8) * 62 + (2 + 10)]).toBe(255);
+        expect(fields[0].reduce((sum, level) => sum + level, 0)).toBe(255);
     });
 });

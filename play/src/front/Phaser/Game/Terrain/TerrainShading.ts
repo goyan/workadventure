@@ -30,6 +30,15 @@ export function raisedAlpha(height: number): number {
     return height <= 0 ? 0 : 0.3 * Math.min(1, height / 96) ** 0.7;
 }
 
+/**
+ * The snow of the heights (see SnowLine.ts of the map editor library): a white veil over the ground and its grass,
+ * under the shades of the slopes so that a snowy top keeps its shape. All of it under a full cover.
+ */
+export const SNOW_COLOR = 0xf3f7ff;
+export function snowAlpha(cover: number): number {
+    return 0.85 * Math.min(1, Math.max(0, cover));
+}
+
 /** How strongly a slope is lit (a white veil) or shaded (a black one), by how much it faces the light. */
 export function slopeAlpha(shade: number): number {
     return 0.25 * Math.min(1, Math.abs(shade));

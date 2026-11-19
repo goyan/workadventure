@@ -1,5 +1,14 @@
-import { cellOf, heightAt, SOILS, soilAt, TERRAIN_CELL, TERRAIN_CHUNK, TILE_PX } from "@workadventure/map-editor";
-import type { TerrainData } from "@workadventure/map-editor";
+import {
+    cellOf,
+    heightAt,
+    snowCover,
+    SOILS,
+    soilAt,
+    TERRAIN_CELL,
+    TERRAIN_CHUNK,
+    TILE_PX,
+} from "@workadventure/map-editor";
+import type { Season, TerrainData } from "@workadventure/map-editor";
 import type { GameScene } from "../GameScene";
 import { createBlockSurface } from "../Weather/BlockSurface";
 import type { BlockCanvasArea, BlockSurface } from "../Weather/BlockSurface";
@@ -16,6 +25,8 @@ import {
     SHORE_WATER,
     slopeAlpha,
     slopeShade,
+    SNOW_COLOR,
+    snowAlpha,
 } from "./TerrainShading";
 import { GRASS_COLOR, grassAlpha, mottledCover } from "./MeadowState";
 import type { MeadowState } from "./MeadowState";
@@ -35,6 +46,9 @@ interface ReliefLayers extends BlockCanvasArea {
     ground: Uint8Array;
     /** The height of the cells raised over the ground. */
     raised: Uint8Array;
+    /** The snow of the heights over the canvas (0 to 255), and the season it was read for. */
+    snow: Uint8Array | undefined;
+    season: Season | undefined;
     /** For each soil painted on the canvas (by its number in the map): 1 on its cells. */
     soils: Map<number, Uint8Array>;
     /** The grass of the meadow over the canvas, and the state of the meadow it was read from. */
@@ -68,6 +82,8 @@ export class TerrainView {
         surface?: BlockSurface,
         /** The meadow of the map: its grass is drawn on the ground, under the water. */
         private readonly meadow?: MeadowState,
+        /** The season of the map: the snow holds on its heights, lower in winter. None: no snow is drawn. */
+        private readonly season?: () => Season | undefined,
     ) {
         // Smooth: a hollow and its water have soft slopes and edges, not the squares of its cells.
         this.surface = surface ?? createBlockSurface(scene, TERRAIN_DEPTH, true);
@@ -91,7 +107,7 @@ export class TerrainView {
         }
         const camera = this.scene.cameras.main.worldView;
         const screen = { x: camera.x, y: camera.y, width: camera.width, height: camera.height };
-        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}`;
+        const key = `${this.water.drawKey(now)}:${this.seeThrough}:${this.meadow?.version() ?? 0}:${this.season?.() ?? ""}`;
         if (key === this.lastKey && this.drawn && wellInside(this.drawn, screen, DRAW_MARGIN / 5)) return;
         this.lastKey = key;
         this.drawn = paddedView(screen, DRAW_MARGIN);
@@ -125,6 +141,11 @@ export class TerrainView {
             this.surface.paintField(canvas, relief.raised, everywhere, NO_SHIFT, 0xffffff, (level) =>
                 raisedAlpha(level),
             );
+            if (relief.snow) {
+                this.surface.paintField(canvas, relief.snow, everywhere, NO_SHIFT, SNOW_COLOR, (level) =>
+                    snowAlpha(level / 255),
+                );
+            }
             this.surface.paintField(canvas, relief.shaded, everywhere, NO_SHIFT, 0x000000, (level) =>
                 slopeAlpha(level / 255),
             );
@@ -177,6 +198,7 @@ export class TerrainView {
             kept &&
             kept.terrain === terrain &&
             kept.meadowVersion === (this.meadow?.version() ?? 0) &&
+            kept.season === this.season?.() &&
             kept.x === canvas.x &&
             kept.y === canvas.y &&
             kept.columns === canvas.columns &&
@@ -185,6 +207,8 @@ export class TerrainView {
             return kept;
         }
         const size = canvas.columns * canvas.rows;
+        const season = this.season?.();
+        const outdoors = this.scene.getOutdoorGrid?.();
         const layers: ReliefLayers = {
             terrain,
             x: canvas.x,
@@ -193,6 +217,8 @@ export class TerrainView {
             rows: canvas.rows,
             ground: new Uint8Array(size),
             raised: new Uint8Array(size),
+            snow: undefined,
+            season,
             soils: new Map(),
             grass: undefined,
             meadowVersion: this.meadow?.version() ?? 0,
@@ -238,6 +264,18 @@ export class TerrainView {
                     } else if (height > 0) {
                         layers.raised[index] = Math.min(255, height);
                         layers.dug = true;
+                        // The snow of the heights, outdoors only (a roof drawn in the map keeps it off).
+                        const cover = season ? snowCover(height, season) : 0;
+                        const cellX = left + column;
+                        const cellY = top + row;
+                        if (
+                            cover > 0 &&
+                            (!outdoors ||
+                                outdoors.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL))
+                        ) {
+                            layers.snow ??= new Uint8Array(size);
+                            layers.snow[index] = Math.round(cover * 255);
+                        }
                     }
                     const shade = slopeShade(terrain, left + column, top + row);
                     layers.shaded[index] = shade < 0 ? Math.round(-shade * 255) : 0;
