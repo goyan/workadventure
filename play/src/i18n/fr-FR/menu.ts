@@ -3,6 +3,8 @@ import type { Translation } from "../i18n-types";
 
 const menu: DeepPartial<Translation["menu"]> = {
     title: "Menu",
+    narrow: "Réduire le panneau de moitié, à droite, pour voir le jeu",
+    widen: "Rétablir la largeur du panneau",
     icon: {
         open: {
             menu: "Ouvrir le menu",

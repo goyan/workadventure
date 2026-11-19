@@ -23,10 +23,14 @@ import { userIsAdminStore } from "./GameStore";
 import { megaphoneCanBeUsedStore } from "./MegaphoneStore";
 import { chatVisibilityStore } from "./ChatStore";
 import { gameSceneStore } from "./GameSceneStore";
+import { createPersistedSwitchStore } from "./PersistedSwitchStore";
 import { modalIframeStore, modalVisibilityStore, showModalGlobalComminucationVisibilityStore } from "./ModalStore";
 import { getAdditionalMenuItemStore } from "./AdditionalItemsMenuStore";
 
 export const menuIconVisiblilityStore = writable(false);
+/** The menu half as wide, against the right edge, so that the game shows while a setting is tried (personal). */
+export const menuNarrowStore = createPersistedSwitchStore("menuNarrow", false);
+
 export const menuVisiblilityStore = writable(false);
 export const settingsSubMenuTargetStore = writable<"microphone" | "spotify" | undefined>(undefined);
 export const userIsConnected = writable(false);

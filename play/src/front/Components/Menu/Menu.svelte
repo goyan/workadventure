@@ -8,6 +8,7 @@
     import {
         activeSubMenuStore,
         customMenuIframe,
+        menuNarrowStore,
         menuVisiblilityStore,
         SubMenusInterface,
         subMenusStore,
@@ -142,7 +143,10 @@
 <div
     role="dialog"
     aria-label={$LL.menu.title()}
-    class="h-3/4 top-0 flex-col gap-3 @md/main-layout:flex-row [@media(min-height:953px)]/main-layout:h-3/4 w-11/12 @2xl:max-w-screen-2xl close-window pointer-events-auto absolute flex right-0 left-0 bottom-0 z-[900] m-auto overflow-hidden font-main"
+    class="h-3/4 top-0 flex-col gap-3 @md/main-layout:flex-row [@media(min-height:953px)]/main-layout:h-3/4 w-11/12 @2xl:max-w-screen-2xl close-window pointer-events-auto absolute flex right-0 left-0 bottom-0 z-[900] m-auto overflow-hidden font-main {$menuNarrowStore
+        ? 'menu-narrow'
+        : ''}"
+    data-testid="menu-dialog"
     transition:fly={{ y: 1000, duration: 150 }}
     onblur={closeMenu}
 >
@@ -217,14 +221,48 @@
             <SvelteComponent {...props} />
         </div>
     </div>
-    <div class="right-menu-side-bar w-fit h-full @md/main-layout:flex flex-col items-start justify-start hidden">
+    <div class="right-menu-side-bar w-fit h-full @md/main-layout:flex flex-col items-start justify-start gap-2 hidden">
         <div class="p-2 rounded-lg bg-contrast/80 backdrop-blur-md flex items-center justify-center w-fit">
             <ButtonClose onclick={closeMenu} id="closeMenu" dataTestId="closeMenuBtn" />
+        </div>
+        <!-- Half as wide, against the right edge: the game stays in sight while a setting is tried. -->
+        <div class="p-2 rounded-lg bg-contrast/80 backdrop-blur-md flex items-center justify-center w-fit">
+            <button
+                type="button"
+                class="h-12 w-12 rounded bg-white/20 hover:bg-white/30 text-white flex items-center justify-center m-0"
+                aria-pressed={$menuNarrowStore}
+                aria-label={$menuNarrowStore ? $LL.menu.widen() : $LL.menu.narrow()}
+                title={$menuNarrowStore ? $LL.menu.widen() : $LL.menu.narrow()}
+                data-testid="menuNarrowBtn"
+                onclick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    menuNarrowStore.update((narrow) => !narrow);
+                }}
+            >
+                <svg class="h-6 w-6 fill-none stroke-current" viewBox="0 0 24 24" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="16" rx="2" />
+                    {#if $menuNarrowStore}
+                        <path d="M12 4v16M9 9l-3 3 3 3" />
+                    {:else}
+                        <path d="M12 4v16M15 9l3 3-3 3" />
+                    {/if}
+                </svg>
+            </button>
         </div>
     </div>
 </div>
 
 <style>
+    /* Half the width, against the right edge of the game (wide layouts only: a narrow one keeps the whole width). */
+    @container main-layout (min-width: 28rem) {
+        .menu-narrow {
+            width: 45.8333%;
+            left: auto;
+            margin-right: 4.1667%;
+        }
+    }
+
     .menu-nav-sidebar nav::-webkit-scrollbar {
         display: none;
     }
