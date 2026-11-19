@@ -447,13 +447,6 @@
             {/if}
             <ProximityNotificationContainer />
             <BubbleListeningHint />
-            {#if $notificationPlayingStore}
-                <div class="flex flex-col absolute w-auto end-0">
-                    {#each [...$notificationPlayingStore.values()] as notification, index (`${index}-${notification.id}`)}
-                        <Notification {notification} />
-                    {/each}
-                </div>
-            {/if}
 
             {#if $warningBannerStore}
                 <WarningBanner />
@@ -521,6 +514,14 @@
                 <div class="pointer-events-auto"><WorldClock /></div>
                 <!-- The floors of the map, the one of the avatar marked (maps with raised floors only). -->
                 <FloorLevelStack stack={$floorLevelsStore} />
+                <!-- What plays in the zone the avatar stands in (its name, its sound): in the column, never over the clock. -->
+                {#if $notificationPlayingStore}
+                    <div class="pointer-events-auto flex flex-col items-end gap-2 [&_.notification-playing]:mr-0">
+                        {#each [...$notificationPlayingStore.values()] as notification, index (`${index}-${notification.id}`)}
+                            <Notification {notification} />
+                        {/each}
+                    </div>
+                {/if}
                 <!-- The fishing contest of the room: its ranking while it runs, then its podium. -->
                 <FishingContestPanel
                     start={(minutes) => gameManager.getCurrentGameScene().fishingManager?.startContest(minutes)}
