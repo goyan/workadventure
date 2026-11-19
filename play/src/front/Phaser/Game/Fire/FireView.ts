@@ -12,6 +12,8 @@ import {
     FLAME_MAX_HEIGHT_PX,
     flameOutline,
     flamePose,
+    GLOW_NEIGHBOUR_REACH,
+    glowShare,
     smokeOf,
     spreadTiles,
     tileSeed,
@@ -116,7 +118,7 @@ export class FireView {
             this.glowAt(index)
                 .setPosition(footX, footY - FLAME_MAX_HEIGHT_PX * pose.scaleY * scale * 0.4)
                 .setDisplaySize(glow * 2, glow * 2)
-                .setAlpha(input.intensity)
+                .setAlpha(input.intensity * glowShare(this.burningAround(tile.x, tile.y)))
                 .setVisible(true);
             for (const puff of smokeOf(input)) {
                 this.puffAt(puffs++)
@@ -138,6 +140,17 @@ export class FireView {
         this.flames.length = 0;
         this.glows.length = 0;
         this.puffs.length = 0;
+    }
+
+    /** The tiles on fire around a tile, itself counted. */
+    private burningAround(tileX: number, tileY: number): number {
+        let burning = 0;
+        for (let y = tileY - GLOW_NEIGHBOUR_REACH; y <= tileY + GLOW_NEIGHBOUR_REACH; y++) {
+            for (let x = tileX - GLOW_NEIGHBOUR_REACH; x <= tileX + GLOW_NEIGHBOUR_REACH; x++) {
+                if (this.meadow.fireAt(x, y) > 0) burning++;
+            }
+        }
+        return burning;
     }
 
     private flameAt(index: number): Phaser.GameObjects.Image {
