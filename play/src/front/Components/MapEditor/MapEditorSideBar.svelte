@@ -133,9 +133,9 @@
     <!--put a section to avoid lower div to be affected by some css-->
     <div class="flex flex-col items-center gap-4 pt-24 side-bar">
         <div class="flex flex-col gap-1">
-            <div class="close-window p-2 retro-theme rounded-2xl">
+            <div class="close-window tool-floating p-1 retro-theme rounded-2xl">
                 <button
-                    class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
+                    class="build-slot m-0"
                     data-testid="closeMapEditorButton"
                     onclick={(event) => {
                         event.preventDefault();
@@ -145,9 +145,9 @@
                     <IconX font-size="20" />
                 </button>
             </div>
-            <div class="close-window p-2 retro-theme rounded-2xl">
+            <div class="close-window tool-floating p-1 retro-theme rounded-2xl">
                 <button
-                    class="p-3 hover:bg-white/10 rounded aspect-square w-12 m-0"
+                    class="build-slot m-0"
                     data-testid="hideMapEditorButton"
                     onclick={(event) => {
                         event.preventDefault();
@@ -166,7 +166,7 @@
                 </button>
             </div>
         </div>
-        <div class="p-2 retro-theme rounded-2xl flex flex-col gap-2">
+        <div class="tool-floating p-1 retro-theme rounded-2xl flex flex-col gap-2">
             {#each availableTools as tool (tool.toolName)}
                 {@const ToolIcon = tool.iconComponent}
                 {@const shortcutDigit = editorToolShortcutDigit(tool.toolName)}
@@ -202,7 +202,7 @@
         </div>
         <!-- Not a tool: shows in the editor the lighting of the game (night veil, bounced light), to set the lamps as
              they will look, or the plain daylight of the editor again. -->
-        <div class="p-2 retro-theme rounded-2xl">
+        <div class="tool-floating p-1 retro-theme rounded-2xl">
             <div class="tool-button relative">
                 <button
                     class="peer build-slot"

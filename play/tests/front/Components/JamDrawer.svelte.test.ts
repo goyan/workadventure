@@ -62,6 +62,8 @@ vi.mock("../../../src/i18n/i18n-svelte", async () => {
                     jamsButton: ({ count }: { count: number }) => `${count} Jams`,
                     showDrawer: () => "Show the Jams",
                     hideDrawer: () => "Hide the Jams",
+                    lightsDisable: () => "Turn off light effects (for me)",
+                    lightsEnable: () => "Turn on light effects (for me)",
                 },
             },
         }),
