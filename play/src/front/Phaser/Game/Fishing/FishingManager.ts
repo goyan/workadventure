@@ -100,6 +100,7 @@ export class FishingManager {
         const point = this.rod.release(Date.now(), {
             x: player.x,
             y: player.y,
+            floorZ: player.getFloorZ(),
             direction: fishingDirection(player.lastDirection),
         });
         this.chargedFrom = undefined;

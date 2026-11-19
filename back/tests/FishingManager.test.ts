@@ -3,7 +3,7 @@ import type { WAMFileFormat } from "@workadventure/map-editor";
 import type { AquaticLifeMessage, FishingMessage, SubToPusherRoomMessage } from "@workadventure/messages";
 import { describe, expect, it, vi } from "vitest";
 import { AquaticLifeManager } from "../src/Model/AquaticLifeManager";
-import { FishingManager } from "../src/Model/FishingManager";
+import { anglersOf, FishingManager } from "../src/Model/FishingManager";
 import type { VariablesRepositoryInterface } from "../src/Services/Repository/VariablesRepositoryInterface";
 
 const WAITING = 0;
@@ -154,6 +154,24 @@ function harness(options: { savedFishing?: Record<string, string>; failing?: boo
     };
 }
 
+describe("who may fish", () => {
+    const user = (id: number, x: number, y: number, floorZ: number) => ({
+        id,
+        getPosition: () => ({ x, y }),
+        getFloorZ: () => floorZ,
+    });
+
+    it("stands a player of a raised floor over the ground under them", () => {
+        // Drawn 64 px up the screen, the avatar of a raised floor is over the ground 64 px further down the map.
+        expect(anglersOf([user(1, 150, 150, 0), user(2, 300, 100, 64)])).toEqual(
+            new Map([
+                [1, { x: 150, y: 150 }],
+                [2, { x: 300, y: 164 }],
+            ]),
+        );
+    });
+});
+
 describe("FishingManager", () => {
     it("refuses a cast before the life of the room was seen", async () => {
         const { manager, fishing, last } = harness();
@@ -179,7 +197,7 @@ describe("FishingManager", () => {
         expect(fishing.snapshot()?.lines).toHaveLength(1);
     });
 
-    it("refuses a cast from a player who is not on the ground of the room", async () => {
+    it("refuses a cast from a player who is not in the room", async () => {
         const { manager, fishing, steps, last } = harness();
         await manager.restore();
         steps(1);

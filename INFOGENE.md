@@ -3045,7 +3045,9 @@ intéresser et y nage : on le voit venir. Arrivé dessus, **touche** : le boucho
 est ramené en 1 à 4 s selon son poids, puis une carte dit « Poisson rose · 1,24 kg » (vue aussi par les joueurs qui
 ont le pêcheur à l'écran) et le poisson est **remis à l'eau** : la pêche ne retire rien à la vie de la carte. Pendant
 la remontée le poisson reste un poisson de la carte : un dauphin peut le manger. ESPACE sans touche ramène la ligne ;
-marcher, ranger la canne ou quitter la salle aussi.
+marcher, ranger la canne ou quitter la salle aussi. **Depuis un palier** on pêche dans l'eau du sol en contrebas :
+le lancer part du point du sol situé sous l'avatar, avec la même portée qu'au sol, et la ligne descend de la canne
+jusqu'au bouchon.
 
 ESPACE garde ses autres usages : une invite affichée (siège, porte, animal à apprivoiser) ou un objet à activer à
 côté de l'avatar passent avant la canne.
@@ -3059,8 +3061,8 @@ vie.
 
 **Qui décide.** Le serveur (`back`, `FishingManager`) : le navigateur n'envoie que « lancer ici » et « ramener », et
 dessine ce qu'on lui annonce. Refusés par le serveur : un lancer à plus de 9 cases de l'avatar, hors de l'eau à
-poissons, depuis un palier, moins d'une seconde après le précédent, ou quand la carte a déjà 20 lignes à l'eau. Une
-ligne par joueur. Les lignes ne survivent pas à un redémarrage du serveur ; le nombre de prises depuis le début de
+poissons, moins d'une seconde après le précédent, ou quand la carte a déjà 20 lignes à l'eau. La distance d'un joueur
+sur un palier se compte depuis le sol sous lui (`anglersOf`). Une ligne par joueur. Les lignes ne survivent pas à un redémarrage du serveur ; le nombre de prises depuis le début de
 la vie de la carte, si (Redis `fishing:<salle>`).
 
 **Outil Vie.** Le tableau de bord gagne la ligne « Pêchés (remis à l'eau) » : depuis le début (compté par le
@@ -3075,7 +3077,9 @@ salle et ce qui vient d'arriver, envoyé seulement quand une ligne change, et à
 de joueur `_rodEquipped`. `play`, `back` et `map-storage` se déploient ensemble.
 
 **Limites.** Pas de son. Pas d'animation du lancer (la ligne apparaît posée). Le poisson ramené reste dessiné au
-bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni palier). La canne est un trait,
+bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni piscine d'un palier). Depuis un palier, un lancer vers
+le nord part du sol sous l'avatar : à l'écran le bouchon peut tomber plus bas que l'avatar ou derrière le bâtiment
+(non vu en jeu). Le serveur ne connaît pas les dalles : il croit l'altitude que le navigateur publie (`_floorZ`). La canne est un trait,
 dessinée par-dessus tous les avatars.
 
 ### Concours de pêche
