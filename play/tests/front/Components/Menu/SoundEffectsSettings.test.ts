@@ -106,7 +106,7 @@ describe("SoundEffectsSettings", () => {
         const labels = [...target.querySelectorAll("label")].map((label) =>
             label.textContent?.replace(/\s+/g, " ").trim(),
         );
-        expect(labels).toContain("Weather : Muted");
+        expect(labels).toContain("Weather and nature : Muted");
         expect(labels).toContain("Footsteps and swimming : 15 %");
         weatherVolumeStore.set(0.15);
     });
