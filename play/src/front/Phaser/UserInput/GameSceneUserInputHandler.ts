@@ -36,6 +36,7 @@ import {
     armedCatastropheStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
+    fireRadiusTilesStore,
     meteorRadiusTilesStore,
 } from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
@@ -298,7 +299,16 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
         ) {
             return;
         }
-        // The server decides: its cooldown refuses a second launch of a double click.
+        // The server decides what a meteor or a patch of fire does there.
+        if (get(armedCatastropheStore) === "fire") {
+            this.gameScene.connection?.emitLaunchCatastrophe(
+                CatastropheKind.CATASTROPHE_FIRE,
+                worldPoint.x,
+                worldPoint.y,
+                get(fireRadiusTilesStore),
+            );
+            return;
+        }
         this.gameScene.connection?.emitLaunchCatastrophe(
             CatastropheKind.CATASTROPHE_METEOR,
             worldPoint.x,

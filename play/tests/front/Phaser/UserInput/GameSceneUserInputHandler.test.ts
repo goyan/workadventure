@@ -34,6 +34,7 @@ import {
 } from "../../../../src/front/Stores/FishingStore";
 import {
     catastrophePanelStore,
+    fireRadiusTilesStore,
     downpourRadiusTilesStore,
     downpourWholeMapStore,
     meteorRadiusTilesStore,
@@ -722,6 +723,17 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             meteorRadiusTilesStore.set(4);
 
             expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 12]]);
+        });
+
+        it("sets a patch of fire of the size chosen where the fire is armed and the map is clicked", () => {
+            catastrophePanelStore.set(true);
+            toggleArmedCatastrophe("fire");
+            fireRadiusTilesStore.set(5);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            fireRadiusTilesStore.set(2);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_FIRE, 480, 640, 5]]);
+            expect(scene.moveTo.mock.calls).toEqual([]);
         });
 
         it("takes the click before an activatable object", () => {

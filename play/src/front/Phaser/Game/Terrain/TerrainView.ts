@@ -28,7 +28,18 @@ import {
     SNOW_COLOR,
     snowAlpha,
 } from "./TerrainShading";
-import { GRASS_COLOR, grassAlpha, mottledCover, STRAW_COLOR, strawAlpha, strawLevel } from "./MeadowState";
+import {
+    ASH_COLOR,
+    ashAlpha,
+    FIRE_GLOW_COLOR,
+    fireGlowAlpha,
+    GRASS_COLOR,
+    grassAlpha,
+    mottledCover,
+    STRAW_COLOR,
+    strawAlpha,
+    strawLevel,
+} from "./MeadowState";
 import type { MeadowState } from "./MeadowState";
 import type { TerrainWater } from "./TerrainWater";
 
@@ -55,6 +66,9 @@ interface ReliefLayers extends BlockCanvasArea {
     grass: Uint8Array | undefined;
     /** The straw of the grass gone dry over the canvas (see strawLevel); undefined on a green meadow. */
     straw: Uint8Array | undefined;
+    /** The ash and the fire of the meadow over the canvas; undefined where nothing burnt nor burns. */
+    ash: Uint8Array | undefined;
+    fire: Uint8Array | undefined;
     meadowVersion: number;
     shaded: Uint8Array;
     lit: Uint8Array;
@@ -139,6 +153,14 @@ export class TerrainView {
         if (relief.straw) {
             // The grass gone dry under the heat and the wind: straw over the green.
             this.surface.paintField(canvas, relief.straw, everywhere, NO_SHIFT, STRAW_COLOR, strawAlpha);
+        }
+        if (relief.ash) {
+            // What a fire left: the ground blackened, until the grass grows back.
+            this.surface.paintField(canvas, relief.ash, everywhere, NO_SHIFT, ASH_COLOR, ashAlpha);
+        }
+        if (relief.fire) {
+            // The tiles on fire glow on the ground, under their flames.
+            this.surface.paintField(canvas, relief.fire, everywhere, NO_SHIFT, FIRE_GLOW_COLOR, fireGlowAlpha);
         }
         if (relief.dug) {
             this.surface.paintField(canvas, relief.ground, everywhere, NO_SHIFT, 0x000000, (level) =>
@@ -228,6 +250,8 @@ export class TerrainView {
             soils: new Map(),
             grass: undefined,
             straw: undefined,
+            ash: undefined,
+            fire: undefined,
             meadowVersion: this.meadow?.version() ?? 0,
             shaded: new Uint8Array(size),
             lit: new Uint8Array(size),
@@ -297,8 +321,12 @@ export class TerrainView {
             const cellsATile = TILE_PX / TERRAIN_CELL;
             const grass = new Uint8Array(size);
             const straw = new Uint8Array(size);
+            const ash = new Uint8Array(size);
+            const fire = new Uint8Array(size);
             let any = false;
             let dry = false;
+            let burnt = false;
+            let burning = false;
             for (let row = 0; row < canvas.rows; row++) {
                 for (let column = 0; column < canvas.columns; column++) {
                     const cellX = left + column;
@@ -307,7 +335,9 @@ export class TerrainView {
                     const tileY = Math.floor(cellY / cellsATile);
                     const cover = this.meadow.grassAt(tileX, tileY);
                     const dryness = this.meadow.drynessAt(tileX, tileY);
-                    if (cover === 0 && dryness === 0) continue;
+                    const ashes = this.meadow.ashAt(tileX, tileY);
+                    const flames = this.meadow.fireAt(tileX, tileY);
+                    if (cover === 0 && dryness === 0 && ashes === 0 && flames === 0) continue;
                     if (outdoor && !outdoor.isOutdoorAt((cellX + 0.5) * TERRAIN_CELL, (cellY + 0.5) * TERRAIN_CELL)) {
                         continue;
                     }
@@ -315,6 +345,14 @@ export class TerrainView {
                     if (drawn > 0) {
                         grass[row * canvas.columns + column] = drawn;
                         any = true;
+                    }
+                    if (ashes > 0) {
+                        ash[row * canvas.columns + column] = ashes;
+                        burnt = true;
+                    }
+                    if (flames > 0) {
+                        fire[row * canvas.columns + column] = flames;
+                        burning = true;
                     }
                     if (dryness === 0) continue;
                     // A dry ground yellows with or without grass on it.
@@ -324,6 +362,8 @@ export class TerrainView {
             }
             if (any) layers.grass = grass;
             if (dry) layers.straw = straw;
+            if (burnt) layers.ash = ash;
+            if (burning) layers.fire = fire;
         }
         this.relief = layers;
         return layers;

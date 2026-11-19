@@ -2,6 +2,8 @@
     import {
         DOWNPOUR_MAX_TILES,
         DOWNPOUR_MIN_TILES,
+        FIRE_MAX_TILES,
+        FIRE_MIN_TILES,
         METEOR_MAX_TILES,
         METEOR_MIN_TILES,
     } from "@workadventure/map-editor";
@@ -13,6 +15,7 @@
         disarmCatastrophe,
         downpourRadiusTilesStore,
         downpourWholeMapStore,
+        fireRadiusTilesStore,
         meteorRadiusTilesStore,
         toggleArmedCatastrophe,
     } from "../../Stores/CatastropheStore";
@@ -30,8 +33,9 @@
     }
     const meteorArmed = $derived($armedCatastropheStore === "meteor");
     const downpourArmed = $derived($armedCatastropheStore === "downpour");
+    const fireArmed = $derived($armedCatastropheStore === "fire");
     // The size shown is that of the armed catastrophe, and stays that of the last one armed.
-    let sized = $state<"meteor" | "downpour">("meteor");
+    let sized = $state<"meteor" | "downpour" | "fire">("meteor");
     $effect(() => {
         if ($armedCatastropheStore !== undefined) sized = $armedCatastropheStore;
     });
@@ -100,6 +104,18 @@
                     <PixelIcon name="downpour" size={16} />
                     <span>{$LL.actionbar.catastrophe.downpour()}</span>
                 </button>
+                <button
+                    type="button"
+                    class="flex items-center gap-1 rounded-full px-2 py-1 {fireArmed
+                        ? 'bg-white/30 ring-1 ring-white'
+                        : 'bg-white/10 hover:bg-white/20'}"
+                    aria-pressed={fireArmed}
+                    data-testid="catastrophe-fire"
+                    onclick={() => toggleArmedCatastrophe("fire")}
+                >
+                    <PixelIcon name="fire" size={16} />
+                    <span>{$LL.actionbar.catastrophe.fire()}</span>
+                </button>
                 {#if sized === "downpour"}
                     <label class="flex items-center gap-1 whitespace-nowrap">
                         <input
@@ -126,6 +142,22 @@
                             >
                         </label>
                     {/if}
+                {:else if sized === "fire"}
+                    <label class="flex items-center gap-2">
+                        <input
+                            type="range"
+                            class="w-24"
+                            min={FIRE_MIN_TILES}
+                            max={FIRE_MAX_TILES}
+                            step="1"
+                            aria-label={$LL.actionbar.catastrophe.fireSizeLabel()}
+                            data-testid="catastrophe-fire-size"
+                            bind:value={$fireRadiusTilesStore}
+                        />
+                        <span class="whitespace-nowrap"
+                            >{$LL.actionbar.catastrophe.size({ tiles: $fireRadiusTilesStore })}</span
+                        >
+                    </label>
                 {:else}
                     <label class="flex items-center gap-2">
                         <input
@@ -146,7 +178,7 @@
                 <span class="text-white/60">
                     {downpourArmed
                         ? $LL.actionbar.catastrophe.downpourArmedHelp()
-                        : meteorArmed
+                        : meteorArmed || fireArmed
                           ? $LL.actionbar.catastrophe.armedHelp()
                           : $LL.actionbar.catastrophe.idleHelp()}
                 </span>

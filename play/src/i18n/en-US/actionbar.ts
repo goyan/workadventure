@@ -77,6 +77,8 @@ const actionbar = {
         armedHelp: "Click on the map · Esc to cancel",
         idleHelp: "Pick a disaster",
         downpour: "Downpour",
+        fire: "Fire",
+        fireSizeLabel: "Size of the fire: radius of the patch, in tiles",
         wholeMap: "Whole map",
         downpourSizeLabel: "Size of the downpour: radius of the disc it rains on, in tiles",
         downpourArmedHelp: "Hold the click on the map · Esc to cancel",

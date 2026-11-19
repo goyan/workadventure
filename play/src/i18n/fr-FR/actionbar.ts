@@ -82,6 +82,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
         armedHelp: "Cliquez sur la carte · Échap pour annuler",
         idleHelp: "Choisissez une catastrophe",
         downpour: "Averse",
+        fire: "Feu",
+        fireSizeLabel: "Taille du feu : rayon du patch, en cases",
         wholeMap: "Toute la carte",
         downpourSizeLabel: "Taille de l'averse : rayon du disque arrosé, en cases",
         downpourArmedHelp: "Maintenez le clic sur la carte · Échap pour annuler",
