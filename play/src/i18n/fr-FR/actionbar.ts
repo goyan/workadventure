@@ -103,6 +103,12 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
             thresholdWind: "Plus venteux que",
             danger: "Danger d'incendie",
             dangerLevel: { low: "faible", moderate: "modéré", high: "fort", extreme: "extrême" },
+            heldBack: {
+                title: "Ce qui retient le feu :",
+                temperature: "pas assez chaud",
+                humidity: "air trop humide",
+                wind: "pas assez de vent",
+            },
         },
     },
     weatherBanner: {

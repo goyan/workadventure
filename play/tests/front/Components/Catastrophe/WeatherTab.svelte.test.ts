@@ -117,6 +117,31 @@ describe("WeatherTab", () => {
         expect(danger?.textContent).toContain("dangerLevel.low");
     });
 
+    it("says which condition holds the fire back: an air too damp, whatever the heat and the wind", () => {
+        fireConditionsStore.set({ ...real, manual: true, temperature: 50, humidity: 96, windSpeed: 120 });
+        render();
+        expect(target.querySelector('[data-testid="fire-danger"]')?.textContent).toContain("dangerLevel.low");
+        const held = target.querySelector('[data-testid="fire-held-back"]');
+        expect(held?.textContent).toContain("heldBack.humidity");
+        expect(held?.textContent).not.toContain("heldBack.temperature");
+        expect(held?.textContent).not.toContain("heldBack.wind");
+        expect(slider("humidity").closest("label")?.getAttribute("data-met")).toBe("false");
+        expect(slider("temperature").closest("label")?.getAttribute("data-met")).toBe("true");
+        expect(slider("windSpeed").closest("label")?.getAttribute("data-met")).toBe("true");
+    });
+
+    it("names all that holds the fire back, and nothing once the three conditions are met", () => {
+        fireConditionsStore.set({ ...real, manual: true, temperature: 10, humidity: 80, windSpeed: 5 });
+        render();
+        const held = (): string => target.querySelector('[data-testid="fire-held-back"]')?.textContent ?? "";
+        expect(held()).toContain("heldBack.temperature");
+        expect(held()).toContain("heldBack.humidity");
+        expect(held()).toContain("heldBack.wind");
+        fireConditionsStore.set({ ...real, manual: true, temperature: 35, humidity: 10, windSpeed: 40 });
+        flushSync();
+        expect(target.querySelector('[data-testid="fire-held-back"]')).toBeNull();
+    });
+
     it("sets where the wind comes from by the points of the compass", () => {
         fireConditionsStore.set({ ...real, manual: true });
         render();

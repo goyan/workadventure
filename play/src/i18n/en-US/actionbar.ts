@@ -97,6 +97,12 @@ const actionbar = {
             thresholdWind: "Windier than",
             danger: "Fire danger",
             dangerLevel: { low: "low", moderate: "moderate", high: "high", extreme: "extreme" },
+            heldBack: {
+                title: "What holds the fire back:",
+                temperature: "not hot enough",
+                humidity: "air too damp",
+                wind: "not enough wind",
+            },
         },
     },
     weatherBanner: {

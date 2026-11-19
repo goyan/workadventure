@@ -66,6 +66,20 @@
         ),
     );
 
+    // Which of the three conditions is met: hotter than, drier than, windier than its threshold.
+    const met = $derived({
+        temperature: shown.temperature >= shown.thresholdTemperature,
+        humidity: shown.humidity <= shown.thresholdHumidity,
+        windSpeed: shown.windSpeed >= shown.thresholdWindSpeed,
+    });
+    const heldBack = $derived(
+        [
+            met.temperature ? undefined : $LL.actionbar.catastrophe.weather.heldBack.temperature(),
+            met.humidity ? undefined : $LL.actionbar.catastrophe.weather.heldBack.humidity(),
+            met.windSpeed ? undefined : $LL.actionbar.catastrophe.weather.heldBack.wind(),
+        ].filter((reason) => reason !== undefined),
+    );
+
     const conditionRows = $derived([
         {
             field: "temperature" as const,
@@ -124,11 +138,20 @@
             {$LL.actionbar.catastrophe.weather.dangerLevel[DANGER_NAMES[danger]]()}
         </span>
     </label>
+    {#if heldBack.length > 0}
+        <p class="m-0 max-w-xs text-white/80" data-testid="fire-held-back">
+            {$LL.actionbar.catastrophe.weather.heldBack.title()}
+            {heldBack.join(", ")}
+        </p>
+    {/if}
     {#if !shown.manual}
         <p class="m-0 max-w-xs text-white/60">{$LL.actionbar.catastrophe.weather.realHint()}</p>
     {/if}
     {#each conditionRows as row (row.field)}
-        <label class="grid grid-cols-[7rem_1fr_4.5rem] items-center gap-2 {shown.manual ? '' : 'opacity-60'}">
+        <label
+            class="grid grid-cols-[7rem_1fr_5rem] items-center gap-2 {shown.manual ? '' : 'opacity-60'}"
+            data-met={met[row.field]}
+        >
             <span>{row.label}</span>
             <input
                 type="range"
@@ -140,7 +163,11 @@
                 data-testid="fire-{row.field}"
                 oninput={(event) => change(row.field, Number(event.currentTarget.value))}
             />
-            <span class="whitespace-nowrap text-end tabular-nums">{row.value}</span>
+            <!-- In the pixel font, a 5 reads as an S: the figures use the system font, as in the weather banner. -->
+            <span
+                class="whitespace-nowrap text-end tabular-nums {met[row.field] ? 'text-orange-300' : 'text-white/60'}"
+                style:font-family="var(--ui-font-system)">{met[row.field] ? "✓ " : ""}{row.value}</span
+            >
         </label>
     {/each}
     <label class="grid grid-cols-[7rem_1fr] items-center gap-2 {shown.manual ? '' : 'opacity-60'}">
@@ -171,7 +198,9 @@
                 data-testid="fire-{row.field}"
                 oninput={(event) => change(row.field, Number(event.currentTarget.value))}
             />
-            <span class="whitespace-nowrap text-end tabular-nums">{row.value}</span>
+            <span class="whitespace-nowrap text-end tabular-nums" style:font-family="var(--ui-font-system)"
+                >{row.value}</span
+            >
         </label>
     {/each}
 </div>
