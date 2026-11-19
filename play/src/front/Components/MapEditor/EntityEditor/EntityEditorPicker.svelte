@@ -335,13 +335,14 @@
             <button
                 type="button"
                 role="tab"
-                class="build-slot"
+                class="build-slot labeled"
                 aria-selected={$selectCategoryStore === undefined}
                 aria-label={$LL.mapEditor.entityEditor.allObjects()}
                 data-testid="clearCurrentSelection"
                 onclick={displayTagListAndClearCurrentSelection}
             >
                 <IconLayoutGrid font-size="20" />
+                <span class="build-label">{$LL.mapEditor.entityEditor.allObjects()}</span>
             </button>
             {#each entitiesPrefabsVariantsWithCategories as { category } (`${category.kind}-${category.tag}`)}
                 {@const CategoryIconComponent = categoryIcon(category)}
@@ -350,7 +351,7 @@
                 <button
                     type="button"
                     role="tab"
-                    class="build-slot"
+                    class="build-slot labeled"
                     aria-selected={selected}
                     aria-label={label}
                     data-testid="entityCategory-{category.tag}"
@@ -361,6 +362,7 @@
                     {:else}
                         <span class="text-base font-bold uppercase">{label.charAt(0)}</span>
                     {/if}
+                    <span class="build-label">{label}</span>
                 </button>
             {/each}
         </div>

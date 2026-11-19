@@ -190,13 +190,14 @@
         disabled={(mode === "door" && !$mapLayerDoorsAvailableStore) ||
             (mode === "window" && !$mapLayerWindowsAvailableStore) ||
             (isFloorMode(mode) && !$mapLayerFloorsAvailableStore)}
-        class="build-slot"
+        class="build-slot labeled"
         data-testid="mapLayerMode-{mode}"
         aria-label={$LL.mapEditor.mapLayer.modes[mode]()}
         aria-pressed={$mapLayerModeStore === mode}
         onclick={() => mapLayerModeStore.set(mode)}
     >
         <Icon font-size="22" />
+        <span class="build-label">{$LL.mapEditor.mapLayer.modes[mode]()}</span>
     </button>
 {/snippet}
 

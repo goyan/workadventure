@@ -1305,3 +1305,27 @@
         background: transparent;
     }
 }
+
+/* A slot with its name under the icon (map editor build kit and object categories): one reads instead of guessing,
+   the name cut to one line when it is long; the full name stays in the tooltip. */
+.build-slot.labeled {
+    flex-direction: column;
+    gap: 3px;
+    width: 64px;
+    height: 58px;
+    padding: 4px 3px 3px;
+}
+.build-slot .build-label {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.1;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+}
+.build-slot.labeled[aria-pressed="true"] .build-label,
+.build-slot.labeled[aria-selected="true"] .build-label {
+    opacity: 1;
+    font-weight: 700;
+}
