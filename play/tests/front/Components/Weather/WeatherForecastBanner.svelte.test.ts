@@ -30,6 +30,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
             weatherBanner: {
                 label: label("Map weather"),
                 now: label("Now"),
+                humidity: ({ value }: { value: number }) => `${value} % humidity`,
+                manual: label("manual"),
                 inHours: ({ hours }: { hours: number }) => `+${hours} h`,
                 cell: ({ when, weather }: { when: string; weather: string }) => `${when}: ${weather}`,
                 cellWithWind: ({ when, weather, speed }: { when: string; weather: string; speed: number }) =>
@@ -111,12 +113,24 @@ vi.mock("../../../../src/front/Stores/NightStore", async () => {
 });
 
 import WeatherForecastBanner from "../../../../src/front/Components/Weather/WeatherForecastBanner.svelte";
+import { fireConditionsStore } from "../../../../src/front/Stores/FireConditionsStore";
 import { weatherBannerStore } from "../../../../src/front/Stores/WeatherBannerStore";
 
 function nightDate(): Writable<Date | undefined> {
     if (!clock.store) throw new Error("NightStore not mocked");
     return clock.store;
 }
+
+const conditions = {
+    manual: true,
+    temperature: 38,
+    humidity: 12,
+    windSpeed: 55,
+    windFrom: 180,
+    thresholdTemperature: 30,
+    thresholdHumidity: 30,
+    thresholdWindSpeed: 30,
+};
 
 let target: HTMLElement;
 let component: ReturnType<typeof mount> | undefined;
@@ -133,6 +147,7 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    fireConditionsStore.set(undefined);
     place.value = undefined;
     weatherBannerStore.set(true);
     nightDate().set(NOW);
@@ -171,6 +186,25 @@ describe("WeatherForecastBanner", () => {
         ]);
         // The source is credited in the map weather settings, not in the banner.
         expect(banner()?.querySelector("a")).toBeNull();
+    });
+
+    it("adds the humidity of the air the room goes by, for now only", () => {
+        fireConditionsStore.set({ ...conditions, manual: false });
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown[0].textContent?.replace(/\s+/g, " ").trim()).toBe("Now 8° 12 % humidity");
+        expect(shown[1].textContent).not.toContain("humidity");
+        expect(target.querySelector('[data-testid="weather-banner-manual"]')).toBeNull();
+    });
+
+    it("shows the heat and the wind set by hand in the room, and says so", () => {
+        fireConditionsStore.set(conditions);
+        render();
+        const shown = [...target.querySelectorAll('[data-testid="weather-banner-cell"]')];
+        expect(shown[0].textContent?.replace(/\s+/g, " ").trim()).toContain("Now 38°");
+        expect(shown[0].querySelector('[data-testid="weather-banner-wind"]')?.textContent).toContain("55");
+        expect(shown[1].textContent?.replace(/\s+/g, " ").trim()).toBe("+1 h 10°");
+        expect(target.querySelector('[data-testid="weather-banner-manual"]')?.textContent).toBe("manual");
     });
 
     it("has no temperature for a weather that is not real", () => {

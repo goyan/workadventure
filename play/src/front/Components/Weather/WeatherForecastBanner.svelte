@@ -8,7 +8,9 @@
     import { compassPointOf, windArrowOf } from "../../Phaser/Game/Weather/WindDirection";
     import type { CompassPoint, WindArrow } from "../../Phaser/Game/Weather/WindDirection";
     import { nightDateStore } from "../../Stores/NightStore";
+    import { fireConditionsStore } from "../../Stores/FireConditionsStore";
     import { weatherBannerStore } from "../../Stores/WeatherBannerStore";
+    import { nowCellWithConditions } from "../../Phaser/Game/Weather/ManualConditions";
     import WeatherIcon from "../Menu/WeatherIcon.svelte";
     import { weatherLook, weatherName } from "../Menu/WeatherName";
     import { IconX } from "@wa-icons";
@@ -18,9 +20,12 @@
     function mapSettings() {
         return gameManager.getCurrentGameScene().getGameMap().getWamFile()?.getWam().settings;
     }
-    const cells = $derived(
+    const forecast = $derived(
         $weatherBannerStore && $nightDateStore ? shownWeatherForecast(mapSettings(), $nightDateStore) : [],
     );
+    // Now goes by the conditions of the room: its heat and wind when a player set them by hand, its humidity.
+    const now = $derived(forecast.length > 0 ? nowCellWithConditions(forecast[0], $fireConditionsStore) : undefined);
+    const cells = $derived(now ? [now.cell, ...forecast.slice(1)] : forecast);
     /** The town of the map (the place tried, if any) without its region and country; Paris by default. */
     const city = $derived.by(() => {
         if (!$weatherBannerStore || !$nightDateStore) return "";
@@ -81,6 +86,11 @@
         data-testid="weather-banner"
     >
         <span class="font-bold" data-testid="weather-banner-city">{city}</span>
+        {#if now?.manual}
+            <span class="rounded bg-white/20 px-1" data-testid="weather-banner-manual"
+                >{$LL.actionbar.weatherBanner.manual()}</span
+            >
+        {/if}
         {#each cells as cell, index (index)}
             {@const look = shown(cell)}
             <div
@@ -165,6 +175,15 @@
                         class="tabular-nums"
                         style:font-family="var(--ui-font-system)"
                         data-testid="weather-banner-wind">{windText(cell.windSpeed, point)}</span
+                    >
+                {/if}
+                {#if index === 0 && now?.humidity !== undefined}
+                    <!-- The humidity of the air, for now only: with the heat and the wind it says whether fire takes. -->
+                    <span
+                        class="tabular-nums text-white/80"
+                        style:font-family="var(--ui-font-system)"
+                        data-testid="weather-banner-humidity"
+                        >{$LL.actionbar.weatherBanner.humidity({ value: Math.round(now.humidity) })}</span
                     >
                 {/if}
             </div>

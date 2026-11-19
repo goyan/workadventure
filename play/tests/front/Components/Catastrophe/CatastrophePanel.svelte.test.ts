@@ -13,11 +13,16 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 idleHelp: label("Pick a disaster"),
                 size: ({ tiles }: { tiles: number }) => `${tiles} tiles`,
                 sizeLabel: label("Size of the meteor: radius of its crater, in tiles"),
+                tabs: { catastrophes: label("Disasters"), weather: label("Weather") },
             },
         },
     });
     return { default: LL, LL };
 });
+
+vi.mock("../../../../src/front/Components/Catastrophe/WeatherTab.svelte", async () => ({
+    default: (await import("./WeatherTabStub.svelte")).default,
+}));
 
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";
 import {
@@ -86,6 +91,20 @@ describe("CatastrophePanel", () => {
         expect(get(meteorRadiusTilesStore)).toBe(12);
         expect(target.textContent).toContain("12 tiles");
         meteorRadiusTilesStore.set(4);
+    });
+
+    it("has a weather tab, and nothing stays armed behind it", () => {
+        render();
+        tile()?.click();
+        flushSync();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tab-weather"]')?.click();
+        flushSync();
+        expect(get(armedCatastropheStore)).toBeUndefined();
+        expect(target.querySelector('[data-testid="weather-tab-stub"]')).not.toBeNull();
+        expect(tile()).toBeNull();
+        target.querySelector<HTMLButtonElement>('[data-testid="catastrophe-tab-catastrophes"]')?.click();
+        flushSync();
+        expect(tile()).not.toBeNull();
     });
 
     it("disarms on Escape", () => {

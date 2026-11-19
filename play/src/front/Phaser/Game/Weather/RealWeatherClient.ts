@@ -1,3 +1,4 @@
+import type { FireConditionsMessage } from "@workadventure/messages";
 import Debug from "debug";
 import { WeatherLocation, WeatherType } from "@workadventure/map-editor";
 import { derived, writable } from "svelte/store";
@@ -14,6 +15,7 @@ import type { MapSnowSettings } from "./SnowCover";
 import { weatherForecast } from "./WeatherForecast";
 import { AUTO_CLOUDINESS, cloudinessAt } from "./WeatherSchedule";
 import type { ForecastCell } from "./WeatherForecast";
+import { withManualWind } from "./ManualConditions";
 
 const debug = Debug("front:real-weather");
 
@@ -131,6 +133,19 @@ let memo:
  * such a map makes this browser ask.
  */
 export function shownWeatherSettings(
+    settings: MapSnowSettings | undefined,
+    date: Date | undefined,
+): MapSnowSettings | undefined {
+    return withManualWind(mapWeatherSettings(settings, date), manualConditions);
+}
+
+/** The conditions of the room, when a player set them by hand: their wind is the wind of the whole scene. */
+let manualConditions: FireConditionsMessage | undefined;
+export function setRoomConditions(conditions: FireConditionsMessage | undefined): void {
+    manualConditions = conditions;
+}
+
+function mapWeatherSettings(
     settings: MapSnowSettings | undefined,
     date: Date | undefined,
 ): MapSnowSettings | undefined {

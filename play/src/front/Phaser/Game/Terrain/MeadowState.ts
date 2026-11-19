@@ -21,6 +21,20 @@ export function mottledCover(cover: number, cellX: number, cellY: number): numbe
     return Math.max(1, Math.round(cover * share));
 }
 
+/** The colour of the grass gone dry: straw, drawn over the green as much as the grass is dry. */
+export const STRAW_COLOR = 0xd9c257;
+export const STRAW_ALPHA = 0.85;
+
+/** How much straw is drawn over the grass of a cell, from its cover and its dryness (0 to 255 each). */
+export function strawLevel(cover: number, dryness: number): number {
+    return Math.round((Math.max(0, cover) * Math.max(0, dryness)) / 255);
+}
+
+/** How strongly the straw of a cell is drawn, from its level (0 to 255). */
+export function strawAlpha(level: number): number {
+    return STRAW_ALPHA * Math.min(1, Math.max(0, level / 255));
+}
+
 /**
  * The meadow of the map as the server last told it: the grass and the moisture of the soil of each tile. The server
  * alone computes it; the browser only draws it.
@@ -30,11 +44,19 @@ export class MeadowState {
     private height = 0;
     private grass: Uint8Array = new Uint8Array(0);
     private moisture: Uint8Array = new Uint8Array(0);
+    private dryness: Uint8Array = new Uint8Array(0);
     private any = false;
     private changes = 0;
 
     /** A state of the meadow, its bytes already unzipped. One that does not fit its size is left out. */
-    public receive(state: { width: number; height: number; grass: Uint8Array; moisture: Uint8Array }): void {
+    public receive(state: {
+        width: number;
+        height: number;
+        grass: Uint8Array;
+        moisture: Uint8Array;
+        /** Absent or empty from a server that does not dry the grass: all green. */
+        dryness?: Uint8Array;
+    }): void {
         const tiles = state.width * state.height;
         if (!Number.isInteger(tiles) || tiles < 0 || state.grass.length !== tiles || state.moisture.length !== tiles) {
             return;
@@ -43,6 +65,7 @@ export class MeadowState {
         this.height = state.height;
         this.grass = state.grass;
         this.moisture = state.moisture;
+        this.dryness = state.dryness?.length === tiles ? state.dryness : new Uint8Array(tiles);
         this.any = state.grass.some((cover) => cover > 0);
         this.changes++;
     }
@@ -55,6 +78,11 @@ export class MeadowState {
     /** The grass of a tile, from 0 (bare) to 255 (a full meadow). */
     public grassAt(tileX: number, tileY: number): number {
         return this.at(this.grass, tileX, tileY);
+    }
+
+    /** How dry the grass of a tile is, from 0 (green) to 255 (straw, ready to burn). */
+    public drynessAt(tileX: number, tileY: number): number {
+        return this.at(this.dryness, tileX, tileY);
     }
 
     /** The moisture of the soil at a point of the map (map pixels), from 0 (dry) to 1 (sodden). */
