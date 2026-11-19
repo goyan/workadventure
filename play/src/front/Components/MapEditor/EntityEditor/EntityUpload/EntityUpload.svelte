@@ -189,8 +189,6 @@
                 </button>
             </div>
         {/if}
-        <p class="m-0">{$LL.mapEditor.entityEditor.uploadEntity.title()}</p>
-        <p class="opacity-50">{$LL.mapEditor.entityEditor.uploadEntity.description()}</p>
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
             ondrop={(event) => {
@@ -207,7 +205,7 @@
                 dropZoneRef?.classList.remove("border-cyan-400");
             }}
             bind:this={dropZoneRef}
-            class="hover:cursor-pointer h-32 flex flex-col border border-dashed rounded-md items-center justify-center bg-white/10"
+            class="hover:cursor-pointer h-16 flex flex-col border border-dashed rounded-md items-center justify-center bg-white/10"
         >
             <input
                 id="upload"
@@ -219,10 +217,9 @@
             />
 
             <label class="flex flex-row gap-2 min-w-full p-2 m-0 items-center justify-center" for="upload">
-                <IconCloudUpload font-size={32} />
+                <IconCloudUpload font-size={24} />
                 <span class="flex flex-col">
                     <span class="hover:cursor-pointer">
-                        {$LL.mapEditor.entityEditor.uploadEntity.dragDrop()}
                         <span class="hover:cursor-pointer underline text-contrast-300"
                             >{$LL.mapEditor.entityEditor.uploadEntity.chooseFile()}</span
                         >

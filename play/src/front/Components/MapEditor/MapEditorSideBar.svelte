@@ -14,16 +14,16 @@
     import type { WorkAdventureComponent } from "../../../types/component";
     import { nightInEditorStore } from "../../Stores/NightStore";
     import {
-        IconDeselect,
         IconX,
-        IconTexture,
-        IconLamp,
         IconMapSearch,
         IconSunMoon,
         IconSettings,
-        IconWall,
         IconShovel,
-        IconFish,
+        IconHammer,
+        IconSofa,
+        IconMarquee,
+        IconSquareDashed,
+        IconPaw,
     } from "@wa-icons";
 
     type SideBarTool = {
@@ -42,17 +42,17 @@
 
     const entityEditorTool = {
         toolName: EditorToolName.EntityEditor,
-        iconComponent: IconLamp,
+        iconComponent: IconSofa,
         tooltiptext: $LL.mapEditor.sideBar.entityEditor(),
     };
     const mapLayerEditorTool = {
         toolName: EditorToolName.MapLayerEditor,
-        iconComponent: IconWall,
+        iconComponent: IconHammer,
         tooltiptext: $LL.mapEditor.sideBar.mapLayerEditor(),
     };
     const selectionEditorTool = {
         toolName: EditorToolName.SelectionEditor,
-        iconComponent: IconDeselect,
+        iconComponent: IconMarquee,
         tooltiptext: $LL.mapEditor.sideBar.selectionEditor(),
     };
 
@@ -66,7 +66,7 @@
         if ($mapEditorActivated && !isMobile) {
             tools.push({
                 toolName: EditorToolName.AreaEditor,
-                iconComponent: IconTexture,
+                iconComponent: IconSquareDashed,
                 tooltiptext: $LL.mapEditor.sideBar.areaEditor(),
             });
             tools.push(mapLayerEditorTool);
@@ -86,7 +86,7 @@
             // The life of that water: its figures and its settings.
             tools.push({
                 toolName: EditorToolName.LifeEditor,
-                iconComponent: IconFish,
+                iconComponent: IconPaw,
                 tooltiptext: $LL.mapEditor.sideBar.lifeEditor(),
             });
         }
@@ -172,11 +172,10 @@
                 {@const shortcutDigit = editorToolShortcutDigit(tool.toolName)}
                 <div class="tool-button relative">
                     <button
-                        class="peer p-3 aspect-square w-12 rounded {$mapEditorSelectedToolStore === tool.toolName
-                            ? 'bg-secondary'
-                            : 'hover:bg-white/10'}"
+                        class="peer build-slot"
                         id={tool.toolName}
                         class:active={$mapEditorSelectedToolStore === tool.toolName}
+                        aria-label={tool.tooltiptext}
                         onclick={(event) => {
                             event.preventDefault();
                             switchTool(tool.toolName);
@@ -184,6 +183,9 @@
                         type="button"
                     >
                         <ToolIcon font-size="22" />
+                        {#if shortcutDigit !== undefined}
+                            <span class="build-key" aria-hidden="true">{shortcutDigit}</span>
+                        {/if}
                     </button>
                     <div
                         class=" bg-contrast/90 backdrop-blur-xl text-white tooltip absolute text-nowrap p-2 invisible opacity-0 transition-all peer-hover:visible peer-hover:opacity-100 rounded top-1/2 -translate-y-1/2 right-[130%]"
@@ -203,9 +205,7 @@
         <div class="p-2 retro-theme rounded-2xl">
             <div class="tool-button relative">
                 <button
-                    class="peer p-3 aspect-square w-12 rounded {$nightInEditorStore
-                        ? 'bg-secondary'
-                        : 'hover:bg-white/10'}"
+                    class="peer build-slot"
                     data-testid="mapEditorNightToggle"
                     aria-pressed={$nightInEditorStore}
                     aria-label={$LL.mapEditor.sideBar.nightInEditor()}

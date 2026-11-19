@@ -19,6 +19,7 @@ import { drinkStance } from "./WanderDrink";
 import { RADIUS_TILES, WanderSchedule } from "./WanderSchedule";
 import type { Point, Shore, WanderDirection, WanderMap, WanderPose } from "./WanderSchedule";
 import { blockWetTiles, changedTiles, shoresOf, wetTilesOf } from "./WanderWater";
+import { FEAR_CALM_PX, FEAR_RADIUS_PX, fleeTarget, isBrave, nearestThreat, straightRunIsClear } from "./WanderFear";
 import type { WetTiles } from "./WanderWater";
 import {
     WANDER_FRAME_SIZE,
@@ -87,6 +88,8 @@ interface WanderingCharacter {
     fleeing: boolean;
     /** Whether the sprite is drawn in a drinking stance (turned or squeezed): undone when it stops drinking. */
     inStance: boolean;
+    /** Where a wild animal runs to, away from an avatar it fears (see WanderFear); undefined when it is calm. */
+    scaredTo?: Point;
 }
 
 /**
@@ -594,7 +597,9 @@ export class WanderingCharactersManager {
         const frameMs = Math.min(MAX_FRAME_MS, Math.max(0, now - this.lastUpdateMs));
         this.lastUpdateMs = now;
         let changed = false;
-        for (const character of this.characters.values()) {
+        // Where the avatars stand, read once per frame and only when a wild animal is shown.
+        let threats: Point[] | undefined;
+        for (const [id, character] of this.characters) {
             const sheet = this.sheets.get(character.sheetPath);
             const columns = typeof sheet === "object" ? sheet.columns : WANDER_WALK_COLUMNS;
             if (!character.sprite && typeof sheet === "object") {
@@ -618,7 +623,24 @@ export class WanderingCharactersManager {
                     // Only a character on its own walk flees.
                     character.fleeing = false;
                 }
-                if (pose && character.fleeing && character.hasPose && this.flee(character, sprite, pose, frameMs)) {
+                const fearful =
+                    !character.entity &&
+                    !lead &&
+                    character.hasPose &&
+                    sprite.visible &&
+                    !this.isEditorMode &&
+                    !isBrave(id, now);
+                if (fearful) {
+                    threats ??= this.scene.avatarFeetOnGround();
+                }
+                if (fearful && threats && this.runFromAvatars(character, sprite, threats, frameMs)) {
+                    changed = true;
+                } else if (
+                    pose &&
+                    character.fleeing &&
+                    character.hasPose &&
+                    this.flee(character, sprite, pose, frameMs)
+                ) {
                     changed = true;
                 } else if (pose) {
                     character.fleeing = false;
@@ -701,6 +723,47 @@ export class WanderingCharactersManager {
     }
 
     /**
+     * A wild animal near an avatar runs away from it, on the ground it may walk (outdoors: never into a building), and
+     * keeps away until every avatar is far enough. Once calm, it runs back to its walk, or appears on it when a wall
+     * stands on the straight way back.
+     * @returns whether it is running from an avatar this frame (the caller then leaves its walk aside)
+     */
+    private runFromAvatars(
+        character: WanderingCharacter,
+        sprite: Phaser.GameObjects.Sprite,
+        threats: readonly Point[],
+        frameMs: number,
+    ): boolean {
+        const feet = { x: sprite.x, y: sprite.y };
+        const threat = nearestThreat(feet, threats, character.scaredTo ? FEAR_CALM_PX : FEAR_RADIUS_PX);
+        const walkable = (x: number, y: number): boolean =>
+            character.map.isWalkable({
+                x: Math.floor(x / this.tileDimensions.width),
+                y: Math.floor(y / this.tileDimensions.height),
+            });
+        if (!threat) {
+            if (character.scaredTo) {
+                character.scaredTo = undefined;
+                const pose = character.schedule.poseAt(Date.now());
+                if (pose && straightRunIsClear(feet, pose, walkable)) character.fleeing = true;
+                else character.hasPose = false;
+            }
+            return false;
+        }
+        // A new way out when it got there, or when the avatar came round to the side it was running to.
+        const target = character.scaredTo;
+        const stillAway =
+            target !== undefined &&
+            Math.hypot(target.x - threat.x, target.y - threat.y) > Math.hypot(feet.x - threat.x, feet.y - threat.y);
+        if (!target || !stillAway || !this.flee(character, sprite, target, frameMs)) {
+            // Cornered: it stays where it is, facing the avatar, rather than running through a wall.
+            character.scaredTo = fleeTarget(feet, threat, walkable) ?? feet;
+            this.flee(character, sprite, character.scaredTo, frameMs);
+        }
+        return true;
+    }
+
+    /**
      * Moves a fleeing character a frame closer to where its walk has it now, at a run, in a straight line: the water
      * took the ground it was walking on, and its walk was computed again around it.
      * @returns whether it is still running; false once it is there (the caller then puts it on its walk)
@@ -708,7 +771,7 @@ export class WanderingCharactersManager {
     private flee(
         character: WanderingCharacter,
         sprite: Phaser.GameObjects.Sprite,
-        pose: WanderPose,
+        pose: Point,
         frameMs: number,
     ): boolean {
         const dx = pose.x - sprite.x;

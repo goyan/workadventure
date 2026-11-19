@@ -1,6 +1,13 @@
 import type { BaseTranslation } from "../i18n-types";
 
 const mapEditor: BaseTranslation = {
+    workshop: {
+        title: "Workshop",
+        build: "Build",
+        decorate: "Decorate",
+        select: "Select",
+        play: "Play",
+    },
     map: {
         refreshPrompt: "New version of map detected. Refresh needed",
         deletePrompt: "This map has been deleted",
@@ -698,12 +705,12 @@ const mapEditor: BaseTranslation = {
     },
     mapLayer: {
         groups: {
-            freehand: "Draw freehand",
-            area: "Draw an area",
-            placed: "Place an item",
-            floors: "Raised floors",
+            freehand: "Structure",
+            area: "Edit",
+            placed: "Openings",
+            floors: "Platforms",
         },
-        title: "Map",
+        title: "Build",
         modes: {
             wall: "Wall",
             room: "Room",
@@ -750,6 +757,7 @@ const mapEditor: BaseTranslation = {
             deadEnd: "A placed stair that leads nowhere",
         },
         floorLevel: {
+            adjust: "Adjust height",
             areaTitle: "Level of this area",
             objectTitle: "Level of this object",
             auto: "Auto",
@@ -933,6 +941,8 @@ const mapEditor: BaseTranslation = {
         },
         eraser: "Eraser",
         eraserHint: "Click or drag over objects to delete them.",
+        allObjects: "All objects",
+        objectCount: "{count} object{{s}}",
         testInteractionButton: "Test Interaction",
         buttonLabel: "Button Label",
         editInstructions: "Click an entity to modify its properties.",

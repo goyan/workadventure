@@ -175,7 +175,7 @@ export class RgbLamps {
      * effects turned off for this player (lampEffectsEnabledStore), the turning lamps stand still at the direction that
      * was set; they turn again in step with the clock once both are back.
      */
-    public update(editorOpen = false, effectsEnabled = true): void {
+    public update(editorOpen = false, effectsEnabled = true, lightsInEditor = false): void {
         if (this.lamps.size === 0) {
             return;
         }
@@ -188,8 +188,9 @@ export class RgbLamps {
         for (const [id, lamp] of this.lamps) {
             const { entity } = lamp;
             // A lamp a switch put out gives no light, and nothing through the night veil. In the map editor every
-            // lamp shines, so that it can be set.
-            const power = editorOpen ? 1 : this.power.level(id, this.isOn(id), this.fadeNow());
+            // lamp is out (its glow would hide what is being built), or shines when the editor shows the game lighting,
+            // so that it can be set.
+            const power = editorOpen ? (lightsInEditor ? 1 : 0) : this.power.level(id, this.isOn(id), this.fadeNow());
             const shown = entity.visible && power > 0;
             if (power === 0) {
                 if (lamp.light || lamp.visible) {

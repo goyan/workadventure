@@ -1,4 +1,5 @@
 <script lang="ts">
+    import FloorLevelStack from "../Floors/FloorLevelStack.svelte";
     import { LL } from "../../../i18n/i18n-svelte";
     import { mapEditorPlacementLevelStore } from "../../Stores/MapEditorStore";
     import {
@@ -9,7 +10,7 @@
     } from "../../Stores/MapLayerStore";
     import { floorLevelTiles } from "../../Phaser/Game/MapEditor/MapLayer/MapLayerFloors";
     import { stepLevel, steppableLevels } from "../../Phaser/Game/MapEditor/MapLayer/FloorOperations";
-    import { IconColorPicker } from "@wa-icons";
+    import { IconChevronDown, IconChevronUp, IconColorPicker } from "@wa-icons";
 
     interface Props {
         /**
@@ -31,7 +32,14 @@
     let current = $derived(choice === "auto" ? $mapLayerLevelStore : choice);
     // The ground, the floors that have slabs, and the level chosen when it is none of them.
     let chips = $derived(
-        [...new Set([0, ...$mapLayerBuiltLevelsStore, ...(choice === "auto" ? [] : [choice])])].sort((a, b) => a - b),
+        [
+            ...new Set([
+                0,
+                ...$mapLayerBuiltLevelsStore,
+                ...$mapLayerLevelsStore,
+                ...(choice === "auto" ? [] : [choice]),
+            ]),
+        ].sort((a, b) => a - b),
     );
 
     function label(level: number): string {
@@ -69,94 +77,80 @@
         `px-2 py-1 rounded text-xs ${selected ? "bg-secondary" : "bg-white/10 hover:bg-white/20"}`;
 </script>
 
-<section class="flex flex-col gap-2 text-white" data-testid="floorLevelPicker">
-    <h3 class="m-0 text-sm font-bold">
-        {forObject
-            ? forArea
-                ? $LL.mapEditor.mapLayer.floorLevel.areaTitle()
-                : $LL.mapEditor.mapLayer.floorLevel.objectTitle()
-            : $LL.mapEditor.mapLayer.floorLevel.title()}
-    </h3>
-    <div class="flex flex-wrap items-center gap-2">
+<section class="level-bar flex shrink-0 flex-col gap-2 text-white" data-testid="floorLevelPicker">
+    {#if forObject}
+        <h3 class="m-0 text-xs font-bold opacity-80">
+            {forArea ? $LL.mapEditor.mapLayer.floorLevel.areaTitle() : $LL.mapEditor.mapLayer.floorLevel.objectTitle()}
+        </h3>
+    {/if}
+    <div class="flex items-center gap-2">
+        <button
+            type="button"
+            class="build-slot sm"
+            aria-label={$LL.mapEditor.mapLayer.floorLevel.floorDown()}
+            disabled={current === 0}
+            data-testid="floorDown"
+            onclick={() => stepByFloor(-1)}
+        >
+            <IconChevronDown font-size="18" />
+        </button>
+        <div class="min-w-0 flex-1" data-testid="floorLevelSelect">
+            <FloorLevelStack
+                stack={{
+                    levels: [...chips].reverse().map((elevation) => ({ elevation, name: label(elevation) })),
+                    current,
+                    viewed: choice === "auto" ? undefined : choice,
+                }}
+                onSelectFloor={(level) => choose(level ?? "auto")}
+                allowAuto={!forObject}
+                fullWidth
+            />
+        </div>
+        <button
+            type="button"
+            class="build-slot sm"
+            aria-label={$LL.mapEditor.mapLayer.floorLevel.floorUp()}
+            disabled={!$mapLayerBuiltLevelsStore.some((level) => level > current)}
+            data-testid="floorUp"
+            onclick={() => stepByFloor(1)}
+        >
+            <IconChevronUp font-size="18" />
+        </button>
         {#if !forObject}
             <button
                 type="button"
-                class={chipClass(choice === "auto")}
-                aria-pressed={choice === "auto"}
-                title={$LL.mapEditor.mapLayer.floorLevel.autoHint()}
-                data-testid="floorLevel-auto"
-                onclick={() => choose("auto")}
-            >
-                {$LL.mapEditor.mapLayer.floorLevel.auto()}
-            </button>
-            <button
-                type="button"
-                class={chipClass($mapLayerPickLevelStore)}
+                class="build-slot sm"
                 aria-pressed={$mapLayerPickLevelStore}
                 aria-label={$LL.mapEditor.mapLayer.floorLevel.pick()}
-                title={`${$LL.mapEditor.mapLayer.floorLevel.pick()}. ${$LL.mapEditor.mapLayer.floorLevel.pickHint()}`}
+                data-tip={$LL.mapEditor.mapLayer.floorLevel.pickHint()}
                 data-testid="floorLevelPick"
                 onclick={() => mapLayerPickLevelStore.update((armed) => !armed)}
             >
                 <IconColorPicker font-size="16" />
             </button>
         {/if}
-        {#each chips as level (level)}
+    </div>
+    <details class="text-xs">
+        <summary class="cursor-pointer opacity-60 hover:opacity-100">
+            {$LL.mapEditor.mapLayer.floorLevel.adjust()}
+        </summary>
+        <div class="mt-2 flex items-center gap-2">
             <button
                 type="button"
-                class={chipClass(choice === level)}
-                aria-pressed={choice === level}
-                title={level === 0
-                    ? $LL.mapEditor.mapLayer.floorLevel.groundHint()
-                    : $LL.mapEditor.mapLayer.floorLevel.levelHint({ height: floorLevelTiles(level) })}
-                data-testid="floorLevel-{level}"
-                onclick={() => choose(level)}
+                class={chipClass(false)}
+                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
+                data-testid="floorLevelDown"
+                onclick={() => stepByLevel(-1)}>{$LL.mapEditor.mapLayer.floorLevel.levelDown()}</button
             >
-                {label(level)}
-            </button>
-        {/each}
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
-        <button
-            type="button"
-            class={chipClass(false)}
-            title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-            data-testid="floorLevelDown"
-            onclick={() => stepByLevel(-1)}
-        >
-            {$LL.mapEditor.mapLayer.floorLevel.levelDown()}
-        </button>
-        <button
-            type="button"
-            class={chipClass(false)}
-            title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
-            data-testid="floorLevelUp"
-            onclick={() => stepByLevel(1)}
-        >
-            {$LL.mapEditor.mapLayer.floorLevel.levelUp()}
-        </button>
-        <button
-            type="button"
-            class={chipClass(false)}
-            title={$LL.mapEditor.mapLayer.floorLevel.floorStepHint()}
-            data-testid="floorDown"
-            onclick={() => stepByFloor(-1)}
-        >
-            {$LL.mapEditor.mapLayer.floorLevel.floorDown()}
-        </button>
-        <button
-            type="button"
-            class={chipClass(false)}
-            title={$LL.mapEditor.mapLayer.floorLevel.floorStepHint()}
-            data-testid="floorUp"
-            onclick={() => stepByFloor(1)}
-        >
-            {$LL.mapEditor.mapLayer.floorLevel.floorUp()}
-        </button>
-        {#if choice === "auto" && current > 0}
-            <span class="text-xs opacity-70" data-testid="floorLevelCurrent">{label(current)}</span>
-        {/if}
-    </div>
+            <button
+                type="button"
+                class={chipClass(false)}
+                title={$LL.mapEditor.mapLayer.floorLevel.levelStepHint()}
+                data-testid="floorLevelUp"
+                onclick={() => stepByLevel(1)}>{$LL.mapEditor.mapLayer.floorLevel.levelUp()}</button
+            >
+        </div>
+    </details>
     {#if $mapLayerPickLevelStore && !forObject}
         <p class="m-0 text-xs opacity-80">{$LL.mapEditor.mapLayer.floorLevel.pickArmed()}</p>
     {/if}

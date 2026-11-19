@@ -5,12 +5,15 @@
     import { entityPlacementBlockerStore } from "../../Stores/MapEditorStore";
     import { EditorToolName } from "../../Phaser/Game/MapEditor/MapEditorModeManager";
     import { mapEditorSelectedToolStore, mapEditorVisibilityStore } from "../../Stores/MapEditorStore";
+    import { mapLayerFloorsAvailableStore, mapLayerBuiltLevelsStore } from "../../Stores/MapLayerStore";
     import Explorer from "../Exploration/Explorer.svelte";
 
     import { windowSize } from "../../Stores/CoWebsiteStore";
 
     import { blocker } from "../../Utils/screenBlocker";
     import PixelSkyline from "../UI/PixelSkyline.svelte";
+    import FloorLevelPicker from "./FloorLevelPicker.svelte";
+    import BuildSlotTooltip from "./BuildSlotTooltip.svelte";
     import AreaEditor from "./AreaEditor/AreaEditor.svelte";
     import EntityEditor from "./EntityEditor/EntityEditor.svelte";
     import MapEditorSideBar from "./MapEditorSideBar.svelte";
@@ -23,6 +26,18 @@
     import { mapEditorSideBarWidthStore } from "./MapEditorSideBarWidthStore";
 
     let mapEditor: HTMLElement;
+
+    // The tools that build on one level show which one, on top of their panel: the same picker for all of them.
+    const LEVELLED_TOOLS: (EditorToolName | undefined)[] = [
+        EditorToolName.MapLayerEditor,
+        EditorToolName.EntityEditor,
+        EditorToolName.AreaEditor,
+        EditorToolName.SelectionEditor,
+    ];
+    let showsLevel = $derived(
+        ($mapLayerFloorsAvailableStore || $mapLayerBuiltLevelsStore.length > 0) &&
+            LEVELLED_TOOLS.includes($mapEditorSelectedToolStore),
+    );
 
     let mapEditorSideBarWidth = $derived(
         $mapEditorVisibilityStore && $mapEditorSelectedToolStore !== EditorToolName.WAMSettingsEditor
@@ -47,6 +62,7 @@
 {#if $mapEditorSelectedToolStore === EditorToolName.WAMSettingsEditor}
     <ConfigureMyRoom />
 {/if}
+<BuildSlotTooltip />
 <div
     id="map-editor-container"
     class="z-[500] flex flex-row items-start justify-end gap-4 absolute h-full max-w-full md:max-w-[calc(100%-18px)] top-0 end-0 pointer-events-none"
@@ -79,6 +95,9 @@
                 in:fly={{ x: 100, duration: 200, delay: 200 }}
                 out:fly={{ x: 100, duration: 200 }}
             >
+                {#if showsLevel}
+                    <FloorLevelPicker />
+                {/if}
                 {#if $mapEditorSelectedToolStore === EditorToolName.EntityEditor}
                     <EntityEditor />
                 {/if}

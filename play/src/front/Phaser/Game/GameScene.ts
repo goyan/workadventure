@@ -1952,6 +1952,18 @@ export class GameScene extends DirtyScene {
         return cover;
     }
 
+    /** Feet of the avatars on the ground (not on a raised floor): the wild animals run from them (WanderFear). */
+    public avatarFeetOnGround(): { x: number; y: number }[] {
+        const feet: { x: number; y: number }[] = [];
+        if (this.CurrentPlayer && this.CurrentPlayer.getFloorZ() === 0) {
+            feet.push({ x: this.CurrentPlayer.x, y: this.CurrentPlayer.y + CHARACTER_BODY_OFFSET_Y });
+        }
+        for (const player of this.MapPlayersByKey.values()) {
+            if (player.getFloorZ() === 0) feet.push({ x: player.x, y: player.y + CHARACTER_BODY_OFFSET_Y });
+        }
+        return feet;
+    }
+
     /** Feet of the players who leave footprints: everyone but the riders and the skaters. */
     private seasonalWalkers(): WalkerSample[] {
         const walkers: WalkerSample[] = [];
@@ -3668,11 +3680,11 @@ export class GameScene extends DirtyScene {
                             // in "auto"); in the other tools the one chosen in the panel, every floor in "auto".
                             const choice = get(mapEditorPlacementLevelStore);
                             const level =
-                                get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
-                                    ? get(mapLayerLevelStore)
-                                    : choice === "auto"
-                                      ? Number.POSITIVE_INFINITY
-                                      : choice;
+                                choice !== "auto"
+                                    ? choice
+                                    : get(mapEditorSelectedToolStore) === EditorToolName.MapLayerEditor
+                                      ? get(mapLayerLevelStore)
+                                      : Number.POSITIVE_INFINITY;
                             return { open: get(mapEditorModeStore), level };
                         },
                         (z) => {
