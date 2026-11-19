@@ -3059,8 +3059,9 @@ salle et ce qui vient d'arriver, envoyé seulement quand une ligne change, et à
 de joueur `_rodEquipped`. `play`, `back` et `map-storage` se déploient ensemble.
 
 **Limites.** Pas de son. Pas d'animation du lancer (la ligne apparaît posée). Le poisson ramené reste dessiné au
-bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni piscine d'un palier) ; depuis un palier, le bouchon
-lancé vers le nord peut se poser sous le palier lui-même. La canne est un trait,
+bouchon jusqu'à la prise. Eau du relief au sol seulement (ni piscine de la carte, ni piscine d'un palier). Depuis un palier, un lancer vers
+le nord part du sol sous l'avatar : à l'écran le bouchon peut tomber plus bas que l'avatar ou derrière le bâtiment
+(non vu en jeu). Le serveur ne connaît pas les dalles : il croit l'altitude que le navigateur publie (`_floorZ`). La canne est un trait,
 dessinée par-dessus tous les avatars.
 
 ### Concours de pêche
