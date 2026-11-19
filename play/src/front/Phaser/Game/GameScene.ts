@@ -267,7 +267,12 @@ import { audioPlaybackStore, handleSuspendedAudioContext } from "@wa/front/Store
 import { requestedScreenSharingState } from "@wa/front/Stores/ScreenSharingStore";
 import { EnterLeaveScriptingService } from "@wa/front/Phaser/Helpers/EnterLeaveScriptingService";
 import { stopShortOf } from "@wa/front/Utils/PathStop";
-import { doorVolumeStore, footstepVolumeStore, notificationSoundVolumeStore } from "@wa/front/Stores/SoundEffectsStore";
+import {
+    doorVolumeStore,
+    footstepVolumeStore,
+    jungleVolumeStore,
+    notificationSoundVolumeStore,
+} from "@wa/front/Stores/SoundEffectsStore";
 import { karaokeSingerActiveStore } from "../../Karaoke/KaraokeGameStore";
 import type { TileBarriers } from "../../Utils/TileBarriers";
 import { nerfEquippedStore } from "../../Stores/NerfStore";
@@ -359,6 +364,9 @@ import { AquaticLife } from "./Life/AquaticLife";
 import { AquaticLifeView } from "./Life/AquaticLifeView";
 import { LandLifeView } from "./Life/LandLifeView";
 import { LandCompanions } from "./Life/LandCompanions";
+import { LandCries } from "./Life/LandCries";
+import type { HeardAnimal } from "./Life/LandCries";
+import { playJungleSound } from "./Jungle/JungleCries";
 import { isLandKind } from "./Life/LandSprites";
 import { LifeSpeciesStats, withoutSpeciesCounts } from "./Life/LifeSpeciesStats";
 import { LifeStats } from "./Life/LifeStats";
@@ -566,6 +574,7 @@ export class GameScene extends DirtyScene {
     private readonly landLife = new AquaticLife(isLandKind);
     private landLifeView: LandLifeView | undefined;
     private landCompanions: LandCompanions | undefined;
+    private landCries: LandCries | undefined;
     private landTamePrompt: InteractionPrompt | undefined;
     private landReleasePrompt: InteractionPrompt | undefined;
     private readonly aquaticLifeStats = new LifeStats();
@@ -1848,7 +1857,38 @@ export class GameScene extends DirtyScene {
                 scale: sprite.scaleX,
             });
         });
+        // The antelopes, lions and tigers the server runs.
+        this.landLifeView?.forEachShown((id, sprite) => {
+            animals.push({
+                id: `land:${id}`,
+                x: sprite.x,
+                y: sprite.y,
+                width: sprite.displayWidth * 0.7,
+                height: sprite.displayHeight * 0.6,
+                sprites: [sprite],
+                scale: sprite.scaleX,
+            });
+        });
         return animals;
+    }
+
+    /** The calls of the lions and tigers the server runs, as for those of the jungle (see LandCries). */
+    private updateLandCries(): void {
+        const view = this.landLifeView;
+        if (!view || !get(jungleEnabledStore)) return;
+        this.landCries ??= new LandCries({
+            listener: () => (this.CurrentPlayer ? { x: this.CurrentPlayer.x, y: this.CurrentPlayer.y } : undefined),
+            hidden: () => document.hidden,
+            volume: () => get(jungleVolumeStore),
+            play: (key, volume) => {
+                // The same guards as the other sound effects (see NerfManager.playPop).
+                if (localUserStore.getBlockAudio() || this.sound.locked) return;
+                playJungleSound(this.sound, this.cache.audio, key, volume);
+            },
+        });
+        const heard: HeardAnimal[] = [];
+        view.forEachShown((id, sprite, animal) => heard.push({ id, x: sprite.x, y: sprite.y, ...animal }));
+        this.landCries.update(Date.now(), heard);
     }
 
     /**
@@ -2155,6 +2195,7 @@ export class GameScene extends DirtyScene {
             this.aquaticLifeView?.update(time);
             this.landCompanions?.update(time);
             this.landLifeView?.update(time);
+            this.updateLandCries();
             this.skyShadowManager?.update(time);
             this.skyWindowLightManager?.update(time);
             this.skyMovingShadows?.update();

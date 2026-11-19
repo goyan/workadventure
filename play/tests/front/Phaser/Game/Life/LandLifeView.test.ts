@@ -243,3 +243,26 @@ describe("LandLifeView, a tamed animal", () => {
         expect(sprites[0].destroyed).toBe(true);
     });
 });
+
+describe("LandLifeView, what is drawn now", () => {
+    it("tells each animal drawn, its species, whether it walks and whether it is led", () => {
+        const { view, life } = createView({
+            lead: (animal) => (animal.owner === 7 ? { x: 300, y: 200, direction: "up", moving: true } : undefined),
+        });
+        life.receive(
+            [
+                { id: 1, kind: 6, x: 100, y: 100, owner: 7 },
+                { id: 2, kind: 4, x: 50, y: 60 },
+            ],
+            0,
+        );
+        view.update(0);
+        view.update(16);
+        const told: unknown[] = [];
+        view.forEachShown((id, sprite, animal) => told.push({ id, x: sprite.x, ...animal }));
+        expect(told).toEqual([
+            { id: 1, x: 300, species: "lion", moving: true, led: true },
+            { id: 2, x: 50, species: "antelope", moving: false, led: false },
+        ]);
+    });
+});
