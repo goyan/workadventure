@@ -21,7 +21,7 @@ import type { JunglePrefab } from "./JunglePlan";
 const REFRESH_INTERVAL_MS = 500;
 
 /** The feet of a character, like Player.getFeet: what the companions follow. */
-function feetOf(character: Character): Point {
+export function feetOf(character: Character): Point {
     return { x: character.x, y: character.y + CHARACTER_BODY_HEIGHT / 2 + CHARACTER_BODY_OFFSET_Y };
 }
 
@@ -78,6 +78,7 @@ export class GameJungle {
                 tileSize: () => gameMapFrontWrapper.getTileDimensions().width,
                 // The clock of the wandering characters: the day changes at the same time as their walks.
                 now: () => new Date(),
+                simulated: () => scene.getGameMap().getWamFile()?.getWam().settings?.life?.landEnabled === true,
             },
             (animals, map) => wanderers.setFreeCharacters(animals, map),
             {
@@ -110,6 +111,8 @@ export class GameJungle {
             animalPose: (id) => wanderers.characterPose(id),
             editorOpen: () => get(mapEditorModeStore),
             playerOnGround: () => scene.CurrentPlayer.isNearGround(),
+            // The lions and tigers of the life of the map the player tamed: one group, one limit.
+            otherCompanions: () => scene.landTamedCount(),
             serverNow: () => scene.getServerDate()?.getTime() ?? Date.now(),
             send: (message) => {
                 const { name, data } = encodeJungleCompanion(message);
@@ -138,6 +141,14 @@ export class GameJungle {
             loop: true,
             callback: () => this.manager.refresh(),
         });
+    }
+
+    /** The sheet of a lion or of a tiger in the catalogues of the map, for the animals the server runs. */
+    public sheetOf(species: "antelope" | "lion" | "tiger"): string | undefined {
+        const names = species === "lion" ? [":lion:"] : species === "tiger" ? [":tigre:", ":tiger:"] : [];
+        return this.loadedPrefabs.find(
+            (prefab) => prefab.wander !== undefined && names.some((name) => prefab.id.includes(name)),
+        )?.wander?.sheetPath;
     }
 
     public tamedAnimalCount(): number {

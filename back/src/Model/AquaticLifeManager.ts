@@ -4,6 +4,8 @@ import {
     emptyLifeTally,
     emptyPopulation,
     isPredator,
+    landPlacesOf,
+    landWallsOf,
     lifeCensus,
     LIFE_RANGES,
     LifeHistory,
@@ -13,13 +15,19 @@ import {
     SPECIES_IDS,
     SPECIES_WIRE,
     speciesCensus,
+    leadTamed,
+    releaseAnimals,
     stepPopulation,
+    tameAnimal,
     waterBodiesOf,
+    WaterGrid as LifeWaterGrid,
+    wireKindOf,
 } from "@workadventure/map-editor";
 import type {
     LifeCensus,
     LifeSample,
     LifeTally,
+    Places,
     Population,
     SpeciesCensus,
     SpeciesId,
@@ -55,6 +63,9 @@ const SavedSpeciesTally = z.object({
     diedDry: count,
     meals: z.record(z.enum(SPECIES_IDS), count),
 });
+
+/** A player is answered this many times a second when they ask to tame an animal. */
+const TAME_ASKS_A_SECOND = 5;
 
 const SavedLife = z.object({
     animals: z.array(Animal).max(1000),
@@ -102,6 +113,11 @@ export interface LifeWater {
     waterVersion(): number;
 }
 
+/** The land is read again this often at most while the water on it moves (the walls are read at once). */
+const STEPS_PER_LAND = 10;
+/** The water of a map that has none: the life of the land goes on without it. */
+const NO_WATER = new LifeWaterGrid(undefined, undefined);
+const NO_BODIES = waterBodiesOf(NO_WATER);
 /** The life of a room as one of its steps is about to find it, for what acts on the animals before it (fishing). */
 export interface LifeAtStep {
     /** The animals themselves: one told where to swim goes there during the step. */
@@ -122,8 +138,6 @@ export interface LifeHooks {
 /** A tile is 32 map pixels: the speed of the map is set in tiles a second. */
 const TILE_PX = 32;
 
-/** 0 a male fish, 1 a female fish, 2 a male dolphin, 3 a female dolphin. */
-const kindOnWire = (animal: Animal): number => (animal.kind === "dolphin" ? 2 : 0) + (animal.sex === "female" ? 1 : 0);
 
 /**
  * Keeps the life in the water of the relief of a room: fish that swim, breed and die, dolphins that hunt them
@@ -142,6 +156,11 @@ export class AquaticLifeManager {
     private bodiesGrid: WaterGrid | undefined;
     private bodiesVersion = -1;
     private bodiesStep = -Infinity;
+    /** The outdoor land of the map, for the animals that walk; undefined while the land is off or its size unknown. */
+    private land: Places | undefined;
+    private landKey = "";
+    private landVersion = -1;
+    private landStep = -Infinity;
     /** What happened since the life of the map began (`since`), for its dashboard. */
     private totals: LifeTally = emptyLifeTally();
     /** The same, species by species (and what each ate). */
@@ -165,8 +184,43 @@ export class AquaticLifeManager {
         private readonly random: () => number = Math.random,
         /** Where the avatars the animals fear stand, in map pixels (those on the ground). */
         private readonly avatars: () => readonly { x: number; y: number }[] = () => [],
+        /** The size of the map in cells of the relief (16 px), once its Tiled map is read. */
+        private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
+        /**
+         * Where a player of the room stands, in map pixels, and whether on the ground; undefined once they left:
+         * the animals they tamed follow them, and are let go when they go.
+         */
+        private readonly masterAt: (userId: number) => { x: number; y: number; ground: boolean } | undefined = () =>
+            undefined,
         private readonly hooks: LifeHooks = {},
     ) {}
+
+    /** When each player last asked to tame an animal, to answer them TAME_ASKS_A_SECOND times a second at most. */
+    private readonly tameAsks = new Map<number, number[]>();
+
+    /**
+     * A player asks for an animal near them (see tameAnimal for what is refused). The room is told at once when it
+     * is theirs: the animal stops where it is on every screen, and follows them.
+     */
+    public tame(userId: number, animalId: number): boolean {
+        const now = this.now();
+        const asks = (this.tameAsks.get(userId) ?? []).filter((at) => now - at < 1000);
+        if (asks.length >= TAME_ASKS_A_SECOND) return false;
+        asks.push(now);
+        this.tameAsks.set(userId, asks);
+        if (this.room.getWam()?.settings?.life?.landEnabled !== true) return false;
+        const master = this.masterAt(userId);
+        if (!master || !master.ground) return false;
+        if (tameAnimal(this.population, animalId, { id: userId, x: master.x, y: master.y }) !== undefined) return false;
+        this.tell();
+        return true;
+    }
+
+    /** A player lets go one of their animals, or all of them (also when they leave the room). */
+    public release(userId: number, animalId?: number): void {
+        this.tameAsks.delete(userId);
+        if (releaseAnimals(this.population, userId, animalId) > 0) this.tell();
+    }
 
     /**
      * Brings back the animals saved before a restart; their ages went on meanwhile. A store that does not answer,
@@ -178,7 +232,15 @@ export class AquaticLifeManager {
             const fields = await this.store.repository.loadVariables(this.hashKey());
             if (!fields.state) return;
             const saved = SavedLife.parse(JSON.parse(fields.state));
-            this.population = { animals: saved.animals, nextId: saved.nextId, seeded: true, dolphinsSeeded: true };
+            // A user id lasts as long as a connection: nobody is the master of an animal saved before a restart.
+            for (const animal of saved.animals) animal.tamedBy = undefined;
+            this.population = {
+                animals: saved.animals,
+                nextId: saved.nextId,
+                seeded: true,
+                dolphinsSeeded: true,
+                landSeeded: true,
+            };
             this.totals = saved.totals ?? emptyLifeTally();
             // Before the species were counted one by one, the totals told the fish from the dolphins.
             this.bySpecies = saved.bySpecies ?? {
@@ -218,11 +280,13 @@ export class AquaticLifeManager {
         this.save();
     }
 
-    /** The map of the room changed (or was just read): the life follows its setting and the grid of its water. */
+    /** The map of the room changed (or was just read): the life follows its settings, its water and its walls. */
     public mapChanged(): void {
-        const enabled = this.room.getWam()?.settings?.life?.enabled === true;
-        if (!enabled) {
-            // Turned off, the water is emptied: turned on again, it starts over.
+        const settings = this.room.getWam()?.settings?.life;
+        const water = settings?.enabled === true;
+        const land = settings?.landEnabled === true;
+        if (!water && !land) {
+            // Turned off, the map is emptied: turned on again, its life starts over.
             const had = this.population.animals.length > 0;
             this.population = emptyPopulation();
             this.totals = emptyLifeTally();
@@ -231,6 +295,7 @@ export class AquaticLifeManager {
             this.since = undefined;
             this.history.clear();
             this.ranges.clear();
+            this.land = undefined;
             this.clearTimer();
             this.tellStopped(true);
             if (had || this.toldSome) {
@@ -239,20 +304,62 @@ export class AquaticLifeManager {
             }
             return;
         }
+        // The animals of a habitat that was turned off go; the others stay.
+        const before = this.population.animals.length;
+        this.population.animals = this.population.animals.filter((animal) =>
+            SPECIES[animal.kind].habitat === "land" ? land : water,
+        );
+        if (!land) {
+            this.land = undefined;
+            this.population.landSeeded = false;
+        }
+        if (!water) {
+            this.population.seeded = false;
+            this.population.dolphinsSeeded = false;
+        }
+        // The walls may have changed: the land is read again at the next step.
+        this.landKey = "";
+        if (this.population.animals.length !== before) {
+            this.tell();
+            this.save(true);
+        }
         let grid: WaterGrid | undefined;
         try {
             grid = this.water.getGrid();
         } catch (error) {
             console.error("Could not read the water of the map for its life", error);
         }
-        if (grid && !this.timer) {
+        if ((land || grid) && !this.timer) {
             this.timer = setInterval(() => this.tick(), LIFE_STEP_MS);
             // The life of a room must never keep the process alive.
             this.timer.unref?.();
-        } else if (!grid) {
+        } else if (!land && !grid) {
             this.clearTimer();
             this.tellStopped(false);
         }
+    }
+
+    /** The outdoor land as the walls, the size of the map and the water on it make it. */
+    private readLand(grid: WaterGrid | undefined): void {
+        const size = this.mapSize();
+        if (!size) {
+            this.land = undefined;
+            return;
+        }
+        const walls = landWallsOf(this.room.getWam());
+        const key = `${size.width}x${size.height}|${walls.signature}`;
+        const version = grid ? this.water.waterVersion() : -1;
+        const stale = version !== this.landVersion && this.steps - this.landStep >= STEPS_PER_LAND;
+        if (this.land && key === this.landKey && !stale) return;
+        this.land = landPlacesOf({
+            width: size.width,
+            height: size.height,
+            walls,
+            depthAt: grid ? (cellX, cellY) => grid.depthAt(cellX, cellY) : () => 0,
+        });
+        this.landKey = key;
+        this.landVersion = version;
+        this.landStep = this.steps;
     }
 
     /** A step from the timer: a failure stops the life of the room until its map changes, never the server. */
@@ -269,18 +376,33 @@ export class AquaticLifeManager {
     public step(): void {
         const grid = this.water.getGrid();
         const settings = this.room.getWam()?.settings?.life;
-        if (!grid || settings?.enabled !== true) return;
-        const version = this.water.waterVersion();
-        const stale = grid !== this.bodiesGrid || version !== this.bodiesVersion;
-        if (!this.bodies || grid !== this.bodiesGrid || (stale && this.steps - this.bodiesStep >= STEPS_PER_BODIES)) {
-            this.bodies = waterBodiesOf(grid);
-            this.bodiesGrid = grid;
-            this.bodiesVersion = version;
-            this.bodiesStep = this.steps;
+        const water = settings?.enabled === true && grid !== undefined;
+        const onLand = settings?.landEnabled === true;
+        if (!water && !onLand) return;
+        if (!grid) {
+            this.bodies = NO_BODIES;
+            this.bodiesGrid = undefined;
+        } else {
+            const version = this.water.waterVersion();
+            const stale = grid !== this.bodiesGrid || version !== this.bodiesVersion;
+            if (
+                !this.bodies ||
+                grid !== this.bodiesGrid ||
+                (stale && this.steps - this.bodiesStep >= STEPS_PER_BODIES)
+            ) {
+                this.bodies = waterBodiesOf(grid);
+                this.bodiesGrid = grid;
+                this.bodiesVersion = version;
+                this.bodiesStep = this.steps;
+            }
         }
+        if (onLand) this.readLand(grid);
+        else this.land = undefined;
         const now = this.now();
         this.since ??= now;
-        const lifeSettings = { ...DEFAULT_LIFE_SETTINGS, ...settings };
+        // The tamed animals go with their masters; those whose master left are free again.
+        leadTamed(this.population, this.masterAt, this.land);
+        const lifeSettings = { ...DEFAULT_LIFE_SETTINGS, ...settings, enabled: water };
         try {
             this.hooks.beforeStep?.({
                 animals: this.population.animals,
@@ -293,7 +415,7 @@ export class AquaticLifeManager {
         }
         const tally = stepPopulation(
             this.population,
-            grid,
+            grid ?? NO_WATER,
             this.bodies,
             lifeSettings,
             LIFE_STEP_MS,
@@ -301,6 +423,7 @@ export class AquaticLifeManager {
             this.random,
             this.avatars(),
             this.bySpecies,
+            this.land,
         );
         this.totals.arrivals += tally.arrivals;
         this.totals.births += tally.births;
@@ -321,10 +444,19 @@ export class AquaticLifeManager {
         // Once a second, with the message: the waters as the life sees them.
         if (this.steps % STEPS_PER_MESSAGE === 0) {
             this.census = lifeCensus(this.population, this.bodies);
-            this.speciesNow = speciesCensus(this.population, this.bodies);
+            this.speciesNow = speciesCensus(this.population, this.bodies, this.land);
             this.tell();
         }
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
+    }
+
+    /** Where the animals of the land are, in map pixels: the presence sensors of the map sense them. */
+    public landAnimals(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const animal of this.population.animals) {
+            if (SPECIES[animal.kind].habitat === "land") positions.push({ x: animal.x, y: animal.y });
+        }
+        return positions;
     }
 
     /** All the animals of the room, for a player who joins it. Undefined when there is none. */
@@ -374,9 +506,10 @@ export class AquaticLifeManager {
         return {
             animals: this.population.animals.map((animal) => ({
                 id: animal.id,
-                kind: kindOnWire(animal),
+                kind: wireKindOf(animal.kind, animal.sex ?? "male"),
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
+                owner: animal.tamedBy,
             })),
             species: this.speciesStats(),
             stats: {

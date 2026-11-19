@@ -408,6 +408,13 @@ message UpdateLifeSettingMessage {
   optional double dolphinMaxLifespan = 7;
   // How long a land animal waits between two drinks. Absent from a browser that does not know it: kept as it is.
   optional double drinkInterval = 8;
+  // The life of the land (antelopes, lions, tigers). Absent from a browser that does not know it: kept as it is.
+  optional bool landEnabled = 9;
+  optional double antelopeReproductionDelay = 10;
+  optional double antelopeMaxLifespan = 11;
+  optional double landHuntInterval = 12;
+  optional double landPredatorReproductionDelay = 13;
+  optional double landPredatorMaxLifespan = 14;
 }
 
 // How fast the water of the relief comes and goes (WaterSettings in libs/map-editor).
@@ -708,6 +715,8 @@ message ClientToServerMessage {
     SetAreaPropertyVariableMessage setAreaPropertyVariableMessage = 46;
     SetEntityStateMessage setEntityStateMessage = 55;
     ReportSwitchPresenceMessage reportSwitchPresenceMessage = 56;
+    TameAnimalMessage tameAnimalMessage = 62;
+    ReleaseAnimalsMessage releaseAnimalsMessage = 63;
     CastFishingLineMessage castFishingLineMessage = 60;
     ReelFishingLineMessage reelFishingLineMessage = 61;
     VideoQualityReportMessage videoQualityReportMessage = 50;
@@ -937,6 +946,19 @@ message AquaticAnimalMessage {
   sint32 y = 4;
   // 0 or absent: as usual, 1: flying, 2: resting, 3: drinking.
   optional uint32 state = 5;
+  // The user id of the player who tamed it and whom it follows; absent for a free animal.
+  optional uint32 owner = 6;
+}
+
+// A player asks to tame an animal of the life of the map (a lion, a tiger) that is near them. The server decides
+// (species, distance, an animal not taken, five at most) and says so in the next AquaticLifeMessage (`owner`).
+message TameAnimalMessage {
+  uint32 animalId = 1;
+}
+
+// A player lets go one of the animals they tamed, or all of them when none is named.
+message ReleaseAnimalsMessage {
+  optional uint32 animalId = 1;
 }
 
 // What came into the water of the map and went out of it over the last second, in cubic metres an hour of the time
@@ -2210,6 +2232,8 @@ message PusherToBackMessage {
     DuckRushPromptMessage duckRushPromptMessage = 36;
     SetEntityStateMessage setEntityStateMessage = 37;
     ReportSwitchPresenceMessage reportSwitchPresenceMessage = 38;
+    TameAnimalMessage tameAnimalMessage = 46;
+    ReleaseAnimalsMessage releaseAnimalsMessage = 47;
     CastFishingLineMessage castFishingLineMessage = 44;
     ReelFishingLineMessage reelFishingLineMessage = 45;
   }

@@ -96,6 +96,8 @@ function harness(options: { savedFishing?: Record<string, string>; failing?: boo
         () => clock.now,
         random,
         () => [...anglers.values()],
+        undefined,
+        undefined,
         {
             beforeStep: options.failing
                 ? () => {

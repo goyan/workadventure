@@ -566,6 +566,16 @@ const mapEditor: BaseTranslation = {
         drinkInterval: "Time between two drinks",
         landAnimalsHint:
             "The wandering animals (jungle, dogs, cats, ducks) never enter the water of the relief and run to dry ground when it rises. At this interval, each one goes to drink at the shore nearest to its territory.",
+        land: {
+            title: "Life of the land",
+            enabled: "Antelopes, lions and tigers on the map",
+            hint: "Antelopes come by themselves to any outdoor ground big enough (200 tiles), breed and run from their predators. Once five antelopes live there, a couple of lions and a couple of tigers come: they hunt the antelopes and the fish of the shallow water, and starve without a catch. They replace the jungle animals drawn each day. All of them stay outdoors and keep away from the avatars.",
+            antelopeReproductionDelay: "Breeding delay of the antelopes",
+            antelopeMaxLifespan: "Longest life of the antelopes",
+            landHuntInterval: "Hunting interval of the lions and tigers",
+            landPredatorReproductionDelay: "Breeding delay of the lions and tigers",
+            landPredatorMaxLifespan: "Longest life of the lions and tigers",
+        },
         species: {
             title: "By species",
             name: {
@@ -633,6 +643,9 @@ const mapEditor: BaseTranslation = {
         fill: "Fill",
         hint: "Click or drag on the map. Going over the same place again digs further. Escape drops the stroke.",
         blocked: "The ground is dug outdoors only, never under a wall nor inside a building.",
+        marks: "The sources and the sinks of the map are pointed out while this tool is open, with their flow; a pale one is turned off.",
+        markSource: "Source",
+        markSink: "Sink",
         diameter: "Brush diameter (tiles)",
         forceAuto: "Automatic force (an eighth of the diameter)",
         force: "Force (thickness taken off by a stroke)",

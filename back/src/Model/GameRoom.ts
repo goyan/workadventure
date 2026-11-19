@@ -14,6 +14,7 @@ import {
     KARAOKE_LEADERBOARD_MIN_COVERAGE,
     KARAOKE_LEADERBOARD_REQUEST_EVENT,
     KaraokeLeaderboardRequestSchema,
+    TERRAIN_CELL,
 } from "@workadventure/map-editor";
 import * as Sentry from "@sentry/node";
 import { Metadata } from "@grpc/grpc-js";
@@ -133,6 +134,9 @@ const MEETING_INVITATION_MAX_REQUESTS = 50;
 const MEETING_INVITATION_MAX_REQUESTS_PER_USER = 3;
 const MEETING_INVITATION_REQUEST_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
+/** The life of the land reads at most this many cells of the relief on each side of a map. */
+const MAX_MAP_CELLS = 4096;
+
 export class GameRoom implements BrothersFinder {
     private readonly privateMessages = new PrivateMessages((uuid) => this.getUsersByUuid(uuid));
     public readonly id: string;
@@ -159,6 +163,8 @@ export class GameRoom implements BrothersFinder {
     private switchTriggers: SwitchTriggerEvaluator | undefined;
     private terrainWater: TerrainWaterManager | undefined;
     private aquaticLife: AquaticLifeManager | undefined;
+    /** The size of the map in cells of the relief; undefined until its Tiled map is read. */
+    private mapCells: { width: number; height: number } | undefined;
     private fishing: FishingManager | undefined;
     private karaokeLeaderboard: KaraokeLeaderboardManager | undefined;
     private readonly wamManager?: WamManager;
@@ -321,7 +327,13 @@ export class GameRoom implements BrothersFinder {
         });
         await gameRoom.entityStateManager.restore();
         // Uses the switches that have a trigger (presence sensors, timers) once a second.
-        const switchTriggers = new SwitchTriggerEvaluator(gameRoom, gameRoom.entityStateManager);
+        const switchTriggers = new SwitchTriggerEvaluator(
+            gameRoom,
+            gameRoom.entityStateManager,
+            undefined,
+            // The antelopes, lions and tigers the server runs are sensed like the avatars.
+            gameRoom.landAnimalPositions.bind(gameRoom),
+        );
         gameRoom.switchTriggers = switchTriggers;
         switchTriggers.start();
         // No need to unsubscribe since GameRoom.destroy completes this stream.
@@ -353,6 +365,10 @@ export class GameRoom implements BrothersFinder {
             undefined,
             // The animals fear the avatars that are on the ground, where the water is.
             gameRoom.groundAvatarPositions.bind(gameRoom),
+            // The animals of the land live on the whole map: its size is in its Tiled map.
+            gameRoom.mapSizeInCells.bind(gameRoom),
+            // The animals a player tamed follow them.
+            gameRoom.masterPosition.bind(gameRoom),
             {
                 beforeStep: (life) => fishing.beforeStep(life),
                 stopped: (emptied) => fishing.lifeStopped(emptied),
@@ -361,6 +377,7 @@ export class GameRoom implements BrothersFinder {
         gameRoom.aquaticLife = aquaticLife;
         await aquaticLife.restore();
         aquaticLife.start();
+        gameRoom.readMapSize(() => aquaticLife.mapChanged());
         // eslint-disable-next-line rxjs/no-ignored-subscription,svelte/no-ignored-unsubscribe
         gameRoom.destroyRoomStream.subscribe(() => aquaticLife.stop());
 
@@ -559,6 +576,8 @@ export class GameRoom implements BrothersFinder {
             return;
         }
         user.disconnected = true;
+        // The animals they tamed are free again, now rather than at the next step of the life.
+        this.aquaticLife?.release(user.id);
 
         if (!this.users.has(user.id)) {
             console.warn("User ", user.id, "does not belong to this game room! It should!");
@@ -1154,6 +1173,26 @@ export class GameRoom implements BrothersFinder {
         return this.terrainWater?.snapshot();
     }
 
+    /** The size of the map in cells of the relief (16 px), for the life of its land; undefined until it is read. */
+    public mapSizeInCells(): { width: number; height: number } | undefined {
+        return this.mapCells;
+    }
+
+    /** Reads the size of the map in its Tiled map; a map that cannot be read has no life on its land. */
+    private readMapSize(onRead: () => void): void {
+        this.getMap()
+            .then((map) => {
+                const cells = (tiles: number | undefined, tilePx: number | undefined): number =>
+                    Math.min(MAX_MAP_CELLS, Math.max(0, Math.ceil(((tiles ?? 0) * (tilePx ?? 32)) / TERRAIN_CELL)));
+                this.mapCells = {
+                    width: cells(map.width, map.tilewidth),
+                    height: cells(map.height, map.tileheight),
+                };
+                onRead();
+            })
+            .catch((error) => console.warn("Could not read the size of the map for the life of its land", error));
+    }
+
     /** Where the avatars standing on the ground are, in map pixels (not those on a raised floor). */
     public groundAvatarPositions(): { x: number; y: number }[] {
         const positions: { x: number; y: number }[] = [];
@@ -1163,6 +1202,29 @@ export class GameRoom implements BrothersFinder {
             positions.push({ x, y });
         }
         return positions;
+    }
+
+    /** Where the animals of the land the server runs are, in map pixels: for the presence sensors. */
+    public landAnimalPositions(): { x: number; y: number }[] {
+        return this.aquaticLife?.landAnimals() ?? [];
+    }
+
+    /** Where a player of the room stands, for the animals they tamed; undefined once they left. */
+    public masterPosition(userId: number): { x: number; y: number; ground: boolean } | undefined {
+        const user = this.users.get(userId);
+        if (!user || user.disconnected === true) return undefined;
+        const { x, y } = user.getPosition();
+        return { x, y, ground: sameFloor(user.getFloorZ(), 0) };
+    }
+
+    /** A player asks to tame an animal of the life of the map that is near them. */
+    public tameAnimal(user: Pick<User, "id">, animalId: number): void {
+        this.aquaticLife?.tame(user.id, animalId);
+    }
+
+    /** A player lets go one of the animals they tamed, or all of them. */
+    public releaseAnimals(user: Pick<User, "id">, animalId?: number): void {
+        this.aquaticLife?.release(user.id, animalId);
     }
 
     /** Where the players who may fish stand, by user id: those on the ground, where the water is. */

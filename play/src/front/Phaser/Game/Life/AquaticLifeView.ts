@@ -1,4 +1,5 @@
 import type * as Phaser from "phaser";
+import { isAquaticKind } from "./AquaticLife";
 import type { AquaticLife } from "./AquaticLife";
 import { ensureAquaticTexture } from "./AquaticSprites";
 
@@ -42,6 +43,7 @@ export class AquaticLifeView {
         // The scene is drawn again only when something the player can see changed.
         let changed = false;
         for (const animal of this.life.shown(now, this.reducedMotion())) {
+            if (!isAquaticKind(animal.kind)) continue;
             seen.add(animal.id);
             const x = Math.round(animal.x);
             const y = Math.round(animal.y);

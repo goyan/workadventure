@@ -1230,6 +1230,16 @@ export class RoomConnection implements RoomConnection {
         });
     }
 
+    /** Asks the server for an animal of the life of the map that is near the player. */
+    emitTameAnimal(animalId: number): void {
+        this.send({ message: { $case: "tameAnimalMessage", tameAnimalMessage: { animalId } } });
+    }
+
+    /** Lets go one of the animals the player tamed, or all of them. */
+    emitReleaseAnimals(animalId?: number): void {
+        this.send({ message: { $case: "releaseAnimalsMessage", releaseAnimalsMessage: { animalId } } });
+    }
+
     emitSetAreaPropertyVariable(areaId: string, propertyId: string, key: string, value: unknown): void {
         this.send({
             message: {

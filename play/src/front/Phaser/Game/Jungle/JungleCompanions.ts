@@ -48,6 +48,8 @@ export interface JungleCompanionWorld {
     editorOpen(): boolean;
     /** Whether the local player stands on the ground, where the animals are (not on a raised floor over them). */
     playerOnGround?(): boolean;
+    /** How many animals of the life of the map (lions, tigers the server runs) follow the local player: one limit. */
+    otherCompanions?(): number;
     /** The server clock (the computer's until it is known), in ms. */
     serverNow(): number;
     /** Tells the whole room. */
@@ -187,7 +189,7 @@ export class JungleCompanions {
     }
 
     private tame(animal: string): void {
-        if (this.local.has(animal) || this.local.size >= JUNGLE_MAX_COMPANIONS || this.world.editorOpen()) return;
+        if (this.local.has(animal) || !this.hasRoom() || this.world.editorOpen()) return;
         if (this.world.playerOnGround?.() === false) return;
         // The action may be called late (a prompt of a former frame): the animal must still be within reach and free.
         if (!this.withinReach(animal) || this.others.claims(this.nowMs).some((claim) => claim.animal === animal))
@@ -195,6 +197,11 @@ export class JungleCompanions {
         this.local.set(animal, this.world.serverNow());
         this.lastAnnounce = this.nowMs;
         this.sendLocal();
+    }
+
+    /** Whether the local player may tame one more animal, those of the life of the map counted. */
+    private hasRoom(): boolean {
+        return this.local.size + (this.world.otherCompanions?.() ?? 0) < JUNGLE_MAX_COMPANIONS;
     }
 
     private withinReach(animal: string): boolean {
@@ -277,7 +284,7 @@ export class JungleCompanions {
         }
         // The nearest animal within reach the key can act on: one of the companions (released), or a free animal
         // (tamed) while there is room for one more.
-        const canTame = this.local.size < JUNGLE_MAX_COMPANIONS;
+        const canTame = this.hasRoom();
         let wanted: { kind: "tame" | "release"; animal: string } | undefined;
         let best = Number.POSITIVE_INFINITY;
         for (const animal of animals.keys()) {

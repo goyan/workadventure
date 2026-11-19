@@ -11,27 +11,41 @@ export interface WaterCell {
 }
 
 /**
- * The bodies of water of a grid: the cells deep enough for a fish that touch each other without a wall between
- * them. They are read again when the water moved, never kept on an animal: bodies merge and split as the level
- * goes up and down.
+ * Where the animals of a habitat live: bodies of cells that touch each other without a wall between them (bodies of
+ * water, pieces of outdoor land). An animal has a level: the least water it swims in, or the most a land animal
+ * walks in.
  */
-export interface WaterBodies {
-    /** The body of a cell, from 1; 0 where no fish swims. */
+export interface Places {
+    /** The body of a cell, from 1; 0 where nothing of that habitat lives. */
     bodyAt(cellX: number, cellY: number): number;
     /** For each body (its number is the index, 0 is none): its cells, and those deep enough for a dolphin. */
     readonly sizes: readonly { cells: number; deep: number }[];
-    /** Whether the cell holds at least this much water. */
-    swimmable(cellX: number, cellY: number, minDepth: number): boolean;
-    /** A random cell of the body with at least this much water, at most `reach` cells away on each axis. */
+    /** Whether an animal of that level may be in the cell. */
+    passable(cellX: number, cellY: number, level: number): boolean;
+    /** Whether one goes from a cell to the next one on that side (-1, 0 or 1 on one axis only) without a wall. */
+    canCross(cellX: number, cellY: number, dx: number, dy: number): boolean;
+    /** How good a cell is for an animal left where it cannot be: it goes to the best one next to it. */
+    comfortAt(cellX: number, cellY: number): number;
+    /** A random cell of the body an animal of that level may be in, at most `reach` cells away on each axis. */
     randomCell(
         body: number,
         near: WaterCell,
         reach: number,
-        minDepth: number,
+        level: number,
         random: () => number,
     ): WaterCell | undefined;
-    /** A random cell of the whole body with at least this much water. Reads the whole grid: for rare uses. */
-    anyCell(body: number, minDepth: number, random: () => number): WaterCell | undefined;
+    /** A random cell of the whole body for that level. Reads the whole place: for rare uses. */
+    anyCell(body: number, level: number, random: () => number): WaterCell | undefined;
+}
+
+/**
+ * The bodies of water of a grid: the cells deep enough for a fish that touch each other without a wall between
+ * them. They are read again when the water moved, never kept on an animal: bodies merge and split as the level
+ * goes up and down. The level of an animal is the least water it swims in.
+ */
+export interface WaterBodies extends Places {
+    /** Whether the cell holds at least this much water (`passable`). */
+    swimmable(cellX: number, cellY: number, minDepth: number): boolean;
 }
 
 const SIDES = [
@@ -88,6 +102,9 @@ export function waterBodiesOf(grid: WaterGrid): WaterBodies {
         sizes,
         bodyAt,
         swimmable: (cellX, cellY, minDepth) => grid.depthAt(cellX, cellY) >= minDepth,
+        passable: (cellX, cellY, minDepth) => grid.depthAt(cellX, cellY) >= minDepth,
+        canCross: (cellX, cellY, dx, dy) => canSwimAcross(grid, cellX, cellY, dx, dy),
+        comfortAt: (cellX, cellY) => grid.depthAt(cellX, cellY),
         anyCell: (body, minDepth, random) => {
             if (body === 0) return undefined;
             // One pass, each fitting cell kept with the same chance.

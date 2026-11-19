@@ -2176,6 +2176,15 @@ son seuil `shallowest`), un tourbillon sur chaque puits qui a de l'eau autour de
 tour par seconde selon le débit réglé) et des ronds qui s'élargissent sur chaque source. Dessiné 15 fois par seconde ;
 chaque navigateur a ses propres traits (un décor, rien n'est partagé). Rien pour qui a demandé moins de mouvement.
 
+**Sources et puits repérés dans l'outil Relief.** Tant que l'outil Relief est ouvert, chaque objet qui porte une
+propriété de source ou de puits est repéré sur la carte (`Terrain/WaterMarks.ts`, logique pure ;
+`Terrain/WaterMarksView.ts`, dessin, créé et détruit par `TerrainEditorTool`) : une pastille bleue marquée + pour une
+source, orange marquée − pour un puits, là où son eau sort ou part (le milieu de la cellule que le serveur utilise),
+un halo qui bat, le disque qu'elle arrose ou vide, et son débit écrit dessous en m³/h. Une source ou un puits réglé à
+0 est repéré aussi, plus pâle. Les pastilles gardent leur taille à l'écran quel que soit le zoom (14 px de rayon, 10
+px de carte au moins). Les objets sont relus une fois par seconde ; halo fixe pour qui a demandé moins de mouvement.
+Vu par l'éditeur seulement, rien n'est écrit dans la carte. Le panneau Relief rappelle les deux couleurs.
+
 **Sources et puits.** N'importe quel objet devient une source ou un puits depuis ses propriétés. Le débit se règle
 par un nombre, deux boutons − et + (pas de la taille de la valeur : 1, 2… 10, 20… 100, 200…) et une unité au choix
 (m³/h, L/s, L/min, m³/s ; le choix est gardé dans le navigateur, le débit est enregistré en litres par minute). L'eau
@@ -2341,6 +2350,88 @@ antilopes, lions et tigres viendront sur ce moteur).
   `LifeSpeciesStats.ts`) : un tableau à une colonne par espèce, sur la dernière minute ou depuis le début ; « Qui mange
   qui » ; une courbe par espèce, à la même échelle, chacune masquable ; un bandeau quand une espèce qui a vécu n'a plus
   d'individu. Un vieux serveur qui ne dit rien des espèces : ce bloc ne s'affiche pas.
+
+
+### Vie de la terre : antilopes, lions et tigres
+
+Plan : `docs/superpowers/plans/2026-11-18-chaine-alimentaire-lot2a-terre.md` du dépôt d'infra.
+
+**En jeu.** Réglage de la carte « Antilopes, lions et tigres sur la carte » (outil Vie, bloc « Vie de la terre »,
+coupé par défaut, indépendant de l'eau). Activé :
+
+- un couple d'**antilopes** arrive sur tout sol de dehors d'au moins 200 cases ; elles se reproduisent (1 ou 2
+  petits), fuient un lion ou un tigre à moins de 3 cases et un avatar à moins de 3 cases, n'entrent pas dans l'eau
+  (2 px), se noient en 5 s si l'eau monte sur elles ; 1 antilope pour 40 cases, 60 par salle ;
+- dès que 5 antilopes vivent sur un sol, un couple de **lions** et un couple de **tigres** y arrivent ; affamés (un
+  intervalle de chasse après leur repas), ils courent sur l'antilope la plus proche, ou sur un poisson de l'eau où
+  ils ont pied (moins de 16 px) ; un petit pour un couple qui a mangé deux fois ; ils meurent de vieillesse ou de faim
+  (huit intervalles de chasse sans prise) ; 6 lions et 6 tigres au plus pour 60 antilopes ;
+- les poissons fuient un lion ou un tigre qui s'approche, comme un avatar ;
+- **le tirage quotidien de la jungle s'arrête** sur cette carte : les lions et les tigres sont ceux du serveur. Ils
+  s'apprivoisent (voir ci-dessous), crient comme ceux de la jungle, ont une ombre et allument les capteurs ;
+- le réglage personnel « jungle » les masque.
+
+**Les dauphins attendent trente poissons.** Un couple de dauphins ne vient plus dans un lac qui compte moins de 30
+poissons (`FISH_PER_DOLPHIN_COUPLE`) : avec les réglages par défaut ils vidaient le lac à leur arrivée. Les empreintes
+de `LifeGolden.test.ts` ont été reprises pour cela, une fois (à seuil 0 ce sont celles d'avant).
+
+**Comment.**
+
+- **Lieux** (`Places`, `Life/WaterBodies.ts`) : ce que les règles demandent d'un habitat (corps, passage, voisinage).
+  L'eau en est un ; la terre de dehors un autre (`Life/LandPlaces.ts`) : les cellules de 16 px atteintes depuis le
+  bord de la carte sans franchir un mur de l'outil Carte ni une porte (`Terrain/LandWalls.ts`, portes fermées) ni une
+  eau de 16 px. Ce que des murs ferment est « dedans » : rien n'y vit.
+- **Règles** (`Life/Population.ts`) : `stepPopulation(…, land)` ; un prédateur cherche ses proies dans son propre
+  lieu, à son niveau (le dauphin en eau de 16 px, le lion là où il a pied) ; une proie fuit les prédateurs de sa
+  liste `flees` ; un chasseur vise au-delà d'une proie qui le fuit. L'eau et la terre ont chacune leur salle (300 et
+  100 animaux).
+- **Serveur** : `AquaticLifeManager` construit la terre avec la taille de la carte (lue dans la carte Tiled par
+  `GameRoom`), les murs et l'eau, au plus toutes les 5 s quand l'eau bouge ; il tourne dès que l'eau ou la terre est
+  activée, et retire les animaux d'un habitat coupé.
+- **Navigateur** : `Life/LandLifeView.ts` dessine les animaux de `kind` 4 à 9 parmi les avatars, avec les planches
+  `lion-sheet.png` et `tigre-sheet.png` du catalogue des animaux quand la carte l'a, sinon une image dessinée en code
+  (toujours pour l'antilope).
+- **Valeurs par défaut** : choisies par un essai de 24 h simulées sur trois graines, gardées par
+  `LifeBalance.test.ts` (2 h simulées).
+
+**Apprivoiser un lion ou un tigre du serveur.** Même geste que pour les animaux promeneurs : à 1,5 case d'un lion ou
+d'un tigre libre, « [ESPACE] pour apprivoiser cet animal 🐾 » ; près d'un des siens, « [ESPACE] pour relâcher votre
+compagnon 🐾 » ; « Relâcher mes animaux (n) » dans la roue de l'avatar les compte tous. Cinq compagnons par joueur,
+animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
+
+- **Le serveur seul dit à qui est l'animal** (`Animal.tamedBy`, `AquaticAnimalMessage.owner`) : pas de revendication
+  par événement de salle comme pour les promeneurs. Le navigateur demande (`TameAnimalMessage`,
+  `ReleaseAnimalsMessage`), `AquaticLifeManager.tame` vérifie (lion ou tigre, libre, à 5 cases au plus des pieds du
+  joueur pour couvrir la seconde de retard de l'affichage, joueur au sol, cinq au plus, cinq demandes par seconde) et
+  l'annonce aussitôt à la salle. Un refus ne dit rien : l'invite revient si l'animal est encore là.
+- **Hors de la vie, mais compté** (`Life/Taming.ts`, `stepPopulation`) : apprivoisé, il ne vieillit pas, n'a pas faim,
+  ne chasse pas, n'est pas fui, n'a pas de petit ; ses horloges attendent. Il compte toujours dans les plafonds de son
+  lieu et de la salle, sinon cinq lions pris en feraient venir cinq autres.
+- **Où il est** : pour le serveur, là où se tient son maître tant que celui-ci est au sol sur la terre de dehors ;
+  dans une pièce, dans l'eau profonde ou sur un palier, il reste à sa dernière bonne place. À l'écran, il marche
+  derrière son maître (`Life/LandCompanions.ts`, le suiveur des promeneurs), après ses chiens et ses chats.
+- **Relâché tout seul** : le maître quitte la carte ou recharge la page, `back` redémarre (l'identifiant d'un joueur
+  ne vaut que pour une connexion), la terre est coupée, l'éditeur de carte s'ouvre.
+- **Pour qu'on puisse l'approcher**, un lion ou un tigre rassasié ne fuit plus les avatars ; celui qui chasse garde
+  ses distances (3 cases) comme avant.
+- Limites : relâché alors que son maître est dans une pièce, l'animal réapparaît à sa dernière place de dehors ; au
+  relâcher il fait un petit saut de l'endroit où on le voyait à celui où le serveur le tient.
+
+**Ce que les animaux du serveur gardent de la jungle.**
+
+- **Cris** (`Life/LandCries.ts`) : un lion ou un tigre immobile crie de temps en temps (une étape de 20 s sur 12,
+  portée 12 cases, un cri toutes les 20 s au plus par joueur, rien onglet caché), avec les sons et le volume de la
+  jungle. Chaque navigateur les joue pour lui-même, tirés de l'identifiant de l'animal et de l'heure. Un animal
+  apprivoisé ne crie pas ; une antilope non plus.
+- **Ombres** : ovale sous chaque animal de la terre, dehors, comme sous les promeneurs (`GameScene.shadowAnimals`,
+  réglage « animaux » des ombres).
+- **Capteurs de présence** : le serveur compte lui-même les antilopes, lions et tigres qu'il simule
+  (`AquaticLifeManager.landAnimals`, quatrième paramètre de `SwitchTriggerEvaluator`), au sol, comme un avatar ; pas
+  de rapport du navigateur pour eux.
+
+**Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
+les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se
+retrouver ; les prédateurs sont limités par leur plafond plus que par la faim (les poissons leur servent de repli).
 
 ## Météo de la carte
 

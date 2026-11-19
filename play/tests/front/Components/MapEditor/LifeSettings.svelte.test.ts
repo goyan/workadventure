@@ -95,6 +95,13 @@ describe("LifeSettings", () => {
                 dolphinReproductionDelay: 300,
                 dolphinMaxLifespan: 3600,
                 drinkInterval: 300,
+                // The life of the land, off, with its default values.
+                landEnabled: false,
+                antelopeReproductionDelay: 120,
+                antelopeMaxLifespan: 900,
+                landHuntInterval: 60,
+                landPredatorReproductionDelay: 300,
+                landPredatorMaxLifespan: 3600,
             },
         });
         for (const slider of sliders) expect(find(slider)).not.toBeNull();
@@ -133,5 +140,19 @@ describe("LifeSettings", () => {
             $case: "updateLifeSettingMessage",
             updateLifeSettingMessage: expect.objectContaining({ enabled: true, maxSpeed: 3 }),
         });
+    });
+
+    it("turns the life of the land on by its own switch, and shows its settings then", () => {
+        render(false);
+        expect(find("life-land-landHuntInterval")).toBeNull();
+        const input = find("life-land-enabled")?.querySelector("input");
+        if (!input) throw new Error("No switch");
+        flushSync(() => input.click());
+        expect(executeUpdateWAMSettings).toHaveBeenLastCalledWith({
+            $case: "updateLifeSettingMessage",
+            updateLifeSettingMessage: expect.objectContaining({ enabled: false, landEnabled: true }) as unknown,
+        });
+        expect(find("life-land-landHuntInterval")?.textContent).toContain("1 min");
+        expect(find("life-land-antelopeMaxLifespan")).not.toBeNull();
     });
 });

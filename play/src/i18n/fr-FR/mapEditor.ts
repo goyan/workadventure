@@ -577,6 +577,16 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         drinkInterval: "Intervalle entre deux boissons",
         landAnimalsHint:
             "Les animaux qui se promènent (jungle, chiens, chats, canards) n'entrent jamais dans l'eau du relief et courent se mettre au sec quand elle monte. À cet intervalle, chacun va boire à la rive la plus proche de son territoire.",
+        land: {
+            title: "Vie de la terre",
+            enabled: "Antilopes, lions et tigres sur la carte",
+            hint: "Des antilopes arrivent seules sur tout sol de dehors assez grand (200 cases), se reproduisent et fuient leurs prédateurs. Dès que cinq antilopes vivent là, un couple de lions et un couple de tigres arrivent : ils chassent les antilopes et les poissons de l'eau peu profonde, et meurent de faim sans prise. Les animaux de la jungle tirés chaque jour sont remplacés par ceux-ci. Tous restent dehors et s'écartent des avatars.",
+            antelopeReproductionDelay: "Délai de reproduction des antilopes",
+            antelopeMaxLifespan: "Durée de vie maximale des antilopes",
+            landHuntInterval: "Intervalle de chasse des lions et des tigres",
+            landPredatorReproductionDelay: "Délai de reproduction des lions et des tigres",
+            landPredatorMaxLifespan: "Durée de vie maximale des lions et des tigres",
+        },
         species: {
             title: "Par espèce",
             name: {
@@ -644,6 +654,9 @@ const mapEditor: DeepPartial<Translation["mapEditor"]> = {
         fill: "Remblayer",
         hint: "Cliquez ou glissez sur la carte. Repasser au même endroit creuse davantage. Échap abandonne le geste.",
         blocked: "Le relief ne se creuse que dehors, jamais sous un mur ni dans un bâtiment.",
+        marks: "Les sources et les puits de la carte sont repérés tant que cet outil est ouvert, avec leur débit ; un repère pâle est à l'arrêt.",
+        markSource: "Source",
+        markSink: "Puits",
         diameter: "Diamètre du pinceau (cases)",
         forceAuto: "Force automatique (un huitième du diamètre)",
         force: "Force (épaisseur enlevée par passage)",
