@@ -8,6 +8,7 @@ import type {
     SayMessage,
     TerrainWaterMessage,
     MeadowMessage,
+    FireConditionsMessage,
     AquaticLifeMessage,
     FishingMessage,
 } from "@workadventure/messages";
@@ -96,6 +97,8 @@ export interface RoomJoinedMessageInterface {
     aquaticLife?: AquaticLifeMessage;
     /** The meadow of the map (its whole state) as the server computes it; absent where nothing ever grew. */
     meadow?: MeadowMessage;
+    /** The conditions the fire of the room goes by when it was joined. */
+    fireConditions?: FireConditionsMessage;
     /** The fishing lines of the room when it was joined; absent when nobody ever fished there. */
     fishing?: FishingMessage;
     characterTextures: WokaTextureDescriptionInterface[];

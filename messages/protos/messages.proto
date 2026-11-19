@@ -974,6 +974,8 @@ message MeadowMessage {
   bytes grass = 3;
   // A byte a tile (0: dry, 255: sodden), row by row, gzipped.
   bytes moisture = 4;
+  // A byte a tile (0: green grass, 255: straw, ready to burn), row by row, gzipped. Empty from an older server.
+  bytes dryness = 5;
 }
 
 // The water of the relief of the map (WaterGrid in libs/map-editor): the depth of the water over each cell of a

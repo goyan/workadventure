@@ -43,12 +43,15 @@ export class MeadowManager {
     private readTerrain: TerrainData | undefined | null = null;
     private readSignature: string | undefined;
     /** The state saved before a restart, until the first meadow takes it. */
-    private saved: { width: number; height: number; grass: Uint8Array; moisture: Uint8Array } | undefined;
+    private saved:
+        | { width: number; height: number; grass: Uint8Array; moisture: Uint8Array; dryness?: Uint8Array }
+        | undefined;
     private timer: ReturnType<typeof setInterval> | undefined;
     private steps = 0;
     private rainRate = 0;
     private sentGrass: Uint8Array | undefined;
     private sentMoisture: Uint8Array | undefined;
+    private sentDryness: Uint8Array | undefined;
     private changedSinceSave = false;
     /** Whether the meadow was wiped because the map turned it off. */
     private cleared = false;
@@ -64,6 +67,8 @@ export class MeadowManager {
         private readonly mapSize: () => { width: number; height: number } | undefined = () => undefined,
         /** Where the animals that graze are, in map pixels (the antelopes of the life of the land): they eat the grass under them. */
         private readonly grazers: () => readonly { x: number; y: number }[] = () => [],
+        /** How ready the grass is to burn under the conditions of the room, from 0 to 1: it dries by it. */
+        private readonly fireDanger: () => number = () => 0,
     ) {}
 
     /** Brings back the meadow saved before a restart. A store that does not answer must not keep the room closed. */
@@ -79,6 +84,10 @@ export class MeadowManager {
                 height,
                 grass: new Uint8Array(gunzipSync(Buffer.from(fields.grass, "base64"))),
                 moisture: new Uint8Array(gunzipSync(Buffer.from(fields.moisture, "base64"))),
+                // Absent from a meadow saved before its grass could dry.
+                ...(fields.dryness
+                    ? { dryness: new Uint8Array(gunzipSync(Buffer.from(fields.dryness, "base64"))) }
+                    : {}),
             };
         } catch (error) {
             console.error("Could not restore the meadow of the map", error);
@@ -117,7 +126,7 @@ export class MeadowManager {
         this.meadow = new Meadow({ width, height }, wam?.terrain, walls, paved);
         if (before) this.meadow.takeFrom(before);
         else if (this.saved && this.saved.width === width && this.saved.height === height) {
-            this.meadow.read(this.saved.grass, this.saved.moisture);
+            this.meadow.read(this.saved.grass, this.saved.moisture, this.saved.dryness);
         }
         this.saved = undefined;
         if (!this.timer) {
@@ -172,6 +181,7 @@ export class MeadowManager {
             growSeconds: set.growMinutes * 60,
             thirstSeconds: set.thirstMinutes * 60,
             moistureHold: set.moistureHold,
+            fireDanger: this.fireDanger(),
             waterAt: grid
                 ? (tileX, tileY) => {
                       let deepest = 0;
@@ -192,25 +202,30 @@ export class MeadowManager {
 
     /** The whole state the room was last told, for a player who joins it. Undefined where nothing ever grew. */
     public snapshot(): MeadowMessage | undefined {
-        if (!this.meadow || !this.sentGrass || !this.sentMoisture) return undefined;
+        if (!this.meadow || !this.sentGrass || !this.sentMoisture || !this.sentDryness) return undefined;
         return {
             width: this.meadow.width,
             height: this.meadow.height,
             grass: gzipSync(this.sentGrass),
             moisture: gzipSync(this.sentMoisture),
+            dryness: gzipSync(this.sentDryness),
         };
     }
 
     private tell(meadow: Meadow): void {
         const grass = meadow.writeGrass();
         const moisture = meadow.writeMoisture();
+        const dryness = meadow.writeDryness();
         const same = (a: Uint8Array, b: Uint8Array | undefined): boolean =>
             b !== undefined && a.length === b.length && a.every((value, index) => value === b[index]);
         // A bare and dry map the room was never told about: nothing to say.
         if (!this.sentGrass && grass.every((value) => value === 0) && moisture.every((value) => value === 0)) return;
-        if (same(grass, this.sentGrass) && same(moisture, this.sentMoisture)) return;
+        if (same(grass, this.sentGrass) && same(moisture, this.sentMoisture) && same(dryness, this.sentDryness)) {
+            return;
+        }
         this.sentGrass = grass;
         this.sentMoisture = moisture;
+        this.sentDryness = dryness;
         this.changedSinceSave = true;
         this.room.sendSubMessageToRoom({
             message: {
@@ -220,6 +235,7 @@ export class MeadowManager {
                     height: meadow.height,
                     grass: gzipSync(grass),
                     moisture: gzipSync(moisture),
+                    dryness: gzipSync(dryness),
                 },
             },
         });
@@ -231,6 +247,7 @@ export class MeadowManager {
         const fields: [string, string][] = [
             ["grass", Buffer.from(gzipSync(this.meadow.writeGrass())).toString("base64")],
             ["moisture", Buffer.from(gzipSync(this.meadow.writeMoisture())).toString("base64")],
+            ["dryness", Buffer.from(gzipSync(this.meadow.writeDryness())).toString("base64")],
             ["size", `${this.meadow.width}x${this.meadow.height}`],
         ];
         for (const [field, value] of fields) {

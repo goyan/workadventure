@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     altitudeGrowth,
+    DRYING_SECONDS,
     GRASS_LINE_PX,
     GRAZE_SECONDS,
     Meadow,
@@ -307,5 +308,70 @@ describe("the snow of the heights", () => {
         meadow.set(3, 2, 0.5, 1);
         run(meadow, 1300, { ...winter, season: Season.Summer });
         expect(meadow.grassAt(3, 2)).toBe(1);
+    });
+});
+
+describe("the dryness of the grass", () => {
+    const burning: MeadowStepInput = { ...dry, daylight: false, fireDanger: 1 };
+
+    it("rises on a dry soil when it is hot, dry and windy: most of the way in a minute and a half", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 0, 1);
+        expect(DRYING_SECONDS).toBe(90);
+        run(meadow, 90, burning);
+        expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.6);
+        expect(meadow.drynessAt(3, 2)).toBeLessThan(0.7);
+        run(meadow, 360, burning);
+        expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.95);
+    });
+
+    it("stays green on a sodden soil, and under water", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 1, 1);
+        run(meadow, 20, { ...burning, rainMmPerHour: 50 });
+        expect(meadow.drynessAt(3, 2)).toBeLessThan(0.05);
+        const flooded = new Meadow(size, undefined, undefined);
+        flooded.set(3, 2, 0, 1, 1);
+        run(flooded, 600, { ...burning, waterAt: () => 4 });
+        expect(flooded.drynessAt(3, 2)).toBeLessThan(0.05);
+    });
+
+    it("goes back down when the conditions do", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 0, 1, 1);
+        run(meadow, 90, { ...dry, daylight: false });
+        expect(meadow.drynessAt(3, 2)).toBeLessThan(0.4);
+        expect(meadow.drynessAt(3, 2)).toBeGreaterThan(0.3);
+    });
+
+    it("is nothing where there is no grass", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 0, 0, 1);
+        run(meadow, 2, burning);
+        expect(meadow.drynessAt(3, 2)).toBe(0);
+        expect(meadow.drynessAt(-1, 0)).toBe(0);
+    });
+
+    it("is written with the meadow, and a state saved without it is still read", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 0.5, 1, 0.8);
+        const copy = new Meadow(size, undefined, undefined);
+        expect(copy.read(meadow.writeGrass(), meadow.writeMoisture(), meadow.writeDryness())).toBe(true);
+        expect(copy.drynessAt(3, 2)).toBeCloseTo(0.8, 2);
+        const older = new Meadow(size, undefined, undefined);
+        expect(older.read(meadow.writeGrass(), meadow.writeMoisture())).toBe(true);
+        expect(older.grassAt(3, 2)).toBe(1);
+        expect(older.drynessAt(3, 2)).toBe(0);
+        expect(older.read(meadow.writeGrass(), meadow.writeMoisture(), new Uint8Array(3))).toBe(false);
+    });
+
+    it("follows the meadow that replaces it when the map is edited, and goes with a meadow turned off", () => {
+        const meadow = new Meadow(size, undefined, undefined);
+        meadow.set(3, 2, 0.5, 1, 0.8);
+        const next = new Meadow(size, undefined, undefined);
+        next.takeFrom(meadow);
+        expect(next.drynessAt(3, 2)).toBeCloseTo(0.8, 5);
+        next.clear();
+        expect(next.drynessAt(3, 2)).toBe(0);
     });
 });

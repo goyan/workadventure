@@ -2,6 +2,7 @@ import path from "path";
 import {
     isAtAreaLevel,
     canUpdateListeningZoneJams,
+    fireDanger,
     GameMapProperties,
     LISTENING_ZONE_JAM_VARIABLE,
     parseListeningZoneJams,
@@ -422,6 +423,8 @@ export class GameRoom implements BrothersFinder {
             gameRoom.mapSizeInCells.bind(gameRoom),
             // The antelopes of the life of the land graze the meadow.
             () => aquaticLife.grazers(),
+            // The grass dries by the conditions of the room.
+            () => fireDanger(fireConditions.conditions(), fireConditions.thresholds()),
         );
         gameRoom.meadow = meadow;
         await meadow.restore();
