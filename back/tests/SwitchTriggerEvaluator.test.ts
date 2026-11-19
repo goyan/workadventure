@@ -30,13 +30,16 @@ function createHarness(entities: Record<string, unknown>, areas: unknown[] = [ro
         written.push([entityId, value]);
         return "set" as const;
     });
+    const animals: { x: number; y: number }[] = [];
     const evaluator = new SwitchTriggerEvaluator(
         { getWam: () => wam, getUsers: getUsers as never },
         { setAutomatic },
         () => time,
+        () => animals,
     );
     return {
         evaluator,
+        animals,
         wam,
         written,
         getUsers,
@@ -468,5 +471,35 @@ describe("SwitchTriggerEvaluator, hours on a map that has a place", () => {
 
         expect(none.tick()).toEqual([["l1", "false"]]);
         expect(chosenBefore.tick()).toEqual([["l1", "false"]]);
+    });
+});
+
+describe("SwitchTriggerEvaluator, the animals of the life of the land", () => {
+    const near = { type: "presence", scope: "proximity", tiles: 3, offDelay: 0 };
+
+    it("lights the lamps when an animal the server runs stands in the room, and puts them out once it left", () => {
+        const h = createHarness({ ...sensor("s", { ...inRoom, offDelay: 0 }, ["l1"]), ...lamps("l1") });
+        expect(h.tick()).toEqual([["l1", "false"]]);
+        h.animals.push({ x: 100, y: 100 });
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "true"]]);
+        h.animals.length = 0;
+        h.animals.push({ x: 900, y: 900 });
+        h.advance(1);
+        expect(h.tick()).toEqual([["l1", "false"]]);
+    });
+
+    it("does not sense such an animal from a sensor of a raised floor", () => {
+        const raised = createHarness({ ...sensor("s", near, ["l1"], { x: 160, y: 160 }, 64), ...lamps("l1") }, []);
+        raised.tick();
+        raised.animals.push({ x: 176, y: 176 });
+        raised.advance(1);
+        expect(raised.tick()).toEqual([]);
+        // The same sensor on the ground senses it.
+        const ground = createHarness({ ...sensor("s", near, ["l1"]), ...lamps("l1") }, []);
+        ground.tick();
+        ground.animals.push({ x: 176, y: 176 });
+        ground.advance(1);
+        expect(ground.tick()).toEqual([["l1", "true"]]);
     });
 });

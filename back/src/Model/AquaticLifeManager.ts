@@ -416,6 +416,15 @@ export class AquaticLifeManager {
         if (this.steps % STEPS_PER_SAVE === 0) this.save();
     }
 
+    /** Where the animals of the land are, in map pixels: the presence sensors of the map sense them. */
+    public landAnimals(): { x: number; y: number }[] {
+        const positions: { x: number; y: number }[] = [];
+        for (const animal of this.population.animals) {
+            if (SPECIES[animal.kind].habitat === "land") positions.push({ x: animal.x, y: animal.y });
+        }
+        return positions;
+    }
+
     /** All the animals of the room, for a player who joins it. Undefined when there is none. */
     public snapshot(): AquaticLifeMessage | undefined {
         return this.population.animals.length > 0 ? this.message(true) : undefined;
