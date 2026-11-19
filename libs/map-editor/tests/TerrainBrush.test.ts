@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     capThickness,
+    discWeight,
     defaultForcePx,
     chunkedChanges,
     MAX_STROKE_CELLS,
@@ -108,5 +109,68 @@ describe("terrain brush", () => {
         // A usual stroke is one command; no change, no command.
         expect(chunkedChanges(strokeChanges(undefined, centre, dig, everywhere))).toHaveLength(1);
         expect(chunkedChanges(new Map())).toEqual([]);
+    });
+});
+
+// Flattening towards 20 px under the ground, 16 px at most by stroke, with the same sphere.
+const flatten = { diameterTiles: 4, forcePx: 16, maxDepthTiles: 2, mode: "flatten" as const, targetPx: -20 };
+const smooth = { diameterTiles: 4, forcePx: 32, maxDepthTiles: 2, mode: "smooth" as const };
+
+describe("terrain brush, flattening", () => {
+    it("weighs the whole middle of the disc the same, down to nothing at the rim", () => {
+        expect(discWeight(0, 64)).toBe(1);
+        expect(discWeight(32, 64)).toBe(1);
+        expect(discWeight(48, 64)).toBeCloseTo(0.875);
+        expect(discWeight(64, 64)).toBe(0);
+        expect(discWeight(90, 64)).toBe(0);
+    });
+
+    it("brings the ground towards the level asked, a force at most by stroke, and stops there", () => {
+        const first = strokeChanges(undefined, centre, flatten, everywhere);
+        expect(first.get(cellKey(12, 12))).toBe(-16);
+        // 32 px away: as much as at the centre, so the bottom is flat. 48 px away: less, so the bank is a slope.
+        expect(first.get(cellKey(14, 12))).toBe(-16);
+        expect(first.get(cellKey(15, 12))).toBe(-14);
+        const second = strokeChanges(withHeights(undefined, first), centre, flatten, everywhere);
+        expect(second.get(cellKey(12, 12))).toBe(-20);
+        const third = strokeChanges(withHeights(withHeights(undefined, first), second), centre, flatten, everywhere);
+        expect(third.has(cellKey(12, 12))).toBe(false);
+    });
+
+    it("fills what is deeper than the level asked", () => {
+        const terrain = withHeights(undefined, new Map([[cellKey(12, 12), -40]]));
+        expect(strokeChanges(terrain, centre, flatten, everywhere).get(cellKey(12, 12))).toBe(-24);
+    });
+
+    it("never digs under the maximum depth of the map, nor where the ground may not be dug", () => {
+        const deep = { ...flatten, targetPx: -100 };
+        const terrain = withHeights(undefined, new Map([[cellKey(12, 12), -60]]));
+        expect(strokeChanges(terrain, centre, deep, everywhere).get(cellKey(12, 12))).toBe(-64);
+        expect(strokeChanges(undefined, centre, flatten, () => false).size).toBe(0);
+    });
+
+    it("does nothing without a level to reach", () => {
+        expect(strokeChanges(undefined, centre, { ...flatten, targetPx: undefined }, everywhere).size).toBe(0);
+    });
+});
+
+describe("terrain brush, smoothing", () => {
+    it("leaves level ground as it is", () => {
+        expect(strokeChanges(undefined, centre, smooth, everywhere).size).toBe(0);
+    });
+
+    it("brings a cell to the mean of itself and its eight neighbours", () => {
+        const terrain = withHeights(undefined, new Map([[cellKey(12, 12), -27]]));
+        const changes = strokeChanges(terrain, centre, smooth, everywhere);
+        expect(changes.get(cellKey(12, 12))).toBe(-3);
+        expect(changes.get(cellKey(13, 12))).toBe(-3);
+        // Two cells away, the pit is not a neighbour.
+        expect(changes.has(cellKey(14, 12))).toBe(false);
+    });
+
+    it("goes half the way at half the full force", () => {
+        const terrain = withHeights(undefined, new Map([[cellKey(12, 12), -27]]));
+        const changes = strokeChanges(terrain, centre, { ...smooth, forcePx: 16 }, everywhere);
+        expect(changes.get(cellKey(12, 12))).toBe(-15);
     });
 });

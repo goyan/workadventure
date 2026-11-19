@@ -12,6 +12,12 @@ export const terrainBrushStore = writable<TerrainBrush>(DEFAULT_TERRAIN_BRUSH);
 /** Whether the pointer is over ground that may not be dug (indoors, under a wall): the panel says why nothing happens. */
 export const terrainBlockedStore = writable(false);
 
+/** The height of the ground under the pointer of the relief tool, in pixels of altitude; undefined off the map. */
+export const terrainHoverHeightStore = writable<number | undefined>(undefined);
+
+/** Whether the relief tool draws the contour lines of the relief (for the one who edits only). */
+export const terrainContoursStore = writable(true);
+
 /** What comes into the water of the map and goes out of it, as the server last told (the dashboard of the relief tool). */
 export const terrainWaterStatsStore = writable<TerrainWaterStatsMessage | undefined>(undefined);
 

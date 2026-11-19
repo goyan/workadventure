@@ -3,18 +3,27 @@ import type { BrushSettings, TerrainData } from "@workadventure/map-editor";
 
 /** What the panel of the relief tool sets: the force is automatic (an eighth of the diameter) until chosen. */
 export interface TerrainBrush {
-    mode: "dig" | "fill";
+    mode: BrushSettings["mode"];
     diameterTiles: number;
     forcePx: number | undefined;
+    /**
+     * The height the flatten mode brings the ground to, in pixels of altitude. Absent: the height of the ground where
+     * the stroke starts.
+     */
+    targetPx?: number;
 }
 
-/** The brush as the relief works with it, with the maximum depth of the map. */
-export function brushSettingsOf(brush: TerrainBrush, maxDepthTiles: number): BrushSettings {
+/**
+ * The brush as the relief works with it, with the maximum depth of the map. `startHeightPx` is the height of the
+ * ground where the stroke starts: what the flatten mode brings the ground to, unless the panel sets a level.
+ */
+export function brushSettingsOf(brush: TerrainBrush, maxDepthTiles: number, startHeightPx = 0): BrushSettings {
     return {
         mode: brush.mode,
         diameterTiles: brush.diameterTiles,
         forcePx: brush.forcePx ?? defaultForcePx(brush.diameterTiles),
         maxDepthTiles,
+        ...(brush.mode === "flatten" ? { targetPx: brush.targetPx ?? startHeightPx } : {}),
     };
 }
 

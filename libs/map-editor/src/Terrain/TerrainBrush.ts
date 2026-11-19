@@ -10,8 +10,17 @@ export interface BrushSettings {
     forcePx: number;
     /** How deep the map may be dug, in tiles. */
     maxDepthTiles: number;
-    mode: "dig" | "fill";
+    /**
+     * dig and fill take off or put back a cap; flatten brings the ground towards `targetPx`; smooth brings each cell
+     * towards the mean of its neighbours.
+     */
+    mode: "dig" | "fill" | "flatten" | "smooth";
+    /** The height the flatten mode brings the ground to, in pixels of altitude (0 the ground, negative under it). */
+    targetPx?: number;
 }
+
+/** The force at which the smooth mode brings a cell all the way to the mean of its neighbours in one stroke. */
+export const FULL_SMOOTH_FORCE_PX = 32;
 
 /** The force of a brush left on automatic: an eighth of its diameter. */
 export function defaultForcePx(diameterTiles: number): number {
@@ -22,6 +31,24 @@ export function defaultForcePx(diameterTiles: number): number {
 export function capThickness(distancePx: number, radiusPx: number, forcePx: number): number {
     if (!(distancePx < radiusPx)) return 0;
     return forcePx * (1 - (distancePx / radiusPx) ** 2);
+}
+
+/**
+ * How much of the force the flatten and smooth modes apply this far from the centre of the brush: all of it over the
+ * middle of the disc (so that a bottom comes out flat), down to nothing at its rim (so that its bank is a slope).
+ */
+export function discWeight(distancePx: number, radiusPx: number): number {
+    if (!(distancePx < radiusPx)) return 0;
+    return Math.min(1, 2 * (1 - (distancePx / radiusPx) ** 2));
+}
+
+/** The mean height of a cell and its eight neighbours. */
+function meanAround(terrain: TerrainData | undefined, cellX: number, cellY: number): number {
+    let sum = 0;
+    for (let y = cellY - 1; y <= cellY + 1; y++) {
+        for (let x = cellX - 1; x <= cellX + 1; x++) sum += heightAt(terrain, x, y);
+    }
+    return sum / 9;
 }
 
 /** The most cells one command may change: the changes of a longer stroke are sent in several (chunkedChanges). */
@@ -70,6 +97,8 @@ export function strokeChanges(
     const changes = new Map<string, number>();
     if (!usable(settings)) return changes;
     const radius = (settings.diameterTiles * TILE_PX) / 2;
+    const shaped = settings.mode === "flatten" || settings.mode === "smooth";
+    if (settings.mode === "flatten" && !Number.isFinite(settings.targetPx)) return changes;
     const thickest = new Map<string, number>();
     let lastCell: string | undefined;
     for (const point of sampled(path)) {
@@ -87,7 +116,9 @@ export function strokeChanges(
                     (cellX + 0.5) * TERRAIN_CELL - centreX,
                     (cellY + 0.5) * TERRAIN_CELL - centreY,
                 );
-                const thickness = capThickness(distance, radius, settings.forcePx);
+                const thickness = shaped
+                    ? settings.forcePx * discWeight(distance, radius)
+                    : capThickness(distance, radius, settings.forcePx);
                 if (thickness <= 0) continue;
                 const key = cellKey(cellX, cellY);
                 if (thickness > (thickest.get(key) ?? 0)) thickest.set(key, thickness);
@@ -99,12 +130,26 @@ export function strokeChanges(
         const { x, y } = cellOf(key);
         if (!allowed(x, y)) continue;
         const current = heightAt(terrain, x, y);
-        const next =
-            settings.mode === "dig"
-                ? // What is already deeper than the maximum stays as it is.
-                  Math.min(current, Math.max(floor, Math.round(current - thickness)))
-                : Math.min(0, Math.round(current + thickness));
-        if (next !== current) changes.set(key, next);
+        let next: number;
+        if (settings.mode === "dig") {
+            // What is already deeper than the maximum stays as it is.
+            next = Math.min(current, Math.max(floor, Math.round(current - thickness)));
+        } else if (settings.mode === "fill") {
+            next = Math.min(0, Math.round(current + thickness));
+        } else if (settings.mode === "flatten") {
+            const target = Math.min(0, Math.max(floor, settings.targetPx ?? 0));
+            next =
+                current > target
+                    ? Math.max(target, Math.round(current - thickness))
+                    : // What is deeper than the level asked (and than the maximum, even) is filled up to it.
+                      Math.min(target, Math.round(current + thickness));
+        } else {
+            const blend = Math.min(1, thickness / FULL_SMOOTH_FORCE_PX);
+            next = Math.round(current + (meanAround(terrain, x, y) - current) * blend);
+            // Smoothing digs no deeper than the map allows: the rim of a hollow at its maximum is left as it is.
+            if (next < current) next = Math.min(current, Math.max(floor, next));
+        }
+        if (next !== current) changes.set(key, next === 0 ? 0 : next);
     }
     return changes;
 }
