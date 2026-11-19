@@ -136,4 +136,19 @@ describe("getObjectInteraction cache", () => {
         expect(getObjectInteraction(seat, undefined).trigger).toBe("auto");
         expect(getObjectInteraction(seat, { seats: { interaction: "sit", trigger: "key" } }).trigger).toBe("key");
     });
+
+    it("answers again when the same object is given another seat box, name or tags", () => {
+        const chair = object(["Furniture"], "Big shelf");
+        expect(getObjectInteraction(chair, undefined).interaction).toBe("none");
+        const sittable = Object.assign(chair, { sittable: true });
+        expect(getObjectInteraction(sittable, undefined).interaction).toBe("sit");
+        sittable.tags = ["Seats"];
+        sittable.sittable = false;
+        expect(getObjectInteraction(sittable, undefined).interaction).toBe("none");
+    });
+
+    it("gives the very same answer for the same object, without computing it again", () => {
+        const seat = object(["Seats"]);
+        expect(getObjectInteraction(seat, undefined)).toBe(getObjectInteraction(seat, undefined));
+    });
 });
