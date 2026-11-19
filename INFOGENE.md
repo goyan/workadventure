@@ -2446,6 +2446,10 @@ animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
 - Durée de 6 s pour les proies choisie sur 4 h simulées et trois graines : à 20 s les antilopes s'éteignaient deux
   fois sur trois (les lions pêchent déjà au bord de l'eau).
 
+**Planche de l'antilope.** Comme le lion et le tigre, l'antilope prend la planche du catalogue des animaux quand la
+carte l'a (objet `…:antilope:…` avec une planche `wander`, `landSheetOf` dans `Life/LandSprites.ts`) : marche animée
+dans les quatre directions. Sans elle, le petit dessin fait en code reste affiché.
+
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se
 retrouver ; les prédateurs sont limités par leur plafond plus que par la faim (les poissons leur servent de repli).
