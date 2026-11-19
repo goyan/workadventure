@@ -1,4 +1,4 @@
-import { METEOR_COOLDOWN_MS, METEOR_FALL_MS, METEORS_PER_ROOM } from "@workadventure/map-editor";
+import { METEOR_COOLDOWN_MS, METEOR_FALL_MS, meteorShape, METEORS_PER_ROOM } from "@workadventure/map-editor";
 import { CatastropheKind } from "@workadventure/messages";
 import type { GameRoom } from "./GameRoom";
 
@@ -18,12 +18,15 @@ export class CatastropheManager {
         private readonly room: Pick<GameRoom, "sendSubMessageToRoom">,
         /** The size of the map in pixels; undefined until it is read. */
         private readonly mapSize: () => { width: number; height: number } | undefined,
-        private readonly strike: (x: number, y: number) => void,
+        private readonly strike: (x: number, y: number, radiusTiles: number) => void,
         private readonly now: () => number = Date.now,
     ) {}
 
-    /** A player launches a catastrophe at a point of the map (pixels). False when it is refused. */
-    public launch(userId: number, kind: CatastropheKind, x: number, y: number): boolean {
+    /**
+     * A player launches a catastrophe at a point of the map (pixels): a meteor whose crater is `radiusTiles` wide,
+     * kept within what a meteor may be. False when it is refused.
+     */
+    public launch(userId: number, kind: CatastropheKind, x: number, y: number, radiusTiles: number): boolean {
         if (this.stopped || kind !== CatastropheKind.CATASTROPHE_METEOR) return false;
         const size = this.mapSize();
         if (!size || !Number.isFinite(x) || !Number.isFinite(y)) return false;
@@ -33,16 +36,17 @@ export class CatastropheManager {
         if (last !== undefined && now - last < METEOR_COOLDOWN_MS) return false;
         if (this.inFlight.size >= METEORS_PER_ROOM) return false;
         this.lastLaunch.set(userId, now);
+        const tiles = meteorShape(radiusTiles).radiusTiles;
         this.room.sendSubMessageToRoom({
             message: {
                 $case: "catastropheMessage",
-                catastropheMessage: { id: this.nextId++, kind, x, y, impactInMs: METEOR_FALL_MS },
+                catastropheMessage: { id: this.nextId++, kind, x, y, impactInMs: METEOR_FALL_MS, radiusTiles: tiles },
             },
         });
         const timer = setTimeout(() => {
             this.inFlight.delete(timer);
             try {
-                this.strike(x, y);
+                this.strike(x, y, tiles);
             } catch (error) {
                 console.error("A meteor of the map could not strike", error);
             }

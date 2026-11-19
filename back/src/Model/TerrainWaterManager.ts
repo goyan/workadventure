@@ -6,6 +6,7 @@ import {
     DEFAULT_WATER_SETTINGS,
     gridBoundsOf,
     LITRES_PER_M3,
+    meteorShape,
     rainRateAt,
     startImpactWave,
     ratesOf,
@@ -221,13 +222,18 @@ export class TerrainWaterManager {
     }
 
     /**
-     * A meteor lands at a point of the map (pixels): the water of its crater is thrown out, and a wave carries it to
+     * A meteor lands at a point of the map (pixels), its crater `radiusTiles` wide: its water is thrown out, and a wave carries it to
      * the shores, step after step. The room is told at once. Nothing on a map without water.
      */
-    public strike(x: number, y: number): void {
+    public strike(x: number, y: number, radiusTiles: number): void {
         const grid = this.grid;
         if (!grid) return;
-        const started = startImpactWave(grid, Math.floor(x / TERRAIN_CELL), Math.floor(y / TERRAIN_CELL));
+        const started = startImpactWave(
+            grid,
+            Math.floor(x / TERRAIN_CELL),
+            Math.floor(y / TERRAIN_CELL),
+            meteorShape(radiusTiles),
+        );
         if (!started) return;
         this.waves.push(started.wave);
         this.sums.sourcesPx += started.addedPx;

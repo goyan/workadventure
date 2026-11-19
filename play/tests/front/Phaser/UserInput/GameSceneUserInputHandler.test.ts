@@ -32,7 +32,11 @@ import {
     fishingContestStore,
     rodEquippedStore,
 } from "../../../../src/front/Stores/FishingStore";
-import { catastrophePanelStore, toggleArmedCatastrophe } from "../../../../src/front/Stores/CatastropheStore";
+import {
+    catastrophePanelStore,
+    meteorRadiusTilesStore,
+    toggleArmedCatastrophe,
+} from "../../../../src/front/Stores/CatastropheStore";
 import type { RoomConnection } from "../../../../src/front/Connection/RoomConnection";
 import { torchEquippedStore } from "../../../../src/front/Stores/TorchStore";
 import type { TorchManager } from "../../../../src/front/Phaser/Game/Torch/TorchManager";
@@ -705,8 +709,17 @@ describe("GameSceneUserInputHandler pointer navigation", () => {
             arm();
             handler.handlePointerUpEvent(pointer(0, 1), []);
 
-            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640]]);
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 4]]);
             expect(scene.moveTo.mock.calls).toEqual([]);
+        });
+
+        it("launches the meteor of the size chosen in the panel", () => {
+            arm();
+            meteorRadiusTilesStore.set(12);
+            handler.handlePointerUpEvent(pointer(0, 1), []);
+            meteorRadiusTilesStore.set(4);
+
+            expect(launch.mock.calls).toEqual([[CatastropheKind.CATASTROPHE_METEOR, 480, 640, 12]]);
         });
 
         it("takes the click before an activatable object", () => {

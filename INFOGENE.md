@@ -3188,10 +3188,16 @@ est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de 
 Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
 et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus du voile de nuit et de la météo (`DEPTH_NIGHT_INDEX + 2`).
 
-**Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (rayon 8 cellules de 16 px, soit 4 cases) et confie
+**Taille du météore.** Le widget a un curseur : rayon du cratère de **2 à 24 cases** (4 par défaut, gardé pour la
+session). Le navigateur l'envoie avec la demande (`radiusTiles`), le serveur le ramène dans ces bornes
+(`meteorShape`) et l'annonce à la salle. Tout en découle : volume d'eau déplacé (surface du cratère × profondeur), eau
+apportée, portée de l'onde (6 fois le rayon du cratère, entre 64 et 240 cellules), taille de l'ombre, du météore, de
+la gerbe et des cercles.
+
+**Ce que fait l'eau.** À l'impact, le serveur vide le **cratère** (pour la taille par défaut : rayon 8 cellules de 16 px, soit 4 cases) et confie
 cette eau, **plus 8 px apportés par cellule du cratère**, à une **onde** (`Catastrophe/ImpactWave.ts`) dont le front
 avance d'une cellule à chaque pas de l'eau (10 par seconde, donc 5 cases par seconde), jusqu'à 64 cellules (32 cases)
-de l'impact. En eau profonde (8 px et plus) chaque cellule que le front atteint ne garde qu'une houle de 0,5 px ; le
+de l'impact pour la taille par défaut. En eau profonde (8 px et plus) chaque cellule que le front atteint ne garde qu'une houle de 0,5 px ; le
 sol sec ou peu mouillé reçoit le reste, jusqu'au niveau d'eau le plus haut permis : c'est la rive qui est inondée,
 même loin de l'impact. L'onde ne traverse aucun mur. À sa fin, l'eau qui n'a trouvé aucune rive retombe dans le
 cratère ; ce qui n'y tient pas est perdu. L'eau apportée est comptée dans les **sources** du bilan de l'eau, l'eau
@@ -3210,8 +3216,8 @@ long du cercle, `wetStretches`) : sur la terre le cercle s'interrompt.
 numérique, un joueur qui a lancé il y a moins de **3 s**, plus de **5 météores en vol** dans la salle, une taille de
 carte pas encore lue. Accepté, le serveur annonce à toute la salle `CatastropheMessage {id, kind, x, y, impactInMs}`
 (une fois), et frappe l'eau 1,2 s plus tard ; chaque navigateur dessine la chute à partir de ce temps restant. Valeurs
-uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_DISC_CELLS` 8,
-`METEOR_WAVE_CELLS` 64, `METEOR_CREST_PX` 0,5, `METEOR_DEEP_PX` 8, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
+uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_MIN_TILES` 2, `METEOR_MAX_TILES` 24,
+`METEOR_DEFAULT_TILES` 4, `METEOR_CREST_PX` 0,5, `METEOR_DEEP_PX` 8, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
 l'impact est journalisée et n'arrête ni `back` ni l'eau de la salle.
 
 **Ce que ça ne fait pas.** Ni le relief, ni les avatars, ni les animaux, ni les objets ne sont touchés (le météore

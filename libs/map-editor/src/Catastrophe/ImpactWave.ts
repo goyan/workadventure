@@ -1,17 +1,14 @@
 import type { WaterGrid } from "../Terrain/WaterGrid";
-import {
-    METEOR_ADDED_PX,
-    METEOR_CREST_PX,
-    METEOR_DEEP_PX,
-    METEOR_DISC_CELLS,
-    METEOR_WAVE_CELLS,
-    METEOR_WAVE_CELLS_PER_STEP,
-} from "./Meteor";
+import { METEOR_ADDED_PX, METEOR_CREST_PX, METEOR_DEEP_PX, METEOR_WAVE_CELLS_PER_STEP } from "./Meteor";
+import type { MeteorShape } from "./Meteor";
 
 /** The wave an impact sends out: where it started, how far its front is, and the water it still carries. */
 export interface ImpactWave {
     cellX: number;
     cellY: number;
+    /** The crater it left and how far it goes, in cells. */
+    discCells: number;
+    waveCells: number;
     /** The front of the wave, in cells from the impact. */
     radius: number;
     /** The water the wave carries, in pixels of water over one cell. */
@@ -26,11 +23,22 @@ export function startImpactWave(
     grid: WaterGrid,
     cellX: number,
     cellY: number,
+    shape: MeteorShape,
 ): { wave: ImpactWave; addedPx: number } | undefined {
-    const crater = grid.takeDisc(cellX, cellY, METEOR_DISC_CELLS);
+    const crater = grid.takeDisc(cellX, cellY, shape.discCells);
     if (!crater) return undefined;
     const addedPx = METEOR_ADDED_PX * crater.cells;
-    return { wave: { cellX, cellY, radius: METEOR_DISC_CELLS, carriedPx: crater.takenPx + addedPx }, addedPx };
+    return {
+        wave: {
+            cellX,
+            cellY,
+            discCells: shape.discCells,
+            waveCells: shape.waveCells,
+            radius: shape.discCells,
+            carriedPx: crater.takenPx + addedPx,
+        },
+        addedPx,
+    };
 }
 
 /**
@@ -39,7 +47,7 @@ export function startImpactWave(
  * lost (`lostPx`). The grid it runs on may be another one than at the step before: the wave only keeps where it is.
  */
 export function advanceImpactWave(grid: WaterGrid, wave: ImpactWave): { done: boolean; lostPx: number } {
-    const front = Math.min(METEOR_WAVE_CELLS, wave.radius + METEOR_WAVE_CELLS_PER_STEP);
+    const front = Math.min(wave.waveCells, wave.radius + METEOR_WAVE_CELLS_PER_STEP);
     wave.carriedPx -= grid.layRing(
         wave.cellX,
         wave.cellY,
@@ -50,10 +58,10 @@ export function advanceImpactWave(grid: WaterGrid, wave: ImpactWave): { done: bo
         METEOR_DEEP_PX,
     );
     wave.radius = front;
-    if (wave.carriedPx > 1e-3 && front < METEOR_WAVE_CELLS) return { done: false, lostPx: 0 };
+    if (wave.carriedPx > 1e-3 && front < wave.waveCells) return { done: false, lostPx: 0 };
     const lostPx = Math.max(
         0,
-        wave.carriedPx - grid.layRing(wave.cellX, wave.cellY, -1, METEOR_DISC_CELLS, wave.carriedPx),
+        wave.carriedPx - grid.layRing(wave.cellX, wave.cellY, -1, wave.discCells, wave.carriedPx),
     );
     wave.carriedPx = 0;
     return { done: true, lostPx };

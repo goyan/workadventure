@@ -1,16 +1,18 @@
 import type { CatastropheMessage } from "@workadventure/messages";
-import { METEOR_FALL_MS } from "@workadventure/map-editor";
+import { METEOR_DEFAULT_TILES, METEOR_FALL_MS, meteorShape, TERRAIN_CELL } from "@workadventure/map-editor";
+import type { MeteorShape } from "@workadventure/map-editor";
 import { DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import { LAMP_MIN_FLASH_INTERVAL_MS } from "../Lamps/LampSignal";
 import { flashAllowed, meteorFrame, waveCircles, wetStretches } from "./MeteorFall";
 
-const SHADOW_RADIUS_PX = 48;
+/** The meteor of the usual size is drawn this wide; the others in proportion to their crater. */
 const METEOR_RADIUS_PX = 10;
 const METEOR_COLOR = 0xffb347;
 const TRAIL_SEGMENTS = 3;
 const FLASH_ALPHA = 0.6;
 const BURST_STROKES = 12;
-const BURST_RADIUS_PX = 96;
+/** The burst of an impact goes this many times the radius of the crater. */
+const BURST_REACH = 1.5;
 const WET_BURST_COLOR = 0x8fd3ff;
 const DRY_BURST_COLOR = 0x8a6a45;
 const WAVE_COLOR = 0xdff3ff;
@@ -22,6 +24,11 @@ const WAVE_MAX_SAMPLES = 360;
 interface Meteor {
     x: number;
     y: number;
+    /** Its crater and its wave, in cells, and the radius of its crater in map pixels. */
+    shape: MeteorShape;
+    craterPx: number;
+    /** How wide it is drawn next to the usual meteor. */
+    scale: number;
     /** When the meteor was launched, in ms of the game. */
     launchedAt: number;
     /** Whether the meteor falls into water: read when it is announced, before the impact empties its crater. */
@@ -52,9 +59,13 @@ export class MeteorView {
 
     /** `receivedAt` in ms of the game: the impact is `message.impactInMs` later. */
     public add(message: CatastropheMessage, receivedAt: number): void {
+        const shape = meteorShape(message.radiusTiles);
         this.meteors.push({
             x: message.x,
             y: message.y,
+            shape,
+            craterPx: shape.discCells * TERRAIN_CELL,
+            scale: shape.radiusTiles / METEOR_DEFAULT_TILES,
             launchedAt: receivedAt + message.impactInMs - METEOR_FALL_MS,
             wet: this.isWet(message.x, message.y),
             flashes: undefined,
@@ -72,7 +83,7 @@ export class MeteorView {
             const sinceLaunch = now - meteor.launchedAt;
             const frame = meteorFrame(sinceLaunch, METEOR_FALL_MS, reduced);
             // The circles of the wave run on the water long after the burst: none on dry ground, none in reduced motion.
-            const circles = meteor.wet && !reduced ? waveCircles(sinceLaunch - METEOR_FALL_MS) : [];
+            const circles = meteor.wet && !reduced ? waveCircles(sinceLaunch - METEOR_FALL_MS, meteor.shape) : [];
             if (frame.done && circles.length === 0) {
                 this.meteors.splice(index, 1);
                 continue;
@@ -104,25 +115,26 @@ export class MeteorView {
 
     private drawShadow(meteor: Meteor, scale: number): void {
         this.graphics.fillStyle(0x000000, 0.35);
-        const radius = SHADOW_RADIUS_PX * scale;
+        const radius = meteor.craterPx * scale;
         this.graphics.fillEllipse(meteor.x, meteor.y, radius * 2, radius);
     }
 
     private drawMeteor(meteor: Meteor, offset: { x: number; y: number }): void {
+        const size = METEOR_RADIUS_PX * meteor.scale;
         const length = Math.hypot(offset.x, offset.y);
         // The trail goes back along the way the meteor came from.
         const back = length > 0 ? { x: offset.x / length, y: offset.y / length } : { x: 0, y: 0 };
         for (let segment = TRAIL_SEGMENTS; segment >= 1; segment--) {
-            const distance = segment * METEOR_RADIUS_PX * 1.6;
+            const distance = segment * size * 1.6;
             this.graphics.fillStyle(METEOR_COLOR, 0.5 * (1 - segment / (TRAIL_SEGMENTS + 1)));
             this.graphics.fillCircle(
                 meteor.x + offset.x + back.x * distance,
                 meteor.y + offset.y + back.y * distance,
-                METEOR_RADIUS_PX * (1 - segment * 0.2),
+                size * (1 - segment * 0.2),
             );
         }
         this.graphics.fillStyle(METEOR_COLOR, 1);
-        this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, METEOR_RADIUS_PX);
+        this.graphics.fillCircle(meteor.x + offset.x, meteor.y + offset.y, size);
     }
 
     /** The circles of the wave, only where they lie on water: a wave does not run over the land. */
@@ -158,8 +170,8 @@ export class MeteorView {
     }
 
     private drawBurst(meteor: Meteor, burst: number, wet: boolean): void {
-        this.graphics.lineStyle(3, wet ? WET_BURST_COLOR : DRY_BURST_COLOR, 1 - burst);
-        const outer = BURST_RADIUS_PX * burst;
+        this.graphics.lineStyle(3 * Math.max(1, meteor.scale), wet ? WET_BURST_COLOR : DRY_BURST_COLOR, 1 - burst);
+        const outer = meteor.craterPx * BURST_REACH * burst;
         const inner = outer * 0.6;
         for (let stroke = 0; stroke < BURST_STROKES; stroke++) {
             const angle = (stroke / BURST_STROKES) * Math.PI * 2;

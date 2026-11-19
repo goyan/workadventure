@@ -1,10 +1,5 @@
-import {
-    METEOR_DISC_CELLS,
-    METEOR_WAVE_CELLS,
-    METEOR_WAVE_CELLS_PER_STEP,
-    TERRAIN_CELL,
-    WATER_STEP_MS,
-} from "@workadventure/map-editor";
+import { METEOR_WAVE_CELLS_PER_STEP, TERRAIN_CELL, WATER_STEP_MS } from "@workadventure/map-editor";
+import type { MeteorShape } from "@workadventure/map-editor";
 
 export interface MeteorFrame {
     /** 0.2 at launch, 1 at impact. */
@@ -51,19 +46,18 @@ const WAVE_CIRCLE_GAP_PX = 24;
 /** How strong each circle is next to the front: the front, then the two behind it. */
 const WAVE_CIRCLE_STRENGTHS = [1, 0.6, 0.35];
 const WAVE_FRONT_ALPHA = 0.7;
-/** How long the wave of the server runs: from the rim of the crater as far as it goes. */
-const WAVE_MS = ((METEOR_WAVE_CELLS - METEOR_DISC_CELLS) / METEOR_WAVE_CELLS_PER_STEP) * WATER_STEP_MS;
-
 /**
  * The circles of the wave an impact sends over the water, `sinceImpactMs` after it: the front, where the wave of the
- * server is at that time, and two fainter ones behind it, all fading as they go. Radii in map pixels. None before
+ * server is at that time for a meteor of that shape, and two fainter ones behind it, all fading as they go. Radii in map pixels. None before
  * the impact nor once the wave ended.
  */
-export function waveCircles(sinceImpactMs: number): { radius: number; alpha: number }[] {
-    if (sinceImpactMs < 0 || sinceImpactMs >= WAVE_MS) return [];
-    const cells = METEOR_DISC_CELLS + (sinceImpactMs / WATER_STEP_MS) * METEOR_WAVE_CELLS_PER_STEP;
+export function waveCircles(sinceImpactMs: number, shape: MeteorShape): { radius: number; alpha: number }[] {
+    // How long the wave of the server runs: from the rim of the crater as far as it goes.
+    const waveMs = ((shape.waveCells - shape.discCells) / METEOR_WAVE_CELLS_PER_STEP) * WATER_STEP_MS;
+    if (sinceImpactMs < 0 || sinceImpactMs >= waveMs) return [];
+    const cells = shape.discCells + (sinceImpactMs / WATER_STEP_MS) * METEOR_WAVE_CELLS_PER_STEP;
     const front = cells * TERRAIN_CELL;
-    const fade = 1 - sinceImpactMs / WAVE_MS;
+    const fade = 1 - sinceImpactMs / waveMs;
     return WAVE_CIRCLE_STRENGTHS.map((strength, index) => ({
         radius: front - index * WAVE_CIRCLE_GAP_PX,
         alpha: WAVE_FRONT_ALPHA * fade * strength,

@@ -31,7 +31,7 @@ import { isHumanAvatar } from "@wa/front/Phaser/Entity/MusicHeadphonesEffect";
 import { AvatarAction } from "@wa/front/Phaser/Entity/AvatarAction";
 import { Swimwear } from "@wa/front/Phaser/Entity/Swimwear";
 import { ENABLE_TILE_SNAP, WOKA_SPEED } from "@wa/front/Enum/EnvironmentVariable";
-import { armedCatastropheStore } from "@wa/front/Stores/CatastropheStore";
+import { armedCatastropheStore, meteorRadiusTilesStore } from "@wa/front/Stores/CatastropheStore";
 import { cameraDetachedStore } from "@wa/front/Stores/CameraStore";
 import { isKeyFromInteractiveElement } from "@wa/front/Utils/isKeyFromInteractiveElement";
 import { findShortcutAction } from "@wa/front/Stores/ShortcutsStore";
@@ -289,6 +289,7 @@ export class GameSceneUserInputHandler implements UserInputHandlerInterface {
             CatastropheKind.CATASTROPHE_METEOR,
             worldPoint.x,
             worldPoint.y,
+            get(meteorRadiusTilesStore),
         );
     }
 

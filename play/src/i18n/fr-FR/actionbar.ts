@@ -77,6 +77,8 @@ const actionbar: DeepPartial<Translation["actionbar"]> = {
     catastrophe: {
         label: "Catastrophe",
         meteor: "Météore",
+        size: "{tiles} cases",
+        sizeLabel: "Taille du météore : rayon du cratère, en cases",
         armedHelp: "Cliquez sur la carte · Échap pour annuler",
         idleHelp: "Choisissez une catastrophe",
     },

@@ -141,7 +141,7 @@ describe("TerrainWaterManager", () => {
         const { manager, sent } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();
         fillWithWater(manager);
-        manager.strike(240, 240);
+        manager.strike(240, 240, 4);
         expect(manager.getGrid()?.depthAt(15, 15)).toBe(0);
         expect(sent).toHaveLength(1);
         expect(sent[0].stats?.sources).toBeGreaterThan(0);
@@ -151,7 +151,7 @@ describe("TerrainWaterManager", () => {
         const { manager, sent, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();
         fillWithWater(manager);
-        manager.strike(240, 240);
+        manager.strike(240, 240, 4);
         const afterImpact = sent.length;
         steps(4);
         expect(sent.length - afterImpact).toBe(2);
@@ -166,7 +166,7 @@ describe("TerrainWaterManager", () => {
         const { manager, wam, sent, steps } = createHarness({ wam: wamWith(wideLake) });
         manager.mapChanged();
         fillWithWater(manager);
-        manager.strike(240, 240);
+        manager.strike(240, 240, 4);
         const afterImpact = sent.length;
         wam.terrain = undefined;
         manager.mapChanged();
@@ -177,7 +177,7 @@ describe("TerrainWaterManager", () => {
     it("a strike on a map without water does nothing", () => {
         const { manager, sent } = createHarness({ wam: wamWith(undefined) });
         manager.mapChanged();
-        manager.strike(24, 24);
+        manager.strike(24, 24, 4);
         expect(sent).toHaveLength(0);
     });
 
@@ -187,7 +187,7 @@ describe("TerrainWaterManager", () => {
         fillWithWater(manager);
         wam.terrain = undefined;
         manager.mapChanged();
-        manager.strike(240, 240);
+        manager.strike(240, 240, 4);
         expect(sent).toHaveLength(0);
     });
 

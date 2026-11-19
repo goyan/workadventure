@@ -827,6 +827,8 @@ message LaunchCatastropheMessage {
   CatastropheKind kind = 1;
   int32 x = 2;
   int32 y = 3;
+  // A meteor: the radius of its crater, in tiles. The server keeps it within what a meteor may be.
+  int32 radiusTiles = 4;
 }
 
 // Server to room: a catastrophe is on its way.
@@ -836,6 +838,8 @@ message CatastropheMessage {
   int32 x = 3;
   int32 y = 4;
   int32 impactInMs = 5;
+  // A meteor: the radius of its crater, in tiles, as the server kept it.
+  int32 radiusTiles = 6;
 }
 
 // A player casts their fishing line: where the float lands, in map pixels. The server decides whether it does

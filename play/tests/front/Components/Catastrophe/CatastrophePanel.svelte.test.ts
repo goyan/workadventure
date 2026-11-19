@@ -11,6 +11,8 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
                 meteor: label("Meteor"),
                 armedHelp: label("Click on the map · Esc to cancel"),
                 idleHelp: label("Pick a disaster"),
+                size: ({ tiles }: { tiles: number }) => `${tiles} tiles`,
+                sizeLabel: label("Size of the meteor: radius of its crater, in tiles"),
             },
         },
     });
@@ -20,6 +22,7 @@ vi.mock("../../../../src/i18n/i18n-svelte", () => {
 import CatastrophePanel from "../../../../src/front/Components/Catastrophe/CatastrophePanel.svelte";
 import {
     armedCatastropheStore,
+    meteorRadiusTilesStore,
     catastrophePanelStore,
     disarmCatastrophe,
 } from "../../../../src/front/Stores/CatastropheStore";
@@ -68,6 +71,21 @@ describe("CatastrophePanel", () => {
         expect(tile()?.getAttribute("aria-pressed")).toBe("true");
         expect(get(armedCatastropheStore)).toBe("meteor");
         expect(target.textContent).toContain("Click on the map · Esc to cancel");
+    });
+
+    it("chooses the size of the meteor, from 2 to 24 tiles", () => {
+        render();
+        const slider = target.querySelector<HTMLInputElement>('[data-testid="catastrophe-meteor-size"]');
+        expect(slider?.min).toBe("2");
+        expect(slider?.max).toBe("24");
+        expect(target.textContent).toContain("4 tiles");
+        if (!slider) throw new Error("no slider");
+        slider.value = "12";
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+        flushSync();
+        expect(get(meteorRadiusTilesStore)).toBe(12);
+        expect(target.textContent).toContain("12 tiles");
+        meteorRadiusTilesStore.set(4);
     });
 
     it("disarms on Escape", () => {

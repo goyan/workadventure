@@ -1,3 +1,4 @@
+import { meteorShape } from "@workadventure/map-editor";
 import { describe, expect, it } from "vitest";
 import {
     flashAllowed,
@@ -91,28 +92,37 @@ describe("flashAllowed", () => {
 });
 
 describe("waveCircles", () => {
+    const usual = meteorShape(4);
     // The crater is 8 cells of 16 px wide, the front moves one cell every 100 ms, as far as 64 cells.
     it("starts at the rim of the crater when the meteor lands", () => {
-        const circles = waveCircles(0);
+        const circles = waveCircles(0, usual);
         expect(circles[0].radius).toBe(128);
         expect(circles[0].alpha).toBeCloseTo(0.7, 5);
     });
 
     it("moves on with the wave of the server, followed by two fainter circles", () => {
-        const circles = waveCircles(1000);
+        const circles = waveCircles(1000, usual);
         expect(circles.map((circle) => circle.radius)).toEqual([288, 264, 240]);
         expect(circles[1].alpha).toBeLessThan(circles[0].alpha);
         expect(circles[2].alpha).toBeLessThan(circles[1].alpha);
     });
 
     it("fades as it goes and is gone once the wave ended", () => {
-        expect(waveCircles(4000)[0].alpha).toBeLessThan(waveCircles(1000)[0].alpha);
-        expect(waveCircles(5599)).toHaveLength(3);
-        expect(waveCircles(5600)).toEqual([]);
+        expect(waveCircles(4000, usual)[0].alpha).toBeLessThan(waveCircles(1000, usual)[0].alpha);
+        expect(waveCircles(5599, usual)).toHaveLength(3);
+        expect(waveCircles(5600, usual)).toEqual([]);
+    });
+
+    it("starts wider and runs further for a wider meteor", () => {
+        const huge = meteorShape(24);
+        expect(waveCircles(0, huge)[0].radius).toBe(768);
+        // 48 cells of crater, a wave as far as 240 cells: 192 steps of 100 ms.
+        expect(waveCircles(19199, huge)).toHaveLength(3);
+        expect(waveCircles(19200, huge)).toEqual([]);
     });
 
     it("has nothing to show before the impact", () => {
-        expect(waveCircles(-1)).toEqual([]);
+        expect(waveCircles(-1, usual)).toEqual([]);
     });
 });
 

@@ -72,6 +72,8 @@ const actionbar = {
     catastrophe: {
         label: "Disaster",
         meteor: "Meteor",
+        size: "{tiles} tiles",
+        sizeLabel: "Size of the meteor: radius of its crater, in tiles",
         armedHelp: "Click on the map · Esc to cancel",
         idleHelp: "Pick a disaster",
     },
