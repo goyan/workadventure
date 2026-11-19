@@ -3150,3 +3150,64 @@ reconnexion. Protocole : `StartFishingContestMessage {minutes}` (navigateur → 
 
 **Limites.** Un concours ne survit pas à un redémarrage du serveur. Après une reconnexion, sa propre ligne n'est plus
 mise en gras avant sa prise suivante. Pas d'annonce sonore ni de carte d'annonce à part : le panneau apparaît.
+
+## Catastrophes : le météore
+
+Conception et plan dans le dépôt d'infra, `docs/superpowers/{specs,plans}/2026-11-19-catastrophes-meteore*`. Lot 1 :
+le météore, qui ne touche que l'eau du relief.
+
+**En jeu.** Le menu des applications a un bouton « Catastrophe » qui montre ou cache un petit widget sous l'horloge
+(fermé à chaque chargement de page ; absent dans l'éditeur). Dans le widget, la tuile « Météore » **arme** le tir
+(un second clic sur la tuile le désarme ; fermer le widget ou ouvrir l'éditeur aussi) : le curseur devient un viseur
+et un **clic gauche sur la carte** (ou un toucher bref) lance le météore à cet endroit. **Échap** annule. Le glisser
+de la carte reste libre : seul un clic qui n'est pas un glissé tire, et il ne fait alors ni marcher, ni activer, ni
+choisir quoi que ce soit. Rien n'est tiré hors de la carte ni quand les commandes sont suspendues. Armé, le tir
+reste armé après chaque lancer.
+
+**Ce que tout le monde voit.** Une ombre qui grandit au sol pendant la chute (1,2 s), le météore qui arrive en
+diagonale avec sa traîne, un éclair blanc de 120 ms sur tout l'écran, puis une gerbe de 0,6 s : **bleue** si le sol
+est sous au moins 2 px d'eau à l'impact (d'après ce que ce navigateur sait de l'eau), **brune** (poussière) sinon.
+Pour qui a demandé moins de mouvement (`prefers-reduced-motion`) : ni éclair ni météore qui tombe, il reste l'ombre
+et la gerbe. Tout est dessiné par le navigateur, en code, dans un seul calque au-dessus de tout (`DEPTH_NIGHT_INDEX + 2`).
+
+**Ce que fait l'eau.** Le serveur vide le **disque** d'impact (rayon 6 cellules de 16 px), puis étale cette eau, **plus
+8 px apportés par cellule du disque**, à parts égales sur l'**anneau** autour du disque (jusqu'à 12 cellules). Une
+cellule de l'anneau ne reçoit pas plus que ce qui la ferait dépasser le niveau d'eau le plus haut permis (niveau de
+débordement + 18 px) : le reste est perdu. Les murs ne sont pas traversés (le disque et l'anneau se comptent par
+voisinage, sans mur ni sol bloqué) ; un impact sur une cellule fermée ou sans anneau ne fait rien. L'eau apportée est
+comptée dans les **sources** du bilan de l'eau, l'eau perdue dans les **pertes**. Ensuite c'est la simulation
+ordinaire qui la fait couler : l'eau n'est pas versée par `pour`, dont les parcelles redescendraient aussitôt dans le
+cratère. Sur une carte sans eau, rien.
+
+**Qui décide.** Le serveur (`back`, `CatastropheManager`) : le navigateur n'envoie que « météore ici »
+(`LaunchCatastropheMessage`, pixels de la carte). Refusés **sans rien dire** : un point hors de la carte ou non
+numérique, un joueur qui a lancé il y a moins de **3 s**, plus de **5 météores en vol** dans la salle, une taille de
+carte pas encore lue. Accepté, le serveur annonce à toute la salle `CatastropheMessage {id, kind, x, y, impactInMs}`
+(une fois), et frappe l'eau 1,2 s plus tard ; chaque navigateur dessine la chute à partir de ce temps restant. Valeurs
+uniques dans `libs/map-editor/src/Catastrophe/Meteor.ts` (`METEOR_FALL_MS` 1200, `METEOR_DISC_CELLS` 6,
+`METEOR_RING_CELLS` 12, `METEOR_ADDED_PX` 8, `METEOR_COOLDOWN_MS` 3000, `METEORS_PER_ROOM` 5). Une erreur à
+l'impact est journalisée et n'arrête ni `back` ni l'eau de la salle.
+
+**Ce que ça ne fait pas.** Ni le relief, ni les avatars, ni les animaux, ni les objets ne sont touchés (le météore
+ne creuse rien et ne tue personne directement) : seule l'eau bouge. Rien n'est écrit dans la carte (WAM) ni dans Redis, aucun réglage
+de carte. `map-storage` n'est pas concerné. Un météore en vol est perdu si `back` redémarre (ses minuteries ne sont
+pas gardées) ; le salon détruit les arrête. Un joueur qui entre pendant la chute ne voit que l'eau : l'annonce n'est
+envoyée qu'une fois, pas à l'entrée.
+
+**Technique.** `WaterGrid.splash` (`libs/map-editor/src/Terrain/WaterGrid.ts`) ; `TerrainWaterManager.strike`
+(compteurs, annonce aussitôt de l'eau) ; `back/src/Model/CatastropheManager.ts` (tenu par `GameRoom`,
+`launchCatastrophe`, `mapSizeInPixels`) ; `RoomManager.ts` (`launchCatastropheMessage`) ; pusher : `IoSocketController`
+transmet, `PusherRoom` relaie `catastropheMessage` à tous les auditeurs. Protocole : `CatastropheKind`,
+`LaunchCatastropheMessage` (65 du navigateur au pusher, 49 du pusher à `back`), `CatastropheMessage` (41 des
+sous-messages, 21 du back au pusher). Navigateur : `Phaser/Game/Catastrophe/{MeteorFall,MeteorView}.ts`,
+`Stores/CatastropheStore.ts`, `Components/Catastrophe/CatastrophePanel.svelte` (monté dans `MainLayout.svelte`),
+bouton dans `AppsMenuContent.svelte`, icône `meteor` de `PixelIcons.ts`, tir dans `GameSceneUserInputHandler.ts`
+(`launchArmedCatastrophe`), libellés `actionbar.catastrophe` en `fr-FR` et `en-US` seulement. `play` et `back` se
+déploient ensemble ; `map-storage` n'est pas concerné.
+
+**Limites connues.** L'eau est annoncée une fois par seconde : le navigateur la voit changer à l'annonce suivante,
+pas à l'éclair (la gerbe bleue ou brune est décidée avec ce qu'il sait déjà). Un poisson dans le disque vidé peut
+mourir à sec après 5 s. N'importe quel joueur peut inonder une carte à la longue (une rafale de 5 météores tous les
+3 s par joueur, avec 8 px apportés par cellule du disque). Pas de son. Rien n'a été vu à l'écran à l'écriture de
+cette section : widget, viseur, chute, éclair et gerbe ne sont validés que par les tests ; l'effet sur l'eau en jeu
+n'est pas vu.
