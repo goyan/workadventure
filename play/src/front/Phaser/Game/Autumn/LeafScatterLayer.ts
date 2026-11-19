@@ -1,5 +1,6 @@
 import { DEPTH_TILE_INDEX } from "../DepthIndexes";
 import type { WeatherView } from "../Weather/WeatherFrame";
+import { seenFromFar } from "../Weather/ScreenScale";
 import { scatteredLeavesInView } from "./LeafScatter";
 
 /** Above the floors (0.5) and the seasonal grass (0.6), below objects and avatars. */
@@ -13,12 +14,19 @@ export class LeafScatterLayer {
     private readonly graphics: Phaser.GameObjects.Graphics;
     private drawn: WeatherView | undefined;
 
-    constructor(scene: Phaser.Scene) {
+    constructor(private readonly scene: Phaser.Scene) {
         this.graphics = scene.add.graphics().setDepth(LEAF_SCATTER_DEPTH);
     }
 
     /** Returns true when it redrew. */
     update(view: WeatherView, isOutdoor: (x: number, y: number) => boolean, force: boolean): boolean {
+        // Seen from far a leaf is a pixel, and the view holds tens of thousands of them: none.
+        if (seenFromFar(this.scene)) {
+            if (!this.drawn) return false;
+            this.drawn = undefined;
+            this.graphics.clear();
+            return true;
+        }
         const drawn = this.drawn;
         if (
             !force &&

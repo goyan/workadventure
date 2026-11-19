@@ -70,6 +70,7 @@ import {
 import type { CloudPalette } from "./Clouds";
 import { SnowGround } from "./SnowGround";
 import { createBlockSurface } from "./BlockSurface";
+import { screenScale, seenFromFar } from "./ScreenScale";
 import type { BlockCanvasArea, BlockSurface } from "./BlockSurface";
 import { WeatherSounds } from "./WeatherSounds";
 
@@ -92,8 +93,6 @@ const DRAW_MARGIN = 0.1;
 const VEIL_STEP = 256;
 /** A veil of more rectangles than this is painted in the canvas of the clouds instead (see fillVeil). */
 const VEIL_MAX_RECTS = 96;
-/** Puddles are drawn from this many screen pixels a map pixel: under it, the map is seen from too far. */
-const PUDDLE_MIN_SCALE = 0.5;
 /**
  * The body of the clouds (their rim is fainter, cloudAlpha) and their shadows: shadows first, the clouds over them,
  * opaque enough to hide their own shadow and read as clouds, not mist.
@@ -595,7 +594,7 @@ export class WeatherManager {
         const size = this.rainSettings.puddles;
         // Seen from far a puddle is a dot, and the whole map holds so many of them that drawing them again at every
         // image took most of the time of an image: none under this scale.
-        if (wetness <= 0 || size <= 0 || this.screenScale() < PUDDLE_MIN_SCALE) {
+        if (wetness <= 0 || size <= 0 || seenFromFar(this.scene)) {
             this.lastPuddleKey = "";
             this.hidePuddles();
             return;
@@ -658,14 +657,8 @@ export class WeatherManager {
         return cloudZoomFade(this.screenScale(), this.cloudsHeight);
     }
 
-    /**
-     * Screen pixels a map pixel takes: the camera zoom over Phaser's display scale, which stretches the canvas while the
-     * camera stays at 1 (Retina screens). The camera zoom alone when the display scale is unknown.
-     */
     private screenScale(): number {
-        const zoom = this.scene.cameras.main.zoom;
-        const scale = zoom / this.scene.scale.displayScale.x;
-        return Number.isFinite(scale) && scale > 0 ? scale : zoom;
+        return screenScale(this.scene);
     }
 
     /** The flash of the last strike over everything outdoors, and its bolt (not when motion is reduced). */
