@@ -329,7 +329,7 @@ export class GameRoom implements BrothersFinder {
             gameRoom.entityStateManager,
             undefined,
             // The antelopes, lions and tigers the server runs are sensed like the avatars.
-            () => gameRoom.aquaticLife?.landAnimals() ?? [],
+            gameRoom.landAnimalPositions.bind(gameRoom),
         );
         gameRoom.switchTriggers = switchTriggers;
         switchTriggers.start();
@@ -1188,6 +1188,11 @@ export class GameRoom implements BrothersFinder {
             positions.push({ x, y });
         }
         return positions;
+    }
+
+    /** Where the animals of the land the server runs are, in map pixels: for the presence sensors. */
+    public landAnimalPositions(): { x: number; y: number }[] {
+        return this.aquaticLife?.landAnimals() ?? [];
     }
 
     /** Where a player of the room stands, for the animals they tamed; undefined once they left. */
