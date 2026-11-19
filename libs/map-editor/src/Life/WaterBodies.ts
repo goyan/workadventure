@@ -36,6 +36,15 @@ export interface Places {
     ): WaterCell | undefined;
     /** A random cell of the whole body for that level. Reads the whole place: for rare uses. */
     anyCell(body: number, level: number, random: () => number): WaterCell | undefined;
+    /** On land: the trees a lion or a tiger may live around, in map pixels, with their body. */
+    readonly homes?: readonly { x: number; y: number; body: number }[];
+    /**
+     * On land: the cell of the body nearest to a cell where an animal of that level stands beside water; of any
+     * body for -1.
+     */
+    shoreNear?(body: number, cellX: number, cellY: number, level: number): WaterCell | undefined;
+    /** On land: whether an animal standing on that cell is beside water it can drink. */
+    atShore?(cellX: number, cellY: number): boolean;
 }
 
 /**

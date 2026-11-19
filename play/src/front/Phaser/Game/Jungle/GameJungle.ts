@@ -9,6 +9,7 @@ import { jungleVolumeStore } from "../../../Stores/SoundEffectsStore";
 import type { Character } from "../../Entity/Character";
 import { CHARACTER_BODY_HEIGHT, CHARACTER_BODY_OFFSET_Y } from "../../Entity/Character";
 import type { GameScene } from "../GameScene";
+import { landSheetOf } from "../Life/LandSprites";
 import { InteractionPrompt } from "../Water/InteractionPrompt";
 import type { WanderingCharactersManager } from "../Wander/WanderingCharactersManager";
 import type { Point } from "../Wander/WanderSchedule";
@@ -143,12 +144,9 @@ export class GameJungle {
         });
     }
 
-    /** The sheet of a lion or of a tiger in the catalogues of the map, for the animals the server runs. */
+    /** The sheet of a species in the catalogues of the map, for the animals the server runs. */
     public sheetOf(species: "antelope" | "lion" | "tiger"): string | undefined {
-        const names = species === "lion" ? [":lion:"] : species === "tiger" ? [":tigre:", ":tiger:"] : [];
-        return this.loadedPrefabs.find(
-            (prefab) => prefab.wander !== undefined && names.some((name) => prefab.id.includes(name)),
-        )?.wander?.sheetPath;
+        return landSheetOf(species, this.loadedPrefabs);
     }
 
     public tamedAnimalCount(): number {

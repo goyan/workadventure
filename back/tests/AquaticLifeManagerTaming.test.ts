@@ -20,7 +20,7 @@ const lion = (id: number, x: number, y: number, more: Partial<Animal> = {}): Ani
 });
 
 /** A map of 60 × 40 dry cells whose land is alive, with the animals given already there. */
-async function harness(animals: Animal[]) {
+async function harness(animals: Animal[], random: () => number = () => 0.5) {
     const settings: Partial<LifeSettings> = { enabled: false, maxSpeed: 1.5, landEnabled: true };
     const wam: WAMFileFormat = {
         version: "2.1.0",
@@ -52,7 +52,7 @@ async function harness(animals: Animal[]) {
         { getGrid: () => undefined, waterVersion: () => 1 },
         { repository, roomUrl: "room" },
         () => clock.now,
-        () => 0.5,
+        random,
         () => [],
         () => ({ width: 60, height: 40 }),
         (userId) => masters.get(userId),
@@ -193,5 +193,40 @@ describe("AquaticLifeManager, the animals of the land for the sensors", () => {
     it("tells where the animals of the land are", async () => {
         const { manager } = await harness([lion(1, 200, 300)]);
         expect(manager.landAnimals()).toEqual([{ x: 200, y: 300 }]);
+    });
+});
+
+describe("AquaticLifeManager, drinking and the trees", () => {
+    it("tells the room an animal that drinks (state 3), and nothing for the others", async () => {
+        const { told } = await harness([lion(1, 200, 200, { drinkUntil: 1e13 }), lion(2, 400, 200)]);
+        expect(told(1)?.state).toBe(3);
+        expect(told(2)?.state).toBeUndefined();
+    });
+
+    it("gives the lions that come a tree of the map as their home", async () => {
+        const antelopes = Array.from(
+            { length: 8 },
+            (_, index): Animal => ({
+                id: 10 + index,
+                kind: "antelope",
+                sex: "male",
+                x: 100 + index * 20,
+                y: 500,
+                bornAt: START,
+                lifespanMs: 1e12,
+                readyAt: 1e13,
+            }),
+        );
+        // Every chance taken: the lions come at the first step.
+        const { steps, wam, saved } = await harness(antelopes, () => 0);
+        wam.entities = {
+            tree: { x: 600, y: 300, prefabRef: { collectionName: "Nature", id: "Nature:tree-oak:Default:Down" } },
+        } as unknown as typeof wam.entities;
+        // Saved every thirty seconds.
+        steps(60);
+        const state = JSON.parse(saved.state) as { animals: Animal[] };
+        const lions = state.animals.filter((one) => one.kind === "lion" || one.kind === "tiger");
+        expect(lions.length).toBeGreaterThan(0);
+        for (const one of lions) expect(one).toMatchObject({ homeX: 632, homeY: 364 });
     });
 });

@@ -1,4 +1,5 @@
 import { cellOf } from "../Terrain/TerrainGrid";
+import { TERRAIN_CELL } from "../types";
 import type { WaterWallSides } from "../Terrain/WaterGrid";
 import type { Places, WaterCell } from "./WaterBodies";
 
@@ -6,6 +7,8 @@ import type { Places, WaterCell } from "./WaterBodies";
 export const WADE_DEPTH_PX = 16;
 /** An antelope goes into less water than this: it keeps its feet dry. */
 export const DRY_LAND_PX = 2;
+/** An animal drinks from a cell that holds this much water at least, in pixels. */
+export const DRINK_DEPTH_PX = 2;
 
 /** What the land of a map is made of: its size in cells of the relief, its walls, and the water on it. */
 export interface LandInput {
@@ -15,6 +18,8 @@ export interface LandInput {
     walls: WaterWallSides;
     /** The water on a cell, in pixels (0 without any). */
     depthAt: (cellX: number, cellY: number) => number;
+    /** The trees of the map, in map pixels (see landTreesOf): those on the land are homes for the predators. */
+    trees?: readonly { x: number; y: number }[];
 }
 
 const SIDES = [
@@ -92,7 +97,48 @@ export function landPlacesOf(input: LandInput): Places {
     const bodyAt = (cellX: number, cellY: number): number => (inside(cellX, cellY) ? labels[cellY * width + cellX] : 0);
     const passable = (cellX: number, cellY: number, level: number): boolean =>
         bodyAt(cellX, cellY) !== 0 && depthAt(cellX, cellY) < level;
+    const homes: { x: number; y: number; body: number }[] = [];
+    for (const tree of input.trees ?? []) {
+        const body = bodyAt(Math.floor(tree.x / TERRAIN_CELL), Math.floor(tree.y / TERRAIN_CELL));
+        if (body !== 0) homes.push({ x: tree.x, y: tree.y, body });
+    }
+    const atShore = (cellX: number, cellY: number): boolean => {
+        if (bodyAt(cellX, cellY) === 0 || depthAt(cellX, cellY) >= DRY_LAND_PX) return false;
+        for (const [dx, dy] of SIDES) {
+            if (inside(cellX + dx, cellY + dy) && depthAt(cellX + dx, cellY + dy) >= DRINK_DEPTH_PX) return true;
+        }
+        return false;
+    };
+    // The cells of the land beside water, read the first time an animal is thirsty.
+    let shores: Int32Array | undefined;
+    const readShores = (): Int32Array => {
+        const found: number[] = [];
+        for (let index = 0; index < labels.length; index++) {
+            if (labels[index] !== 0 && atShore(index % width, Math.floor(index / width))) found.push(index);
+        }
+        return Int32Array.from(found);
+    };
     return {
+        homes,
+        atShore,
+        shoreNear: (body, cellX, cellY, level) => {
+            // Any piece of land for a body of -1 (a gull lands anywhere).
+            if (body === 0) return undefined;
+            shores ??= readShores();
+            let best: WaterCell | undefined;
+            let least = Number.POSITIVE_INFINITY;
+            for (const index of shores) {
+                if (body !== -1 && labels[index] !== body) continue;
+                const x = index % width;
+                const y = Math.floor(index / width);
+                const far = (x - cellX) ** 2 + (y - cellY) ** 2;
+                if (far < least && depthAt(x, y) < level) {
+                    least = far;
+                    best = { cellX: x, cellY: y };
+                }
+            }
+            return best;
+        },
         sizes,
         bodyAt,
         passable,

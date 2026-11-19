@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { AquaticLife } from "../../../../../src/front/Phaser/Game/Life/AquaticLife";
 import { directionOf, landFrame, LandLifeView } from "../../../../../src/front/Phaser/Game/Life/LandLifeView";
+import { drinkStance } from "../../../../../src/front/Phaser/Game/Wander/WanderDrink";
 import { isLandKind, landSpeciesOf } from "../../../../../src/front/Phaser/Game/Life/LandSprites";
 
 vi.mock("../../../../../src/front/Phaser/Game/Life/LandSprites", async (importOriginal) => ({
@@ -17,6 +18,8 @@ interface FakeSprite {
     flipX: boolean;
     frame: { name: number | string };
     destroyed: boolean;
+    angle: number;
+    scaleY: number;
 }
 
 /** A scene that keeps the sprites it is asked for; `sheets` are the sheets already loaded, with their columns. */
@@ -49,6 +52,16 @@ function createScene(sheets: Record<string, number> = {}) {
                     flipX: false,
                     frame: { name: -1 as number | string },
                     destroyed: false,
+                    angle: 0,
+                    scaleY: 1,
+                    setAngle: (angle: number) => {
+                        sprite.angle = angle;
+                        return sprite;
+                    },
+                    setScale: (_x: number, y: number) => {
+                        sprite.scaleY = y;
+                        return sprite;
+                    },
                     setOrigin: () => sprite,
                     setTexture: (next: string) => {
                         sprite.key = next;
@@ -293,5 +306,29 @@ describe("an animal that glides slowly", () => {
             flips.add(sprites[0].flipX);
         }
         expect([...flips]).toEqual([false]);
+    });
+});
+
+describe("LandLifeView, a drinking animal", () => {
+    it("bows to the water while the server says it drinks, and stands up again after", () => {
+        const { view, life, sprites } = createView();
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100, state: 3 }], 0);
+        view.update(0);
+        view.update(16);
+        // The image drawn here heads right: bowed that way.
+        expect(sprites[0].angle).toBe(drinkStance("right", 0, false).angle);
+        expect(sprites[0].angle).not.toBe(0);
+        life.receive([{ id: 1, kind: 4, x: 100, y: 100 }], 1000);
+        view.update(1016);
+        expect(sprites[0]).toMatchObject({ angle: 0, scaleY: 1, x: 100, y: 100 });
+    });
+
+    it("a tamed animal never bows: it follows its master", () => {
+        const { view, life, sprites } = createView({
+            lead: () => ({ x: 300, y: 200, direction: "right", moving: false }),
+        });
+        life.receive([{ id: 1, kind: 6, x: 100, y: 100, owner: 7, state: 3 }], 0);
+        view.update(0);
+        expect(sprites[0].angle).toBe(0);
     });
 });

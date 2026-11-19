@@ -2455,6 +2455,49 @@ animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
   (`AquaticLifeManager.landAnimals`, quatrième paramètre de `SwitchTriggerEvaluator`), au sol, comme un avatar ; pas
   de rapport du navigateur pour eux.
 
+**Soif et arbre d'attache.**
+
+- **Boire** (`stepPopulation`, `Life/LandPlaces.ts` : `shoreNear`, `atShore`) : une fois par « intervalle entre deux
+  boissons » (le réglage des animaux promeneurs), un animal de terre marche vers la rive la plus proche de sa terre
+  (une cellule sèche à côté d'une cellule d'au moins 2 px d'eau), y boit tête baissée, puis repart. Un lion ou un tigre
+  boit 20 s, une antilope 6 s. Pendant ce temps une antilope ne voit un lion ou un tigre qu'à 2 cases au lieu de 3 :
+  c'est là qu'elle se fait prendre. Dérangé, l'animal revient plus tôt (un quart d'intervalle). Sans eau trouvée en
+  une minute, il attend l'intervalle suivant. La première soif est répartie sur un intervalle d'après son identifiant.
+  Sur le fil : `AquaticAnimalMessage.state` = 3 ; à l'écran la pose de boisson des promeneurs (`drinkStance`).
+- **Arbre d'attache** (`Terrain/LandTrees.ts`) : le serveur lit les arbres `Nature:tree-…` posés au sol. Un couple de
+  lions ou de tigres arrive près d'un arbre de sa terre, qui devient son foyer (`Animal.homeX`, `homeY`) ; ses petits
+  en héritent. Hors chasse et hors soif, il se promène à 5 cases au plus de cet arbre, et y revient après une chasse.
+  Sans arbre sur la terre, rien ne change. Le serveur ne connaît pas la taille d'une image : le pied de l'arbre est
+  pris une case à droite et deux cases sous le coin de l'image, à une case près.
+- Durée de 6 s pour les proies choisie sur 4 h simulées et trois graines : à 20 s les antilopes s'éteignaient deux
+  fois sur trois (les lions pêchent déjà au bord de l'eau).
+
+**Planche de l'antilope.** Comme le lion et le tigre, l'antilope prend la planche du catalogue des animaux quand la
+carte l'a (objet `…:antilope:…` avec une planche `wander`, `landSheetOf` dans `Life/LandSprites.ts`) : marche animée
+dans les quatre directions. Sans elle, le petit dessin fait en code reste affiché.
+
+**Mouettes (vie de l'air).** Réglage de carte `life.gullsEnabled` (outil Vie, bloc « Vie de l'air », coupé par
+défaut ; sans effet si la vie de l'eau est coupée), trois durées : intervalle de pêche (45 s), délai de reproduction
+(5 min), durée de vie (30 min).
+
+- **Règles** (`Life/Gulls.ts`, appelées par `stepPopulation`) : un couple arrive au-dessus de tout plan d'eau qui peut
+  porter 20 poissons et en compte 15 ; une mouette pour 25 poissons de capacité, 16 par salle. Son eau est son foyer
+  (`homeX`, `homeY`). Affamée, elle vole droit, sans obstacle, vers le poisson le plus proche de son eau et le prend ;
+  sans poisson elle tourne au-dessus. Rassasiée, elle se pose sur la rive la plus proche (`perchedAt`). Posée depuis
+  3 s, elle s'envole d'un avatar à 3 cases ou d'un lion à 2 cases, et reste en l'air 10 s. Un lion affamé à moins
+  d'une cellule d'une mouette posée la mange : seulement si elle vient de se poser. Le tigre n'y touche pas. Un
+  couple rassasié (3 repas) posé ensemble a 1 ou 2 petits. Elle meurt de vieillesse ou de faim. Son eau disparue,
+  elle prend un autre plan d'eau de la carte. Les poissons ne la fuient pas.
+- **Fil** : espèce 5 (`kind` 10 et 11), `state` 1 en vol, 2 posée ; réglages `UpdateLifeSettingMessage` 15 à 18.
+- **Serveur** : la terre est lue aussi pour les mouettes (les rives), même terre coupée ; elles partent quand on les
+  coupe ou qu'on coupe l'eau ; les capteurs de présence ne les comptent pas.
+- **Navigateur** (`Life/GullLifeView.ts`, `GullSprites.ts`) : en vol, dessinée au-dessus de tout, 28 px au-dessus
+  d'une petite ombre au sol, ailes qui battent ; posée, au sol parmi les avatars. Masquée avec les poissons.
+- **Refuge des antilopes rares** (`SCARCE_PREY_SHARE`) : sur une terre, lions et tigres ne chassent plus les
+  antilopes quand il en reste moins d'un dixième de ce que la terre porte ; ils se rabattent sur les poissons. Sans
+  cela, des prédateurs qui ne manquent jamais de poissons tenaient les antilopes à zéro deux fois sur trois (4 h
+  simulées, trois graines). Une petite terre (moins de dix antilopes de capacité) n'a pas ce refuge.
+
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se
 retrouver ; les prédateurs sont limités par leur plafond plus que par la faim (les poissons leur servent de repli).

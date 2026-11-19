@@ -3,6 +3,7 @@ import {
     MAX_ANIMALS,
     MAX_ANTELOPES,
     MAX_DOLPHINS,
+    MAX_GULLS,
     MAX_LAND_PREDATORS,
     MEALS_FOR_CALF,
     STARVE_HUNTS,
@@ -11,11 +12,18 @@ import { DRY_LAND_PX, WADE_DEPTH_PX } from "./LandPlaces";
 import { DOLPHIN_DEPTH_PX, FISH_DEPTH_PX } from "./WaterBodies";
 
 /** The species the life of a map knows, in the order its rules go through them. */
-export const SPECIES_IDS = ["fish", "dolphin", "antelope", "lion", "tiger"] as const;
+export const SPECIES_IDS = ["fish", "dolphin", "antelope", "lion", "tiger", "gull"] as const;
 export type SpeciesId = (typeof SPECIES_IDS)[number];
 
 /** The number of a species in the messages. Never reuse one: the browsers and the saved histories keep them. */
-export const SPECIES_WIRE: Record<SpeciesId, number> = { fish: 0, dolphin: 1, antelope: 2, lion: 3, tiger: 4 };
+export const SPECIES_WIRE: Record<SpeciesId, number> = {
+    fish: 0,
+    dolphin: 1,
+    antelope: 2,
+    lion: 3,
+    tiger: 4,
+    gull: 5,
+};
 
 /** What the rules of the life need to know of a species. */
 export interface Species {
@@ -93,7 +101,8 @@ export const SPECIES: Record<SpeciesId, Species> = {
         habitat: "land",
         minDepthPx: 0,
         maxDepthPx: WADE_DEPTH_PX,
-        prey: ["antelope", "fish"],
+        // A gull only while it is landed (see Gulls): the tiger leaves them alone.
+        prey: ["antelope", "fish", "gull"],
         flees: [],
         fleeRadiusPx: 0,
         speedFactor: 1.6,
@@ -117,6 +126,21 @@ export const SPECIES: Record<SpeciesId, Species> = {
         starveHunts: STARVE_HUNTS,
         roomCap: MAX_LAND_PREDATORS,
         tamable: true,
+    },
+    gull: {
+        id: "gull",
+        // Over the water and the land alike: nothing stops it (see Gulls).
+        habitat: "air",
+        minDepthPx: 0,
+        prey: ["fish"],
+        flees: [],
+        fleeRadiusPx: 0,
+        speedFactor: 2,
+        litter: [1, 2],
+        mealsForYoung: 3,
+        starveHunts: STARVE_HUNTS,
+        roomCap: MAX_GULLS,
+        tamable: false,
     },
 };
 
