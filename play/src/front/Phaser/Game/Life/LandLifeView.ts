@@ -1,4 +1,5 @@
 import type * as Phaser from "phaser";
+import { drinkStance } from "../Wander/WanderDrink";
 import type { WanderDirection } from "../Wander/WanderSchedule";
 import { WANDER_FRAME_SIZE, WANDER_WALK_COLUMNS, wanderIdleFrame, wanderWalkFrames } from "../Wander/WanderSheet";
 import type { AquaticLife, ShownAnimal } from "./AquaticLife";
@@ -11,6 +12,8 @@ const MARGIN_PX = 48;
 const WALK_FRAME_MS = 150;
 /** Under this many pixels between two frames an animal stands still. */
 const STILL_PX = 0.05;
+/** The state the server tells for an animal that drinks. */
+const DRINKING = 3;
 /** A sheet of the catalogue has four rows of frames. */
 const SHEET_ROWS = 4;
 
@@ -43,6 +46,8 @@ interface Shown {
      */
     atX: number;
     atY: number;
+    /** Since when it drinks, undefined while it does not. */
+    drinkingSince: number | undefined;
 }
 
 type SceneOfView = Pick<Phaser.Scene, "add" | "cameras" | "textures" | "load"> & { markDirty(): void };
@@ -118,6 +123,7 @@ export class LandLifeView {
                     led: false,
                     atX: animal.x,
                     atY: animal.y,
+                    drinkingSince: undefined,
                 };
                 this.shown.set(animal.id, entry);
                 changed ||= onScreen(x, y);
@@ -141,6 +147,21 @@ export class LandLifeView {
             sprite.setPosition(x, y);
             sprite.setDepth(y);
             sprite.setAlpha(animal.alpha);
+            // Head down at the water (the stance of the wandering animals, without its sway of a pixel: the place
+            // of the sprite tells whether the animal moved).
+            const drinking = animal.state === DRINKING && led === undefined;
+            entry.drinkingSince = drinking ? (entry.drinkingSince ?? now) : undefined;
+            const stance =
+                entry.drinkingSince === undefined
+                    ? undefined
+                    : drinkStance(entry.direction, now - entry.drinkingSince, reduced);
+            const angle = stance?.angle ?? 0;
+            const scaleY = stance?.scaleY ?? 1;
+            if (sprite.angle !== angle || sprite.scaleY !== scaleY) {
+                sprite.setAngle(angle);
+                sprite.setScale(1, scaleY);
+                changed ||= onScreen(x, y);
+            }
             if (columns === undefined) {
                 // The image drawn here heads right.
                 sprite.setFlipX(entry.direction === "left" || (entry.direction !== "right" && animal.facingLeft));

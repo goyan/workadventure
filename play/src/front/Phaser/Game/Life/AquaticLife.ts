@@ -18,6 +18,8 @@ export interface ShownAnimal {
     facingLeft: boolean;
     /** The user id of the player it follows, for a tamed animal. */
     owner?: number;
+    /** As the server tells it: 3 while it drinks. */
+    state?: number;
 }
 
 interface Entry {
@@ -35,6 +37,7 @@ interface Entry {
     goneAt: number | undefined;
     facingLeft: boolean;
     owner: number | undefined;
+    state: number | undefined;
 }
 
 const share = (elapsed: number, duration: number): number => Math.min(1, Math.max(0, elapsed / duration));
@@ -52,7 +55,7 @@ export class AquaticLife {
     constructor(private readonly accepts: (kind: number) => boolean = isAquaticKind) {}
 
     public receive(
-        animals: readonly { id: number; kind: number; x: number; y: number; owner?: number }[],
+        animals: readonly { id: number; kind: number; x: number; y: number; owner?: number; state?: number }[],
         now: number,
     ): void {
         const told = new Set<number>();
@@ -74,6 +77,7 @@ export class AquaticLife {
                     goneAt: undefined,
                     facingLeft: false,
                     owner: animal.owner,
+                    state: animal.state,
                 });
                 continue;
             }
@@ -84,6 +88,7 @@ export class AquaticLife {
             entry.toY = animal.y;
             entry.since = now;
             entry.owner = animal.owner;
+            entry.state = animal.state;
             // It keeps its side while it does not move sideways.
             if (Math.abs(animal.x - at.x) >= 1) entry.facingLeft = animal.x < at.x;
         }
@@ -118,6 +123,7 @@ export class AquaticLife {
                 facingLeft: entry.facingLeft,
                 // A dead animal follows nobody.
                 owner: entry.goneAt === undefined ? entry.owner : undefined,
+                state: entry.goneAt === undefined ? entry.state : undefined,
             });
         }
         return shown;

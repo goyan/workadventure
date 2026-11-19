@@ -27,6 +27,7 @@ export * from "./Terrain/WaterWalls";
 export * from "./Terrain/LandWalls";
 export * from "./Life/WaterBodies";
 export * from "./Life/LandPlaces";
+export * from "./Terrain/LandTrees";
 export * from "./Life/Species";
 export * from "./Life/Animal";
 export * from "./Life/Swim";

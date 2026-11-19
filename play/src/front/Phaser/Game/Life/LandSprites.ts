@@ -9,6 +9,23 @@ export function landSpeciesOf(kind: number): LandSpecies | undefined {
 }
 export const isLandKind = (kind: number): boolean => landSpeciesOf(kind) !== undefined;
 
+/** How the entry of each species of the land is named in a catalogue of animals (`<collection>:<name>:…`). */
+const LAND_SHEET_NAMES = {
+    lion: [":lion:"],
+    tiger: [":tigre:", ":tiger:"],
+    antelope: [":antilope:", ":antelope:"],
+} as const satisfies Record<LandSpecies, readonly string[]>;
+
+/** The wandering sheet of a species of the land among the objects of the catalogues of a map, when one has it. */
+export function landSheetOf(
+    species: LandSpecies,
+    prefabs: readonly { id: string; wander?: { sheetPath: string } }[],
+): string | undefined {
+    return prefabs.find(
+        (prefab) => prefab.wander !== undefined && LAND_SHEET_NAMES[species].some((name) => prefab.id.includes(name)),
+    )?.wander?.sheetPath;
+}
+
 /**
  * The animals of the land, drawn here pixel by pixel, heading right: what is shown for an antelope, and for a lion
  * or a tiger while the sheet of the catalogue is not there. A character a pixel: "b" the body, "d" the darker parts

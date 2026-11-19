@@ -5,6 +5,7 @@ import {
     emptyPopulation,
     isPredator,
     landPlacesOf,
+    landTreesOf,
     landWallsOf,
     lifeCensus,
     LIFE_RANGES,
@@ -137,7 +138,6 @@ export interface LifeHooks {
 
 /** A tile is 32 map pixels: the speed of the map is set in tiles a second. */
 const TILE_PX = 32;
-
 
 /**
  * Keeps the life in the water of the relief of a room: fish that swim, breed and die, dolphins that hunt them
@@ -347,7 +347,9 @@ export class AquaticLifeManager {
             return;
         }
         const walls = landWallsOf(this.room.getWam());
-        const key = `${size.width}x${size.height}|${walls.signature}`;
+        // The trees the lions and the tigers live around.
+        const trees = landTreesOf(this.room.getWam());
+        const key = `${size.width}x${size.height}|${walls.signature}|${trees.map((tree) => `${tree.x},${tree.y}`).join(";")}`;
         const version = grid ? this.water.waterVersion() : -1;
         const stale = version !== this.landVersion && this.steps - this.landStep >= STEPS_PER_LAND;
         if (this.land && key === this.landKey && !stale) return;
@@ -356,6 +358,7 @@ export class AquaticLifeManager {
             height: size.height,
             walls,
             depthAt: grid ? (cellX, cellY) => grid.depthAt(cellX, cellY) : () => 0,
+            trees,
         });
         this.landKey = key;
         this.landVersion = version;
@@ -510,6 +513,8 @@ export class AquaticLifeManager {
                 x: Math.round(animal.x),
                 y: Math.round(animal.y),
                 owner: animal.tamedBy,
+                // 3: head down at the water.
+                state: animal.drinkUntil !== undefined && animal.tamedBy === undefined ? 3 : undefined,
             })),
             species: this.speciesStats(),
             stats: {

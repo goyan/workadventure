@@ -2444,6 +2444,27 @@ animaux promeneurs compris. Les antilopes ne s'apprivoisent pas.
   (`AquaticLifeManager.landAnimals`, quatrième paramètre de `SwitchTriggerEvaluator`), au sol, comme un avatar ; pas
   de rapport du navigateur pour eux.
 
+**Soif et arbre d'attache.**
+
+- **Boire** (`stepPopulation`, `Life/LandPlaces.ts` : `shoreNear`, `atShore`) : une fois par « intervalle entre deux
+  boissons » (le réglage des animaux promeneurs), un animal de terre marche vers la rive la plus proche de sa terre
+  (une cellule sèche à côté d'une cellule d'au moins 2 px d'eau), y boit tête baissée, puis repart. Un lion ou un tigre
+  boit 20 s, une antilope 6 s. Pendant ce temps une antilope ne voit un lion ou un tigre qu'à 2 cases au lieu de 3 :
+  c'est là qu'elle se fait prendre. Dérangé, l'animal revient plus tôt (un quart d'intervalle). Sans eau trouvée en
+  une minute, il attend l'intervalle suivant. La première soif est répartie sur un intervalle d'après son identifiant.
+  Sur le fil : `AquaticAnimalMessage.state` = 3 ; à l'écran la pose de boisson des promeneurs (`drinkStance`).
+- **Arbre d'attache** (`Terrain/LandTrees.ts`) : le serveur lit les arbres `Nature:tree-…` posés au sol. Un couple de
+  lions ou de tigres arrive près d'un arbre de sa terre, qui devient son foyer (`Animal.homeX`, `homeY`) ; ses petits
+  en héritent. Hors chasse et hors soif, il se promène à 5 cases au plus de cet arbre, et y revient après une chasse.
+  Sans arbre sur la terre, rien ne change. Le serveur ne connaît pas la taille d'une image : le pied de l'arbre est
+  pris une case à droite et deux cases sous le coin de l'image, à une case près.
+- Durée de 6 s pour les proies choisie sur 4 h simulées et trois graines : à 20 s les antilopes s'éteignaient deux
+  fois sur trois (les lions pêchent déjà au bord de l'eau).
+
+**Planche de l'antilope.** Comme le lion et le tigre, l'antilope prend la planche du catalogue des animaux quand la
+carte l'a (objet `…:antilope:…` avec une planche `wander`, `landSheetOf` dans `Life/LandSprites.ts`) : marche animée
+dans les quatre directions. Sans elle, le petit dessin fait en code reste affiché.
+
 **Limites.** Les animaux de terre traversent les objets et les murs dessinés dans Tiled (le serveur ne connaît que
 les murs de l'outil Carte) ; pas de recherche de chemin : un couple séparé par un obstacle met du temps à se
 retrouver ; les prédateurs sont limités par leur plafond plus que par la faim (les poissons leur servent de repli).
