@@ -1,3 +1,4 @@
+import * as Phaser from "phaser";
 import { TILE_PX } from "@workadventure/map-editor";
 import { DEPTH_LAMP_LIGHT_INDEX, DEPTH_NIGHT_INDEX } from "../DepthIndexes";
 import type { MeadowState } from "../Terrain/MeadowState";
