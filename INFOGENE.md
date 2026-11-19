@@ -2226,6 +2226,14 @@ l'humidité, gzip) et à l'entrée ; le navigateur dessine l'herbe en voile vert
 (`Terrain/MeadowState.ts`, dans `TerrainView`), là où c'est dehors pour lui. Une argile détrempée (60 % d'humidité)
 est de la boue même sans eau dessus. L'outil Relief dit l'humidité et l'herbe sous le curseur. `play`, `back` et `map-storage` à déployer ensemble.
 
+**Neige en altitude** (`Terrain/SnowLine.ts`). La neige tient sur les monts à partir d'une altitude qui dépend de la
+saison du calendrier de Paris : 96 px (3 cases) en hiver, 160 px au printemps et en automne, 224 px en été ; fine à
+la limite, complète 32 px plus haut (`snowCover`). Le navigateur la dessine en voile blanc sur le sol et l'herbe,
+sous les ombres des pentes, dehors seulement (`TerrainView`, `snowAlpha`) ; on y marche moins vite (85 % sous une
+couverture complète, `snowPace` dans `GroundPace.ts`) ; le serveur y fait mourir l'herbe, à l'allure de la soif sous
+une couverture complète (`Meadow.step`). Tout se calcule à partir du relief et de la saison : rien dans la carte ni
+sur le fil, aucun réglage. Indépendante de la neige de la météo (qui blanchit toute la carte) et du thème personnel.
+
 **Altitude de l'avatar.** Sur une carte qui a un relief, la pile des étages sous l'horloge dit l'altitude de
 l'avatar, en mètres (une case d'altitude ≈ 1,10 m, `metresOf`) : la hauteur du relief sous ses pieds quand il est au
 sol (négative dans un creux, positive sur un mont), l'altitude de son palier quand il est en hauteur

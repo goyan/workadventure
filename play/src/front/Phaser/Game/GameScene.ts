@@ -31,6 +31,8 @@ import {
     GameMap,
     GameMapProperties,
     listeningZoneJamKey,
+    type Season,
+    seasonAt,
     type WAMFileFormat,
     WAMSettingsUtils,
     WeatherType,
@@ -2898,6 +2900,15 @@ export class GameScene extends DirtyScene {
             .catch((error: unknown) => console.warn("A state of the meadow of the map could not be read", error));
     }
 
+    /**
+     * The season of the ground of the map, by the calendar of Paris like the meadow of the server (not the personal
+     * theme: the snow of the heights slows everyone alike). Unknown until the time of the server is.
+     */
+    public getGroundSeason(): Season | undefined {
+        const date = this.nightManager?.serverDate();
+        return date && Number.isFinite(date.getTime()) ? seasonAt(date) : undefined;
+    }
+
     /** The meadow of the map, for what reads its grass and the moisture of its soil. */
     public getMeadow(): MeadowState {
         return this.meadow;
@@ -3615,7 +3626,9 @@ export class GameScene extends DirtyScene {
                 });
                 // The relief of the ground and the water of its hollows.
                 this.terrainView?.destroy();
-                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow);
+                this.terrainView = new TerrainView(this, this.terrainWater, undefined, this.meadow, () =>
+                    this.getGroundSeason(),
+                );
                 // The water seen moving: foam on its current, whirls over the sinks, rings over the sources.
                 this.waterFlowView?.destroy();
                 this.waterFlowView = new WaterFlowView(this, {
